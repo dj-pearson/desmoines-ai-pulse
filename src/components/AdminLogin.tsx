@@ -29,17 +29,25 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     setIsLoading(true);
     setError("");
 
+    console.log("🔐 AdminLogin: Starting login process...");
+
     try {
+      console.log("🔐 AdminLogin: Calling login function...");
       const success = await login(email, password);
+      console.log("🔐 AdminLogin: Login result:", success);
+
       if (success) {
+        console.log("✅ AdminLogin: Login successful, reloading page...");
         // Force reload to update auth state and redirect to admin
         window.location.reload();
       } else {
+        console.log("❌ AdminLogin: Login failed, showing error");
         setError(
           "Invalid credentials or insufficient permissions. Please ensure you have admin access."
         );
       }
     } catch (err) {
+      console.error("❌ AdminLogin: Login exception:", err);
       setError("Login failed. Please try again.");
     } finally {
       setIsLoading(false);
