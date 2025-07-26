@@ -1056,7 +1056,18 @@ Deno.serve(async (req) => {
     // Filter jobs based on recent scraping history
     const jobsToProcess: any[] = [];
     const skippedJobs: { name: string; reason: string }[] = [];
-    const isAdminDashboard = triggerSource === "admin-dashboard";
+
+    // Detect admin dashboard trigger more broadly
+    const isAdminDashboard =
+      triggerSource === "admin-dashboard" ||
+      origin?.includes("desmoinesinsider.com") ||
+      origin?.includes("localhost") ||
+      referer?.includes("desmoinesinsider.com") ||
+      referer?.includes("localhost");
+
+    console.log(
+      `🔍 Admin Dashboard Detection: triggerSource="${triggerSource}", origin="${origin}", referer="${referer}", isAdminDashboard=${isAdminDashboard}`
+    );
 
     for (const jobRow of scrapingJobs) {
       const job: ScrapingJob = {
