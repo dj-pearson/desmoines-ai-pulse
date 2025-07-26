@@ -72,6 +72,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { useScraping } from "@/hooks/useScraping";
 import ScraperConfigWizard from "../components/ScraperConfigWizard";
 import EventEditor from "../components/EventEditor";
+import WebsiteAnalysisDialog from "@/components/WebsiteAnalysisDialog";
 
 // Scraping jobs data is now fetched from Supabase via useScraping hook
 
@@ -118,6 +119,8 @@ export default function Admin() {
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showEventEditor, setShowEventEditor] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
+  const [selectedScrapingJob, setSelectedScrapingJob] = useState<any>(null);
   const [eventFilters, setEventFilters] = useState({
     status: "all" as const,
     search: "",
@@ -258,6 +261,11 @@ export default function Admin() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleAnalyzeWebsite = (scrapingJob: any) => {
+    setSelectedScrapingJob(scrapingJob);
+    setShowAnalysisDialog(true);
   };
 
   const handleDeleteEvent = async (eventId: string) => {
@@ -637,7 +645,11 @@ export default function Admin() {
                               >
                                 <Play className="h-4 w-4" />
                               </Button>
-                              <Button size="sm" variant="outline">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleAnalyzeWebsite(job)}
+                              >
                                 <Settings className="h-4 w-4" />
                               </Button>
                             </div>
@@ -1021,6 +1033,15 @@ export default function Admin() {
             setShowEventEditor(false);
             setSelectedEvent(null);
           }}
+        />
+      )}
+
+      {/* Website Analysis Dialog */}
+      {showAnalysisDialog && selectedScrapingJob && (
+        <WebsiteAnalysisDialog
+          open={showAnalysisDialog}
+          onOpenChange={setShowAnalysisDialog}
+          scrapingJob={selectedScrapingJob}
         />
       )}
     </div>

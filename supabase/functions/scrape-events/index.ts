@@ -354,8 +354,19 @@ function extractCatchDesMoinesEvent(
   category: string;
   date: Date | null;
 } {
-  // Look for event title in h1, h2, or title tags
-  let title = querySelectorText(html, "h1, h2, .event-title, .title");
+  console.log(`🔍 Catch Des Moines HTML preview: ${html.substring(0, 500)}...`);
+
+  // Try multiple approaches for finding event titles
+  let title =
+    querySelectorText(html, ".event-title") ||
+    querySelectorText(html, ".title") ||
+    querySelectorText(html, "h1") ||
+    querySelectorText(html, "h2") ||
+    querySelectorText(html, ".card-title") ||
+    querySelectorText(html, "[data-title]") ||
+    querySelectorText(html, ".event-name");
+
+  console.log(`🔍 Catch Des Moines found title: "${title}"`);
 
   // If no title found, try to extract from page title or meta tags
   if (!title) {
@@ -367,26 +378,51 @@ function extractCatchDesMoinesEvent(
     }
   }
 
+  // Try multiple approaches for descriptions
   const description =
-    querySelectorText(html, job.config.selectors.description) ||
-    querySelectorText(html, ".event-description, .description, p");
+    querySelectorText(html, ".event-description") ||
+    querySelectorText(html, ".description") ||
+    querySelectorText(html, ".summary") ||
+    querySelectorText(html, ".excerpt") ||
+    querySelectorText(html, ".content") ||
+    querySelectorText(html, "p");
+
+  console.log(
+    `🔍 Catch Des Moines found description: "${description?.substring(
+      0,
+      100
+    )}..."`
+  );
 
   const location =
-    querySelectorText(html, job.config.selectors.location) ||
-    querySelectorText(html, ".event-location, .location, .venue") ||
+    querySelectorText(html, ".event-location") ||
+    querySelectorText(html, ".location") ||
+    querySelectorText(html, ".venue") ||
+    querySelectorText(html, ".address") ||
     "Des Moines, IA";
 
   const price =
-    querySelectorText(html, job.config.selectors.price || "") ||
-    querySelectorText(html, ".price, .cost, .admission") ||
+    querySelectorText(html, ".price") ||
+    querySelectorText(html, ".cost") ||
+    querySelectorText(html, ".admission") ||
+    querySelectorText(html, ".ticket-price") ||
     "See website";
 
   const category =
-    querySelectorText(html, job.config.selectors.category || "") ||
+    querySelectorText(html, ".category") ||
+    querySelectorText(html, ".event-type") ||
+    querySelectorText(html, ".tag") ||
     "Community Event";
 
-  // Enhanced date extraction
-  const date = extractValidDate(html, job.config.selectors.date);
+  // Enhanced date extraction with multiple approaches
+  const date =
+    extractValidDate(html, ".event-date") ||
+    extractValidDate(html, ".date") ||
+    extractValidDate(html, "time") ||
+    extractValidDate(html, "[datetime]") ||
+    extractValidDate(html, ".when");
+
+  console.log(`🔍 Catch Des Moines found date: ${date}`);
 
   return {
     title: title || "Community Event",
@@ -672,11 +708,40 @@ function extractGenericEvent(
 
 // Enhanced date extraction and validation
 function extractValidDate(html: string, dateSelector: string): Date | null {
-  const dateText = querySelectorText(html, dateSelector);
+  console.log(`🔍 Attempting to extract date with selector: "${dateSelector}"`);
+
+  let dateText = querySelectorText(html, dateSelector);
+
+  // If primary selector fails, try common date patterns in the HTML
+  if (!dateText) {
+    console.log(`🔍 Primary selector failed, trying fallback patterns...`);
+
+    // Try to find any date-like text in the HTML
+    const datePatterns = [
+      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/gi,
+      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}\b/gi,
+      /\b\d{1,2}\/\d{1,2}\/\d{4}\b/g,
+      /\b\d{4}-\d{2}-\d{2}\b/g,
+      /\b\d{1,2}-\d{1,2}-\d{4}\b/g,
+    ];
+
+    for (const pattern of datePatterns) {
+      const matches = html.match(pattern);
+      if (matches && matches.length > 0) {
+        // Take the first reasonable looking date
+        dateText = matches[0];
+        console.log(`🔍 Found date via pattern matching: "${dateText}"`);
+        break;
+      }
+    }
+  }
 
   if (!dateText) {
+    console.log(`🔍 No date text found`);
     return null;
   }
+
+  console.log(`🔍 Raw date text: "${dateText}"`);
 
   // Try multiple date parsing approaches
   const cleanDateText = dateText.trim();
@@ -686,6 +751,8 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
 
   // If invalid, try common date formats
   if (isNaN(parsedDate.getTime())) {
+    console.log(`🔍 Initial parsing failed, trying specific patterns...`);
+
     // Try extracting date patterns like "Jan 15, 2025" or "2025-01-15"
     const datePatterns = [
       /(\w{3,9}\s+\d{1,2},?\s+\d{4})/i, // "January 15, 2025"
@@ -698,6 +765,9 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
       const match = cleanDateText.match(pattern);
       if (match) {
         parsedDate = new Date(match[1]);
+        console.log(
+          `🔍 Trying pattern "${pattern}" with "${match[1]}" -> ${parsedDate}`
+        );
         if (!isNaN(parsedDate.getTime())) {
           break;
         }
@@ -713,11 +783,18 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
       now.getTime() + 2 * 365 * 24 * 60 * 60 * 1000
     );
 
+    console.log(
+      `🔍 Date validation: ${parsedDate.toDateString()}, range: ${threeDaysAgo.toDateString()} to ${twoYearsFromNow.toDateString()}`
+    );
+
     if (parsedDate >= threeDaysAgo && parsedDate <= twoYearsFromNow) {
+      console.log(`✅ Valid date found: ${parsedDate.toDateString()}`);
       return parsedDate;
     } else {
       console.log(`⚠️ Date out of valid range: ${parsedDate.toDateString()}`);
     }
+  } else {
+    console.log(`⚠️ Could not parse date: "${cleanDateText}"`);
   }
 
   return null;
@@ -735,7 +812,7 @@ async function scrapeWebsite(
   let duplicatesSkipped = 0;
 
   try {
-    console.log(`Scraping ${job.name} from ${job.config.url}`);
+    console.log(`🔍 Scraping ${job.name} from ${job.config.url}`);
 
     const response = await fetch(job.config.url, {
       headers: {
@@ -745,15 +822,24 @@ async function scrapeWebsite(
     });
 
     if (!response.ok) {
-      console.error(`Failed to fetch ${job.config.url}: ${response.status}`);
+      console.error(
+        `❌ Failed to fetch ${job.config.url}: ${response.status} ${response.statusText}`
+      );
       return { events, newEventsCount: 0, duplicatesSkipped };
     }
 
     const html = await response.text();
-    console.log(`Fetched HTML from ${job.name}, length: ${html.length}`);
+    console.log(`✅ Fetched HTML from ${job.name}, length: ${html.length}`);
 
     // Extract event data using enhanced logic
     const eventData = extractEventData(html, job);
+
+    console.log(`🔍 Extracted event data:`, {
+      title: eventData.title,
+      date: eventData.date?.toISOString(),
+      location: eventData.location,
+      description: eventData.description?.substring(0, 100) + "...",
+    });
 
     // Skip if no valid title or date
     if (!eventData.title || !eventData.date) {
@@ -764,7 +850,15 @@ async function scrapeWebsite(
     }
 
     // Skip generic titles
-    const genericTitles = ["event from", "community event", "see website"];
+    const genericTitles = [
+      "event from",
+      "community event",
+      "see website",
+      "schedule",
+      "upcoming events",
+      "shows",
+      "events",
+    ];
     if (
       genericTitles.some((generic) =>
         eventData.title.toLowerCase().includes(generic)
@@ -802,7 +896,7 @@ async function scrapeWebsite(
       console.log(`✅ New event: ${event.title} from ${job.name}`);
     }
   } catch (error) {
-    console.error(`Error scraping ${job.name}:`, error);
+    console.error(`❌ Error scraping ${job.name}:`, error);
   }
 
   return {
@@ -810,6 +904,287 @@ async function scrapeWebsite(
     newEventsCount: events.length,
     duplicatesSkipped,
   };
+}
+
+// Analyze website structure and suggest better selectors using AI
+async function analyzeWebsiteStructure(
+  url: string,
+  claudeApiKey?: string,
+  openaiApiKey?: string
+): Promise<{
+  success: boolean;
+  analysis?: {
+    suggestedSelectors: {
+      title: string[];
+      description: string[];
+      date: string[];
+      location: string[];
+      price: string[];
+      category: string[];
+    };
+    htmlStructureAnalysis: string;
+    recommendations: string;
+  };
+  error?: string;
+}> {
+  try {
+    console.log(`🔍 Analyzing website structure for: ${url}`);
+
+    // Fetch the website HTML
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+    });
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: `Failed to fetch website: ${response.status} ${response.statusText}`,
+      };
+    }
+
+    const html = await response.text();
+    console.log(`✅ Fetched HTML for analysis, length: ${html.length}`);
+
+    // Extract relevant HTML snippets that might contain event data
+    const htmlAnalysisSnippet = extractRelevantHTMLSnippets(html);
+
+    // Use AI to analyze the structure and suggest selectors
+    const aiAnalysis = await getAIStructureAnalysis(
+      url,
+      htmlAnalysisSnippet,
+      claudeApiKey,
+      openaiApiKey
+    );
+
+    if (!aiAnalysis) {
+      return {
+        success: false,
+        error: "AI analysis failed or no API keys available",
+      };
+    }
+
+    return {
+      success: true,
+      analysis: aiAnalysis,
+    };
+  } catch (error) {
+    console.error(`❌ Error analyzing website structure:`, error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+// Extract relevant HTML snippets for AI analysis
+function extractRelevantHTMLSnippets(html: string): string {
+  // Remove scripts, styles, and other non-content elements
+  let cleanHtml = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
+
+  // Extract potential event-related sections
+  const eventKeywords = [
+    "event", "show", "concert", "game", "match", "schedule", "calendar",
+    "date", "time", "venue", "location", "price", "ticket", "admission",
+    "title", "name", "description", "details", "artist", "performer"
+  ];
+
+  // Find sections that likely contain event information
+  const relevantSections: string[] = [];
+
+  // Look for divs, articles, sections with event-related classes or content
+  const sectionRegex = /<(div|article|section|header|main)[^>]*(?:class|id)="[^"]*(?:event|show|concert|game|schedule|calendar)[^"]*"[^>]*>[\s\S]*?<\/\1>/gi;
+  let match;
+  while ((match = sectionRegex.exec(cleanHtml)) !== null && relevantSections.length < 3) {
+    relevantSections.push(match[0].substring(0, 1000)); // Limit length
+  }
+
+  // If no specific event sections found, look for common structural patterns
+  if (relevantSections.length === 0) {
+    // Look for date patterns and surrounding context
+    const datePatterns = [
+      /(<[^>]*>.*?\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}[^<]*<\/[^>]*>)/gi,
+      /(<[^>]*>.*?\b\d{1,2}\/\d{1,2}\/\d{4}[^<]*<\/[^>]*>)/gi,
+      /(<[^>]*>.*?\b\d{4}-\d{2}-\d{2}[^<]*<\/[^>]*>)/gi
+    ];
+
+    for (const pattern of datePatterns) {
+      let dateMatch;
+      while ((dateMatch = pattern.exec(cleanHtml)) !== null && relevantSections.length < 2) {
+        // Get surrounding context (500 chars before and after)
+        const start = Math.max(0, dateMatch.index - 500);
+        const end = Math.min(cleanHtml.length, dateMatch.index + dateMatch[0].length + 500);
+        relevantSections.push(cleanHtml.substring(start, end));
+      }
+    }
+  }
+
+  // If still no sections, get first few structural elements
+  if (relevantSections.length === 0) {
+    const structuralRegex = /<(h1|h2|h3|div|article|section)[^>]*>[\s\S]*?<\/\1>/gi;
+    let structMatch;
+    while ((structMatch = structuralRegex.exec(cleanHtml)) !== null && relevantSections.length < 5) {
+      if (structMatch[0].length < 2000) { // Only include reasonably sized elements
+        relevantSections.push(structMatch[0]);
+      }
+    }
+  }
+
+  return relevantSections.join('\n\n--- SECTION BREAK ---\n\n').substring(0, 4000);
+}
+
+// Get AI analysis of website structure
+async function getAIStructureAnalysis(
+  url: string,
+  htmlSnippet: string,
+  claudeApiKey?: string,
+  openaiApiKey?: string
+): Promise<{
+  suggestedSelectors: {
+    title: string[];
+    description: string[];
+    date: string[];
+    location: string[];
+    price: string[];
+    category: string[];
+  };
+  htmlStructureAnalysis: string;
+  recommendations: string;
+} | null> {
+  
+  const prompt = `Analyze this HTML structure from ${url} and provide CSS selector recommendations for scraping event information.
+
+HTML SNIPPET:
+${htmlSnippet}
+
+Please analyze this HTML and provide:
+
+1. SUGGESTED CSS SELECTORS for each field (provide 2-3 options for each):
+   - Event titles
+   - Event descriptions  
+   - Event dates/times
+   - Event locations/venues
+   - Event prices
+   - Event categories/types
+
+2. HTML STRUCTURE ANALYSIS: Brief explanation of the page structure
+
+3. RECOMMENDATIONS: Best practices for scraping this specific site
+
+Format your response as JSON:
+{
+  "suggestedSelectors": {
+    "title": ["selector1", "selector2", "selector3"],
+    "description": ["selector1", "selector2"],
+    "date": ["selector1", "selector2", "selector3"],
+    "location": ["selector1", "selector2"],
+    "price": ["selector1", "selector2"],
+    "category": ["selector1", "selector2"]
+  },
+  "htmlStructureAnalysis": "Brief analysis of the HTML structure...",
+  "recommendations": "Specific recommendations for scraping this site..."
+}`;
+
+  // Try Claude first
+  if (claudeApiKey) {
+    try {
+      console.log(`🔍 Using Claude for website structure analysis`);
+      
+      const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": claudeApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-sonnet-20250114",
+          max_tokens: 1000,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        }),
+      });
+
+      if (claudeResponse.ok) {
+        const claudeData = await claudeResponse.json();
+        const analysisText = claudeData.content?.[0]?.text?.trim();
+        
+        if (analysisText) {
+          try {
+            // Try to parse JSON from the response
+            const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const analysis = JSON.parse(jsonMatch[0]);
+              console.log(`✅ Claude provided structure analysis`);
+              return analysis;
+            }
+          } catch (parseError) {
+            console.log(`⚠️ Could not parse Claude JSON response, trying text extraction`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Claude API error:", error);
+    }
+  }
+
+  // Fallback to OpenAI
+  if (openaiApiKey) {
+    try {
+      console.log(`🔍 Using OpenAI for website structure analysis`);
+      
+      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${openaiApiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4",
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+          max_tokens: 1000,
+          temperature: 0.3,
+        }),
+      });
+
+      if (openaiResponse.ok) {
+        const openaiData = await openaiResponse.json();
+        const analysisText = openaiData.choices?.[0]?.message?.content?.trim();
+        
+        if (analysisText) {
+          try {
+            // Try to parse JSON from the response
+            const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              const analysis = JSON.parse(jsonMatch[0]);
+              console.log(`✅ OpenAI provided structure analysis`);
+              return analysis;
+            }
+          } catch (parseError) {
+            console.log(`⚠️ Could not parse OpenAI JSON response`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error("OpenAI API error:", error);
+    }
+  }
+
+  return null;
 }
 
 async function enhanceEventWithAI(
@@ -941,6 +1316,49 @@ Deno.serve(async (req) => {
   }
 
   try {
+    const url = new URL(req.url);
+    const pathname = url.pathname;
+    const isAnalyzeRequest = req.headers.get("x-endpoint") === "analyze";
+
+    // Handle website analysis endpoint
+    if (isAnalyzeRequest && req.method === "POST") {
+      console.log("Starting website structure analysis...");
+
+      const requestBody = await req.json();
+      const { websiteUrl } = requestBody;
+
+      if (!websiteUrl) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Website URL is required",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
+
+      const claudeApiKey = Deno.env.get("CLAUDE_API");
+      const openaiApiKey = Deno.env.get("OPENAI_API");
+
+      const analysisResult = await analyzeWebsiteStructure(
+        websiteUrl,
+        claudeApiKey,
+        openaiApiKey
+      );
+
+      return new Response(
+        JSON.stringify(analysisResult),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: analysisResult.success ? 200 : 400,
+        }
+      );
+    }
+
+    // Handle main scraping endpoint (existing functionality)
     console.log("Starting event scraping process...");
 
     // Check for authorization header or specific trigger
