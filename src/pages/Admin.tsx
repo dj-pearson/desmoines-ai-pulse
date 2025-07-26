@@ -33,6 +33,8 @@ import {
   Eye,
   Shield,
   LogOut,
+  Plus,
+  Sparkles,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -53,11 +55,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLogin from "@/components/AdminLogin";
 import { useEvents } from "@/hooks/useEvents";
 import { useScraping } from "@/hooks/useScraping";
+import ScraperConfigWizard from "@/components/ScraperConfigWizard";
 
 // Real data from Supabase
 const mockScrapingJobs = [
@@ -127,6 +138,7 @@ const mockSystemStats = {
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [eventFilters, setEventFilters] = useState({
     status: "all" as const,
     search: "",
@@ -145,6 +157,7 @@ export default function Admin() {
     runScrapingJob,
     runAllJobs,
     stopAllJobs,
+    addJob,
   } = useScraping();
 
   // Show loading state
@@ -191,6 +204,47 @@ export default function Admin() {
       toast({
         title: "Stop Failed",
         description: "Failed to stop scraping process.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSaveScraperConfig = async (config: {
+    name: string;
+    url: string;
+    schedule: string;
+    selectors: {
+      title: string;
+      description: string;
+      date: string;
+      location: string;
+      price?: string;
+      category?: string;
+    };
+    category: string;
+    enabled: boolean;
+  }) => {
+    try {
+      await addJob({
+        name: config.name,
+        config: {
+          url: config.url,
+          selectors: config.selectors,
+          schedule: config.schedule,
+          isActive: config.enabled,
+        },
+      });
+
+      toast({
+        title: "Scraper Added",
+        description: `${config.name} has been configured and added to the scraping jobs.`,
+      });
+
+      setShowScraperWizard(false);
+    } catch (error) {
+      toast({
+        title: "Configuration Failed",
+        description: "Failed to save scraper configuration.",
         variant: "destructive",
       });
     }
@@ -430,6 +484,14 @@ export default function Admin() {
                 </p>
               </div>
               <div className="flex gap-2">
+                <Button
+                  onClick={() => setShowScraperWizard(true)}
+                  variant="outline"
+                  className="bg-gradient-to-r from-purple-600 to-blue-600 text-white border-0 hover:from-purple-700 hover:to-blue-700"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Add New Scraper
+                </Button>
                 <Button
                   onClick={
                     isGlobalRunning ? handleStopScraping : handleStartScraping
@@ -859,6 +921,14 @@ export default function Admin() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Scraper Configuration Wizard */}
+      {showScraperWizard && (
+        <ScraperConfigWizard
+          onSave={handleSaveScraperConfig}
+          onClose={() => setShowScraperWizard(false)}
+        />
+      )}
     </div>
   );
 }
