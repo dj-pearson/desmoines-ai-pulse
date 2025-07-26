@@ -959,7 +959,8 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
 
 async function scrapeWebsite(
   job: ScrapingJob,
-  existingEvents: ExistingEvent[]
+  existingEvents: ExistingEvent[],
+  claudeApiKey?: string
 ): Promise<{
   events: ScrapedEvent[];
   newEventsCount: number;
@@ -988,7 +989,37 @@ async function scrapeWebsite(
     const html = await response.text();
     console.log(`✅ Fetched HTML from ${job.name}, length: ${html.length}`);
 
-    // Extract event data using enhanced logic
+    // Try AI-powered extraction first if Claude API is available
+    if (claudeApiKey) {
+      console.log(`🤖 Attempting AI-powered event extraction for ${job.name}`);
+      const aiExtractedEvents = await extractMultipleEventsWithAI(html, job, claudeApiKey);
+      
+      if (aiExtractedEvents.length > 0) {
+        console.log(`🤖 AI found ${aiExtractedEvents.length} events from ${job.name}`);
+        
+        // Process AI-extracted events for duplicates
+        for (const event of aiExtractedEvents) {
+          event.fingerprint = generateEventFingerprint(event);
+          const duplicateCheck = isDuplicateEvent(event, existingEvents);
+
+          if (duplicateCheck.isDuplicate) {
+            console.log(`⚠️ Skipping duplicate event: ${event.title} (Reason: ${duplicateCheck.reason})`);
+            duplicatesSkipped++;
+          } else {
+            events.push(event);
+            console.log(`✅ New AI event: ${event.title} from ${job.name}`);
+          }
+        }
+
+        return {
+          events,
+          newEventsCount: events.length,
+          duplicatesSkipped,
+        };
+      } else {
+        console.log(`🤖 AI extraction found no events, falling back to legacy method`);
+      }
+    }
     const eventData = extractEventData(html, job);
 
     console.log(`🔍 Extracted event data:`, {
@@ -1818,7 +1849,8 @@ Deno.serve(async (req) => {
 
       const scrapeResult = await scrapeWebsite(
         job,
-        existingEventsWithFingerprints
+        existingEventsWithFingerprints,
+        claudeApiKey
       );
       allScrapedEvents.push(...scrapeResult.events);
       totalDuplicatesSkipped += scrapeResult.duplicatesSkipped;
