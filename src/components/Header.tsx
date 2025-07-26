@@ -11,22 +11,42 @@ export default function Header() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center">
-            <h1 className="text-2xl font-bold text-primary">Des Moines Insider</h1>
+            <h1 className="text-2xl font-bold text-primary">
+              Des Moines Insider
+            </h1>
           </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex space-x-8">
-            <a href="#events" className="text-gray-700 hover:text-primary transition-colors">
+            <a
+              href="#events"
+              className="text-gray-700 hover:text-primary transition-colors"
+            >
               Events
             </a>
-            <a href="#restaurants" className="text-gray-700 hover:text-primary transition-colors">
+            <a
+              href="#restaurants"
+              className="text-gray-700 hover:text-primary transition-colors"
+            >
               Dining
             </a>
-            <a href="#attractions" className="text-gray-700 hover:text-primary transition-colors">
+            <a
+              href="#attractions"
+              className="text-gray-700 hover:text-primary transition-colors"
+            >
               Attractions
             </a>
-            <a href="#newsletter" className="text-gray-700 hover:text-primary transition-colors">
+            <a
+              href="#newsletter"
+              className="text-gray-700 hover:text-primary transition-colors"
+            >
               Newsletter
+            </a>
+            <a
+              href="/admin"
+              className="text-gray-700 hover:text-primary transition-colors"
+            >
+              Admin
             </a>
           </nav>
 
@@ -37,7 +57,11 @@ export default function Header() {
               size="sm"
               onClick={() => setIsMenuOpen(!isMenuOpen)}
             >
-              {isMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {isMenuOpen ? (
+                <X className="h-6 w-6" />
+              ) : (
+                <Menu className="h-6 w-6" />
+              )}
             </Button>
           </div>
         </div>
@@ -73,6 +97,13 @@ export default function Header() {
                 onClick={() => setIsMenuOpen(false)}
               >
                 Newsletter
+              </a>
+              <a
+                href="/admin"
+                className="text-gray-700 hover:text-primary transition-colors"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Admin
               </a>
             </nav>
           </div>
