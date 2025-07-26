@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Shield, LogIn } from "lucide-react";
+import { Loader2, Shield, LogIn, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 interface AdminLoginProps {
@@ -34,7 +34,9 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
       if (success) {
         onLoginSuccess();
       } else {
-        setError("Invalid credentials. Please try again.");
+        setError(
+          "Invalid credentials or insufficient permissions. Please ensure you have admin access."
+        );
       }
     } catch (err) {
       setError("Login failed. Please try again.");
@@ -68,7 +70,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               <Input
                 id="email"
                 type="email"
-                placeholder="admin@desmoines.ai"
+                placeholder="Enter your admin email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -105,11 +107,21 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
           </form>
 
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800 font-medium mb-2">
-              Demo Credentials:
-            </p>
-            <p className="text-sm text-blue-700">Email: admin@desmoines.ai</p>
-            <p className="text-sm text-blue-700">Password: admin123</p>
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm text-blue-800 font-medium mb-2">
+                  Admin Access Required
+                </p>
+                <p className="text-sm text-blue-700">
+                  Only authorized administrators can access this dashboard.
+                  Contact your system administrator if you need admin access.
+                </p>
+                <p className="text-xs text-blue-600 mt-2">
+                  Admin users: admin@desmoines.ai, admin@desmoinesinsider.com
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

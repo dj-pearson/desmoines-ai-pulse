@@ -56,8 +56,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLogin from "@/components/AdminLogin";
+import { useEvents } from "@/hooks/useEvents";
+import { useScraping } from "@/hooks/useScraping";
 
-// Mock data - replace with real API calls
+// Real data from Supabase
 const mockScrapingJobs = [
   {
     id: 1,
@@ -125,9 +127,25 @@ const mockSystemStats = {
 
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
-  const [isScrapingRunning, setIsScrapingRunning] = useState(false);
+  const [eventFilters, setEventFilters] = useState({
+    status: "all" as const,
+    search: "",
+  });
   const { toast } = useToast();
   const { isLoading, isAdmin, user, logout } = useAuth();
+  const {
+    events,
+    isLoading: eventsLoading,
+    totalCount,
+    refetch: refetchEvents,
+  } = useEvents(eventFilters);
+  const {
+    jobs: scrapingJobs,
+    isGlobalRunning,
+    runScrapingJob,
+    runAllJobs,
+    stopAllJobs,
+  } = useScraping();
 
   // Show loading state
   if (isLoading) {
@@ -146,20 +164,36 @@ export default function Admin() {
     return <AdminLogin onLoginSuccess={() => window.location.reload()} />;
   }
 
-  const handleStartScraping = () => {
-    setIsScrapingRunning(true);
-    toast({
-      title: "Scraping Started",
-      description: "Event scraping process has been initiated.",
-    });
+  const handleStartScraping = async () => {
+    try {
+      await runAllJobs();
+      toast({
+        title: "Scraping Started",
+        description: "Event scraping process has been initiated.",
+      });
+    } catch (error) {
+      toast({
+        title: "Scraping Failed",
+        description: "Failed to start scraping process.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleStopScraping = () => {
-    setIsScrapingRunning(false);
-    toast({
-      title: "Scraping Stopped",
-      description: "Event scraping process has been stopped.",
-    });
+  const handleStopScraping = async () => {
+    try {
+      await stopAllJobs();
+      toast({
+        title: "Scraping Stopped",
+        description: "Event scraping process has been stopped.",
+      });
+    } catch (error) {
+      toast({
+        title: "Stop Failed",
+        description: "Failed to stop scraping process.",
+        variant: "destructive",
+      });
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -209,7 +243,7 @@ export default function Admin() {
             <div className="flex items-center gap-4">
               <Badge variant="outline" className="flex items-center gap-2">
                 <Shield className="h-4 w-4" />
-                {user?.name || "Admin"}
+                {user?.email?.split("@")[0] || "Admin"}
               </Badge>
               <Button variant="outline" size="sm">
                 <Settings className="h-4 w-4 mr-2" />
@@ -398,11 +432,11 @@ export default function Admin() {
               <div className="flex gap-2">
                 <Button
                   onClick={
-                    isScrapingRunning ? handleStopScraping : handleStartScraping
+                    isGlobalRunning ? handleStopScraping : handleStartScraping
                   }
-                  variant={isScrapingRunning ? "destructive" : "default"}
+                  variant={isGlobalRunning ? "destructive" : "default"}
                 >
-                  {isScrapingRunning ? (
+                  {isGlobalRunning ? (
                     <>
                       <Pause className="h-4 w-4 mr-2" />
                       Stop All
