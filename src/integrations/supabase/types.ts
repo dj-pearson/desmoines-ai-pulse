@@ -14,7 +14,231 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      attractions: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_featured: boolean | null
+          location: string | null
+          name: string
+          rating: number | null
+          type: string
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          location?: string | null
+          name: string
+          rating?: number | null
+          type: string
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          location?: string | null
+          name?: string
+          rating?: number | null
+          type?: string
+          updated_at?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          category: string
+          created_at: string | null
+          date: string
+          enhanced_description: string | null
+          id: string
+          image_url: string | null
+          is_enhanced: boolean | null
+          is_featured: boolean | null
+          location: string
+          original_description: string | null
+          price: string | null
+          source_url: string | null
+          title: string
+          updated_at: string | null
+          venue: string | null
+        }
+        Insert: {
+          category?: string
+          created_at?: string | null
+          date: string
+          enhanced_description?: string | null
+          id?: string
+          image_url?: string | null
+          is_enhanced?: boolean | null
+          is_featured?: boolean | null
+          location: string
+          original_description?: string | null
+          price?: string | null
+          source_url?: string | null
+          title: string
+          updated_at?: string | null
+          venue?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          date?: string
+          enhanced_description?: string | null
+          id?: string
+          image_url?: string | null
+          is_enhanced?: boolean | null
+          is_featured?: boolean | null
+          location?: string
+          original_description?: string | null
+          price?: string | null
+          source_url?: string | null
+          title?: string
+          updated_at?: string | null
+          venue?: string | null
+        }
+        Relationships: []
+      }
+      playgrounds: {
+        Row: {
+          age_range: string | null
+          amenities: string[] | null
+          created_at: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_featured: boolean | null
+          location: string | null
+          name: string
+          rating: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          age_range?: string | null
+          amenities?: string[] | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          location?: string | null
+          name: string
+          rating?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          age_range?: string | null
+          amenities?: string[] | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          location?: string | null
+          name?: string
+          rating?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      restaurant_openings: {
+        Row: {
+          created_at: string | null
+          cuisine: string | null
+          description: string | null
+          id: string
+          location: string | null
+          name: string
+          opening_date: string | null
+          source_url: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          cuisine?: string | null
+          description?: string | null
+          id?: string
+          location?: string | null
+          name: string
+          opening_date?: string | null
+          source_url?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          cuisine?: string | null
+          description?: string | null
+          id?: string
+          location?: string | null
+          name?: string
+          opening_date?: string | null
+          source_url?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      restaurants: {
+        Row: {
+          created_at: string | null
+          cuisine: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_featured: boolean | null
+          location: string | null
+          name: string
+          phone: string | null
+          price_range: string | null
+          rating: number | null
+          updated_at: string | null
+          website: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          cuisine?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          location?: string | null
+          name: string
+          phone?: string | null
+          price_range?: string | null
+          rating?: number | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          cuisine?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_featured?: boolean | null
+          location?: string | null
+          name?: string
+          phone?: string | null
+          price_range?: string | null
+          rating?: number | null
+          updated_at?: string | null
+          website?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
