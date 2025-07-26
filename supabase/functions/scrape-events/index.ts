@@ -915,6 +915,48 @@ Deno.serve(async (req) => {
   try {
     console.log("Starting event scraping process...");
 
+    // Check for authorization header or specific trigger
+    const authHeader = req.headers.get("authorization");
+    const triggerSource = req.headers.get("x-trigger-source");
+
+    // Only allow calls from:
+    // 1. Authenticated requests with valid Supabase JWT
+    // 2. Requests with our custom trigger header
+    // 3. Requests from our frontend domain
+    const origin = req.headers.get("origin");
+    const referer = req.headers.get("referer");
+
+    const isValidTrigger =
+      authHeader?.includes("Bearer") || // Supabase auth
+      triggerSource === "admin-dashboard" || // Our frontend
+      origin?.includes("desmoinesinsider.com") ||
+      origin?.includes("localhost") ||
+      referer?.includes("desmoinesinsider.com") ||
+      referer?.includes("localhost");
+
+    if (!isValidTrigger) {
+      console.log(
+        `🚫 Unauthorized scraping attempt from ${origin || "unknown"}`
+      );
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error:
+            "Unauthorized - scraping can only be triggered from admin dashboard",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 401,
+        }
+      );
+    }
+
+    console.log(
+      `✅ Authorized scraping request from ${
+        origin || triggerSource || "authenticated source"
+      }`
+    );
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;

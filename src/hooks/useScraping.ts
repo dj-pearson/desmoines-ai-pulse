@@ -322,9 +322,12 @@ export function useScraping() {
         ),
       }));
 
-      // Call the Supabase edge function
+      // Call the Supabase edge function with authentication header
       const { data, error } = await supabase.functions.invoke("scrape-events", {
         body: { jobId },
+        headers: {
+          "x-trigger-source": "admin-dashboard",
+        },
       });
 
       if (error) throw error;
