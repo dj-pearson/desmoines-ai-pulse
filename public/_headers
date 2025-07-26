@@ -1,0 +1,21 @@
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+*.js
+  Content-Type: text/javascript
+
+*.mjs
+  Content-Type: text/javascript
+
+*.ts
+  Content-Type: text/javascript
+
+/assets/*.js
+  Content-Type: text/javascript
+  Cache-Control: public, max-age=31536000, immutable
+
+/assets/*.css
+  Content-Type: text/css
+  Cache-Control: public, max-age=31536000, immutable 
