@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -158,7 +158,13 @@ export default function Admin() {
     runAllJobs,
     stopAllJobs,
     addJob,
+    forceRefresh,
   } = useScraping();
+
+  // Force refresh scraping jobs on component mount to ensure real jobs are loaded
+  useEffect(() => {
+    forceRefresh();
+  }, [forceRefresh]);
 
   // Show loading state
   if (isLoading) {
@@ -510,7 +516,7 @@ export default function Admin() {
                     </>
                   )}
                 </Button>
-                <Button variant="outline">
+                <Button variant="outline" onClick={forceRefresh}>
                   <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh
                 </Button>

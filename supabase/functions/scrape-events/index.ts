@@ -48,77 +48,132 @@ const mockScrapedEvents = [
 
 async function enhanceEventWithAI(
   event: any,
-  openaiApiKey: string
+  openaiApiKey: string,
+  claudeApiKey?: string
 ): Promise<any> {
-  try {
-    const enhancementPrompt = `Enhance this event description to be more engaging and informative while keeping it concise (max 150 words). Original description: "${event.original_description}"`;
+  const enhancementPrompt = `Enhance this event description to be more engaging and informative while keeping it concise (max 150 words). Original description: "${event.original_description}"`;
 
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${openaiApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-3.5-turbo",
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a helpful assistant that enhances event descriptions for a Des Moines events website. Make descriptions engaging, informative, and locally relevant.",
-            },
-            {
-              role: "user",
-              content: enhancementPrompt,
-            },
-          ],
-          max_tokens: 200,
-          temperature: 0.7,
-        }),
+  // Try Claude API first if available (it's more reliable and has higher limits)
+  if (claudeApiKey) {
+    try {
+      console.log(`Attempting to enhance event ${event.title} with Claude API`);
+
+      const claudeResponse = await fetch(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "anthropic-version": "2023-06-01",
+            "x-api-key": claudeApiKey,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 200,
+            messages: [
+              {
+                role: "user",
+                content: `You are a helpful assistant that enhances event descriptions for a Des Moines events website. Make descriptions engaging, informative, and locally relevant. ${enhancementPrompt}`,
+              },
+            ],
+          }),
+        }
+      );
+
+      if (claudeResponse.ok) {
+        const claudeData = await claudeResponse.json();
+        const enhancedDescription = claudeData.content[0]?.text?.trim();
+
+        if (enhancedDescription) {
+          console.log(`✅ Claude API enhanced event: ${event.title}`);
+          return {
+            ...event,
+            enhanced_description: enhancedDescription,
+            is_enhanced: true,
+          };
+        }
+      } else {
+        const errorText = await claudeResponse.text();
+        console.log(`Claude API error for ${event.title}: ${errorText}`);
       }
-    );
-
-    if (!openaiResponse.ok) {
-      const errorText = await openaiResponse.text();
-      console.error("OpenAI API error:", errorText);
-
-      // Check if it's a quota error
-      if (
-        openaiResponse.status === 429 ||
-        errorText.includes("insufficient_quota")
-      ) {
-        console.log(
-          `Quota exceeded for event ${event.title}, using original description`
-        );
-        return {
-          ...event,
-          enhanced_description: event.original_description,
-          is_enhanced: false,
-        };
-      }
-
-      throw new Error(`OpenAI API error: ${errorText}`);
+    } catch (error) {
+      console.error(`Claude API failed for event ${event.title}:`, error);
     }
-
-    const openaiData = await openaiResponse.json();
-    const enhancedDescription = openaiData.choices[0]?.message?.content?.trim();
-
-    return {
-      ...event,
-      enhanced_description: enhancedDescription || event.original_description,
-      is_enhanced: !!enhancedDescription,
-    };
-  } catch (error) {
-    console.error(`Failed to enhance event ${event.title}:`, error);
-    // If enhancement fails for any reason, use original description
-    return {
-      ...event,
-      enhanced_description: event.original_description,
-      is_enhanced: false,
-    };
   }
+
+  // Fallback to OpenAI if Claude fails or isn't available
+  if (openaiApiKey) {
+    try {
+      console.log(`Attempting to enhance event ${event.title} with OpenAI API`);
+
+      const openaiResponse = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${openaiApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-3.5-turbo",
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a helpful assistant that enhances event descriptions for a Des Moines events website. Make descriptions engaging, informative, and locally relevant.",
+              },
+              {
+                role: "user",
+                content: enhancementPrompt,
+              },
+            ],
+            max_tokens: 200,
+            temperature: 0.7,
+          }),
+        }
+      );
+
+      if (openaiResponse.ok) {
+        const openaiData = await openaiResponse.json();
+        const enhancedDescription =
+          openaiData.choices[0]?.message?.content?.trim();
+
+        if (enhancedDescription) {
+          console.log(`✅ OpenAI enhanced event: ${event.title}`);
+          return {
+            ...event,
+            enhanced_description: enhancedDescription,
+            is_enhanced: true,
+          };
+        }
+      } else {
+        const errorText = await openaiResponse.text();
+        console.log(`OpenAI API error for ${event.title}: ${errorText}`);
+
+        // Check if it's a quota error
+        if (
+          openaiResponse.status === 429 ||
+          errorText.includes("insufficient_quota")
+        ) {
+          console.log(
+            `OpenAI quota exceeded for event ${event.title}, using original description`
+          );
+        }
+      }
+    } catch (error) {
+      console.error(`OpenAI API failed for event ${event.title}:`, error);
+    }
+  }
+
+  // If both APIs fail, use original description
+  console.log(
+    `No AI enhancement available for ${event.title}, using original description`
+  );
+  return {
+    ...event,
+    enhanced_description: event.original_description,
+    is_enhanced: false,
+  };
 }
 
 Deno.serve(async (req) => {
@@ -137,6 +192,7 @@ Deno.serve(async (req) => {
 
     // Get OpenAI API key (optional - if not available, skip AI enhancement)
     const openaiApiKey = Deno.env.get("OPENAI_API");
+    const claudeApiKey = Deno.env.get("CLAUDE_API"); // Assuming CLAUDE_API is also available
 
     console.log("Processing events with AI enhancement...");
 
@@ -144,17 +200,20 @@ Deno.serve(async (req) => {
     let enhancedCount = 0;
 
     for (const event of mockScrapedEvents) {
-      if (openaiApiKey) {
-        const enhancedEvent = await enhanceEventWithAI(event, openaiApiKey);
+      if (openaiApiKey || claudeApiKey) {
+        // Only attempt AI if at least one API key is available
+        const enhancedEvent = await enhanceEventWithAI(
+          event,
+          openaiApiKey,
+          claudeApiKey
+        );
         enhancedEvents.push(enhancedEvent);
         if (enhancedEvent.is_enhanced) enhancedCount++;
         console.log(
           `Processed event: ${event.title} (enhanced: ${enhancedEvent.is_enhanced})`
         );
       } else {
-        console.log(
-          "OpenAI API key not available, using original descriptions"
-        );
+        console.log("No AI API key available, using original descriptions");
         enhancedEvents.push({
           ...event,
           enhanced_description: event.original_description,
@@ -203,6 +262,7 @@ Deno.serve(async (req) => {
         events_processed: enhancedEvents.length,
         events_enhanced: enhancedCount,
         openai_available: !!openaiApiKey,
+        claude_available: !!claudeApiKey,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

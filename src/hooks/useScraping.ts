@@ -220,13 +220,30 @@ export function useScraping() {
       console.error("Error fetching scraping jobs:", error);
       setState((prev) => ({
         ...prev,
+        error: "Failed to fetch scraping jobs",
         isLoading: false,
-        error:
-          error instanceof Error
-            ? error.message
-            : "Failed to fetch scraping jobs",
       }));
     }
+  };
+
+  const forceRefresh = async () => {
+    console.log(
+      "Force refreshing scraping jobs with real Des Moines sources..."
+    );
+    setState((prev) => ({
+      ...prev,
+      jobs: [], // Clear current jobs
+      isLoading: true,
+    }));
+
+    // Force reload with real jobs
+    setTimeout(() => {
+      setState((prev) => ({
+        ...prev,
+        jobs: realJobs,
+        isLoading: false,
+      }));
+    }, 100);
   };
 
   const runScrapingJob = async (jobId: string) => {
@@ -371,5 +388,6 @@ export function useScraping() {
     stopAllJobs,
     updateJobConfig,
     addJob,
+    forceRefresh,
   };
 }
