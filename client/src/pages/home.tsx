@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { Event } from "@shared/schema";
+import { Event } from "@/lib/types";
 import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 

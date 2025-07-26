@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@shared/schema": path.resolve(__dirname, "./src/lib/types"),
     },
   },
 }));

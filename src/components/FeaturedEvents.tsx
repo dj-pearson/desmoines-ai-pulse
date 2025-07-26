@@ -1,8 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import EventCard from "./EventCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Event } from "@/lib/types";
+import { useFeaturedEvents } from "@/hooks/useSupabase";
 
 interface FeaturedEventsProps {
   onViewAllEvents: () => void;
@@ -10,9 +10,7 @@ interface FeaturedEventsProps {
 }
 
 export default function FeaturedEvents({ onViewAllEvents, onViewEventDetails }: FeaturedEventsProps) {
-  const { data: events, isLoading, error } = useQuery<Event[]>({
-    queryKey: ['/api/events/featured'],
-  });
+  const { data: events, isLoading, error } = useFeaturedEvents();
 
   if (error) {
     return (

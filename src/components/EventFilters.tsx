@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
@@ -7,6 +6,7 @@ import EventCard from "./EventCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Event } from "@/lib/types";
 import { Calendar, Filter } from "lucide-react";
+import { useEvents } from "@/hooks/useSupabase";
 
 interface EventFiltersProps {
   onViewEventDetails: (event: Event) => void;
@@ -17,37 +17,13 @@ export default function EventFilters({ onViewEventDetails }: EventFiltersProps) 
   const [categoryFilter, setCategoryFilter] = useState("All Categories");
   const [locationFilter, setLocationFilter] = useState("All Locations");
 
-  const buildQueryParams = () => {
-    const params = new URLSearchParams();
-    if (categoryFilter !== "All Categories") params.append('category', categoryFilter);
-    if (locationFilter !== "All Locations") params.append('location', locationFilter);
-    if (dateFilter !== "All Dates") {
-      const today = new Date();
-      if (dateFilter === "Today") {
-        params.append('date', today.toISOString().split('T')[0]);
-      } else if (dateFilter === "This Week") {
-        params.append('date', today.toISOString().split('T')[0]);
-      } else if (dateFilter === "This Month") {
-        params.append('date', today.toISOString().split('T')[0]);
-      }
-    }
-    return params.toString();
+  const filters = {
+    category: categoryFilter !== "All Categories" ? categoryFilter : undefined,
+    location: locationFilter !== "All Locations" ? locationFilter : undefined,
+    date: dateFilter !== "All Dates" ? new Date().toISOString() : undefined,
   };
 
-  const { data: events, isLoading, error, refetch } = useQuery<Event[]>({
-    queryKey: ['/api/events', buildQueryParams()],
-    queryFn: async () => {
-      const params = buildQueryParams();
-      const url = params ? `/api/events?${params}` : '/api/events';
-      const response = await fetch(url);
-      if (!response.ok) throw new Error('Failed to fetch events');
-      return response.json();
-    },
-  });
-
-  const applyFilters = () => {
-    refetch();
-  };
+  const { data: events, isLoading, error } = useEvents(filters);
 
   const resetFilters = () => {
     setDateFilter("All Dates");
@@ -125,13 +101,6 @@ export default function EventFilters({ onViewEventDetails }: EventFiltersProps) 
               </Select>
             </div>
             <div className="flex items-end gap-2">
-              <Button 
-                className="flex-1 bg-primary hover:bg-blue-700 text-white font-semibold transition-colors"
-                onClick={applyFilters}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Apply
-              </Button>
               <Button 
                 variant="outline" 
                 onClick={resetFilters}
