@@ -11,13 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  Sparkles, 
-  Loader2, 
-  AlertCircle, 
-  CheckCircle, 
+import {
+  Sparkles,
+  Loader2,
+  AlertCircle,
+  CheckCircle,
   Copy,
-  RefreshCw 
+  RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -65,7 +65,9 @@ export default function WebsiteAnalysisDialog({
   scrapingJob,
 }: WebsiteAnalysisDialogProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null
+  );
   const { toast } = useToast();
 
   const analyzeWebsite = async () => {
@@ -93,7 +95,8 @@ export default function WebsiteAnalysisDialog({
       if (data.success) {
         toast({
           title: "Analysis Complete",
-          description: "AI has analyzed the website structure and provided recommendations.",
+          description:
+            "AI has analyzed the website structure and provided recommendations.",
         });
       } else {
         toast({
@@ -130,13 +133,13 @@ export default function WebsiteAnalysisDialog({
     }
   };
 
-  const SelectorCard = ({ 
-    title, 
-    current, 
-    suggested 
-  }: { 
-    title: string; 
-    current: string; 
+  const SelectorCard = ({
+    title,
+    current,
+    suggested,
+  }: {
+    title: string;
+    current: string;
     suggested: string[];
   }) => (
     <Card className="mb-4">
@@ -163,12 +166,14 @@ export default function WebsiteAnalysisDialog({
           </div>
         </div>
         <div>
-          <div className="text-xs text-muted-foreground mb-1">AI Suggestions:</div>
+          <div className="text-xs text-muted-foreground mb-1">
+            AI Suggestions:
+          </div>
           <div className="space-y-1">
             {suggested.map((selector, index) => (
               <div key={index} className="flex items-center gap-2">
-                <Badge 
-                  variant={selector === current ? "default" : "secondary"} 
+                <Badge
+                  variant={selector === current ? "default" : "secondary"}
                   className="font-mono text-xs"
                 >
                   {selector}
@@ -201,7 +206,8 @@ export default function WebsiteAnalysisDialog({
             AI Website Analysis: {scrapingJob.name}
           </DialogTitle>
           <DialogDescription>
-            Analyze website structure and get AI-powered recommendations for better CSS selectors.
+            Analyze website structure and get AI-powered recommendations for
+            better CSS selectors.
           </DialogDescription>
         </DialogHeader>
 
@@ -243,38 +249,53 @@ export default function WebsiteAnalysisDialog({
                       <SelectorCard
                         title="Event Title"
                         current={scrapingJob.config.selectors.title}
-                        suggested={analysisResult.analysis.suggestedSelectors.title}
+                        suggested={
+                          analysisResult.analysis.suggestedSelectors.title
+                        }
                       />
                       <SelectorCard
                         title="Description"
                         current={scrapingJob.config.selectors.description}
-                        suggested={analysisResult.analysis.suggestedSelectors.description}
+                        suggested={
+                          analysisResult.analysis.suggestedSelectors.description
+                        }
                       />
                       <SelectorCard
                         title="Date/Time"
                         current={scrapingJob.config.selectors.date}
-                        suggested={analysisResult.analysis.suggestedSelectors.date}
+                        suggested={
+                          analysisResult.analysis.suggestedSelectors.date
+                        }
                       />
                       <SelectorCard
                         title="Location/Venue"
                         current={scrapingJob.config.selectors.location}
-                        suggested={analysisResult.analysis.suggestedSelectors.location}
+                        suggested={
+                          analysisResult.analysis.suggestedSelectors.location
+                        }
                       />
                       <SelectorCard
                         title="Price"
                         current={scrapingJob.config.selectors.price || ""}
-                        suggested={analysisResult.analysis.suggestedSelectors.price}
+                        suggested={
+                          analysisResult.analysis.suggestedSelectors.price
+                        }
                       />
                       <SelectorCard
                         title="Category"
                         current={scrapingJob.config.selectors.category || ""}
-                        suggested={analysisResult.analysis.suggestedSelectors.category}
+                        suggested={
+                          analysisResult.analysis.suggestedSelectors.category
+                        }
                       />
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
                       <AlertCircle className="h-8 w-8 mx-auto mb-2" />
-                      <p>{analysisResult.error || "Run analysis to see selector recommendations"}</p>
+                      <p>
+                        {analysisResult.error ||
+                          "Run analysis to see selector recommendations"}
+                      </p>
                     </div>
                   )}
                 </ScrollArea>
@@ -284,7 +305,9 @@ export default function WebsiteAnalysisDialog({
                 <ScrollArea className="h-[400px]">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-sm">HTML Structure Analysis</CardTitle>
+                      <CardTitle className="text-sm">
+                        HTML Structure Analysis
+                      </CardTitle>
                     </CardHeader>
                     <CardContent>
                       {analysisResult.success && analysisResult.analysis ? (
@@ -306,7 +329,9 @@ export default function WebsiteAnalysisDialog({
                 <ScrollArea className="h-[400px]">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-sm">AI Recommendations</CardTitle>
+                      <CardTitle className="text-sm">
+                        AI Recommendations
+                      </CardTitle>
                     </CardHeader>
                     <CardContent>
                       {analysisResult.success && analysisResult.analysis ? (
@@ -330,7 +355,10 @@ export default function WebsiteAnalysisDialog({
             <div className="text-center py-12 text-muted-foreground">
               <Sparkles className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
               <h3 className="text-lg font-medium mb-2">Ready to Analyze</h3>
-              <p>Click "Start Analysis" to have AI examine the website structure and suggest optimal CSS selectors.</p>
+              <p>
+                Click "Start Analysis" to have AI examine the website structure
+                and suggest optimal CSS selectors.
+              </p>
             </div>
           )}
         </div>

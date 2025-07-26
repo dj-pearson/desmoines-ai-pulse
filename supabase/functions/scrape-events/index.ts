@@ -989,18 +989,39 @@ function extractRelevantHTMLSnippets(html: string): string {
 
   // Extract potential event-related sections
   const eventKeywords = [
-    "event", "show", "concert", "game", "match", "schedule", "calendar",
-    "date", "time", "venue", "location", "price", "ticket", "admission",
-    "title", "name", "description", "details", "artist", "performer"
+    "event",
+    "show",
+    "concert",
+    "game",
+    "match",
+    "schedule",
+    "calendar",
+    "date",
+    "time",
+    "venue",
+    "location",
+    "price",
+    "ticket",
+    "admission",
+    "title",
+    "name",
+    "description",
+    "details",
+    "artist",
+    "performer",
   ];
 
   // Find sections that likely contain event information
   const relevantSections: string[] = [];
 
   // Look for divs, articles, sections with event-related classes or content
-  const sectionRegex = /<(div|article|section|header|main)[^>]*(?:class|id)="[^"]*(?:event|show|concert|game|schedule|calendar)[^"]*"[^>]*>[\s\S]*?<\/\1>/gi;
+  const sectionRegex =
+    /<(div|article|section|header|main)[^>]*(?:class|id)="[^"]*(?:event|show|concert|game|schedule|calendar)[^"]*"[^>]*>[\s\S]*?<\/\1>/gi;
   let match;
-  while ((match = sectionRegex.exec(cleanHtml)) !== null && relevantSections.length < 3) {
+  while (
+    (match = sectionRegex.exec(cleanHtml)) !== null &&
+    relevantSections.length < 3
+  ) {
     relevantSections.push(match[0].substring(0, 1000)); // Limit length
   }
 
@@ -1010,15 +1031,21 @@ function extractRelevantHTMLSnippets(html: string): string {
     const datePatterns = [
       /(<[^>]*>.*?\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}[^<]*<\/[^>]*>)/gi,
       /(<[^>]*>.*?\b\d{1,2}\/\d{1,2}\/\d{4}[^<]*<\/[^>]*>)/gi,
-      /(<[^>]*>.*?\b\d{4}-\d{2}-\d{2}[^<]*<\/[^>]*>)/gi
+      /(<[^>]*>.*?\b\d{4}-\d{2}-\d{2}[^<]*<\/[^>]*>)/gi,
     ];
 
     for (const pattern of datePatterns) {
       let dateMatch;
-      while ((dateMatch = pattern.exec(cleanHtml)) !== null && relevantSections.length < 2) {
+      while (
+        (dateMatch = pattern.exec(cleanHtml)) !== null &&
+        relevantSections.length < 2
+      ) {
         // Get surrounding context (500 chars before and after)
         const start = Math.max(0, dateMatch.index - 500);
-        const end = Math.min(cleanHtml.length, dateMatch.index + dateMatch[0].length + 500);
+        const end = Math.min(
+          cleanHtml.length,
+          dateMatch.index + dateMatch[0].length + 500
+        );
         relevantSections.push(cleanHtml.substring(start, end));
       }
     }
@@ -1026,16 +1053,23 @@ function extractRelevantHTMLSnippets(html: string): string {
 
   // If still no sections, get first few structural elements
   if (relevantSections.length === 0) {
-    const structuralRegex = /<(h1|h2|h3|div|article|section)[^>]*>[\s\S]*?<\/\1>/gi;
+    const structuralRegex =
+      /<(h1|h2|h3|div|article|section)[^>]*>[\s\S]*?<\/\1>/gi;
     let structMatch;
-    while ((structMatch = structuralRegex.exec(cleanHtml)) !== null && relevantSections.length < 5) {
-      if (structMatch[0].length < 2000) { // Only include reasonably sized elements
+    while (
+      (structMatch = structuralRegex.exec(cleanHtml)) !== null &&
+      relevantSections.length < 5
+    ) {
+      if (structMatch[0].length < 2000) {
+        // Only include reasonably sized elements
         relevantSections.push(structMatch[0]);
       }
     }
   }
 
-  return relevantSections.join('\n\n--- SECTION BREAK ---\n\n').substring(0, 4000);
+  return relevantSections
+    .join("\n\n--- SECTION BREAK ---\n\n")
+    .substring(0, 4000);
 }
 
 // Get AI analysis of website structure
@@ -1056,7 +1090,6 @@ async function getAIStructureAnalysis(
   htmlStructureAnalysis: string;
   recommendations: string;
 } | null> {
-  
   const prompt = `Analyze this HTML structure from ${url} and provide CSS selector recommendations for scraping event information.
 
 HTML SNIPPET:
@@ -1094,30 +1127,33 @@ Format your response as JSON:
   if (claudeApiKey) {
     try {
       console.log(`🔍 Using Claude for website structure analysis`);
-      
-      const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20250114",
-          max_tokens: 1000,
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-        }),
-      });
+
+      const claudeResponse = await fetch(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": claudeApiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-sonnet-20250114",
+            max_tokens: 1000,
+            messages: [
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+          }),
+        }
+      );
 
       if (claudeResponse.ok) {
         const claudeData = await claudeResponse.json();
         const analysisText = claudeData.content?.[0]?.text?.trim();
-        
+
         if (analysisText) {
           try {
             // Try to parse JSON from the response
@@ -1128,7 +1164,9 @@ Format your response as JSON:
               return analysis;
             }
           } catch (parseError) {
-            console.log(`⚠️ Could not parse Claude JSON response, trying text extraction`);
+            console.log(
+              `⚠️ Could not parse Claude JSON response, trying text extraction`
+            );
           }
         }
       }
@@ -1141,30 +1179,33 @@ Format your response as JSON:
   if (openaiApiKey) {
     try {
       console.log(`🔍 Using OpenAI for website structure analysis`);
-      
-      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${openaiApiKey}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4",
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-          max_tokens: 1000,
-          temperature: 0.3,
-        }),
-      });
+
+      const openaiResponse = await fetch(
+        "https://api.openai.com/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${openaiApiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4",
+            messages: [
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
+            max_tokens: 1000,
+            temperature: 0.3,
+          }),
+        }
+      );
 
       if (openaiResponse.ok) {
         const openaiData = await openaiResponse.json();
         const analysisText = openaiData.choices?.[0]?.message?.content?.trim();
-        
+
         if (analysisText) {
           try {
             // Try to parse JSON from the response
@@ -1349,13 +1390,10 @@ Deno.serve(async (req) => {
         openaiApiKey
       );
 
-      return new Response(
-        JSON.stringify(analysisResult),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: analysisResult.success ? 200 : 400,
-        }
-      );
+      return new Response(JSON.stringify(analysisResult), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: analysisResult.success ? 200 : 400,
+      });
     }
 
     // Handle main scraping endpoint (existing functionality)
