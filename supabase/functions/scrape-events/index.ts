@@ -188,8 +188,8 @@ function shouldSkipJobScraping(
     const minutesSinceLastRun =
       (now.getTime() - lastRun.getTime()) / (1000 * 60);
 
-    // For admin dashboard, only skip if scraped within last 2 minutes
-    if (minutesSinceLastRun < 2) {
+    // For admin dashboard, only skip if scraped within last 30 seconds
+    if (minutesSinceLastRun < 0.5) {
       return {
         skip: true,
         reason: `Too recent - last scraped ${minutesSinceLastRun.toFixed(
@@ -309,7 +309,136 @@ function querySelectorText(html: string, selector: string): string {
   }
 }
 
-// Enhanced event extraction with site-specific logic
+// Enhanced AI-powered event extraction from website HTML
+async function extractMultipleEventsWithAI(
+  html: string,
+  job: ScrapingJob,
+  claudeApiKey?: string
+): Promise<ScrapedEvent[]> {
+  if (!claudeApiKey) {
+    console.log("No Claude API key available for AI event extraction");
+    return [];
+  }
+
+  try {
+    console.log(`🤖 Using AI to extract multiple events from ${job.name}`);
+
+    // Extract relevant sections that might contain event data
+    const relevantHtml = extractRelevantHTMLSnippets(html);
+    
+    const prompt = `Extract all individual events from this HTML content from ${job.config.url}.
+
+HTML CONTENT:
+${relevantHtml}
+
+Please analyze this HTML and extract ALL individual events you can find. For each event, provide:
+- title: The event name/title
+- description: Brief description or details
+- date: Any date/time information (if found)
+- location: Venue or location
+- price: Ticket price or cost (if mentioned)
+- category: Type of event (sports, music, entertainment, etc.)
+
+Format your response as a JSON array of events:
+[
+  {
+    "title": "Event Title",
+    "description": "Event description",
+    "date": "date string if found, null if not",
+    "location": "venue/location", 
+    "price": "price if found, 'See website' if not",
+    "category": "event category"
+  }
+]
+
+Only include actual events, not navigation items, headers, or generic text. If no events are found, return an empty array [].`;
+
+    const claudeResponse = await fetch(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": claudeApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-0",
+          max_tokens: 2000,
+          messages: [
+            {
+              role: "user",
+              content: prompt,
+            },
+          ],
+        }),
+      }
+    );
+
+    if (claudeResponse.ok) {
+      const claudeData = await claudeResponse.json();
+      const responseText = claudeData.content?.[0]?.text?.trim();
+
+      if (responseText) {
+        try {
+          // Extract JSON from the response
+          const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const extractedEvents = JSON.parse(jsonMatch[0]);
+            console.log(`🤖 AI extracted ${extractedEvents.length} events from ${job.name}`);
+
+            // Convert to ScrapedEvent objects
+            const scrapedEvents: ScrapedEvent[] = [];
+            const now = new Date();
+
+            for (const event of extractedEvents) {
+              if (!event.title || event.title.trim().length === 0) continue;
+
+              // Parse date or use default
+              let eventDate: Date;
+              if (event.date && event.date !== "null") {
+                eventDate = new Date(event.date);
+                if (isNaN(eventDate.getTime())) {
+                  // If date parsing fails, use a future date
+                  eventDate = new Date();
+                  eventDate.setDate(eventDate.getDate() + 7);
+                }
+              } else {
+                // Default to one week from now
+                eventDate = new Date();
+                eventDate.setDate(eventDate.getDate() + 7);
+              }
+
+              const scrapedEvent: ScrapedEvent = {
+                title: event.title.substring(0, 200),
+                original_description: (event.description || `Event from ${job.name}`).substring(0, 500),
+                date: eventDate,
+                location: (event.location || "Des Moines, IA").substring(0, 100),
+                venue: (event.location || "Des Moines, IA").substring(0, 100),
+                category: (event.category || "General").substring(0, 50),
+                price: (event.price || "See website").substring(0, 50),
+                source_url: job.config.url,
+                is_featured: Math.random() > 0.8, // 20% chance of being featured
+              };
+
+              scrapedEvents.push(scrapedEvent);
+            }
+
+            return scrapedEvents;
+          }
+        } catch (parseError) {
+          console.log(`⚠️ Could not parse AI response JSON:`, parseError);
+        }
+      }
+    } else {
+      console.log(`⚠️ Claude API error: ${claudeResponse.status}`);
+    }
+  } catch (error) {
+    console.error(`❌ Error in AI event extraction:`, error);
+  }
+
+  return [];
+}
 function extractEventData(
   html: string,
   job: ScrapingJob
@@ -716,22 +845,32 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
   if (!dateText) {
     console.log(`🔍 Primary selector failed, trying fallback patterns...`);
 
-    // Try to find any date-like text in the HTML
+    // Try to find any date-like text in the HTML - with more flexible patterns
     const datePatterns = [
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/gi,
       /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}\b/gi,
+      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\b/gi, // Month Day without year
+      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b/gi, // Short month without year
+      /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b/gi, // Day of week + date
       /\b\d{1,2}\/\d{1,2}\/\d{4}\b/g,
       /\b\d{4}-\d{2}-\d{2}\b/g,
       /\b\d{1,2}-\d{1,2}-\d{4}\b/g,
+      /\b\d{1,2}\/\d{1,2}\b/g, // MM/DD without year
     ];
 
     for (const pattern of datePatterns) {
       const matches = html.match(pattern);
       if (matches && matches.length > 0) {
-        // Take the first reasonable looking date
-        dateText = matches[0];
-        console.log(`🔍 Found date via pattern matching: "${dateText}"`);
-        break;
+        // Take the first reasonable looking date that might be in the future
+        for (const match of matches.slice(0, 3)) { // Check first 3 matches
+          const testDate = new Date(match);
+          if (!isNaN(testDate.getTime()) && testDate > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) {
+            dateText = match;
+            console.log(`🔍 Found date via pattern matching: "${dateText}"`);
+            break;
+          }
+        }
+        if (dateText) break;
       }
     }
   }
@@ -775,22 +914,40 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
     }
   }
 
-  // Validate the date is reasonable (not in the past more than a few days, not too far in future)
+  // Validate the date is reasonable - be more flexible with date ranges
   if (!isNaN(parsedDate.getTime())) {
     const now = new Date();
-    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
-    const twoYearsFromNow = new Date(
-      now.getTime() + 2 * 365 * 24 * 60 * 60 * 1000
+    const sixMonthsAgo = new Date(now.getTime() - 6 * 30 * 24 * 60 * 60 * 1000); // 6 months ago
+    const threeYearsFromNow = new Date(
+      now.getTime() + 3 * 365 * 24 * 60 * 60 * 1000 // 3 years from now
     );
 
     console.log(
-      `🔍 Date validation: ${parsedDate.toDateString()}, range: ${threeDaysAgo.toDateString()} to ${twoYearsFromNow.toDateString()}`
+      `🔍 Date validation: ${parsedDate.toDateString()}, range: ${sixMonthsAgo.toDateString()} to ${threeYearsFromNow.toDateString()}`
     );
 
-    if (parsedDate >= threeDaysAgo && parsedDate <= twoYearsFromNow) {
+    if (parsedDate >= sixMonthsAgo && parsedDate <= threeYearsFromNow) {
       console.log(`✅ Valid date found: ${parsedDate.toDateString()}`);
       return parsedDate;
     } else {
+      // Try to fix year inference for dates that might be missing current year
+      if (parsedDate.getFullYear() < 2020) {
+        console.log(`🔧 Attempting year correction for: ${parsedDate.toDateString()}`);
+        // Try current year
+        const currentYearDate = new Date(parsedDate);
+        currentYearDate.setFullYear(now.getFullYear());
+        
+        // If that's in the past, try next year
+        if (currentYearDate < now) {
+          currentYearDate.setFullYear(now.getFullYear() + 1);
+        }
+        
+        if (currentYearDate >= sixMonthsAgo && currentYearDate <= threeYearsFromNow) {
+          console.log(`✅ Corrected date to: ${currentYearDate.toDateString()}`);
+          return currentYearDate;
+        }
+      }
+      
       console.log(`⚠️ Date out of valid range: ${parsedDate.toDateString()}`);
     }
   } else {
@@ -841,25 +998,48 @@ async function scrapeWebsite(
       description: eventData.description?.substring(0, 100) + "...",
     });
 
-    // Skip if no valid title or date
-    if (!eventData.title || !eventData.date) {
+    // Skip if no valid title, but allow events without dates temporarily for debugging
+    if (!eventData.title) {
       console.log(
-        `⚠️ Skipping invalid event from ${job.name}: title="${eventData.title}", date=${eventData.date}`
+        `⚠️ Skipping invalid event from ${job.name}: title="${eventData.title}"`
       );
       return { events, newEventsCount: 0, duplicatesSkipped };
     }
 
-    // Skip generic titles
+    // If no date found, use a default future date to allow the event through for now
+    if (!eventData.date) {
+      console.log(`⚠️ No date found for event "${eventData.title}", using default date`);
+      const defaultDate = new Date();
+      defaultDate.setDate(defaultDate.getDate() + 7); // One week from now
+      eventData.date = defaultDate;
+    }
+
+    // Skip generic titles - but allow sports schedules
     const genericTitles = [
       "event from",
-      "community event",
+      "community event", 
       "see website",
-      "schedule",
       "upcoming events",
       "shows",
       "events",
     ];
-    if (
+    
+    // Allow "schedule" for sports sites but enhance the title
+    if (eventData.title.toLowerCase() === "schedule" && 
+        (job.config.url.includes("cubs") || job.config.url.includes("wild") || 
+         job.config.url.includes("wolves") || job.config.url.includes("barnstormers"))) {
+      // For sports schedules, create a more specific title based on the site
+      if (job.config.url.includes("cubs")) {
+        eventData.title = "Iowa Cubs Baseball Games";
+      } else if (job.config.url.includes("wild")) {
+        eventData.title = "Iowa Wild Hockey Games";
+      } else if (job.config.url.includes("wolves")) {
+        eventData.title = "Iowa Wolves Basketball Games";
+      } else if (job.config.url.includes("barnstormers")) {
+        eventData.title = "Iowa Barnstormers Arena Football Games";
+      }
+      console.log(`🔧 Enhanced generic schedule title to: ${eventData.title}`);
+    } else if (
       genericTitles.some((generic) =>
         eventData.title.toLowerCase().includes(generic)
       )
