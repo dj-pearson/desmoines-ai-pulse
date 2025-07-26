@@ -32,7 +32,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
     try {
       const success = await login(email, password);
       if (success) {
-        onLoginSuccess();
+        // Force reload to update auth state and redirect to admin
+        window.location.reload();
       } else {
         setError(
           "Invalid credentials or insufficient permissions. Please ensure you have admin access."

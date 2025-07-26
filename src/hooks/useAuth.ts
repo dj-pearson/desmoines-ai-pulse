@@ -128,6 +128,17 @@ export function useAuth() {
         return false;
       }
 
+      // Check if user has admin access after successful login
+      if (data.session?.user) {
+        const isAdmin = await checkIsAdmin(data.session.user);
+        if (!isAdmin) {
+          // Sign out if user doesn't have admin access
+          await supabase.auth.signOut();
+          console.error("User does not have admin access");
+          return false;
+        }
+      }
+
       return !!data.session;
     } catch (error) {
       console.error("Login failed:", error);
