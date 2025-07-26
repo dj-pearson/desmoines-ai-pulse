@@ -72,6 +72,7 @@ export default function AuthDebug() {
           "admin@desmoines.ai",
           "admin@desmoinesinsider.com",
           "pearson.performance@gmail.com",
+          "djpearson@pm.me",
         ];
         const isAdmin =
           data.user?.email && adminEmails.includes(data.user.email);

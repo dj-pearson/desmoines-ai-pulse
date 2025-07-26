@@ -120,7 +120,8 @@ export function useAuth() {
     const adminEmails = [
       "admin@desmoines.ai",
       "admin@desmoinesinsider.com",
-      "pearson.performance@gmail.com", // Add your email
+      "pearson.performance@gmail.com",
+      "djpearson@pm.me", // Add user's actual email
       // Add more admin emails as needed
     ];
 

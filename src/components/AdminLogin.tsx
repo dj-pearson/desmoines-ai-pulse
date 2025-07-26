@@ -128,7 +128,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                 </p>
                 <p className="text-xs text-blue-600 mt-2">
                   Admin users: admin@desmoines.ai, admin@desmoinesinsider.com,
-                  pearson.performance@gmail.com
+                  pearson.performance@gmail.com, djpearson@pm.me
                 </p>
               </div>
             </div>
