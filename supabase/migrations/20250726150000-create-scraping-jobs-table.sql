@@ -31,9 +31,8 @@ CREATE INDEX idx_scraping_jobs_status ON public.scraping_jobs(status);
 CREATE INDEX idx_scraping_jobs_next_run ON public.scraping_jobs(next_run);
 
 -- Insert the real Des Moines area scraper configurations
-INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_found, config) VALUES
+INSERT INTO public.scraping_jobs (name, status, last_run, next_run, events_found, config) VALUES
 (
-  'catch-des-moines',
   'Catch Des Moines Events',
   'idle',
   now() - interval '3 hours',
@@ -54,7 +53,6 @@ INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_f
   }'::jsonb
 ),
 (
-  'iowa-cubs',
   'Iowa Cubs Schedule',
   'idle',
   now() - interval '1 hour',
@@ -75,7 +73,6 @@ INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_f
   }'::jsonb
 ),
 (
-  'iowa-wolves',
   'Iowa Wolves G-League',
   'idle',
   now() - interval '2 hours',
@@ -96,7 +93,6 @@ INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_f
   }'::jsonb
 ),
 (
-  'iowa-wild',
   'Iowa Wild Hockey',
   'idle',
   now() - interval '4 hours',
@@ -117,7 +113,6 @@ INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_f
   }'::jsonb
 ),
 (
-  'iowa-barnstormers',
   'Iowa Barnstormers Arena Football',
   'idle',
   now() - interval '5 hours',
@@ -138,7 +133,6 @@ INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_f
   }'::jsonb
 ),
 (
-  'iowa-events-center',
   'Iowa Events Center',
   'idle',
   now() - interval '2 hours',
@@ -159,7 +153,6 @@ INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_f
   }'::jsonb
 ),
 (
-  'vibrant-music-hall',
   'Vibrant Music Hall',
   'idle',
   now() - interval '1 hour',
@@ -180,7 +173,6 @@ INSERT INTO public.scraping_jobs (id, name, status, last_run, next_run, events_f
   }'::jsonb
 ),
 (
-  'google-events-dsm',
   'Google Events - Des Moines',
   'idle',
   now() - interval '6 hours',
