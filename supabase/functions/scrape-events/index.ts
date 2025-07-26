@@ -804,7 +804,7 @@ async function enhanceEventWithAI(
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
+            model: "claude-3-5-sonnet-20250114", // Updated to latest Claude Sonnet model
             max_tokens: 200,
             messages: [
               {

@@ -250,11 +250,12 @@ export function useScraping() {
 
       if (!data || data.length === 0) {
         console.log(
-          "No scraping jobs found in database - this is expected if migration hasn't been run"
+          "No scraping jobs found in database - using fallback real jobs data"
         );
         setState((prev) => ({
           ...prev,
-          jobs: [],
+          jobs: realJobs,
+          error: "Using fallback data - database migration needed",
           isLoading: false,
         }));
         return;
@@ -303,6 +304,15 @@ export function useScraping() {
         jobs: [],
         error:
           "Failed to fetch scraping jobs. Please run the database migration.",
+        isLoading: false,
+      }));
+
+      // Fallback to real jobs data so the interface still works
+      console.log("Using fallback real jobs data...");
+      setState((prev) => ({
+        ...prev,
+        jobs: realJobs,
+        error: "Using fallback data - database migration needed",
         isLoading: false,
       }));
     }

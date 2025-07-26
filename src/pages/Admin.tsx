@@ -73,33 +73,7 @@ import { useScraping } from "@/hooks/useScraping";
 import ScraperConfigWizard from "../components/ScraperConfigWizard";
 import EventEditor from "../components/EventEditor";
 
-// Real data from Supabase
-const mockScrapingJobs = [
-  {
-    id: 1,
-    name: "Des Moines Events",
-    status: "running",
-    lastRun: "2025-01-26 14:30",
-    nextRun: "2025-01-26 16:00",
-    eventsFound: 45,
-  },
-  {
-    id: 2,
-    name: "Restaurant Openings",
-    status: "completed",
-    lastRun: "2025-01-26 12:00",
-    nextRun: "2025-01-27 12:00",
-    eventsFound: 12,
-  },
-  {
-    id: 3,
-    name: "Arts & Culture",
-    status: "failed",
-    lastRun: "2025-01-26 10:15",
-    nextRun: "2025-01-26 15:00",
-    eventsFound: 0,
-  },
-];
+// Scraping jobs data is now fetched from Supabase via useScraping hook
 
 const mockEvents = [
   {
@@ -160,6 +134,8 @@ export default function Admin() {
   } = useEvents(eventFilters);
   const {
     jobs: scrapingJobs,
+    isLoading: scrapingIsLoading,
+    error: scrapingError,
     isGlobalRunning,
     runScrapingJob,
     runAllJobs,
@@ -172,12 +148,12 @@ export default function Admin() {
   // The scraping jobs will load naturally when the component mounts
 
   // Show loading state
-  if (isLoading) {
+  if (isLoading || scrapingIsLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Loading admin dashboard...</p>
         </div>
       </div>
     );
@@ -589,32 +565,86 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mockScrapingJobs.map((job) => (
-                      <TableRow key={job.id}>
-                        <TableCell className="font-medium">
-                          {job.name}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(job.status)}
-                            {getStatusBadge(job.status)}
-                          </div>
-                        </TableCell>
-                        <TableCell>{job.lastRun}</TableCell>
-                        <TableCell>{job.nextRun}</TableCell>
-                        <TableCell>{job.eventsFound}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline">
-                              <Play className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline">
-                              <Settings className="h-4 w-4" />
+                    {scrapingError ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <div className="text-red-500">
+                            <p>Error loading scraping jobs:</p>
+                            <p className="text-sm mt-1">{scrapingError}</p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-2"
+                              onClick={forceRefresh}
+                            >
+                              Retry
                             </Button>
                           </div>
                         </TableCell>
                       </TableRow>
-                    ))}
+                    ) : scrapingJobs.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="text-center py-8">
+                          <div className="text-gray-500">
+                            <p>No scraping jobs found.</p>
+                            <p className="text-sm mt-1">
+                              Make sure the scraping_jobs table exists in your
+                              database.
+                            </p>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-2"
+                              onClick={forceRefresh}
+                            >
+                              Refresh
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      scrapingJobs.map((job) => (
+                        <TableRow key={job.id}>
+                          <TableCell className="font-medium">
+                            {job.name}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getStatusIcon(job.status)}
+                              {getStatusBadge(job.status)}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {job.lastRun
+                              ? new Date(job.lastRun).toLocaleString()
+                              : "Never"}
+                          </TableCell>
+                          <TableCell>
+                            {job.nextRun
+                              ? new Date(job.nextRun).toLocaleString()
+                              : "Not scheduled"}
+                          </TableCell>
+                          <TableCell>{job.eventsFound}</TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => runScrapingJob(job.id)}
+                                disabled={
+                                  job.status === "running" || isGlobalRunning
+                                }
+                              >
+                                <Play className="h-4 w-4" />
+                              </Button>
+                              <Button size="sm" variant="outline">
+                                <Settings className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
                   </TableBody>
                 </Table>
               </CardContent>
