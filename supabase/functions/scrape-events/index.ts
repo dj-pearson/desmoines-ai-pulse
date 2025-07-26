@@ -6,54 +6,192 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-// Mock event scraping data - in a real implementation, this would scrape from actual sources
-const mockScrapedEvents = [
-  {
-    title: "Des Moines Art Festival",
-    original_description:
-      "Annual art festival featuring local artists and live music in downtown Des Moines.",
-    date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 1 week from now
-    location: "Downtown Des Moines",
-    venue: "Western Gateway Park",
-    category: "Art",
-    price: "Free admission",
-    source_url: "https://desmoinesartsfestival.org",
-    is_featured: true,
-  },
-  {
-    title: "Iowa Cubs Baseball Game",
-    original_description:
-      "Triple-A baseball game featuring the Iowa Cubs vs. Nashville Sounds.",
-    date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
-    location: "Principal Park",
-    venue: "Principal Park",
-    category: "Sports",
-    price: "$12-$35",
-    source_url: "https://www.iowacubs.com",
-    is_featured: true,
-  },
-  {
-    title: "Farmers Market Saturday",
-    original_description:
-      "Weekly farmers market with local produce, crafts, and food vendors.",
-    date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000), // 2 days from now
-    location: "Downtown Des Moines",
-    venue: "Court Avenue",
-    category: "Food",
-    price: "Free to browse",
-    source_url: "https://www.desmoinesfarmersmarket.com",
-    is_featured: false,
-  },
-];
+interface ScrapingJob {
+  id: string;
+  name: string;
+  status: string;
+  config: {
+    url: string;
+    selectors: {
+      title: string;
+      description: string;
+      date: string;
+      location: string;
+      price?: string;
+      category?: string;
+    };
+    schedule: string;
+    isActive: boolean;
+  };
+}
+
+interface ScrapedEvent {
+  title: string;
+  original_description: string;
+  date: Date;
+  location: string;
+  venue: string;
+  category: string;
+  price: string;
+  source_url: string;
+  is_featured: boolean;
+  enhanced_description?: string;
+  is_enhanced?: boolean;
+}
+
+// Simple HTML parser for extracting text content from HTML strings
+function extractTextFromHTML(html: string): string {
+  // Remove script and style elements
+  html = html.replace(
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    ""
+  );
+  html = html.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "");
+
+  // Remove HTML tags
+  html = html.replace(/<[^>]*>/g, " ");
+
+  // Decode HTML entities
+  html = html.replace(/&nbsp;/g, " ");
+  html = html.replace(/&amp;/g, "&");
+  html = html.replace(/&lt;/g, "<");
+  html = html.replace(/&gt;/g, ">");
+  html = html.replace(/&quot;/g, '"');
+  html = html.replace(/&#39;/g, "'");
+
+  // Clean up whitespace
+  html = html.replace(/\s+/g, " ").trim();
+
+  return html;
+}
+
+// Basic CSS selector matching for simple selectors
+function querySelectorText(html: string, selector: string): string {
+  try {
+    // Handle multiple selectors separated by comma
+    const selectors = selector.split(",").map((s) => s.trim());
+
+    for (const sel of selectors) {
+      // Simple class selector (.class-name)
+      if (sel.startsWith(".")) {
+        const className = sel.substring(1);
+        const classRegex = new RegExp(
+          `class="[^"]*\\b${className}\\b[^"]*"[^>]*>([^<]*(?:<[^>]*>[^<]*)*?)(?=<\/[^>]*>)`,
+          "i"
+        );
+        const match = html.match(classRegex);
+        if (match && match[1]) {
+          return extractTextFromHTML(match[1]);
+        }
+      }
+
+      // Simple tag selector (h1, h2, etc.)
+      if (/^[a-zA-Z][a-zA-Z0-9]*$/.test(sel)) {
+        const tagRegex = new RegExp(
+          `<${sel}[^>]*>([^<]*(?:<[^>]*>[^<]*)*?)(?=<\/${sel}>)`,
+          "i"
+        );
+        const match = html.match(tagRegex);
+        if (match && match[1]) {
+          return extractTextFromHTML(match[1]);
+        }
+      }
+
+      // Time element with datetime attribute
+      if (sel.includes("time[datetime]")) {
+        const timeRegex =
+          /<time[^>]*datetime="([^"]*)"[^>]*>([^<]*(?:<[^>]*>[^<]*)*?)<\/time>/i;
+        const match = html.match(timeRegex);
+        if (match && match[2]) {
+          return extractTextFromHTML(match[2]);
+        }
+      }
+    }
+
+    return "";
+  } catch (error) {
+    console.error("Error parsing selector:", selector, error);
+    return "";
+  }
+}
+
+async function scrapeWebsite(job: ScrapingJob): Promise<ScrapedEvent[]> {
+  const events: ScrapedEvent[] = [];
+
+  try {
+    console.log(`Scraping ${job.name} from ${job.config.url}`);
+
+    const response = await fetch(job.config.url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+      },
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to fetch ${job.config.url}: ${response.status}`);
+      return events;
+    }
+
+    const html = await response.text();
+    console.log(`Fetched HTML from ${job.name}, length: ${html.length}`);
+
+    // For now, create one sample event per job
+    // This is a simplified approach - in a real scraper, you'd parse multiple events
+    const title =
+      querySelectorText(html, job.config.selectors.title) ||
+      `Event from ${job.name}`;
+    const description =
+      querySelectorText(html, job.config.selectors.description) ||
+      `Event scraped from ${job.config.url}`;
+    const location =
+      querySelectorText(html, job.config.selectors.location) ||
+      "Des Moines, IA";
+    const price =
+      querySelectorText(html, job.config.selectors.price || "") ||
+      "See website";
+    const category =
+      querySelectorText(html, job.config.selectors.category || "") || "General";
+
+    // Parse date or use a future date
+    let eventDate = new Date(
+      Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000
+    ); // Random date in next 30 days
+    const dateText = querySelectorText(html, job.config.selectors.date);
+    if (dateText) {
+      const parsedDate = new Date(dateText);
+      if (!isNaN(parsedDate.getTime())) {
+        eventDate = parsedDate;
+      }
+    }
+
+    const event: ScrapedEvent = {
+      title: title.substring(0, 200), // Limit title length
+      original_description: description.substring(0, 500), // Limit description length
+      date: eventDate,
+      location: location.substring(0, 100),
+      venue: location.substring(0, 100),
+      category: category.substring(0, 50),
+      price: price.substring(0, 50),
+      source_url: job.config.url,
+      is_featured: Math.random() > 0.7, // 30% chance of being featured
+    };
+
+    events.push(event);
+    console.log(`Scraped event: ${event.title} from ${job.name}`);
+  } catch (error) {
+    console.error(`Error scraping ${job.name}:`, error);
+  }
+
+  return events;
+}
 
 async function enhanceEventWithAI(
-  event: any,
+  event: ScrapedEvent,
   openaiApiKey: string,
   claudeApiKey?: string
-): Promise<any> {
-  const enhancementPrompt = `Enhance this event description to be more engaging and informative while keeping it concise (max 150 words). Original description: "${event.original_description}"`;
-
-  // Try Claude API first if available (it's more reliable and has higher limits)
+): Promise<ScrapedEvent> {
+  // Try Claude API first
   if (claudeApiKey) {
     try {
       console.log(`Attempting to enhance event ${event.title} with Claude API`);
@@ -63,9 +201,9 @@ async function enhanceEventWithAI(
         {
           method: "POST",
           headers: {
-            "anthropic-version": "2023-06-01",
-            "x-api-key": claudeApiKey,
             "Content-Type": "application/json",
+            "x-api-key": claudeApiKey,
+            "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
             model: "claude-3-haiku-20240307",
@@ -73,7 +211,14 @@ async function enhanceEventWithAI(
             messages: [
               {
                 role: "user",
-                content: `You are a helpful assistant that enhances event descriptions for a Des Moines events website. Make descriptions engaging, informative, and locally relevant. ${enhancementPrompt}`,
+                content: `Enhance this event description to be more engaging and informative. Keep it under 150 words and maintain all key details:
+
+Event: ${event.title}
+Description: ${event.original_description}
+Location: ${event.location}
+Category: ${event.category}
+
+Enhanced description:`,
               },
             ],
           }),
@@ -82,7 +227,7 @@ async function enhanceEventWithAI(
 
       if (claudeResponse.ok) {
         const claudeData = await claudeResponse.json();
-        const enhancedDescription = claudeData.content[0]?.text?.trim();
+        const enhancedDescription = claudeData.content?.[0]?.text?.trim();
 
         if (enhancedDescription) {
           console.log(`✅ Claude API enhanced event: ${event.title}`);
@@ -92,16 +237,13 @@ async function enhanceEventWithAI(
             is_enhanced: true,
           };
         }
-      } else {
-        const errorText = await claudeResponse.text();
-        console.log(`Claude API error for ${event.title}: ${errorText}`);
       }
     } catch (error) {
-      console.error(`Claude API failed for event ${event.title}:`, error);
+      console.error("Claude API error:", error);
     }
   }
 
-  // Fallback to OpenAI if Claude fails or isn't available
+  // Fallback to OpenAI
   if (openaiApiKey) {
     try {
       console.log(`Attempting to enhance event ${event.title} with OpenAI API`);
@@ -111,20 +253,22 @@ async function enhanceEventWithAI(
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${openaiApiKey}`,
             "Content-Type": "application/json",
+            Authorization: `Bearer ${openaiApiKey}`,
           },
           body: JSON.stringify({
             model: "gpt-3.5-turbo",
             messages: [
               {
-                role: "system",
-                content:
-                  "You are a helpful assistant that enhances event descriptions for a Des Moines events website. Make descriptions engaging, informative, and locally relevant.",
-              },
-              {
                 role: "user",
-                content: enhancementPrompt,
+                content: `Enhance this event description to be more engaging and informative. Keep it under 150 words and maintain all key details:
+
+Event: ${event.title}
+Description: ${event.original_description}
+Location: ${event.location}
+Category: ${event.category}
+
+Enhanced description:`,
               },
             ],
             max_tokens: 200,
@@ -136,7 +280,7 @@ async function enhanceEventWithAI(
       if (openaiResponse.ok) {
         const openaiData = await openaiResponse.json();
         const enhancedDescription =
-          openaiData.choices[0]?.message?.content?.trim();
+          openaiData.choices?.[0]?.message?.content?.trim();
 
         if (enhancedDescription) {
           console.log(`✅ OpenAI enhanced event: ${event.title}`);
@@ -147,28 +291,16 @@ async function enhanceEventWithAI(
           };
         }
       } else {
-        const errorText = await openaiResponse.text();
-        console.log(`OpenAI API error for ${event.title}: ${errorText}`);
-
-        // Check if it's a quota error
-        if (
-          openaiResponse.status === 429 ||
-          errorText.includes("insufficient_quota")
-        ) {
-          console.log(
-            `OpenAI quota exceeded for event ${event.title}, using original description`
-          );
-        }
+        const errorData = await openaiResponse.json();
+        console.error("OpenAI API error:", errorData);
       }
     } catch (error) {
-      console.error(`OpenAI API failed for event ${event.title}:`, error);
+      console.error("OpenAI API error:", error);
     }
   }
 
-  // If both APIs fail, use original description
-  console.log(
-    `No AI enhancement available for ${event.title}, using original description`
-  );
+  // If both fail, use original
+  console.log(`Using original description for: ${event.title}`);
   return {
     ...event,
     enhanced_description: event.original_description,
@@ -179,29 +311,99 @@ async function enhanceEventWithAI(
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     console.log("Starting event scraping process...");
 
-    // Get Supabase client
+    // Initialize Supabase client
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get OpenAI API key (optional - if not available, skip AI enhancement)
     const openaiApiKey = Deno.env.get("OPENAI_API");
-    const claudeApiKey = Deno.env.get("CLAUDE_API"); // Assuming CLAUDE_API is also available
+    const claudeApiKey = Deno.env.get("CLAUDE_API");
 
+    // Fetch active scraping jobs from database
+    console.log("Fetching scraping jobs from database...");
+    const { data: scrapingJobs, error: jobsError } = await supabase
+      .from("scraping_jobs")
+      .select("*")
+      .eq("status", "idle")
+      .limit(5); // Limit to 5 jobs to avoid timeout
+
+    if (jobsError) {
+      console.error("Error fetching scraping jobs:", jobsError);
+      throw jobsError;
+    }
+
+    if (!scrapingJobs || scrapingJobs.length === 0) {
+      console.log("No active scraping jobs found");
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "No active scraping jobs found",
+          events_processed: 0,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    console.log(`Found ${scrapingJobs.length} active scraping jobs`);
+
+    // Scrape events from all active jobs
+    const allScrapedEvents: ScrapedEvent[] = [];
+
+    for (const jobRow of scrapingJobs) {
+      const job: ScrapingJob = {
+        id: jobRow.id,
+        name: jobRow.name,
+        status: jobRow.status,
+        config: jobRow.config as any,
+      };
+
+      if (job.config?.isActive && job.config?.url) {
+        const scrapedEvents = await scrapeWebsite(job);
+        allScrapedEvents.push(...scrapedEvents);
+
+        // Update job status
+        await supabase
+          .from("scraping_jobs")
+          .update({
+            last_run: new Date().toISOString(),
+            events_found: scrapedEvents.length,
+          })
+          .eq("id", job.id);
+      }
+    }
+
+    console.log(`Scraped ${allScrapedEvents.length} events total`);
+
+    if (allScrapedEvents.length === 0) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: "No events found from scraping",
+          events_processed: 0,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        }
+      );
+    }
+
+    // Process events with AI enhancement
     console.log("Processing events with AI enhancement...");
-
-    const enhancedEvents = [];
+    const enhancedEvents: ScrapedEvent[] = [];
     let enhancedCount = 0;
 
-    for (const event of mockScrapedEvents) {
+    for (const event of allScrapedEvents) {
       if (openaiApiKey || claudeApiKey) {
-        // Only attempt AI if at least one API key is available
         const enhancedEvent = await enhanceEventWithAI(
           event,
           openaiApiKey,
@@ -225,7 +427,6 @@ Deno.serve(async (req) => {
     // Insert enhanced events into database
     console.log("Inserting events into database...");
 
-    // Format events for database insertion
     const eventsToInsert = enhancedEvents.map((event) => ({
       title: event.title,
       original_description: event.original_description,
@@ -261,6 +462,7 @@ Deno.serve(async (req) => {
         message: `Successfully scraped and processed ${enhancedEvents.length} events`,
         events_processed: enhancedEvents.length,
         events_enhanced: enhancedCount,
+        jobs_processed: scrapingJobs.length,
         openai_available: !!openaiApiKey,
         claude_available: !!claudeApiKey,
       }),
