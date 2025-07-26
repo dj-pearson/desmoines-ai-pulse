@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -35,6 +35,8 @@ import {
   LogOut,
   Plus,
   Sparkles,
+  AlertCircle,
+  TrendingUp,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -68,7 +70,8 @@ import { useAuth } from "@/hooks/useAuth";
 import AdminLogin from "@/components/AdminLogin";
 import { useEvents } from "@/hooks/useEvents";
 import { useScraping } from "@/hooks/useScraping";
-import ScraperConfigWizard from "@/components/ScraperConfigWizard";
+import ScraperConfigWizard from "../components/ScraperConfigWizard";
+import EventEditor from "../components/EventEditor";
 
 // Real data from Supabase
 const mockScrapingJobs = [
@@ -139,6 +142,8 @@ const mockSystemStats = {
 export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
+  const [showEventEditor, setShowEventEditor] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<any>(null);
   const [eventFilters, setEventFilters] = useState({
     status: "all" as const,
     search: "",
@@ -150,6 +155,8 @@ export default function Admin() {
     isLoading: eventsLoading,
     totalCount,
     refetch: refetchEvents,
+    updateEvent,
+    deleteEvent,
   } = useEvents(eventFilters);
   const {
     jobs: scrapingJobs,
@@ -249,6 +256,47 @@ export default function Admin() {
       toast({
         title: "Configuration Failed",
         description: "Failed to save scraper configuration.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditEvent = (event: any) => {
+    setSelectedEvent(event);
+    setShowEventEditor(true);
+  };
+
+  const handleSaveEvent = async (updatedEvent: any) => {
+    try {
+      await updateEvent(updatedEvent.id, updatedEvent);
+      toast({
+        title: "Event Updated",
+        description: `"${updatedEvent.title}" has been successfully updated.`,
+      });
+      setShowEventEditor(false);
+      setSelectedEvent(null);
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: "Failed to update the event. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm("Are you sure you want to delete this event?")) return;
+
+    try {
+      await deleteEvent(eventId);
+      toast({
+        title: "Event Deleted",
+        description: "The event has been successfully deleted.",
+      });
+    } catch (error) {
+      toast({
+        title: "Delete Failed",
+        description: "Failed to delete the event. Please try again.",
         variant: "destructive",
       });
     }
@@ -931,6 +979,18 @@ export default function Admin() {
         <ScraperConfigWizard
           onSave={handleSaveScraperConfig}
           onClose={() => setShowScraperWizard(false)}
+        />
+      )}
+
+      {/* Event Editor Modal */}
+      {showEventEditor && selectedEvent && (
+        <EventEditor
+          event={selectedEvent}
+          onSave={handleSaveEvent}
+          onClose={() => {
+            setShowEventEditor(false);
+            setSelectedEvent(null);
+          }}
         />
       )}
     </div>

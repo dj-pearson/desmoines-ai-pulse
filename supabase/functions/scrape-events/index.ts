@@ -281,6 +281,420 @@ function querySelectorText(html: string, selector: string): string {
   }
 }
 
+// Enhanced event extraction with site-specific logic
+function extractEventData(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  const url = job.config.url.toLowerCase();
+
+  // Site-specific extraction logic
+  if (url.includes("catchdesmoines.com")) {
+    return extractCatchDesMoinesEvent(html, job);
+  } else if (url.includes("iowacubs.com") || url.includes("milb.com/iowa")) {
+    return extractIowaCubsEvent(html, job);
+  } else if (url.includes("iowa.gleague.nba.com")) {
+    return extractIowaWolvesEvent(html, job);
+  } else if (url.includes("iowawild.com")) {
+    return extractIowaWildEvent(html, job);
+  } else if (url.includes("theiowabarnstormers.com")) {
+    return extractIowaBarnstormersEvent(html, job);
+  } else if (url.includes("iowaeventscenter.com")) {
+    return extractIowaEventsCenterEvent(html, job);
+  } else if (url.includes("vibrantmusichall.com")) {
+    return extractVibrantMusicHallEvent(html, job);
+  } else {
+    return extractGenericEvent(html, job);
+  }
+}
+
+function extractCatchDesMoinesEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  // Look for event title in h1, h2, or title tags
+  let title = querySelectorText(html, "h1, h2, .event-title, .title");
+
+  // If no title found, try to extract from page title or meta tags
+  if (!title) {
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    if (titleMatch) {
+      title = extractTextFromHTML(titleMatch[1]);
+      // Clean up title (remove site name)
+      title = title.replace(/\s*-\s*Catch Des Moines.*$/i, "").trim();
+    }
+  }
+
+  const description =
+    querySelectorText(html, job.config.selectors.description) ||
+    querySelectorText(html, ".event-description, .description, p");
+
+  const location =
+    querySelectorText(html, job.config.selectors.location) ||
+    querySelectorText(html, ".event-location, .location, .venue") ||
+    "Des Moines, IA";
+
+  const price =
+    querySelectorText(html, job.config.selectors.price || "") ||
+    querySelectorText(html, ".price, .cost, .admission") ||
+    "See website";
+
+  const category =
+    querySelectorText(html, job.config.selectors.category || "") ||
+    "Community Event";
+
+  // Enhanced date extraction
+  const date = extractValidDate(html, job.config.selectors.date);
+
+  return {
+    title: title || "Community Event",
+    description:
+      description ||
+      `Event in Des Moines area. Visit ${job.config.url} for more details.`,
+    location,
+    price,
+    category,
+    date,
+  };
+}
+
+function extractIowaCubsEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  // Look for game matchups like "Cubs vs Team"
+  let title = querySelectorText(
+    html,
+    "h1, h2, .game-title, .matchup, .event-title"
+  );
+
+  // Try to find opponent team names
+  const opponent = querySelectorText(html, ".opponent, .vs, .visiting-team");
+  if (opponent && !title.toLowerCase().includes("vs")) {
+    title = `Iowa Cubs vs ${opponent}`;
+  }
+
+  if (!title || title.toLowerCase().includes("event from")) {
+    title = "Iowa Cubs Baseball Game";
+  }
+
+  const description =
+    querySelectorText(html, job.config.selectors.description) ||
+    `Professional baseball game featuring the Iowa Cubs at Principal Park.`;
+
+  const date = extractValidDate(html, job.config.selectors.date);
+
+  return {
+    title,
+    description,
+    location: "Principal Park",
+    price: querySelectorText(html, ".price, .ticket-price") || "$12-$35",
+    category: "Sports",
+    date,
+  };
+}
+
+function extractIowaWolvesEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  let title = querySelectorText(html, "h1, h2, .game-title, .matchup");
+
+  const opponent = querySelectorText(html, ".opponent, .vs, .visiting-team");
+  if (opponent && !title.toLowerCase().includes("vs")) {
+    title = `Iowa Wolves vs ${opponent}`;
+  }
+
+  if (!title || title.toLowerCase().includes("event from")) {
+    title = "Iowa Wolves Basketball Game";
+  }
+
+  // Validate that this is during basketball season (October - April)
+  const date = extractValidDate(html, job.config.selectors.date);
+  if (date) {
+    const month = date.getMonth() + 1; // 1-12
+    if (month >= 5 && month <= 9) {
+      console.log(
+        `⚠️ Invalid date for basketball: ${date.toDateString()} (off-season)`
+      );
+      return {
+        title: "",
+        description: "",
+        location: "",
+        price: "",
+        category: "",
+        date: null,
+      };
+    }
+  }
+
+  return {
+    title,
+    description: `G-League basketball game featuring the Iowa Wolves.`,
+    location: "Wells Fargo Arena",
+    price: querySelectorText(html, ".price, .ticket-price") || "$15-$25",
+    category: "Sports",
+    date,
+  };
+}
+
+function extractIowaWildEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  let title = querySelectorText(html, "h1, h2, .game-title, .matchup");
+
+  const opponent = querySelectorText(html, ".opponent, .vs, .visiting-team");
+  if (opponent && !title.toLowerCase().includes("vs")) {
+    title = `Iowa Wild vs ${opponent}`;
+  }
+
+  if (!title || title.toLowerCase().includes("event from")) {
+    title = "Iowa Wild Hockey Game";
+  }
+
+  // Validate hockey season (October - April)
+  const date = extractValidDate(html, job.config.selectors.date);
+  if (date) {
+    const month = date.getMonth() + 1;
+    if (month >= 5 && month <= 9) {
+      console.log(
+        `⚠️ Invalid date for hockey: ${date.toDateString()} (off-season)`
+      );
+      return {
+        title: "",
+        description: "",
+        location: "",
+        price: "",
+        category: "",
+        date: null,
+      };
+    }
+  }
+
+  return {
+    title,
+    description: `Professional hockey game featuring the Iowa Wild.`,
+    location: "Wells Fargo Arena",
+    price: querySelectorText(html, ".price, .ticket-price") || "$18-$30",
+    category: "Sports",
+    date,
+  };
+}
+
+function extractIowaBarnstormersEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  let title = querySelectorText(html, "h1, h2, .game-title, .matchup");
+
+  const opponent = querySelectorText(html, ".opponent, .vs, .visiting-team");
+  if (opponent && !title.toLowerCase().includes("vs")) {
+    title = `Iowa Barnstormers vs ${opponent}`;
+  }
+
+  if (!title || title.toLowerCase().includes("event from")) {
+    title = "Iowa Barnstormers Arena Football";
+  }
+
+  return {
+    title,
+    description: `Arena football game featuring the Iowa Barnstormers.`,
+    location: "Wells Fargo Arena",
+    price: querySelectorText(html, ".price, .ticket-price") || "$20-$40",
+    category: "Sports",
+    date: extractValidDate(html, job.config.selectors.date),
+  };
+}
+
+function extractIowaEventsCenterEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  const title =
+    querySelectorText(html, "h1, h2, .event-title, .show-title") ||
+    "Iowa Events Center Show";
+
+  return {
+    title,
+    description:
+      querySelectorText(html, job.config.selectors.description) ||
+      `Event at Iowa Events Center. Visit ${job.config.url} for details.`,
+    location: "Iowa Events Center",
+    price: querySelectorText(html, ".price, .ticket-price") || "See website",
+    category: "Entertainment",
+    date: extractValidDate(html, job.config.selectors.date),
+  };
+}
+
+function extractVibrantMusicHallEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  const title =
+    querySelectorText(
+      html,
+      "h1, h2, .artist-name, .show-title, .event-title"
+    ) || "Concert at Vibrant Music Hall";
+
+  return {
+    title,
+    description:
+      querySelectorText(html, job.config.selectors.description) ||
+      `Live music performance at Vibrant Music Hall.`,
+    location: "Vibrant Music Hall",
+    price: querySelectorText(html, ".price, .ticket-price") || "See website",
+    category: "Music",
+    date: extractValidDate(html, job.config.selectors.date),
+  };
+}
+
+function extractGenericEvent(
+  html: string,
+  job: ScrapingJob
+): {
+  title: string;
+  description: string;
+  location: string;
+  price: string;
+  category: string;
+  date: Date | null;
+} {
+  const title =
+    querySelectorText(html, job.config.selectors.title) ||
+    querySelectorText(html, "h1, h2, .title") ||
+    "Community Event";
+
+  const description =
+    querySelectorText(html, job.config.selectors.description) ||
+    `Event scraped from ${job.config.url}`;
+
+  const location =
+    querySelectorText(html, job.config.selectors.location) || "Des Moines, IA";
+  const price =
+    querySelectorText(html, job.config.selectors.price || "") || "See website";
+  const category =
+    querySelectorText(html, job.config.selectors.category || "") || "General";
+
+  return {
+    title,
+    description,
+    location,
+    price,
+    category,
+    date: extractValidDate(html, job.config.selectors.date),
+  };
+}
+
+// Enhanced date extraction and validation
+function extractValidDate(html: string, dateSelector: string): Date | null {
+  const dateText = querySelectorText(html, dateSelector);
+
+  if (!dateText) {
+    return null;
+  }
+
+  // Try multiple date parsing approaches
+  const cleanDateText = dateText.trim();
+
+  // Try parsing the date
+  let parsedDate = new Date(cleanDateText);
+
+  // If invalid, try common date formats
+  if (isNaN(parsedDate.getTime())) {
+    // Try extracting date patterns like "Jan 15, 2025" or "2025-01-15"
+    const datePatterns = [
+      /(\w{3,9}\s+\d{1,2},?\s+\d{4})/i, // "January 15, 2025"
+      /(\d{4}-\d{2}-\d{2})/, // "2025-01-15"
+      /(\d{1,2}\/\d{1,2}\/\d{4})/, // "1/15/2025"
+      /(\d{1,2}-\d{1,2}-\d{4})/, // "1-15-2025"
+    ];
+
+    for (const pattern of datePatterns) {
+      const match = cleanDateText.match(pattern);
+      if (match) {
+        parsedDate = new Date(match[1]);
+        if (!isNaN(parsedDate.getTime())) {
+          break;
+        }
+      }
+    }
+  }
+
+  // Validate the date is reasonable (not in the past more than a few days, not too far in future)
+  if (!isNaN(parsedDate.getTime())) {
+    const now = new Date();
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const twoYearsFromNow = new Date(
+      now.getTime() + 2 * 365 * 24 * 60 * 60 * 1000
+    );
+
+    if (parsedDate >= threeDaysAgo && parsedDate <= twoYearsFromNow) {
+      return parsedDate;
+    } else {
+      console.log(`⚠️ Date out of valid range: ${parsedDate.toDateString()}`);
+    }
+  }
+
+  return null;
+}
+
 async function scrapeWebsite(
   job: ScrapingJob,
   existingEvents: ExistingEvent[]
@@ -310,45 +724,38 @@ async function scrapeWebsite(
     const html = await response.text();
     console.log(`Fetched HTML from ${job.name}, length: ${html.length}`);
 
-    // For now, create one sample event per job
-    // This is a simplified approach - in a real scraper, you'd parse multiple events
-    const title =
-      querySelectorText(html, job.config.selectors.title) ||
-      `Event from ${job.name}`;
-    const description =
-      querySelectorText(html, job.config.selectors.description) ||
-      `Event scraped from ${job.config.url}`;
-    const location =
-      querySelectorText(html, job.config.selectors.location) ||
-      "Des Moines, IA";
-    const price =
-      querySelectorText(html, job.config.selectors.price || "") ||
-      "See website";
-    const category =
-      querySelectorText(html, job.config.selectors.category || "") || "General";
+    // Extract event data using enhanced logic
+    const eventData = extractEventData(html, job);
 
-    // Parse date or use a future date
-    let eventDate = new Date(
-      Date.now() + Math.random() * 30 * 24 * 60 * 60 * 1000
-    ); // Random date in next 30 days
-    const dateText = querySelectorText(html, job.config.selectors.date);
-    if (dateText) {
-      const parsedDate = new Date(dateText);
-      if (!isNaN(parsedDate.getTime())) {
-        eventDate = parsedDate;
-      }
+    // Skip if no valid title or date
+    if (!eventData.title || !eventData.date) {
+      console.log(
+        `⚠️ Skipping invalid event from ${job.name}: title="${eventData.title}", date=${eventData.date}`
+      );
+      return { events, newEventsCount: 0, duplicatesSkipped };
+    }
+
+    // Skip generic titles
+    const genericTitles = ["event from", "community event", "see website"];
+    if (
+      genericTitles.some((generic) =>
+        eventData.title.toLowerCase().includes(generic)
+      )
+    ) {
+      console.log(`⚠️ Skipping generic event title: ${eventData.title}`);
+      return { events, newEventsCount: 0, duplicatesSkipped };
     }
 
     const event: ScrapedEvent = {
-      title: title.substring(0, 200), // Limit title length
-      original_description: description.substring(0, 500), // Limit description length
-      date: eventDate,
-      location: location.substring(0, 100),
-      venue: location.substring(0, 100),
-      category: category.substring(0, 50),
-      price: price.substring(0, 50),
+      title: eventData.title.substring(0, 200),
+      original_description: eventData.description.substring(0, 500),
+      date: eventData.date,
+      location: eventData.location.substring(0, 100),
+      venue: eventData.location.substring(0, 100),
+      category: eventData.category.substring(0, 50),
+      price: eventData.price.substring(0, 50),
       source_url: job.config.url,
-      is_featured: Math.random() > 0.7, // 30% chance of being featured
+      is_featured: Math.random() > 0.7,
     };
 
     // Generate fingerprint for duplicate detection
