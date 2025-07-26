@@ -7,7 +7,6 @@ import EventFilters from "@/components/EventFilters";
 import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
-import AuthDebug from "@/components/AuthDebug";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -80,18 +79,10 @@ export default function Index() {
       <Header />
       <SearchSection onSearch={handleSearch} />
 
-      {/* Temporary Auth Debug Tool */}
-      <section className="py-8 bg-yellow-50 border-y-2 border-yellow-200">
+      {/* Restaurant Openings Section */}
+      <section className="py-16 bg-muted/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-4">
-            <h2 className="text-lg font-semibold text-yellow-800">
-              🔧 Debug Tool (Temporary)
-            </h2>
-            <p className="text-sm text-yellow-700">
-              Use this to test authentication before visiting /admin
-            </p>
-          </div>
-          <AuthDebug />
+          <RestaurantOpenings />
         </div>
       </section>
 
@@ -102,13 +93,6 @@ export default function Index() {
             onViewEventDetails={handleViewEventDetails}
           />
           <MostSearched />
-
-          {/* Restaurant Openings Section */}
-          <section className="py-16 bg-muted/50">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-              <RestaurantOpenings />
-            </div>
-          </section>
         </>
       )}
 
