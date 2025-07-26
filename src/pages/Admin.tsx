@@ -1041,6 +1041,10 @@ export default function Admin() {
         <WebsiteAnalysisDialog
           open={showAnalysisDialog}
           onOpenChange={setShowAnalysisDialog}
+          onUpdate={() => {
+            // Refresh scraping jobs when selectors are updated
+            forceRefresh();
+          }}
           scrapingJob={selectedScrapingJob}
         />
       )}

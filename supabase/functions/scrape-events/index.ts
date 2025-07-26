@@ -909,8 +909,7 @@ async function scrapeWebsite(
 // Analyze website structure and suggest better selectors using AI
 async function analyzeWebsiteStructure(
   url: string,
-  claudeApiKey?: string,
-  openaiApiKey?: string
+  claudeApiKey?: string
 ): Promise<{
   success: boolean;
   analysis?: {
@@ -955,8 +954,7 @@ async function analyzeWebsiteStructure(
     const aiAnalysis = await getAIStructureAnalysis(
       url,
       htmlAnalysisSnippet,
-      claudeApiKey,
-      openaiApiKey
+      claudeApiKey
     );
 
     if (!aiAnalysis) {
@@ -1076,8 +1074,7 @@ function extractRelevantHTMLSnippets(html: string): string {
 async function getAIStructureAnalysis(
   url: string,
   htmlSnippet: string,
-  claudeApiKey?: string,
-  openaiApiKey?: string
+  claudeApiKey?: string
 ): Promise<{
   suggestedSelectors: {
     title: string[];
@@ -1138,7 +1135,7 @@ Format your response as JSON:
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-5-sonnet-20250114",
+            model: "claude-sonnet-4-0",
             max_tokens: 1000,
             messages: [
               {
@@ -1188,84 +1185,15 @@ Format your response as JSON:
     console.log(`⚠️ No Claude API key available`);
   }
 
-  // Fallback to OpenAI
-  if (openaiApiKey) {
-    try {
-      console.log(`🔍 Using OpenAI for website structure analysis`);
-
-      const openaiResponse = await fetch(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${openaiApiKey}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-4",
-            messages: [
-              {
-                role: "user",
-                content: prompt,
-              },
-            ],
-            max_tokens: 1000,
-            temperature: 0.3,
-          }),
-        }
-      );
-
-      console.log(`🔍 OpenAI response status: ${openaiResponse.status}`);
-
-      if (openaiResponse.ok) {
-        const openaiData = await openaiResponse.json();
-        console.log(
-          `🔍 OpenAI response data structure:`,
-          Object.keys(openaiData)
-        );
-        const analysisText = openaiData.choices?.[0]?.message?.content?.trim();
-
-        if (analysisText) {
-          console.log(`🔍 OpenAI analysis text length: ${analysisText.length}`);
-          try {
-            // Try to parse JSON from the response
-            const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              const analysis = JSON.parse(jsonMatch[0]);
-              console.log(`✅ OpenAI provided structure analysis`);
-              return analysis;
-            } else {
-              console.log(`⚠️ No JSON found in OpenAI response`);
-            }
-          } catch (parseError) {
-            console.log(`⚠️ Could not parse OpenAI JSON response:`, parseError);
-          }
-        } else {
-          console.log(`⚠️ No analysis text found in OpenAI response`);
-        }
-      } else {
-        const errorText = await openaiResponse.text();
-        console.error(
-          `❌ OpenAI API error: ${openaiResponse.status} - ${errorText}`
-        );
-      }
-    } catch (error) {
-      console.error("OpenAI API error:", error);
-    }
-  } else {
-    console.log(`⚠️ No OpenAI API key available`);
-  }
-
-  console.log(`❌ Both AI services failed or unavailable, returning null`);
+  console.log(`❌ Claude API failed or unavailable, returning null`);
   return null;
 }
 
 async function enhanceEventWithAI(
   event: ScrapedEvent,
-  openaiApiKey: string,
   claudeApiKey?: string
 ): Promise<ScrapedEvent> {
-  // Try Claude API first
+  // Try Claude API
   if (claudeApiKey) {
     try {
       console.log(`Attempting to enhance event ${event.title} with Claude API`);
@@ -1280,7 +1208,7 @@ async function enhanceEventWithAI(
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-5-sonnet-20250114", // Updated to latest Claude Sonnet model
+            model: "claude-sonnet-4-0", // Updated to latest Claude Sonnet model
             max_tokens: 200,
             messages: [
               {
@@ -1317,63 +1245,7 @@ Enhanced description:`,
     }
   }
 
-  // Fallback to OpenAI
-  if (openaiApiKey) {
-    try {
-      console.log(`Attempting to enhance event ${event.title} with OpenAI API`);
-
-      const openaiResponse = await fetch(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${openaiApiKey}`,
-          },
-          body: JSON.stringify({
-            model: "gpt-3.5-turbo",
-            messages: [
-              {
-                role: "user",
-                content: `Enhance this event description to be more engaging and informative. Keep it under 150 words and maintain all key details:
-
-Event: ${event.title}
-Description: ${event.original_description}
-Location: ${event.location}
-Category: ${event.category}
-
-Enhanced description:`,
-              },
-            ],
-            max_tokens: 200,
-            temperature: 0.7,
-          }),
-        }
-      );
-
-      if (openaiResponse.ok) {
-        const openaiData = await openaiResponse.json();
-        const enhancedDescription =
-          openaiData.choices?.[0]?.message?.content?.trim();
-
-        if (enhancedDescription) {
-          console.log(`✅ OpenAI enhanced event: ${event.title}`);
-          return {
-            ...event,
-            enhanced_description: enhancedDescription,
-            is_enhanced: true,
-          };
-        }
-      } else {
-        const errorData = await openaiResponse.json();
-        console.error("OpenAI API error:", errorData);
-      }
-    } catch (error) {
-      console.error("OpenAI API error:", error);
-    }
-  }
-
-  // If both fail, use original
+  // If Claude fails, use original
   console.log(`Using original description for: ${event.title}`);
   return {
     ...event,
@@ -1392,13 +1264,14 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const pathname = url.pathname;
     const isAnalyzeRequest = req.headers.get("x-endpoint") === "analyze";
+    const isUpdateRequest = req.headers.get("x-endpoint") === "update";
 
     console.log(
       `🔍 Request details: method=${
         req.method
       }, pathname=${pathname}, x-endpoint=${req.headers.get(
         "x-endpoint"
-      )}, isAnalyzeRequest=${isAnalyzeRequest}`
+      )}, isAnalyzeRequest=${isAnalyzeRequest}, isUpdateRequest=${isUpdateRequest}`
     );
 
     // Handle website analysis endpoint
@@ -1441,18 +1314,153 @@ Deno.serve(async (req) => {
       }
 
       const claudeApiKey = Deno.env.get("CLAUDE_API");
-      const openaiApiKey = Deno.env.get("OPENAI_API");
+
+      console.log(`🔑 API Keys availability - Claude: ${claudeApiKey ? 'Available' : 'Missing'}`);
+
+      // Check if we have Claude API key
+      if (!claudeApiKey) {
+        console.error("❌ No Claude API key found. Please configure CLAUDE_API environment variable.");
+        return new Response(JSON.stringify({
+          success: false,
+          error: "Claude API key not configured. Please set CLAUDE_API environment variable in your Supabase project settings."
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 500,
+        });
+      }
 
       const analysisResult = await analyzeWebsiteStructure(
         websiteUrl,
-        claudeApiKey,
-        openaiApiKey
+        claudeApiKey
       );
 
       return new Response(JSON.stringify(analysisResult), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: analysisResult.success ? 200 : 400,
       });
+    }
+
+    // Handle scraping job selector update endpoint
+    if (isUpdateRequest && req.method === "POST") {
+      console.log("Starting scraping job selector update...");
+
+      let requestBody;
+      try {
+        requestBody = await req.json();
+        console.log(`🔍 Update request body:`, requestBody);
+      } catch (parseError) {
+        console.error(`❌ Failed to parse update request body:`, parseError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Invalid JSON in request body",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
+
+      const { jobId, selectors } = requestBody;
+
+      if (!jobId || !selectors) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Job ID and selectors are required",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
+
+      // Initialize Supabase client for update
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      try {
+        // Fetch current job to merge selectors
+        const { data: currentJob, error: fetchError } = await supabase
+          .from("scraping_jobs")
+          .select("config")
+          .eq("id", jobId)
+          .single();
+
+        if (fetchError) {
+          console.error("Error fetching current job:", fetchError);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "Failed to fetch current job configuration",
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 500,
+            }
+          );
+        }
+
+        // Merge new selectors with existing config
+        const updatedConfig = {
+          ...currentJob.config,
+          selectors: {
+            ...currentJob.config.selectors,
+            ...selectors,
+          },
+        };
+
+        // Update the job with new selectors
+        const { data: updatedJob, error: updateError } = await supabase
+          .from("scraping_jobs")
+          .update({ config: updatedConfig })
+          .eq("id", jobId)
+          .select()
+          .single();
+
+        if (updateError) {
+          console.error("Error updating job selectors:", updateError);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: "Failed to update job selectors",
+            }),
+            {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 500,
+            }
+          );
+        }
+
+        console.log(`✅ Successfully updated selectors for job ${jobId}`);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "Selectors updated successfully",
+            updatedJob,
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          }
+        );
+      } catch (error) {
+        console.error("Error in selector update:", error);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Internal server error during selector update",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          }
+        );
+      }
     }
 
     // Handle main scraping endpoint (existing functionality)
@@ -1505,7 +1513,6 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const openaiApiKey = Deno.env.get("OPENAI_API");
     const claudeApiKey = Deno.env.get("CLAUDE_API");
 
     // Fetch existing events from the last 60 days for duplicate checking
@@ -1663,10 +1670,9 @@ Deno.serve(async (req) => {
     let enhancedCount = 0;
 
     for (const event of allScrapedEvents) {
-      if (openaiApiKey || claudeApiKey) {
+      if (claudeApiKey) {
         const enhancedEvent = await enhanceEventWithAI(
           event,
-          openaiApiKey,
           claudeApiKey
         );
         enhancedEvents.push(enhancedEvent);
@@ -1726,7 +1732,6 @@ Deno.serve(async (req) => {
         jobs_processed: jobsToProcess.length,
         jobs_skipped: skippedJobs.length,
         skipped_jobs: skippedJobs,
-        openai_available: !!openaiApiKey,
         claude_available: !!claudeApiKey,
       }),
       {
