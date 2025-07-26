@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-trigger-source",
+    "authorization, x-client-info, apikey, content-type, x-trigger-source, x-endpoint",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
@@ -1150,11 +1150,15 @@ Format your response as JSON:
         }
       );
 
+      console.log(`🔍 Claude response status: ${claudeResponse.status}`);
+
       if (claudeResponse.ok) {
         const claudeData = await claudeResponse.json();
+        console.log(`🔍 Claude response data:`, claudeData);
         const analysisText = claudeData.content?.[0]?.text?.trim();
 
         if (analysisText) {
+          console.log(`🔍 Claude analysis text length: ${analysisText.length}`);
           try {
             // Try to parse JSON from the response
             const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
@@ -1162,17 +1166,26 @@ Format your response as JSON:
               const analysis = JSON.parse(jsonMatch[0]);
               console.log(`✅ Claude provided structure analysis`);
               return analysis;
+            } else {
+              console.log(`⚠️ No JSON found in Claude response`);
             }
           } catch (parseError) {
-            console.log(
-              `⚠️ Could not parse Claude JSON response, trying text extraction`
-            );
+            console.log(`⚠️ Could not parse Claude JSON response:`, parseError);
           }
+        } else {
+          console.log(`⚠️ No analysis text found in Claude response`);
         }
+      } else {
+        const errorText = await claudeResponse.text();
+        console.error(
+          `❌ Claude API error: ${claudeResponse.status} - ${errorText}`
+        );
       }
     } catch (error) {
       console.error("Claude API error:", error);
     }
+  } else {
+    console.log(`⚠️ No Claude API key available`);
   }
 
   // Fallback to OpenAI
@@ -1202,11 +1215,18 @@ Format your response as JSON:
         }
       );
 
+      console.log(`🔍 OpenAI response status: ${openaiResponse.status}`);
+
       if (openaiResponse.ok) {
         const openaiData = await openaiResponse.json();
+        console.log(
+          `🔍 OpenAI response data structure:`,
+          Object.keys(openaiData)
+        );
         const analysisText = openaiData.choices?.[0]?.message?.content?.trim();
 
         if (analysisText) {
+          console.log(`🔍 OpenAI analysis text length: ${analysisText.length}`);
           try {
             // Try to parse JSON from the response
             const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
@@ -1214,17 +1234,29 @@ Format your response as JSON:
               const analysis = JSON.parse(jsonMatch[0]);
               console.log(`✅ OpenAI provided structure analysis`);
               return analysis;
+            } else {
+              console.log(`⚠️ No JSON found in OpenAI response`);
             }
           } catch (parseError) {
-            console.log(`⚠️ Could not parse OpenAI JSON response`);
+            console.log(`⚠️ Could not parse OpenAI JSON response:`, parseError);
           }
+        } else {
+          console.log(`⚠️ No analysis text found in OpenAI response`);
         }
+      } else {
+        const errorText = await openaiResponse.text();
+        console.error(
+          `❌ OpenAI API error: ${openaiResponse.status} - ${errorText}`
+        );
       }
     } catch (error) {
       console.error("OpenAI API error:", error);
     }
+  } else {
+    console.log(`⚠️ No OpenAI API key available`);
   }
 
+  console.log(`❌ Both AI services failed or unavailable, returning null`);
   return null;
 }
 
@@ -1361,14 +1393,41 @@ Deno.serve(async (req) => {
     const pathname = url.pathname;
     const isAnalyzeRequest = req.headers.get("x-endpoint") === "analyze";
 
+    console.log(
+      `🔍 Request details: method=${
+        req.method
+      }, pathname=${pathname}, x-endpoint=${req.headers.get(
+        "x-endpoint"
+      )}, isAnalyzeRequest=${isAnalyzeRequest}`
+    );
+
     // Handle website analysis endpoint
     if (isAnalyzeRequest && req.method === "POST") {
       console.log("Starting website structure analysis...");
 
-      const requestBody = await req.json();
+      let requestBody;
+      try {
+        requestBody = await req.json();
+        console.log(`🔍 Request body:`, requestBody);
+      } catch (parseError) {
+        console.error(`❌ Failed to parse request body:`, parseError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Invalid JSON in request body",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 400,
+          }
+        );
+      }
+
       const { websiteUrl } = requestBody;
+      console.log(`🔍 Extracted websiteUrl: "${websiteUrl}"`);
 
       if (!websiteUrl) {
+        console.log(`❌ No websiteUrl provided in request body`);
         return new Response(
           JSON.stringify({
             success: false,
