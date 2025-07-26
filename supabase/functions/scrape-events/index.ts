@@ -325,7 +325,7 @@ async function extractMultipleEventsWithAI(
 
     // Extract relevant sections that might contain event data
     const relevantHtml = extractRelevantHTMLSnippets(html);
-    
+
     const prompt = `Extract all individual events from this HTML content from ${job.config.url}.
 
 HTML CONTENT:
@@ -385,7 +385,9 @@ Only include actual events, not navigation items, headers, or generic text. If n
           const jsonMatch = responseText.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
             const extractedEvents = JSON.parse(jsonMatch[0]);
-            console.log(`🤖 AI extracted ${extractedEvents.length} events from ${job.name}`);
+            console.log(
+              `🤖 AI extracted ${extractedEvents.length} events from ${job.name}`
+            );
 
             // Convert to ScrapedEvent objects
             const scrapedEvents: ScrapedEvent[] = [];
@@ -411,9 +413,14 @@ Only include actual events, not navigation items, headers, or generic text. If n
 
               const scrapedEvent: ScrapedEvent = {
                 title: event.title.substring(0, 200),
-                original_description: (event.description || `Event from ${job.name}`).substring(0, 500),
+                original_description: (
+                  event.description || `Event from ${job.name}`
+                ).substring(0, 500),
                 date: eventDate,
-                location: (event.location || "Des Moines, IA").substring(0, 100),
+                location: (event.location || "Des Moines, IA").substring(
+                  0,
+                  100
+                ),
                 venue: (event.location || "Des Moines, IA").substring(0, 100),
                 category: (event.category || "General").substring(0, 50),
                 price: (event.price || "See website").substring(0, 50),
@@ -862,9 +869,13 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
       const matches = html.match(pattern);
       if (matches && matches.length > 0) {
         // Take the first reasonable looking date that might be in the future
-        for (const match of matches.slice(0, 3)) { // Check first 3 matches
+        for (const match of matches.slice(0, 3)) {
+          // Check first 3 matches
           const testDate = new Date(match);
-          if (!isNaN(testDate.getTime()) && testDate > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)) {
+          if (
+            !isNaN(testDate.getTime()) &&
+            testDate > new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+          ) {
             dateText = match;
             console.log(`🔍 Found date via pattern matching: "${dateText}"`);
             break;
@@ -932,22 +943,29 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
     } else {
       // Try to fix year inference for dates that might be missing current year
       if (parsedDate.getFullYear() < 2020) {
-        console.log(`🔧 Attempting year correction for: ${parsedDate.toDateString()}`);
+        console.log(
+          `🔧 Attempting year correction for: ${parsedDate.toDateString()}`
+        );
         // Try current year
         const currentYearDate = new Date(parsedDate);
         currentYearDate.setFullYear(now.getFullYear());
-        
+
         // If that's in the past, try next year
         if (currentYearDate < now) {
           currentYearDate.setFullYear(now.getFullYear() + 1);
         }
-        
-        if (currentYearDate >= sixMonthsAgo && currentYearDate <= threeYearsFromNow) {
-          console.log(`✅ Corrected date to: ${currentYearDate.toDateString()}`);
+
+        if (
+          currentYearDate >= sixMonthsAgo &&
+          currentYearDate <= threeYearsFromNow
+        ) {
+          console.log(
+            `✅ Corrected date to: ${currentYearDate.toDateString()}`
+          );
           return currentYearDate;
         }
       }
-      
+
       console.log(`⚠️ Date out of valid range: ${parsedDate.toDateString()}`);
     }
   } else {
@@ -992,18 +1010,26 @@ async function scrapeWebsite(
     // Try AI-powered extraction first if Claude API is available
     if (claudeApiKey) {
       console.log(`🤖 Attempting AI-powered event extraction for ${job.name}`);
-      const aiExtractedEvents = await extractMultipleEventsWithAI(html, job, claudeApiKey);
-      
+      const aiExtractedEvents = await extractMultipleEventsWithAI(
+        html,
+        job,
+        claudeApiKey
+      );
+
       if (aiExtractedEvents.length > 0) {
-        console.log(`🤖 AI found ${aiExtractedEvents.length} events from ${job.name}`);
-        
+        console.log(
+          `🤖 AI found ${aiExtractedEvents.length} events from ${job.name}`
+        );
+
         // Process AI-extracted events for duplicates
         for (const event of aiExtractedEvents) {
           event.fingerprint = generateEventFingerprint(event);
           const duplicateCheck = isDuplicateEvent(event, existingEvents);
 
           if (duplicateCheck.isDuplicate) {
-            console.log(`⚠️ Skipping duplicate event: ${event.title} (Reason: ${duplicateCheck.reason})`);
+            console.log(
+              `⚠️ Skipping duplicate event: ${event.title} (Reason: ${duplicateCheck.reason})`
+            );
             duplicatesSkipped++;
           } else {
             events.push(event);
@@ -1017,7 +1043,9 @@ async function scrapeWebsite(
           duplicatesSkipped,
         };
       } else {
-        console.log(`🤖 AI extraction found no events, falling back to legacy method`);
+        console.log(
+          `🤖 AI extraction found no events, falling back to legacy method`
+        );
       }
     }
     const eventData = extractEventData(html, job);
@@ -1039,7 +1067,9 @@ async function scrapeWebsite(
 
     // If no date found, use a default future date to allow the event through for now
     if (!eventData.date) {
-      console.log(`⚠️ No date found for event "${eventData.title}", using default date`);
+      console.log(
+        `⚠️ No date found for event "${eventData.title}", using default date`
+      );
       const defaultDate = new Date();
       defaultDate.setDate(defaultDate.getDate() + 7); // One week from now
       eventData.date = defaultDate;
@@ -1048,17 +1078,21 @@ async function scrapeWebsite(
     // Skip generic titles - but allow sports schedules
     const genericTitles = [
       "event from",
-      "community event", 
+      "community event",
       "see website",
       "upcoming events",
       "shows",
       "events",
     ];
-    
+
     // Allow "schedule" for sports sites but enhance the title
-    if (eventData.title.toLowerCase() === "schedule" && 
-        (job.config.url.includes("cubs") || job.config.url.includes("wild") || 
-         job.config.url.includes("wolves") || job.config.url.includes("barnstormers"))) {
+    if (
+      eventData.title.toLowerCase() === "schedule" &&
+      (job.config.url.includes("cubs") ||
+        job.config.url.includes("wild") ||
+        job.config.url.includes("wolves") ||
+        job.config.url.includes("barnstormers"))
+    ) {
       // For sports schedules, create a more specific title based on the site
       if (job.config.url.includes("cubs")) {
         eventData.title = "Iowa Cubs Baseball Games";
