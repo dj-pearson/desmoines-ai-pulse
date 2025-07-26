@@ -1,6 +1,18 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
+interface ScrapingJobRow {
+  id: string;
+  name: string;
+  status: string;
+  last_run: string | null;
+  next_run: string | null;
+  events_found: number | null;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
 interface ScrapingJob {
   id: string;
   name: string;
@@ -207,13 +219,49 @@ export function useScraping() {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      // TODO: Replace with real API call when you have a scraping jobs table
-      // For now, simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // Fetch scraping jobs from Supabase using raw query to avoid type issues
+      const { data, error } = await (
+        supabase as unknown as {
+          from: (table: string) => {
+            select: (columns: string) => {
+              order: (
+                column: string,
+                options: { ascending: boolean }
+              ) => Promise<{
+                data: ScrapingJobRow[] | null;
+                error: Error | null;
+              }>;
+            };
+          };
+        }
+      )
+        .from("scraping_jobs")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      // Transform the database data to match our interface
+      const jobs: ScrapingJob[] = (data || []).map((row: ScrapingJobRow) => ({
+        id: row.id,
+        name: row.name,
+        status: row.status as "idle" | "running" | "completed" | "failed",
+        lastRun: row.last_run,
+        nextRun: row.next_run,
+        eventsFound: row.events_found || 0,
+        config: row.config as {
+          url?: string;
+          selectors?: Record<string, string>;
+          schedule?: string;
+          isActive?: boolean;
+        },
+      }));
 
       setState((prev) => ({
         ...prev,
-        jobs: realJobs,
+        jobs,
         isLoading: false,
       }));
     } catch (error) {
@@ -227,23 +275,8 @@ export function useScraping() {
   };
 
   const forceRefresh = async () => {
-    console.log(
-      "Force refreshing scraping jobs with real Des Moines sources..."
-    );
-    setState((prev) => ({
-      ...prev,
-      jobs: [], // Clear current jobs
-      isLoading: true,
-    }));
-
-    // Force reload with real jobs
-    setTimeout(() => {
-      setState((prev) => ({
-        ...prev,
-        jobs: realJobs,
-        isLoading: false,
-      }));
-    }, 100);
+    console.log("Force refreshing scraping jobs from database...");
+    await fetchJobs();
   };
 
   const runScrapingJob = async (jobId: string) => {
