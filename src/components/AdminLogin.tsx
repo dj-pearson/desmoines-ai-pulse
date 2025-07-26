@@ -118,7 +118,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                   Contact your system administrator if you need admin access.
                 </p>
                 <p className="text-xs text-blue-600 mt-2">
-                  Admin users: admin@desmoines.ai, admin@desmoinesinsider.com
+                  Admin users: admin@desmoines.ai, admin@desmoinesinsider.com,
+                  pearson.performance@gmail.com
                 </p>
               </div>
             </div>
