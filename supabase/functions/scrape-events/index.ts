@@ -23,6 +23,8 @@ interface ScrapingJob {
     schedule: string;
     isActive: boolean;
   };
+  last_run?: string;
+  events_found?: number;
 }
 
 interface ScrapedEvent {
@@ -37,6 +39,170 @@ interface ScrapedEvent {
   is_featured: boolean;
   enhanced_description?: string;
   is_enhanced?: boolean;
+  fingerprint?: string;
+}
+
+interface ExistingEvent {
+  id: string;
+  title: string;
+  date: string;
+  venue: string;
+  source_url: string;
+  fingerprint?: string;
+}
+
+// Generate a unique fingerprint for an event to detect duplicates
+function generateEventFingerprint(event: {
+  title: string;
+  date: Date;
+  venue: string;
+  source_url: string;
+}): string {
+  // Normalize the data for consistent comparison
+  const normalizedTitle = event.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "") // Remove special chars and spaces
+    .substring(0, 50); // Limit length
+
+  const normalizedVenue = event.venue
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .substring(0, 30);
+
+  const dateString = event.date.toISOString().split("T")[0]; // YYYY-MM-DD format
+  const domain = event.source_url.replace(/^https?:\/\//, "").split("/")[0];
+
+  return `${normalizedTitle}_${dateString}_${normalizedVenue}_${domain}`;
+}
+
+// Check if an event is likely a duplicate based on multiple criteria
+function isDuplicateEvent(
+  newEvent: ScrapedEvent,
+  existingEvents: ExistingEvent[]
+): { isDuplicate: boolean; reason?: string; existingEvent?: ExistingEvent } {
+  for (const existing of existingEvents) {
+    // 1. Exact fingerprint match (most reliable)
+    if (
+      newEvent.fingerprint &&
+      existing.fingerprint &&
+      newEvent.fingerprint === existing.fingerprint
+    ) {
+      return {
+        isDuplicate: true,
+        reason: "exact_fingerprint_match",
+        existingEvent: existing,
+      };
+    }
+
+    // 2. Same source URL, same date, similar title
+    if (existing.source_url === newEvent.source_url) {
+      const existingDate = new Date(existing.date);
+      const sameDate =
+        existingDate.toDateString() === newEvent.date.toDateString();
+
+      if (sameDate) {
+        // Calculate title similarity (simple approach)
+        const titleSimilarity = calculateTitleSimilarity(
+          newEvent.title,
+          existing.title
+        );
+
+        if (titleSimilarity > 0.8) {
+          // 80% similar
+          return {
+            isDuplicate: true,
+            reason: "same_source_date_similar_title",
+            existingEvent: existing,
+          };
+        }
+      }
+    }
+
+    // 3. Same title, same venue, date within 1 day (for recurring events)
+    const titleMatch =
+      newEvent.title.toLowerCase().trim() ===
+      existing.title.toLowerCase().trim();
+    const venueMatch =
+      newEvent.venue.toLowerCase().trim() ===
+      existing.venue.toLowerCase().trim();
+
+    if (titleMatch && venueMatch) {
+      const existingDate = new Date(existing.date);
+      const timeDiff = Math.abs(
+        newEvent.date.getTime() - existingDate.getTime()
+      );
+      const hoursDiff = timeDiff / (1000 * 60 * 60);
+
+      // If same title/venue and within 24 hours, likely duplicate
+      if (hoursDiff < 24) {
+        return {
+          isDuplicate: true,
+          reason: "same_title_venue_within_24h",
+          existingEvent: existing,
+        };
+      }
+    }
+  }
+
+  return { isDuplicate: false };
+}
+
+// Simple title similarity calculation using character overlap
+function calculateTitleSimilarity(title1: string, title2: string): number {
+  const normalize = (str: string) =>
+    str.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const norm1 = normalize(title1);
+  const norm2 = normalize(title2);
+
+  if (norm1.length === 0 || norm2.length === 0) return 0;
+
+  // Simple character overlap ratio
+  const minLength = Math.min(norm1.length, norm2.length);
+  const maxLength = Math.max(norm1.length, norm2.length);
+
+  let matches = 0;
+  for (let i = 0; i < minLength; i++) {
+    if (norm1[i] === norm2[i]) matches++;
+  }
+
+  return matches / maxLength;
+}
+
+// Check if we should skip scraping a job based on recent scraping history
+function shouldSkipJobScraping(job: ScrapingJob): {
+  skip: boolean;
+  reason?: string;
+} {
+  if (!job.last_run) {
+    return { skip: false }; // Never scraped before
+  }
+
+  const lastRun = new Date(job.last_run);
+  const now = new Date();
+  const hoursSinceLastRun =
+    (now.getTime() - lastRun.getTime()) / (1000 * 60 * 60);
+
+  // Skip if scraped within last 2 hours and found events
+  if (hoursSinceLastRun < 2 && (job.events_found || 0) > 0) {
+    return {
+      skip: true,
+      reason: `Recently scraped ${hoursSinceLastRun.toFixed(1)}h ago with ${
+        job.events_found
+      } events found`,
+    };
+  }
+
+  // Skip if scraped within last 30 minutes regardless of results
+  if (hoursSinceLastRun < 0.5) {
+    return {
+      skip: true,
+      reason: `Too recent - last scraped ${(hoursSinceLastRun * 60).toFixed(
+        0
+      )} minutes ago`,
+    };
+  }
+
+  return { skip: false };
 }
 
 // Simple HTML parser for extracting text content from HTML strings
@@ -115,8 +281,16 @@ function querySelectorText(html: string, selector: string): string {
   }
 }
 
-async function scrapeWebsite(job: ScrapingJob): Promise<ScrapedEvent[]> {
+async function scrapeWebsite(
+  job: ScrapingJob,
+  existingEvents: ExistingEvent[]
+): Promise<{
+  events: ScrapedEvent[];
+  newEventsCount: number;
+  duplicatesSkipped: number;
+}> {
   const events: ScrapedEvent[] = [];
+  let duplicatesSkipped = 0;
 
   try {
     console.log(`Scraping ${job.name} from ${job.config.url}`);
@@ -130,7 +304,7 @@ async function scrapeWebsite(job: ScrapingJob): Promise<ScrapedEvent[]> {
 
     if (!response.ok) {
       console.error(`Failed to fetch ${job.config.url}: ${response.status}`);
-      return events;
+      return { events, newEventsCount: 0, duplicatesSkipped };
     }
 
     const html = await response.text();
@@ -177,13 +351,30 @@ async function scrapeWebsite(job: ScrapingJob): Promise<ScrapedEvent[]> {
       is_featured: Math.random() > 0.7, // 30% chance of being featured
     };
 
-    events.push(event);
-    console.log(`Scraped event: ${event.title} from ${job.name}`);
+    // Generate fingerprint for duplicate detection
+    event.fingerprint = generateEventFingerprint(event);
+
+    // Check if this event is a duplicate
+    const duplicateCheck = isDuplicateEvent(event, existingEvents);
+
+    if (duplicateCheck.isDuplicate) {
+      console.log(
+        `⚠️ Skipping duplicate event: ${event.title} (Reason: ${duplicateCheck.reason})`
+      );
+      duplicatesSkipped++;
+    } else {
+      events.push(event);
+      console.log(`✅ New event: ${event.title} from ${job.name}`);
+    }
   } catch (error) {
     console.error(`Error scraping ${job.name}:`, error);
   }
 
-  return events;
+  return {
+    events,
+    newEventsCount: events.length,
+    duplicatesSkipped,
+  };
 }
 
 async function enhanceEventWithAI(
@@ -325,13 +516,43 @@ Deno.serve(async (req) => {
     const openaiApiKey = Deno.env.get("OPENAI_API");
     const claudeApiKey = Deno.env.get("CLAUDE_API");
 
+    // Fetch existing events from the last 60 days for duplicate checking
+    console.log("Fetching existing events for duplicate detection...");
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000);
+    const { data: existingEvents, error: eventsError } = await supabase
+      .from("events")
+      .select("id, title, date, venue, source_url")
+      .gte("date", sixtyDaysAgo.toISOString())
+      .order("date", { ascending: false });
+
+    if (eventsError) {
+      console.error("Error fetching existing events:", eventsError);
+      throw eventsError;
+    }
+
+    const existingEventsWithFingerprints: ExistingEvent[] = (
+      existingEvents || []
+    ).map((event) => ({
+      ...event,
+      fingerprint: generateEventFingerprint({
+        title: event.title,
+        date: new Date(event.date),
+        venue: event.venue,
+        source_url: event.source_url,
+      }),
+    }));
+
+    console.log(
+      `Found ${existingEventsWithFingerprints.length} existing events for duplicate checking`
+    );
+
     // Fetch active scraping jobs from database
     console.log("Fetching scraping jobs from database...");
     const { data: scrapingJobs, error: jobsError } = await supabase
       .from("scraping_jobs")
       .select("*")
       .eq("status", "idle")
-      .limit(5); // Limit to 5 jobs to avoid timeout
+      .limit(10); // Increase limit since we're optimizing
 
     if (jobsError) {
       console.error("Error fetching scraping jobs:", jobsError);
@@ -353,10 +574,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`Found ${scrapingJobs.length} active scraping jobs`);
+    console.log(`Found ${scrapingJobs.length} total scraping jobs`);
 
-    // Scrape events from all active jobs
-    const allScrapedEvents: ScrapedEvent[] = [];
+    // Filter jobs based on recent scraping history
+    const jobsToProcess: any[] = [];
+    const skippedJobs: { name: string; reason: string }[] = [];
 
     for (const jobRow of scrapingJobs) {
       const job: ScrapingJob = {
@@ -364,31 +586,65 @@ Deno.serve(async (req) => {
         name: jobRow.name,
         status: jobRow.status,
         config: jobRow.config as any,
+        last_run: jobRow.last_run,
+        events_found: jobRow.events_found,
       };
 
-      if (job.config?.isActive && job.config?.url) {
-        const scrapedEvents = await scrapeWebsite(job);
-        allScrapedEvents.push(...scrapedEvents);
-
-        // Update job status
-        await supabase
-          .from("scraping_jobs")
-          .update({
-            last_run: new Date().toISOString(),
-            events_found: scrapedEvents.length,
-          })
-          .eq("id", job.id);
+      const skipCheck = shouldSkipJobScraping(job);
+      if (skipCheck.skip) {
+        console.log(`⏭️ Skipping ${job.name}: ${skipCheck.reason}`);
+        skippedJobs.push({ name: job.name, reason: skipCheck.reason! });
+      } else if (job.config?.isActive && job.config?.url) {
+        jobsToProcess.push(jobRow);
       }
     }
 
-    console.log(`Scraped ${allScrapedEvents.length} events total`);
+    console.log(
+      `Processing ${jobsToProcess.length} jobs, skipped ${skippedJobs.length} jobs`
+    );
+
+    // Scrape events from filtered jobs
+    const allScrapedEvents: ScrapedEvent[] = [];
+    let totalDuplicatesSkipped = 0;
+
+    for (const jobRow of jobsToProcess) {
+      const job: ScrapingJob = {
+        id: jobRow.id,
+        name: jobRow.name,
+        status: jobRow.status,
+        config: jobRow.config as any,
+      };
+
+      const scrapeResult = await scrapeWebsite(
+        job,
+        existingEventsWithFingerprints
+      );
+      allScrapedEvents.push(...scrapeResult.events);
+      totalDuplicatesSkipped += scrapeResult.duplicatesSkipped;
+
+      // Update job status
+      await supabase
+        .from("scraping_jobs")
+        .update({
+          last_run: new Date().toISOString(),
+          events_found: scrapeResult.newEventsCount,
+        })
+        .eq("id", job.id);
+    }
+
+    console.log(
+      `Scraped ${allScrapedEvents.length} new events, skipped ${totalDuplicatesSkipped} duplicates`
+    );
 
     if (allScrapedEvents.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
-          message: "No events found from scraping",
+          message: `No new events found. Skipped ${totalDuplicatesSkipped} duplicates and ${skippedJobs.length} recently scraped jobs.`,
           events_processed: 0,
+          duplicates_skipped: totalDuplicatesSkipped,
+          jobs_skipped: skippedJobs.length,
+          skipped_jobs: skippedJobs,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -459,10 +715,13 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Successfully scraped and processed ${enhancedEvents.length} events`,
+        message: `Successfully scraped and processed ${enhancedEvents.length} new events`,
         events_processed: enhancedEvents.length,
         events_enhanced: enhancedCount,
-        jobs_processed: scrapingJobs.length,
+        duplicates_skipped: totalDuplicatesSkipped,
+        jobs_processed: jobsToProcess.length,
+        jobs_skipped: skippedJobs.length,
+        skipped_jobs: skippedJobs,
         openai_available: !!openaiApiKey,
         claude_available: !!claudeApiKey,
       }),
