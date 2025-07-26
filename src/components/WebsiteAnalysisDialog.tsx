@@ -160,12 +160,12 @@ export default function WebsiteAnalysisDialog({
           title: "Selector Applied!",
           description: `Updated ${field} selector successfully`,
         });
-        
+
         // Refresh the analysis to show updated current selectors
         setTimeout(() => {
           analyzeWebsite();
         }, 1000);
-        
+
         // Notify parent component of the update
         onUpdate?.();
       } else {
@@ -175,7 +175,8 @@ export default function WebsiteAnalysisDialog({
       console.error("Failed to apply selector:", error);
       toast({
         title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to apply selector",
+        description:
+          error instanceof Error ? error.message : "Failed to apply selector",
         variant: "destructive",
       });
     } finally {
@@ -185,7 +186,7 @@ export default function WebsiteAnalysisDialog({
 
   const applyBestSelectors = async () => {
     if (!analysisResult?.analysis) return;
-    
+
     setIsUpdating(true);
     try {
       const bestSelectors = {
@@ -216,12 +217,12 @@ export default function WebsiteAnalysisDialog({
           title: "All Selectors Applied!",
           description: "Updated all selectors with AI recommendations",
         });
-        
+
         // Refresh the analysis to show updated current selectors
         setTimeout(() => {
           analyzeWebsite();
         }, 1000);
-        
+
         // Notify parent component of the update
         onUpdate?.();
       } else {
@@ -231,7 +232,8 @@ export default function WebsiteAnalysisDialog({
       console.error("Failed to apply selectors:", error);
       toast({
         title: "Update Failed",
-        description: error instanceof Error ? error.message : "Failed to apply selectors",
+        description:
+          error instanceof Error ? error.message : "Failed to apply selectors",
         variant: "destructive",
       });
     } finally {

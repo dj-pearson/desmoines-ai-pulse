@@ -1315,18 +1315,28 @@ Deno.serve(async (req) => {
 
       const claudeApiKey = Deno.env.get("CLAUDE_API");
 
-      console.log(`🔑 API Keys availability - Claude: ${claudeApiKey ? 'Available' : 'Missing'}`);
+      console.log(
+        `🔑 API Keys availability - Claude: ${
+          claudeApiKey ? "Available" : "Missing"
+        }`
+      );
 
       // Check if we have Claude API key
       if (!claudeApiKey) {
-        console.error("❌ No Claude API key found. Please configure CLAUDE_API environment variable.");
-        return new Response(JSON.stringify({
-          success: false,
-          error: "Claude API key not configured. Please set CLAUDE_API environment variable in your Supabase project settings."
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 500,
-        });
+        console.error(
+          "❌ No Claude API key found. Please configure CLAUDE_API environment variable."
+        );
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error:
+              "Claude API key not configured. Please set CLAUDE_API environment variable in your Supabase project settings.",
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 500,
+          }
+        );
       }
 
       const analysisResult = await analyzeWebsiteStructure(
@@ -1671,10 +1681,7 @@ Deno.serve(async (req) => {
 
     for (const event of allScrapedEvents) {
       if (claudeApiKey) {
-        const enhancedEvent = await enhanceEventWithAI(
-          event,
-          claudeApiKey
-        );
+        const enhancedEvent = await enhanceEventWithAI(event, claudeApiKey);
         enhancedEvents.push(enhancedEvent);
         if (enhancedEvent.is_enhanced) enhancedCount++;
         console.log(
