@@ -64,12 +64,177 @@ interface ScraperTemplate {
 
 const scraperTemplates: ScraperTemplate[] = [
   {
-    id: "eventbrite",
-    name: "Eventbrite Events",
-    description: "Scrape events from Eventbrite event listing pages",
-    category: "Events",
+    id: "catch-des-moines",
+    name: "Catch Des Moines Events",
+    description:
+      "Official Des Moines tourism events from the city's main events portal",
+    category: "Tourism",
     difficulty: "beginner",
     schedule: "0 */6 * * *", // Every 6 hours
+    selectors: {
+      title: ".event-title, h2.title, h3.title",
+      description: ".event-description, .description, .summary",
+      date: ".event-date, .date, time[datetime]",
+      location: ".event-location, .location, .venue",
+      price: ".event-price, .price, .cost",
+      category: ".event-category, .category, .event-type",
+    },
+    example_url: "https://www.catchdesmoines.com/events/",
+    tips: [
+      "Official tourism site with well-structured event data",
+      "Events are categorized by type (arts, food, festivals, etc.)",
+      "Check for event submission forms for comprehensive coverage",
+      "May use dynamic loading - wait for content to appear",
+    ],
+  },
+  {
+    id: "iowa-cubs",
+    name: "Iowa Cubs Baseball Schedule",
+    description:
+      "Triple-A baseball games at Principal Park from the official MiLB site",
+    category: "Sports",
+    difficulty: "intermediate",
+    schedule: "0 */12 * * *", // Every 12 hours
+    selectors: {
+      title: ".game-matchup, .opponent, .game-title",
+      description: ".game-info, .promotion-info, .special-event",
+      date: ".game-date, .date, .schedule-date, [data-date]",
+      location: ".venue, .location, .park-name",
+      price: ".ticket-price, .price, .buy-tickets",
+      category: ".game-type, .promotion-type",
+    },
+    example_url: "https://www.milb.com/iowa/schedule",
+    tips: [
+      "MiLB sites have consistent structure across teams",
+      "Look for promotional games and special events",
+      "Schedule filters may affect content loading",
+      "Games include both home and away - filter for home games",
+    ],
+  },
+  {
+    id: "iowa-wolves",
+    name: "Iowa Wolves G-League Basketball",
+    description:
+      "Professional basketball games from the NBA G-League affiliate",
+    category: "Sports",
+    difficulty: "intermediate",
+    schedule: "0 */12 * * *", // Every 12 hours
+    selectors: {
+      title: ".game-matchup, .opponent, .vs, .game-info",
+      description: ".game-details, .special-event, .promotion",
+      date: ".game-date, .date, .schedule-date, time",
+      location: ".venue, .arena, .location",
+      price: ".ticket-info, .price, .tickets",
+      category: ".game-type, .season-type",
+    },
+    example_url: "https://iowa.gleague.nba.com/schedule",
+    tips: [
+      "NBA G-League sites use standardized templates",
+      "Season vs playoff games have different structures",
+      "Check for promotional nights and special events",
+      "Schedule may include filters that affect content",
+    ],
+  },
+  {
+    id: "iowa-wild",
+    name: "Iowa Wild Hockey Schedule",
+    description: "Professional hockey games from the AHL affiliate team",
+    category: "Sports",
+    difficulty: "intermediate",
+    schedule: "0 */12 * * *", // Every 12 hours
+    selectors: {
+      title: ".game-matchup, .opponent, .vs-opponent",
+      description: ".game-info, .promotion, .special-event",
+      date: ".game-date, .date, .game-time",
+      location: ".venue, .arena, .rink",
+      price: ".ticket-price, .pricing, .tickets",
+      category: ".game-type, .promotion-type",
+    },
+    example_url: "https://www.iowawild.com/games",
+    tips: [
+      "Hockey schedules often include promotional themes",
+      "Look for season ticket vs single game pricing",
+      "Game times may be in different time zones",
+      "Check for playoff vs regular season differences",
+    ],
+  },
+  {
+    id: "vibrant-music-hall",
+    name: "Vibrant Music Hall Shows",
+    description: "Live music and entertainment venue in downtown Des Moines",
+    category: "Music",
+    difficulty: "beginner",
+    schedule: "0 */6 * * *", // Every 6 hours
+    selectors: {
+      title: ".show-title, .artist-name, .event-title, h1, h2",
+      description: ".show-description, .event-details, .artist-bio",
+      date: ".show-date, .event-date, .date, time",
+      location: ".venue, .hall, .room",
+      price: ".ticket-price, .pricing, .cost, .price-range",
+      category: ".genre, .show-type, .music-type",
+    },
+    example_url: "https://www.vibrantmusichall.com/",
+    tips: [
+      "Music venues often list artist names prominently",
+      "Check for all-ages vs 21+ events",
+      "Ticket prices may show ranges ($25-$45)",
+      "Genre information helps with categorization",
+    ],
+  },
+  {
+    id: "iowa-events-center",
+    name: "Iowa Events Center",
+    description:
+      "Major venue hosting concerts, conventions, and special events",
+    category: "Venues",
+    difficulty: "beginner",
+    schedule: "0 */8 * * *", // Every 8 hours
+    selectors: {
+      title: ".event-title, .show-title, h2, h3",
+      description: ".event-description, .show-description, .summary",
+      date: ".event-date, .show-date, .date, time",
+      location: ".venue, .location, .hall",
+      price: ".ticket-price, .pricing, .cost",
+      category: ".event-type, .show-type, .category",
+    },
+    example_url: "https://www.iowaeventscenter.com/",
+    tips: [
+      "Large venues host diverse event types",
+      "Check for different halls/rooms within venue",
+      "May include both public and private events",
+      "Corporate events might not show pricing",
+    ],
+  },
+  {
+    id: "google-events-dsm",
+    name: "Google Events - Des Moines",
+    description: "Aggregate events from Google's local events search",
+    category: "Aggregator",
+    difficulty: "advanced",
+    schedule: "0 */4 * * *", // Every 4 hours
+    selectors: {
+      title: ".event-title, .g-card h3, .event-name",
+      description: ".event-description, .snippet, .event-details",
+      date: ".event-date, .date, .when",
+      location: ".event-location, .location, .where",
+      price: ".price, .cost, .ticket-info",
+      category: ".event-type, .category",
+    },
+    example_url: "https://www.google.com/search?q=events+in+des+moines+iowa",
+    tips: [
+      "Google results change frequently and unpredictably",
+      "May require handling of anti-bot measures",
+      "Results are personalized and location-based",
+      "Consider using Google Events API instead of scraping",
+    ],
+  },
+  {
+    id: "eventbrite-dsm",
+    name: "Eventbrite - Des Moines Area",
+    description: "Community and professional events listed on Eventbrite",
+    category: "Community",
+    difficulty: "beginner",
+    schedule: "0 */4 * * *", // Every 4 hours
     selectors: {
       title: "[data-event-name], .event-title, h1",
       description: ".event-description, .event-summary, .eds-text--left",
@@ -84,72 +249,6 @@ const scraperTemplates: ScraperTemplate[] = [
       "Look for [data-event-*] attributes first",
       "Events load dynamically, may need to wait for content",
       "Check for pagination to get all events",
-    ],
-  },
-  {
-    id: "facebook-events",
-    name: "Facebook Events",
-    description:
-      "Extract events from Facebook event pages (limited due to restrictions)",
-    category: "Social",
-    difficulty: "advanced",
-    schedule: "0 */12 * * *", // Every 12 hours
-    selectors: {
-      title: '[data-testid="event-permalink-event-name"], h1',
-      description: '[data-testid="event-permalink-description"]',
-      date: '[data-testid="event-permalink-start-time"]',
-      location: '[data-testid="event-permalink-location"]',
-    },
-    example_url: "https://www.facebook.com/events/",
-    tips: [
-      "Facebook has strict anti-scraping measures",
-      "May require authentication or special handling",
-      "Consider using their Graph API instead",
-      "Test thoroughly as selectors change frequently",
-    ],
-  },
-  {
-    id: "meetup",
-    name: "Meetup Events",
-    description: "Scrape events from Meetup.com group pages",
-    category: "Community",
-    difficulty: "intermediate",
-    schedule: "0 */4 * * *", // Every 4 hours
-    selectors: {
-      title: '[data-testid="event-title"], .event-title',
-      description: ".event-description, .break-words",
-      date: '[data-testid="event-time"], .event-time-link',
-      location: '[data-testid="event-venue"], .venue-info',
-      category: ".category-label, .topic-tag",
-    },
-    example_url: "https://www.meetup.com/cities/us/ia/des_moines/",
-    tips: [
-      "Meetup has good semantic markup",
-      "Use data-testid attributes when available",
-      "Events may load via AJAX, wait for content",
-      "Group pages have different structure than event lists",
-    ],
-  },
-  {
-    id: "local-venue",
-    name: "Local Venue Website",
-    description: "Generic template for local venue event pages",
-    category: "Venues",
-    difficulty: "beginner",
-    schedule: "0 0 * * *", // Daily at midnight
-    selectors: {
-      title: "h1, h2, .event-title, .show-title",
-      description: ".description, .event-details, p",
-      date: ".date, .event-date, time, .datetime",
-      location: ".venue, .location, .address",
-      price: ".price, .cost, .ticket-price",
-    },
-    example_url: "https://example-venue.com/events",
-    tips: [
-      "Start with semantic HTML elements (h1, h2, time)",
-      'Look for class names with "event", "show", "date"',
-      "Many venues use WordPress with event plugins",
-      "Check page source for structured data (JSON-LD)",
     ],
   },
 ];
@@ -192,8 +291,41 @@ const cronTemplates = [
   },
 ];
 
+interface ScraperConfig {
+  name: string;
+  url: string;
+  schedule: string;
+  selectors: {
+    title: string;
+    description: string;
+    date: string;
+    location: string;
+    price?: string;
+    category?: string;
+  };
+  category: string;
+  enabled: boolean;
+}
+
+interface AnalysisResult {
+  domain: string;
+  detected_platform: string;
+  recommended_schedule: string;
+  confidence: number;
+  suggested_selectors: {
+    title: string;
+    description: string;
+    date: string;
+    location: string;
+    price?: string;
+    category?: string;
+  };
+  tips: string[];
+  potential_issues: string[];
+}
+
 interface ScraperConfigWizardProps {
-  onSave: (config: any) => void;
+  onSave: (config: ScraperConfig) => void;
   onClose: () => void;
 }
 
@@ -203,11 +335,13 @@ export default function ScraperConfigWizard({
 }: ScraperConfigWizardProps) {
   const [activeTab, setActiveTab] = useState("url-analysis");
   const [url, setUrl] = useState("");
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(
+    null
+  );
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedTemplate, setSelectedTemplate] =
     useState<ScraperTemplate | null>(null);
-  const [customConfig, setCustomConfig] = useState({
+  const [customConfig, setCustomConfig] = useState<ScraperConfig>({
     name: "",
     url: "",
     schedule: "0 */6 * * *",
@@ -238,7 +372,7 @@ export default function ScraperConfigWizard({
 
     // Simulate AI analysis (in real implementation, this would call an API)
     setTimeout(() => {
-      const mockAnalysis = {
+      const mockAnalysis: AnalysisResult = {
         domain: new URL(url).hostname,
         detected_platform: "Custom",
         recommended_schedule: "0 */6 * * *",
@@ -249,6 +383,7 @@ export default function ScraperConfigWizard({
           date: "time, .date, .event-date, [datetime]",
           location: ".location, .venue, .address",
           price: ".price, .cost, .ticket-price",
+          category: ".category, .event-type, .genre",
         },
         tips: [
           "Site uses standard HTML5 semantic markup",

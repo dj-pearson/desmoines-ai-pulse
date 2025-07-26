@@ -31,45 +31,174 @@ export function useScraping() {
     isGlobalRunning: false,
   });
 
-  // Mock scraping jobs for now - replace with real data when you have a scraping jobs table
-  const mockJobs: ScrapingJob[] = [
+  // Real scraping jobs for Des Moines area event sources
+  const realJobs: ScrapingJob[] = [
     {
-      id: "1",
-      name: "Des Moines Events",
+      id: "catch-des-moines",
+      name: "Catch Des Moines Events",
+      status: "idle",
+      lastRun: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
+      nextRun: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(), // 3 hours from now
+      eventsFound: 0,
+      config: {
+        url: "https://www.catchdesmoines.com/events/",
+        schedule: "0 */6 * * *", // Every 6 hours
+        selectors: {
+          title: ".event-title, h2.title, h3.title",
+          description: ".event-description, .description, .summary",
+          date: ".event-date, .date, time[datetime]",
+          location: ".event-location, .location, .venue",
+          price: ".event-price, .price, .cost",
+          category: ".event-category, .category, .event-type",
+        },
+        isActive: true,
+      },
+    },
+    {
+      id: "iowa-cubs",
+      name: "Iowa Cubs Schedule",
+      status: "idle",
+      lastRun: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+      nextRun: new Date(Date.now() + 11 * 60 * 60 * 1000).toISOString(), // 11 hours from now
+      eventsFound: 0,
+      config: {
+        url: "https://www.milb.com/iowa/schedule",
+        schedule: "0 */12 * * *", // Every 12 hours (games don't change often)
+        selectors: {
+          title: ".game-matchup, .opponent, .game-title",
+          description: ".game-info, .promotion-info, .special-event",
+          date: ".game-date, .date, .schedule-date, [data-date]",
+          location: ".venue, .location, .park-name",
+          price: ".ticket-price, .price, .buy-tickets",
+          category: ".game-type, .promotion-type",
+        },
+        isActive: true,
+      },
+    },
+    {
+      id: "iowa-wolves",
+      name: "Iowa Wolves G-League",
       status: "idle",
       lastRun: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-      nextRun: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // 4 hours from now
+      nextRun: new Date(Date.now() + 10 * 60 * 60 * 1000).toISOString(), // 10 hours from now
       eventsFound: 0,
       config: {
-        url: "https://www.desmoinesregister.com/events/",
-        schedule: "0 */6 * * *", // Every 6 hours
+        url: "https://iowa.gleague.nba.com/schedule",
+        schedule: "0 */12 * * *", // Every 12 hours
+        selectors: {
+          title: ".game-matchup, .opponent, .vs, .game-info",
+          description: ".game-details, .special-event, .promotion",
+          date: ".game-date, .date, .schedule-date, time",
+          location: ".venue, .arena, .location",
+          price: ".ticket-info, .price, .tickets",
+          category: ".game-type, .season-type",
+        },
         isActive: true,
       },
     },
     {
-      id: "2",
-      name: "Restaurant Openings",
-      status: "idle",
-      lastRun: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-      nextRun: new Date(Date.now() + 18 * 60 * 60 * 1000).toISOString(), // 18 hours from now
-      eventsFound: 0,
-      config: {
-        url: "https://www.desmoinesregister.com/story/entertainment/dining/",
-        schedule: "0 0 */1 * *", // Daily
-        isActive: true,
-      },
-    },
-    {
-      id: "3",
-      name: "Arts & Culture",
+      id: "iowa-wild",
+      name: "Iowa Wild Hockey",
       status: "idle",
       lastRun: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
       nextRun: new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(), // 8 hours from now
       eventsFound: 0,
       config: {
-        url: "https://www.desmoinesartscenter.org/events",
-        schedule: "0 0 */2 * *", // Every 2 days
-        isActive: false,
+        url: "https://www.iowawild.com/games",
+        schedule: "0 */12 * * *", // Every 12 hours
+        selectors: {
+          title: ".game-matchup, .opponent, .vs-opponent",
+          description: ".game-info, .promotion, .special-event",
+          date: ".game-date, .date, .game-time",
+          location: ".venue, .arena, .rink",
+          price: ".ticket-price, .pricing, .tickets",
+          category: ".game-type, .promotion-type",
+        },
+        isActive: true,
+      },
+    },
+    {
+      id: "iowa-barnstormers",
+      name: "Iowa Barnstormers Arena Football",
+      status: "idle",
+      lastRun: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
+      nextRun: new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString(), // 7 hours from now
+      eventsFound: 0,
+      config: {
+        url: "https://theiowabarnstormers.com/",
+        schedule: "0 0 */2 * *", // Every 2 days (less frequent schedule changes)
+        selectors: {
+          title: ".game-title, .matchup, .opponent",
+          description: ".game-details, .event-info, .description",
+          date: ".game-date, .date, .schedule-date",
+          location: ".venue, .stadium, .arena",
+          price: ".ticket-info, .pricing, .tickets",
+          category: ".game-type, .event-type",
+        },
+        isActive: true,
+      },
+    },
+    {
+      id: "iowa-events-center",
+      name: "Iowa Events Center",
+      status: "idle",
+      lastRun: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+      nextRun: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(), // 4 hours from now
+      eventsFound: 0,
+      config: {
+        url: "https://www.iowaeventscenter.com/",
+        schedule: "0 */8 * * *", // Every 8 hours
+        selectors: {
+          title: ".event-title, .show-title, h2, h3",
+          description: ".event-description, .show-description, .summary",
+          date: ".event-date, .show-date, .date, time",
+          location: ".venue, .location, .hall",
+          price: ".ticket-price, .pricing, .cost",
+          category: ".event-type, .show-type, .category",
+        },
+        isActive: true,
+      },
+    },
+    {
+      id: "vibrant-music-hall",
+      name: "Vibrant Music Hall",
+      status: "idle",
+      lastRun: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+      nextRun: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(), // 5 hours from now
+      eventsFound: 0,
+      config: {
+        url: "https://www.vibrantmusichall.com/",
+        schedule: "0 */6 * * *", // Every 6 hours
+        selectors: {
+          title: ".show-title, .artist-name, .event-title, h1, h2",
+          description: ".show-description, .event-details, .artist-bio",
+          date: ".show-date, .event-date, .date, time",
+          location: ".venue, .hall, .room",
+          price: ".ticket-price, .pricing, .cost, .price-range",
+          category: ".genre, .show-type, .music-type",
+        },
+        isActive: true,
+      },
+    },
+    {
+      id: "google-events-dsm",
+      name: "Google Events - Des Moines",
+      status: "idle",
+      lastRun: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+      nextRun: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
+      eventsFound: 0,
+      config: {
+        url: "https://www.google.com/search?q=events+in+des+moines+iowa",
+        schedule: "0 */4 * * *", // Every 4 hours
+        selectors: {
+          title: ".event-title, .g-card h3, .event-name",
+          description: ".event-description, .snippet, .event-details",
+          date: ".event-date, .date, .when",
+          location: ".event-location, .location, .where",
+          price: ".price, .cost, .ticket-info",
+          category: ".event-type, .category",
+        },
+        isActive: true,
       },
     },
   ];
@@ -84,7 +213,7 @@ export function useScraping() {
 
       setState((prev) => ({
         ...prev,
-        jobs: mockJobs,
+        jobs: realJobs,
         isLoading: false,
       }));
     } catch (error) {
