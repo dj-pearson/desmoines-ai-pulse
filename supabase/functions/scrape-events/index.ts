@@ -170,10 +170,37 @@ function calculateTitleSimilarity(title1: string, title2: string): number {
 }
 
 // Check if we should skip scraping a job based on recent scraping history
-function shouldSkipJobScraping(job: ScrapingJob): {
+function shouldSkipJobScraping(
+  job: ScrapingJob,
+  isAdminDashboard = false
+): {
   skip: boolean;
   reason?: string;
 } {
+  // If triggered from admin dashboard, allow more frequent scraping
+  if (isAdminDashboard) {
+    if (!job.last_run) {
+      return { skip: false }; // Never scraped before
+    }
+
+    const lastRun = new Date(job.last_run);
+    const now = new Date();
+    const minutesSinceLastRun =
+      (now.getTime() - lastRun.getTime()) / (1000 * 60);
+
+    // For admin dashboard, only skip if scraped within last 2 minutes
+    if (minutesSinceLastRun < 2) {
+      return {
+        skip: true,
+        reason: `Too recent - last scraped ${minutesSinceLastRun.toFixed(
+          1
+        )} minutes ago`,
+      };
+    }
+
+    return { skip: false };
+  }
+
   if (!job.last_run) {
     return { skip: false }; // Never scraped before
   }
@@ -183,8 +210,8 @@ function shouldSkipJobScraping(job: ScrapingJob): {
   const hoursSinceLastRun =
     (now.getTime() - lastRun.getTime()) / (1000 * 60 * 60);
 
-  // Skip if scraped within last 2 hours and found events
-  if (hoursSinceLastRun < 2 && (job.events_found || 0) > 0) {
+  // Skip if scraped within last 15 minutes and found events (reduced from 2 hours)
+  if (hoursSinceLastRun < 0.25 && (job.events_found || 0) > 0) {
     return {
       skip: true,
       reason: `Recently scraped ${hoursSinceLastRun.toFixed(1)}h ago with ${
@@ -193,8 +220,8 @@ function shouldSkipJobScraping(job: ScrapingJob): {
     };
   }
 
-  // Skip if scraped within last 30 minutes regardless of results
-  if (hoursSinceLastRun < 0.5) {
+  // Skip if scraped within last 5 minutes regardless of results (reduced from 30 minutes)
+  if (hoursSinceLastRun < 0.083) {
     return {
       skip: true,
       reason: `Too recent - last scraped ${(hoursSinceLastRun * 60).toFixed(
@@ -1029,6 +1056,7 @@ Deno.serve(async (req) => {
     // Filter jobs based on recent scraping history
     const jobsToProcess: any[] = [];
     const skippedJobs: { name: string; reason: string }[] = [];
+    const isAdminDashboard = triggerSource === "admin-dashboard";
 
     for (const jobRow of scrapingJobs) {
       const job: ScrapingJob = {
@@ -1040,7 +1068,7 @@ Deno.serve(async (req) => {
         events_found: jobRow.events_found,
       };
 
-      const skipCheck = shouldSkipJobScraping(job);
+      const skipCheck = shouldSkipJobScraping(job, isAdminDashboard);
       if (skipCheck.skip) {
         console.log(`⏭️ Skipping ${job.name}: ${skipCheck.reason}`);
         skippedJobs.push({ name: job.name, reason: skipCheck.reason! });
