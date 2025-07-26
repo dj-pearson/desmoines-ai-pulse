@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
     const { data: insertedEvents, error: insertError } = await supabase
       .from("events")
       .upsert(eventsToInsert, {
-        onConflict: "title,date",
+        onConflict: "title,venue",
         ignoreDuplicates: false,
       })
       .select();
