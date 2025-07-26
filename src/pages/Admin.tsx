@@ -161,10 +161,8 @@ export default function Admin() {
     forceRefresh,
   } = useScraping();
 
-  // Force refresh scraping jobs on component mount to ensure real jobs are loaded
-  useEffect(() => {
-    forceRefresh();
-  }, [forceRefresh]);
+  // Remove the useEffect that's causing infinite loop
+  // The scraping jobs will load naturally when the component mounts
 
   // Show loading state
   if (isLoading) {

@@ -219,7 +219,9 @@ export function useScraping() {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      // Fetch scraping jobs from Supabase using raw query to avoid type issues
+      console.log("Fetching scraping jobs from database...");
+
+      // Direct query with type casting
       const { data, error } = await (
         supabase as unknown as {
           from: (table: string) => {
@@ -228,7 +230,7 @@ export function useScraping() {
                 column: string,
                 options: { ascending: boolean }
               ) => Promise<{
-                data: ScrapingJobRow[] | null;
+                data: unknown[] | null;
                 error: Error | null;
               }>;
             };
@@ -240,24 +242,48 @@ export function useScraping() {
         .order("created_at", { ascending: false });
 
       if (error) {
+        console.error("Database query error:", error);
         throw error;
       }
 
-      // Transform the database data to match our interface
-      const jobs: ScrapingJob[] = (data || []).map((row: ScrapingJobRow) => ({
-        id: row.id,
-        name: row.name,
-        status: row.status as "idle" | "running" | "completed" | "failed",
-        lastRun: row.last_run,
-        nextRun: row.next_run,
-        eventsFound: row.events_found || 0,
-        config: row.config as {
-          url?: string;
-          selectors?: Record<string, string>;
-          schedule?: string;
-          isActive?: boolean;
-        },
-      }));
+      console.log("Raw database response:", data);
+
+      if (!data || data.length === 0) {
+        console.log(
+          "No scraping jobs found in database - this is expected if migration hasn't been run"
+        );
+        setState((prev) => ({
+          ...prev,
+          jobs: [],
+          isLoading: false,
+        }));
+        return;
+      }
+
+      // Transform the database data
+      const jobs: ScrapingJob[] = data.map((row: unknown) => {
+        const typedRow = row as ScrapingJobRow;
+        return {
+          id: typedRow.id,
+          name: typedRow.name,
+          status: typedRow.status as
+            | "idle"
+            | "running"
+            | "completed"
+            | "failed",
+          lastRun: typedRow.last_run,
+          nextRun: typedRow.next_run,
+          eventsFound: typedRow.events_found || 0,
+          config: typedRow.config as {
+            url?: string;
+            selectors?: Record<string, string>;
+            schedule?: string;
+            isActive?: boolean;
+          },
+        };
+      });
+
+      console.log("Successfully transformed jobs:", jobs);
 
       setState((prev) => ({
         ...prev,
@@ -266,9 +292,17 @@ export function useScraping() {
       }));
     } catch (error) {
       console.error("Error fetching scraping jobs:", error);
+
+      // If database query fails, it might be because the table doesn't exist or migration wasn't run
+      console.log(
+        "Database query failed - falling back to empty array. Make sure to run the migration!"
+      );
+
       setState((prev) => ({
         ...prev,
-        error: "Failed to fetch scraping jobs",
+        jobs: [],
+        error:
+          "Failed to fetch scraping jobs. Please run the database migration.",
         isLoading: false,
       }));
     }
