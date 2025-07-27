@@ -9,6 +9,7 @@ import UserRoleManager from "@/components/UserRoleManager";
 import ContentTable from "@/components/ContentTable";
 import AICrawler from "@/components/AICrawler";
 import ScraperConfigWizard from "@/components/ScraperConfigWizard";
+import ScrapingJobManager from "@/components/ScrapingJobManager";
 import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
@@ -22,6 +23,7 @@ export default function Admin() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
+  const [showJobManager, setShowJobManager] = useState(false);
 
   // Data hooks
   const events = useEvents();
@@ -266,7 +268,10 @@ export default function Admin() {
                           <Bot className="h-4 w-4" />
                           Create New Scraper
                         </Button>
-                        <Button variant="outline">
+                        <Button 
+                          variant="outline"
+                          onClick={() => setShowJobManager(true)}
+                        >
                           <Settings className="h-4 w-4 mr-2" />
                           Manage Existing
                         </Button>
@@ -393,6 +398,14 @@ export default function Admin() {
             setShowScraperWizard(false);
           }}
           onClose={() => setShowScraperWizard(false)}
+        />
+      )}
+
+      {/* Scraping Job Manager */}
+      {showJobManager && (
+        <ScrapingJobManager 
+          isOpen={showJobManager} 
+          onClose={() => setShowJobManager(false)} 
         />
       )}
     </div>
