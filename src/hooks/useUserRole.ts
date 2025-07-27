@@ -29,7 +29,10 @@ export function useUserRole() {
   });
 
   const fetchUserRole = async () => {
+    console.log("fetchUserRole called, user:", user);
+    
     if (!user) {
+      console.log("No user found, setting default role");
       setState({ userRole: 'user', isLoading: false, error: null });
       return;
     }
