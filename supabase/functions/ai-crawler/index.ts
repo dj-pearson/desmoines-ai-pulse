@@ -222,78 +222,78 @@ async function extractContentWithAI(
   const relevantContent = extractRelevantContent(html);
 
   const prompts = {
-    events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com and similar event listing sites. Extract ALL individual events from this website content from ${url}.
+    events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${url}.
 
 CURRENT DATE: July 26, 2025
-IMPORTANT: Only extract events that are TODAY or in the FUTURE. Skip any events from the past.
-
 WEBSITE CONTENT:
 ${relevantContent}
 
-CRITICAL INSTRUCTIONS FOR CATCHDESMOINES.COM:
-1. FIND EVERY SINGLE EVENT - This is the most important requirement
-2. Look for events in HTML structures like:
-   - <article class="slide"> elements containing event info
-   - Event cards with titles, dates, and venues
-   - Grid layouts with event listings
-   - Any text mentioning specific event names with dates
-3. Extract events from ALL visible patterns including:
-   - Event names like "Warren County Fair", "Anastasia the Musical", "National Senior Games"
-   - Venue names like "Warren County Fairgrounds", "Indianola High School Auditorium"
-   - Date patterns like "Jul 26th", "Aug 1st", "2025"
-   - Recurring events with date ranges
-4. Include events even with partial information - infer missing details logically
-5. ONLY include events from July 26, 2025 onwards (skip past events)
+CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
 
-SPECIFIC PATTERNS TO LOOK FOR:
-- Event titles in headings or card titles
-- Venue information in location fields
-- Date information (convert "Jul 26th" to "2025-07-26")
-- Category indicators (concerts, sports, festivals, art shows, etc.)
-- "Recurring daily/weekly" patterns with end dates
+🎯 WHAT TO LOOK FOR:
+- ANY text that mentions specific event names or titles
+- Venue names that host events (fairgrounds, theaters, arenas, etc.)
+- Date patterns (July 26, Jul 26th, 7/26, 2025, etc.)
+- Event categories (concerts, festivals, sports, shows, fairs, etc.)
+- HTML structures: <article class="slide">, event cards, lists, grids
 
-SMART DATE PARSING:
+🔍 SPECIFIC EVENT PATTERNS:
+- Look for proper nouns that sound like event names
+- Geographic venues (Warren County, Indianola, Des Moines locations)
+- Entertainment venues (theaters, halls, stadiums)
+- Event types (fair, festival, concert, show, game, exhibition)
+- Time indicators (daily, weekly, through August, etc.)
+
+💡 EXTRACTION EXAMPLES:
+- "Warren County Fair" → title: "Warren County Fair"
+- "Anastasia the Musical" → title: "Anastasia the Musical" 
+- "National Senior Games" → title: "National Senior Games"
+- "Iowa Artists Sale-A-Bration" → title: "Iowa Artists Sale-A-Bration"
+- "Live Horse Racing" → title: "Live Horse Racing"
+
+📅 DATE CONVERSION:
 - "Jul 26th" → "2025-07-26 19:00:00"
-- "Aug 1st" → "2025-08-01 19:00:00" 
-- "Recurring daily until July 28, 2025" → multiple events
-- If only partial date info, use reasonable defaults (7 PM start time)
+- "August 1st" → "2025-08-01 19:00:00"
+- "Through July 28" → create events until that date
+- No specific time? → default to 7:00 PM (19:00:00)
+- Past dates (before July 26, 2025) → SKIP these events
 
-For each FUTURE event found, extract:
-- title: Event name/title (e.g., "2025 Warren County Fair")
-- description: Event details or description
-- date: Event date (YYYY-MM-DD HH:MM:SS format, must be July 26, 2025 or later)
-- location: Full address or city (default to "Des Moines, IA" if unclear)
-- venue: Venue name (e.g., "Warren County Fairgrounds")
-- category: Event type (Sports, Music, Entertainment, Arts, Community, etc.)
-- price: Ticket price or "See website"
+🏢 VENUE EXTRACTION:
+- Look for venue names near event titles
+- Common Des Moines venues: Wells Fargo Arena, Civic Center, etc.
+- County fairgrounds, high schools, parks
+- If unclear → use "Des Moines, IA" as location
 
-EXTRACTION STRATEGY:
-1. Scan for ANY event names or titles mentioned in the content
-2. Look for venue names that suggest events
-3. Find date patterns and associate with nearby event text
-4. Extract from HTML structures like cards, articles, lists
-5. Parse recurring event descriptions into multiple entries
-6. Use context clues to fill missing information
+For EVERY event you find, extract:
+- title: Exact event name from content
+- description: Any details about the event
+- date: YYYY-MM-DD HH:MM:SS (future dates only)
+- location: City/state (default: "Des Moines, IA")
+- venue: Specific venue name
+- category: Music/Sports/Arts/Community/Entertainment/Festival
+- price: If mentioned, or "See website"
 
-FORMAT AS JSON ARRAY with ALL events:
+CRITICAL SUCCESS FACTORS:
+✅ Extract events even with incomplete info
+✅ Use logical defaults for missing details
+✅ Convert all date formats consistently
+✅ Include recurring events as separate entries
+✅ Scan the ENTIRE content thoroughly
+
+FORMAT AS JSON ARRAY:
 [
   {
-    "title": "Event Title",
-    "description": "Event description",
+    "title": "Event Name",
+    "description": "Event details",
     "date": "2025-MM-DD HH:MM:SS",
     "location": "Des Moines, IA",
-    "venue": "Venue Name", 
-    "category": "Event Category",
-    "price": "See website"
+    "venue": "Venue Name",
+    "category": "Event Type",
+    "price": "Price or See website"
   }
 ]
 
-ABSOLUTELY CRITICAL: 
-- Extract EVERY event mentioned, even if info is incomplete
-- Use smart defaults for missing info (Des Moines for location, etc.)
-- Convert all date formats to proper YYYY-MM-DD HH:MM:SS
-- If you see 10+ events mentioned, include them ALL
-- Return empty array [] only if literally NO events are mentioned`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY event mentioned in the content. If you see references to 10+ events, include ALL of them. Return empty array [] ONLY if literally no events are found anywhere in the content.`,
 
     restaurants: `Extract all restaurants from this website content from ${url}.
 
@@ -553,39 +553,70 @@ async function checkForDuplicates(
   let duplicates = 0;
   const newItems = [];
 
+  // First remove duplicates within the batch itself
+  const seen = new Set();
+  const uniqueItems = [];
+  
   for (const item of items) {
-    const fingerprint = generateFingerprint(item, category);
-
-    let query;
+    let key;
     switch (category) {
       case "events":
-        query = supabase
-          .from(tableName)
-          .select("id")
-          .eq("title", item.title)
-          .eq("venue", item.venue);
-        if (item.date) {
-          query = query.eq("date", item.date);
-        }
+        key = `${item.title?.toLowerCase()?.trim()}|${item.venue?.toLowerCase()?.trim()}`;
         break;
-      case "restaurants":
-      case "restaurant_openings":
-      case "playgrounds":
-      case "attractions":
-        query = supabase
-          .from(tableName)
-          .select("id")
-          .eq("name", item.name)
-          .ilike("location", `%${item.location.substring(0, 20)}%`);
-        break;
+      default:
+        key = item.name?.toLowerCase()?.trim();
     }
-
-    const { data: existing } = await query.limit(1);
-
-    if (existing && existing.length > 0) {
-      console.log(`⚠️ Duplicate found: ${item.title || item.name}`);
-      duplicates++;
+    
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueItems.push(item);
     } else {
+      duplicates++;
+      console.log(`⚠️ Batch duplicate removed: ${item.title || item.name}`);
+    }
+  }
+
+  // Then check against database
+  for (const item of uniqueItems) {
+    const fingerprint = generateFingerprint(item, category);
+
+    try {
+      let query;
+      switch (category) {
+        case "events":
+          // Use case-insensitive matching for events
+          query = supabase
+            .from(tableName)
+            .select("id")
+            .ilike("title", item.title?.trim())
+            .ilike("venue", item.venue?.trim());
+          break;
+        case "restaurants":
+        case "restaurant_openings":
+        case "playgrounds":
+        case "attractions":
+          query = supabase
+            .from(tableName)
+            .select("id")
+            .ilike("name", item.name?.trim());
+          break;
+      }
+
+      const { data: existing, error } = await query.limit(1);
+
+      if (error) {
+        console.error(`Error checking duplicate for ${item.title || item.name}:`, error);
+        // On error, still add the item
+        newItems.push({ ...item, fingerprint });
+      } else if (existing && existing.length > 0) {
+        console.log(`⚠️ Database duplicate found: ${item.title || item.name}`);
+        duplicates++;
+      } else {
+        newItems.push({ ...item, fingerprint });
+      }
+    } catch (error) {
+      console.error(`Error processing item ${item.title || item.name}:`, error);
+      // On error, still add the item to avoid losing data
       newItems.push({ ...item, fingerprint });
     }
   }
