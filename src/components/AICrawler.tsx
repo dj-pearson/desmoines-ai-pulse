@@ -37,7 +37,7 @@ interface CrawlResult {
     inserted: number;
     errors: number;
   };
-  items?: any[];
+  items?: Record<string, unknown>[];
   error?: string;
 }
 
@@ -291,30 +291,38 @@ const AICrawler: React.FC = () => {
               <div className="space-y-2">
                 <h4 className="font-medium text-sm">Preview of extracted items:</h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {result.items.slice(0, 5).map((item, index) => (
+                  {result.items.slice(0, 5).map((item, index) => {
+                    const itemData = item as Record<string, unknown>;
+                    const title = (itemData.title || itemData.name || "Unnamed Item") as string;
+                    const date = itemData.date as string;
+                    const location = (itemData.location || itemData.venue) as string;
+                    const category = itemData.category as string;
+                    
+                    return (
                     <div key={index} className="p-2 bg-white rounded border text-xs">
                       <div className="font-medium">
-                        {item.title || item.name || "Unnamed Item"}
+                        {title}
                       </div>
-                      {item.date && (
+                      {date && (
                         <div className="text-gray-500 flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
-                          {new Date(item.date).toLocaleDateString()}
+                          {new Date(date).toLocaleDateString()}
                         </div>
                       )}
-                      {(item.location || item.venue) && (
+                      {location && (
                         <div className="text-gray-500 flex items-center gap-1">
                           <MapPin className="h-3 w-3" />
-                          {item.location || item.venue}
+                          {location}
                         </div>
                       )}
-                      {item.category && (
+                      {category && (
                         <Badge variant="secondary" className="text-xs mt-1">
-                          {item.category}
+                          {category}
                         </Badge>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
