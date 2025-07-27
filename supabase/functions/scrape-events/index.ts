@@ -1,3 +1,5 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -309,7 +311,45 @@ function querySelectorText(html: string, selector: string): string {
   }
 }
 
-// Enhanced AI-powered event extraction from website HTML
+// Use Firecrawl to scrape events for a job
+async function scrapeJobWithFirecrawl(
+  job: ScrapingJob,
+  supabase: any
+): Promise<{ success: boolean; eventsFound: number; errors: string[] }> {
+  try {
+    console.log(`🚀 Starting Firecrawl scrape for job: ${job.name} - ${job.config.url}`);
+
+    // Call the firecrawl-scraper function
+    const { data, error } = await supabase.functions.invoke('firecrawl-scraper', {
+      body: {
+        url: job.config.url,
+        category: job.config.category || 'General',
+        maxPages: job.config.maxPages || 3
+      }
+    });
+
+    if (error) {
+      console.error(`❌ Firecrawl error for ${job.name}:`, error);
+      return { success: false, eventsFound: 0, errors: [error.message || 'Firecrawl error'] };
+    }
+
+    if (data?.success) {
+      console.log(`✅ Firecrawl completed for ${job.name}: ${data.inserted} new, ${data.updated} updated`);
+      return { 
+        success: true, 
+        eventsFound: data.inserted + data.updated, 
+        errors: data.errors > 0 ? [`${data.errors} processing errors`] : [] 
+      };
+    } else {
+      return { success: false, eventsFound: 0, errors: [data?.error || 'Unknown error'] };
+    }
+  } catch (error) {
+    console.error(`❌ Error scraping job ${job.name}:`, error);
+    return { success: false, eventsFound: 0, errors: [error.message] };
+  }
+}
+
+// Enhanced AI-powered event extraction from website HTML (fallback)
 async function extractMultipleEventsWithAI(
   html: string,
   job: ScrapingJob,
@@ -321,7 +361,7 @@ async function extractMultipleEventsWithAI(
   }
 
   try {
-    console.log(`🤖 Using AI to extract multiple events from ${job.name}`);
+    console.log(`🤖 Using AI fallback extraction for ${job.name}`);
 
     // Extract relevant sections that might contain event data
     const relevantHtml = extractRelevantHTMLSnippets(html);
@@ -1499,7 +1539,7 @@ Enhanced description:`,
   };
 }
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1869,9 +1909,10 @@ Deno.serve(async (req) => {
       `Processing ${jobsToProcess.length} jobs, skipped ${skippedJobs.length} jobs`
     );
 
-    // Scrape events from filtered jobs
-    const allScrapedEvents: ScrapedEvent[] = [];
-    let totalDuplicatesSkipped = 0;
+    // Scrape events from filtered jobs using Firecrawl
+    let totalEventsFound = 0;
+    let totalErrors = 0;
+    const jobResults = [];
 
     for (const jobRow of jobsToProcess) {
       const job: ScrapingJob = {
@@ -1881,92 +1922,55 @@ Deno.serve(async (req) => {
         config: jobRow.config as any,
       };
 
-      const scrapeResult = await scrapeWebsite(
-        job,
-        existingEventsWithFingerprints,
-        claudeApiKey
-      );
-      allScrapedEvents.push(...scrapeResult.events);
-      totalDuplicatesSkipped += scrapeResult.duplicatesSkipped;
+      console.log(`🎯 Processing job: ${job.name} - ${job.config.url}`);
+
+      // Use Firecrawl for scraping
+      const scrapeResult = await scrapeJobWithFirecrawl(job, supabase);
+      
+      totalEventsFound += scrapeResult.eventsFound;
+      totalErrors += scrapeResult.errors.length;
+      
+      jobResults.push({
+        jobName: job.name,
+        url: job.config.url,
+        eventsFound: scrapeResult.eventsFound,
+        success: scrapeResult.success,
+        errors: scrapeResult.errors
+      });
 
       // Update job status
       await supabase
         .from("scraping_jobs")
         .update({
           last_run: new Date().toISOString(),
-          events_found: scrapeResult.newEventsCount,
+          events_found: scrapeResult.eventsFound,
         })
         .eq("id", job.id);
+
+      console.log(`✅ Completed ${job.name}: ${scrapeResult.eventsFound} events found`);
     }
 
     console.log(
-      `Scraped ${allScrapedEvents.length} new events, skipped ${totalDuplicatesSkipped} duplicates`
+      `Processed ${jobsToProcess.length} jobs, found ${totalEventsFound} total events`
     );
 
-    if (allScrapedEvents.length === 0) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: `No new events found. Skipped ${totalDuplicatesSkipped} duplicates and ${skippedJobs.length} recently scraped jobs.`,
-          events_processed: 0,
-          duplicates_skipped: totalDuplicatesSkipped,
-          jobs_skipped: skippedJobs.length,
-          skipped_jobs: skippedJobs,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
-    }
-
-    // Process events with AI enhancement
-    console.log("Processing events with AI enhancement...");
-    const enhancedEvents: ScrapedEvent[] = [];
-    let enhancedCount = 0;
-
-    for (const event of allScrapedEvents) {
-      if (claudeApiKey) {
-        const enhancedEvent = await enhanceEventWithAI(event, claudeApiKey);
-        enhancedEvents.push(enhancedEvent);
-        if (enhancedEvent.is_enhanced) enhancedCount++;
-        console.log(
-          `Processed event: ${event.title} (enhanced: ${enhancedEvent.is_enhanced})`
-        );
-      } else {
-        console.log("No AI API key available, using original descriptions");
-        enhancedEvents.push({
-          ...event,
-          enhanced_description: event.original_description,
-          is_enhanced: false,
-        });
+    // Return comprehensive results
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: `Scraping completed: ${totalEventsFound} events found across ${jobsToProcess.length} jobs`,
+        jobs_processed: jobsToProcess.length,
+        jobs_skipped: skippedJobs.length,
+        total_events_found: totalEventsFound,
+        total_errors: totalErrors,
+        skipped_jobs: skippedJobs,
+        job_results: jobResults,
+      }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
       }
-    }
-
-    // Insert enhanced events into database
-    console.log("Inserting events into database...");
-
-    const eventsToInsert = enhancedEvents.map((event) => ({
-      title: event.title,
-      original_description: event.original_description,
-      enhanced_description: event.enhanced_description,
-      date: event.date.toISOString(),
-      location: event.location,
-      venue: event.venue,
-      category: event.category,
-      price: event.price,
-      source_url: event.source_url,
-      is_enhanced: event.is_enhanced,
-      is_featured: event.is_featured,
-    }));
-
-    const { data: insertedEvents, error: insertError } = await supabase
-      .from("events")
-      .upsert(eventsToInsert, {
-        onConflict: "title,venue",
-        ignoreDuplicates: false,
-      })
-      .select();
+    );
 
     if (insertError) {
       console.error("Database insert error:", insertError);
