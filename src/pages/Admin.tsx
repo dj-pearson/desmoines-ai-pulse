@@ -73,6 +73,7 @@ import { useScraping } from "@/hooks/useScraping";
 import ScraperConfigWizard from "../components/ScraperConfigWizard";
 import EventEditor from "../components/EventEditor";
 import WebsiteAnalysisDialog from "@/components/WebsiteAnalysisDialog";
+import AICrawler from "@/components/AICrawler";
 
 // Scraping jobs data is now fetched from Supabase via useScraping hook
 
@@ -352,9 +353,10 @@ export default function Admin() {
           onValueChange={setActiveTab}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="scraping">Scraping</TabsTrigger>
+            <TabsTrigger value="ai-crawler">AI Crawler</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
             <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
             <TabsTrigger value="content">Content</TabsTrigger>
@@ -704,6 +706,19 @@ export default function Admin() {
                 <Button>Add Scraper</Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* AI Crawler Tab */}
+          <TabsContent value="ai-crawler" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">AI Website Crawler</h2>
+                <p className="text-muted-foreground">
+                  Use AI to automatically extract content from any website
+                </p>
+              </div>
+            </div>
+            <AICrawler />
           </TabsContent>
 
           {/* Events Tab */}
