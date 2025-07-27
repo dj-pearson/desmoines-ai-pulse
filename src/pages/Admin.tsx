@@ -69,9 +69,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import AdminLogin from "@/components/AdminLogin";
 import { useEvents } from "@/hooks/useEvents";
+import { useRestaurants } from "@/hooks/useRestaurants";
+import { useAttractions } from "@/hooks/useAttractions";
+import { usePlaygrounds } from "@/hooks/usePlaygrounds";
+import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
 import { useScraping } from "@/hooks/useScraping";
 import ScraperConfigWizard from "../components/ScraperConfigWizard";
 import EventEditor from "../components/EventEditor";
+import ContentEditor from "../components/ContentEditor";
+import ContentTable from "../components/ContentTable";
 import WebsiteAnalysisDialog from "@/components/WebsiteAnalysisDialog";
 import AICrawler from "@/components/AICrawler";
 
@@ -119,23 +125,65 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showEventEditor, setShowEventEditor] = useState(false);
+  const [showContentEditor, setShowContentEditor] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
+  const [selectedContent, setSelectedContent] = useState<any>(null);
+  const [contentType, setContentType] = useState<"event" | "restaurant" | "attraction" | "playground" | "restaurant_opening">("event");
   const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
   const [selectedScrapingJob, setSelectedScrapingJob] = useState<any>(null);
   const [eventFilters, setEventFilters] = useState({
     status: "all" as const,
     search: "",
   });
+  const [restaurantFilters, setRestaurantFilters] = useState({ search: "" });
+  const [attractionFilters, setAttractionFilters] = useState({ search: "" });
+  const [playgroundFilters, setPlaygroundFilters] = useState({ search: "" });
+  const [restaurantOpeningFilters, setRestaurantOpeningFilters] = useState({ search: "" });
+  
   const { toast } = useToast();
   const { isLoading, isAdmin, user, logout } = useAuth();
+  
   const {
     events,
     isLoading: eventsLoading,
-    totalCount,
+    totalCount: eventsTotalCount,
     refetch: refetchEvents,
     updateEvent,
     deleteEvent,
   } = useEvents(eventFilters);
+  
+  const {
+    restaurants,
+    isLoading: restaurantsLoading,
+    totalCount: restaurantsTotalCount,
+    updateRestaurant,
+    deleteRestaurant,
+  } = useRestaurants(restaurantFilters);
+  
+  const {
+    attractions,
+    isLoading: attractionsLoading,
+    totalCount: attractionsTotalCount,
+    updateAttraction,
+    deleteAttraction,
+  } = useAttractions(attractionFilters);
+  
+  const {
+    playgrounds,
+    isLoading: playgroundsLoading,
+    totalCount: playgroundsTotalCount,
+    updatePlayground,
+    deletePlayground,
+  } = usePlaygrounds(playgroundFilters);
+  
+  const {
+    restaurantOpenings,
+    isLoading: restaurantOpeningsLoading,
+    totalCount: restaurantOpeningsTotalCount,
+    updateRestaurantOpening,
+    deleteRestaurantOpening,
+  } = useRestaurantOpenings(restaurantOpeningFilters);
+  
   const {
     jobs: scrapingJobs,
     isLoading: scrapingIsLoading,
@@ -264,6 +312,79 @@ export default function Admin() {
     }
   };
 
+  const handleEditContent = (type: typeof contentType, item: any) => {
+    setContentType(type);
+    setSelectedContent(item);
+    setShowContentEditor(true);
+  };
+
+  const handleSaveContent = async (updatedItem: any) => {
+    try {
+      switch (contentType) {
+        case "restaurant":
+          await updateRestaurant(updatedItem.id, updatedItem);
+          break;
+        case "attraction":
+          await updateAttraction(updatedItem.id, updatedItem);
+          break;
+        case "playground":
+          await updatePlayground(updatedItem.id, updatedItem);
+          break;
+        case "restaurant_opening":
+          await updateRestaurantOpening(updatedItem.id, updatedItem);
+          break;
+        default:
+          await updateEvent(updatedItem.id, updatedItem);
+      }
+      
+      toast({
+        title: "Item Updated",
+        description: `The ${contentType} has been successfully updated.`,
+      });
+      setShowContentEditor(false);
+      setSelectedContent(null);
+    } catch (error) {
+      toast({
+        title: "Update Failed",
+        description: `Failed to update the ${contentType}. Please try again.`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteContent = async (type: typeof contentType, id: string) => {
+    try {
+      switch (type) {
+        case "event":
+          await deleteEvent(id);
+          break;
+        case "restaurant":
+          await deleteRestaurant(id);
+          break;
+        case "attraction":
+          await deleteAttraction(id);
+          break;
+        case "playground":
+          await deletePlayground(id);
+          break;
+        case "restaurant_opening":
+          await deleteRestaurantOpening(id);
+          break;
+      }
+      
+      toast({
+        title: "Item Deleted",
+        description: `The ${type} has been successfully deleted.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Delete Failed",
+        description: `Failed to delete the ${type}. Please try again.`,
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleAnalyzeWebsite = (scrapingJob: any) => {
     setSelectedScrapingJob(scrapingJob);
     setShowAnalysisDialog(true);
@@ -353,13 +474,16 @@ export default function Admin() {
           onValueChange={setActiveTab}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-9">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="scraping">Scraping</TabsTrigger>
             <TabsTrigger value="ai-crawler">AI Crawler</TabsTrigger>
             <TabsTrigger value="events">Events</TabsTrigger>
+            <TabsTrigger value="restaurants">Restaurants</TabsTrigger>
+            <TabsTrigger value="attractions">Attractions</TabsTrigger>
+            <TabsTrigger value="playgrounds">Playgrounds</TabsTrigger>
+            <TabsTrigger value="openings">Openings</TabsTrigger>
             <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
-            <TabsTrigger value="content">Content</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -723,96 +847,72 @@ export default function Admin() {
 
           {/* Events Tab */}
           <TabsContent value="events" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Event Management</h2>
-                <p className="text-muted-foreground">
-                  Review and moderate events
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline">
-                  <Download className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-                <Button variant="outline">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Import
-                </Button>
-              </div>
-            </div>
+            <ContentTable
+              type="event"
+              items={events}
+              isLoading={eventsLoading}
+              totalCount={eventsTotalCount}
+              onEdit={(item) => handleEditContent("event", item)}
+              onDelete={(id) => handleDeleteContent("event", id)}
+              onSearch={(search) => setEventFilters(prev => ({ ...prev, search }))}
+              onFilter={(filters) => setEventFilters(prev => ({ ...prev, ...filters }))}
+            />
+          </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Event Filters</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-4">
-                  <Input placeholder="Search events..." className="max-w-sm" />
-                  <Select>
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Status" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Status</SelectItem>
-                      <SelectItem value="approved">Approved</SelectItem>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="flagged">Flagged</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filter
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+          {/* Restaurants Tab */}
+          <TabsContent value="restaurants" className="space-y-6">
+            <ContentTable
+              type="restaurant"
+              items={restaurants}
+              isLoading={restaurantsLoading}
+              totalCount={restaurantsTotalCount}
+              onEdit={(item) => handleEditContent("restaurant", item)}
+              onDelete={(id) => handleDeleteContent("restaurant", id)}
+              onSearch={(search) => setRestaurantFilters(prev => ({ ...prev, search }))}
+              onFilter={(filters) => setRestaurantFilters(prev => ({ ...prev, ...filters }))}
+            />
+          </TabsContent>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Events</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Title</TableHead>
-                      <TableHead>Venue</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Views</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {mockEvents.map((event) => (
-                      <TableRow key={event.id}>
-                        <TableCell className="font-medium">
-                          {event.title}
-                        </TableCell>
-                        <TableCell>{event.venue}</TableCell>
-                        <TableCell>{event.date}</TableCell>
-                        <TableCell>{getStatusBadge(event.status)}</TableCell>
-                        <TableCell>{event.views}</TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline">
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="outline">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button size="sm" variant="destructive">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+          {/* Attractions Tab */}
+          <TabsContent value="attractions" className="space-y-6">
+            <ContentTable
+              type="attraction"
+              items={attractions}
+              isLoading={attractionsLoading}
+              totalCount={attractionsTotalCount}
+              onEdit={(item) => handleEditContent("attraction", item)}
+              onDelete={(id) => handleDeleteContent("attraction", id)}
+              onSearch={(search) => setAttractionFilters(prev => ({ ...prev, search }))}
+              onFilter={(filters) => setAttractionFilters(prev => ({ ...prev, ...filters }))}
+            />
+          </TabsContent>
+
+          {/* Playgrounds Tab */}
+          <TabsContent value="playgrounds" className="space-y-6">
+            <ContentTable
+              type="playground"
+              items={playgrounds}
+              isLoading={playgroundsLoading}
+              totalCount={playgroundsTotalCount}
+              onEdit={(item) => handleEditContent("playground", item)}
+              onDelete={(id) => handleDeleteContent("playground", id)}
+              onSearch={(search) => setPlaygroundFilters(prev => ({ ...prev, search }))}
+              onFilter={(filters) => setPlaygroundFilters(prev => ({ ...prev, ...filters }))}
+            />
+          </TabsContent>
+
+          {/* Restaurant Openings Tab */}
+          <TabsContent value="openings" className="space-y-6">
+            <ContentTable
+              type="restaurant_opening"
+              items={restaurantOpenings}
+              isLoading={restaurantOpeningsLoading}
+              totalCount={restaurantOpeningsTotalCount}
+              onEdit={(item) => handleEditContent("restaurant_opening", item)}
+              onDelete={(id) => handleDeleteContent("restaurant_opening", id)}
+              onSearch={(search) => setRestaurantOpeningFilters(prev => ({ ...prev, search }))}
+              onFilter={(filters) => setRestaurantOpeningFilters(prev => ({ ...prev, ...filters }))}
+            />
           </TabsContent>
 
           {/* Monitoring Tab */}
@@ -1047,6 +1147,19 @@ export default function Admin() {
           onClose={() => {
             setShowEventEditor(false);
             setSelectedEvent(null);
+          }}
+        />
+      )}
+
+      {/* Content Editor Modal */}
+      {showContentEditor && selectedContent && (
+        <ContentEditor
+          type={contentType}
+          item={selectedContent}
+          onSave={handleSaveContent}
+          onClose={() => {
+            setShowContentEditor(false);
+            setSelectedContent(null);
           }}
         />
       )}
