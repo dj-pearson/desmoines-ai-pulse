@@ -23,7 +23,7 @@ interface RoleState {
 export function useUserRole(user?: User | null) {
   const [state, setState] = useState<RoleState>({
     userRole: 'user',
-    isLoading: true,
+    isLoading: true, // Start with loading true
     error: null,
   });
 
@@ -157,10 +157,8 @@ export function useUserRole(user?: User | null) {
   const canAccessAdminDashboard = (): boolean => hasRole('moderator');
 
   useEffect(() => {
-    // Set loading immediately when user changes
-    if (user) {
-      setState(prev => ({ ...prev, isLoading: true }));
-    }
+    // Always ensure loading state when user changes
+    setState(prev => ({ ...prev, isLoading: true }));
     fetchUserRole();
   }, [fetchUserRole]);
 
