@@ -152,6 +152,48 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          communication_preferences: Json | null
+          created_at: string
+          email: string | null
+          first_name: string | null
+          id: string
+          interests: string[] | null
+          last_name: string | null
+          location: string | null
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          communication_preferences?: Json | null
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          interests?: string[] | null
+          last_name?: string | null
+          location?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          communication_preferences?: Json | null
+          created_at?: string
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          interests?: string[] | null
+          last_name?: string | null
+          location?: string | null
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       restaurant_openings: {
         Row: {
           created_at: string | null
@@ -236,6 +278,42 @@ export type Database = {
           rating?: number | null
           updated_at?: string | null
           website?: string | null
+        }
+        Relationships: []
+      }
+      scraping_jobs: {
+        Row: {
+          config: Json
+          created_at: string | null
+          events_found: number | null
+          id: string
+          last_run: string | null
+          name: string
+          next_run: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          config: Json
+          created_at?: string | null
+          events_found?: number | null
+          id?: string
+          last_run?: string | null
+          name: string
+          next_run?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          config?: Json
+          created_at?: string | null
+          events_found?: number | null
+          id?: string
+          last_run?: string | null
+          name?: string
+          next_run?: string | null
+          status?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }

@@ -115,21 +115,34 @@ export function useAuth() {
         return false;
       }
 
-      // Check if user has admin access after successful login
-      if (data.session?.user) {
-        const isAdmin = await checkIsAdmin(data.session.user);
-
-        if (!isAdmin) {
-          console.log("❌ User does not have admin access, signing out");
-          await supabase.auth.signOut();
-          console.error("User does not have admin access");
-          return false;
-        }
-      }
-
       return !!data.session;
     } catch (error) {
       console.error("Login failed:", error);
+      return false;
+    }
+  };
+
+  const signup = async (email: string, password: string, metadata?: any): Promise<boolean> => {
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: metadata
+        }
+      });
+
+      if (error) {
+        console.error("Signup error:", error);
+        return false;
+      }
+
+      return !!data.user;
+    } catch (error) {
+      console.error("Signup failed:", error);
       return false;
     }
   };
@@ -151,6 +164,7 @@ export function useAuth() {
   return {
     ...authState,
     login,
+    signup,
     logout,
     requireAdmin,
   };
