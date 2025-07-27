@@ -8,7 +8,7 @@ import EventFilters from "@/components/EventFilters";
 import SmartEventNavigation from "@/components/SmartEventNavigation";
 import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
-import { RestaurantOpenings } from "@/components/RestaurantOpenings";
+import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -131,12 +131,8 @@ export default function Index() {
 
         <SearchSection onSearch={handleSearch} />
 
-      {/* Restaurant Openings Section */}
-      <section className="py-16 bg-muted/50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <RestaurantOpenings />
-        </div>
-      </section>
+      {/* All-Inclusive Dashboard */}
+      <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} />
 
       {!showAllEvents && (
         <>
