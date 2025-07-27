@@ -119,7 +119,7 @@ const AICrawler: React.FC = () => {
     try {
       console.log("Starting AI crawl...", { url, category });
 
-      const { data, error } = await supabase.functions.invoke("firecrawl-scraper", {
+      const { data, error } = await supabase.functions.invoke("ai-crawler", {
         body: { url, category },
       });
 
