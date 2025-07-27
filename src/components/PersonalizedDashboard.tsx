@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
-import { useEvents } from "@/hooks/useEvents";
+import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import EventCard from "@/components/EventCard";
-import { Heart, TrendingUp, MapPin, Calendar } from "lucide-react";
+import { Heart, TrendingUp, MapPin, Calendar, Brain, Sparkles } from "lucide-react";
 import { Event } from "@/lib/types";
 
 interface PersonalizedDashboardProps {
@@ -15,70 +15,44 @@ interface PersonalizedDashboardProps {
 }
 
 export default function PersonalizedDashboard({ onViewEventDetails }: PersonalizedDashboardProps) {
+  const { user } = useAuth();
   const { profile } = useProfile();
-  const { events, isLoading } = useEvents({ limit: 12 });
   const [personalizedEvents, setPersonalizedEvents] = useState<Event[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [confidence, setConfidence] = useState(0);
+  const [reasoning, setReasoning] = useState("");
 
-  // Filter events based on user interests and location
+  // Fetch AI-powered personalized recommendations
+  const fetchPersonalizedRecommendations = async () => {
+    if (!user) return;
+
+    try {
+      setIsLoading(true);
+      
+      const { data, error } = await supabase.functions.invoke('personalized-recommendations', {
+        body: { userId: user.id }
+      });
+
+      if (error) {
+        console.error('Error fetching personalized recommendations:', error);
+        return;
+      }
+
+      setPersonalizedEvents(data.recommendations || []);
+      setConfidence(data.confidence || 0);
+      setReasoning(data.reasoning || "");
+    } catch (error) {
+      console.error('Error fetching recommendations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!profile || !events.length) return;
-
-    const filtered = events.filter(event => {
-      // Location-based filtering
-      if (profile.location && event.location) {
-        const userLocation = profile.location.toLowerCase();
-        const eventLocation = event.location.toLowerCase();
-        
-        // Prioritize events in user's area
-        if (userLocation.includes("downtown") && eventLocation.includes("downtown")) return true;
-        if (userLocation.includes("west des moines") && eventLocation.includes("west")) return true;
-        if (userLocation.includes(userLocation.split(" ")[0])) return true;
-      }
-
-      // Interest-based filtering
-      if (profile.interests?.length) {
-        const eventCategory = event.category.toLowerCase();
-        const eventTitle = event.title.toLowerCase();
-        const eventDescription = (event.enhanced_description || event.original_description || "").toLowerCase();
-        
-        return profile.interests.some(interest => {
-          switch (interest) {
-            case "food":
-              return eventCategory.includes("food") || eventTitle.includes("food") || 
-                     eventDescription.includes("restaurant") || eventDescription.includes("dining");
-            case "music":
-              return eventCategory.includes("music") || eventTitle.includes("music") || 
-                     eventTitle.includes("concert") || eventDescription.includes("live music");
-            case "sports":
-              return eventCategory.includes("sport") || eventTitle.includes("game") || 
-                     eventDescription.includes("athletic");
-            case "arts":
-              return eventCategory.includes("art") || eventTitle.includes("art") || 
-                     eventDescription.includes("gallery") || eventDescription.includes("theater");
-            case "family":
-              return eventDescription.includes("family") || eventDescription.includes("kids") || 
-                     eventDescription.includes("children");
-            case "outdoor":
-              return eventDescription.includes("outdoor") || eventDescription.includes("park") || 
-                     eventDescription.includes("nature");
-            default:
-              return false;
-          }
-        });
-      }
-
-      return true; // Show all events if no specific preferences
-    });
-
-    // Sort by relevance (interested events first, then by date)
-    const sorted = filtered.sort((a, b) => {
-      const aDate = new Date(a.date);
-      const bDate = new Date(b.date);
-      return aDate.getTime() - bDate.getTime();
-    });
-
-    setPersonalizedEvents(sorted.slice(0, 6));
-  }, [profile, events]);
+    if (user) {
+      fetchPersonalizedRecommendations();
+    }
+  }, [user]);
 
   const getPersonalizedGreeting = () => {
     const interests = profile?.interests || [];
@@ -96,7 +70,7 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
     };
 
     const mappedInterests = interests.slice(0, 2).map(i => interestMap[i]).filter(Boolean);
-    return `Discover ${mappedInterests.join(" and ")} just for you`;
+    return `AI-curated ${mappedInterests.join(" and ")} just for you`;
   };
 
   if (isLoading) {
@@ -122,12 +96,21 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Heart className="h-6 w-6 text-primary" />
-            <h3 className="text-3xl font-bold text-neutral-900">Just For You</h3>
+            <Brain className="h-6 w-6 text-primary" />
+            <h3 className="text-3xl font-bold text-neutral-900">AI-Powered Recommendations</h3>
           </div>
-          <p className="text-lg text-neutral-600 mb-6">
+          <p className="text-lg text-neutral-600 mb-4">
             {getPersonalizedGreeting()}
           </p>
+          
+          {confidence > 0 && (
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <Sparkles className="h-4 w-4 text-accent" />
+              <span className="text-sm text-neutral-500">
+                {Math.round(confidence * 100)}% confidence • {reasoning}
+              </span>
+            </div>
+          )}
           
           {profile?.interests && profile.interests.length > 0 && (
             <div className="flex flex-wrap justify-center gap-2 mb-8">
@@ -161,9 +144,9 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
             </div>
 
             <div className="text-center">
-              <Button variant="outline" className="mr-4">
-                <Calendar className="h-4 w-4 mr-2" />
-                View More Recommendations
+              <Button variant="outline" className="mr-4" onClick={fetchPersonalizedRecommendations}>
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Refresh Recommendations
               </Button>
               <Button variant="ghost">
                 <MapPin className="h-4 w-4 mr-2" />
@@ -174,15 +157,16 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
         ) : (
           <Card className="text-center py-12">
             <CardHeader>
-              <CardTitle>Building Your Recommendations</CardTitle>
+              <CardTitle>Building Your AI Profile</CardTitle>
               <CardDescription>
-                We're learning your preferences to provide better event suggestions.
-                Check back soon for personalized recommendations!
+                Rate some events with thumbs up/down to help our AI learn your preferences.
+                The more feedback you provide, the better our recommendations become!
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline">
-                Update Your Interests
+              <Button variant="outline" onClick={fetchPersonalizedRecommendations}>
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Try Again
               </Button>
             </CardContent>
           </Card>
