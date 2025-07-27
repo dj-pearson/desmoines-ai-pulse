@@ -1,17 +1,22 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS, PUT, DELETE',
-}
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+};
 
 interface CrawlRequest {
   url: string;
-  category: 'events' | 'restaurants' | 'playgrounds' | 'restaurant_openings' | 'attractions';
+  category:
+    | "events"
+    | "restaurants"
+    | "playgrounds"
+    | "restaurant_openings"
+    | "attractions";
 }
 
 interface EventData {
@@ -41,7 +46,7 @@ interface RestaurantOpeningData {
   location: string;
   cuisine: string;
   opening_date: string;
-  status: 'opening_soon' | 'newly_opened' | 'announced';
+  status: "opening_soon" | "newly_opened" | "announced";
 }
 
 interface PlaygroundData {
@@ -62,40 +67,69 @@ interface AttractionData {
   website?: string;
 }
 
+// Preprocess URL to try to find better event-specific pages
+function findBestEventUrl(originalUrl: string): string[] {
+  const baseUrl = originalUrl.replace(/\/$/, ""); // Remove trailing slash
+
+  // List of potential event page paths to try
+  const eventPaths = [
+    originalUrl, // Original URL first
+    `${baseUrl}/events`,
+    `${baseUrl}/calendar`,
+    `${baseUrl}/shows`,
+    `${baseUrl}/concerts`,
+    `${baseUrl}/schedule`,
+    `${baseUrl}/upcoming`,
+    `${baseUrl}/events/upcoming`,
+    `${baseUrl}/shows/upcoming`,
+  ];
+
+  // Remove duplicates and return unique URLs
+  return [...new Set(eventPaths)];
+}
+
 // Enhanced HTML content extraction
 function extractRelevantContent(html: string): string {
   // Remove scripts, styles, and other non-content elements
-  let cleanHtml = html
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, '')
-    .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, '')
-    .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, '');
+  const cleanHtml = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
 
-  // Extract main content areas
+  // Try to extract main content areas, but be more inclusive
   const contentPatterns = [
     /<main[^>]*>([\s\S]*?)<\/main>/gi,
     /<article[^>]*>([\s\S]*?)<\/article>/gi,
     /<section[^>]*>([\s\S]*?)<\/section>/gi,
     /<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
     /<div[^>]*class="[^"]*main[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*class="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*class="[^"]*calendar[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*class="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*id="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<ul[^>]*class="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/ul>/gi,
   ];
 
-  let relevantContent = '';
+  let relevantContent = "";
   for (const pattern of contentPatterns) {
     const matches = cleanHtml.match(pattern);
     if (matches) {
-      relevantContent += matches.join('\n\n');
+      relevantContent += matches.join("\n\n--- SECTION ---\n\n");
     }
   }
 
-  // If no specific content areas found, use the whole cleaned HTML (truncated)
-  if (!relevantContent) {
-    relevantContent = cleanHtml.substring(0, 8000);
+  // If no specific content areas found, extract more content but remove navigation/footer
+  if (!relevantContent || relevantContent.length < 1000) {
+    let fallbackContent = cleanHtml
+      .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
+      .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
+      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "");
+
+    relevantContent = fallbackContent.substring(0, 15000); // Increased limit
   }
 
-  return relevantContent.substring(0, 6000); // Limit for AI processing
+  // Increase the limit significantly to capture more events
+  return relevantContent.substring(0, 12000);
 }
 
 // AI-powered content extraction using Claude
@@ -108,25 +142,41 @@ async function extractContentWithAI(
   const relevantContent = extractRelevantContent(html);
 
   const prompts = {
-    events: `Extract all individual events from this website content from ${url}.
+    events: `You are an expert at extracting event information from websites. Extract ALL individual events from this website content from ${url}.
 
 WEBSITE CONTENT:
 ${relevantContent}
 
-Please analyze this content and extract ALL individual events you can find. For each event, provide:
-- title: The event name/title
+IMPORTANT INSTRUCTIONS:
+1. Look for EVERY individual event, not just the first one
+2. Search for patterns like concert listings, show schedules, game calendars, event calendars
+3. Events may be in lists, tables, cards, or individual sections
+4. Look for repeating patterns of event information
+5. Extract even partial information - we can use default values for missing fields
+6. Include upcoming events, scheduled shows, concerts, games, performances, etc.
+
+For each event you find, extract:
+- title: The event name/title (required)
 - description: Brief description or details about the event
-- date: Event date/time (format as YYYY-MM-DD HH:MM:SS if time available, or YYYY-MM-DD)
-- location: Full address or location description
+- date: Event date/time (look for any date patterns - MM/DD, Month Day, etc.)
+- location: Full address or location description  
 - venue: Venue name where the event takes place
 - category: Type of event (Sports, Music, Entertainment, Community, Arts, etc.)
 - price: Ticket price or cost information
 
-Format as JSON array:
+LOOK FOR THESE PATTERNS:
+- Multiple event titles in succession
+- Date patterns followed by event names
+- Artist names, band names, performer names
+- Game schedules, match listings
+- Concert lineups, show listings
+- Event cards or event items
+
+Format as JSON array - include EVERY event you find:
 [
   {
     "title": "Event Title",
-    "description": "Event description",
+    "description": "Event description", 
     "date": "2025-MM-DD HH:MM:SS",
     "location": "Full address",
     "venue": "Venue Name",
@@ -135,7 +185,7 @@ Format as JSON array:
   }
 ]
 
-Only include actual events with dates. Return empty array [] if no events found.`,
+CRITICAL: Extract ALL events you can identify, not just one. If you see multiple events, include them all in the array. Return empty array [] only if absolutely no events are found.`,
 
     restaurants: `Extract all restaurants from this website content from ${url}.
 
@@ -247,30 +297,37 @@ Format as JSON array:
   }
 ]
 
-Return empty array [] if no attractions found.`
+Return empty array [] if no attractions found.`,
   };
 
   try {
     console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
+    console.log(
+      `📄 Content length being sent to AI: ${relevantContent.length} characters`
+    );
+    console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
 
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-0',
-        max_tokens: 3000,
-        messages: [
-          {
-            role: 'user',
-            content: prompts[category as keyof typeof prompts],
-          },
-        ],
-      }),
-    });
+    const claudeResponse = await fetch(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": claudeApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-0",
+          max_tokens: 4000, // Increased to handle multiple events
+          messages: [
+            {
+              role: "user",
+              content: prompts[category as keyof typeof prompts],
+            },
+          ],
+        }),
+      }
+    );
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
@@ -282,7 +339,9 @@ Return empty array [] if no attractions found.`
           const jsonMatch = responseText.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
             const extractedData = JSON.parse(jsonMatch[0]);
-            console.log(`🤖 AI extracted ${extractedData.length} ${category} items from ${url}`);
+            console.log(
+              `🤖 AI extracted ${extractedData.length} ${category} items from ${url}`
+            );
             return extractedData;
           }
         } catch (parseError) {
@@ -301,22 +360,28 @@ Return empty array [] if no attractions found.`
 
 // Generate fingerprint for duplicate detection
 function generateFingerprint(data: any, category: string): string {
-  let key = '';
-  
+  let key = "";
+
   switch (category) {
-    case 'events':
-      key = `${data.title}_${data.date}_${data.venue}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    case "events":
+      key = `${data.title}_${data.date}_${data.venue}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
       break;
-    case 'restaurants':
-    case 'restaurant_openings':
-      key = `${data.name}_${data.location}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    case "restaurants":
+    case "restaurant_openings":
+      key = `${data.name}_${data.location}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
       break;
-    case 'playgrounds':
-    case 'attractions':
-      key = `${data.name}_${data.location}`.toLowerCase().replace(/[^a-z0-9]/g, '');
+    case "playgrounds":
+    case "attractions":
+      key = `${data.name}_${data.location}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "");
       break;
   }
-  
+
   return key.substring(0, 100);
 }
 
@@ -326,39 +391,40 @@ async function checkForDuplicates(
   category: string,
   items: any[]
 ): Promise<{ newItems: any[]; duplicates: number }> {
-  const tableName = category === 'restaurant_openings' ? 'restaurant_openings' : category;
+  const tableName =
+    category === "restaurant_openings" ? "restaurant_openings" : category;
   let duplicates = 0;
   const newItems = [];
 
   for (const item of items) {
     const fingerprint = generateFingerprint(item, category);
-    
+
     let query;
     switch (category) {
-      case 'events':
+      case "events":
         query = supabase
           .from(tableName)
-          .select('id')
-          .eq('title', item.title)
-          .eq('venue', item.venue);
+          .select("id")
+          .eq("title", item.title)
+          .eq("venue", item.venue);
         if (item.date) {
-          query = query.eq('date', item.date);
+          query = query.eq("date", item.date);
         }
         break;
-      case 'restaurants':
-      case 'restaurant_openings':
-      case 'playgrounds':
-      case 'attractions':
+      case "restaurants":
+      case "restaurant_openings":
+      case "playgrounds":
+      case "attractions":
         query = supabase
           .from(tableName)
-          .select('id')
-          .eq('name', item.name)
-          .ilike('location', `%${item.location.substring(0, 20)}%`);
+          .select("id")
+          .eq("name", item.name)
+          .ilike("location", `%${item.location.substring(0, 20)}%`);
         break;
     }
 
     const { data: existing } = await query.limit(1);
-    
+
     if (existing && existing.length > 0) {
       console.log(`⚠️ Duplicate found: ${item.title || item.name}`);
       duplicates++;
@@ -376,7 +442,8 @@ async function insertData(
   category: string,
   items: any[]
 ): Promise<{ success: boolean; insertedCount: number; errors: any[] }> {
-  const tableName = category === 'restaurant_openings' ? 'restaurant_openings' : category;
+  const tableName =
+    category === "restaurant_openings" ? "restaurant_openings" : category;
   const errors = [];
   let insertedCount = 0;
 
@@ -384,10 +451,10 @@ async function insertData(
   const batchSize = 10;
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
-    
+
     try {
       // Transform data for database schema
-      const transformedBatch = batch.map(item => {
+      const transformedBatch = batch.map((item) => {
         const baseItem = {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
@@ -395,60 +462,69 @@ async function insertData(
         };
 
         switch (category) {
-          case 'events':
+          case "events":
             return {
               ...baseItem,
-              title: item.title?.substring(0, 200) || 'Untitled Event',
-              original_description: item.description?.substring(0, 500) || '',
-              enhanced_description: item.description?.substring(0, 500) || '',
-              date: item.date ? new Date(item.date).toISOString() : new Date().toISOString(),
-              location: item.location?.substring(0, 100) || 'Des Moines, IA',
-              venue: item.venue?.substring(0, 100) || item.location?.substring(0, 100) || 'TBD',
-              category: item.category?.substring(0, 50) || 'General',
-              price: item.price?.substring(0, 50) || 'See website',
-              source_url: item.source_url || '',
+              title: item.title?.substring(0, 200) || "Untitled Event",
+              original_description: item.description?.substring(0, 500) || "",
+              enhanced_description: item.description?.substring(0, 500) || "",
+              date: item.date
+                ? new Date(item.date).toISOString()
+                : new Date().toISOString(),
+              location: item.location?.substring(0, 100) || "Des Moines, IA",
+              venue:
+                item.venue?.substring(0, 100) ||
+                item.location?.substring(0, 100) ||
+                "TBD",
+              category: item.category?.substring(0, 50) || "General",
+              price: item.price?.substring(0, 50) || "See website",
+              source_url: item.source_url || "",
               is_enhanced: false,
             };
-          case 'restaurants':
+          case "restaurants":
             return {
               ...baseItem,
-              name: item.name?.substring(0, 200) || 'Unnamed Restaurant',
-              cuisine: item.cuisine?.substring(0, 100) || 'American',
-              location: item.location?.substring(0, 200) || 'Des Moines, IA',
+              name: item.name?.substring(0, 200) || "Unnamed Restaurant",
+              cuisine: item.cuisine?.substring(0, 100) || "American",
+              location: item.location?.substring(0, 200) || "Des Moines, IA",
               rating: item.rating || null,
-              price_range: item.price_range?.substring(0, 20) || '$$',
-              description: item.description?.substring(0, 500) || '',
+              price_range: item.price_range?.substring(0, 20) || "$$",
+              description: item.description?.substring(0, 500) || "",
               phone: item.phone?.substring(0, 20) || null,
               website: item.website?.substring(0, 200) || null,
             };
-          case 'restaurant_openings':
+          case "restaurant_openings":
             return {
               ...baseItem,
-              name: item.name?.substring(0, 200) || 'New Restaurant',
-              description: item.description?.substring(0, 500) || '',
-              location: item.location?.substring(0, 200) || 'Des Moines, IA',
-              cuisine: item.cuisine?.substring(0, 100) || 'American',
-              opening_date: item.opening_date ? new Date(item.opening_date).toISOString().split('T')[0] : null,
-              status: item.status || 'announced',
-              source_url: item.source_url || '',
+              name: item.name?.substring(0, 200) || "New Restaurant",
+              description: item.description?.substring(0, 500) || "",
+              location: item.location?.substring(0, 200) || "Des Moines, IA",
+              cuisine: item.cuisine?.substring(0, 100) || "American",
+              opening_date: item.opening_date
+                ? new Date(item.opening_date).toISOString().split("T")[0]
+                : null,
+              status: item.status || "announced",
+              source_url: item.source_url || "",
             };
-          case 'playgrounds':
+          case "playgrounds":
             return {
               ...baseItem,
-              name: item.name?.substring(0, 200) || 'Playground',
-              location: item.location?.substring(0, 200) || 'Des Moines, IA',
-              description: item.description?.substring(0, 500) || '',
-              age_range: item.age_range?.substring(0, 50) || 'All ages',
-              amenities: Array.isArray(item.amenities) ? item.amenities.slice(0, 10) : [],
+              name: item.name?.substring(0, 200) || "Playground",
+              location: item.location?.substring(0, 200) || "Des Moines, IA",
+              description: item.description?.substring(0, 500) || "",
+              age_range: item.age_range?.substring(0, 50) || "All ages",
+              amenities: Array.isArray(item.amenities)
+                ? item.amenities.slice(0, 10)
+                : [],
               rating: item.rating || null,
             };
-          case 'attractions':
+          case "attractions":
             return {
               ...baseItem,
-              name: item.name?.substring(0, 200) || 'Attraction',
-              type: item.type?.substring(0, 100) || 'General',
-              location: item.location?.substring(0, 200) || 'Des Moines, IA',
-              description: item.description?.substring(0, 500) || '',
+              name: item.name?.substring(0, 200) || "Attraction",
+              type: item.type?.substring(0, 100) || "General",
+              location: item.location?.substring(0, 200) || "Des Moines, IA",
+              description: item.description?.substring(0, 500) || "",
               rating: item.rating || null,
               website: item.website?.substring(0, 200) || null,
             };
@@ -484,55 +560,62 @@ async function insertData(
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    if (req.method !== 'POST') {
-      return new Response(
-        JSON.stringify({ error: 'Method not allowed' }),
-        {
-          status: 405,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        }
-      );
+    if (req.method !== "POST") {
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        status: 405,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const { url, category }: CrawlRequest = await req.json();
 
     if (!url || !category) {
       return new Response(
-        JSON.stringify({ error: 'URL and category are required' }),
+        JSON.stringify({ error: "URL and category are required" }),
         {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    const validCategories = ['events', 'restaurants', 'playgrounds', 'restaurant_openings', 'attractions'];
+    const validCategories = [
+      "events",
+      "restaurants",
+      "playgrounds",
+      "restaurant_openings",
+      "attractions",
+    ];
     if (!validCategories.includes(category)) {
       return new Response(
-        JSON.stringify({ error: `Invalid category. Must be one of: ${validCategories.join(', ')}` }),
+        JSON.stringify({
+          error: `Invalid category. Must be one of: ${validCategories.join(
+            ", "
+          )}`,
+        }),
         {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
     // Initialize services
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const claudeApiKey = Deno.env.get("CLAUDE_API");
 
     if (!claudeApiKey) {
       return new Response(
-        JSON.stringify({ error: 'Claude API key not configured' }),
+        JSON.stringify({ error: "Claude API key not configured" }),
         {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
@@ -541,30 +624,76 @@ Deno.serve(async (req) => {
 
     console.log(`🚀 Starting AI crawl of ${url} for ${category}`);
 
-    // Fetch website content
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-      },
-    });
+    // Try multiple URLs to find the best event page
+    const urlsToTry = findBestEventUrl(url);
+    console.log(`🔍 Will try these URLs: ${urlsToTry.join(", ")}`);
 
-    if (!response.ok) {
+    let bestHtml = "";
+    let bestUrl = url;
+    let maxEventContent = 0;
+
+    // Try each URL to find the one with the most event content
+    for (const tryUrl of urlsToTry) {
+      try {
+        console.log(`📄 Trying URL: ${tryUrl}`);
+
+        const response = await fetch(tryUrl, {
+          headers: {
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+          },
+        });
+
+        if (response.ok) {
+          const html = await response.text();
+
+          // Quick test for event-related content
+          const eventContentTest = (
+            html.match(/event|concert|show|game|performance|calendar/gi) || []
+          ).length;
+          console.log(
+            `📊 ${tryUrl}: Found ${eventContentTest} event-related keywords in ${html.length} chars`
+          );
+
+          if (eventContentTest > maxEventContent) {
+            maxEventContent = eventContentTest;
+            bestHtml = html;
+            bestUrl = tryUrl;
+            console.log(
+              `✅ New best URL: ${tryUrl} (${eventContentTest} keywords)`
+            );
+          }
+        } else {
+          console.log(`❌ Failed to fetch ${tryUrl}: ${response.status}`);
+        }
+      } catch (error) {
+        console.log(`⚠️ Error fetching ${tryUrl}:`, error.message);
+      }
+    }
+
+    if (!bestHtml) {
       return new Response(
-        JSON.stringify({ 
-          error: `Failed to fetch website: ${response.status} ${response.statusText}` 
+        JSON.stringify({
+          error: `Failed to fetch website content from any URL`,
         }),
         {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    const html = await response.text();
-    console.log(`✅ Fetched website content: ${html.length} characters`);
+    console.log(
+      `✅ Using content from: ${bestUrl} (${bestHtml.length} characters, ${maxEventContent} event keywords)`
+    );
 
     // Extract content using AI
-    const extractedItems = await extractContentWithAI(html, category, url, claudeApiKey);
+    const extractedItems = await extractContentWithAI(
+      bestHtml,
+      category,
+      bestUrl,
+      claudeApiKey
+    );
 
     if (extractedItems.length === 0) {
       return new Response(
@@ -579,7 +708,7 @@ Deno.serve(async (req) => {
           },
         }),
         {
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
@@ -587,9 +716,15 @@ Deno.serve(async (req) => {
     console.log(`🤖 AI extracted ${extractedItems.length} ${category} items`);
 
     // Check for duplicates
-    const { newItems, duplicates } = await checkForDuplicates(supabase, category, extractedItems);
-    
-    console.log(`📊 Found ${newItems.length} new items, ${duplicates} duplicates`);
+    const { newItems, duplicates } = await checkForDuplicates(
+      supabase,
+      category,
+      extractedItems
+    );
+
+    console.log(
+      `📊 Found ${newItems.length} new items, ${duplicates} duplicates`
+    );
 
     let insertedCount = 0;
     let insertErrors = [];
@@ -617,19 +752,18 @@ Deno.serve(async (req) => {
     console.log(`✅ Crawl completed:`, response_data.results);
 
     return new Response(JSON.stringify(response_data), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
-    console.error('❌ Error in AI crawler:', error);
+    console.error("❌ Error in AI crawler:", error);
     return new Response(
       JSON.stringify({
-        error: 'Internal server error',
+        error: "Internal server error",
         details: error.message,
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
   }

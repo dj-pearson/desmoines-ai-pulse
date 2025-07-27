@@ -53,14 +53,23 @@ const AICrawler: React.FC = () => {
       label: "Events",
       icon: Calendar,
       description: "Concerts, festivals, sports games, community events",
-      examples: ["Event venues", "Concert halls", "Sports stadiums", "Festival websites"],
+      examples: [
+        "Event venues",
+        "Concert halls",
+        "Sports stadiums",
+        "Festival websites",
+      ],
     },
     {
       value: "restaurants",
       label: "Restaurants",
       icon: Utensils,
       description: "Restaurants, cafes, bars, food establishments",
-      examples: ["Restaurant directories", "Food review sites", "Menu websites"],
+      examples: [
+        "Restaurant directories",
+        "Food review sites",
+        "Menu websites",
+      ],
     },
     {
       value: "restaurant_openings",
@@ -73,7 +82,8 @@ const AICrawler: React.FC = () => {
       value: "playgrounds",
       label: "Playgrounds",
       icon: Play,
-      description: "Playgrounds, play areas, children's recreational facilities",
+      description:
+        "Playgrounds, play areas, children's recreational facilities",
       examples: ["Parks & recreation sites", "Family activity websites"],
     },
     {
@@ -81,7 +91,11 @@ const AICrawler: React.FC = () => {
       label: "Attractions",
       icon: Camera,
       description: "Tourist attractions, museums, historic sites",
-      examples: ["Tourism websites", "Visitor bureau sites", "Attraction directories"],
+      examples: [
+        "Tourism websites",
+        "Visitor bureau sites",
+        "Attraction directories",
+      ],
     },
   ];
 
@@ -92,7 +106,13 @@ const AICrawler: React.FC = () => {
       setResult({
         success: false,
         message: "Please provide both URL and category",
-        results: { totalFound: 0, newItems: 0, duplicates: 0, inserted: 0, errors: 1 },
+        results: {
+          totalFound: 0,
+          newItems: 0,
+          duplicates: 0,
+          inserted: 0,
+          errors: 1,
+        },
         error: "URL and category are required",
       });
       return;
@@ -120,8 +140,15 @@ const AICrawler: React.FC = () => {
       setResult({
         success: false,
         message: "Failed to crawl website",
-        results: { totalFound: 0, newItems: 0, duplicates: 0, inserted: 0, errors: 1 },
-        error: error instanceof Error ? error.message : "Unknown error occurred",
+        results: {
+          totalFound: 0,
+          newItems: 0,
+          duplicates: 0,
+          inserted: 0,
+          errors: 1,
+        },
+        error:
+          error instanceof Error ? error.message : "Unknown error occurred",
       });
     } finally {
       setIsLoading(false);
@@ -139,7 +166,9 @@ const AICrawler: React.FC = () => {
 
   const getResultColor = () => {
     if (!result) return "";
-    return result.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50";
+    return result.success
+      ? "border-green-200 bg-green-50"
+      : "border-red-200 bg-red-50";
   };
 
   return (
@@ -151,9 +180,9 @@ const AICrawler: React.FC = () => {
             AI Website Crawler
           </CardTitle>
           <p className="text-sm text-gray-600">
-            Use AI to automatically extract and categorize content from any website. 
-            The AI will intelligently parse the website and create database entries 
-            for events, restaurants, playgrounds, and more.
+            Use AI to automatically extract and categorize content from any
+            website. The AI will intelligently parse the website and create
+            database entries for events, restaurants, playgrounds, and more.
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -205,9 +234,13 @@ const AICrawler: React.FC = () => {
               <selectedCategory.icon className="h-4 w-4" />
               <AlertDescription>
                 <div className="space-y-2">
-                  <p><strong>{selectedCategory.label}:</strong> {selectedCategory.description}</p>
+                  <p>
+                    <strong>{selectedCategory.label}:</strong>{" "}
+                    {selectedCategory.description}
+                  </p>
                   <p className="text-xs">
-                    <strong>Good for:</strong> {selectedCategory.examples.join(", ")}
+                    <strong>Good for:</strong>{" "}
+                    {selectedCategory.examples.join(", ")}
                   </p>
                 </div>
               </AlertDescription>
@@ -289,38 +322,44 @@ const AICrawler: React.FC = () => {
             {/* Preview of extracted items */}
             {result.items && result.items.length > 0 && (
               <div className="space-y-2">
-                <h4 className="font-medium text-sm">Preview of extracted items:</h4>
+                <h4 className="font-medium text-sm">
+                  Preview of extracted items:
+                </h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {result.items.slice(0, 5).map((item, index) => {
                     const itemData = item as Record<string, unknown>;
-                    const title = (itemData.title || itemData.name || "Unnamed Item") as string;
+                    const title = (itemData.title ||
+                      itemData.name ||
+                      "Unnamed Item") as string;
                     const date = itemData.date as string;
-                    const location = (itemData.location || itemData.venue) as string;
+                    const location = (itemData.location ||
+                      itemData.venue) as string;
                     const category = itemData.category as string;
-                    
+
                     return (
-                    <div key={index} className="p-2 bg-white rounded border text-xs">
-                      <div className="font-medium">
-                        {title}
+                      <div
+                        key={index}
+                        className="p-2 bg-white rounded border text-xs"
+                      >
+                        <div className="font-medium">{title}</div>
+                        {date && (
+                          <div className="text-gray-500 flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(date).toLocaleDateString()}
+                          </div>
+                        )}
+                        {location && (
+                          <div className="text-gray-500 flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {location}
+                          </div>
+                        )}
+                        {category && (
+                          <Badge variant="secondary" className="text-xs mt-1">
+                            {category}
+                          </Badge>
+                        )}
                       </div>
-                      {date && (
-                        <div className="text-gray-500 flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {new Date(date).toLocaleDateString()}
-                        </div>
-                      )}
-                      {location && (
-                        <div className="text-gray-500 flex items-center gap-1">
-                          <MapPin className="h-3 w-3" />
-                          {location}
-                        </div>
-                      )}
-                      {category && (
-                        <Badge variant="secondary" className="text-xs mt-1">
-                          {category}
-                        </Badge>
-                      )}
-                    </div>
                     );
                   })}
                 </div>
@@ -337,12 +376,24 @@ const AICrawler: React.FC = () => {
         </CardHeader>
         <CardContent className="space-y-2 text-xs text-gray-600">
           <ul className="list-disc list-inside space-y-1">
-            <li>Use websites with clear, structured content (avoid heavily JavaScript-based sites)</li>
-            <li>Event sites work best when they have clear dates, titles, and locations</li>
-            <li>Restaurant sites should have names, addresses, and cuisine information</li>
+            <li>
+              Use websites with clear, structured content (avoid heavily
+              JavaScript-based sites)
+            </li>
+            <li>
+              Event sites work best when they have clear dates, titles, and
+              locations
+            </li>
+            <li>
+              Restaurant sites should have names, addresses, and cuisine
+              information
+            </li>
             <li>The AI will automatically detect and skip duplicate entries</li>
             <li>Large websites may take 30-60 seconds to process completely</li>
-            <li>Try specific pages (like /events or /menu) rather than homepage for better results</li>
+            <li>
+              Try specific pages (like /events or /menu) rather than homepage
+              for better results
+            </li>
           </ul>
         </CardContent>
       </Card>
