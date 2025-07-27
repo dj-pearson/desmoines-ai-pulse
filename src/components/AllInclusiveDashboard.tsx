@@ -8,19 +8,58 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, MapPin, ExternalLink, Utensils, Palette, TreePine } from "lucide-react";
-import { format } from "date-fns";
+import { format, isToday, isTomorrow, isThisWeek, isWeekend, addWeeks, isWithinInterval } from "date-fns";
 
 interface AllInclusiveDashboardProps {
   onViewEventDetails?: (event: any) => void;
+  dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null;
 }
 
-export default function AllInclusiveDashboard({ onViewEventDetails }: AllInclusiveDashboardProps) {
-  const { events, isLoading: eventsLoading } = useEvents({ limit: 6 });
-  const { restaurantOpenings, isLoading: restaurantsLoading } = useRestaurantOpenings({ limit: 6 });
-  const { attractions, isLoading: attractionsLoading } = useAttractions({ limit: 6 });
-  const { playgrounds, isLoading: playgroundsLoading } = usePlaygrounds({ limit: 6 });
+export default function AllInclusiveDashboard({ onViewEventDetails, dateFilter }: AllInclusiveDashboardProps) {
+  // Get base data without date filtering first
+  const { events: allEvents, isLoading: eventsLoading } = useEvents({ limit: 50 });
+  const { restaurantOpenings: allRestaurantOpenings, isLoading: restaurantsLoading } = useRestaurantOpenings({ limit: 50 });
+  const { attractions, isLoading: attractionsLoading } = useAttractions({ limit: 50 });
+  const { playgrounds, isLoading: playgroundsLoading } = usePlaygrounds({ limit: 50 });
 
   const [activeTab, setActiveTab] = useState("all");
+
+  // Filter events and restaurant openings based on date filter
+  const filterByDate = (items: any[], dateField: string = 'date') => {
+    if (!dateFilter) return items;
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    return items.filter(item => {
+      const itemDate = new Date(item[dateField]);
+      
+      if (dateFilter.mode === 'single' && dateFilter.start) {
+        const filterDate = new Date(dateFilter.start.getFullYear(), dateFilter.start.getMonth(), dateFilter.start.getDate());
+        const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+        return itemDateOnly.getTime() === filterDate.getTime();
+      }
+      
+      if (dateFilter.mode === 'range' && dateFilter.start) {
+        if (dateFilter.end) {
+          return isWithinInterval(itemDate, { start: dateFilter.start, end: dateFilter.end });
+        } else {
+          return itemDate >= dateFilter.start;
+        }
+      }
+      
+      if (dateFilter.mode === 'preset') {
+        // Handle preset filters - this would need to be passed from the search component
+        // For now, return all items for preset mode
+        return true;
+      }
+      
+      return true;
+    });
+  };
+
+  const events = filterByDate(allEvents || []);
+  const restaurantOpenings = filterByDate(allRestaurantOpenings || [], 'opening_date');
 
   const formatDate = (date: string | Date) => {
     try {

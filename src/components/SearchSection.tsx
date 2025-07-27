@@ -2,13 +2,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Calendar, MapPin, DollarSign } from "lucide-react";
+import { Search, MapPin, DollarSign } from "lucide-react";
+import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 
 interface SearchSectionProps {
   onSearch: (filters: {
     query: string;
     category: string;
-    date?: string;
+    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null;
     location?: string;
     priceRange?: string;
   }) => void;
@@ -17,13 +18,13 @@ interface SearchSectionProps {
 export default function SearchSection({ onSearch }: SearchSectionProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
-  const [date, setDate] = useState("");
+  const [dateFilter, setDateFilter] = useState<{ start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null>(null);
   const [location, setLocation] = useState("");
   const [priceRange, setPriceRange] = useState("");
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    onSearch({ query, category, date, location, priceRange });
+    onSearch({ query, category, dateFilter, location, priceRange });
   };
 
   return (
@@ -66,24 +67,11 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
             </Button>
           </div>
 
-          {/* Advanced filters */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-white/70" />
-              <Select value={date} onValueChange={setDate}>
-                <SelectTrigger className="bg-white/95 backdrop-blur">
-                  <SelectValue placeholder="Any date" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any-date">Any date</SelectItem>
-                  <SelectItem value="today">Today</SelectItem>
-                  <SelectItem value="tomorrow">Tomorrow</SelectItem>
-                  <SelectItem value="this-week">This week</SelectItem>
-                  <SelectItem value="this-weekend">This weekend</SelectItem>
-                  <SelectItem value="next-week">Next week</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <InteractiveDateSelector 
+              onDateChange={setDateFilter}
+              className="w-full"
+            />
 
             <div className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-white/70" />

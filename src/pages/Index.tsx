@@ -31,6 +31,7 @@ export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [searchFilters, setSearchFilters] = useState<{ dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null }>({});
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
@@ -39,10 +40,13 @@ export default function Index() {
   const handleSearch = (filters: {
     query: string;
     category: string;
-    date?: string;
+    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null;
     location?: string;
     priceRange?: string;
   }) => {
+    // Store search filters for the dashboard
+    setSearchFilters({ dateFilter: filters.dateFilter });
+    
     // Scroll to events section and apply filters
     document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
     
@@ -132,7 +136,12 @@ export default function Index() {
         <SearchSection onSearch={handleSearch} />
 
       {/* All-Inclusive Dashboard */}
-      <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} />
+      <div id="events">
+        <AllInclusiveDashboard 
+          onViewEventDetails={handleViewEventDetails} 
+          dateFilter={searchFilters.dateFilter}
+        />
+      </div>
 
       {!showAllEvents && (
         <>

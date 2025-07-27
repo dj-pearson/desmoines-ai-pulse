@@ -34,7 +34,7 @@ export default function Header() {
             <Link to="/" className="text-neutral-600 hover:text-primary transition-colors">
               Events
             </Link>
-            <Link to="/" className="text-neutral-600 hover:text-primary transition-colors">
+            <Link to="/restaurants" className="text-neutral-600 hover:text-primary transition-colors">
               Restaurants
             </Link>
             <Link to="/" className="text-neutral-600 hover:text-primary transition-colors">
