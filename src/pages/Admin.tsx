@@ -7,12 +7,29 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import UserRoleManager from "@/components/UserRoleManager";
 import ContentTable from "@/components/ContentTable";
-import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings } from "lucide-react";
+import AICrawler from "@/components/AICrawler";
+import ScraperConfigWizard from "@/components/ScraperConfigWizard";
+import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play } from "lucide-react";
+import { useEvents } from "@/hooks/useEvents";
+import { useRestaurants } from "@/hooks/useRestaurants";
+import { useAttractions } from "@/hooks/useAttractions";
+import { usePlaygrounds } from "@/hooks/usePlaygrounds";
+import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
+import { useScraping } from "@/hooks/useScraping";
 
 export default function Admin() {
   const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } = useAdminAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
+  const [showScraperWizard, setShowScraperWizard] = useState(false);
+
+  // Data hooks
+  const events = useEvents();
+  const restaurants = useRestaurants();
+  const attractions = useAttractions();
+  const playgrounds = usePlaygrounds();
+  const restaurantOpenings = useRestaurantOpenings();
+  const scraping = useScraping();
 
   useEffect(() => {
     console.log("Admin useEffect:", {
@@ -108,24 +125,32 @@ export default function Admin() {
             </TabsTrigger>
             {canManageContent() && (
               <>
+                <TabsTrigger value="ai-crawler" className="flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  AI Crawler
+                </TabsTrigger>
+                <TabsTrigger value="scraping" className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Scraping
+                </TabsTrigger>
                 <TabsTrigger value="events" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
+                  <Calendar className="h-4 w-4" />
                   Events
                 </TabsTrigger>
                 <TabsTrigger value="restaurants" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
+                  <Utensils className="h-4 w-4" />
                   Restaurants
                 </TabsTrigger>
                 <TabsTrigger value="attractions" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
+                  <Camera className="h-4 w-4" />
                   Attractions
                 </TabsTrigger>
                 <TabsTrigger value="playgrounds" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
+                  <Play className="h-4 w-4" />
                   Playgrounds
                 </TabsTrigger>
                 <TabsTrigger value="restaurant-openings" className="flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
+                  <Building className="h-4 w-4" />
                   Restaurant Openings
                 </TabsTrigger>
               </>
@@ -216,64 +241,138 @@ export default function Admin() {
 
           {canManageContent() && (
             <>
-              <TabsContent value="events">
+              <TabsContent value="ai-crawler">
+                <AICrawler />
+              </TabsContent>
+
+              <TabsContent value="scraping">
                 <Card>
                   <CardHeader>
-                    <CardTitle>Events Management</CardTitle>
-                    <CardDescription>Manage all events in the system</CardDescription>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-purple-600" />
+                      Automated Scraping Management
+                    </CardTitle>
+                    <CardDescription>
+                      Configure and manage automated scrapers for events, restaurants, and more
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-muted-foreground">Event management interface coming soon.</p>
+                    <div className="space-y-4">
+                      <div className="flex gap-4">
+                        <Button 
+                          onClick={() => setShowScraperWizard(true)}
+                          className="flex items-center gap-2"
+                        >
+                          <Bot className="h-4 w-4" />
+                          Create New Scraper
+                        </Button>
+                        <Button variant="outline">
+                          <Settings className="h-4 w-4 mr-2" />
+                          Manage Existing
+                        </Button>
+                      </div>
+                      
+                      {scraping.jobs.length > 0 ? (
+                        <div className="grid gap-4">
+                          {scraping.jobs.map((job) => (
+                            <Card key={job.id} className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h4 className="font-semibold">{job.name}</h4>
+                                   <p className="text-sm text-muted-foreground">
+                                     Last run: {job.lastRun ? new Date(job.lastRun).toLocaleString() : 'Never'}
+                                   </p>
+                                   <p className="text-sm text-muted-foreground">
+                                     Events found: {job.eventsFound || 0}
+                                   </p>
+                                </div>
+                                <Badge variant={job.status === 'running' ? 'default' : 'secondary'}>
+                                  {job.status}
+                                </Badge>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>No scraping jobs configured yet.</p>
+                          <p className="text-sm">Create your first automated scraper to get started.</p>
+                        </div>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="events">
+                <ContentTable
+                  type="event"
+                  items={events.events}
+                  isLoading={events.isLoading}
+                  totalCount={events.events.length}
+                  onEdit={(item) => console.log('Edit event:', item)}
+                  onDelete={(id) => console.log('Delete event:', id)}
+                  onSearch={(search) => console.log('Search events:', search)}
+                  onFilter={(filter) => console.log('Filter events:', filter)}
+                  onCreate={() => console.log('Create new event')}
+                />
               </TabsContent>
 
               <TabsContent value="restaurants">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Restaurant Management</CardTitle>
-                    <CardDescription>Manage restaurant listings</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">Restaurant management interface coming soon.</p>
-                  </CardContent>
-                </Card>
+                <ContentTable
+                  type="restaurant"
+                  items={restaurants.restaurants}
+                  isLoading={restaurants.isLoading}
+                  totalCount={restaurants.restaurants.length}
+                  onEdit={(item) => console.log('Edit restaurant:', item)}
+                  onDelete={(id) => console.log('Delete restaurant:', id)}
+                  onSearch={(search) => console.log('Search restaurants:', search)}
+                  onFilter={(filter) => console.log('Filter restaurants:', filter)}
+                  onCreate={() => console.log('Create new restaurant')}
+                />
               </TabsContent>
 
               <TabsContent value="attractions">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Attractions Management</CardTitle>
-                    <CardDescription>Manage attraction listings</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">Attractions management interface coming soon.</p>
-                  </CardContent>
-                </Card>
+                <ContentTable
+                  type="attraction"
+                  items={attractions.attractions}
+                  isLoading={attractions.isLoading}
+                  totalCount={attractions.attractions.length}
+                  onEdit={(item) => console.log('Edit attraction:', item)}
+                  onDelete={(id) => console.log('Delete attraction:', id)}
+                  onSearch={(search) => console.log('Search attractions:', search)}
+                  onFilter={(filter) => console.log('Filter attractions:', filter)}
+                  onCreate={() => console.log('Create new attraction')}
+                />
               </TabsContent>
 
               <TabsContent value="playgrounds">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Playgrounds Management</CardTitle>
-                    <CardDescription>Manage playground listings</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">Playgrounds management interface coming soon.</p>
-                  </CardContent>
-                </Card>
+                <ContentTable
+                  type="playground"
+                  items={playgrounds.playgrounds}
+                  isLoading={playgrounds.isLoading}
+                  totalCount={playgrounds.playgrounds.length}
+                  onEdit={(item) => console.log('Edit playground:', item)}
+                  onDelete={(id) => console.log('Delete playground:', id)}
+                  onSearch={(search) => console.log('Search playgrounds:', search)}
+                  onFilter={(filter) => console.log('Filter playgrounds:', filter)}
+                  onCreate={() => console.log('Create new playground')}
+                />
               </TabsContent>
 
               <TabsContent value="restaurant-openings">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Restaurant Openings Management</CardTitle>
-                    <CardDescription>Manage restaurant opening announcements</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-muted-foreground">Restaurant openings management interface coming soon.</p>
-                  </CardContent>
-                </Card>
+                <ContentTable
+                  type="restaurant_opening"
+                  items={restaurantOpenings.restaurantOpenings}
+                  isLoading={restaurantOpenings.isLoading}
+                  totalCount={restaurantOpenings.restaurantOpenings.length}
+                  onEdit={(item) => console.log('Edit restaurant opening:', item)}
+                  onDelete={(id) => console.log('Delete restaurant opening:', id)}
+                  onSearch={(search) => console.log('Search restaurant openings:', search)}
+                  onFilter={(filter) => console.log('Filter restaurant openings:', filter)}
+                  onCreate={() => console.log('Create new restaurant opening')}
+                />
               </TabsContent>
             </>
           )}
@@ -285,6 +384,17 @@ export default function Admin() {
           )}
         </Tabs>
       </div>
+
+      {/* Scraper Configuration Wizard */}
+      {showScraperWizard && (
+        <ScraperConfigWizard
+          onSave={(config) => {
+            console.log('Save scraper config:', config);
+            setShowScraperWizard(false);
+          }}
+          onClose={() => setShowScraperWizard(false)}
+        />
+      )}
     </div>
   );
 }
