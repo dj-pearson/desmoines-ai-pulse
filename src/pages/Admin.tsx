@@ -20,7 +20,7 @@ export default function Admin() {
     canManageContent,
     isRootAdmin,
     isAdmin
-  } = useUserRole();
+  } = useUserRole(user);
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
 
