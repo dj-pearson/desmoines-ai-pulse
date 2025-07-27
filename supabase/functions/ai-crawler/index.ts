@@ -248,8 +248,8 @@ function extractRelevantContent(html: string): string {
   
   // Limit to much smaller size for more focused AI processing
   const finalContent = relevantContent.substring(0, 8000); // Much smaller than 35000
-  console.log(`📊 Final content for AI: ${finalContent.length} characters (reduced from ${relevantContent.length})`);
   
+  console.log(`📏 Final content length: ${finalContent.length} characters (reduced from ${relevantContent.length})`);
   return finalContent;
 }
 
