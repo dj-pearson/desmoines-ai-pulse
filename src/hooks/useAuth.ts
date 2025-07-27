@@ -88,16 +88,16 @@ export function useAuth() {
       return false;
     }
 
-    // Check user role from database using the role system
+    // Check user role from user_roles table
     try {
       const { data, error } = await supabase
-        .from("profiles")
-        .select("user_role")
+        .from("user_roles")
+        .select("role")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (!error && data?.user_role) {
-        return data.user_role === 'admin' || data.user_role === 'root_admin';
+      if (!error && data?.role) {
+        return data.role === 'admin' || data.role === 'root_admin';
       }
     } catch (error) {
       console.error("Error checking admin status:", error);
