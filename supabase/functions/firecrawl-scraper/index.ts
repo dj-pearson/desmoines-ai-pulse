@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 interface ScrapRequest {
   url: string;
   category: string;
+  maxPages?: number; // New optional parameter for pagination
 }
 
 const corsHeaders = {
@@ -33,7 +34,7 @@ serve(async (req) => {
       });
     }
 
-    const { url, category }: ScrapRequest = await req.json();
+    const { url, category, maxPages = 3 }: ScrapRequest = await req.json();
 
     if (!url || !category) {
       return new Response(
@@ -45,70 +46,82 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🚀 Starting Firecrawl scrape of ${url} for ${category}`);
+    console.log(`🚀 Starting Firecrawl scrape of ${url} for ${category} (max ${maxPages} pages)`);
 
-    // Use Firecrawl to get JavaScript-rendered content
-    const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${firecrawlApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: url,
-        formats: ['markdown', 'html'],
-        waitFor: 5000, // Wait 5 seconds for JavaScript to load
-        timeout: 30000, // 30 second timeout
-      }),
-    });
-
-    if (!firecrawlResponse.ok) {
-      const errorText = await firecrawlResponse.text();
-      console.error(`❌ Firecrawl API error: ${firecrawlResponse.status} - ${errorText}`);
-      return new Response(
-        JSON.stringify({ error: `Firecrawl API error: ${firecrawlResponse.status}` }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const firecrawlData = await firecrawlResponse.json();
-    const content = firecrawlData.data?.markdown || firecrawlData.data?.html || '';
+    // Generate URLs for pagination if it's a Catch Des Moines events page
+    const urlsToScrape = [];
+    const urlObj = new URL(url);
     
-    console.log(`📄 Firecrawl returned ${content.length} characters of content`);
-    console.log(`📝 Content preview: ${content.substring(0, 500)}...`);
-
-    if (!content || content.length < 100) {
-      console.error(`❌ No usable content returned from Firecrawl`);
-      return new Response(
-        JSON.stringify({ error: "No content returned from Firecrawl" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (urlObj.hostname.includes('catchdesmoines.com') && urlObj.pathname.includes('/events')) {
+      // Generate paginated URLs for Catch Des Moines
+      for (let page = 0; page < maxPages; page++) {
+        const pageUrl = new URL(url);
+        if (page > 0) {
+          pageUrl.searchParams.set('skip', (page * 12).toString());
+          pageUrl.searchParams.set('bounds', 'false');
+          pageUrl.searchParams.set('view', 'grid');
+          pageUrl.searchParams.set('sort', 'date');
         }
-      );
+        urlsToScrape.push(pageUrl.toString());
+      }
+    } else {
+      // For other sites, just scrape the single URL
+      urlsToScrape.push(url);
     }
 
-    // Extract events using Claude AI
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
-    
-    if (!claudeApiKey) {
-      console.error(`❌ Claude API key not found`);
-      return new Response(
-        JSON.stringify({ error: "Claude API key not configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    console.log(`📄 Will scrape ${urlsToScrape.length} pages: ${urlsToScrape.join(', ')}`);
 
-    const eventPrompt = `Extract all events from this website content from ${url}.
+    let allExtractedEvents = [];
+    let totalContentLength = 0;
+
+    // Process each URL for pagination support
+    for (const currentUrl of urlsToScrape) {
+      console.log(`🌐 Scraping page: ${currentUrl}`);
+      
+      // Use Firecrawl to get JavaScript-rendered content
+      const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${firecrawlApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          url: currentUrl,
+          formats: ['markdown', 'html'],
+          waitFor: 3000, // Reduced wait time for pagination
+          timeout: 20000, // Reduced timeout for pagination
+        }),
+      });
+
+      if (!firecrawlResponse.ok) {
+        const errorText = await firecrawlResponse.text();
+        console.error(`❌ Firecrawl API error for ${currentUrl}: ${firecrawlResponse.status} - ${errorText}`);
+        continue; // Skip this page and continue with others
+      }
+
+      const firecrawlData = await firecrawlResponse.json();
+      const content = firecrawlData.data?.markdown || firecrawlData.data?.html || '';
+      
+      console.log(`📄 Firecrawl returned ${content.length} characters from ${currentUrl}`);
+      totalContentLength += content.length;
+
+      if (!content || content.length < 100) {
+        console.error(`❌ No usable content returned from ${currentUrl}`);
+        continue; // Skip this page
+      }
+
+      // Extract events using Claude AI for this page
+      const claudeApiKey = Deno.env.get('CLAUDE_API');
+      
+      if (!claudeApiKey) {
+        console.error(`❌ Claude API key not found`);
+        break; // Exit loop if no API key
+      }
+
+      const eventPrompt = `Extract all events from this website content from ${currentUrl}.
 
 WEBSITE CONTENT:
-${content.substring(0, 20000)} 
+${content.substring(0, 15000)} 
 
 Please analyze this content and extract ALL events, concerts, shows, festivals, or activities. For each event, provide:
 - title: Event title/name
@@ -129,106 +142,90 @@ Format as JSON array ONLY - no other text:
     "description": "Event description",
     "category": "Concert",
     "price": "$25",
-    "source_url": "${url}"
+    "source_url": "${currentUrl}"
   }
 ]
 
 Return empty array [] if no events found. Focus on upcoming events only.`;
 
-    console.log(`🤖 Sending ${content.length} characters to Claude AI`);
+      console.log(`🤖 Sending ${content.length} characters to Claude AI for ${currentUrl}`);
 
-    const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": claudeApiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 8000,
-        temperature: 0.1,
-        messages: [
-          {
-            role: "user",
-            content: eventPrompt,
-          },
-        ],
-      }),
-    });
+      const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": claudeApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-sonnet-20241022",
+          max_tokens: 6000,
+          temperature: 0.1,
+          messages: [
+            {
+              role: "user",
+              content: eventPrompt,
+            },
+          ],
+        }),
+      });
 
-    if (!claudeResponse.ok) {
-      const errorText = await claudeResponse.text();
-      console.error(`❌ Claude API error: ${claudeResponse.status} - ${errorText}`);
-      return new Response(
-        JSON.stringify({ error: `Claude API error: ${claudeResponse.status}` }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (!claudeResponse.ok) {
+        const errorText = await claudeResponse.text();
+        console.error(`❌ Claude API error for ${currentUrl}: ${claudeResponse.status} - ${errorText}`);
+        continue; // Skip this page
+      }
+
+      const claudeData = await claudeResponse.json();
+      const responseText = claudeData.content?.[0]?.text?.trim();
+
+      console.log(`🔍 Claude response length for ${currentUrl}: ${responseText?.length || 0}`);
+
+      if (!responseText) {
+        console.error(`❌ No response text from Claude API for ${currentUrl}`);
+        continue; // Skip this page
+      }
+
+      // Parse Claude's response
+      let pageEvents = [];
+      try {
+        // Extract JSON from the response
+        let jsonMatch = responseText.match(/\[[\s\S]*\]/);
+        
+        if (!jsonMatch) {
+          // Try to find JSON in code blocks
+          jsonMatch = responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
+                     responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
+          if (jsonMatch) jsonMatch[0] = jsonMatch[1];
         }
-      );
-    }
-
-    const claudeData = await claudeResponse.json();
-    const responseText = claudeData.content?.[0]?.text?.trim();
-
-    console.log(`🔍 Claude response length: ${responseText?.length || 0}`);
-    console.log(`🔍 Claude response preview: ${responseText?.substring(0, 1000) || 'No text'}...`);
-
-    if (!responseText) {
-      console.error(`❌ No response text from Claude API`);
-      return new Response(
-        JSON.stringify({ error: "No response from Claude API" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        
+        if (!jsonMatch) {
+          console.error(`❌ No JSON array found in Claude response for ${currentUrl}`);
+          continue; // Skip this page
         }
-      );
+        
+        pageEvents = JSON.parse(jsonMatch[0]);
+        
+        if (!Array.isArray(pageEvents)) {
+          console.error(`❌ Parsed data is not an array for ${currentUrl}: ${typeof pageEvents}`);
+          pageEvents = [];
+        }
+        
+        console.log(`🤖 AI extracted ${pageEvents.length} events from ${currentUrl}`);
+        allExtractedEvents.push(...pageEvents);
+        
+      } catch (parseError) {
+        console.error(`❌ Could not parse AI response JSON for ${currentUrl}:`, parseError);
+        continue; // Skip this page
+      }
     }
 
-    // Parse Claude's response
-    let extractedEvents = [];
-    try {
-      // Extract JSON from the response
-      let jsonMatch = responseText.match(/\[[\s\S]*\]/);
-      
-      if (!jsonMatch) {
-        // Try to find JSON in code blocks
-        jsonMatch = responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
-                   responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
-        if (jsonMatch) jsonMatch[0] = jsonMatch[1];
-      }
-      
-      if (!jsonMatch) {
-        console.error(`❌ No JSON array found in Claude response. Full response: ${responseText}`);
-        return new Response(
-          JSON.stringify({ error: "Could not parse events from Claude response" }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-      
-      extractedEvents = JSON.parse(jsonMatch[0]);
-      
-      if (!Array.isArray(extractedEvents)) {
-        console.error(`❌ Parsed data is not an array: ${typeof extractedEvents}`);
-        extractedEvents = [];
-      }
-      
-      console.log(`🤖 AI extracted ${extractedEvents.length} events from ${url}`);
-      
-    } catch (parseError) {
-      console.error(`❌ Could not parse AI response JSON:`, parseError);
-      console.error(`❌ JSON string that failed to parse: ${responseText.substring(0, 2000)}`);
-      extractedEvents = [];
-    }
+    console.log(`🎯 Total events extracted from all pages: ${allExtractedEvents.length}`);
 
     // Filter future events (including today)
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0); // Set to start of today
-    const futureEvents = extractedEvents.filter(event => {
+    const futureEvents = allExtractedEvents.filter(event => {
       if (!event.date) return true; // Keep events without dates
       
       try {
@@ -241,7 +238,7 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
       }
     });
 
-    console.log(`🕒 After filtering past events: ${futureEvents.length} items (removed ${extractedEvents.length - futureEvents.length} past events)`);
+    console.log(`🕒 After filtering past events: ${futureEvents.length} items (removed ${allExtractedEvents.length - futureEvents.length} past events)`);
 
     // Insert into database
     let insertedCount = 0;
@@ -294,7 +291,7 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
 
     const result = {
       success: true,
-      totalFound: extractedEvents.length,
+      totalFound: allExtractedEvents.length,
       futureEvents: futureEvents.length,
       inserted: insertedCount,
       errors: errors.length,
