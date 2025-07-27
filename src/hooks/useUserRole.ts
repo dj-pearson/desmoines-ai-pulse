@@ -158,8 +158,13 @@ export function useUserRole(user?: User | null) {
   const canAccessAdminDashboard = (): boolean => hasRole('moderator');
 
   useEffect(() => {
-    // Always ensure loading state when user changes
-    setState(prev => ({ ...prev, isLoading: true }));
+    console.log("useUserRole useEffect triggered, user:", user?.id || 'null');
+    // Always ensure loading state when user changes - this must be synchronous
+    setState(prev => ({ 
+      ...prev, 
+      isLoading: true,
+      error: null 
+    }));
     fetchUserRole();
   }, [fetchUserRole]);
 
