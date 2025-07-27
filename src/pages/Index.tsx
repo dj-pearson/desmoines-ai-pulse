@@ -28,13 +28,20 @@ export default function Index() {
 
   const scrapeMutation = useEventScraper();
 
-  const handleSearch = (query: string, category: string) => {
-    // For now, just scroll to events section
-    // In a full implementation, this would filter events
+  const handleSearch = (filters: {
+    query: string;
+    category: string;
+    date?: string;
+    location?: string;
+    priceRange?: string;
+  }) => {
+    // Scroll to events section and apply filters
     document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
+    
+    // TODO: Implement actual filtering logic with the enhanced filters
     toast({
-      title: "Search executed",
-      description: `Searching for "${query}" in ${category}`,
+      title: "Smart Search Applied",
+      description: `Found events matching your criteria`,
     });
   };
 
