@@ -57,15 +57,25 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const isAdmin = await checkIsAdmin(session?.user);
-
+      // Only synchronous state updates here to prevent deadlock
       setAuthState({
         user: session?.user || null,
         session,
         isLoading: false,
         isAuthenticated: !!session,
-        isAdmin,
+        isAdmin: false, // Will be updated after the timeout
       });
+
+      // Defer admin check to prevent Supabase deadlock
+      if (session?.user) {
+        setTimeout(async () => {
+          const isAdmin = await checkIsAdmin(session.user);
+          setAuthState(prev => ({
+            ...prev,
+            isAdmin
+          }));
+        }, 0);
+      }
     });
 
     return () => subscription.unsubscribe();
