@@ -75,7 +75,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                   <SelectValue placeholder="Any date" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any date</SelectItem>
+                  <SelectItem value="any-date">Any date</SelectItem>
                   <SelectItem value="today">Today</SelectItem>
                   <SelectItem value="tomorrow">Tomorrow</SelectItem>
                   <SelectItem value="this-week">This week</SelectItem>
@@ -92,7 +92,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                   <SelectValue placeholder="Any location" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any location</SelectItem>
+                  <SelectItem value="any-location">Any location</SelectItem>
                   <SelectItem value="downtown">Downtown</SelectItem>
                   <SelectItem value="west-des-moines">West Des Moines</SelectItem>
                   <SelectItem value="ankeny">Ankeny</SelectItem>
@@ -109,7 +109,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                   <SelectValue placeholder="Any price" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Any price</SelectItem>
+                  <SelectItem value="any-price">Any price</SelectItem>
                   <SelectItem value="free">Free</SelectItem>
                   <SelectItem value="under-25">Under $25</SelectItem>
                   <SelectItem value="25-50">$25 - $50</SelectItem>
