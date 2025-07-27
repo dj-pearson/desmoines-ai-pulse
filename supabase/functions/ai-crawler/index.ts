@@ -134,122 +134,16 @@ async function findApiEndpoints(html: string, baseUrl: string): Promise<string[]
 function extractRelevantContent(html: string): string {
   console.log(`🔍 Starting content extraction from ${html.length} character HTML`);
   
-  let relevantContent = "";
+  // Simple approach: just clean HTML and limit size to avoid CPU timeout
+  const cleanHtml = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "");
   
-  // Special handling for CatchDesMoines.com
-  if (html.includes('catchdesmoines.com')) {
-    console.log(`🎯 Applying CatchDesMoines-specific extraction`);
-    
-    // First try to extract JSON data that might contain events
-    const jsonPatterns = [
-      /window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/gi,
-      /var\s+events\s*=\s*(\[.*?\]);/gi,
-      /"events":\s*(\[.*?\])/gi,
-    ];
-    
-    for (const pattern of jsonPatterns) {
-      const matches = html.match(pattern);
-      if (matches) {
-        relevantContent += "--- JSON DATA ---\n" + matches.join("\n") + "\n\n";
-        console.log(`📄 Found JSON data: ${matches.length} matches`);
-      }
-    }
-    
-    // Extract specific CatchDesMoines event patterns more carefully
-    // Look for article slides which seem to be their main event container
-    const slidePattern = /<article[^>]*class="[^"]*slide[^"]*"[^>]*>(.*?)<\/article>/gis;
-    const slideMatches = html.match(slidePattern) || [];
-    
-    console.log(`🎯 Found ${slideMatches.length} article slides`);
-    
-    for (const slide of slideMatches.slice(0, 10)) { // Limit to first 10 slides
-      // Extract text content from the slide, removing HTML tags
-      const textContent = slide
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      // Only include if it looks like it contains event information
-      if (textContent.length > 30 && (
-        textContent.toLowerCase().includes('event') ||
-        textContent.toLowerCase().includes('fair') ||
-        textContent.toLowerCase().includes('festival') ||
-        textContent.toLowerCase().includes('show') ||
-        textContent.toLowerCase().includes('concert') ||
-        textContent.toLowerCase().includes('2025') ||
-        /july|august|september|october|november|december/i.test(textContent)
-      )) {
-        relevantContent += `--- EVENT SLIDE ---\n${textContent}\n\n`;
-      }
-    }
-    
-    // Look for other event-related divs
-    const eventDivs = html.match(/<div[^>]*class="[^"]*(?:event|listing|card)[^"]*"[^>]*>.*?<\/div>/gis) || [];
-    console.log(`🎯 Found ${eventDivs.length} event-related divs`);
-    
-    for (const div of eventDivs.slice(0, 5)) {
-      const textContent = div
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      
-      if (textContent.length > 30 && textContent.toLowerCase().includes('event')) {
-        relevantContent += `--- EVENT DIV ---\n${textContent}\n\n`;
-      }
-    }
-    
-    // Extract any text that mentions specific event keywords
-    const eventKeywords = ['warren county fair', 'anastasia', 'senior games', 'sale-a-bration', 'biergarten', 'horse racing', 'painting'];
-    for (const keyword of eventKeywords) {
-      const keywordRegex = new RegExp(`[^.!?]*${keyword}[^.!?]*[.!?]`, 'gi');
-      const matches = html.match(keywordRegex) || [];
-      if (matches.length > 0) {
-        relevantContent += `--- ${keyword.toUpperCase()} MENTIONS ---\n${matches.join('\n')}\n\n`;
-      }
-    }
-  } else {
-    // General extraction for other sites
-    console.log(`📄 Using general extraction approach`);
-    
-    const jsonPatterns = [
-      /window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/gi,
-      /var\s+events\s*=\s*(\[.*?\]);/gi,
-      /"events":\s*(\[.*?\])/gi,
-    ];
-    
-    for (const pattern of jsonPatterns) {
-      const matches = html.match(pattern);
-      if (matches) {
-        relevantContent += "--- JSON DATA ---\n" + matches.join("\n") + "\n\n";
-      }
-    }
-    
-    // Clean HTML and extract main content areas
-    const cleanHtml = html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
-      .replace(/<!--[\s\S]*?-->/g, "");
-    
-    const contentPatterns = [
-      /<main[^>]*>([\s\S]*?)<\/main>/gi,
-      /<article[^>]*>([\s\S]*?)<\/article>/gi,
-      /<div[^>]*class="[^"]*event[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    ];
-    
-    for (const pattern of contentPatterns) {
-      const matches = cleanHtml.match(pattern);
-      if (matches) {
-        relevantContent += "--- SECTION ---\n" + matches.slice(0, 3).join("\n--- SECTION ---\n") + "\n\n";
-      }
-    }
-  }
+  // Limit to 15000 characters to avoid CPU timeout
+  const finalContent = cleanHtml.substring(0, 15000);
   
-  // Limit to much smaller size for more focused AI processing
-  const finalContent = relevantContent.substring(0, 8000); // Much smaller than 35000
-  
-  console.log(`📏 Final content length: ${finalContent.length} characters (reduced from ${relevantContent.length})`);
+  console.log(`📏 Final content length: ${finalContent.length} characters (reduced from ${html.length})`);
   return finalContent;
 }
 
