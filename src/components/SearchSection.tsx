@@ -22,16 +22,50 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   const [location, setLocation] = useState("");
   const [priceRange, setPriceRange] = useState("");
 
-  // Auto-trigger search when date filter changes
+  // Auto-trigger search when any filter changes
+  const handleFilterChange = (newFilters: Partial<{
+    query?: string;
+    category?: string;
+    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
+    location?: string;
+    priceRange?: string;
+  }>) => {
+    const updatedFilters = { query, category, dateFilter, location, priceRange, ...newFilters };
+    onSearch(updatedFilters);
+  };
+
   const handleDateFilterChange = (newDateFilter: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null) => {
     setDateFilter(newDateFilter);
-    // Immediately trigger search with new date filter
-    onSearch({ query, category, dateFilter: newDateFilter, location, priceRange });
+    handleFilterChange({ dateFilter: newDateFilter });
+  };
+
+  const handleCategoryChange = (newCategory: string) => {
+    setCategory(newCategory);
+    handleFilterChange({ category: newCategory });
+  };
+
+  const handleLocationChange = (newLocation: string) => {
+    setLocation(newLocation);
+    handleFilterChange({ location: newLocation });
+  };
+
+  const handlePriceChange = (newPriceRange: string) => {
+    setPriceRange(newPriceRange);
+    handleFilterChange({ priceRange: newPriceRange });
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     onSearch({ query, category, dateFilter, location, priceRange });
+  };
+
+  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newQuery = e.target.value;
+    setQuery(newQuery);
+    // Debounce search for text input
+    if (newQuery.length === 0 || newQuery.length >= 2) {
+      handleFilterChange({ query: newQuery });
+    }
   };
 
   return (
@@ -52,11 +86,11 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                 type="text"
                 placeholder="Search events, restaurants, attractions..."
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={handleQueryChange}
                 className="h-12 text-lg bg-white/95 backdrop-blur"
               />
             </div>
-            <Select value={category} onValueChange={setCategory}>
+            <Select value={category} onValueChange={handleCategoryChange}>
               <SelectTrigger className="h-12 w-full sm:w-48 bg-white/95 backdrop-blur">
                 <SelectValue />
               </SelectTrigger>
@@ -82,7 +116,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
             <div className="flex items-center gap-2">
               <MapPin className="h-5 w-5 text-white/70" />
-              <Select value={location} onValueChange={setLocation}>
+              <Select value={location} onValueChange={handleLocationChange}>
                 <SelectTrigger className="bg-white/95 backdrop-blur">
                   <SelectValue placeholder="Any location" />
                 </SelectTrigger>
@@ -99,7 +133,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
             <div className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-white/70" />
-              <Select value={priceRange} onValueChange={setPriceRange}>
+              <Select value={priceRange} onValueChange={handlePriceChange}>
                 <SelectTrigger className="bg-white/95 backdrop-blur">
                   <SelectValue placeholder="Any price" />
                 </SelectTrigger>

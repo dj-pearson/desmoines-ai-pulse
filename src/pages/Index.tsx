@@ -31,7 +31,13 @@ export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
-  const [searchFilters, setSearchFilters] = useState<{ dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null }>({});
+  const [searchFilters, setSearchFilters] = useState<{
+    query?: string;
+    category?: string;
+    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
+    location?: string;
+    priceRange?: string;
+  }>({});
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
@@ -44,16 +50,17 @@ export default function Index() {
     location?: string;
     priceRange?: string;
   }) => {
-    // Store search filters for the dashboard
-    setSearchFilters({ dateFilter: filters.dateFilter });
+    // Store all search filters for the dashboard
+    setSearchFilters(filters);
     
-    // Scroll to events section and apply filters
+    // Scroll to events section
     document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
     
-    // TODO: Implement actual filtering logic with the enhanced filters
+    // Show feedback to user
+    const filterCount = Object.values(filters).filter(f => f && f !== 'All' && f !== 'any-date' && f !== 'any-location' && f !== 'any-price').length;
     toast({
-      title: "Smart Search Applied",
-      description: `Found events matching your criteria`,
+      title: "Filters Applied",
+      description: filterCount > 0 ? `${filterCount} filter(s) active` : "Showing all results",
     });
   };
 
@@ -139,7 +146,7 @@ export default function Index() {
       <div id="events">
         <AllInclusiveDashboard 
           onViewEventDetails={handleViewEventDetails} 
-          dateFilter={searchFilters.dateFilter}
+          filters={searchFilters}
         />
       </div>
 

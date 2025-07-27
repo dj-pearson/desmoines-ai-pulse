@@ -12,77 +12,158 @@ import { format, isToday, isTomorrow, isThisWeek, isWeekend, addWeeks, isWithinI
 
 interface AllInclusiveDashboardProps {
   onViewEventDetails?: (event: any) => void;
-  dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
+  filters?: {
+    query?: string;
+    category?: string;
+    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
+    location?: string;
+    priceRange?: string;
+  };
 }
 
-export default function AllInclusiveDashboard({ onViewEventDetails, dateFilter }: AllInclusiveDashboardProps) {
-  // Get base data without date filtering first
-  const { events: allEvents, isLoading: eventsLoading } = useEvents({ limit: 50 });
-  const { restaurantOpenings: allRestaurantOpenings, isLoading: restaurantsLoading } = useRestaurantOpenings({ limit: 50 });
-  const { attractions, isLoading: attractionsLoading } = useAttractions({ limit: 50 });
-  const { playgrounds, isLoading: playgroundsLoading } = usePlaygrounds({ limit: 50 });
+export default function AllInclusiveDashboard({ onViewEventDetails, filters }: AllInclusiveDashboardProps) {
+  // Get base data without filtering first
+  const { events: allEvents, isLoading: eventsLoading } = useEvents({ limit: 100 });
+  const { restaurantOpenings: allRestaurantOpenings, isLoading: restaurantsLoading } = useRestaurantOpenings({ limit: 100 });
+  const { attractions: allAttractions, isLoading: attractionsLoading } = useAttractions({ limit: 100 });
+  const { playgrounds: allPlaygrounds, isLoading: playgroundsLoading } = usePlaygrounds({ limit: 100 });
 
   const [activeTab, setActiveTab] = useState("all");
 
-  // Enhanced date filtering with proper preset handling
-  const filterByDate = (items: any[], dateField: string = 'date') => {
-    if (!dateFilter) return items;
+  // Comprehensive filtering function
+  const applyFilters = (items: any[], itemType: string, dateField: string = 'date') => {
+    if (!filters) return items.slice(0, 12); // Default limit if no filters
 
-    const now = new Date();
+    let filtered = [...items];
 
-    return items.filter(item => {
-      const itemDate = new Date(item[dateField]);
-      
-      if (dateFilter.mode === 'single' && dateFilter.start) {
-        const filterDate = startOfDay(dateFilter.start);
-        const itemDateOnly = startOfDay(itemDate);
-        return itemDateOnly.getTime() === filterDate.getTime();
-      }
-      
-      if (dateFilter.mode === 'range' && dateFilter.start) {
-        if (dateFilter.end) {
-          return isWithinInterval(itemDate, { 
-            start: startOfDay(dateFilter.start), 
-            end: endOfDay(dateFilter.end) 
-          });
-        } else {
-          return itemDate >= startOfDay(dateFilter.start);
-        }
-      }
-      
-      if (dateFilter.mode === 'preset' && dateFilter.preset) {
-        // Implement actual preset filtering
-        const today = startOfDay(now);
-        const tomorrow = startOfDay(addDays(now, 1));
-        const thisWeekStart = startOfWeek(now, { weekStartsOn: 0 });
-        const thisWeekEnd = endOfWeek(now, { weekStartsOn: 0 });
-        const nextWeekStart = addDays(thisWeekStart, 7);
-        const nextWeekEnd = addDays(thisWeekEnd, 7);
+    // Text search filter
+    if (filters.query && filters.query.trim()) {
+      const searchQuery = filters.query.toLowerCase().trim();
+      filtered = filtered.filter(item => {
+        const searchableText = [
+          item.title || item.name || '',
+          item.description || item.enhanced_description || item.original_description || '',
+          item.location || '',
+          item.venue || '',
+          item.cuisine || '',
+          item.category || ''
+        ].join(' ').toLowerCase();
         
-        switch (dateFilter.preset) {
-          case 'today':
-            return isToday(itemDate);
-          case 'tomorrow':
-            return isTomorrow(itemDate);
-          case 'this-week':
-            return isWithinInterval(itemDate, { start: thisWeekStart, end: thisWeekEnd });
-          case 'this-weekend':
-            const saturday = addDays(thisWeekStart, 6);
-            const sunday = addDays(thisWeekStart, 7);
-            return isWithinInterval(itemDate, { start: saturday, end: sunday });
-          case 'next-week':
-            return isWithinInterval(itemDate, { start: nextWeekStart, end: nextWeekEnd });
+        return searchableText.includes(searchQuery);
+      });
+    }
+
+    // Category filter
+    if (filters.category && filters.category !== 'All') {
+      const categoryFilter = filters.category.toLowerCase();
+      filtered = filtered.filter(item => {
+        if (categoryFilter === 'events') return itemType === 'event';
+        if (categoryFilter === 'restaurants') return itemType === 'restaurant';
+        if (categoryFilter === 'attractions') return itemType === 'attraction';
+        if (categoryFilter === 'playgrounds') return itemType === 'playground';
+        return true;
+      });
+    }
+
+    // Location filter
+    if (filters.location && filters.location !== 'any-location' && filters.location.trim()) {
+      const locationFilter = filters.location.toLowerCase();
+      filtered = filtered.filter(item => {
+        const itemLocation = (item.location || '').toLowerCase();
+        if (locationFilter === 'downtown') return itemLocation.includes('downtown');
+        if (locationFilter === 'west-des-moines') return itemLocation.includes('west des moines');
+        if (locationFilter === 'ankeny') return itemLocation.includes('ankeny');
+        if (locationFilter === 'urbandale') return itemLocation.includes('urbandale');
+        if (locationFilter === 'clive') return itemLocation.includes('clive');
+        return itemLocation.includes(locationFilter);
+      });
+    }
+
+    // Price filter
+    if (filters.priceRange && filters.priceRange !== 'any-price' && filters.priceRange.trim()) {
+      filtered = filtered.filter(item => {
+        const price = item.price || '';
+        const priceText = price.toLowerCase();
+        
+        switch (filters.priceRange) {
+          case 'free':
+            return priceText.includes('free') || priceText.includes('$0') || price === '';
+          case 'under-25':
+            return priceText.includes('$') && !priceText.match(/\$([2-9]\d|[1-9]\d\d+)/);
+          case '25-50':
+            return priceText.match(/\$(2[5-9]|[34]\d|50)/);
+          case '50-100':
+            return priceText.match(/\$(5\d|[6-9]\d|100)/);
+          case 'over-100':
+            return priceText.match(/\$([1-9]\d{2,})/);
           default:
             return true;
         }
-      }
-      
-      return true;
-    });
+      });
+    }
+
+    // Date filter
+    if (filters.dateFilter) {
+      const dateFilter = filters.dateFilter;
+      const now = new Date();
+
+      filtered = filtered.filter(item => {
+        const itemDate = new Date(item[dateField]);
+        
+        if (dateFilter.mode === 'single' && dateFilter.start) {
+          const filterDate = startOfDay(dateFilter.start);
+          const itemDateOnly = startOfDay(itemDate);
+          return itemDateOnly.getTime() === filterDate.getTime();
+        }
+        
+        if (dateFilter.mode === 'range' && dateFilter.start) {
+          if (dateFilter.end) {
+            return isWithinInterval(itemDate, { 
+              start: startOfDay(dateFilter.start), 
+              end: endOfDay(dateFilter.end) 
+            });
+          } else {
+            return itemDate >= startOfDay(dateFilter.start);
+          }
+        }
+        
+        if (dateFilter.mode === 'preset' && dateFilter.preset) {
+          const today = startOfDay(now);
+          const thisWeekStart = startOfWeek(now, { weekStartsOn: 0 });
+          const thisWeekEnd = endOfWeek(now, { weekStartsOn: 0 });
+          const nextWeekStart = addDays(thisWeekStart, 7);
+          const nextWeekEnd = addDays(thisWeekEnd, 7);
+          
+          switch (dateFilter.preset) {
+            case 'today':
+              return isToday(itemDate);
+            case 'tomorrow':
+              return isTomorrow(itemDate);
+            case 'this-week':
+              return isWithinInterval(itemDate, { start: thisWeekStart, end: thisWeekEnd });
+            case 'this-weekend':
+              const saturday = addDays(thisWeekStart, 6);
+              const sunday = addDays(thisWeekStart, 7);
+              return isWithinInterval(itemDate, { start: saturday, end: sunday });
+            case 'next-week':
+              return isWithinInterval(itemDate, { start: nextWeekStart, end: nextWeekEnd });
+            default:
+              return true;
+          }
+        }
+        
+        return true;
+      });
+    }
+
+    return filtered.slice(0, 12); // Limit results
   };
 
-  const events = filterByDate(allEvents || []);
-  const restaurantOpenings = filterByDate(allRestaurantOpenings || [], 'opening_date');
+  // Apply filters to each data type
+  const events = applyFilters(allEvents || [], 'event');
+  const restaurantOpenings = applyFilters(allRestaurantOpenings || [], 'restaurant', 'opening_date');
+  const attractions = applyFilters(allAttractions || [], 'attraction');
+  const playgrounds = applyFilters(allPlaygrounds || [], 'playground');
 
   const formatDate = (date: string | Date) => {
     try {
