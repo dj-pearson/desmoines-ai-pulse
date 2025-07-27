@@ -25,12 +25,23 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
+    console.log("Admin useEffect:", {
+      isAuthenticated,
+      roleLoading,
+      userRole,
+      canAccessAdminDashboard: canAccessAdminDashboard(),
+      isRootAdmin: isRootAdmin(),
+      isAdmin: isAdmin()
+    });
+    
     if (!isAuthenticated) {
+      console.log("Redirecting to /auth - not authenticated");
       navigate("/auth");
     } else if (!roleLoading && !canAccessAdminDashboard()) {
+      console.log("Redirecting to / - no admin access");
       navigate("/");
     }
-  }, [isAuthenticated, roleLoading, canAccessAdminDashboard, navigate]);
+  }, [isAuthenticated, roleLoading, canAccessAdminDashboard, navigate, userRole, isRootAdmin, isAdmin]);
 
   if (roleLoading) {
     return (
