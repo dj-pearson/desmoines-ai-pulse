@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -11,45 +10,34 @@ import ContentTable from "@/components/ContentTable";
 import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings } from "lucide-react";
 
 export default function Admin() {
-  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
-  const { 
-    userRole, 
-    isLoading: roleLoading, 
-    canAccessAdminDashboard,
-    canManageUsers,
-    canManageContent,
-    isRootAdmin,
-    isAdmin
-  } = useUserRole(user);
+  const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } = useAdminAuth();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     console.log("Admin useEffect:", {
-      isAuthenticated,
-      authLoading,
-      roleLoading,
+      user: user?.id || 'null',
       userRole,
-      canAccessAdminDashboard: canAccessAdminDashboard(),
-      isRootAdmin: isRootAdmin(),
-      isAdmin: isAdmin()
+      isLoading,
+      hasAdminAccess,
+      isRootAdmin
     });
     
-    // Wait for both auth and role loading to complete
-    if (authLoading || roleLoading) {
+    // Wait for loading to complete
+    if (isLoading) {
       return;
     }
     
-    if (!isAuthenticated) {
+    if (!user) {
       console.log("Redirecting to /auth - not authenticated");
       navigate("/auth");
-    } else if (!canAccessAdminDashboard()) {
+    } else if (!hasAdminAccess) {
       console.log("Redirecting to / - no admin access");
       navigate("/");
     }
-  }, [isAuthenticated, authLoading, roleLoading, canAccessAdminDashboard, navigate, userRole, isRootAdmin, isAdmin]);
+  }, [user, userRole, isLoading, hasAdminAccess, navigate]);
 
-  if (authLoading || roleLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
@@ -57,7 +45,7 @@ export default function Admin() {
     );
   }
 
-  if (!canAccessAdminDashboard()) {
+  if (!hasAdminAccess) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="p-6 max-w-md">
@@ -77,19 +65,22 @@ export default function Admin() {
   }
 
   const getRoleIcon = () => {
-    if (isRootAdmin()) return <Crown className="h-5 w-5" />;
-    if (isAdmin()) return <Shield className="h-5 w-5" />;
+    if (isRootAdmin) return <Crown className="h-5 w-5" />;
+    if (userRole === 'admin') return <Shield className="h-5 w-5" />;
     return <Users className="h-5 w-5" />;
   };
 
   const getRoleBadge = () => {
-    const variant = isRootAdmin() ? "default" : isAdmin() ? "destructive" : "secondary";
+    const variant = isRootAdmin ? "default" : userRole === 'admin' ? "destructive" : "secondary";
     return (
       <Badge variant={variant} className="ml-2">
         {userRole.replace('_', ' ')}
       </Badge>
     );
   };
+
+  const canManageContent = () => ['moderator', 'admin', 'root_admin'].includes(userRole);
+  const canManageUsers = () => ['admin', 'root_admin'].includes(userRole);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -163,8 +154,8 @@ export default function Admin() {
                     {userRole.replace('_', ' ')}
                   </div>
                   <div className="mt-4 text-sm text-gray-600">
-                    {isRootAdmin() && "✅ Full system access"}
-                    {isAdmin() && !isRootAdmin() && "✅ Administrative access"}
+                    {isRootAdmin && "✅ Full system access"}
+                    {userRole === 'admin' && !isRootAdmin && "✅ Administrative access"}
                     {userRole === 'moderator' && "✅ Content management access"}
                   </div>
                 </CardContent>
