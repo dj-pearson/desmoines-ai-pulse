@@ -36,6 +36,8 @@ export function useUserRole() {
 
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
+      
+      console.log("fetchUserRole: checking for user ID:", user.id);
 
       // Check user_roles table first (authoritative source)
       const { data: roleData, error: roleError } = await supabase
@@ -45,6 +47,8 @@ export function useUserRole() {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      console.log("user_roles query result:", { roleData, roleError });
 
       if (!roleError && roleData?.role) {
         setState({
@@ -62,7 +66,11 @@ export function useUserRole() {
         .eq("user_id", user.id)
         .maybeSingle();
 
+      console.log("profiles query result:", { profile, profileError });
+
       const userRole = profile?.user_role as UserRole || 'user';
+      console.log("Final userRole determined:", userRole);
+      
       setState({
         userRole,
         isLoading: false,
