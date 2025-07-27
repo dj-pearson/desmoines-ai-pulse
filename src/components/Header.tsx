@@ -11,8 +11,6 @@ export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const { profile } = useProfile();
 
-  console.log("Header debug:", { isAuthenticated, isAdmin, profile });
-
   const handleLogout = async () => {
     await logout();
   };

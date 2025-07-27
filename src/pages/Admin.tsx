@@ -11,7 +11,7 @@ import ContentTable from "@/components/ContentTable";
 import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings } from "lucide-react";
 
 export default function Admin() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
   const { 
     userRole, 
     isLoading: roleLoading, 
@@ -27,6 +27,7 @@ export default function Admin() {
   useEffect(() => {
     console.log("Admin useEffect:", {
       isAuthenticated,
+      authLoading,
       roleLoading,
       userRole,
       canAccessAdminDashboard: canAccessAdminDashboard(),
@@ -34,16 +35,21 @@ export default function Admin() {
       isAdmin: isAdmin()
     });
     
+    // Wait for both auth and role loading to complete
+    if (authLoading || roleLoading) {
+      return;
+    }
+    
     if (!isAuthenticated) {
       console.log("Redirecting to /auth - not authenticated");
       navigate("/auth");
-    } else if (!roleLoading && !canAccessAdminDashboard()) {
+    } else if (!canAccessAdminDashboard()) {
       console.log("Redirecting to / - no admin access");
       navigate("/");
     }
-  }, [isAuthenticated, roleLoading, canAccessAdminDashboard, navigate, userRole, isRootAdmin, isAdmin]);
+  }, [isAuthenticated, authLoading, roleLoading, canAccessAdminDashboard, navigate, userRole, isRootAdmin, isAdmin]);
 
-  if (roleLoading) {
+  if (authLoading || roleLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
