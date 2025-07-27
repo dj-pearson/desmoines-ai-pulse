@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
+import { useUserRole } from "./useUserRole";
 
 interface AuthState {
   user: User | null;
@@ -77,23 +78,27 @@ export function useAuth() {
       return false;
     }
 
-    // Check if user has admin role
-    // You can customize this logic based on your admin setup
-    // Option 1: Check user metadata
-    if (
-      user.user_metadata?.role === "admin" ||
-      user.app_metadata?.role === "admin"
-    ) {
-      return true;
+    // Check user role from database using the role system
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (!error && data?.user_role) {
+        return data.user_role === 'admin' || data.user_role === 'root_admin';
+      }
+    } catch (error) {
+      console.error("Error checking admin status:", error);
     }
 
-    // Option 2: Check email domain (for simple setup)
+    // Fallback to email check for backward compatibility
     const adminEmails = [
       "admin@desmoines.ai",
-      "admin@desmoinesinsider.com",
+      "admin@desmoinesinsider.com", 
       "pearson.performance@gmail.com",
-      "djpearson@pm.me", // Add user's actual email
-      // Add more admin emails as needed
+      "djpearson@pm.me", // Root admin email
     ];
 
     if (user.email && adminEmails.includes(user.email)) {
