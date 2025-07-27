@@ -40,13 +40,37 @@ export function useProfile() {
         .from("profiles")
         .select("*")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        throw error;
+        console.error("Error fetching profile:", error);
+        setError(error.message);
+        return;
       }
 
-      setProfile(data);
+      if (!data) {
+        // Profile doesn't exist, create it
+        const { data: newProfile, error: createError } = await supabase
+          .from("profiles")
+          .insert({
+            user_id: user.id,
+            email: user.email,
+            first_name: user.user_metadata?.first_name || null,
+            last_name: user.user_metadata?.last_name || null,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error("Error creating profile:", createError);
+          setError(createError.message);
+          return;
+        }
+
+        setProfile(newProfile);
+      } else {
+        setProfile(data);
+      }
     } catch (error) {
       console.error("Error fetching profile:", error);
       setError(error instanceof Error ? error.message : "Failed to fetch profile");

@@ -94,7 +94,7 @@ export function useAuth() {
         .from("profiles")
         .select("user_role")
         .eq("user_id", user.id)
-        .single();
+        .maybeSingle();
 
       if (!error && data?.user_role) {
         return data.user_role === 'admin' || data.user_role === 'root_admin';
