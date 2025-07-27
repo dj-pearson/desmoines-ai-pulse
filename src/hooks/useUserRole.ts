@@ -28,7 +28,7 @@ export function useUserRole(user?: User | null) {
   });
 
   const fetchUserRole = useCallback(async () => {
-    console.log("fetchUserRole called, user:", user);
+    console.log("fetchUserRole called, user:", user?.id || 'null');
     
     if (!user) {
       console.log("No user found, setting default role");
@@ -36,9 +36,6 @@ export function useUserRole(user?: User | null) {
       return;
     }
 
-    console.log("Setting loading true for user:", user.id);
-    // Keep loading state true throughout the entire async operation
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
       console.log("fetchUserRole: checking for user ID:", user.id);
 
@@ -82,11 +79,11 @@ export function useUserRole(user?: User | null) {
       });
     } catch (error) {
       console.error("Error fetching user role:", error);
-      setState(prev => ({
-        ...prev,
+      setState({
+        userRole: 'user',
         isLoading: false,
         error: error instanceof Error ? error.message : "Failed to fetch user role",
-      }));
+      });
     }
   }, [user]);
 
