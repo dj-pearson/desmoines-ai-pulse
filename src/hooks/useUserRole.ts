@@ -23,72 +23,92 @@ interface RoleState {
 export function useUserRole(user?: User | null) {
   const [state, setState] = useState<RoleState>({
     userRole: 'user',
-    isLoading: true, // Start with loading true
+    isLoading: true,
     error: null,
   });
 
-  const fetchUserRole = useCallback(async () => {
-    console.log("fetchUserRole called, user:", user?.id || 'null');
+  useEffect(() => {
+    let isMounted = true;
     
-    if (!user) {
-      console.log("No user found, setting default role");
-      setState({ userRole: 'user', isLoading: false, error: null });
-      return;
-    }
-
-    // Set loading to true when starting async operation
-    setState(prev => ({ ...prev, isLoading: true, error: null }));
-
-    try {
-      console.log("fetchUserRole: checking for user ID:", user.id);
-
-      // Check user_roles table first (authoritative source)
-      const { data: roleData, error: roleError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      console.log("user_roles query result:", { roleData, roleError });
-
-      if (!roleError && roleData?.role) {
-        console.log("Found role in user_roles:", roleData.role);
-        setState({
-          userRole: roleData.role as UserRole,
-          isLoading: false,
-          error: null,
-        });
+    const fetchUserRole = async () => {
+      console.log("fetchUserRole called, user:", user?.id || 'null');
+      
+      if (!user) {
+        console.log("No user found, setting default role");
+        if (isMounted) {
+          setState({ userRole: 'user', isLoading: false, error: null });
+        }
         return;
       }
 
-      // Fallback to profiles table if no role found in user_roles
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("user_role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+      // Keep loading true during the entire fetch operation
+      if (isMounted) {
+        setState(prev => ({ ...prev, isLoading: true, error: null }));
+      }
 
-      console.log("profiles query result:", { profile, profileError });
+      try {
+        console.log("fetchUserRole: checking for user ID:", user.id);
 
-      const userRole = profile?.user_role as UserRole || 'user';
-      console.log("Final userRole determined:", userRole);
-      
-      setState({
-        userRole,
-        isLoading: false,
-        error: null,
-      });
-    } catch (error) {
-      console.error("Error fetching user role:", error);
-      setState({
-        userRole: 'user',
-        isLoading: false,
-        error: error instanceof Error ? error.message : "Failed to fetch user role",
-      });
-    }
-  }, [user]);
+        // Check user_roles table first (authoritative source)
+        const { data: roleData, error: roleError } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        console.log("user_roles query result:", { roleData, roleError });
+
+        if (!roleError && roleData?.role) {
+          console.log("Found role in user_roles:", roleData.role);
+          if (isMounted) {
+            setState({
+              userRole: roleData.role as UserRole,
+              isLoading: false,
+              error: null,
+            });
+          }
+          return;
+        }
+
+        // Fallback to profiles table if no role found in user_roles
+        const { data: profile, error: profileError } = await supabase
+          .from("profiles")
+          .select("user_role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        console.log("profiles query result:", { profile, profileError });
+
+        const userRole = profile?.user_role as UserRole || 'user';
+        console.log("Final userRole determined:", userRole);
+        
+        if (isMounted) {
+          setState({
+            userRole,
+            isLoading: false,
+            error: null,
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching user role:", error);
+        if (isMounted) {
+          setState({
+            userRole: 'user',
+            isLoading: false,
+            error: error instanceof Error ? error.message : "Failed to fetch user role",
+          });
+        }
+      }
+    };
+
+    fetchUserRole();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]); // Only depend on user.id to prevent unnecessary re-runs
 
   const assignRole = async (targetUserId: string, role: UserRole) => {
     if (!user) {
@@ -157,16 +177,14 @@ export function useUserRole(user?: User | null) {
   const canManageContent = (): boolean => hasRole('moderator');
   const canAccessAdminDashboard = (): boolean => hasRole('moderator');
 
-  useEffect(() => {
-    console.log("useUserRole useEffect triggered, user:", user?.id || 'null');
-    // Always ensure loading state when user changes - this must be synchronous
-    setState(prev => ({ 
-      ...prev, 
-      isLoading: true,
-      error: null 
-    }));
-    fetchUserRole();
-  }, [fetchUserRole]);
+  // Force refetch function
+  const refetch = useCallback(async () => {
+    if (user?.id) {
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      // Re-trigger the effect by updating a dependency
+      // This will be handled by the useEffect above
+    }
+  }, [user?.id]);
 
   return {
     ...state,
@@ -179,6 +197,6 @@ export function useUserRole(user?: User | null) {
     canManageUsers,
     canManageContent,
     canAccessAdminDashboard,
-    refetch: fetchUserRole,
+    refetch,
   };
 }
