@@ -36,6 +36,9 @@ export function useUserRole(user?: User | null) {
       return;
     }
 
+    // Set loading to true when starting async operation
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
+
     try {
       console.log("fetchUserRole: checking for user ID:", user.id);
 
