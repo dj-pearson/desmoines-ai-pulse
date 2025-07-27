@@ -88,48 +88,128 @@ function findBestEventUrl(originalUrl: string): string[] {
   return [...new Set(eventPaths)];
 }
 
-// Enhanced HTML content extraction
+// Try to find API endpoints or JSON data in the page
+async function findApiEndpoints(html: string, baseUrl: string): Promise<string[]> {
+  const apiEndpoints = [];
+  
+  // Look for common API patterns in script tags
+  const scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+  
+  for (const script of scriptMatches) {
+    // Look for API endpoints in script content
+    const apiPatterns = [
+      /["']([^"']*\/api\/[^"']*events?[^"']*?)["']/gi,
+      /["']([^"']*\/events?\.json[^"']*?)["']/gi,
+      /["']([^"']*\/calendar[^"']*\.json[^"']*?)["']/gi,
+      /fetch\s*\(\s*["']([^"']*events?[^"']*?)["']/gi,
+      /ajax\s*\(\s*["']([^"']*events?[^"']*?)["']/gi,
+    ];
+    
+    for (const pattern of apiPatterns) {
+      let match;
+      while ((match = pattern.exec(script)) !== null) {
+        let endpoint = match[1];
+        if (endpoint.startsWith('/')) {
+          endpoint = new URL(endpoint, baseUrl).href;
+        }
+        if (endpoint.startsWith('http')) {
+          apiEndpoints.push(endpoint);
+        }
+      }
+    }
+  }
+  
+  // Look for data attributes or inline JSON
+  const dataMatches = [
+    ...html.matchAll(/data-events=["']([^"']+)["']/gi),
+    ...html.matchAll(/data-calendar=["']([^"']+)["']/gi),
+    ...html.matchAll(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/gi),
+    ...html.matchAll(/var\s+events\s*=\s*(\[.*?\]);/gi),
+  ];
+  
+  return [...new Set(apiEndpoints)];
+}
+
+// Enhanced HTML content extraction with better patterns for CatchDesMoines
 function extractRelevantContent(html: string): string {
-  // Remove scripts, styles, and other non-content elements
+  // First, try to extract any JSON data embedded in the page
+  const jsonPatterns = [
+    /window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/gi,
+    /var\s+events\s*=\s*(\[.*?\]);/gi,
+    /data-events=["']([^"']+)["']/gi,
+    /"events":\s*(\[.*?\])/gi,
+  ];
+  
+  let jsonData = "";
+  for (const pattern of jsonPatterns) {
+    const matches = html.match(pattern);
+    if (matches) {
+      jsonData += matches.join("\n\n--- JSON DATA ---\n\n");
+    }
+  }
+  
+  // Remove scripts and styles but keep data attributes
   const cleanHtml = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "");
 
-  // Try to extract main content areas, but be more inclusive
+  // Enhanced patterns for event content, especially for CatchDesMoines structure
   const contentPatterns = [
+    // Main content areas
     /<main[^>]*>([\s\S]*?)<\/main>/gi,
     /<article[^>]*>([\s\S]*?)<\/article>/gi,
     /<section[^>]*>([\s\S]*?)<\/section>/gi,
-    /<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*class="[^"]*main[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*class="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*class="[^"]*calendar[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    
+    // Event-specific containers
+    /<div[^>]*class="[^"]*event[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
     /<div[^>]*class="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*id="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<ul[^>]*class="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/ul>/gi,
+    /<div[^>]*class="[^"]*grid[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*class="[^"]*card[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*class="[^"]*item[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    
+    // Calendar and schedule patterns
+    /<div[^>]*class="[^"]*calendar[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*class="[^"]*schedule[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<table[^>]*class="[^"]*event[^"]*"[^>]*>([\s\S]*?)<\/table>/gi,
+    
+    // List patterns
+    /<ul[^>]*class="[^"]*event[^"]*"[^>]*>([\s\S]*?)<\/ul>/gi,
+    /<ol[^>]*class="[^"]*event[^"]*"[^>]*>([\s\S]*?)<\/ol>/gi,
+    
+    // ID-based selectors
+    /<div[^>]*id="[^"]*event[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*id="[^"]*calendar[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
+    /<div[^>]*id="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
   ];
 
-  let relevantContent = "";
+  let relevantContent = jsonData; // Start with any JSON data found
+  
   for (const pattern of contentPatterns) {
     const matches = cleanHtml.match(pattern);
     if (matches) {
-      relevantContent += matches.join("\n\n--- SECTION ---\n\n");
+      relevantContent += "\n\n--- SECTION ---\n\n" + matches.join("\n\n--- SECTION ---\n\n");
     }
   }
 
-  // If no specific content areas found, extract more content but remove navigation/footer
-  if (!relevantContent || relevantContent.length < 1000) {
+  // If still not enough content, extract more from the body but filter out nav/footer
+  if (relevantContent.length < 2000) {
     let fallbackContent = cleanHtml
       .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
       .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
-      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "");
+      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "")
+      .replace(/<aside\b[^<]*(?:(?!<\/aside>)<[^<]*)*<\/aside>/gi, "");
 
-    relevantContent = fallbackContent.substring(0, 15000); // Increased limit
+    // Try to find any text that looks like event information
+    const eventTextPattern = /(?:july|august|september|october|november|december|\d{1,2}\/\d{1,2}|\d{4})[^.!?]*(?:event|concert|show|game|performance|festival|fair)[^.!?]*[.!?]/gi;
+    const eventTexts = fallbackContent.match(eventTextPattern) || [];
+    
+    relevantContent += "\n\n--- EVENT MENTIONS ---\n\n" + eventTexts.join("\n");
+    relevantContent += "\n\n--- FALLBACK CONTENT ---\n\n" + fallbackContent.substring(0, 25000);
   }
 
-  // Increase the limit significantly to capture more events
-  return relevantContent.substring(0, 20000); // Increased for more events
+  // Return more content to give AI better chance to find events
+  return relevantContent.substring(0, 35000);
 }
 
 // AI-powered content extraction using Claude
@@ -142,7 +222,7 @@ async function extractContentWithAI(
   const relevantContent = extractRelevantContent(html);
 
   const prompts = {
-    events: `You are an expert at extracting event information from websites. Extract ALL individual events from this website content from ${url}.
+    events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com and similar event listing sites. Extract ALL individual events from this website content from ${url}.
 
 CURRENT DATE: July 26, 2025
 IMPORTANT: Only extract events that are TODAY or in the FUTURE. Skip any events from the past.
@@ -150,37 +230,50 @@ IMPORTANT: Only extract events that are TODAY or in the FUTURE. Skip any events 
 WEBSITE CONTENT:
 ${relevantContent}
 
-CRITICAL INSTRUCTIONS:
+CRITICAL INSTRUCTIONS FOR CATCHDESMOINES.COM:
 1. FIND EVERY SINGLE EVENT - This is the most important requirement
-2. Look for ALL events in lists, tables, calendars, schedules, grids
-3. Extract events from repeating patterns like game schedules, concert lineups
-4. Scan the ENTIRE content thoroughly - don't stop after finding one event
-5. Include events even with partial information
-6. ONLY include events from July 26, 2025 onwards (skip past events)
+2. Look for events in HTML structures like:
+   - <article class="slide"> elements containing event info
+   - Event cards with titles, dates, and venues
+   - Grid layouts with event listings
+   - Any text mentioning specific event names with dates
+3. Extract events from ALL visible patterns including:
+   - Event names like "Warren County Fair", "Anastasia the Musical", "National Senior Games"
+   - Venue names like "Warren County Fairgrounds", "Indianola High School Auditorium"
+   - Date patterns like "Jul 26th", "Aug 1st", "2025"
+   - Recurring events with date ranges
+4. Include events even with partial information - infer missing details logically
+5. ONLY include events from July 26, 2025 onwards (skip past events)
 
-COMPREHENSIVE SEARCH PATTERNS:
-- Sports schedules (games, matches, tournaments)
-- Concert/music listings (shows, performances, artists)
-- Event calendars and directories
-- Show schedules and venue listings
-- Festival and community event lists
-- Recurring event series
+SPECIFIC PATTERNS TO LOOK FOR:
+- Event titles in headings or card titles
+- Venue information in location fields
+- Date information (convert "Jul 26th" to "2025-07-26")
+- Category indicators (concerts, sports, festivals, art shows, etc.)
+- "Recurring daily/weekly" patterns with end dates
+
+SMART DATE PARSING:
+- "Jul 26th" → "2025-07-26 19:00:00"
+- "Aug 1st" → "2025-08-01 19:00:00" 
+- "Recurring daily until July 28, 2025" → multiple events
+- If only partial date info, use reasonable defaults (7 PM start time)
 
 For each FUTURE event found, extract:
-- title: Event name/title
+- title: Event name/title (e.g., "2025 Warren County Fair")
 - description: Event details or description
 - date: Event date (YYYY-MM-DD HH:MM:SS format, must be July 26, 2025 or later)
-- location: Full address or location
-- venue: Venue name
-- category: Event type (Sports, Music, Entertainment, etc.)
+- location: Full address or city (default to "Des Moines, IA" if unclear)
+- venue: Venue name (e.g., "Warren County Fairgrounds")
+- category: Event type (Sports, Music, Entertainment, Arts, Community, etc.)
 - price: Ticket price or "See website"
 
 EXTRACTION STRATEGY:
-1. First scan for date patterns (2025 dates, month names, etc.)
-2. Look for event titles near these dates
-3. Extract ALL events in lists or grids
-4. Check tables and structured data
-5. Look for recurring patterns of event information
+1. Scan for ANY event names or titles mentioned in the content
+2. Look for venue names that suggest events
+3. Find date patterns and associate with nearby event text
+4. Extract from HTML structures like cards, articles, lists
+5. Parse recurring event descriptions into multiple entries
+6. Use context clues to fill missing information
 
 FORMAT AS JSON ARRAY with ALL events:
 [
@@ -188,18 +281,19 @@ FORMAT AS JSON ARRAY with ALL events:
     "title": "Event Title",
     "description": "Event description",
     "date": "2025-MM-DD HH:MM:SS",
-    "location": "Full address",
+    "location": "Des Moines, IA",
     "venue": "Venue Name", 
     "category": "Event Category",
-    "price": "Price or 'See website'"
+    "price": "See website"
   }
 ]
 
 ABSOLUTELY CRITICAL: 
-- Extract EVERY event you can find, not just one
-- Skip events before July 26, 2025
-- If you find 5+ events, include them ALL
-- Return empty array [] only if NO future events exist`,
+- Extract EVERY event mentioned, even if info is incomplete
+- Use smart defaults for missing info (Des Moines for location, etc.)
+- Convert all date formats to proper YYYY-MM-DD HH:MM:SS
+- If you see 10+ events mentioned, include them ALL
+- Return empty array [] only if literally NO events are mentioned`,
 
     restaurants: `Extract all restaurants from this website content from ${url}.
 
@@ -314,34 +408,66 @@ Format as JSON array:
 Return empty array [] if no attractions found.`,
   };
 
-  try {
-    console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
-    console.log(
-      `📄 Content length being sent to AI: ${relevantContent.length} characters`
-    );
-    console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
+    try {
+      console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
+      console.log(
+        `📄 Content length being sent to AI: ${relevantContent.length} characters`
+      );
+      console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
 
-    const claudeResponse = await fetch(
-      "https://api.anthropic.com/v1/messages",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-0",
-          max_tokens: 6000, // Increased significantly for multiple events
-          messages: [
-            {
-              role: "user",
-              content: prompts[category as keyof typeof prompts],
-            },
-          ],
-        }),
+      // Try to find API endpoints first
+      if (category === 'events') {
+        const apiEndpoints = await findApiEndpoints(html, url);
+        if (apiEndpoints.length > 0) {
+          console.log(`🔍 Found potential API endpoints: ${apiEndpoints.join(', ')}`);
+          
+          // Try to fetch from API endpoints
+          for (const endpoint of apiEndpoints.slice(0, 3)) { // Try first 3 endpoints
+            try {
+              const apiResponse = await fetch(endpoint, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                  "Accept": "application/json, text/javascript, */*",
+                },
+              });
+              
+              if (apiResponse.ok) {
+                const apiData = await apiResponse.text();
+                if (apiData.length > 100) {
+                  console.log(`✅ Got API data from ${endpoint}: ${apiData.length} chars`);
+                  relevantContent = apiData + "\n\n--- ORIGINAL HTML ---\n\n" + relevantContent;
+                  break;
+                }
+              }
+            } catch (error) {
+              console.log(`⚠️ API endpoint failed ${endpoint}:`, error.message);
+            }
+          }
+        }
       }
-    );
+
+      const claudeResponse = await fetch(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": claudeApiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-sonnet-20241022", // Use more capable model
+            max_tokens: 8000, // Increased for multiple events
+            temperature: 0.1, // Lower temperature for more precise extraction
+            messages: [
+              {
+                role: "user",
+                content: prompts[category as keyof typeof prompts],
+              },
+            ],
+          }),
+        }
+      );
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
@@ -655,8 +781,17 @@ Deno.serve(async (req) => {
 
     console.log(`🚀 Starting AI crawl of ${url} for ${category}`);
 
-    // Try multiple URLs to find the best event page
-    const urlsToTry = findBestEventUrl(url);
+    // For CatchDesMoines and similar sites, try multiple strategies
+    const urlsToTry = category === 'events' ? [
+      url,
+      url.replace(/\/$/, '') + '/events/',
+      url.replace(/\/$/, '') + '/calendar/',
+      // Try common CatchDesMoines patterns
+      'https://www.catchdesmoines.com/events/',
+      'https://www.catchdesmoines.com/events/search/',
+      'https://www.catchdesmoines.com/calendar/',
+    ] : findBestEventUrl(url);
+    
     console.log(`🔍 Will try these URLs: ${urlsToTry.join(", ")}`);
 
     let bestHtml = "";
@@ -671,27 +806,37 @@ Deno.serve(async (req) => {
         const response = await fetch(tryUrl, {
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
           },
         });
 
         if (response.ok) {
           const html = await response.text();
 
-          // Quick test for event-related content
-          const eventContentTest = (
-            html.match(/event|concert|show|game|performance|calendar/gi) || []
-          ).length;
+          // Enhanced scoring for CatchDesMoines-style content
+          const eventKeywords = (html.match(/event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi) || []).length;
+          const venueKeywords = (html.match(/arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi) || []).length;
+          const dateKeywords = (html.match(/2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi) || []).length;
+          const titleKeywords = (html.match(/warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi) || []).length;
+          
+          const totalScore = eventKeywords + (venueKeywords * 2) + (dateKeywords * 1.5) + (titleKeywords * 3);
+          
           console.log(
-            `📊 ${tryUrl}: Found ${eventContentTest} event-related keywords in ${html.length} chars`
+            `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
           );
 
-          if (eventContentTest > maxEventContent) {
-            maxEventContent = eventContentTest;
+          if (totalScore > maxEventContent) {
+            maxEventContent = totalScore;
             bestHtml = html;
             bestUrl = tryUrl;
             console.log(
-              `✅ New best URL: ${tryUrl} (${eventContentTest} keywords)`
+              `✅ New best URL: ${tryUrl} (score: ${totalScore})`
             );
           }
         } else {
