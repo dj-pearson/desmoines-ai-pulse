@@ -497,7 +497,7 @@ Return empty array [] if no attractions found.`,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-5-sonnet-20241022", // Use more capable model
+            model: "claude-3-5-sonnet-20241022", // Use stable model
             max_tokens: 8000, // Increased for multiple events
             temperature: 0.1, // Lower temperature for more precise extraction
             messages: [
