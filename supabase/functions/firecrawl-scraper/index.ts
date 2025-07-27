@@ -131,6 +131,9 @@ Please analyze this content and extract ALL events, concerts, shows, festivals, 
 - description: Event description
 - category: Type of event (Concert, Festival, Sports, etc.)
 - price: Ticket price or "Free" if no cost mentioned
+- source_url: Extract the specific event URL or venue website URL if available, otherwise use the page URL
+
+IMPORTANT: Look for individual event URLs, "Visit Website" links, venue websites, or specific event pages in the content. Use these specific URLs instead of the general page URL when possible.
 
 Format as JSON array ONLY - no other text:
 [
@@ -142,7 +145,7 @@ Format as JSON array ONLY - no other text:
     "description": "Event description",
     "category": "Concert",
     "price": "$25",
-    "source_url": "${currentUrl}"
+    "source_url": "https://specific-event-or-venue-url.com"
   }
 ]
 
