@@ -71,7 +71,7 @@ serve(async (req) => {
 
     console.log(`📄 Will scrape ${urlsToScrape.length} pages: ${urlsToScrape.join(', ')}`);
 
-    let allExtractedEvents = [];
+    let allExtractedItems = [];
     let totalContentLength = 0;
 
     // Process each URL for pagination support
@@ -118,7 +118,9 @@ serve(async (req) => {
         break; // Exit loop if no API key
       }
 
-      const eventPrompt = `Extract all events from this website content from ${currentUrl}.
+      // Generate category-specific prompts
+      const prompts = {
+        events: `Extract all events from this website content from ${currentUrl}.
 
 WEBSITE CONTENT:
 ${content.substring(0, 15000)} 
@@ -149,7 +151,150 @@ Format as JSON array ONLY - no other text:
   }
 ]
 
-Return empty array [] if no events found. Focus on upcoming events only.`;
+Return empty array [] if no events found. Focus on upcoming events only.`,
+
+        restaurants: `You are an expert at extracting restaurant information from websites like Eater.com, Des Moines Register, and restaurant listing sites. Your task is to find EVERY SINGLE RESTAURANT mentioned in this content from ${currentUrl}.
+
+WEBSITE CONTENT:
+${content.substring(0, 15000)}
+
+CRITICAL PARSING INSTRUCTIONS FOR RESTAURANT SITES:
+
+🎯 WHAT TO LOOK FOR:
+- Restaurant names (often in headers, links, or bold text)
+- Food establishment mentions (cafes, bistros, breweries, bakeries, etc.)
+- Article structures with restaurant reviews or lists
+- Address information or neighborhood mentions
+- Menu items or cuisine descriptions
+- Chef or owner names associated with restaurants
+
+🔍 SPECIFIC RESTAURANT PATTERNS:
+- Look for proper nouns that sound like restaurant names
+- Food-related business names (ending in Kitchen, Grill, Bistro, etc.)
+- Geographic location indicators (downtown, West Des Moines, etc.)
+- Price indicators ($, $$, $$$, "affordable", "upscale")
+- Cuisine type mentions (Italian, Mexican, farm-to-table, etc.)
+- Restaurant review language ("must-try", "best", "favorite")
+
+For EVERY restaurant you find, extract:
+- name: Exact restaurant name from content
+- cuisine: Type of cuisine (Italian, American, Mexican, Asian Fusion, etc.)
+- location: Address or area description (default: "Des Moines, IA")
+- rating: Numerical rating 1-5 if mentioned, or null
+- price_range: $, $$, $$$, or $$$$ based on content
+- description: Key details about food, atmosphere, or specialties
+- phone: Phone number if mentioned
+- website: Website URL if mentioned
+
+FORMAT AS JSON ARRAY:
+[
+  {
+    "name": "Restaurant Name",
+    "cuisine": "Cuisine Type",
+    "location": "Des Moines, IA",
+    "rating": 4.5,
+    "price_range": "$$",
+    "description": "Restaurant description and specialties",
+    "phone": "515-xxx-xxxx",
+    "website": "https://restaurant-website.com"
+  }
+]
+
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY restaurant or food establishment mentioned in the content. Return empty array [] ONLY if literally no restaurants are found anywhere in the content.`,
+
+        playgrounds: `You are an expert at extracting playground and children's recreation information from websites like visitdesmoines.com, Greater DSM, and family activity sites. Your task is to find EVERY SINGLE PLAYGROUND or children's recreational facility mentioned in this content from ${currentUrl}.
+
+WEBSITE CONTENT:
+${content.substring(0, 15000)}
+
+CRITICAL PARSING INSTRUCTIONS FOR PLAYGROUND SITES:
+
+🎯 WHAT TO LOOK FOR:
+- Playground names (often park names or specific playground names)
+- Children's recreation areas, splash pads, adventure playgrounds
+- Parks with playground equipment mentioned
+- Family-friendly recreational facilities
+- Youth activity centers or outdoor play areas
+- Age-specific play structures or facilities
+
+For EVERY playground you find, extract:
+- name: Exact playground or park name from content
+- location: Address or area description (default: "Des Moines, IA")
+- description: Key features, themes, or special attributes
+- age_range: Target age group (e.g., "2-12 years", "All ages")
+- amenities: Array of equipment and features
+- rating: Numerical rating 1-5 if mentioned, or null
+
+FORMAT AS JSON ARRAY:
+[
+  {
+    "name": "Playground Name",
+    "location": "Des Moines, IA",
+    "description": "Playground features and description",
+    "age_range": "2-12 years",
+    "amenities": ["swings", "slides", "climbing structure", "splash pad"],
+    "rating": 4.2
+  }
+]
+
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY playground or children's recreational facility mentioned in the content. Return empty array [] ONLY if literally no playgrounds are found anywhere in the content.`,
+
+        restaurant_openings: `Extract information about new restaurant openings from this website content from ${currentUrl}.
+
+WEBSITE CONTENT:
+${content.substring(0, 15000)}
+
+Please analyze this content and extract information about NEW restaurant openings, upcoming restaurants, or recently opened restaurants. For each opening, provide:
+- name: Restaurant name
+- description: Description of the restaurant concept
+- location: Location where it will open/opened
+- cuisine: Type of cuisine
+- opening_date: Opening date (format as YYYY-MM-DD, or null if not specified)
+- status: 'opening_soon', 'newly_opened', or 'announced'
+
+Format as JSON array:
+[
+  {
+    "name": "Restaurant Name",
+    "description": "Restaurant concept description",
+    "location": "Location",
+    "cuisine": "Cuisine Type",
+    "opening_date": "2025-MM-DD",
+    "status": "opening_soon"
+  }
+]
+
+Return empty array [] if no restaurant openings found.`,
+
+        attractions: `Extract all attractions, tourist spots, or places of interest from this website content from ${currentUrl}.
+
+WEBSITE CONTENT:
+${content.substring(0, 15000)}
+
+Please analyze this content and extract ALL attractions, tourist destinations, or points of interest. For each attraction, provide:
+- name: Attraction name
+- type: Type of attraction (Museum, Park, Historic Site, Entertainment, etc.)
+- location: Full address or location description
+- description: Description of the attraction
+- rating: Numerical rating if available (1-5 scale)
+- website: Website URL if available
+
+Format as JSON array:
+[
+  {
+    "name": "Attraction Name",
+    "type": "Attraction Type",
+    "location": "Full address",
+    "description": "Attraction description",
+    "rating": 4.3,
+    "website": "Website URL"
+  }
+]
+
+Return empty array [] if no attractions found.`
+      };
+
+      const selectedPrompt = prompts[category as keyof typeof prompts] || prompts.events;
 
       console.log(`🤖 Sending ${content.length} characters to Claude AI for ${currentUrl}`);
 
@@ -167,7 +312,7 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
           messages: [
             {
               role: "user",
-              content: eventPrompt,
+              content: selectedPrompt,
             },
           ],
         }),
@@ -190,7 +335,7 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
       }
 
       // Parse Claude's response
-      let pageEvents = [];
+      let pageItems = [];
       try {
         // Extract JSON from the response
         let jsonMatch = responseText.match(/\[[\s\S]*\]/);
@@ -207,15 +352,15 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
           continue; // Skip this page
         }
         
-        pageEvents = JSON.parse(jsonMatch[0]);
+        pageItems = JSON.parse(jsonMatch[0]);
         
-        if (!Array.isArray(pageEvents)) {
-          console.error(`❌ Parsed data is not an array for ${currentUrl}: ${typeof pageEvents}`);
-          pageEvents = [];
+        if (!Array.isArray(pageItems)) {
+          console.error(`❌ Parsed data is not an array for ${currentUrl}: ${typeof pageItems}`);
+          pageItems = [];
         }
         
-        console.log(`🤖 AI extracted ${pageEvents.length} events from ${currentUrl}`);
-        allExtractedEvents.push(...pageEvents);
+        console.log(`🤖 AI extracted ${pageItems.length} ${category} items from ${currentUrl}`);
+        allExtractedItems.push(...pageItems);
         
       } catch (parseError) {
         console.error(`❌ Could not parse AI response JSON for ${currentUrl}:`, parseError);
@@ -223,129 +368,145 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
       }
     }
 
-    console.log(`🎯 Total events extracted from all pages: ${allExtractedEvents.length}`);
+    console.log(`🎯 Total ${category} extracted from all pages: ${allExtractedItems.length}`);
 
-    // Filter future events (including today)
-    const currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0); // Set to start of today
-    const futureEvents = allExtractedEvents.filter(event => {
-      if (!event.date) return true; // Keep events without dates
-      
-      try {
-        const eventDate = new Date(event.date);
-        eventDate.setHours(0, 0, 0, 0); // Set to start of event day
-        return eventDate >= currentDate; // Include today and future dates
-      } catch (error) {
-        console.log(`⚠️ Could not parse date: ${event.date}`);
-        return true; // Keep events with unparseable dates
-      }
-    });
+    // For events category, filter out past events
+    let filteredItems = allExtractedItems;
+    if (category === 'events') {
+      const currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0);
+      filteredItems = allExtractedItems.filter(item => {
+        if (!item.date) return true;
+        try {
+          const itemDate = new Date(item.date);
+          itemDate.setHours(0, 0, 0, 0);
+          return itemDate >= currentDate;
+        } catch (error) {
+          console.log(`⚠️ Could not parse date: ${item.date}`);
+          return true;
+        }
+      });
+    }
 
-    console.log(`🕒 After filtering past events: ${futureEvents.length} items (removed ${allExtractedEvents.length - futureEvents.length} past events)`);
+    console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
 
-    // Insert or update events in database
+    // Get appropriate table name and process items
+    const tableMapping = {
+      events: 'events',
+      restaurants: 'restaurants', 
+      playgrounds: 'playgrounds',
+      restaurant_openings: 'restaurant_openings',
+      attractions: 'attractions'
+    };
+
+    const tableName = tableMapping[category as keyof typeof tableMapping] || 'events';
     let insertedCount = 0;
     let updatedCount = 0;
     const errors = [];
 
-    if (futureEvents.length > 0) {
-      // Process in batches to avoid rate limiting
+    if (filteredItems.length > 0) {
+      // Process in batches
       const batchSize = 10;
-      for (let i = 0; i < futureEvents.length; i += batchSize) {
-        const batch = futureEvents.slice(i, i + batchSize);
+      for (let i = 0; i < filteredItems.length; i += batchSize) {
+        const batch = filteredItems.slice(i, i + batchSize);
 
         for (const item of batch) {
           try {
-            // Check if event already exists
-            const { data: existingEvents, error: selectError } = await supabase
-              .from('events')
-              .select('*')
-              .eq('title', item.title?.substring(0, 200) || "Untitled Event")
-              .eq('venue', item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD");
-
-            if (selectError) {
-              console.error(`❌ Error checking existing event:`, selectError);
-              errors.push(selectError);
-              continue;
+            // Transform data based on category
+            let transformedData: any = {};
+            
+            switch (category) {
+              case 'events':
+                transformedData = {
+                  title: item.title?.substring(0, 200) || "Untitled Event",
+                  original_description: item.description?.substring(0, 500) || "",
+                  enhanced_description: item.description?.substring(0, 500) || "",
+                  date: item.date ? new Date(item.date).toISOString() : new Date().toISOString(),
+                  location: item.location?.substring(0, 100) || "Des Moines, IA",
+                  venue: item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD",
+                  category: item.category?.substring(0, 50) || "General",
+                  price: item.price?.substring(0, 50) || "See website",
+                  source_url: item.source_url || url,
+                  is_enhanced: false,
+                  updated_at: new Date().toISOString(),
+                };
+                break;
+                
+              case 'restaurants':
+                transformedData = {
+                  name: item.name?.substring(0, 200) || "Unnamed Restaurant",
+                  cuisine: item.cuisine?.substring(0, 100) || "American",
+                  location: item.location?.substring(0, 200) || "Des Moines, IA",
+                  rating: item.rating || null,
+                  price_range: item.price_range?.substring(0, 20) || "$$",
+                  description: item.description?.substring(0, 500) || "",
+                  phone: item.phone?.substring(0, 20) || null,
+                  website: item.website?.substring(0, 200) || null,
+                  is_featured: Math.random() > 0.8,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
+                break;
+                
+              case 'playgrounds':
+                transformedData = {
+                  name: item.name?.substring(0, 200) || "Playground",
+                  location: item.location?.substring(0, 200) || "Des Moines, IA",
+                  description: item.description?.substring(0, 500) || "",
+                  age_range: item.age_range?.substring(0, 50) || "All ages",
+                  amenities: Array.isArray(item.amenities) ? item.amenities.slice(0, 10) : [],
+                  rating: item.rating || null,
+                  is_featured: Math.random() > 0.8,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
+                break;
+                
+              default:
+                continue; // Skip unknown categories
             }
 
-            const eventData = {
-              title: item.title?.substring(0, 200) || "Untitled Event",
-              original_description: item.description?.substring(0, 500) || "",
-              enhanced_description: item.description?.substring(0, 500) || "",
-              date: item.date
-                ? new Date(item.date).toISOString()
-                : new Date().toISOString(),
-              location: item.location?.substring(0, 100) || "Des Moines, IA",
-              venue: item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD",
-              category: item.category?.substring(0, 50) || "General",
-              price: item.price?.substring(0, 50) || "See website",
-              source_url: item.source_url || url,
-              is_enhanced: false,
-              updated_at: new Date().toISOString(),
-            };
-
-            if (existingEvents && existingEvents.length > 0) {
-              // Update existing event with any new non-empty information
-              const existingEvent = existingEvents[0];
-              const updates: any = { updated_at: new Date().toISOString() };
-              let hasUpdates = false;
-
-              // Update fields that are currently empty/null with new non-empty values
-              if ((!existingEvent.original_description || existingEvent.original_description === 'EMPTY' || existingEvent.original_description.trim() === '') 
-                  && eventData.original_description && eventData.original_description.trim() !== '') {
-                updates.original_description = eventData.original_description;
-                updates.enhanced_description = eventData.original_description;
-                hasUpdates = true;
-              }
-
-              if ((!existingEvent.price || existingEvent.price === 'See website') 
-                  && eventData.price && eventData.price !== 'See website') {
-                updates.price = eventData.price;
-                hasUpdates = true;
-              }
-
-              if ((!existingEvent.source_url || existingEvent.source_url === url) 
-                  && eventData.source_url && eventData.source_url !== url) {
-                updates.source_url = eventData.source_url;
-                hasUpdates = true;
-              }
-
-              if (hasUpdates) {
-                const { error: updateError } = await supabase
-                  .from('events')
-                  .update(updates)
-                  .eq('id', existingEvent.id);
-
-                if (updateError) {
-                  console.error(`❌ Error updating event:`, updateError);
-                  errors.push(updateError);
-                } else {
-                  updatedCount++;
-                  console.log(`🔄 Updated existing event: ${eventData.title}`);
-                }
-              } else {
-                console.log(`ℹ️ No new information for existing event: ${eventData.title}`);
-              }
+            // Check for duplicates
+            let existingItems = [];
+            if (category === 'events') {
+              const { data, error } = await supabase
+                .from(tableName)
+                .select('*')
+                .eq('title', transformedData.title)
+                .eq('venue', transformedData.venue);
+              existingItems = data || [];
             } else {
-              // Insert new event
-              eventData.is_featured = Math.random() > 0.8; // 20% chance of being featured
-              eventData.created_at = new Date().toISOString();
+              const { data, error } = await supabase
+                .from(tableName)
+                .select('*')
+                .eq('name', transformedData.name);
+              existingItems = data || [];
+            }
+
+            if (existingItems.length > 0) {
+              console.log(`⚠️ Duplicate found: ${transformedData.title || transformedData.name}`);
+              // Could implement update logic here if needed
+            } else {
+              // Insert new item
+              if (category === 'events') {
+                transformedData.is_featured = Math.random() > 0.8;
+                transformedData.created_at = new Date().toISOString();
+              }
 
               const { error: insertError } = await supabase
-                .from('events')
-                .insert([eventData]);
+                .from(tableName)
+                .insert([transformedData]);
 
               if (insertError) {
-                console.error(`❌ Error inserting event:`, insertError);
+                console.error(`❌ Error inserting ${category} item:`, insertError);
                 errors.push(insertError);
               } else {
                 insertedCount++;
-                console.log(`✅ Inserted new event: ${eventData.title}`);
+                console.log(`✅ Inserted new ${category}: ${transformedData.title || transformedData.name}`);
               }
             }
           } catch (error) {
-            console.error(`❌ Error processing event:`, error);
+            console.error(`❌ Error processing ${category} item:`, error);
             errors.push(error);
           }
         }
@@ -354,8 +515,8 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
 
     const result = {
       success: true,
-      totalFound: allExtractedEvents.length,
-      futureEvents: futureEvents.length,
+      totalFound: allExtractedItems.length,
+      futureEvents: filteredItems.length,
       inserted: insertedCount,
       updated: updatedCount,
       errors: errors.length,
