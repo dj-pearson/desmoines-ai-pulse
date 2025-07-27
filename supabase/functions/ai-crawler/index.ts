@@ -129,7 +129,7 @@ function extractRelevantContent(html: string): string {
   }
 
   // Increase the limit significantly to capture more events
-  return relevantContent.substring(0, 12000);
+  return relevantContent.substring(0, 20000); // Increased for more events
 }
 
 // AI-powered content extraction using Claude
@@ -144,48 +144,62 @@ async function extractContentWithAI(
   const prompts = {
     events: `You are an expert at extracting event information from websites. Extract ALL individual events from this website content from ${url}.
 
+CURRENT DATE: July 26, 2025
+IMPORTANT: Only extract events that are TODAY or in the FUTURE. Skip any events from the past.
+
 WEBSITE CONTENT:
 ${relevantContent}
 
-IMPORTANT INSTRUCTIONS:
-1. Look for EVERY individual event, not just the first one
-2. Search for patterns like concert listings, show schedules, game calendars, event calendars
-3. Events may be in lists, tables, cards, or individual sections
-4. Look for repeating patterns of event information
-5. Extract even partial information - we can use default values for missing fields
-6. Include upcoming events, scheduled shows, concerts, games, performances, etc.
+CRITICAL INSTRUCTIONS:
+1. FIND EVERY SINGLE EVENT - This is the most important requirement
+2. Look for ALL events in lists, tables, calendars, schedules, grids
+3. Extract events from repeating patterns like game schedules, concert lineups
+4. Scan the ENTIRE content thoroughly - don't stop after finding one event
+5. Include events even with partial information
+6. ONLY include events from July 26, 2025 onwards (skip past events)
 
-For each event you find, extract:
-- title: The event name/title (required)
-- description: Brief description or details about the event
-- date: Event date/time (look for any date patterns - MM/DD, Month Day, etc.)
-- location: Full address or location description  
-- venue: Venue name where the event takes place
-- category: Type of event (Sports, Music, Entertainment, Community, Arts, etc.)
-- price: Ticket price or cost information
+COMPREHENSIVE SEARCH PATTERNS:
+- Sports schedules (games, matches, tournaments)
+- Concert/music listings (shows, performances, artists)
+- Event calendars and directories
+- Show schedules and venue listings
+- Festival and community event lists
+- Recurring event series
 
-LOOK FOR THESE PATTERNS:
-- Multiple event titles in succession
-- Date patterns followed by event names
-- Artist names, band names, performer names
-- Game schedules, match listings
-- Concert lineups, show listings
-- Event cards or event items
+For each FUTURE event found, extract:
+- title: Event name/title
+- description: Event details or description
+- date: Event date (YYYY-MM-DD HH:MM:SS format, must be July 26, 2025 or later)
+- location: Full address or location
+- venue: Venue name
+- category: Event type (Sports, Music, Entertainment, etc.)
+- price: Ticket price or "See website"
 
-Format as JSON array - include EVERY event you find:
+EXTRACTION STRATEGY:
+1. First scan for date patterns (2025 dates, month names, etc.)
+2. Look for event titles near these dates
+3. Extract ALL events in lists or grids
+4. Check tables and structured data
+5. Look for recurring patterns of event information
+
+FORMAT AS JSON ARRAY with ALL events:
 [
   {
     "title": "Event Title",
-    "description": "Event description", 
+    "description": "Event description",
     "date": "2025-MM-DD HH:MM:SS",
     "location": "Full address",
-    "venue": "Venue Name",
+    "venue": "Venue Name", 
     "category": "Event Category",
-    "price": "Price info or 'See website'"
+    "price": "Price or 'See website'"
   }
 ]
 
-CRITICAL: Extract ALL events you can identify, not just one. If you see multiple events, include them all in the array. Return empty array [] only if absolutely no events are found.`,
+ABSOLUTELY CRITICAL: 
+- Extract EVERY event you can find, not just one
+- Skip events before July 26, 2025
+- If you find 5+ events, include them ALL
+- Return empty array [] only if NO future events exist`,
 
     restaurants: `Extract all restaurants from this website content from ${url}.
 
@@ -318,7 +332,7 @@ Return empty array [] if no attractions found.`,
         },
         body: JSON.stringify({
           model: "claude-sonnet-4-0",
-          max_tokens: 4000, // Increased to handle multiple events
+          max_tokens: 6000, // Increased significantly for multiple events
           messages: [
             {
               role: "user",
@@ -356,6 +370,23 @@ Return empty array [] if no attractions found.`,
   }
 
   return [];
+}
+
+// Filter out past events
+function filterFutureEvents(events: any[]): any[] {
+  const currentDate = new Date('2025-07-26'); // Current date
+  
+  return events.filter(event => {
+    if (!event.date) return true; // Keep events without dates
+    
+    try {
+      const eventDate = new Date(event.date);
+      return eventDate >= currentDate;
+    } catch (error) {
+      console.log(`⚠️ Could not parse date: ${event.date}`);
+      return true; // Keep events with unparseable dates
+    }
+  });
 }
 
 // Generate fingerprint for duplicate detection
@@ -695,7 +726,14 @@ Deno.serve(async (req) => {
       claudeApiKey
     );
 
-    if (extractedItems.length === 0) {
+    // Filter out past events for events category
+    const filteredItems = category === 'events' 
+      ? filterFutureEvents(extractedItems)
+      : extractedItems;
+
+    console.log(`🕒 After filtering past events: ${filteredItems.length} items (removed ${extractedItems.length - filteredItems.length} past events)`);
+
+    if (filteredItems.length === 0) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -713,13 +751,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`🤖 AI extracted ${extractedItems.length} ${category} items`);
+    console.log(`🤖 AI extracted ${filteredItems.length} ${category} items`);
 
     // Check for duplicates
     const { newItems, duplicates } = await checkForDuplicates(
       supabase,
       category,
-      extractedItems
+      filteredItems
     );
 
     console.log(
@@ -727,7 +765,7 @@ Deno.serve(async (req) => {
     );
 
     let insertedCount = 0;
-    let insertErrors = [];
+    let insertErrors: any[] = [];
 
     // Insert new items
     if (newItems.length > 0) {
@@ -740,13 +778,13 @@ Deno.serve(async (req) => {
       success: true,
       message: `Successfully crawled ${url} for ${category}`,
       results: {
-        totalFound: extractedItems.length,
+        totalFound: filteredItems.length,
         newItems: newItems.length,
         duplicates: duplicates,
         inserted: insertedCount,
         errors: insertErrors.length,
       },
-      items: extractedItems.slice(0, 5), // Return first 5 items as preview
+      items: filteredItems.slice(0, 5), // Return first 5 items as preview
     };
 
     console.log(`✅ Crawl completed:`, response_data.results);
