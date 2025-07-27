@@ -49,15 +49,17 @@ export default function Index() {
     dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
     location?: string;
     priceRange?: string;
-  }) => {
+  }, shouldScroll: boolean = false) => {
     // Store all search filters for the dashboard
     setSearchFilters(filters);
     
-    // Scroll to events section
-    document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
+    // Only scroll to events section when explicitly requested (not during typing)
+    if (shouldScroll) {
+      document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
+    }
     
     // Show feedback to user
-    const filterCount = Object.values(filters).filter(f => f && f !== 'All' && f !== 'any-date' && f !== 'any-location' && f !== 'any-price').length;
+    const filterCount = Object.values(filters).filter(f => f && f !== 'All' && f !== 'any-date' && f !== 'any-location' && f !== 'any-price' && f !== '').length;
     toast({
       title: "Filters Applied",
       description: filterCount > 0 ? `${filterCount} filter(s) active` : "Showing all results",

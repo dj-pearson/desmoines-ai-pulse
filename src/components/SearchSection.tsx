@@ -12,7 +12,7 @@ interface SearchSectionProps {
     dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
     location?: string;
     priceRange?: string;
-  }) => void;
+  }, shouldScroll?: boolean) => void;
 }
 
 export default function SearchSection({ onSearch }: SearchSectionProps) {
@@ -31,7 +31,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
     priceRange?: string;
   }>) => {
     const updatedFilters = { query, category, dateFilter, location, priceRange, ...newFilters };
-    onSearch(updatedFilters);
+    onSearch(updatedFilters, false); // Don't scroll during filter changes
   };
 
   const handleDateFilterChange = (newDateFilter: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null) => {
@@ -56,7 +56,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    onSearch({ query, category, dateFilter, location, priceRange });
+    onSearch({ query, category, dateFilter, location, priceRange }, true); // Scroll when explicitly searching
   };
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
