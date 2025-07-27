@@ -36,6 +36,7 @@ export function useUserRole(user?: User | null) {
       return;
     }
 
+    // Keep loading state true throughout the entire async operation
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
       console.log("fetchUserRole: checking for user ID:", user.id);
@@ -156,6 +157,10 @@ export function useUserRole(user?: User | null) {
   const canAccessAdminDashboard = (): boolean => hasRole('moderator');
 
   useEffect(() => {
+    // Set loading immediately when user changes
+    if (user) {
+      setState(prev => ({ ...prev, isLoading: true }));
+    }
     fetchUserRole();
   }, [fetchUserRole]);
 
