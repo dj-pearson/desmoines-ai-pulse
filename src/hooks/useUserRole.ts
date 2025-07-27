@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
 
@@ -27,7 +27,7 @@ export function useUserRole(user?: User | null) {
     error: null,
   });
 
-  const fetchUserRole = async () => {
+  const fetchUserRole = useCallback(async () => {
     console.log("fetchUserRole called, user:", user);
     
     if (!user) {
@@ -36,9 +36,8 @@ export function useUserRole(user?: User | null) {
       return;
     }
 
+    setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
-      setState(prev => ({ ...prev, isLoading: true, error: null }));
-      
       console.log("fetchUserRole: checking for user ID:", user.id);
 
       // Check user_roles table first (authoritative source)
@@ -87,7 +86,7 @@ export function useUserRole(user?: User | null) {
         error: error instanceof Error ? error.message : "Failed to fetch user role",
       }));
     }
-  };
+  }, [user]);
 
   const assignRole = async (targetUserId: string, role: UserRole) => {
     if (!user) {
@@ -158,7 +157,7 @@ export function useUserRole(user?: User | null) {
 
   useEffect(() => {
     fetchUserRole();
-  }, [user, fetchUserRole]);
+  }, [fetchUserRole]);
 
   return {
     ...state,
