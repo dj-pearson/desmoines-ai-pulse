@@ -472,24 +472,56 @@ Return empty array [] if no attractions found.`,
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
       const responseText = claudeData.content?.[0]?.text?.trim();
+      
+      console.log(`🔍 Claude API response status: ${claudeResponse.status}`);
+      console.log(`🔍 Claude response structure check - content exists: ${!!claudeData.content}`);
+      console.log(`🔍 Claude response text length: ${responseText?.length || 0}`);
+      console.log(`🔍 Claude response preview: ${responseText?.substring(0, 1000) || 'No text'}...`);
 
       if (responseText) {
         try {
-          // Extract JSON from the response
-          const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const extractedData = JSON.parse(jsonMatch[0]);
-            console.log(
-              `🤖 AI extracted ${extractedData.length} ${category} items from ${url}`
-            );
-            return extractedData;
+          // Extract JSON from the response - try multiple patterns
+          let jsonMatch = responseText.match(/\[[\s\S]*\]/);
+          
+          if (!jsonMatch) {
+            // Try to find JSON in code blocks
+            jsonMatch = responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
+                       responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
+            if (jsonMatch) jsonMatch[0] = jsonMatch[1];
           }
+          
+          if (!jsonMatch) {
+            console.error(`❌ No JSON array found in Claude response. Full response: ${responseText}`);
+            return [];
+          }
+          
+          console.log(`🔍 Extracted JSON string: ${jsonMatch[0].substring(0, 500)}...`);
+          
+          const extractedData = JSON.parse(jsonMatch[0]);
+          
+          if (!Array.isArray(extractedData)) {
+            console.error(`❌ Parsed data is not an array: ${typeof extractedData}`);
+            return [];
+          }
+          
+          console.log(`🤖 AI extracted ${extractedData.length} ${category} items from ${url}`);
+          
+          // Log sample item for debugging
+          if (extractedData.length > 0) {
+            console.log(`🔍 Sample extracted item: ${JSON.stringify(extractedData[0])}`);
+          }
+          
+          return extractedData;
         } catch (parseError) {
-          console.log(`⚠️ Could not parse AI response JSON:`, parseError);
+          console.error(`❌ Could not parse AI response JSON:`, parseError);
+          console.error(`❌ JSON string that failed to parse: ${responseText.substring(0, 2000)}`);
         }
+      } else {
+        console.error(`❌ No response text from Claude API`);
       }
     } else {
-      console.log(`⚠️ Claude API error: ${claudeResponse.status}`);
+      const errorText = await claudeResponse.text();
+      console.error(`❌ Claude API error: ${claudeResponse.status} - ${errorText}`);
     }
   } catch (error) {
     console.error(`❌ Error in AI content extraction:`, error);
