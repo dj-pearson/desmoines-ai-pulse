@@ -36,6 +36,7 @@ export function useUserRole(user?: User | null) {
       return;
     }
 
+    console.log("Setting loading true for user:", user.id);
     // Keep loading state true throughout the entire async operation
     setState(prev => ({ ...prev, isLoading: true, error: null }));
     try {
