@@ -37,8 +37,10 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
     let filtered = [...items];
 
     // Text search filter
-    if (filters.query && filters.query.trim()) {
+    if (filters.query && filters.query.trim() !== '') {
       const searchQuery = filters.query.toLowerCase().trim();
+      console.log('Applying text search filter:', searchQuery);
+      
       filtered = filtered.filter(item => {
         const searchableText = [
           item.title || item.name || '',
@@ -49,8 +51,16 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
           item.category || ''
         ].join(' ').toLowerCase();
         
-        return searchableText.includes(searchQuery);
+        const matches = searchableText.includes(searchQuery);
+        if (!matches) {
+          console.log('Filtered out:', item.title || item.name, 'because it does not contain:', searchQuery);
+        }
+        return matches;
       });
+      
+      console.log('After text filter, items remaining:', filtered.length);
+    } else {
+      console.log('No text search filter applied, showing all items');
     }
 
     // Category filter

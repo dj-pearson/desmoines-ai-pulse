@@ -62,10 +62,18 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newQuery = e.target.value;
     setQuery(newQuery);
-    // Debounce search for text input
-    if (newQuery.length === 0 || newQuery.length >= 2) {
+    
+    console.log('Search query changed:', newQuery, 'Length:', newQuery.length);
+    
+    // Always trigger filter change for clearing (empty) or meaningful search (2+ chars)
+    if (newQuery.length === 0) {
+      console.log('Clearing search - showing all results');
+      handleFilterChange({ query: '' });
+    } else if (newQuery.length >= 2) {
+      console.log('Applying search filter:', newQuery);
       handleFilterChange({ query: newQuery });
     }
+    // For 1 character, don't filter yet but keep the previous state
   };
 
   return (
