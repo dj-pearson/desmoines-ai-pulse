@@ -5,6 +5,7 @@ import FeaturedEvents from "@/components/FeaturedEvents";
 import PersonalizedDashboard from "@/components/PersonalizedDashboard";
 import MostSearched from "@/components/MostSearched";
 import EventFilters from "@/components/EventFilters";
+import SmartEventNavigation from "@/components/SmartEventNavigation";
 import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
@@ -17,7 +18,9 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { Event } from "@/lib/types";
+import { Database } from "@/integrations/supabase/types";
+
+type Event = Database["public"]["Tables"]["events"]["Row"];
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
 import { format } from "date-fns";
@@ -101,10 +104,22 @@ export default function Index() {
           {isAuthenticated ? (
             <PersonalizedDashboard onViewEventDetails={handleViewEventDetails} />
           ) : (
-            <FeaturedEvents
-              onViewAllEvents={handleViewAllEvents}
-              onViewEventDetails={handleViewEventDetails}
-            />
+            <>
+              {/* Smart Event Navigation for General Users */}
+              <section className="py-8">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                  <div className="text-center mb-8">
+                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                      Discover Amazing Events
+                    </h2>
+                    <p className="text-lg text-gray-600 dark:text-gray-300">
+                      Find exactly what you're looking for with smart filtering and recommendations
+                    </p>
+                  </div>
+                  <SmartEventNavigation onViewEventDetails={handleViewEventDetails} />
+                </div>
+              </section>
+            </>
           )}
           <MostSearched />
         </>
@@ -115,7 +130,7 @@ export default function Index() {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
             <div className="flex items-center justify-between">
               <Button variant="outline" onClick={() => setShowAllEvents(false)}>
-                ← Back to Featured
+                ← Back to Smart Discovery
               </Button>
               <Button
                 onClick={handleScrapeEvents}
@@ -127,7 +142,9 @@ export default function Index() {
               </Button>
             </div>
           </div>
-          <EventFilters onViewEventDetails={handleViewEventDetails} />
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <EventFilters onViewEventDetails={handleViewEventDetails} />
+          </div>
         </div>
       )}
 
@@ -146,9 +163,9 @@ export default function Index() {
               </DialogHeader>
 
               <div className="space-y-4">
-                {selectedEvent.imageUrl && (
+                {selectedEvent.image_url && (
                   <img
-                    src={selectedEvent.imageUrl}
+                    src={selectedEvent.image_url}
                     alt={selectedEvent.title}
                     className="w-full h-64 object-cover rounded-lg"
                     onError={(e) => {
@@ -187,10 +204,10 @@ export default function Index() {
                 <div>
                   <h4 className="font-semibold mb-2">Description</h4>
                   <p className="text-neutral-600 leading-relaxed">
-                    {selectedEvent.enhancedDescription ||
-                      selectedEvent.originalDescription}
+                    {selectedEvent.enhanced_description ||
+                      selectedEvent.original_description}
                   </p>
-                  {selectedEvent.isEnhanced && (
+                  {selectedEvent.is_enhanced && (
                     <p className="text-sm text-accent mt-2 flex items-center">
                       <Sparkles className="h-4 w-4 mr-1" />
                       Enhanced with AI
@@ -198,11 +215,11 @@ export default function Index() {
                   )}
                 </div>
 
-                {selectedEvent.sourceUrl && (
+                {selectedEvent.source_url && (
                   <div className="pt-4 border-t">
                     <Button asChild className="w-full">
                       <a
-                        href={selectedEvent.sourceUrl}
+                        href={selectedEvent.source_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-center justify-center"
