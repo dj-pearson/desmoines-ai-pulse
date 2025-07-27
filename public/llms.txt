@@ -1,0 +1,61 @@
+# Des Moines Insider - AI-Friendly Site Guide
+
+## Site Overview
+Des Moines Insider is the comprehensive digital guide for discovering events, restaurants, attractions, and family activities in Des Moines, Iowa. We provide AI-powered recommendations, real-time updates, and curated local insights.
+
+## Main Content Sections
+
+### Events
+- Real-time event discovery and recommendations
+- Concerts, festivals, food events, and cultural happenings
+- Smart filtering by date, location, category, and price
+- AI-enhanced event descriptions and recommendations
+
+### Restaurants 
+- Complete restaurant directory for Des Moines metro area
+- New restaurant opening tracking and alerts
+- Cuisine types, price ranges, and location-based filtering
+- Review aggregation and rating systems
+
+### Attractions
+- Family-friendly activities and attractions
+- Tourist destinations and local hidden gems
+- Seasonal activities and year-round attractions
+- Accessibility information and visitor tips
+
+### Playgrounds
+- Comprehensive playground directory for families
+- Equipment types, age recommendations, and safety ratings
+- Location-based search with amenities information
+- User reviews and photo galleries
+
+## Geographic Coverage
+Primary coverage: Des Moines, Iowa metropolitan area
+Extended coverage: 50-mile radius including West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and surrounding communities
+
+## Key Features
+- AI-powered personalized recommendations
+- Real-time event and restaurant data updates
+- Smart search and filtering capabilities
+- Mobile-optimized responsive design
+- User authentication and personalized dashboards
+
+## Data Sources
+- Official venue websites and event calendars
+- Restaurant management systems and social media
+- Municipal recreation departments
+- Community event organizers
+- User-submitted content and reviews
+
+## Contact Information
+Website: https://desmoinssider.com
+Email: info@desmoinssider.com
+Service Area: Des Moines, Iowa and surrounding metropolitan area
+
+## Content Freshness
+- Events: Updated daily
+- Restaurants: Updated weekly
+- Attractions: Updated monthly
+- Playgrounds: Updated quarterly
+
+This site serves residents and visitors seeking authentic local experiences in Des Moines, Iowa.

@@ -24,6 +24,8 @@ type Event = Database["public"]["Tables"]["events"]["Row"];
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
 import { format } from "date-fns";
+import SEOStructure from "@/components/SEOStructure";
+import GEOContent from "@/components/GEOContent";
 
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -89,8 +91,45 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header />
-      <SearchSection onSearch={handleSearch} />
+      {/* SEO and structured data for AI optimization */}
+      <SEOStructure />
+      
+      {/* Main content wrapper with semantic HTML for AI parsing */}
+      <main role="main" itemScope itemType="https://schema.org/WebPage">
+        <Header />
+        
+        {/* Hero section with structured data */}
+        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 py-16">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+              Discover Des Moines Like Never Before
+            </h1>
+            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+              Your AI-powered guide to the best events, restaurants, attractions, and family activities 
+              in Des Moines, Iowa. Real-time updates, personalized recommendations, and comprehensive local insights.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 text-center">
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-primary">500+</div>
+                <p className="text-sm text-muted-foreground">Events Monthly</p>
+              </div>
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-primary">200+</div>
+                <p className="text-sm text-muted-foreground">Restaurants</p>
+              </div>
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-primary">50+</div>
+                <p className="text-sm text-muted-foreground">Attractions</p>
+              </div>
+              <div className="space-y-2">
+                <div className="text-3xl font-bold text-primary">100+</div>
+                <p className="text-sm text-muted-foreground">Playgrounds</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <SearchSection onSearch={handleSearch} />
 
       {/* Restaurant Openings Section */}
       <section className="py-16 bg-muted/50">
@@ -146,10 +185,16 @@ export default function Index() {
             <EventFilters onViewEventDetails={handleViewEventDetails} />
           </div>
         </div>
-      )}
+        )}
 
-      <Newsletter />
-      <Footer />
+        {/* GEO-optimized content section */}
+        <section className="py-16 bg-muted/30">
+          <GEOContent />
+        </section>
+
+        <Newsletter />
+        <Footer />
+      </main>
 
       {/* Event Details Dialog */}
       <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
