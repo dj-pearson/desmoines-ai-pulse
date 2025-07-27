@@ -51,6 +51,7 @@ export function useUserRole() {
       console.log("user_roles query result:", { roleData, roleError });
 
       if (!roleError && roleData?.role) {
+        console.log("Found role in user_roles:", roleData.role);
         setState({
           userRole: roleData.role as UserRole,
           isLoading: false,
