@@ -230,36 +230,84 @@ FORMAT AS JSON ARRAY:
 
 🚨 ABSOLUTE REQUIREMENT: Extract EVERY event mentioned in the content. If you see references to 10+ events, include ALL of them. Return empty array [] ONLY if literally no events are found anywhere in the content.`,
 
-    restaurants: `Extract all restaurants from this website content from ${url}.
+    restaurants: `You are an expert at extracting restaurant information from websites like Eater.com, Des Moines Register, and restaurant listing sites. Your task is to find EVERY SINGLE RESTAURANT mentioned in this content from ${url}.
 
 WEBSITE CONTENT:
 ${relevantContent}
 
-Please analyze this content and extract ALL restaurants you can find. For each restaurant, provide:
-- name: Restaurant name
-- cuisine: Type of cuisine (Italian, American, Asian, etc.)
-- location: Full address or location description
-- rating: Numerical rating if available (1-5 scale)
-- price_range: Price range ($, $$, $$$, $$$$, or specific ranges)
-- description: Brief description of the restaurant
-- phone: Phone number if available
-- website: Website URL if available
+CRITICAL PARSING INSTRUCTIONS FOR RESTAURANT SITES:
 
-Format as JSON array:
+🎯 WHAT TO LOOK FOR:
+- Restaurant names (often in headers, links, or bold text)
+- Food establishment mentions (cafes, bistros, breweries, bakeries, etc.)
+- Article structures with restaurant reviews or lists
+- Address information or neighborhood mentions
+- Menu items or cuisine descriptions
+- Chef or owner names associated with restaurants
+
+🔍 SPECIFIC RESTAURANT PATTERNS:
+- Look for proper nouns that sound like restaurant names
+- Food-related business names (ending in Kitchen, Grill, Bistro, etc.)
+- Geographic location indicators (downtown, West Des Moines, etc.)
+- Price indicators ($, $$, $$$, "affordable", "upscale")
+- Cuisine type mentions (Italian, Mexican, farm-to-table, etc.)
+- Restaurant review language ("must-try", "best", "favorite")
+
+💡 EXTRACTION EXAMPLES FROM COMMON PATTERNS:
+- "Fong's Pizza" → name: "Fong's Pizza", cuisine: "Pizza/Asian Fusion"
+- "Centro" → name: "Centro", cuisine: "Italian"
+- "Proof Restaurant" → name: "Proof Restaurant", cuisine: "American"
+- "Zombie Burger" → name: "Zombie Burger", cuisine: "Burgers"
+- "Alba Restaurant" → name: "Alba Restaurant", cuisine: "Contemporary"
+
+🏢 LOCATION EXTRACTION:
+- Look for Des Moines area neighborhoods (East Village, Beaverdale, etc.)
+- Street addresses when mentioned
+- Area descriptions ("downtown", "west side", etc.)
+- Default to "Des Moines, IA" if unclear
+
+📊 RATING & PRICE EXTRACTION:
+- Look for star ratings, numeric scores, or review language
+- Extract price indicators: $ (under $15), $$ ($15-30), $$$ ($30-50), $$$$ (over $50)
+- Convert descriptive pricing ("affordable", "moderate", "expensive")
+
+📝 DESCRIPTION EXTRACTION:
+- Pull menu highlights, specialties, or signature dishes
+- Include atmosphere descriptions ("casual", "upscale", "family-friendly")
+- Note any unique features or awards mentioned
+
+For EVERY restaurant you find, extract:
+- name: Exact restaurant name from content
+- cuisine: Type of cuisine (Italian, American, Mexican, Asian Fusion, etc.)
+- location: Address or area description (default: "Des Moines, IA")
+- rating: Numerical rating 1-5 if mentioned, or null
+- price_range: $, $$, $$$, or $$$$ based on content
+- description: Key details about food, atmosphere, or specialties
+- phone: Phone number if mentioned
+- website: Website URL if mentioned
+
+CRITICAL SUCCESS FACTORS:
+✅ Extract restaurants even with incomplete info
+✅ Use logical defaults for missing details
+✅ Look for both obvious restaurant names and food establishments
+✅ Include breweries, cafes, bakeries, and food trucks
+✅ Scan the ENTIRE content thoroughly for any food-related businesses
+
+FORMAT AS JSON ARRAY:
 [
   {
     "name": "Restaurant Name",
     "cuisine": "Cuisine Type",
-    "location": "Full address",
+    "location": "Des Moines, IA",
     "rating": 4.5,
     "price_range": "$$",
-    "description": "Restaurant description",
-    "phone": "Phone number",
-    "website": "Website URL"
+    "description": "Restaurant description and specialties",
+    "phone": "515-xxx-xxxx",
+    "website": "https://restaurant-website.com"
   }
 ]
 
-Return empty array [] if no restaurants found.`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY restaurant or food establishment mentioned in the content. If you see references to 10+ restaurants in a "best restaurants" list, include ALL of them. Return empty array [] ONLY if literally no restaurants are found anywhere in the content.`,
 
     restaurant_openings: `Extract information about new restaurant openings from this website content from ${url}.
 
@@ -288,32 +336,92 @@ Format as JSON array:
 
 Return empty array [] if no restaurant openings found.`,
 
-    playgrounds: `Extract all playgrounds or play areas from this website content from ${url}.
+    playgrounds: `You are an expert at extracting playground and children's recreation information from websites like visitdesmoines.com, Greater DSM, and family activity sites. Your task is to find EVERY SINGLE PLAYGROUND or children's recreational facility mentioned in this content from ${url}.
 
 WEBSITE CONTENT:
 ${relevantContent}
 
-Please analyze this content and extract ALL playgrounds, play areas, or children's recreational facilities. For each playground, provide:
-- name: Playground or park name
-- location: Full address or location description
-- description: Description of the playground features
-- age_range: Age range for children (e.g., "2-12 years", "All ages")
-- amenities: Array of amenities/features (swings, slides, climbing structures, etc.)
-- rating: Numerical rating if available (1-5 scale)
+CRITICAL PARSING INSTRUCTIONS FOR PLAYGROUND SITES:
 
-Format as JSON array:
+🎯 WHAT TO LOOK FOR:
+- Playground names (often park names or specific playground names)
+- Children's recreation areas, splash pads, adventure playgrounds
+- Parks with playground equipment mentioned
+- Family-friendly recreational facilities
+- Youth activity centers or outdoor play areas
+- Age-specific play structures or facilities
+
+🔍 SPECIFIC PLAYGROUND PATTERNS:
+- Look for proper nouns ending in "Park", "Playground", "Recreation Area"
+- Equipment mentions (swings, slides, climbing structures, zip lines)
+- Age-related language ("toddler", "kids", "children", "families")
+- Safety features (fenced, rubberized surfaces, shade structures)
+- Accessibility features (wheelchair accessible, inclusive design)
+- Special features (water play, sensory elements, themed playgrounds)
+
+💡 EXTRACTION EXAMPLES FROM COMMON PATTERNS:
+- "Gray's Lake Park Playground" → name: "Gray's Lake Park Playground"
+- "Walnut Woods State Park" → name: "Walnut Woods State Park Recreation Area"
+- "Copper Creek Lake Beach Playground" → name: "Copper Creek Lake Beach Playground"
+- "Jester Park Adventure Playground" → name: "Jester Park Adventure Playground"
+- "Union Park Community Center" → name: "Union Park Community Center Playground"
+
+🏢 LOCATION EXTRACTION:
+- Look for Des Moines area locations (West Des Moines, Ankeny, etc.)
+- Street addresses when mentioned (specific park addresses)
+- Neighborhood or area descriptions ("north side", "downtown area")
+- Cross streets or nearby landmarks for reference
+- Default to "Des Moines, IA" if area unclear
+
+🎪 AMENITIES EXTRACTION:
+- Standard equipment: swings, slides, monkey bars, see-saws
+- Modern features: zip lines, climbing walls, balance beams
+- Special areas: toddler sections, sensory play, splash zones
+- Safety features: fencing, shade structures, soft surfaces
+- Accessibility: ramps, inclusive equipment, wide pathways
+- Additional: picnic areas, restrooms, parking
+
+👶 AGE RANGE EXTRACTION:
+- Look for specific age mentions ("2-5 years", "school age", "toddlers")
+- Convert descriptive terms: "toddler" → "2-5 years", "school age" → "5-12 years"
+- Multiple age areas: "2-12 years" for mixed equipment
+- Default to "All ages" if not specified
+
+📝 DESCRIPTION EXTRACTION:
+- Highlight unique or special features
+- Include size references ("large", "small", "expansive")
+- Note themes or special designs (pirate ship, castle, nature-themed)
+- Mention nearby amenities (trails, lakes, sports facilities)
+- Include accessibility or safety features
+
+For EVERY playground you find, extract:
+- name: Exact playground or park name from content
+- location: Address or area description (default: "Des Moines, IA")
+- description: Key features, themes, or special attributes
+- age_range: Target age group (e.g., "2-12 years", "All ages")
+- amenities: Array of equipment and features
+- rating: Numerical rating 1-5 if mentioned, or null
+
+CRITICAL SUCCESS FACTORS:
+✅ Extract playgrounds even with incomplete info
+✅ Use logical defaults for missing details
+✅ Look for both obvious playground names and recreational facilities
+✅ Include splash pads, adventure courses, and nature play areas
+✅ Scan the ENTIRE content thoroughly for any child-friendly recreational spaces
+
+FORMAT AS JSON ARRAY:
 [
   {
     "name": "Playground Name",
-    "location": "Full address",
-    "description": "Playground description",
-    "age_range": "Age range",
-    "amenities": ["swings", "slides", "climbing structure"],
+    "location": "Des Moines, IA",
+    "description": "Playground features and description",
+    "age_range": "2-12 years",
+    "amenities": ["swings", "slides", "climbing structure", "splash pad"],
     "rating": 4.2
   }
 ]
 
-Return empty array [] if no playgrounds found.`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY playground or children's recreational facility mentioned in the content. If you see references to 10+ playgrounds in a "best playgrounds" list, include ALL of them. Return empty array [] ONLY if literally no playgrounds are found anywhere in the content.`,
 
     attractions: `Extract all attractions, tourist spots, or places of interest from this website content from ${url}.
 
