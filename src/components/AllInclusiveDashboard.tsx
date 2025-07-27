@@ -8,11 +8,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, MapPin, ExternalLink, Utensils, Palette, TreePine } from "lucide-react";
-import { format, isToday, isTomorrow, isThisWeek, isWeekend, addWeeks, isWithinInterval } from "date-fns";
+import { format, isToday, isTomorrow, isThisWeek, isWeekend, addWeeks, isWithinInterval, startOfWeek, endOfWeek, addDays, startOfDay, endOfDay } from "date-fns";
 
 interface AllInclusiveDashboardProps {
   onViewEventDetails?: (event: any) => void;
-  dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null;
+  dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
 }
 
 export default function AllInclusiveDashboard({ onViewEventDetails, dateFilter }: AllInclusiveDashboardProps) {
@@ -24,34 +24,57 @@ export default function AllInclusiveDashboard({ onViewEventDetails, dateFilter }
 
   const [activeTab, setActiveTab] = useState("all");
 
-  // Filter events and restaurant openings based on date filter
+  // Enhanced date filtering with proper preset handling
   const filterByDate = (items: any[], dateField: string = 'date') => {
     if (!dateFilter) return items;
 
     const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     return items.filter(item => {
       const itemDate = new Date(item[dateField]);
       
       if (dateFilter.mode === 'single' && dateFilter.start) {
-        const filterDate = new Date(dateFilter.start.getFullYear(), dateFilter.start.getMonth(), dateFilter.start.getDate());
-        const itemDateOnly = new Date(itemDate.getFullYear(), itemDate.getMonth(), itemDate.getDate());
+        const filterDate = startOfDay(dateFilter.start);
+        const itemDateOnly = startOfDay(itemDate);
         return itemDateOnly.getTime() === filterDate.getTime();
       }
       
       if (dateFilter.mode === 'range' && dateFilter.start) {
         if (dateFilter.end) {
-          return isWithinInterval(itemDate, { start: dateFilter.start, end: dateFilter.end });
+          return isWithinInterval(itemDate, { 
+            start: startOfDay(dateFilter.start), 
+            end: endOfDay(dateFilter.end) 
+          });
         } else {
-          return itemDate >= dateFilter.start;
+          return itemDate >= startOfDay(dateFilter.start);
         }
       }
       
-      if (dateFilter.mode === 'preset') {
-        // Handle preset filters - this would need to be passed from the search component
-        // For now, return all items for preset mode
-        return true;
+      if (dateFilter.mode === 'preset' && dateFilter.preset) {
+        // Implement actual preset filtering
+        const today = startOfDay(now);
+        const tomorrow = startOfDay(addDays(now, 1));
+        const thisWeekStart = startOfWeek(now, { weekStartsOn: 0 });
+        const thisWeekEnd = endOfWeek(now, { weekStartsOn: 0 });
+        const nextWeekStart = addDays(thisWeekStart, 7);
+        const nextWeekEnd = addDays(thisWeekEnd, 7);
+        
+        switch (dateFilter.preset) {
+          case 'today':
+            return isToday(itemDate);
+          case 'tomorrow':
+            return isTomorrow(itemDate);
+          case 'this-week':
+            return isWithinInterval(itemDate, { start: thisWeekStart, end: thisWeekEnd });
+          case 'this-weekend':
+            const saturday = addDays(thisWeekStart, 6);
+            const sunday = addDays(thisWeekStart, 7);
+            return isWithinInterval(itemDate, { start: saturday, end: sunday });
+          case 'next-week':
+            return isWithinInterval(itemDate, { start: nextWeekStart, end: nextWeekEnd });
+          default:
+            return true;
+        }
       }
       
       return true;

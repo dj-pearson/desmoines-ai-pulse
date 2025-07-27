@@ -31,7 +31,7 @@ export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
-  const [searchFilters, setSearchFilters] = useState<{ dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null }>({});
+  const [searchFilters, setSearchFilters] = useState<{ dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null }>({});
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
@@ -40,7 +40,7 @@ export default function Index() {
   const handleSearch = (filters: {
     query: string;
     category: string;
-    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null;
+    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
     location?: string;
     priceRange?: string;
   }) => {

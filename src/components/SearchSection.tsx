@@ -9,7 +9,7 @@ interface SearchSectionProps {
   onSearch: (filters: {
     query: string;
     category: string;
-    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null;
+    dateFilter?: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null;
     location?: string;
     priceRange?: string;
   }) => void;
@@ -18,9 +18,16 @@ interface SearchSectionProps {
 export default function SearchSection({ onSearch }: SearchSectionProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
-  const [dateFilter, setDateFilter] = useState<{ start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null>(null);
+  const [dateFilter, setDateFilter] = useState<{ start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null>(null);
   const [location, setLocation] = useState("");
   const [priceRange, setPriceRange] = useState("");
+
+  // Auto-trigger search when date filter changes
+  const handleDateFilterChange = (newDateFilter: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null) => {
+    setDateFilter(newDateFilter);
+    // Immediately trigger search with new date filter
+    onSearch({ query, category, dateFilter: newDateFilter, location, priceRange });
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +76,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <InteractiveDateSelector 
-              onDateChange={setDateFilter}
+              onDateChange={handleDateFilterChange}
               className="w-full"
             />
 

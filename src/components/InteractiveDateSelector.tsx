@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import type { DateRange } from "react-day-picker";
 
 interface InteractiveDateSelectorProps {
-  onDateChange: (dates: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null) => void;
+  onDateChange: (dates: { start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null) => void;
   className?: string;
 }
 
@@ -22,7 +22,7 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   
   // Track pending changes vs applied changes
-  const [appliedFilter, setAppliedFilter] = useState<{ start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null>(null);
+  const [appliedFilter, setAppliedFilter] = useState<{ start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null>(null);
   const [pendingChanges, setPendingChanges] = useState(false);
 
   const presetOptions = [
@@ -61,7 +61,7 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
         end: dateRange.to 
       };
     } else if (mode === 'preset' && preset !== 'any-date') {
-      filterToApply = { mode: 'preset' as const, start: undefined, end: undefined };
+      filterToApply = { mode: 'preset' as const, start: undefined, end: undefined, preset };
     }
 
     setAppliedFilter(filterToApply);
@@ -92,8 +92,8 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
       }
       return format(appliedFilter.start, "MMM d, yyyy");
     }
-    if (appliedFilter?.mode === 'preset' && preset !== 'any-date') {
-      return presetOptions.find(opt => opt.value === preset)?.label || 'Any date';
+    if (appliedFilter?.mode === 'preset' && appliedFilter.preset) {
+      return presetOptions.find(opt => opt.value === appliedFilter.preset)?.label || 'Any date';
     }
     return 'Any date';
   };
