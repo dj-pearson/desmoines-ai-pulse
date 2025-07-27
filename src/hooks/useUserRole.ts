@@ -37,36 +37,32 @@ export function useUserRole() {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
 
-      // First try to get from profiles table (faster)
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("user_role")
-        .eq("user_id", user.id)
-        .single();
-
-      if (!profileError && profile?.user_role) {
-        setState({
-          userRole: profile.user_role as UserRole,
-          isLoading: false,
-          error: null,
-        });
-        return;
-      }
-
-      // Fallback to user_roles table
+      // Check user_roles table first (authoritative source)
       const { data: roleData, error: roleError } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
         .limit(1)
-        .single();
+        .maybeSingle();
 
-      if (roleError && roleError.code !== 'PGRST116') {
-        throw roleError;
+      if (!roleError && roleData?.role) {
+        setState({
+          userRole: roleData.role as UserRole,
+          isLoading: false,
+          error: null,
+        });
+        return;
       }
 
-      const userRole = roleData?.role as UserRole || 'user';
+      // Fallback to profiles table if no role found in user_roles
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("user_role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const userRole = profile?.user_role as UserRole || 'user';
       setState({
         userRole,
         isLoading: false,
