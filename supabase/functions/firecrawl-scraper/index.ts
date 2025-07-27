@@ -225,14 +225,16 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
       extractedEvents = [];
     }
 
-    // Filter future events
+    // Filter future events (including today)
     const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0); // Set to start of today
     const futureEvents = extractedEvents.filter(event => {
       if (!event.date) return true; // Keep events without dates
       
       try {
         const eventDate = new Date(event.date);
-        return eventDate >= currentDate;
+        eventDate.setHours(0, 0, 0, 0); // Set to start of event day
+        return eventDate >= currentDate; // Include today and future dates
       } catch (error) {
         console.log(`⚠️ Could not parse date: ${event.date}`);
         return true; // Keep events with unparseable dates
