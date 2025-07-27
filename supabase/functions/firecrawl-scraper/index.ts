@@ -243,8 +243,9 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
 
     console.log(`🕒 After filtering past events: ${futureEvents.length} items (removed ${allExtractedEvents.length - futureEvents.length} past events)`);
 
-    // Insert into database
+    // Insert or update events in database
     let insertedCount = 0;
+    let updatedCount = 0;
     const errors = [];
 
     if (futureEvents.length > 0) {
@@ -253,41 +254,100 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
       for (let i = 0; i < futureEvents.length; i += batchSize) {
         const batch = futureEvents.slice(i, i + batchSize);
 
-        try {
-          // Transform data for database schema
-          const transformedBatch = batch.map((item) => ({
-            title: item.title?.substring(0, 200) || "Untitled Event",
-            original_description: item.description?.substring(0, 500) || "",
-            enhanced_description: item.description?.substring(0, 500) || "",
-            date: item.date
-              ? new Date(item.date).toISOString()
-              : new Date().toISOString(),
-            location: item.location?.substring(0, 100) || "Des Moines, IA",
-            venue: item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD",
-            category: item.category?.substring(0, 50) || "General",
-            price: item.price?.substring(0, 50) || "See website",
-            source_url: item.source_url || url,
-            is_enhanced: false,
-            is_featured: Math.random() > 0.8, // 20% chance of being featured
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          }));
+        for (const item of batch) {
+          try {
+            // Check if event already exists
+            const { data: existingEvents, error: selectError } = await supabase
+              .from('events')
+              .select('*')
+              .eq('title', item.title?.substring(0, 200) || "Untitled Event")
+              .eq('venue', item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD");
 
-          const { data, error } = await supabase
-            .from('events')
-            .insert(transformedBatch)
-            .select();
+            if (selectError) {
+              console.error(`❌ Error checking existing event:`, selectError);
+              errors.push(selectError);
+              continue;
+            }
 
-          if (error) {
-            console.error(`❌ Error inserting batch:`, error);
+            const eventData = {
+              title: item.title?.substring(0, 200) || "Untitled Event",
+              original_description: item.description?.substring(0, 500) || "",
+              enhanced_description: item.description?.substring(0, 500) || "",
+              date: item.date
+                ? new Date(item.date).toISOString()
+                : new Date().toISOString(),
+              location: item.location?.substring(0, 100) || "Des Moines, IA",
+              venue: item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD",
+              category: item.category?.substring(0, 50) || "General",
+              price: item.price?.substring(0, 50) || "See website",
+              source_url: item.source_url || url,
+              is_enhanced: false,
+              updated_at: new Date().toISOString(),
+            };
+
+            if (existingEvents && existingEvents.length > 0) {
+              // Update existing event with any new non-empty information
+              const existingEvent = existingEvents[0];
+              const updates: any = { updated_at: new Date().toISOString() };
+              let hasUpdates = false;
+
+              // Update fields that are currently empty/null with new non-empty values
+              if ((!existingEvent.original_description || existingEvent.original_description === 'EMPTY' || existingEvent.original_description.trim() === '') 
+                  && eventData.original_description && eventData.original_description.trim() !== '') {
+                updates.original_description = eventData.original_description;
+                updates.enhanced_description = eventData.original_description;
+                hasUpdates = true;
+              }
+
+              if ((!existingEvent.price || existingEvent.price === 'See website') 
+                  && eventData.price && eventData.price !== 'See website') {
+                updates.price = eventData.price;
+                hasUpdates = true;
+              }
+
+              if ((!existingEvent.source_url || existingEvent.source_url === url) 
+                  && eventData.source_url && eventData.source_url !== url) {
+                updates.source_url = eventData.source_url;
+                hasUpdates = true;
+              }
+
+              if (hasUpdates) {
+                const { error: updateError } = await supabase
+                  .from('events')
+                  .update(updates)
+                  .eq('id', existingEvent.id);
+
+                if (updateError) {
+                  console.error(`❌ Error updating event:`, updateError);
+                  errors.push(updateError);
+                } else {
+                  updatedCount++;
+                  console.log(`🔄 Updated existing event: ${eventData.title}`);
+                }
+              } else {
+                console.log(`ℹ️ No new information for existing event: ${eventData.title}`);
+              }
+            } else {
+              // Insert new event
+              eventData.is_featured = Math.random() > 0.8; // 20% chance of being featured
+              eventData.created_at = new Date().toISOString();
+
+              const { error: insertError } = await supabase
+                .from('events')
+                .insert([eventData]);
+
+              if (insertError) {
+                console.error(`❌ Error inserting event:`, insertError);
+                errors.push(insertError);
+              } else {
+                insertedCount++;
+                console.log(`✅ Inserted new event: ${eventData.title}`);
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Error processing event:`, error);
             errors.push(error);
-          } else {
-            insertedCount += data.length;
-            console.log(`✅ Inserted ${data.length} events`);
           }
-        } catch (error) {
-          console.error(`❌ Error processing batch:`, error);
-          errors.push(error);
         }
       }
     }
@@ -297,6 +357,7 @@ Return empty array [] if no events found. Focus on upcoming events only.`;
       totalFound: allExtractedEvents.length,
       futureEvents: futureEvents.length,
       inserted: insertedCount,
+      updated: updatedCount,
       errors: errors.length,
       url: url
     };

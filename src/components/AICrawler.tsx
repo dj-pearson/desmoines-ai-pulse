@@ -32,6 +32,7 @@ interface CrawlResult {
   totalFound: number;
   futureEvents: number;
   inserted: number;
+  updated: number;
   errors: number;
   url: string;
   error?: string;
@@ -104,6 +105,7 @@ const AICrawler: React.FC = () => {
         totalFound: 0,
         futureEvents: 0,
         inserted: 0,
+        updated: 0,
         errors: 1,
         url: "",
         error: "URL and category are required",
@@ -135,6 +137,7 @@ const AICrawler: React.FC = () => {
         totalFound: 0,
         futureEvents: 0,
         inserted: 0,
+        updated: 0,
         errors: 1,
         url: url,
         error:
@@ -285,7 +288,7 @@ const AICrawler: React.FC = () => {
             )}
 
             {result.success && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="text-center p-3 bg-white rounded border">
                   <div className="text-2xl font-bold text-blue-600">
                     {result.totalFound}
@@ -302,7 +305,13 @@ const AICrawler: React.FC = () => {
                   <div className="text-2xl font-bold text-purple-600">
                     {result.inserted}
                   </div>
-                  <div className="text-xs text-gray-600">Inserted</div>
+                  <div className="text-xs text-gray-600">New Inserted</div>
+                </div>
+                <div className="text-center p-3 bg-white rounded border">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {result.updated}
+                  </div>
+                  <div className="text-xs text-gray-600">Updated</div>
                 </div>
                 <div className="text-center p-3 bg-white rounded border">
                   <div className="text-2xl font-bold text-red-600">
