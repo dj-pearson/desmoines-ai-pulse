@@ -20,6 +20,10 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
   const [preset, setPreset] = useState('any-date');
   const [singleDate, setSingleDate] = useState<Date>();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
+  
+  // Track pending changes vs applied changes
+  const [appliedFilter, setAppliedFilter] = useState<{ start?: Date; end?: Date; mode: 'single' | 'range' | 'preset' } | null>(null);
+  const [pendingChanges, setPendingChanges] = useState(false);
 
   const presetOptions = [
     { value: 'any-date', label: 'Any date' },
@@ -32,29 +36,38 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
 
   const handlePresetChange = (value: string) => {
     setPreset(value);
-    if (value === 'any-date') {
-      onDateChange(null);
-    } else {
-      onDateChange({ mode: 'preset', start: undefined, end: undefined });
-    }
+    setPendingChanges(true);
   };
 
   const handleSingleDateSelect = (date: Date | undefined) => {
     setSingleDate(date);
-    if (date) {
-      onDateChange({ mode: 'single', start: date, end: undefined });
-    }
+    setPendingChanges(true);
   };
 
   const handleDateRangeSelect = (range: DateRange | undefined) => {
     setDateRange(range);
-    if (range?.from) {
-      onDateChange({ 
-        mode: 'range', 
-        start: range.from, 
-        end: range.to 
-      });
+    setPendingChanges(true);
+  };
+
+  const applyFilter = () => {
+    let filterToApply = null;
+
+    if (mode === 'single' && singleDate) {
+      filterToApply = { mode: 'single' as const, start: singleDate, end: undefined };
+    } else if (mode === 'range' && dateRange?.from) {
+      filterToApply = { 
+        mode: 'range' as const, 
+        start: dateRange.from, 
+        end: dateRange.to 
+      };
+    } else if (mode === 'preset' && preset !== 'any-date') {
+      filterToApply = { mode: 'preset' as const, start: undefined, end: undefined };
     }
+
+    setAppliedFilter(filterToApply);
+    onDateChange(filterToApply);
+    setPendingChanges(false);
+    setIsOpen(false);
   };
 
   const clearSelection = () => {
@@ -62,27 +75,37 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
     setPreset('any-date');
     setSingleDate(undefined);
     setDateRange(undefined);
+    setAppliedFilter(null);
     onDateChange(null);
+    setPendingChanges(false);
     setIsOpen(false);
   };
 
   const getDisplayText = () => {
-    if (mode === 'single' && singleDate) {
-      return format(singleDate, "MMM d, yyyy");
+    // Show applied filter, not pending selection
+    if (appliedFilter?.mode === 'single' && appliedFilter.start) {
+      return format(appliedFilter.start, "MMM d, yyyy");
     }
-    if (mode === 'range' && dateRange?.from) {
-      if (dateRange.to) {
-        return `${format(dateRange.from, "MMM d")} - ${format(dateRange.to, "MMM d, yyyy")}`;
+    if (appliedFilter?.mode === 'range' && appliedFilter.start) {
+      if (appliedFilter.end) {
+        return `${format(appliedFilter.start, "MMM d")} - ${format(appliedFilter.end, "MMM d, yyyy")}`;
       }
-      return format(dateRange.from, "MMM d, yyyy");
+      return format(appliedFilter.start, "MMM d, yyyy");
     }
-    if (mode === 'preset' && preset !== 'any-date') {
+    if (appliedFilter?.mode === 'preset' && preset !== 'any-date') {
       return presetOptions.find(opt => opt.value === preset)?.label || 'Any date';
     }
     return 'Any date';
   };
 
-  const hasSelection = mode !== 'preset' || preset !== 'any-date';
+  const hasAppliedFilter = appliedFilter !== null;
+
+  const canApply = () => {
+    if (mode === 'preset' && preset !== 'any-date') return true;
+    if (mode === 'single' && singleDate) return true;
+    if (mode === 'range' && dateRange?.from) return true;
+    return false;
+  };
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
@@ -93,12 +116,15 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
           <Button
             variant="outline"
             className={cn(
-              "justify-start text-left font-normal bg-white/95 backdrop-blur border-white/20",
-              !hasSelection && "text-muted-foreground"
+              "justify-start text-left font-normal bg-white/95 backdrop-blur border-white/20 relative",
+              !hasAppliedFilter && "text-muted-foreground"
             )}
           >
             <CalendarIcon className="mr-2 h-4 w-4" />
             {getDisplayText()}
+            {pendingChanges && (
+              <div className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full" />
+            )}
           </Button>
         </PopoverTrigger>
         
@@ -106,7 +132,7 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h4 className="font-medium">Select dates</h4>
-              {hasSelection && (
+              {hasAppliedFilter && (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -178,13 +204,37 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
               />
             )}
 
-            {hasSelection && (
-              <div className="pt-2 border-t">
+            {(mode !== 'preset' || preset !== 'any-date') && (
+              <div className="pt-2 border-t space-y-3">
                 <Badge variant="secondary" className="text-xs">
                   {mode === 'single' && 'Single date selected'}
                   {mode === 'range' && (dateRange?.to ? 'Date range selected' : 'Select end date')}
-                  {mode === 'preset' && 'Quick filter applied'}
+                  {mode === 'preset' && 'Quick filter selected'}
                 </Badge>
+                
+                <div className="flex gap-2">
+                  <Button
+                    onClick={applyFilter}
+                    disabled={!canApply()}
+                    className="flex-1"
+                    size="sm"
+                  >
+                    Apply Filter
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setMode('preset');
+                      setPreset('any-date');
+                      setSingleDate(undefined);
+                      setDateRange(undefined);
+                      setPendingChanges(false);
+                    }}
+                    size="sm"
+                  >
+                    Reset
+                  </Button>
+                </div>
               </div>
             )}
           </div>
