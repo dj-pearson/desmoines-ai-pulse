@@ -2,6 +2,7 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import SearchSection from "@/components/SearchSection";
 import FeaturedEvents from "@/components/FeaturedEvents";
+import PersonalizedDashboard from "@/components/PersonalizedDashboard";
 import MostSearched from "@/components/MostSearched";
 import EventFilters from "@/components/EventFilters";
 import Newsletter from "@/components/Newsletter";
@@ -15,6 +16,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Event } from "@/lib/types";
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
@@ -25,6 +27,7 @@ export default function Index() {
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
 
   const scrapeMutation = useEventScraper();
 
@@ -95,10 +98,14 @@ export default function Index() {
 
       {!showAllEvents && (
         <>
-          <FeaturedEvents
-            onViewAllEvents={handleViewAllEvents}
-            onViewEventDetails={handleViewEventDetails}
-          />
+          {isAuthenticated ? (
+            <PersonalizedDashboard onViewEventDetails={handleViewEventDetails} />
+          ) : (
+            <FeaturedEvents
+              onViewAllEvents={handleViewAllEvents}
+              onViewEventDetails={handleViewEventDetails}
+            />
+          )}
           <MostSearched />
         </>
       )}
