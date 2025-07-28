@@ -462,6 +462,20 @@ Return empty array [] if no attractions found.`
                 };
                 break;
                 
+              case 'attractions':
+                transformedData = {
+                  name: item.name?.substring(0, 200) || "Attraction",
+                  type: item.type?.substring(0, 100) || "General",
+                  location: item.location?.substring(0, 200) || "Des Moines, IA",
+                  description: item.description?.substring(0, 500) || "",
+                  rating: item.rating || null,
+                  website: item.website?.substring(0, 200) || null,
+                  is_featured: Math.random() > 0.8,
+                  created_at: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                };
+                break;
+                
               default:
                 continue; // Skip unknown categories
             }
