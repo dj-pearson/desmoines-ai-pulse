@@ -168,7 +168,11 @@ export default function Admin() {
     // Refresh the appropriate data after save
     const { contentType } = editDialog;
     if (contentType === 'event') events.refetch();
-    else if (contentType === 'restaurant') restaurants.refetch();
+    else if (contentType === 'restaurant') {
+      restaurants.refetch();
+      // Also refresh restaurant openings since restaurants with opening_date show there
+      restaurantOpenings.refetch();
+    }
     else if (contentType === 'attraction') attractions.refetch();
     else if (contentType === 'playground') playgrounds.refetch();
     else if (contentType === 'restaurant_opening') restaurantOpenings.refetch();
