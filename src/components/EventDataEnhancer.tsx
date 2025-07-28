@@ -69,31 +69,36 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     console.log('EventDataEnhancer: Processing', events.length, 'events for domain extraction');
     
     // Log first 20 sourceUrls to see what we're working with
+    // Handle both camelCase (sourceUrl) and snake_case (source_url) field names
     console.log('First 20 sourceUrls:');
     events.slice(0, 20).forEach((event, index) => {
-      console.log(`${index + 1}. sourceUrl: "${event.sourceUrl}" (${typeof event.sourceUrl})`);
+      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      console.log(`${index + 1}. sourceUrl: "${sourceUrl}" (${typeof sourceUrl})`);
     });
     
     // Look for any URLs containing 'catch' or 'desmoines'
-    const catchEvents = events.filter(event => 
-      event.sourceUrl && (
-        event.sourceUrl.toLowerCase().includes('catch') ||
-        event.sourceUrl.toLowerCase().includes('desmoines')
-      )
-    );
+    const catchEvents = events.filter(event => {
+      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      return sourceUrl && (
+        sourceUrl.toLowerCase().includes('catch') ||
+        sourceUrl.toLowerCase().includes('desmoines')
+      );
+    });
     console.log(`Found ${catchEvents.length} events with 'catch' or 'desmoines' in sourceUrl:`);
     catchEvents.forEach((event, index) => {
-      console.log(`${index + 1}. "${event.sourceUrl}"`);
+      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      console.log(`${index + 1}. "${sourceUrl}"`);
     });
     
     events.forEach((event, index) => {
-      if (event.sourceUrl) {
+      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      if (sourceUrl) {
         try {
-          const url = new URL(event.sourceUrl);
+          const url = new URL(sourceUrl);
           domainSet.add(url.hostname);
         } catch {
           // Try to extract domain from malformed URLs
-          const match = event.sourceUrl.match(/(?:https?:\/\/)?(?:www\.)?([^\/\s]+)/);
+          const match = sourceUrl.match(/(?:https?:\/\/)?(?:www\.)?([^\/\s]+)/);
           if (match && match[1]) {
             console.log(`Extracted domain from malformed URL: ${match[1]}`);
             domainSet.add(match[1]);
@@ -119,10 +124,11 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     }
 
     return events.filter(event => {
-      if (!event.sourceUrl) return false;
+      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      if (!sourceUrl) return false;
       
       // Check if the source URL contains the target domain
-      const normalizedUrl = event.sourceUrl.toLowerCase();
+      const normalizedUrl = sourceUrl.toLowerCase();
       const normalizedDomain = targetDomain.toLowerCase();
       
       // Handle various URL formats
@@ -136,10 +142,11 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     const counts: Record<string, number> = {};
     domains.forEach(domain => {
       const matchingEvents = events.filter(event => {
-        if (!event.sourceUrl) return false;
+        const sourceUrl = event.sourceUrl || (event as any).source_url;
+        if (!sourceUrl) return false;
         
         // More flexible domain matching
-        const normalizedUrl = event.sourceUrl.toLowerCase();
+        const normalizedUrl = sourceUrl.toLowerCase();
         const normalizedDomain = domain.toLowerCase();
         
         const matches = normalizedUrl.includes(normalizedDomain) ||
@@ -147,7 +154,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                normalizedUrl.includes(normalizedDomain.replace('www.', ''));
         
         if (domain.includes('catchdesmoines') && matches) {
-          console.log(`Found catchdesmoines match: ${event.sourceUrl} matches domain ${domain}`);
+          console.log(`Found catchdesmoines match: ${sourceUrl} matches domain ${domain}`);
         }
         
         return matches;
@@ -158,7 +165,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
       if (domain.includes('catchdesmoines')) {
         console.log(`Domain ${domain} has ${counts[domain]} events`);
         if (matchingEvents.length > 0) {
-          console.log('Sample URLs:', matchingEvents.slice(0, 3).map(e => e.sourceUrl));
+          console.log('Sample URLs:', matchingEvents.slice(0, 3).map(e => e.sourceUrl || (e as any).source_url));
         }
       }
     });
@@ -601,9 +608,9 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                             {event.venue && <span>{event.venue} • </span>}
                             {event.date && <span>{new Date(event.date).toLocaleDateString()}</span>}
                           </div>
-                          {mode === "bulk" && event.sourceUrl && (
+                          {mode === "bulk" && (event.sourceUrl || (event as any).source_url) && (
                             <div className="text-xs text-blue-600 truncate mt-1">
-                              {event.sourceUrl}
+                              {event.sourceUrl || (event as any).source_url}
                             </div>
                           )}
                         </div>
