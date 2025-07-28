@@ -33,6 +33,15 @@ export default function Admin() {
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);
   
+  // Search state for each content type
+  const [searchTerms, setSearchTerms] = useState({
+    events: "",
+    restaurants: "",
+    attractions: "",
+    playgrounds: "",
+    restaurantOpenings: ""
+  });
+  
   // Edit dialog state
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
@@ -44,12 +53,12 @@ export default function Admin() {
     item: null
   });
 
-  // Data hooks
-  const events = useEvents();
-  const restaurants = useRestaurants();
-  const attractions = useAttractions();
-  const playgrounds = usePlaygrounds();
-  const restaurantOpenings = useRestaurantOpenings();
+  // Data hooks with search filters
+  const events = useEvents({ search: searchTerms.events });
+  const restaurants = useRestaurants({ search: searchTerms.restaurants });
+  const attractions = useAttractions({ search: searchTerms.attractions });
+  const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds });
+  const restaurantOpenings = useRestaurantOpenings({ search: searchTerms.restaurantOpenings });
   const scraping = useScraping();
 
   useEffect(() => {
@@ -458,7 +467,7 @@ export default function Admin() {
                     totalCount={events.events.length}
                     onEdit={(item) => handleEdit("event", item)}
                     onDelete={(id) => handleDelete("event", id)}
-                    onSearch={(search) => console.log('Search events:', search)}
+                    onSearch={(search) => setSearchTerms(prev => ({ ...prev, events: search }))}
                     onFilter={(filter) => console.log('Filter events:', filter)}
                     onCreate={() => console.log('Create new event')}
                     onRefresh={events.refetch}
@@ -474,7 +483,7 @@ export default function Admin() {
                   totalCount={restaurants.restaurants.length}
                   onEdit={(item) => handleEdit("restaurant", item)}
                   onDelete={(id) => handleDelete("restaurant", id)}
-                  onSearch={(search) => console.log('Search restaurants:', search)}
+                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, restaurants: search }))}
                   onFilter={(filter) => console.log('Filter restaurants:', filter)}
                   onCreate={() => console.log('Create new restaurant')}
                 />
@@ -488,7 +497,7 @@ export default function Admin() {
                   totalCount={attractions.attractions.length}
                   onEdit={(item) => handleEdit("attraction", item)}
                   onDelete={(id) => handleDelete("attraction", id)}
-                  onSearch={(search) => console.log('Search attractions:', search)}
+                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, attractions: search }))}
                   onFilter={(filter) => console.log('Filter attractions:', filter)}
                   onCreate={() => console.log('Create new attraction')}
                 />
@@ -502,7 +511,7 @@ export default function Admin() {
                   totalCount={playgrounds.playgrounds.length}
                   onEdit={(item) => handleEdit("playground", item)}
                   onDelete={(id) => handleDelete("playground", id)}
-                  onSearch={(search) => console.log('Search playgrounds:', search)}
+                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, playgrounds: search }))}
                   onFilter={(filter) => console.log('Filter playgrounds:', filter)}
                   onCreate={() => console.log('Create new playground')}
                 />
@@ -511,24 +520,38 @@ export default function Admin() {
               <TabsContent value="restaurant-openings">
                 <ContentTable
                   type="restaurant_opening"
-                  items={restaurants.restaurants.filter(r => 
-                    r.status === 'opening_soon' || 
-                    r.status === 'newly_opened' || 
-                    r.status === 'announced' ||
-                    r.opening_date || 
-                    r.opening_timeframe
-                  )}
+                  items={restaurants.restaurants.filter(r => {
+                    const matchesSearch = !searchTerms.restaurantOpenings || 
+                      r.name?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.cuisine?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.location?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase());
+                    
+                    const isOpening = r.status === 'opening_soon' || 
+                      r.status === 'newly_opened' || 
+                      r.status === 'announced' ||
+                      r.opening_date || 
+                      r.opening_timeframe;
+                    
+                    return matchesSearch && isOpening;
+                  })}
                   isLoading={restaurants.isLoading}
-                  totalCount={restaurants.restaurants.filter(r => 
-                    r.status === 'opening_soon' || 
-                    r.status === 'newly_opened' || 
-                    r.status === 'announced' ||
-                    r.opening_date || 
-                    r.opening_timeframe
-                  ).length}
+                  totalCount={restaurants.restaurants.filter(r => {
+                    const matchesSearch = !searchTerms.restaurantOpenings || 
+                      r.name?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.cuisine?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.location?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase());
+                    
+                    const isOpening = r.status === 'opening_soon' || 
+                      r.status === 'newly_opened' || 
+                      r.status === 'announced' ||
+                      r.opening_date || 
+                      r.opening_timeframe;
+                    
+                    return matchesSearch && isOpening;
+                  }).length}
                   onEdit={(item) => handleEdit("restaurant", item)} // Use "restaurant" type instead of "restaurant_opening"
                   onDelete={(id) => handleDelete("restaurant", id)}
-                  onSearch={(search) => console.log('Search restaurant openings:', search)}
+                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, restaurantOpenings: search }))}
                   onFilter={(filter) => console.log('Filter restaurant openings:', filter)}
                   onCreate={() => console.log('Create new restaurant opening')}
                 />
