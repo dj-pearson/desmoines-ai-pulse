@@ -12,6 +12,8 @@ const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Admin = lazy(() => import("./pages/Admin"));
 const Restaurants = lazy(() => import("./pages/Restaurants"));
+const Attractions = lazy(() => import("./pages/Attractions"));
+const Playgrounds = lazy(() => import("./pages/Playgrounds"));
 const EventDetails = lazy(() => import("./pages/EventDetails"));
 const RestaurantDetails = lazy(() => import("./pages/RestaurantDetails"));
 const AttractionDetails = lazy(() => import("./pages/AttractionDetails"));
@@ -53,6 +55,8 @@ const App = () => (
             <Route path="/profile" element={<Profile />} />
             <Route path="/admin" element={<Admin />} />
             <Route path="/restaurants" element={<Restaurants />} />
+            <Route path="/attractions" element={<Attractions />} />
+            <Route path="/playgrounds" element={<Playgrounds />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:slug" element={<EventDetails />} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
