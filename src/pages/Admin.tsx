@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import ContentEditDialog from "@/components/ContentEditDialog";
 import UserRoleManager from "@/components/UserRoleManager";
 import ContentTable from "@/components/ContentTable";
 import AICrawler from "@/components/AICrawler";
@@ -17,6 +18,8 @@ import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
 import { useScraping } from "@/hooks/useScraping";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 export default function Admin() {
   const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } = useAdminAuth();
@@ -24,6 +27,17 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);
+  
+  // Edit dialog state
+  const [editDialog, setEditDialog] = useState<{
+    open: boolean;
+    contentType: "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening" | null;
+    item: any;
+  }>({
+    open: false,
+    contentType: null,
+    item: null
+  });
 
   // Data hooks
   const events = useEvents();
@@ -100,6 +114,55 @@ export default function Admin() {
 
   const canManageContent = () => ['moderator', 'admin', 'root_admin'].includes(userRole);
   const canManageUsers = () => ['admin', 'root_admin'].includes(userRole);
+
+  // Handler functions for content management
+  const handleEdit = (contentType: typeof editDialog.contentType, item: any) => {
+    setEditDialog({
+      open: true,
+      contentType,
+      item
+    });
+  };
+
+  const handleDelete = async (contentType: string, id: string) => {
+    try {
+      const tableName = contentType === 'restaurant_opening' ? 'restaurant_openings' : 
+                       contentType === 'event' ? 'events' : 
+                       contentType === 'restaurant' ? 'restaurants' : 
+                       contentType === 'attraction' ? 'attractions' : 
+                       contentType === 'playground' ? 'playgrounds' : contentType + 's';
+      
+      const { error } = await supabase
+        .from(tableName as any)
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} deleted successfully!`);
+      
+      // Refresh the appropriate data
+      if (contentType === 'event') events.refetch();
+      else if (contentType === 'restaurant') restaurants.refetch();
+      else if (contentType === 'attraction') attractions.refetch();
+      else if (contentType === 'playground') playgrounds.refetch();
+      else if (contentType === 'restaurant_opening') restaurantOpenings.refetch();
+      
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error('Failed to delete: ' + (error as Error).message);
+    }
+  };
+
+  const handleSave = () => {
+    // Refresh the appropriate data after save
+    const { contentType } = editDialog;
+    if (contentType === 'event') events.refetch();
+    else if (contentType === 'restaurant') restaurants.refetch();
+    else if (contentType === 'attraction') attractions.refetch();
+    else if (contentType === 'playground') playgrounds.refetch();
+    else if (contentType === 'restaurant_opening') restaurantOpenings.refetch();
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -316,8 +379,8 @@ export default function Admin() {
                   items={events.events}
                   isLoading={events.isLoading}
                   totalCount={events.events.length}
-                  onEdit={(item) => console.log('Edit event:', item)}
-                  onDelete={(id) => console.log('Delete event:', id)}
+                  onEdit={(item) => handleEdit("event", item)}
+                  onDelete={(id) => handleDelete("event", id)}
                   onSearch={(search) => console.log('Search events:', search)}
                   onFilter={(filter) => console.log('Filter events:', filter)}
                   onCreate={() => console.log('Create new event')}
@@ -330,8 +393,8 @@ export default function Admin() {
                   items={restaurants.restaurants}
                   isLoading={restaurants.isLoading}
                   totalCount={restaurants.restaurants.length}
-                  onEdit={(item) => console.log('Edit restaurant:', item)}
-                  onDelete={(id) => console.log('Delete restaurant:', id)}
+                  onEdit={(item) => handleEdit("restaurant", item)}
+                  onDelete={(id) => handleDelete("restaurant", id)}
                   onSearch={(search) => console.log('Search restaurants:', search)}
                   onFilter={(filter) => console.log('Filter restaurants:', filter)}
                   onCreate={() => console.log('Create new restaurant')}
@@ -344,8 +407,8 @@ export default function Admin() {
                   items={attractions.attractions}
                   isLoading={attractions.isLoading}
                   totalCount={attractions.attractions.length}
-                  onEdit={(item) => console.log('Edit attraction:', item)}
-                  onDelete={(id) => console.log('Delete attraction:', id)}
+                  onEdit={(item) => handleEdit("attraction", item)}
+                  onDelete={(id) => handleDelete("attraction", id)}
                   onSearch={(search) => console.log('Search attractions:', search)}
                   onFilter={(filter) => console.log('Filter attractions:', filter)}
                   onCreate={() => console.log('Create new attraction')}
@@ -358,8 +421,8 @@ export default function Admin() {
                   items={playgrounds.playgrounds}
                   isLoading={playgrounds.isLoading}
                   totalCount={playgrounds.playgrounds.length}
-                  onEdit={(item) => console.log('Edit playground:', item)}
-                  onDelete={(id) => console.log('Delete playground:', id)}
+                  onEdit={(item) => handleEdit("playground", item)}
+                  onDelete={(id) => handleDelete("playground", id)}
                   onSearch={(search) => console.log('Search playgrounds:', search)}
                   onFilter={(filter) => console.log('Filter playgrounds:', filter)}
                   onCreate={() => console.log('Create new playground')}
@@ -372,8 +435,8 @@ export default function Admin() {
                   items={restaurantOpenings.restaurantOpenings}
                   isLoading={restaurantOpenings.isLoading}
                   totalCount={restaurantOpenings.restaurantOpenings.length}
-                  onEdit={(item) => console.log('Edit restaurant opening:', item)}
-                  onDelete={(id) => console.log('Delete restaurant opening:', id)}
+                  onEdit={(item) => handleEdit("restaurant_opening", item)}
+                  onDelete={(id) => handleDelete("restaurant_opening", id)}
                   onSearch={(search) => console.log('Search restaurant openings:', search)}
                   onFilter={(filter) => console.log('Filter restaurant openings:', filter)}
                   onCreate={() => console.log('Create new restaurant opening')}
@@ -406,6 +469,17 @@ export default function Admin() {
         <ScrapingJobManager 
           isOpen={showJobManager} 
           onClose={() => setShowJobManager(false)} 
+        />
+      )}
+
+      {/* Content Edit Dialog */}
+      {editDialog.open && editDialog.contentType && editDialog.item && (
+        <ContentEditDialog
+          open={editDialog.open}
+          onOpenChange={(open) => setEditDialog(prev => ({ ...prev, open }))}
+          contentType={editDialog.contentType}
+          item={editDialog.item}
+          onSave={handleSave}
         />
       )}
     </div>
