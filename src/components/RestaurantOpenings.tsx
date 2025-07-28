@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Calendar, MapPin } from "lucide-react";
-import { useRestaurantOpenings } from "@/hooks/useSupabase";
+import { useFeaturedRestaurants } from "@/hooks/useSupabase";
 
 const statusConfig = {
   opening_soon: { label: "Opening Soon", color: "bg-yellow-500" },
@@ -19,7 +19,7 @@ const getStatusConfig = (status: string | undefined) => {
 };
 
 export function RestaurantOpenings() {
-  const { data: openings = [], isLoading } = useRestaurantOpenings();
+  const { data: restaurants = [], isLoading } = useFeaturedRestaurants();
 
   if (isLoading) {
     return (
@@ -41,7 +41,7 @@ export function RestaurantOpenings() {
     );
   }
 
-  if (openings.length === 0) {
+  if (restaurants.length === 0) {
     return (
       <div className="space-y-4 md:space-y-6">
         <h2 className="text-mobile-title md:text-2xl font-bold">New Restaurant Openings</h2>
@@ -68,45 +68,45 @@ export function RestaurantOpenings() {
       
       {/* Mobile-Optimized Restaurant Grid */}
       <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {openings.map((opening) => (
-          <Card key={opening.id} className="smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target">
+        {restaurants.slice(0, 6).map((restaurant) => (
+          <Card key={restaurant.id} className="smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target">
             <CardHeader className="space-y-3 mobile-padding">
               <div className="flex items-start justify-between gap-3">
                 <CardTitle className="text-mobile-body md:text-lg leading-tight flex-1 min-w-0">
-                  {opening.name}
+                  {restaurant.name}
                 </CardTitle>
                 <Badge 
                   variant="secondary" 
-                  className={`${getStatusConfig(opening.status).color} text-white text-xs flex-shrink-0`}
+                  className={`${getStatusConfig(restaurant.status).color} text-white text-xs flex-shrink-0`}
                 >
-                  {getStatusConfig(opening.status).label}
+                  {getStatusConfig(restaurant.status).label}
                 </Badge>
               </div>
               
               {/* Mobile-Optimized Meta Information */}
               <div className="flex flex-col gap-2 text-mobile-caption text-muted-foreground">
-                {opening.location && (
+                {restaurant.location && (
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{opening.location}</span>
+                    <span className="truncate">{restaurant.location}</span>
                   </div>
                 )}
                 
-                {opening.cuisine && (
+                {restaurant.cuisine && (
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full">
-                      {opening.cuisine}
+                      {restaurant.cuisine}
                     </span>
                   </div>
                 )}
                 
-                {(opening.openingDate || opening.openingTimeframe) && (
+                {(restaurant.openingDate || restaurant.openingTimeframe) && (
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 flex-shrink-0" />
                     <span>
-                      {opening.openingDate 
-                        ? new Date(opening.openingDate).toLocaleDateString()
-                        : opening.openingTimeframe
+                      {restaurant.openingDate 
+                        ? new Date(restaurant.openingDate).toLocaleDateString()
+                        : restaurant.openingTimeframe
                       }
                     </span>
                   </div>
@@ -115,21 +115,21 @@ export function RestaurantOpenings() {
             </CardHeader>
             
             <CardContent className="space-y-3 md:space-y-4 mobile-padding pt-0">
-              {opening.description && (
+              {restaurant.description && (
                 <CardDescription className="text-mobile-caption leading-relaxed line-clamp-3">
-                  {opening.description}
+                  {restaurant.description}
                 </CardDescription>
               )}
               
               {/* Mobile-Optimized Footer */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t border-border/50">
                 <span className="text-xs text-muted-foreground">
-                  Added {new Date(opening.createdAt).toLocaleDateString()}
+                  Added {new Date(restaurant.createdAt).toLocaleDateString()}
                 </span>
                 
-                {opening.sourceUrl && (
+                {restaurant.sourceUrl && (
                   <a
-                    href={opening.sourceUrl}
+                    href={restaurant.sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 smooth-transition touch-target self-start"
