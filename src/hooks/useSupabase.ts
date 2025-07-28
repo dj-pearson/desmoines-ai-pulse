@@ -45,19 +45,18 @@ export function useEvents(filters?: { category?: string; location?: string; date
 }
 
 export function useRestaurantOpenings() {
-  return useQuery<RestaurantOpening[]>({
+  return useQuery<Restaurant[]>({
     queryKey: ['restaurant-openings'],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('restaurants')
         .select('*')
-        .not('opening_date', 'is', null)
-        .gte('opening_date', today)
-        .order('opening_date', { ascending: true });
+        .neq('status', 'open')
+        .or('opening_date.not.is.null,opening_timeframe.not.is.null')
+        .order('opening_date', { ascending: true, nullsFirst: false });
       
       if (error) throw error;
-      return data?.map(transformRestaurantOpening) || [];
+      return data?.map(transformRestaurant) || [];
     },
   });
 }
