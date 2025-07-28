@@ -1,11 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Edit, Trash2, Search, Filter, Star, Plus, Sparkles } from "lucide-react";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Edit, Trash2, Search, Filter, Star, Plus, Sparkles, AlertTriangle, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -114,20 +115,40 @@ const tableConfigs = {
   }
 };
 
-export default function ContentTable({
-  type,
-  items,
-  isLoading,
-  totalCount,
-  onEdit,
-  onDelete,
-  onSearch,
-  onFilter,
-  onCreate
-}: ContentTableProps) {
-  const config = tableConfigs[type];
+export default function ContentTable({ type, items, isLoading, totalCount, onEdit, onDelete, onSearch, onFilter, onCreate }: ContentTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  
+  const config = tableConfigs[type];
+
+  // Sort and filter items with null date handling
+  const processedItems = useMemo(() => {
+    let filtered = [...items];
+    
+    // Sort items - special handling for events to sort by date
+    if (type === 'event') {
+      filtered.sort((a, b) => {
+        // Put null dates at the end
+        if (!a.date && !b.date) return 0;
+        if (!a.date) return 1;
+        if (!b.date) return -1;
+        
+        // Sort by date ascending (earliest first)
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+    }
+    
+    return filtered;
+  }, [items, type]);
+
+  // Get events with missing dates for the banner
+  const eventsWithoutDates = useMemo(() => {
+    if (type === 'event') {
+      return items.filter(item => !item.date);
+    }
+    return [];
+  }, [items, type]);
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
 
   const handleSearch = (value: string) => {
@@ -171,13 +192,25 @@ export default function ContentTable({
 
   const renderCellContent = (item: any, column: any) => {
     const value = item[column.key];
-
+    
+    // Special highlighting for null dates
+    if (column.key === 'date' && type === 'event' && !value) {
+      return (
+        <div className="flex items-center gap-2 text-destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <span className="font-medium">Missing Date</span>
+        </div>
+      );
+    }
+    
     switch (column.type) {
       case "text":
         return <span className="font-medium">{value || "-"}</span>;
       
       case "date":
-        return value ? new Date(value).toLocaleDateString() : "-";
+        return value ? new Date(value).toLocaleDateString() : (
+          <span className="text-muted-foreground">No date</span>
+        );
       
       case "badge":
         return value ? (
@@ -257,16 +290,55 @@ export default function ContentTable({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 md:space-y-6">
+      {/* Missing Dates Banner for Events */}
+      {type === 'event' && eventsWithoutDates.length > 0 && (
+        <Alert className="border-destructive bg-destructive/10">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="font-medium text-destructive">
+                  {eventsWithoutDates.length} event(s) missing dates:
+                </span>
+                <span className="ml-2 text-sm">
+                  {eventsWithoutDates.slice(0, 3).map(e => e.title).join(", ")}
+                  {eventsWithoutDates.length > 3 && ` and ${eventsWithoutDates.length - 3} more`}
+                </span>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  // Scroll to first event without date
+                  const firstMissingEvent = eventsWithoutDates[0];
+                  if (firstMissingEvent) {
+                    onEdit(firstMissingEvent);
+                  }
+                }}
+              >
+                <Calendar className="h-4 w-4 mr-1" />
+                Fix First
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold">{config.title}</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-mobile-title md:text-2xl font-bold">{config.title}</h2>
+          <p className="text-muted-foreground text-mobile-caption">
             Manage your {config.title.toLowerCase()} ({totalCount} total)
+            {type === 'event' && (
+              <span className="ml-2 text-destructive">
+                {eventsWithoutDates.length > 0 && `• ${eventsWithoutDates.length} missing dates`}
+              </span>
+            )}
           </p>
         </div>
         {onCreate && (
-          <Button onClick={onCreate}>
+          <Button onClick={onCreate} className="touch-target">
             <Plus className="h-4 w-4 mr-2" />
             Add New
           </Button>
@@ -320,9 +392,21 @@ export default function ContentTable({
 
       <Card>
         <CardHeader>
-          <CardTitle>{config.title} List</CardTitle>
+          <CardTitle className="flex items-center justify-between">
+            <span>{config.title} List</span>
+            {type === 'event' && (
+              <Badge variant="outline" className="text-xs">
+                Sorted by date (earliest first)
+              </Badge>
+            )}
+          </CardTitle>
           <CardDescription>
-            {items.length} of {totalCount} items shown
+            {processedItems.length} of {totalCount} items shown
+            {type === 'event' && eventsWithoutDates.length > 0 && (
+              <span className="ml-2 text-destructive font-medium">
+                • {eventsWithoutDates.length} need dates
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -336,7 +420,7 @@ export default function ContentTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.length === 0 ? (
+              {processedItems.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={config.columns.length + 1} className="text-center py-8">
                     <div className="text-muted-foreground">
@@ -348,8 +432,15 @@ export default function ContentTable({
                   </TableCell>
                 </TableRow>
               ) : (
-                items.map((item) => (
-                  <TableRow key={item.id}>
+                processedItems.map((item) => (
+                  <TableRow 
+                    key={item.id}
+                    className={
+                      type === 'event' && !item.date 
+                        ? "bg-destructive/5 border-l-4 border-l-destructive" 
+                        : ""
+                    }
+                  >
                     {config.columns.map((column) => (
                       <TableCell key={column.key}>
                         {renderCellContent(item, column)}
