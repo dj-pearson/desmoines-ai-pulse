@@ -511,11 +511,23 @@ export default function Admin() {
               <TabsContent value="restaurant-openings">
                 <ContentTable
                   type="restaurant_opening"
-                  items={restaurantOpenings.restaurantOpenings}
-                  isLoading={restaurantOpenings.isLoading}
-                  totalCount={restaurantOpenings.restaurantOpenings.length}
-                  onEdit={(item) => handleEdit("restaurant_opening", item)}
-                  onDelete={(id) => handleDelete("restaurant_opening", id)}
+                  items={restaurants.restaurants.filter(r => 
+                    r.status === 'opening_soon' || 
+                    r.status === 'newly_opened' || 
+                    r.status === 'announced' ||
+                    r.opening_date || 
+                    r.opening_timeframe
+                  )}
+                  isLoading={restaurants.isLoading}
+                  totalCount={restaurants.restaurants.filter(r => 
+                    r.status === 'opening_soon' || 
+                    r.status === 'newly_opened' || 
+                    r.status === 'announced' ||
+                    r.opening_date || 
+                    r.opening_timeframe
+                  ).length}
+                  onEdit={(item) => handleEdit("restaurant", item)} // Use "restaurant" type instead of "restaurant_opening"
+                  onDelete={(id) => handleDelete("restaurant", id)}
                   onSearch={(search) => console.log('Search restaurant openings:', search)}
                   onFilter={(filter) => console.log('Filter restaurant openings:', filter)}
                   onCreate={() => console.log('Create new restaurant opening')}
