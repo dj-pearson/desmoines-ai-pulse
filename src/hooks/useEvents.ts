@@ -36,6 +36,7 @@ export function useEvents(filters: EventFilters = {}) {
       let query = supabase
         .from("events")
         .select("*", { count: "exact" })
+        .gte("date", new Date().toISOString().split('T')[0]) // Only today and future events
         .order("date", { ascending: true }); // Sort by event date, not created_at
 
       // Apply filters
