@@ -217,17 +217,32 @@ export default function ContentEditDialog({
       console.log('Table name:', tableName);
       console.log('Item ID:', item.id);
 
-      const { error } = await supabase
+      // Log the exact query being sent
+      console.log('About to send update query:', {
+        table: tableName,
+        data: cleanedSaveData,
+        where: { id: item.id }
+      });
+
+      const { data: result, error } = await supabase
         .from(tableName)
         .update(cleanedSaveData)
-        .eq('id', item.id);
+        .eq('id', item.id)
+        .select(); // Add select to return the updated data
+
+      console.log('Supabase response:', { result, error });
 
       if (error) {
-        console.error('Supabase error:', error);
+        console.error('Supabase error details:', error);
         throw error;
       }
 
-      console.log('Save successful!');
+      if (!result || result.length === 0) {
+        console.error('No rows were updated! This suggests the ID was not found.');
+        throw new Error('No rows were updated. The record may not exist.');
+      }
+
+      console.log('Save successful! Updated data:', result);
       toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} updated successfully!`);
       onSave();
       onOpenChange(false);

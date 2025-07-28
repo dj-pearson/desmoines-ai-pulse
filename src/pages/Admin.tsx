@@ -23,10 +23,12 @@ import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
 import { useScraping } from "@/hooks/useScraping";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Admin() {
   const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } = useAdminAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);
@@ -164,18 +166,46 @@ export default function Admin() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     // Refresh the appropriate data after save
     const { contentType } = editDialog;
-    if (contentType === 'event') events.refetch();
-    else if (contentType === 'restaurant') {
-      restaurants.refetch();
-      // Also refresh restaurant openings since restaurants with opening_date show there
-      restaurantOpenings.refetch();
+    console.log('handleSave called for contentType:', contentType);
+    
+    try {
+      if (contentType === 'event') {
+        console.log('Refetching events...');
+        await events.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['events'] });
+      }
+      else if (contentType === 'restaurant') {
+        console.log('Refetching restaurants...');
+        await restaurants.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['restaurants'] });
+        // Also refresh restaurant openings since restaurants with opening_date show there
+        console.log('Refetching restaurant openings...');
+        await restaurantOpenings.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['restaurant_openings'] });
+      }
+      else if (contentType === 'attraction') {
+        console.log('Refetching attractions...');
+        await attractions.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['attractions'] });
+      }
+      else if (contentType === 'playground') {
+        console.log('Refetching playgrounds...');
+        await playgrounds.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['playgrounds'] });
+      }
+      else if (contentType === 'restaurant_opening') {
+        console.log('Refetching restaurant openings...');
+        await restaurantOpenings.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['restaurant_openings'] });
+      }
+      
+      console.log('All refetches completed successfully');
+    } catch (error) {
+      console.error('Error during refetch:', error);
     }
-    else if (contentType === 'attraction') attractions.refetch();
-    else if (contentType === 'playground') playgrounds.refetch();
-    else if (contentType === 'restaurant_opening') restaurantOpenings.refetch();
   };
 
   return (
