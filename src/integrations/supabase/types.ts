@@ -544,6 +544,7 @@ export type Database = {
           name: string
           opening: string | null
           opening_date: string | null
+          opening_timeframe: string | null
           phone: string | null
           price_range: string | null
           rating: number | null
@@ -563,6 +564,7 @@ export type Database = {
           name: string
           opening?: string | null
           opening_date?: string | null
+          opening_timeframe?: string | null
           phone?: string | null
           price_range?: string | null
           rating?: number | null
@@ -582,6 +584,7 @@ export type Database = {
           name?: string
           opening?: string | null
           opening_date?: string | null
+          opening_timeframe?: string | null
           phone?: string | null
           price_range?: string | null
           rating?: number | null
