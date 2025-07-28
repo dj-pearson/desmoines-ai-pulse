@@ -149,7 +149,6 @@ export default function ContentTable({ type, items, isLoading, totalCount, onEdi
     }
     return [];
   }, [items, type]);
-  const [enhancingId, setEnhancingId] = useState<string | null>(null);
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);

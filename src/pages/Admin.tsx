@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,8 @@ import ContentTable from "@/components/ContentTable";
 import AICrawler from "@/components/AICrawler";
 import ScraperConfigWizard from "@/components/ScraperConfigWizard";
 import ScrapingJobManager from "@/components/ScrapingJobManager";
-import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play } from "lucide-react";
+import SEOTools from "@/components/SEOTools";
+import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -249,6 +251,20 @@ export default function Admin() {
                   <span className="sm:hidden">Users</span>
                 </TabsTrigger>
               )}
+              {canManageContent() && (
+                <>
+                  <TabsTrigger value="settings" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Cog className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">Settings</span>
+                    <span className="sm:hidden">Settings</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="seo" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Globe className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">SEO Tools</span>
+                    <span className="sm:hidden">SEO</span>
+                  </TabsTrigger>
+                </>
+              )}
             </TabsList>
           </div>
 
@@ -473,6 +489,45 @@ export default function Admin() {
             <TabsContent value="users">
               <UserRoleManager />
             </TabsContent>
+          )}
+
+          {canManageContent() && (
+            <>
+              <TabsContent value="settings">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Cog className="h-5 w-5" />
+                      Application Settings
+                    </CardTitle>
+                    <CardDescription>
+                      Configure system settings and preferences
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <Alert>
+                        <Settings className="h-4 w-4" />
+                        <AlertDescription>
+                          <strong>Coming Soon:</strong> Advanced configuration options including:
+                          <ul className="list-disc list-inside mt-2 space-y-1">
+                            <li>Site-wide settings and preferences</li>
+                            <li>Email notification templates</li>
+                            <li>Content moderation settings</li>
+                            <li>API rate limiting configuration</li>
+                            <li>Analytics and tracking preferences</li>
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="seo">
+                <SEOTools />
+              </TabsContent>
+            </>
           )}
         </Tabs>
       </div>
