@@ -48,10 +48,13 @@ export function useRestaurantOpenings() {
   return useQuery<RestaurantOpening[]>({
     queryKey: ['restaurant-openings'],
     queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
-        .from('restaurant_openings')
+        .from('restaurants')
         .select('*')
-        .order('created_at', { ascending: false });
+        .not('opening_date', 'is', null)
+        .gte('opening_date', today)
+        .order('opening_date', { ascending: true });
       
       if (error) throw error;
       return data?.map(transformRestaurantOpening) || [];
@@ -175,6 +178,9 @@ function transformRestaurant(restaurant: any): Restaurant {
     website: restaurant.website,
     imageUrl: restaurant.image_url,
     isFeatured: restaurant.is_featured,
+    openingDate: restaurant.opening_date,
+    status: restaurant.status,
+    sourceUrl: restaurant.source_url,
     createdAt: restaurant.created_at,
     updatedAt: restaurant.updated_at,
   };

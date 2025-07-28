@@ -136,7 +136,7 @@ export default function Admin() {
 
   const handleDelete = async (contentType: string, id: string) => {
     try {
-      const tableName = contentType === 'restaurant_opening' ? 'restaurant_openings' : 
+      const tableName = contentType === 'restaurant_opening' ? 'restaurants' : 
                        contentType === 'event' ? 'events' : 
                        contentType === 'restaurant' ? 'restaurants' : 
                        contentType === 'attraction' ? 'attractions' : 

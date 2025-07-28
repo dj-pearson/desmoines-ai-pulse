@@ -549,12 +549,18 @@ Return empty array [] if no attractions found.`,
           
           console.log(`🤖 AI extracted ${extractedData.length} ${category} items from ${url}`);
           
+          // Add source_url to each extracted item
+          const itemsWithSource = extractedData.map(item => ({
+            ...item,
+            source_url: url
+          }));
+          
           // Log sample item for debugging
-          if (extractedData.length > 0) {
-            console.log(`🔍 Sample extracted item: ${JSON.stringify(extractedData[0])}`);
+          if (itemsWithSource.length > 0) {
+            console.log(`🔍 Sample extracted item: ${JSON.stringify(itemsWithSource[0])}`);
           }
           
-          return extractedData;
+          return itemsWithSource;
         } catch (parseError) {
           console.error(`❌ Could not parse AI response JSON:`, parseError);
           console.error(`❌ JSON string that failed to parse: ${responseText.substring(0, 2000)}`);
@@ -624,7 +630,7 @@ async function checkForDuplicates(
   items: any[]
 ): Promise<{ newItems: any[]; duplicates: number }> {
   const tableName =
-    category === "restaurant_openings" ? "restaurant_openings" : category;
+    category === "restaurant_openings" ? "restaurants" : category;
   let duplicates = 0;
   const newItems = [];
 
@@ -667,13 +673,22 @@ async function checkForDuplicates(
             .ilike("venue", item.venue?.trim());
           break;
         case "restaurants":
-        case "restaurant_openings":
         case "playgrounds":
         case "attractions":
           query = supabase
             .from(tableName)
             .select("id")
             .ilike("name", item.name?.trim());
+          break;
+        case "restaurant_openings":
+          // For restaurant openings, use exact name match to avoid false duplicates
+          query = supabase
+            .from(tableName)
+            .select("id")
+            .eq("name", item.name?.trim());
+          
+          // Debug for restaurant_openings
+          console.log(`🔍 Checking duplicate for restaurant opening: "${item.name?.trim()}" in table ${tableName} (exact match)`);
           break;
       }
 
@@ -706,7 +721,7 @@ async function insertData(
   items: any[]
 ): Promise<{ success: boolean; insertedCount: number; errors: any[] }> {
   const tableName =
-    category === "restaurant_openings" ? "restaurant_openings" : category;
+    category === "restaurant_openings" ? "restaurants" : category;
   const errors = [];
   let insertedCount = 0;
 
@@ -760,9 +775,13 @@ async function insertData(
             return {
               ...baseItem,
               name: item.name?.substring(0, 200) || "New Restaurant",
-              description: item.description?.substring(0, 500) || "",
-              location: item.location?.substring(0, 200) || "Des Moines, IA",
               cuisine: item.cuisine?.substring(0, 100) || "American",
+              location: item.location?.substring(0, 200) || "Des Moines, IA",
+              description: item.description?.substring(0, 500) || "",
+              phone: item.phone?.substring(0, 20) || null,
+              website: item.website?.substring(0, 200) || null,
+              price_range: item.price_range?.substring(0, 20) || null,
+              rating: item.rating || null,
               opening_date: item.opening_date
                 ? new Date(item.opening_date).toISOString().split("T")[0]
                 : null,
@@ -803,10 +822,16 @@ async function insertData(
 
       if (error) {
         console.error(`❌ Error inserting batch:`, error);
+        if (category === "restaurant_openings") {
+          console.error(`❌ Restaurant openings batch that failed:`, JSON.stringify(transformedBatch, null, 2));
+        }
         errors.push(error);
       } else {
         insertedCount += data.length;
         console.log(`✅ Inserted ${data.length} ${category} items`);
+        if (category === "restaurant_openings" && data.length > 0) {
+          console.log(`🍽️ Successfully inserted restaurant openings:`, data.map(d => d.name).join(', '));
+        }
       }
     } catch (error) {
       console.error(`❌ Error processing batch:`, error);
@@ -1003,6 +1028,11 @@ Deno.serve(async (req) => {
     }
 
     console.log(`🤖 AI extracted ${filteredItems.length} ${category} items`);
+    
+    // Debug: Log a few sample items for restaurant_openings
+    if (category === "restaurant_openings" && filteredItems.length > 0) {
+      console.log(`🔍 Sample restaurant opening items:`, JSON.stringify(filteredItems.slice(0, 2), null, 2));
+    }
 
     // Check for duplicates
     const { newItems, duplicates } = await checkForDuplicates(
@@ -1020,9 +1050,19 @@ Deno.serve(async (req) => {
 
     // Insert new items
     if (newItems.length > 0) {
+      console.log(`💾 Attempting to insert ${newItems.length} ${category} items`);
       const insertResult = await insertData(supabase, category, newItems);
       insertedCount = insertResult.insertedCount;
       insertErrors = insertResult.errors;
+      
+      if (category === "restaurant_openings") {
+        console.log(`🍽️ Restaurant openings insertion result: ${insertedCount} inserted, ${insertErrors.length} errors`);
+        if (insertErrors.length > 0) {
+          console.log(`❌ Restaurant opening insertion errors:`, insertErrors);
+        }
+      }
+    } else {
+      console.log(`⏭️ No new items to insert for ${category}`);
     }
 
     const response_data = {
