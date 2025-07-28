@@ -95,8 +95,15 @@ export default function SEOTools() {
     }
   ];
 
+  const createSlug = (name: string): string => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  };
+
   const generateSitemap = () => {
-    const baseUrl = "https://c6f56135-984a-4df0-b477-f9d3a03c55e7.lovableproject.com";
+    const baseUrl = "https://desmoinesinsider.com";
     const currentDate = new Date().toISOString().split('T')[0];
     
     let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
@@ -106,6 +113,12 @@ export default function SEOTools() {
     <lastmod>${currentDate}</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>${baseUrl}/events</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
   </url>
   <url>
     <loc>${baseUrl}/restaurants</loc>
@@ -123,9 +136,10 @@ export default function SEOTools() {
     // Add dynamic event pages
     events.forEach(event => {
       const eventDate = event.date ? new Date(event.date).toISOString().split('T')[0] : currentDate;
+      const slug = createSlug(event.title);
       sitemap += `
   <url>
-    <loc>${baseUrl}/events/${event.id}</loc>
+    <loc>${baseUrl}/events/${slug}</loc>
     <lastmod>${eventDate}</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -134,9 +148,34 @@ export default function SEOTools() {
 
     // Add restaurant pages
     restaurants.forEach(restaurant => {
+      const slug = createSlug(restaurant.name);
       sitemap += `
   <url>
-    <loc>${baseUrl}/restaurants/${restaurant.id}</loc>
+    <loc>${baseUrl}/restaurants/${slug}</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>`;
+    });
+
+    // Add attraction pages
+    attractions.forEach(attraction => {
+      const slug = createSlug(attraction.name);
+      sitemap += `
+  <url>
+    <loc>${baseUrl}/attractions/${slug}</loc>
+    <lastmod>${currentDate}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>`;
+    });
+
+    // Add playground pages
+    playgrounds.forEach(playground => {
+      const slug = createSlug(playground.name);
+      sitemap += `
+  <url>
+    <loc>${baseUrl}/playgrounds/${slug}</loc>
     <lastmod>${currentDate}</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -175,7 +214,7 @@ Disallow: /admin
 Disallow: /auth
 
 # Sitemap location
-Sitemap: https://c6f56135-984a-4df0-b477-f9d3a03c55e7.lovableproject.com/sitemap.xml
+Sitemap: https://desmoinesinsider.com/sitemap.xml
 
 # Crawl delay for respectful crawling
 Crawl-delay: 1`;
@@ -239,7 +278,7 @@ Last updated: ${new Date().toLocaleDateString()}`;
       "@type": "LocalBusiness",
       "name": "Des Moines Insider",
       "description": "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",
-      "url": "https://c6f56135-984a-4df0-b477-f9d3a03c55e7.lovableproject.com",
+      "url": "https://desmoinesinsider.com",
       "address": {
         "@type": "PostalAddress",
         "addressLocality": "Des Moines",
@@ -302,8 +341,8 @@ ${JSON.stringify(eventListSchema, null, 2)}
 <meta property="og:title" content="Des Moines Insider - Your AI-Powered Local Guide" />
 <meta property="og:description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. Real-time updates and personalized recommendations." />
 <meta property="og:type" content="website" />
-<meta property="og:url" content="https://c6f56135-984a-4df0-b477-f9d3a03c55e7.lovableproject.com" />
-<meta property="og:image" content="https://c6f56135-984a-4df0-b477-f9d3a03c55e7.lovableproject.com/og-image.jpg" />
+<meta property="og:url" content="https://desmoinesinsider.com" />
+<meta property="og:image" content="https://desmoinesinsider.com/og-image.jpg" />
 <meta property="og:image:width" content="1200" />
 <meta property="og:image:height" content="630" />
 <meta property="og:locale" content="en_US" />
@@ -313,7 +352,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:title" content="Des Moines Insider - Your AI-Powered Local Guide" />
 <meta name="twitter:description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa." />
-<meta name="twitter:image" content="https://c6f56135-984a-4df0-b477-f9d3a03c55e7.lovableproject.com/og-image.jpg" />
+<meta name="twitter:image" content="https://desmoinesinsider.com/og-image.jpg" />
 
 <!-- Additional Meta Tags -->
 <meta name="description" content="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. AI-powered recommendations, real-time updates, and comprehensive local insights." />
@@ -326,7 +365,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
   };
 
   const generateRSSFeed = () => {
-    const baseUrl = "https://c6f56135-984a-4df0-b477-f9d3a03c55e7.lovableproject.com";
+    const baseUrl = "https://desmoinesinsider.com";
     const currentDate = new Date().toISOString();
     
     let rss = `<?xml version="1.0" encoding="UTF-8"?>
@@ -347,14 +386,15 @@ ${JSON.stringify(eventListSchema, null, 2)}
     // Add recent events as RSS items
     events.slice(0, 20).forEach(event => {
       const eventDate = event.date ? new Date(event.date).toISOString() : currentDate;
+      const slug = createSlug(event.title);
       rss += `
     <item>
       <title>${event.title}</title>
-      <link>${baseUrl}/events/${event.id}</link>
+      <link>${baseUrl}/events/${slug}</link>
       <description><![CDATA[${event.enhanced_description || event.original_description || 'Event details'}]]></description>
       <category>Events</category>
       <pubDate>${eventDate}</pubDate>
-      <guid>${baseUrl}/events/${event.id}</guid>
+      <guid>${baseUrl}/events/${slug}</guid>
     </item>`;
     });
 

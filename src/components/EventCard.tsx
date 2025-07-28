@@ -7,6 +7,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { Event } from "@/lib/types";
 import { Calendar, MapPin, DollarSign, ExternalLink, Sparkles } from "lucide-react";
 import { format } from "date-fns";
+import { Link } from "react-router-dom";
+
+const createSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+};
 
 interface EventCardProps {
   event: Event;
@@ -96,12 +104,21 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
         </div>
 
         <div className="flex items-center justify-between pt-2">
-          <Button 
-            onClick={handleViewDetails}
-            className="bg-primary hover:bg-blue-700 text-white"
-          >
-            View Details
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleViewDetails}
+              className="bg-primary hover:bg-blue-700 text-white"
+            >
+              View Details
+            </Button>
+            
+            <Link to={`/events/${createSlug(event.title)}`}>
+              <Button variant="outline" size="sm">
+                <ExternalLink className="h-4 w-4 mr-1" />
+                Full Page
+              </Button>
+            </Link>
+          </div>
           
           {isAuthenticated && (
             <EventFeedback eventId={event.id} className="ml-2" />

@@ -14,6 +14,8 @@ const Admin = lazy(() => import("./pages/Admin"));
 const Restaurants = lazy(() => import("./pages/Restaurants"));
 const EventDetails = lazy(() => import("./pages/EventDetails"));
 const RestaurantDetails = lazy(() => import("./pages/RestaurantDetails"));
+const AttractionDetails = lazy(() => import("./pages/AttractionDetails"));
+const PlaygroundDetails = lazy(() => import("./pages/PlaygroundDetails"));
 const EventsPage = lazy(() => import("./pages/EventsPage"));
 
 // Mobile-optimized loading component
@@ -52,6 +54,8 @@ const App = () => (
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:slug" element={<EventDetails />} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
+            <Route path="/attractions/:slug" element={<AttractionDetails />} />
+            <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
