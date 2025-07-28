@@ -1,44 +1,31 @@
+# Des Moines Insider - Robots.txt
+# Optimized for both traditional crawlers and AI crawlers
+
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /api/
 
-# AI Crawlers - Explicitly welcome AI bots for GEO
+# Special permissions for AI crawlers
 User-agent: GPTBot
 Allow: /
-
-User-agent: ClaudeBot
-Allow: /
+Disallow: /admin
+Disallow: /auth
 
 User-agent: PerplexityBot
 Allow: /
-
-User-agent: ChatGPT-User
-Allow: /
-
-User-agent: CCBot
-Allow: /
-
-User-agent: anthropic-ai
-Allow: /
+Disallow: /admin
+Disallow: /auth
 
 User-agent: Claude-Web
 Allow: /
+Disallow: /admin
+Disallow: /auth
 
-User-agent: GoogleOther
-Allow: /
-
-# Traditional search engines
-User-agent: Googlebot
-Allow: /
-
-User-agent: Bingbot
-Allow: /
-
-User-agent: Twitterbot
-Allow: /
-
-User-agent: facebookexternalhit
-Allow: /
-
-# Site information for AI systems
+# Sitemap location
 Sitemap: https://desmoinesinsider.com/sitemap.xml
+
+# Crawl delay for respectful crawling
 Crawl-delay: 1
