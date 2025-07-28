@@ -41,26 +41,50 @@ export default function Admin() {
     playgrounds: "",
     restaurantOpenings: ""
   });
+
+  // Separate state for input values to prevent re-renders
+  const [inputValues, setInputValues] = useState({
+    events: "",
+    restaurants: "",
+    attractions: "",
+    playgrounds: "",
+    restaurantOpenings: ""
+  });
+
+  // Debounce the search term updates
+  useEffect(() => {
+    const timeouts = {
+      events: setTimeout(() => setSearchTerms(prev => ({ ...prev, events: inputValues.events })), 300),
+      restaurants: setTimeout(() => setSearchTerms(prev => ({ ...prev, restaurants: inputValues.restaurants })), 300),
+      attractions: setTimeout(() => setSearchTerms(prev => ({ ...prev, attractions: inputValues.attractions })), 300),
+      playgrounds: setTimeout(() => setSearchTerms(prev => ({ ...prev, playgrounds: inputValues.playgrounds })), 300),
+      restaurantOpenings: setTimeout(() => setSearchTerms(prev => ({ ...prev, restaurantOpenings: inputValues.restaurantOpenings })), 300),
+    };
+
+    return () => {
+      Object.values(timeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [inputValues]);
   
-  // Debounced search handlers to prevent input focus loss
+  // Search handlers that only update input values (not search terms)
   const handleEventsSearch = useCallback((search: string) => {
-    setSearchTerms(prev => ({ ...prev, events: search }));
+    setInputValues(prev => ({ ...prev, events: search }));
   }, []);
   
   const handleRestaurantsSearch = useCallback((search: string) => {
-    setSearchTerms(prev => ({ ...prev, restaurants: search }));
+    setInputValues(prev => ({ ...prev, restaurants: search }));
   }, []);
   
   const handleAttractionsSearch = useCallback((search: string) => {
-    setSearchTerms(prev => ({ ...prev, attractions: search }));
+    setInputValues(prev => ({ ...prev, attractions: search }));
   }, []);
   
   const handlePlaygroundsSearch = useCallback((search: string) => {
-    setSearchTerms(prev => ({ ...prev, playgrounds: search }));
+    setInputValues(prev => ({ ...prev, playgrounds: search }));
   }, []);
   
   const handleRestaurantOpeningsSearch = useCallback((search: string) => {
-    setSearchTerms(prev => ({ ...prev, restaurantOpenings: search }));
+    setInputValues(prev => ({ ...prev, restaurantOpenings: search }));
   }, []);
   
   // Edit dialog state
@@ -486,6 +510,7 @@ export default function Admin() {
                     items={events.events}
                     isLoading={events.isLoading}
                     totalCount={events.events.length}
+                    searchValue={inputValues.events}
                     onEdit={(item) => handleEdit("event", item)}
                     onDelete={(id) => handleDelete("event", id)}
                     onSearch={handleEventsSearch}
@@ -502,6 +527,7 @@ export default function Admin() {
                   items={restaurants.restaurants}
                   isLoading={restaurants.isLoading}
                   totalCount={restaurants.restaurants.length}
+                  searchValue={inputValues.restaurants}
                   onEdit={(item) => handleEdit("restaurant", item)}
                   onDelete={(id) => handleDelete("restaurant", id)}
                   onSearch={handleRestaurantsSearch}
@@ -516,6 +542,7 @@ export default function Admin() {
                   items={attractions.attractions}
                   isLoading={attractions.isLoading}
                   totalCount={attractions.attractions.length}
+                  searchValue={inputValues.attractions}
                   onEdit={(item) => handleEdit("attraction", item)}
                   onDelete={(id) => handleDelete("attraction", id)}
                   onSearch={handleAttractionsSearch}
@@ -530,6 +557,7 @@ export default function Admin() {
                   items={playgrounds.playgrounds}
                   isLoading={playgrounds.isLoading}
                   totalCount={playgrounds.playgrounds.length}
+                  searchValue={inputValues.playgrounds}
                   onEdit={(item) => handleEdit("playground", item)}
                   onDelete={(id) => handleDelete("playground", id)}
                   onSearch={handlePlaygroundsSearch}
@@ -570,6 +598,7 @@ export default function Admin() {
                     
                     return matchesSearch && isOpening;
                   }).length}
+                  searchValue={inputValues.restaurantOpenings}
                   onEdit={(item) => handleEdit("restaurant", item)} // Use "restaurant" type instead of "restaurant_opening"
                   onDelete={(id) => handleDelete("restaurant", id)}
                   onSearch={handleRestaurantOpeningsSearch}

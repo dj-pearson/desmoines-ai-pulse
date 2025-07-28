@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -19,6 +19,7 @@ interface ContentTableProps {
   items: any[];
   isLoading: boolean;
   totalCount: number;
+  searchValue?: string; // Add external search value prop
   onEdit: (item: any) => void;
   onDelete: (id: string) => void;
   onSearch: (search: string) => void;
@@ -122,12 +123,17 @@ const tableConfigs = {
   }
 };
 
-export default function ContentTable({ type, items, isLoading, totalCount, onEdit, onDelete, onSearch, onFilter, onCreate, onRefresh }: ContentTableProps) {
-  const [searchTerm, setSearchTerm] = useState("");
+export default function ContentTable({ type, items, isLoading, totalCount, searchValue = "", onEdit, onDelete, onSearch, onFilter, onCreate, onRefresh }: ContentTableProps) {
+  const [searchTerm, setSearchTerm] = useState(searchValue);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const [showDataEnhancer, setShowDataEnhancer] = useState(false);
   const { isHighlightedDomain } = useDomainHighlights();
+  
+  // Sync internal search term with external search value
+  useEffect(() => {
+    setSearchTerm(searchValue);
+  }, [searchValue]);
   
   const config = tableConfigs[type];
 
