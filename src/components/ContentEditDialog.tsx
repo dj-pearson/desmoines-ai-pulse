@@ -202,6 +202,20 @@ export default function ContentEditDialog({
       console.log('Table name:', tableName);
       console.log('Item ID:', item.id);
 
+      // Let's first check if the record exists
+      const { data: existingRecord, error: checkError } = await supabase
+        .from(tableName)
+        .select('*')
+        .eq('id', item.id)
+        .maybeSingle();
+
+      console.log('Existing record check:', { existingRecord, checkError });
+
+      if (!existingRecord) {
+        console.error('Record not found in table:', tableName);
+        throw new Error(`Record with ID ${item.id} not found in ${tableName} table`);
+      }
+
       const { data: result, error } = await supabase
         .from(tableName)
         .update(saveData)
