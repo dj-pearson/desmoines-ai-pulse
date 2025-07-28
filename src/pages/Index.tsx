@@ -113,32 +113,32 @@ export default function Index() {
         <Header />
         
         {/* Mobile-First Hero section with structured data */}
-        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 mobile-padding py-8 md:py-16 safe-area-top">
+        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 mobile-padding py-6 md:py-16 safe-area-top">
           <div className="container mx-auto text-center">
-            <h1 className="text-mobile-hero md:text-4xl lg:text-6xl font-bold text-foreground mb-4 md:mb-6 leading-tight">
+            <h1 className="text-mobile-hero md:text-4xl lg:text-6xl font-bold text-foreground mb-3 md:mb-6 leading-relaxed mobile-safe-text">
               Discover Des Moines Like Never Before
             </h1>
-            <p className="text-mobile-body md:text-xl text-muted-foreground mb-6 md:mb-8 max-w-3xl mx-auto px-4">
+            <p className="text-mobile-body md:text-xl text-muted-foreground mb-6 md:mb-8 max-w-3xl mx-auto px-2 mobile-safe-text">
               Your AI-powered guide to the best events, restaurants, attractions, and family activities 
               in Des Moines, Iowa. Real-time updates, personalized recommendations, and comprehensive local insights.
             </p>
             
             {/* Mobile-Optimized Stats Grid */}
-            <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mt-8 md:mt-12">
-              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
-                <div className="text-2xl md:text-3xl font-bold text-primary">500+</div>
+            <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mt-6 md:mt-12">
+              <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
+                <div className="text-xl md:text-3xl font-bold text-primary">500+</div>
                 <p className="text-mobile-caption text-muted-foreground">Events Monthly</p>
               </div>
-              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
-                <div className="text-2xl md:text-3xl font-bold text-primary">200+</div>
+              <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
+                <div className="text-xl md:text-3xl font-bold text-primary">200+</div>
                 <p className="text-mobile-caption text-muted-foreground">Restaurants</p>
               </div>
-              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
-                <div className="text-2xl md:text-3xl font-bold text-primary">50+</div>
+              <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
+                <div className="text-xl md:text-3xl font-bold text-primary">50+</div>
                 <p className="text-mobile-caption text-muted-foreground">Attractions</p>
               </div>
-              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
-                <div className="text-2xl md:text-3xl font-bold text-primary">100+</div>
+              <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
+                <div className="text-xl md:text-3xl font-bold text-primary">100+</div>
                 <p className="text-mobile-caption text-muted-foreground">Playgrounds</p>
               </div>
             </div>

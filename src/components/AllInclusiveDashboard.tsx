@@ -261,33 +261,35 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
     
     return (
       <Card key={`${item.type}-${item.id}`} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={handleCardClick}>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-3 px-4 py-4 md:px-6">
+          <div className="flex items-center justify-between mb-2">
             <Badge className={getTypeColor(item.type)}>
-              <Icon className="h-3 w-3 mr-1" />
-              {item.type}
+              <Icon className="h-3 w-3 mr-1 flex-shrink-0" />
+              <span className="truncate">{item.type}</span>
             </Badge>
           </div>
-          <CardTitle className="text-lg">{item.title || item.name}</CardTitle>
+          <CardTitle className="text-mobile-title md:text-lg mobile-safe-text pr-2 leading-relaxed">
+            {item.title || item.name}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 pb-4 md:px-6">
           <div className="space-y-2">
             {item.location && (
-              <div className="flex items-center text-sm text-muted-foreground">
-                <MapPin className="h-4 w-4 mr-1" />
-                {item.location}
+              <div className="flex items-start text-mobile-caption text-muted-foreground">
+                <MapPin className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                <span className="mobile-safe-text">{item.location}</span>
               </div>
             )}
             {item.date && (
-              <div className="flex items-center text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4 mr-1" />
-                {formatDate(item.date)}
+              <div className="flex items-start text-mobile-caption text-muted-foreground">
+                <Calendar className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                <span className="mobile-safe-text">{formatDate(item.date)}</span>
               </div>
             )}
             {item.opening_date && (
-              <div className="flex items-center text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4 mr-1" />
-                Opens: {formatDate(item.opening_date)}
+              <div className="flex items-start text-mobile-caption text-muted-foreground">
+                <Calendar className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+                <span className="mobile-safe-text">Opens: {formatDate(item.opening_date)}</span>
               </div>
             )}
             <p className="text-sm text-muted-foreground line-clamp-2">
@@ -331,24 +333,24 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
   };
 
   return (
-    <section className="py-16 bg-muted/30">
+    <section className="py-8 md:py-16 bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-foreground mb-4">
+        <div className="text-center mb-8 md:mb-12">
+          <h2 className="text-mobile-title md:text-3xl font-bold text-foreground mb-3 md:mb-4 mobile-safe-text">
             What's Happening in Des Moines
           </h2>
-          <p className="text-lg text-muted-foreground">
+          <p className="text-mobile-body md:text-lg text-muted-foreground mobile-safe-text">
             Events, new restaurants, attractions, and family activities all in one place
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 mb-8">
-            <TabsTrigger value="all">All</TabsTrigger>
-            <TabsTrigger value="event">Events</TabsTrigger>
-            <TabsTrigger value="restaurant">Restaurants</TabsTrigger>
-            <TabsTrigger value="attraction">Attractions</TabsTrigger>
-            <TabsTrigger value="playground">Playgrounds</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-5 mb-6 md:mb-8 h-auto">
+            <TabsTrigger value="all" className="text-xs md:text-sm py-2 px-1 md:px-3">All</TabsTrigger>
+            <TabsTrigger value="event" className="text-xs md:text-sm py-2 px-1 md:px-3">Events</TabsTrigger>
+            <TabsTrigger value="restaurant" className="text-xs md:text-sm py-2 px-1 md:px-3">Restaurants</TabsTrigger>
+            <TabsTrigger value="attraction" className="text-xs md:text-sm py-2 px-1 md:px-3">Attractions</TabsTrigger>
+            <TabsTrigger value="playground" className="text-xs md:text-sm py-2 px-1 md:px-3">Playgrounds</TabsTrigger>
           </TabsList>
 
           <TabsContent value="all">

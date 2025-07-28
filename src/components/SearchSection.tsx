@@ -81,16 +81,16 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   };
 
   return (
-    <section className="py-12 md:py-20 bg-gradient-to-r from-primary to-primary/80 mobile-padding">
+    <section className="py-8 md:py-20 bg-gradient-to-r from-primary to-primary/80 mobile-padding">
       <div className="container mx-auto text-center">
-        <h2 className="text-mobile-title md:text-4xl lg:text-6xl font-bold text-primary-foreground mb-4 md:mb-6">
+        <h2 className="text-mobile-title md:text-4xl lg:text-6xl font-bold text-primary-foreground mb-3 md:mb-6 mobile-safe-text">
           Discover Des Moines
         </h2>
-        <p className="text-mobile-body md:text-xl text-primary-foreground/90 mb-8 md:mb-12 max-w-2xl mx-auto">
+        <p className="text-mobile-body md:text-xl text-primary-foreground/90 mb-6 md:mb-12 max-w-2xl mx-auto mobile-safe-text">
           Your AI-powered guide to events, dining, and attractions in the capital city
         </p>
         
-        <form onSubmit={handleSearch} className="space-y-4 md:space-y-6 max-w-4xl mx-auto">
+        <form onSubmit={handleSearch} className="space-y-3 md:space-y-6 max-w-4xl mx-auto">
           {/* Mobile-First Main search bar */}
           <div className="flex flex-col gap-3 md:gap-4">
             <div className="flex flex-col sm:flex-row gap-3 md:gap-4">

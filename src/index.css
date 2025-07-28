@@ -27,13 +27,13 @@ All colors MUST be HSL. Touch targets minimum 44px.
     @apply transition-all duration-200 ease-out;
   }
   
-  /* Mobile-first text sizes */
+  /* Mobile-first text sizes with improved spacing */
   .text-mobile-hero {
     @apply text-2xl font-bold leading-tight;
   }
   
   .text-mobile-title {
-    @apply text-xl font-semibold leading-tight;
+    @apply text-lg font-semibold leading-relaxed;
   }
   
   .text-mobile-body {
@@ -41,12 +41,21 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
   
   .text-mobile-caption {
-    @apply text-sm leading-normal;
+    @apply text-sm leading-relaxed;
   }
   
-  /* Mobile-optimized grid */
+  /* Mobile-optimized grid with better spacing */
   .mobile-grid {
-    @apply grid grid-cols-1 gap-4;
+    @apply grid grid-cols-1 gap-3;
+  }
+  
+  /* Text wrapping utilities for mobile */
+  .mobile-text-wrap {
+    @apply break-words hyphens-auto;
+  }
+  
+  .mobile-safe-text {
+    @apply break-words overflow-hidden;
   }
   
   /* Safe area support - use CSS properties directly */
