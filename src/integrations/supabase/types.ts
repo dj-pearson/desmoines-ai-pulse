@@ -219,6 +219,30 @@ export type Database = {
         }
         Relationships: []
       }
+      domain_highlights: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          domain: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          domain: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          domain?: string
+          id?: string
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           category: string

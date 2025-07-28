@@ -9,6 +9,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { Edit, Trash2, Search, Filter, Star, Plus, Sparkles, AlertTriangle, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useDomainHighlights } from "@/hooks/useDomainHighlights";
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening";
 
@@ -119,6 +120,7 @@ export default function ContentTable({ type, items, isLoading, totalCount, onEdi
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  const { isHighlightedDomain } = useDomainHighlights();
   
   const config = tableConfigs[type];
 
@@ -431,15 +433,19 @@ export default function ContentTable({ type, items, isLoading, totalCount, onEdi
                   </TableCell>
                 </TableRow>
               ) : (
-                processedItems.map((item) => (
-                  <TableRow 
-                    key={item.id}
-                    className={
-                      type === 'event' && !item.date 
-                        ? "bg-destructive/5 border-l-4 border-l-destructive" 
-                        : ""
-                    }
-                  >
+                processedItems.map((item) => {
+                  const isHighlighted = type === 'event' && item.source_url && isHighlightedDomain(item.source_url);
+                  const hasMissingDate = type === 'event' && !item.date;
+                  
+                  return (
+                    <TableRow 
+                      key={item.id}
+                      className={`
+                        ${hasMissingDate ? "bg-destructive/5 border-l-4 border-l-destructive" : ""}
+                        ${isHighlighted ? "bg-warning/10 border-l-4 border-l-warning" : ""}
+                        ${isHighlighted && hasMissingDate ? "bg-gradient-to-r from-destructive/5 to-warning/10 border-l-4 border-l-destructive border-r-4 border-r-warning" : ""}
+                      `.trim()}
+                    >
                     {config.columns.map((column) => (
                       <TableCell key={column.key}>
                         {renderCellContent(item, column)}
@@ -475,8 +481,9 @@ export default function ContentTable({ type, items, isLoading, totalCount, onEdi
                          </Button>
                        </div>
                      </TableCell>
-                  </TableRow>
-                ))
+                    </TableRow>
+                  );
+                })
               )}
             </TableBody>
           </Table>

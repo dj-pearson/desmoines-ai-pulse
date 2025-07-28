@@ -13,6 +13,7 @@ import AICrawler from "@/components/AICrawler";
 import ScraperConfigWizard from "@/components/ScraperConfigWizard";
 import ScrapingJobManager from "@/components/ScrapingJobManager";
 import SEOTools from "@/components/SEOTools";
+import { DomainHighlightManager } from "@/components/DomainHighlightManager";
 import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
@@ -414,17 +415,20 @@ export default function Admin() {
               </TabsContent>
 
               <TabsContent value="events">
-                <ContentTable
-                  type="event"
-                  items={events.events}
-                  isLoading={events.isLoading}
-                  totalCount={events.events.length}
-                  onEdit={(item) => handleEdit("event", item)}
-                  onDelete={(id) => handleDelete("event", id)}
-                  onSearch={(search) => console.log('Search events:', search)}
-                  onFilter={(filter) => console.log('Filter events:', filter)}
-                  onCreate={() => console.log('Create new event')}
-                />
+                <div className="space-y-6">
+                  <DomainHighlightManager />
+                  <ContentTable
+                    type="event"
+                    items={events.events}
+                    isLoading={events.isLoading}
+                    totalCount={events.events.length}
+                    onEdit={(item) => handleEdit("event", item)}
+                    onDelete={(id) => handleDelete("event", id)}
+                    onSearch={(search) => console.log('Search events:', search)}
+                    onFilter={(filter) => console.log('Filter events:', filter)}
+                    onCreate={() => console.log('Create new event')}
+                  />
+                </div>
               </TabsContent>
 
               <TabsContent value="restaurants">
