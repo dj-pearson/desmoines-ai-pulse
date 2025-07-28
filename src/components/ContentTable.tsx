@@ -6,10 +6,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import { Edit, Trash2, Search, Filter, Star, Plus, Sparkles, AlertTriangle, Calendar } from "lucide-react";
+import { Edit, Trash2, Search, Filter, Star, Plus, Sparkles, AlertTriangle, Calendar, Brain } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useDomainHighlights } from "@/hooks/useDomainHighlights";
+import EventDataEnhancer from "./EventDataEnhancer";
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening";
 
@@ -23,6 +24,7 @@ interface ContentTableProps {
   onSearch: (search: string) => void;
   onFilter: (filter: any) => void;
   onCreate?: () => void;
+  onRefresh?: () => void;
 }
 
 const tableConfigs = {
@@ -116,10 +118,11 @@ const tableConfigs = {
   }
 };
 
-export default function ContentTable({ type, items, isLoading, totalCount, onEdit, onDelete, onSearch, onFilter, onCreate }: ContentTableProps) {
+export default function ContentTable({ type, items, isLoading, totalCount, onEdit, onDelete, onSearch, onFilter, onCreate, onRefresh }: ContentTableProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
+  const [showDataEnhancer, setShowDataEnhancer] = useState(false);
   const { isHighlightedDomain } = useDomainHighlights();
   
   const config = tableConfigs[type];
@@ -338,12 +341,24 @@ export default function ContentTable({ type, items, isLoading, totalCount, onEdi
             )}
           </p>
         </div>
-        {onCreate && (
-          <Button onClick={onCreate} className="touch-target">
-            <Plus className="h-4 w-4 mr-2" />
-            Add New
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {type === 'event' && (
+            <Button 
+              variant="outline" 
+              onClick={() => setShowDataEnhancer(true)}
+              className="touch-target"
+            >
+              <Brain className="h-4 w-4 mr-2" />
+              AI Enhance
+            </Button>
+          )}
+          {onCreate && (
+            <Button onClick={onCreate} className="touch-target">
+              <Plus className="h-4 w-4 mr-2" />
+              Add New
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -489,6 +504,23 @@ export default function ContentTable({ type, items, isLoading, totalCount, onEdi
           </Table>
         </CardContent>
       </Card>
+
+      {/* Event Data Enhancer Dialog */}
+      {type === 'event' && (
+        <EventDataEnhancer
+          open={showDataEnhancer}
+          onOpenChange={setShowDataEnhancer}
+          events={items}
+          onSuccess={() => {
+            // Refresh the events data
+            if (onRefresh) {
+              onRefresh();
+            } else {
+              window.location.reload();
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

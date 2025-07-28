@@ -427,6 +427,7 @@ export default function Admin() {
                     onSearch={(search) => console.log('Search events:', search)}
                     onFilter={(filter) => console.log('Filter events:', filter)}
                     onCreate={() => console.log('Create new event')}
+                    onRefresh={events.refetch}
                   />
                 </div>
               </TabsContent>
