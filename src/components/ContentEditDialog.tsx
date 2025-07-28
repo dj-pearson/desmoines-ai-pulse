@@ -216,6 +216,10 @@ export default function ContentEditDialog({
         throw new Error(`Record with ID ${item.id} not found in ${tableName} table`);
       }
 
+      console.log('Full existing record:', existingRecord);
+      console.log('Fields we are trying to update:', Object.keys(saveData));
+      console.log('Update values:', saveData);
+
       const { data: result, error } = await supabase
         .from(tableName)
         .update(saveData)
