@@ -68,10 +68,26 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     
     console.log('EventDataEnhancer: Processing', events.length, 'events for domain extraction');
     
+    // Log first 20 sourceUrls to see what we're working with
+    console.log('First 20 sourceUrls:');
+    events.slice(0, 20).forEach((event, index) => {
+      console.log(`${index + 1}. sourceUrl: "${event.sourceUrl}" (${typeof event.sourceUrl})`);
+    });
+    
+    // Look for any URLs containing 'catch' or 'desmoines'
+    const catchEvents = events.filter(event => 
+      event.sourceUrl && (
+        event.sourceUrl.toLowerCase().includes('catch') ||
+        event.sourceUrl.toLowerCase().includes('desmoines')
+      )
+    );
+    console.log(`Found ${catchEvents.length} events with 'catch' or 'desmoines' in sourceUrl:`);
+    catchEvents.forEach((event, index) => {
+      console.log(`${index + 1}. "${event.sourceUrl}"`);
+    });
+    
     events.forEach((event, index) => {
       if (event.sourceUrl) {
-        console.log(`Event ${index + 1} sourceUrl:`, event.sourceUrl);
-        
         try {
           const url = new URL(event.sourceUrl);
           domainSet.add(url.hostname);
