@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
@@ -265,115 +265,225 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-background safe-area-top">
-      {/* Mobile-First Admin Header */}
-      <div className="bg-card border-b mobile-padding py-3 md:py-4 sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-card/95">
-        <div className="container mx-auto">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div className="flex items-center gap-2 md:gap-3">
-              {getRoleIcon()}
-              <h1 className="text-mobile-title md:text-2xl font-bold">Admin Dashboard</h1>
+    <>
+    <div className="flex h-screen bg-background">
+      {/* Sidebar Navigation */}
+      <div className="w-64 bg-card border-r border-border flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Admin Dashboard</span>
               {getRoleBadge()}
             </div>
-            <Button 
-              variant="outline" 
-              onClick={() => navigate("/")}
-              className="touch-target self-start"
-            >
-              Back to Site
-            </Button>
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate("/")}
+            className="w-full mt-3"
+          >
+            Back to Site
+          </Button>
         </div>
+
+        {/* Navigation Menu */}
+        <nav className="flex-1 p-4 overflow-y-auto">
+          <div className="space-y-2">
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                activeTab === "overview" 
+                  ? "bg-primary text-primary-foreground" 
+                  : "hover:bg-accent hover:text-accent-foreground"
+              }`}
+            >
+              <Database className="h-4 w-4" />
+              <span>Overview</span>
+            </button>
+
+            {canManageContent() && (
+              <>
+                <div className="pt-4 pb-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Content Management
+                  </h3>
+                </div>
+                
+                <button
+                  onClick={() => setActiveTab("ai-crawler")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "ai-crawler" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Bot className="h-4 w-4" />
+                  <span>AI Crawler</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("scraping")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "scraping" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Zap className="h-4 w-4" />
+                  <span>Scraping</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("events")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "events" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Calendar className="h-4 w-4" />
+                  <span>Events</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("restaurants")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "restaurants" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Utensils className="h-4 w-4" />
+                  <span>Restaurants</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("attractions")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "attractions" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Camera className="h-4 w-4" />
+                  <span>Attractions</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("playgrounds")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "playgrounds" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Play className="h-4 w-4" />
+                  <span>Playgrounds</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("restaurant-openings")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "restaurant-openings" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Building className="h-4 w-4" />
+                  <span>Restaurant Openings</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("event-submissions")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "event-submissions" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <UserCheck className="h-4 w-4" />
+                  <span>Event Submissions</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("affiliate-manager")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "affiliate-manager" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  <span>Affiliate Links</span>
+                </button>
+              </>
+            )}
+
+            {canManageUsers() && (
+              <>
+                <div className="pt-4 pb-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    User Management
+                  </h3>
+                </div>
+                
+                <button
+                  onClick={() => setActiveTab("users")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "users" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Users className="h-4 w-4" />
+                  <span>User Management</span>
+                </button>
+              </>
+            )}
+
+            {canManageContent() && (
+              <>
+                <div className="pt-4 pb-2">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    System Tools
+                  </h3>
+                </div>
+                
+                <button
+                  onClick={() => setActiveTab("settings")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "settings" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Cog className="h-4 w-4" />
+                  <span>Settings</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("seo")}
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "seo" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  <Globe className="h-4 w-4" />
+                  <span>SEO Tools</span>
+                </button>
+              </>
+            )}
+          </div>
+        </nav>
       </div>
 
-      <div className="container mx-auto mobile-padding py-4 md:py-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Mobile-Optimized Tab Navigation */}
-          <div className="mb-4 md:mb-6 overflow-x-auto">
-            <TabsList className="flex w-max sm:w-auto gap-1 p-1">
-              <TabsTrigger value="overview" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                <Database className="h-3 w-3 md:h-4 md:w-4" />
-                <span className="hidden sm:inline">Overview</span>
-                <span className="sm:hidden">Info</span>
-              </TabsTrigger>
-              {canManageContent() && (
-                <>
-                  <TabsTrigger value="ai-crawler" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Bot className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">AI Crawler</span>
-                    <span className="sm:hidden">AI</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="scraping" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Zap className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Scraping</span>
-                    <span className="sm:hidden">Scrape</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="events" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Calendar className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Events</span>
-                    <span className="sm:hidden">Events</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="restaurants" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Utensils className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Restaurants</span>
-                    <span className="sm:hidden">Food</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="attractions" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Camera className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Attractions</span>
-                    <span className="sm:hidden">Attract</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="playgrounds" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Play className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Playgrounds</span>
-                    <span className="sm:hidden">Play</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="restaurant-openings" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Building className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Restaurant Openings</span>
-                    <span className="sm:hidden">Open</span>
-                  </TabsTrigger>
-                </>
-              )}
-              {canManageContent() && (
-                <TabsTrigger value="event-submissions" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                  <UserCheck className="h-3 w-3 md:h-4 md:w-4" />
-                  <span className="hidden sm:inline">Event Submissions</span>
-                  <span className="sm:hidden">Submissions</span>
-                </TabsTrigger>
-              )}
-              {canManageContent() && (
-                <TabsTrigger value="affiliate-manager" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                  <DollarSign className="h-3 w-3 md:h-4 md:w-4" />
-                  <span className="hidden sm:inline">Affiliate Links</span>
-                  <span className="sm:hidden">Affiliate</span>
-                </TabsTrigger>
-              )}
-              {canManageUsers() && (
-                <TabsTrigger value="users" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                  <Users className="h-3 w-3 md:h-4 md:w-4" />
-                  <span className="hidden sm:inline">User Management</span>
-                  <span className="sm:hidden">Users</span>
-                </TabsTrigger>
-              )}
-              {canManageContent() && (
-                <>
-                  <TabsTrigger value="settings" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Cog className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Settings</span>
-                    <span className="sm:hidden">Settings</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="seo" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Globe className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">SEO Tools</span>
-                    <span className="sm:hidden">SEO</span>
-                  </TabsTrigger>
-                </>
-              )}
-            </TabsList>
-          </div>
-
-          <TabsContent value="overview">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === "overview" && (
             <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               <Card>
                 <CardHeader className="mobile-padding">
@@ -447,15 +557,13 @@ export default function Admin() {
                 </CardContent>
               </Card>
             </div>
-          </TabsContent>
+          )}
 
-          {canManageContent() && (
-            <>
-              <TabsContent value="ai-crawler">
-                <AICrawler />
-              </TabsContent>
+          {canManageContent() && activeTab === "ai-crawler" && (
+            <AICrawler />
+          )}
 
-              <TabsContent value="scraping">
+          {canManageContent() && activeTab === "scraping" && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -516,9 +624,9 @@ export default function Admin() {
                     </div>
                   </CardContent>
                 </Card>
-              </TabsContent>
+          )}
 
-              <TabsContent value="events">
+          {canManageContent() && activeTab === "events" && (
                 <div className="space-y-6">
                   <DomainHighlightManager />
                   <ContentTable
@@ -535,9 +643,9 @@ export default function Admin() {
                     onRefresh={events.refetch}
                   />
                 </div>
-              </TabsContent>
+              )}
 
-              <TabsContent value="restaurants">
+              {canManageContent() && activeTab === "restaurants" && (
                 <ContentTable
                   type="restaurant"
                   items={restaurants.restaurants}
@@ -550,9 +658,9 @@ export default function Admin() {
                   onFilter={(filter) => console.log('Filter restaurants:', filter)}
                   onCreate={() => console.log('Create new restaurant')}
                 />
-              </TabsContent>
+              )}
 
-              <TabsContent value="attractions">
+              {canManageContent() && activeTab === "attractions" && (
                 <ContentTable
                   type="attraction"
                   items={attractions.attractions}
@@ -565,9 +673,9 @@ export default function Admin() {
                   onFilter={(filter) => console.log('Filter attractions:', filter)}
                   onCreate={() => console.log('Create new attraction')}
                 />
-              </TabsContent>
+              )}
 
-              <TabsContent value="playgrounds">
+              {canManageContent() && activeTab === "playgrounds" && (
                 <ContentTable
                   type="playground"
                   items={playgrounds.playgrounds}
@@ -580,9 +688,9 @@ export default function Admin() {
                   onFilter={(filter) => console.log('Filter playgrounds:', filter)}
                   onCreate={() => console.log('Create new playground')}
                 />
-              </TabsContent>
+              )}
 
-              <TabsContent value="restaurant-openings">
+              {canManageContent() && activeTab === "restaurant-openings" && (
                 <ContentTable
                   type="restaurant_opening"
                   items={restaurants.restaurants.filter(r => {
@@ -621,19 +729,21 @@ export default function Admin() {
                   onFilter={(filter) => console.log('Filter restaurant openings:', filter)}
                   onCreate={() => console.log('Create new restaurant opening')}
                 />
-              </TabsContent>
-            </>
+              )}
+
+              {canManageContent() && activeTab === "event-submissions" && (
+                <EventReviewSystem />
+              )}
+
+              {canManageContent() && activeTab === "affiliate-manager" && (
+                <AffiliateManager />
+              )}
+
+          {canManageUsers() && activeTab === "users" && (
+            <UserRoleManager />
           )}
 
-          {canManageUsers() && (
-            <TabsContent value="users">
-              <UserRoleManager />
-            </TabsContent>
-          )}
-
-          {canManageContent() && (
-            <>
-              <TabsContent value="settings">
+          {canManageContent() && activeTab === "settings" && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -662,53 +772,44 @@ export default function Admin() {
                     </div>
                   </CardContent>
                 </Card>
-              </TabsContent>
+              )}
 
-              <TabsContent value="event-submissions">
-                <EventReviewSystem />
-              </TabsContent>
-
-              <TabsContent value="affiliate-manager">
-                <AffiliateManager />
-              </TabsContent>
-
-              <TabsContent value="seo">
+              {canManageContent() && activeTab === "seo" && (
                 <SEOTools />
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
+              )}
+        </div>
       </div>
-
-      {/* Scraper Configuration Wizard */}
-      {showScraperWizard && (
-        <ScraperConfigWizard
-          onSave={(config) => {
-            console.log('Save scraper config:', config);
-            setShowScraperWizard(false);
-          }}
-          onClose={() => setShowScraperWizard(false)}
-        />
-      )}
-
-      {/* Scraping Job Manager */}
-      {showJobManager && (
-        <ScrapingJobManager 
-          isOpen={showJobManager} 
-          onClose={() => setShowJobManager(false)} 
-        />
-      )}
-
-      {/* Content Edit Dialog */}
-      {editDialog.open && editDialog.contentType && editDialog.item && (
-        <ContentEditDialog
-          open={editDialog.open}
-          onOpenChange={(open) => setEditDialog(prev => ({ ...prev, open }))}
-          contentType={editDialog.contentType}
-          item={editDialog.item}
-          onSave={handleSave}
-        />
-      )}
     </div>
+
+    {/* Scraper Configuration Wizard */}
+    {showScraperWizard && (
+      <ScraperConfigWizard
+        onSave={(config) => {
+          console.log('Save scraper config:', config);
+          setShowScraperWizard(false);
+        }}
+        onClose={() => setShowScraperWizard(false)}
+      />
+    )}
+
+    {/* Scraping Job Manager */}
+    {showJobManager && (
+      <ScrapingJobManager 
+        isOpen={showJobManager} 
+        onClose={() => setShowJobManager(false)} 
+      />
+    )}
+
+    {/* Content Edit Dialog */}
+    {editDialog.open && editDialog.contentType && editDialog.item && (
+      <ContentEditDialog
+        open={editDialog.open}
+        onOpenChange={(open) => setEditDialog(prev => ({ ...prev, open }))}
+        contentType={editDialog.contentType}
+        item={editDialog.item}
+        onSave={handleSave}
+      />
+    )}
+    </>
   );
 }
