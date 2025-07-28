@@ -123,8 +123,13 @@ export default function ContentEditDialog({
         if (field.type === "array" && !initialData[field.key]) {
           initialData[field.key] = [];
         }
+        // Ensure all configured fields exist in form data, even if null/undefined
+        if (!(field.key in initialData)) {
+          initialData[field.key] = null;
+        }
       });
       
+      console.log('Initialized form data:', initialData);
       setFormData(initialData);
     }
   }, [item, open, config.fields]);
@@ -191,7 +196,22 @@ export default function ContentEditDialog({
       delete saveData.created_at;
       delete saveData.updated_at;
 
-      console.log('Save data after processing:', saveData);
+      // Clean up the data - only include fields that are configured and not empty strings
+      const cleanedSaveData: any = {};
+      config.fields.forEach(field => {
+        const value = saveData[field.key];
+        if (value !== undefined && value !== null && value !== '') {
+          cleanedSaveData[field.key] = value;
+        } else if (field.type === "boolean") {
+          // Always include boolean fields
+          cleanedSaveData[field.key] = value || false;
+        } else if (value === '') {
+          // Convert empty strings to null for database
+          cleanedSaveData[field.key] = null;
+        }
+      });
+
+      console.log('Cleaned save data:', cleanedSaveData);
 
       const tableName = getTableName(contentType);
       console.log('Table name:', tableName);
@@ -199,7 +219,7 @@ export default function ContentEditDialog({
 
       const { error } = await supabase
         .from(tableName)
-        .update(saveData)
+        .update(cleanedSaveData)
         .eq('id', item.id);
 
       if (error) {
@@ -207,6 +227,7 @@ export default function ContentEditDialog({
         throw error;
       }
 
+      console.log('Save successful!');
       toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} updated successfully!`);
       onSave();
       onOpenChange(false);
