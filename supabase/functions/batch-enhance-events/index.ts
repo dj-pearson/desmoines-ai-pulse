@@ -46,6 +46,9 @@ async function analyzeWithClaude(searchResults: SearchResult[], fields: string[]
     throw new Error('Claude API key not configured');
   }
 
+  console.log('Claude API Key configured:', claudeApiKey ? 'Yes' : 'No');
+  console.log('Claude API Key length:', claudeApiKey?.length || 0);
+
   const prompt = `
 Based on the following search results and current event data, please extract and improve the following fields: ${fields.join(', ')}.
 
@@ -75,6 +78,17 @@ Example format:
 }
 `;
 
+  const requestBody = {
+    model: 'claude-sonnet-4-20250514',
+    max_tokens: 1000,
+    messages: [{
+      role: 'user',
+      content: prompt
+    }]
+  };
+
+  console.log('Making Claude API request with model:', requestBody.model);
+
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -82,18 +96,15 @@ Example format:
       'Authorization': `Bearer ${claudeApiKey}`,
       'anthropic-version': '2023-06-01'
     },
-    body: JSON.stringify({
-      model: 'claude-3-sonnet-20240229',
-      max_tokens: 1000,
-      messages: [{
-        role: 'user',
-        content: prompt
-      }]
-    })
+    body: JSON.stringify(requestBody)
   });
 
+  console.log('Claude API response status:', response.status);
+  
   if (!response.ok) {
-    throw new Error(`Claude API error: ${response.status}`);
+    const errorText = await response.text();
+    console.error('Claude API error response:', errorText);
+    throw new Error(`Claude API error: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
