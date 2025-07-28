@@ -30,9 +30,14 @@ const tableConfigs = {
     columns: [
       { key: "title", label: "Title", type: "text" },
       { key: "venue", label: "Venue", type: "text" },
+      { key: "location", label: "Location", type: "text" },
       { key: "date", label: "Date", type: "date" },
+      { key: "price", label: "Price", type: "text" },
       { key: "category", label: "Category", type: "badge" },
+      { key: "original_description", label: "Description", type: "truncated" },
+      { key: "source_url", label: "Source", type: "link" },
       { key: "is_featured", label: "Featured", type: "boolean" },
+      { key: "is_enhanced", label: "Enhanced", type: "boolean" },
     ],
     filters: [
       { key: "category", label: "Category", options: ["All", "Art", "Sports", "Music", "Food", "Entertainment"] },
@@ -47,6 +52,9 @@ const tableConfigs = {
       { key: "cuisine", label: "Cuisine", type: "text" },
       { key: "location", label: "Location", type: "text" },
       { key: "price_range", label: "Price", type: "badge" },
+      { key: "phone", label: "Phone", type: "text" },
+      { key: "website", label: "Website", type: "link" },
+      { key: "description", label: "Description", type: "truncated" },
       { key: "rating", label: "Rating", type: "rating" },
       { key: "is_featured", label: "Featured", type: "boolean" },
     ],
@@ -62,6 +70,8 @@ const tableConfigs = {
       { key: "name", label: "Name", type: "text" },
       { key: "type", label: "Type", type: "text" },
       { key: "location", label: "Location", type: "text" },
+      { key: "website", label: "Website", type: "link" },
+      { key: "description", label: "Description", type: "truncated" },
       { key: "rating", label: "Rating", type: "rating" },
       { key: "is_featured", label: "Featured", type: "boolean" },
     ],
@@ -76,6 +86,8 @@ const tableConfigs = {
       { key: "name", label: "Name", type: "text" },
       { key: "location", label: "Location", type: "text" },
       { key: "age_range", label: "Age Range", type: "badge" },
+      { key: "amenities", label: "Amenities", type: "array" },
+      { key: "description", label: "Description", type: "truncated" },
       { key: "rating", label: "Rating", type: "rating" },
       { key: "is_featured", label: "Featured", type: "boolean" },
     ],
@@ -92,6 +104,8 @@ const tableConfigs = {
       { key: "location", label: "Location", type: "text" },
       { key: "opening_date", label: "Opening Date", type: "date" },
       { key: "status", label: "Status", type: "badge" },
+      { key: "description", label: "Description", type: "truncated" },
+      { key: "source_url", label: "Source", type: "link" },
     ],
     filters: [
       { key: "status", label: "Status", options: ["All", "announced", "opening_soon", "soft_opening", "open", "delayed", "cancelled"] },
@@ -185,6 +199,42 @@ export default function ContentTable({
           <div className="flex items-center">
             <Star className="h-4 w-4 text-yellow-400 mr-1" />
             {value.toFixed(1)}
+          </div>
+        ) : "-";
+      
+      case "truncated":
+        return value ? (
+          <div className="max-w-[200px] truncate" title={value}>
+            {value}
+          </div>
+        ) : "-";
+      
+      case "link":
+        return value ? (
+          <a 
+            href={value} 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-blue-600 hover:text-blue-800 underline max-w-[150px] truncate block"
+            title={value}
+          >
+            {value.replace(/^https?:\/\//, '')}
+          </a>
+        ) : "-";
+      
+      case "array":
+        return value && Array.isArray(value) && value.length > 0 ? (
+          <div className="flex flex-wrap gap-1 max-w-[200px]">
+            {value.slice(0, 3).map((item, index) => (
+              <Badge key={index} variant="outline" className="text-xs">
+                {item}
+              </Badge>
+            ))}
+            {value.length > 3 && (
+              <Badge variant="outline" className="text-xs">
+                +{value.length - 3}
+              </Badge>
+            )}
           </div>
         ) : "-";
       
