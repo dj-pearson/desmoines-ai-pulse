@@ -26,6 +26,7 @@ import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import SEOStructure from "@/components/SEOStructure";
 import GEOContent from "@/components/GEOContent";
+import { AdBanner } from "@/components/AdBanner";
 
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -144,6 +145,11 @@ export default function Index() {
           </div>
         </section>
 
+        {/* Top Banner Ad Placement */}
+        <div className="mobile-padding">
+          <AdBanner placement="top_banner" className="mb-6" />
+        </div>
+
         <SearchSection onSearch={handleSearch} />
 
       {/* Mobile-Optimized All-Inclusive Dashboard */}
@@ -180,6 +186,11 @@ export default function Index() {
           )}
           <div className="mobile-padding">
             <MostSearched />
+          </div>
+          
+          {/* Below the Fold Ad Placement */}
+          <div className="mobile-padding">
+            <AdBanner placement="below_fold" className="my-8" />
           </div>
         </>
       )}

@@ -56,6 +56,136 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_creatives: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          cta_text: string | null
+          description: string | null
+          id: string
+          image_url: string | null
+          is_approved: boolean | null
+          link_url: string | null
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          cta_text?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_approved?: boolean | null
+          link_url?: string | null
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          cta_text?: string | null
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_approved?: boolean | null
+          link_url?: string | null
+          placement_type?: Database["public"]["Enums"]["placement_type"]
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_creatives_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_placements: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          daily_cost: number
+          days_count: number
+          id: string
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          total_cost: number
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          daily_cost: number
+          days_count: number
+          id?: string
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          total_cost: number
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          daily_cost?: number
+          days_count?: number
+          id?: string
+          placement_type?: Database["public"]["Enums"]["placement_type"]
+          total_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_placements_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          id: string
+          name: string
+          start_date: string | null
+          status: Database["public"]["Enums"]["campaign_status"]
+          stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
+          total_cost: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          name: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["campaign_status"]
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          total_cost?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          id?: string
+          name?: string
+          start_date?: string | null
+          status?: Database["public"]["Enums"]["campaign_status"]
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          total_cost?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       content_metrics: {
         Row: {
           content_id: string
@@ -642,6 +772,19 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      get_active_ads: {
+        Args: {
+          p_placement_type: Database["public"]["Enums"]["placement_type"]
+        }
+        Returns: {
+          id: string
+          title: string
+          description: string
+          image_url: string
+          link_url: string
+          cta_text: string
+        }[]
+      }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
@@ -659,6 +802,14 @@ export type Database = {
       }
     }
     Enums: {
+      campaign_status:
+        | "draft"
+        | "pending_payment"
+        | "pending_creative"
+        | "active"
+        | "completed"
+        | "cancelled"
+      placement_type: "top_banner" | "featured_spot" | "below_fold"
       user_role: "user" | "moderator" | "admin" | "root_admin"
     }
     CompositeTypes: {
@@ -787,6 +938,15 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      campaign_status: [
+        "draft",
+        "pending_payment",
+        "pending_creative",
+        "active",
+        "completed",
+        "cancelled",
+      ],
+      placement_type: ["top_banner", "featured_spot", "below_fold"],
       user_role: ["user", "moderator", "admin", "root_admin"],
     },
   },

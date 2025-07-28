@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { Link } from "react-router-dom";
 import { User, LogOut, Settings, Shield, Menu, Calendar, MapPin, Camera, Gamepad2 } from "lucide-react";
+import { AdvertiseButton } from "./AdvertiseButton";
 
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
@@ -160,6 +161,7 @@ export default function Header() {
 
             {/* Desktop User Actions */}
             <div className="hidden lg:flex items-center gap-3">
+              <AdvertiseButton />
               {isAuthenticated ? (
                 <>
                   {isAdmin && (
