@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useEvents } from "@/hooks/useEvents";
-import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
+import { useRestaurantOpenings } from "@/hooks/useSupabase";
 import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,7 +34,7 @@ interface AllInclusiveDashboardProps {
 export default function AllInclusiveDashboard({ onViewEventDetails, filters }: AllInclusiveDashboardProps) {
   // Get base data without filtering first
   const { events: allEvents, isLoading: eventsLoading } = useEvents({ limit: 100 });
-  const { restaurantOpenings: allRestaurantOpenings, isLoading: restaurantsLoading } = useRestaurantOpenings({ limit: 100 });
+  const { data: allRestaurantOpenings = [], isLoading: restaurantsLoading } = useRestaurantOpenings();
   const { attractions: allAttractions, isLoading: attractionsLoading } = useAttractions({ limit: 100 });
   const { playgrounds: allPlaygrounds, isLoading: playgroundsLoading } = usePlaygrounds({ limit: 100 });
 
