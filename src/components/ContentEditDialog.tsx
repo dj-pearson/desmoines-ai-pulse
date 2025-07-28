@@ -196,39 +196,17 @@ export default function ContentEditDialog({
       delete saveData.created_at;
       delete saveData.updated_at;
 
-      // Clean up the data - only include fields that are configured and not empty strings
-      const cleanedSaveData: any = {};
-      config.fields.forEach(field => {
-        const value = saveData[field.key];
-        if (value !== undefined && value !== null && value !== '') {
-          cleanedSaveData[field.key] = value;
-        } else if (field.type === "boolean") {
-          // Always include boolean fields
-          cleanedSaveData[field.key] = value || false;
-        } else if (value === '') {
-          // Convert empty strings to null for database
-          cleanedSaveData[field.key] = null;
-        }
-      });
-
-      console.log('Cleaned save data:', cleanedSaveData);
+      console.log('Save data after processing:', saveData);
 
       const tableName = getTableName(contentType);
       console.log('Table name:', tableName);
       console.log('Item ID:', item.id);
 
-      // Log the exact query being sent
-      console.log('About to send update query:', {
-        table: tableName,
-        data: cleanedSaveData,
-        where: { id: item.id }
-      });
-
       const { data: result, error } = await supabase
         .from(tableName)
-        .update(cleanedSaveData)
+        .update(saveData)
         .eq('id', item.id)
-        .select(); // Add select to return the updated data
+        .select();
 
       console.log('Supabase response:', { result, error });
 
