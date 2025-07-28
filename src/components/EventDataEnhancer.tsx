@@ -66,8 +66,12 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     domainSet.add("catchdesmoines.com");
     domainSet.add("www.catchdesmoines.com");
     
-    events.forEach(event => {
+    console.log('EventDataEnhancer: Processing', events.length, 'events for domain extraction');
+    
+    events.forEach((event, index) => {
       if (event.sourceUrl) {
+        console.log(`Event ${index + 1} sourceUrl:`, event.sourceUrl);
+        
         try {
           const url = new URL(event.sourceUrl);
           domainSet.add(url.hostname);
@@ -75,12 +79,16 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
           // Try to extract domain from malformed URLs
           const match = event.sourceUrl.match(/(?:https?:\/\/)?(?:www\.)?([^\/\s]+)/);
           if (match && match[1]) {
+            console.log(`Extracted domain from malformed URL: ${match[1]}`);
             domainSet.add(match[1]);
           }
         }
       }
     });
-    return Array.from(domainSet).sort();
+    
+    const domainsArray = Array.from(domainSet).sort();
+    console.log('Final domains array:', domainsArray);
+    return domainsArray;
   }, [events]);
 
   // Filter events by selected domain (using custom domain if provided)
@@ -111,17 +119,32 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
   const domainEventCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     domains.forEach(domain => {
-      counts[domain] = events.filter(event => {
+      const matchingEvents = events.filter(event => {
         if (!event.sourceUrl) return false;
         
         // More flexible domain matching
         const normalizedUrl = event.sourceUrl.toLowerCase();
         const normalizedDomain = domain.toLowerCase();
         
-        return normalizedUrl.includes(normalizedDomain) ||
+        const matches = normalizedUrl.includes(normalizedDomain) ||
                normalizedUrl.includes(`www.${normalizedDomain}`) ||
                normalizedUrl.includes(normalizedDomain.replace('www.', ''));
-      }).length;
+        
+        if (domain.includes('catchdesmoines') && matches) {
+          console.log(`Found catchdesmoines match: ${event.sourceUrl} matches domain ${domain}`);
+        }
+        
+        return matches;
+      });
+      
+      counts[domain] = matchingEvents.length;
+      
+      if (domain.includes('catchdesmoines')) {
+        console.log(`Domain ${domain} has ${counts[domain]} events`);
+        if (matchingEvents.length > 0) {
+          console.log('Sample URLs:', matchingEvents.slice(0, 3).map(e => e.sourceUrl));
+        }
+      }
     });
     return counts;
   }, [events, domains]);
