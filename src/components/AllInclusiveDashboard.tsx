@@ -341,7 +341,11 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
   };
 
   const renderCard = (item: any) => {
-    const Icon = item.icon;
+    // Ensure icon exists, provide default based on type if missing
+    const Icon = item.icon || (item.type === 'event' ? Calendar : 
+                              item.type === 'restaurant' ? Utensils :
+                              item.type === 'attraction' ? Palette :
+                              item.type === 'playground' ? TreePine : Calendar);
     
     const handleCardClick = () => {
       // Track view event
