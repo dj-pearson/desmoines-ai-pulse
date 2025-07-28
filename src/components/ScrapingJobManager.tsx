@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -22,6 +23,7 @@ import {
 } from "lucide-react";
 import { useScraping } from "@/hooks/useScraping";
 import { useToast } from "@/components/ui/use-toast";
+import { scheduleOptions, cronToFriendly, friendlyToCron } from "@/lib/cronUtils";
 
 interface ScrapingJob {
   id: string;
@@ -42,6 +44,7 @@ interface JobFormData {
   name?: string;
   url?: string;
   schedule?: string;
+  scheduleType?: string; // friendly schedule type
   isActive?: boolean;
   selectors?: Record<string, string>;
 }
@@ -62,10 +65,15 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
 
   const handleEditJob = (job: ScrapingJob) => {
     setEditingJob(job);
+    
+    // Find the schedule type from the cron expression
+    const scheduleType = scheduleOptions.find(opt => opt.cron === job.config.schedule)?.value || 'custom';
+    
     setFormData({
       name: job.name,
       url: job.config.url || "",
       schedule: job.config.schedule || "",
+      scheduleType: scheduleType,
       isActive: job.config.isActive || false,
       selectors: { ...(job.config.selectors || {}) },
     });
@@ -82,9 +90,14 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
     }
 
     try {
+      // Convert friendly schedule type to cron expression
+      const cronExpression = formData.scheduleType === 'custom' 
+        ? formData.schedule || "" 
+        : friendlyToCron(formData.scheduleType || "never");
+
       await updateJobConfig(editingJob.id, {
         url: formData.url,
-        schedule: formData.schedule || editingJob.config.schedule || "",
+        schedule: cronExpression,
         isActive: formData.isActive ?? editingJob.config.isActive ?? true,
         selectors: formData.selectors || editingJob.config.selectors || {},
       });
@@ -178,7 +191,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                         <p className="font-medium text-gray-600">Schedule:</p>
                         <p className="flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {job.config.schedule}
+                          {cronToFriendly(job.config.schedule || "")}
                         </p>
                       </div>
                       <div>
@@ -263,18 +276,59 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                 </div>
 
                 <div>
-                  <Label htmlFor="job-schedule">Schedule (Cron Expression)</Label>
-                  <Input
-                    id="job-schedule"
-                    value={formData.schedule || ""}
-                    onChange={(e) =>
-                      setFormData({ ...formData, schedule: e.target.value })
-                    }
-                    placeholder="0 */6 * * * (every 6 hours)"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Use cron syntax: minute hour day month weekday
-                  </p>
+                  <Label htmlFor="job-schedule">Schedule</Label>
+                  <Select 
+                    value={formData.scheduleType || "never"} 
+                    onValueChange={(value) => {
+                      setFormData({ 
+                        ...formData, 
+                        scheduleType: value,
+                        schedule: value === 'custom' ? formData.schedule : friendlyToCron(value)
+                      });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select schedule frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {scheduleOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex flex-col">
+                            <span>{option.label}</span>
+                            <span className="text-xs text-muted-foreground">{option.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="custom">
+                        <div className="flex flex-col">
+                          <span>Custom</span>
+                          <span className="text-xs text-muted-foreground">Enter custom cron expression</span>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  {formData.scheduleType === 'custom' && (
+                    <div className="mt-2">
+                      <Input
+                        id="job-schedule-custom"
+                        value={formData.schedule || ""}
+                        onChange={(e) =>
+                          setFormData({ ...formData, schedule: e.target.value })
+                        }
+                        placeholder="0 */6 * * * (custom cron expression)"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Use cron syntax: minute hour day month weekday
+                      </p>
+                    </div>
+                  )}
+                  
+                  {formData.scheduleType && formData.scheduleType !== 'custom' && formData.scheduleType !== 'never' && (
+                    <p className="text-xs text-green-600 mt-1">
+                      Cron expression: {friendlyToCron(formData.scheduleType)}
+                    </p>
+                  )}
                 </div>
 
                 <Alert>

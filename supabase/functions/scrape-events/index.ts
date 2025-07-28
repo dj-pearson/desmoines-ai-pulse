@@ -1760,6 +1760,22 @@ serve(async (req) => {
 
     // Handle main scraping endpoint (existing functionality)
     console.log("Starting event scraping process...");
+    
+    // Parse request body to check for specific jobId
+    let requestBody: any = {};
+    try {
+      if (req.method === "POST") {
+        const text = await req.text();
+        if (text) {
+          requestBody = JSON.parse(text);
+        }
+      }
+    } catch (parseError) {
+      console.log("No valid JSON body found, proceeding with all jobs");
+    }
+
+    const { jobId } = requestBody;
+    console.log(`Specific jobId requested: ${jobId || 'none (will process all jobs)'}`);
 
     // Check for authorization header or specific trigger
     const authHeader = req.headers.get("authorization");
@@ -1842,11 +1858,22 @@ serve(async (req) => {
 
     // Fetch active scraping jobs from database
     console.log("Fetching scraping jobs from database...");
-    const { data: scrapingJobs, error: jobsError } = await supabase
+    
+    let jobsQuery = supabase
       .from("scraping_jobs")
       .select("*")
-      .eq("status", "idle")
-      .limit(10); // Increase limit since we're optimizing
+      .eq("status", "idle");
+    
+    // If specific jobId is requested, filter for that job only
+    if (jobId) {
+      console.log(`Filtering for specific job: ${jobId}`);
+      jobsQuery = jobsQuery.eq("id", jobId);
+    } else {
+      console.log("No specific jobId, will fetch all active jobs");
+      jobsQuery = jobsQuery.limit(10); // Limit only when processing all jobs
+    }
+    
+    const { data: scrapingJobs, error: jobsError } = await jobsQuery;
 
     if (jobsError) {
       console.error("Error fetching scraping jobs:", jobsError);
@@ -1854,11 +1881,14 @@ serve(async (req) => {
     }
 
     if (!scrapingJobs || scrapingJobs.length === 0) {
-      console.log("No active scraping jobs found");
+      const message = jobId 
+        ? `No scraping job found with ID: ${jobId}`
+        : "No active scraping jobs found";
+      console.log(message);
       return new Response(
         JSON.stringify({
           success: true,
-          message: "No active scraping jobs found",
+          message,
           events_processed: 0,
         }),
         {
