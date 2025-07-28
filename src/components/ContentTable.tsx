@@ -56,6 +56,8 @@ const tableConfigs = {
       { key: "cuisine", label: "Cuisine", type: "text" },
       { key: "location", label: "Location", type: "text" },
       { key: "price_range", label: "Price", type: "badge" },
+      { key: "opening_date", label: "Opening Date", type: "date" },
+      { key: "status", label: "Status", type: "badge" },
       { key: "phone", label: "Phone", type: "text" },
       { key: "website", label: "Website", type: "link" },
       { key: "description", label: "Description", type: "truncated" },
@@ -65,6 +67,7 @@ const tableConfigs = {
     filters: [
       { key: "cuisine", label: "Cuisine", options: ["All", "American", "Italian", "Mexican", "Asian", "Other"] },
       { key: "price_range", label: "Price Range", options: ["All", "$", "$$", "$$$", "$$$$"] },
+      { key: "status", label: "Status", options: ["All", "open", "opening_soon", "newly_opened", "announced", "closed"] },
     ]
   },
   attraction: {

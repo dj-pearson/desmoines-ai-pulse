@@ -6,7 +6,16 @@ import { useRestaurantOpenings } from "@/hooks/useSupabase";
 const statusConfig = {
   opening_soon: { label: "Opening Soon", color: "bg-yellow-500" },
   newly_opened: { label: "Newly Opened", color: "bg-green-500" },
-  announced: { label: "Announced", color: "bg-blue-500" }
+  announced: { label: "Announced", color: "bg-blue-500" },
+  open: { label: "Open", color: "bg-green-600" },
+  closed: { label: "Closed", color: "bg-red-500" }
+};
+
+const getStatusConfig = (status: string | undefined) => {
+  if (!status || !statusConfig[status as keyof typeof statusConfig]) {
+    return { label: "Status Unknown", color: "bg-gray-500" };
+  }
+  return statusConfig[status as keyof typeof statusConfig];
 };
 
 export function RestaurantOpenings() {
@@ -68,9 +77,9 @@ export function RestaurantOpenings() {
                 </CardTitle>
                 <Badge 
                   variant="secondary" 
-                  className={`${statusConfig[opening.status].color} text-white text-xs flex-shrink-0`}
+                  className={`${getStatusConfig(opening.status).color} text-white text-xs flex-shrink-0`}
                 >
-                  {statusConfig[opening.status].label}
+                  {getStatusConfig(opening.status).label}
                 </Badge>
               </div>
               
