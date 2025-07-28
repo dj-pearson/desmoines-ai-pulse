@@ -165,7 +165,7 @@ export default function ContentEditDialog({
       case 'event': return 'events';
       case 'attraction': return 'attractions';
       case 'playground': return 'playgrounds';
-      case 'restaurant_opening': return 'restaurant_openings';
+      case 'restaurant_opening': return 'restaurants'; // Restaurant openings are stored in restaurants table
       default: 
         throw new Error(`Unknown content type: ${type}`);
     }
