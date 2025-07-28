@@ -81,55 +81,64 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   };
 
   return (
-    <section className="py-20 bg-gradient-to-r from-primary to-primary/80">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-4xl md:text-6xl font-bold text-white mb-6">
+    <section className="py-12 md:py-20 bg-gradient-to-r from-primary to-primary/80 mobile-padding">
+      <div className="container mx-auto text-center">
+        <h2 className="text-mobile-title md:text-4xl lg:text-6xl font-bold text-primary-foreground mb-4 md:mb-6">
           Discover Des Moines
         </h2>
-        <p className="text-xl text-white/90 mb-12">
+        <p className="text-mobile-body md:text-xl text-primary-foreground/90 mb-8 md:mb-12 max-w-2xl mx-auto">
           Your AI-powered guide to events, dining, and attractions in the capital city
         </p>
         
-        <form onSubmit={handleSearch} className="space-y-6 max-w-4xl mx-auto">
-          {/* Main search bar */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <Input
-                type="text"
-                placeholder="Search events, restaurants, attractions..."
-                value={query}
-                onChange={handleQueryChange}
-                className="h-12 text-lg bg-white/95 backdrop-blur"
-              />
+        <form onSubmit={handleSearch} className="space-y-4 md:space-y-6 max-w-4xl mx-auto">
+          {/* Mobile-First Main search bar */}
+          <div className="flex flex-col gap-3 md:gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  placeholder="Search events, restaurants, attractions..."
+                  value={query}
+                  onChange={handleQueryChange}
+                  className="touch-target text-base md:text-lg bg-background/95 backdrop-blur border-0 focus:ring-2 focus:ring-primary-foreground"
+                />
+              </div>
+              <Select value={category} onValueChange={handleCategoryChange}>
+                <SelectTrigger className="touch-target w-full sm:w-48 bg-background/95 backdrop-blur border-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Categories</SelectItem>
+                  <SelectItem value="Events">Events</SelectItem>
+                  <SelectItem value="Restaurants">Restaurants</SelectItem>
+                  <SelectItem value="Attractions">Attractions</SelectItem>
+                  <SelectItem value="Playgrounds">Playgrounds</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <Select value={category} onValueChange={handleCategoryChange}>
-              <SelectTrigger className="h-12 w-full sm:w-48 bg-white/95 backdrop-blur">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="All">All Categories</SelectItem>
-                <SelectItem value="Events">Events</SelectItem>
-                <SelectItem value="Restaurants">Restaurants</SelectItem>
-                <SelectItem value="Attractions">Attractions</SelectItem>
-                <SelectItem value="Playgrounds">Playgrounds</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button type="submit" size="lg" className="h-12 px-8 bg-accent hover:bg-green-700 text-white">
+            
+            <Button type="submit" size="lg" className="touch-target bg-secondary hover:bg-secondary/90 text-secondary-foreground font-semibold">
               <Search className="h-5 w-5 mr-2" />
               Search
             </Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <InteractiveDateSelector 
-              onDateChange={handleDateFilterChange}
-              className="w-full"
-            />
+          {/* Mobile-Optimized Filters */}
+          <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+            <div className="space-y-2">
+              <InteractiveDateSelector 
+                onDateChange={handleDateFilterChange}
+                className="w-full"
+              />
+            </div>
 
-            <div className="flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-white/70" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-primary-foreground/70 text-mobile-caption">
+                <MapPin className="h-4 w-4" />
+                <span>Location</span>
+              </div>
               <Select value={location} onValueChange={handleLocationChange}>
-                <SelectTrigger className="bg-white/95 backdrop-blur">
+                <SelectTrigger className="bg-background/95 backdrop-blur border-0 touch-target">
                   <SelectValue placeholder="Any location" />
                 </SelectTrigger>
                 <SelectContent>
@@ -143,10 +152,13 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
               </Select>
             </div>
 
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-5 w-5 text-white/70" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-primary-foreground/70 text-mobile-caption">
+                <DollarSign className="h-4 w-4" />
+                <span>Price Range</span>
+              </div>
               <Select value={priceRange} onValueChange={handlePriceChange}>
-                <SelectTrigger className="bg-white/95 backdrop-blur">
+                <SelectTrigger className="bg-background/95 backdrop-blur border-0 touch-target">
                   <SelectValue placeholder="Any price" />
                 </SelectTrigger>
                 <SelectContent>

@@ -111,32 +111,34 @@ export default function Index() {
       <main role="main" itemScope itemType="https://schema.org/WebPage">
         <Header />
         
-        {/* Hero section with structured data */}
-        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+        {/* Mobile-First Hero section with structured data */}
+        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 mobile-padding py-8 md:py-16 safe-area-top">
+          <div className="container mx-auto text-center">
+            <h1 className="text-mobile-hero md:text-4xl lg:text-6xl font-bold text-foreground mb-4 md:mb-6 leading-tight">
               Discover Des Moines Like Never Before
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+            <p className="text-mobile-body md:text-xl text-muted-foreground mb-6 md:mb-8 max-w-3xl mx-auto px-4">
               Your AI-powered guide to the best events, restaurants, attractions, and family activities 
               in Des Moines, Iowa. Real-time updates, personalized recommendations, and comprehensive local insights.
             </p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 text-center">
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">500+</div>
-                <p className="text-sm text-muted-foreground">Events Monthly</p>
+            
+            {/* Mobile-Optimized Stats Grid */}
+            <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mt-8 md:mt-12">
+              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
+                <div className="text-2xl md:text-3xl font-bold text-primary">500+</div>
+                <p className="text-mobile-caption text-muted-foreground">Events Monthly</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">200+</div>
-                <p className="text-sm text-muted-foreground">Restaurants</p>
+              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
+                <div className="text-2xl md:text-3xl font-bold text-primary">200+</div>
+                <p className="text-mobile-caption text-muted-foreground">Restaurants</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">50+</div>
-                <p className="text-sm text-muted-foreground">Attractions</p>
+              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
+                <div className="text-2xl md:text-3xl font-bold text-primary">50+</div>
+                <p className="text-mobile-caption text-muted-foreground">Attractions</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">100+</div>
-                <p className="text-sm text-muted-foreground">Playgrounds</p>
+              <div className="bg-background/50 backdrop-blur rounded-lg p-4 space-y-2">
+                <div className="text-2xl md:text-3xl font-bold text-primary">100+</div>
+                <p className="text-mobile-caption text-muted-foreground">Playgrounds</p>
               </div>
             </div>
           </div>
@@ -144,8 +146,8 @@ export default function Index() {
 
         <SearchSection onSearch={handleSearch} />
 
-      {/* All-Inclusive Dashboard */}
-      <div id="events">
+      {/* Mobile-Optimized All-Inclusive Dashboard */}
+      <div id="events" className="mobile-padding">
         <AllInclusiveDashboard 
           onViewEventDetails={handleViewEventDetails} 
           filters={searchFilters}
@@ -155,17 +157,19 @@ export default function Index() {
       {!showAllEvents && (
         <>
           {isAuthenticated ? (
-            <PersonalizedDashboard onViewEventDetails={handleViewEventDetails} />
+            <div className="mobile-padding">
+              <PersonalizedDashboard onViewEventDetails={handleViewEventDetails} />
+            </div>
           ) : (
             <>
-              {/* Smart Event Navigation for General Users */}
-              <section className="py-8">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                  <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+              {/* Mobile-First Smart Event Navigation for General Users */}
+              <section className="py-6 md:py-8 mobile-padding">
+                <div className="container mx-auto">
+                  <div className="text-center mb-6 md:mb-8">
+                    <h2 className="text-mobile-title md:text-3xl font-bold text-foreground mb-3 md:mb-4">
                       Discover Amazing Events
                     </h2>
-                    <p className="text-lg text-gray-600 dark:text-gray-300">
+                    <p className="text-mobile-body md:text-lg text-muted-foreground max-w-2xl mx-auto">
                       Find exactly what you're looking for with smart filtering and recommendations
                     </p>
                   </div>
@@ -174,28 +178,34 @@ export default function Index() {
               </section>
             </>
           )}
-          <MostSearched />
+          <div className="mobile-padding">
+            <MostSearched />
+          </div>
         </>
       )}
 
       {showAllEvents && (
-        <div className="py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
-            <div className="flex items-center justify-between">
-              <Button variant="outline" onClick={() => setShowAllEvents(false)}>
+        <div className="py-6 md:py-8 mobile-padding">
+          <div className="container mx-auto mb-6 md:mb-8">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowAllEvents(false)}
+                className="touch-target"
+              >
                 ← Back to Smart Discovery
               </Button>
               <Button
                 onClick={handleScrapeEvents}
                 disabled={scrapeMutation.isPending}
-                className="bg-accent hover:bg-green-700 text-white"
+                className="bg-accent hover:bg-accent/90 text-white touch-target"
               >
                 <Sparkles className="h-4 w-4 mr-2" />
                 {scrapeMutation.isPending ? "Updating..." : "Update Events"}
               </Button>
             </div>
           </div>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="container mx-auto">
             <EventFilters onViewEventDetails={handleViewEventDetails} />
           </div>
         </div>
@@ -210,23 +220,23 @@ export default function Index() {
         <Footer />
       </main>
 
-      {/* Event Details Dialog */}
+      {/* Mobile-Optimized Event Details Dialog */}
       <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto m-2">
           {selectedEvent && (
             <>
-              <DialogHeader>
-                <DialogTitle className="text-2xl font-bold">
+              <DialogHeader className="text-left space-y-2">
+                <DialogTitle className="text-mobile-title md:text-2xl font-bold pr-8">
                   {selectedEvent.title}
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="space-y-4">
+              <div className="space-y-4 md:space-y-6">
                 {selectedEvent.image_url && (
                   <img
                     src={selectedEvent.image_url}
                     alt={selectedEvent.title}
-                    className="w-full h-64 object-cover rounded-lg"
+                    className="w-full h-48 md:h-64 object-cover rounded-lg"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.style.display = "none";
@@ -234,40 +244,40 @@ export default function Index() {
                   />
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center text-neutral-600">
-                    <Calendar className="h-5 w-5 mr-2" />
-                    <span>{formatEventDate(selectedEvent.date)}</span>
+                <div className="mobile-grid sm:grid-cols-2 gap-3 md:gap-4">
+                  <div className="flex items-center text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                    <Calendar className="h-5 w-5 mr-2 flex-shrink-0" />
+                    <span className="text-mobile-caption md:text-sm">{formatEventDate(selectedEvent.date)}</span>
                   </div>
 
-                  <div className="flex items-center text-neutral-600">
-                    <MapPin className="h-5 w-5 mr-2" />
-                    <span>{selectedEvent.location}</span>
+                  <div className="flex items-center text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                    <MapPin className="h-5 w-5 mr-2 flex-shrink-0" />
+                    <span className="text-mobile-caption md:text-sm truncate">{selectedEvent.location}</span>
                   </div>
                 </div>
 
                 {selectedEvent.venue && (
-                  <div>
-                    <h4 className="font-semibold mb-2">Venue</h4>
-                    <p className="text-neutral-600">{selectedEvent.venue}</p>
+                  <div className="p-3 bg-muted/30 rounded-lg">
+                    <h4 className="font-semibold mb-2 text-mobile-body">Venue</h4>
+                    <p className="text-muted-foreground text-mobile-caption">{selectedEvent.venue}</p>
                   </div>
                 )}
 
                 {selectedEvent.price && (
-                  <div>
-                    <h4 className="font-semibold mb-2">Price</h4>
-                    <p className="text-neutral-600">{selectedEvent.price}</p>
+                  <div className="p-3 bg-muted/30 rounded-lg">
+                    <h4 className="font-semibold mb-2 text-mobile-body">Price</h4>
+                    <p className="text-muted-foreground text-mobile-caption">{selectedEvent.price}</p>
                   </div>
                 )}
 
-                <div>
-                  <h4 className="font-semibold mb-2">Description</h4>
-                  <p className="text-neutral-600 leading-relaxed">
+                <div className="p-3 bg-muted/30 rounded-lg">
+                  <h4 className="font-semibold mb-2 text-mobile-body">Description</h4>
+                  <p className="text-muted-foreground leading-relaxed text-mobile-caption">
                     {selectedEvent.enhanced_description ||
                       selectedEvent.original_description}
                   </p>
                   {selectedEvent.is_enhanced && (
-                    <p className="text-sm text-accent mt-2 flex items-center">
+                    <p className="text-sm text-primary mt-2 flex items-center">
                       <Sparkles className="h-4 w-4 mr-1" />
                       Enhanced with AI
                     </p>
@@ -276,7 +286,7 @@ export default function Index() {
 
                 {selectedEvent.source_url && (
                   <div className="pt-4 border-t">
-                    <Button asChild className="w-full">
+                    <Button asChild className="w-full touch-target">
                       <a
                         href={selectedEvent.source_url}
                         target="_blank"
