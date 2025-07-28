@@ -172,6 +172,9 @@ export default function ContentEditDialog({
       // Prepare data for save
       const saveData = { ...formData };
       
+      console.log('Original form data:', formData);
+      console.log('Content type:', contentType);
+      
       // Format dates properly
       config.fields.forEach(field => {
         if ((field.type === "date" || field.type === "datetime") && saveData[field.key]) {
@@ -188,13 +191,21 @@ export default function ContentEditDialog({
       delete saveData.created_at;
       delete saveData.updated_at;
 
+      console.log('Save data after processing:', saveData);
+
       const tableName = getTableName(contentType);
+      console.log('Table name:', tableName);
+      console.log('Item ID:', item.id);
+
       const { error } = await supabase
         .from(tableName)
         .update(saveData)
         .eq('id', item.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
       toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} updated successfully!`);
       onSave();
