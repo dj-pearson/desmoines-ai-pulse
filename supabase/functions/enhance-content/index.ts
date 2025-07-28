@@ -134,8 +134,20 @@ Only return the JSON object with fields that have accurate information. If you c
   const enhancedContent = aiResponse.content[0].text;
   
   try {
-    // Parse the AI response as JSON
-    const cleanedResponse = enhancedContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    // Parse the AI response as JSON - handle both wrapped and unwrapped JSON
+    let cleanedResponse = enhancedContent.trim();
+    
+    // Remove markdown code blocks if present
+    cleanedResponse = cleanedResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '');
+    
+    // Try to extract just the JSON object by finding the first { and last }
+    const firstBrace = cleanedResponse.indexOf('{');
+    const lastBrace = cleanedResponse.lastIndexOf('}');
+    
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanedResponse = cleanedResponse.substring(firstBrace, lastBrace + 1);
+    }
+    
     return JSON.parse(cleanedResponse);
   } catch (parseError) {
     console.error('Failed to parse AI response:', enhancedContent);
