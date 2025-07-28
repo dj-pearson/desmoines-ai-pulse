@@ -31,7 +31,7 @@ import { toast } from "sonner";
 interface UniqueURL {
   domain: string;
   originalUrl: string;
-  affiliateUrl: string;
+  utmParameters: string;
   categories: string[];
   count: number;
   isProcessing: boolean;
@@ -106,7 +106,7 @@ export default function AffiliateManager() {
                   urlMap.set(key, {
                     domain,
                     originalUrl: url,
-                    affiliateUrl: '',
+                    utmParameters: '',
                     categories: [config.table],
                     count: 1,
                     isProcessing: false
@@ -129,21 +129,44 @@ export default function AffiliateManager() {
     }
   };
 
-  // Update affiliate URL for a domain
-  const updateAffiliateUrl = (domain: string, affiliateUrl: string) => {
+  // Update UTM parameters for a domain
+  const updateUtmParameters = (domain: string, utmParameters: string) => {
     setUniqueUrls(prev => 
       prev.map(url => 
         url.domain === domain 
-          ? { ...url, affiliateUrl } 
+          ? { ...url, utmParameters } 
           : url
       )
     );
   };
 
-  // Process affiliate URL replacement for a specific domain
-  const processAffiliateReplacement = async (urlData: UniqueURL) => {
-    if (!urlData.affiliateUrl.trim()) {
-      toast.error('Please enter an affiliate URL');
+  // Helper function to append UTM parameters to a URL
+  const appendUtmToUrl = (originalUrl: string, utmParameters: string): string => {
+    if (!utmParameters.trim()) return originalUrl;
+    
+    try {
+      const url = new URL(originalUrl.startsWith('http') ? originalUrl : `https://${originalUrl}`);
+      
+      // Parse UTM parameters
+      const utmString = utmParameters.startsWith('?') ? utmParameters.substring(1) : utmParameters;
+      const utmParams = new URLSearchParams(utmString);
+      
+      // Add UTM parameters to the URL
+      utmParams.forEach((value, key) => {
+        url.searchParams.set(key, value);
+      });
+      
+      return url.toString();
+    } catch (error) {
+      console.error('Error appending UTM parameters:', error);
+      return originalUrl;
+    }
+  };
+
+  // Process UTM parameter addition for a specific domain
+  const processUtmParameterAddition = async (urlData: UniqueURL) => {
+    if (!urlData.utmParameters.trim()) {
+      toast.error('Please enter UTM parameters');
       return;
     }
 
@@ -159,7 +182,7 @@ export default function AffiliateManager() {
     try {
       let totalUpdated = 0;
       const domain = urlData.domain;
-      const newAffiliateUrl = urlData.affiliateUrl;
+      const utmParameters = urlData.utmParameters;
 
       // Define tables and their URL columns
       const tableConfigs = [
@@ -192,9 +215,11 @@ export default function AffiliateManager() {
               return url && extractDomain(url) === domain;
             });
 
-            // Update each matching record
+            // Update each matching record with UTM parameters
             for (const record of recordsToUpdate) {
-              const updateData = { [column]: newAffiliateUrl };
+              const originalUrl = record[column];
+              const urlWithUtm = appendUtmToUrl(originalUrl, utmParameters);
+              const updateData = { [column]: urlWithUtm };
               
               const { error: updateError } = await supabase
                 .from(config.table)
@@ -211,7 +236,7 @@ export default function AffiliateManager() {
         }
       }
 
-      toast.success(`Successfully updated ${totalUpdated} URLs for ${domain}`);
+      toast.success(`Successfully added UTM parameters to ${totalUpdated} URLs for ${domain}`);
       
       // Update stats
       setProcessingStats(prev => ({
@@ -224,8 +249,8 @@ export default function AffiliateManager() {
       await fetchUniqueUrls();
 
     } catch (error) {
-      console.error('Error processing affiliate replacement:', error);
-      toast.error('Failed to update URLs');
+      console.error('Error processing UTM parameter addition:', error);
+      toast.error('Failed to add UTM parameters');
       
       setProcessingStats(prev => ({
         ...prev,
@@ -273,10 +298,10 @@ export default function AffiliateManager() {
         <div>
           <h2 className="text-2xl font-bold flex items-center gap-2">
             <DollarSign className="h-6 w-6 text-green-600" />
-            Affiliate Link Manager
+            UTM Parameter Manager
           </h2>
           <p className="text-muted-foreground">
-            Manage and update affiliate URLs across all content tables
+            Add UTM tracking parameters to URLs across all content tables
           </p>
         </div>
         <Button onClick={handleRefresh} disabled={isRefreshing} variant="outline">
@@ -341,17 +366,17 @@ export default function AffiliateManager() {
         <AlertTriangle className="h-4 w-4" />
         <AlertDescription>
           <strong>How it works:</strong> This tool finds all unique domains from your content tables. 
-          Enter your affiliate URL (with UTM parameters) for each domain, then click "Update URLs" 
-          to replace all matching URLs across events, restaurants, attractions, playgrounds, and restaurant openings.
+          Enter UTM parameters (e.g., ?utm_source=desmoinesinsider&utm_medium=website&utm_campaign=events) for each domain, 
+          then click "Add UTM Parameters" to append tracking parameters to all matching URLs across events, restaurants, attractions, playgrounds, and restaurant openings.
         </AlertDescription>
       </Alert>
 
       {/* URL Management Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Domain Management</CardTitle>
+          <CardTitle>UTM Parameter Management</CardTitle>
           <CardDescription>
-            Manage affiliate URLs for each unique domain found in your content
+            Add UTM tracking parameters to URLs for each unique domain found in your content
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -364,7 +389,7 @@ export default function AffiliateManager() {
                     <TableHead>Sample URL</TableHead>
                     <TableHead>Categories</TableHead>
                     <TableHead>Count</TableHead>
-                    <TableHead>Affiliate URL</TableHead>
+                    <TableHead>UTM Parameters</TableHead>
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -396,28 +421,28 @@ export default function AffiliateManager() {
                       </TableCell>
                       <TableCell>
                         <Input
-                          placeholder="https://example.com?utm_source=desmoinesinsider"
-                          value={urlData.affiliateUrl}
-                          onChange={(e) => updateAffiliateUrl(urlData.domain, e.target.value)}
+                          placeholder="?utm_source=desmoinesinsider&utm_medium=website&utm_campaign=events"
+                          value={urlData.utmParameters}
+                          onChange={(e) => updateUtmParameters(urlData.domain, e.target.value)}
                           disabled={urlData.isProcessing}
-                          className="min-w-64"
+                          className="min-w-96"
                         />
                       </TableCell>
                       <TableCell>
                         <Button
-                          onClick={() => processAffiliateReplacement(urlData)}
-                          disabled={urlData.isProcessing || !urlData.affiliateUrl.trim()}
+                          onClick={() => processUtmParameterAddition(urlData)}
+                          disabled={urlData.isProcessing || !urlData.utmParameters.trim()}
                           size="sm"
                         >
                           {urlData.isProcessing ? (
                             <>
                               <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              Updating...
+                              Adding...
                             </>
                           ) : (
                             <>
                               <Save className="h-4 w-4 mr-2" />
-                              Update URLs
+                              Add UTM Parameters
                             </>
                           )}
                         </Button>
