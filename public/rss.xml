@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Des Moines Insider - Events, Restaurants & Attractions</title>
+    <description>Discover the best events, restaurants, attractions, and playgrounds in Des Moines, Iowa. AI-powered recommendations and real-time updates.</description>
+    <link>https://desmoinesinsider.com</link>
+    <atom:link href="https://desmoinesinsider.com/rss.xml" rel="self" type="application/rss+xml"/>
+    <language>en-US</language>
+    <category>Local Guide</category>
+    <copyright>© 2025 Des Moines Insider</copyright>
+    <managingEditor>team@desmoinesinsider.com (Des Moines Insider Team)</managingEditor>
+    <webMaster>team@desmoinesinsider.com (Des Moines Insider Team)</webMaster>
+    <lastBuildDate>Mon, 27 Jan 2025 12:00:00 GMT</lastBuildDate>
+    <pubDate>Mon, 27 Jan 2025 12:00:00 GMT</pubDate>
+    <ttl>1440</ttl>
+    
+    <!-- Sample items - replace with actual content -->
+    <item>
+      <title>Sample Event - Replace with actual event</title>
+      <description>Sample event description - replace with actual event details</description>
+      <link>https://desmoinesinsider.com/events/sample-event</link>
+      <guid>https://desmoinesinsider.com/events/sample-event</guid>
+      <pubDate>Mon, 27 Jan 2025 12:00:00 GMT</pubDate>
+      <category>Events</category>
+    </item>
+    
+    <item>
+      <title>Sample Restaurant Opening - Replace with actual opening</title>
+      <description>Sample restaurant opening description - replace with actual details</description>
+      <link>https://desmoinesinsider.com/restaurants/sample-restaurant</link>
+      <guid>https://desmoinesinsider.com/restaurants/sample-restaurant</guid>
+      <pubDate>Mon, 27 Jan 2025 12:00:00 GMT</pubDate>
+      <category>Restaurants</category>
+    </item>
+  </channel>
+</rss>
