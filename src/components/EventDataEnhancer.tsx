@@ -224,8 +224,8 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5" />
             Event Data Enhancer
@@ -235,8 +235,9 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
           </DialogDescription>
         </DialogHeader>
 
-        {currentStep === "select" && (
-          <div className="space-y-6">
+        <ScrollArea className="flex-1 overflow-auto">
+          {currentStep === "select" && (
+            <div className="space-y-6 pr-4">
             {/* Search Query Input */}
             <div className="space-y-2">
               <Label htmlFor="searchQuery">Base Search Query (optional)</Label>
@@ -320,56 +321,57 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                 </AlertDescription>
               </Alert>
             )}
-          </div>
-        )}
-
-        {currentStep === "process" && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2">
-              <Brain className="w-5 h-5" />
-              <span className="font-medium">Processing Events</span>
             </div>
-            
-            <Progress 
-              value={(progress.filter(p => p.status === "completed" || p.status === "error").length / progress.length) * 100} 
-              className="w-full"
-            />
-            
-            <ScrollArea className="h-64 border rounded-md p-3">
-              <div className="space-y-2">
-                {progress.map((item) => {
-                  const event = events.find(e => e.id === item.eventId);
-                  return (
-                    <div key={item.eventId} className="flex items-center gap-3 p-2 rounded border">
-                      {getStatusIcon(item.status)}
-                      <div className="flex-1">
-                        <div className="font-medium">{event?.title}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {getStatusText(item.status)}
-                          {item.error && <span className="text-red-500"> - {item.error}</span>}
+          )}
+
+          {currentStep === "process" && (
+            <div className="space-y-4 pr-4">
+              <div className="flex items-center gap-2">
+                <Brain className="w-5 h-5" />
+                <span className="font-medium">Processing Events</span>
+              </div>
+              
+              <Progress 
+                value={(progress.filter(p => p.status === "completed" || p.status === "error").length / progress.length) * 100} 
+                className="w-full"
+              />
+              
+              <ScrollArea className="h-64 border rounded-md p-3">
+                <div className="space-y-2">
+                  {progress.map((item) => {
+                    const event = events.find(e => e.id === item.eventId);
+                    return (
+                      <div key={item.eventId} className="flex items-center gap-3 p-2 rounded border">
+                        {getStatusIcon(item.status)}
+                        <div className="flex-1">
+                          <div className="font-medium">{event?.title}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {getStatusText(item.status)}
+                            {item.error && <span className="text-red-500"> - {item.error}</span>}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </ScrollArea>
-          </div>
-        )}
-
-        {currentStep === "complete" && (
-          <div className="space-y-4 text-center">
-            <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
-            <div>
-              <h3 className="font-medium">Processing Complete</h3>
-              <p className="text-sm text-muted-foreground">
-                {progress.filter(p => p.status === "completed").length} events enhanced successfully
-              </p>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
             </div>
-          </div>
-        )}
+          )}
 
-        <DialogFooter>
+          {currentStep === "complete" && (
+            <div className="space-y-4 text-center pr-4">
+              <CheckCircle className="w-12 h-12 text-green-500 mx-auto" />
+              <div>
+                <h3 className="font-medium">Processing Complete</h3>
+                <p className="text-sm text-muted-foreground">
+                  {progress.filter(p => p.status === "completed").length} events enhanced successfully
+                </p>
+              </div>
+            </div>
+          )}
+        </ScrollArea>
+
+        <DialogFooter className="flex-shrink-0 mt-4">
           {currentStep === "select" && (
             <>
               <Button variant="outline" onClick={handleClose}>
