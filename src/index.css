@@ -49,13 +49,13 @@ All colors MUST be HSL. Touch targets minimum 44px.
     @apply grid grid-cols-1 gap-4;
   }
   
-  /* Safe area support */
+  /* Safe area support - use CSS properties directly */
   .safe-area-top {
-    @apply pt-safe-top;
+    padding-top: max(1rem, env(safe-area-inset-top));
   }
   
   .safe-area-bottom {
-    @apply pb-safe-bottom;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
 
@@ -205,14 +205,13 @@ All colors MUST be HSL. Touch targets minimum 44px.
     }
   }
   
-  /* Safe area support for mobile devices */
+  /* Enhanced safe area support for mobile devices */
   @supports (padding: max(0px)) {
-    .safe-area-top {
+    .safe-area-inset {
       padding-top: max(1rem, env(safe-area-inset-top));
-    }
-    
-    .safe-area-bottom {
       padding-bottom: max(1rem, env(safe-area-inset-bottom));
+      padding-left: max(1rem, env(safe-area-inset-left));
+      padding-right: max(1rem, env(safe-area-inset-right));
     }
   }
 }
