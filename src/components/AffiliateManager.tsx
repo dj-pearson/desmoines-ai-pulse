@@ -65,14 +65,16 @@ export default function AffiliateManager() {
 
       // Define tables and their URL columns
       const tableConfigs = [
-        { table: 'events', urlColumns: ['source_url', 'website'] },
-        { table: 'restaurants', urlColumns: ['source_url', 'website'] },
-        { table: 'attractions', urlColumns: ['source_url', 'website'] },
-        { table: 'playgrounds', urlColumns: ['source_url', 'website'] },
-        { table: 'restaurant_openings', urlColumns: ['source_url', 'website'] }
+        { table: 'events' as const, urlColumns: ['source_url'] },
+        { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] },
+        { table: 'attractions' as const, urlColumns: ['website'] },
+        { table: 'playgrounds' as const, urlColumns: ['source_url', 'website'] },
+        { table: 'restaurant_openings' as const, urlColumns: ['source_url', 'website'] }
       ];
 
       for (const config of tableConfigs) {
+        console.log(`Scanning table: ${config.table} for columns: ${config.urlColumns.join(', ')}`);
+        
         // Fetch all records from each table
         const { data, error } = await supabase
           .from(config.table)
@@ -84,10 +86,13 @@ export default function AffiliateManager() {
         }
 
         if (data) {
+          console.log(`Found ${data.length} records in ${config.table}`);
+          let urlsFoundInTable = 0;
           data.forEach((record: any) => {
             config.urlColumns.forEach(column => {
               const url = record[column];
               if (url && url.trim()) {
+                urlsFoundInTable++;
                 const domain = extractDomain(url);
                 const key = domain;
                 
@@ -110,6 +115,7 @@ export default function AffiliateManager() {
               }
             });
           });
+          console.log(`Found ${urlsFoundInTable} URLs in ${config.table}`);
         }
       }
 
@@ -157,11 +163,11 @@ export default function AffiliateManager() {
 
       // Define tables and their URL columns
       const tableConfigs = [
-        { table: 'events', urlColumns: ['source_url', 'website'] },
-        { table: 'restaurants', urlColumns: ['source_url', 'website'] },
-        { table: 'attractions', urlColumns: ['source_url', 'website'] },
-        { table: 'playgrounds', urlColumns: ['source_url', 'website'] },
-        { table: 'restaurant_openings', urlColumns: ['source_url', 'website'] }
+        { table: 'events' as const, urlColumns: ['source_url'] },
+        { table: 'restaurants' as const, urlColumns: ['source_url', 'website'] },
+        { table: 'attractions' as const, urlColumns: ['website'] },
+        { table: 'playgrounds' as const, urlColumns: ['source_url', 'website'] },
+        { table: 'restaurant_openings' as const, urlColumns: ['source_url', 'website'] }
       ];
 
       for (const config of tableConfigs) {
@@ -193,7 +199,7 @@ export default function AffiliateManager() {
               const { error: updateError } = await supabase
                 .from(config.table)
                 .update(updateData)
-                .eq('id', record.id);
+                .eq('id', (record as any).id);
 
               if (updateError) {
                 console.error(`Error updating ${config.table}.${column}:`, updateError);
