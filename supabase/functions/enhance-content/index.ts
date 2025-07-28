@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const openAIApiKey = Deno.env.get('OPENAI_API');
+const claudeApiKey = Deno.env.get('CLAUDE_API');
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -113,28 +113,25 @@ Please provide accurate, verified information in this exact JSON format (only in
 
 Only return the JSON object with fields that have accurate information. If you cannot verify a field, omit it entirely.`;
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${openAIApiKey}`,
+      'x-api-key': claudeApiKey,
       'Content-Type': 'application/json',
+      'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'gpt-4o',
+      model: 'claude-3-5-sonnet-20241022',
+      max_tokens: 1000,
+      temperature: 0.1,
       messages: [
-        { 
-          role: 'system', 
-          content: 'You are a precise data researcher. Only provide verified, accurate information. Return valid JSON only.' 
-        },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.1,
-      max_tokens: 1000,
     }),
   });
 
   const aiResponse = await response.json();
-  const enhancedContent = aiResponse.choices[0].message.content;
+  const enhancedContent = aiResponse.content[0].text;
   
   try {
     // Parse the AI response as JSON
