@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, MapPin, DollarSign } from "lucide-react";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 interface SearchSectionProps {
   onSearch: (filters: {
@@ -21,6 +22,9 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   const [dateFilter, setDateFilter] = useState<{ start?: Date; end?: Date; mode: 'single' | 'range' | 'preset'; preset?: string } | null>(null);
   const [location, setLocation] = useState("");
   const [priceRange, setPriceRange] = useState("");
+  
+  const { trackSearch } = useAnalytics();
+  const [resultsCount, setResultsCount] = useState(0);
 
   // Auto-trigger search when any filter changes
   const handleFilterChange = (newFilters: Partial<{

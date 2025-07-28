@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Calendar, MapPin, ExternalLink, Utensils, Palette, TreePine } from "lucide-react";
 import { format, isToday, isTomorrow, isThisWeek, isWeekend, addWeeks, isWithinInterval, startOfWeek, endOfWeek, addDays, startOfDay, endOfDay } from "date-fns";
+import { useAnalytics } from "@/hooks/useAnalytics";
 
 interface AllInclusiveDashboardProps {
   onViewEventDetails?: (event: any) => void;
@@ -29,6 +30,7 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
   const { playgrounds: allPlaygrounds, isLoading: playgroundsLoading } = usePlaygrounds({ limit: 100 });
 
   const [activeTab, setActiveTab] = useState("all");
+  const { trackEvent } = useAnalytics();
 
   // Comprehensive filtering function
   const applyFilters = (items: any[], itemType: string, dateField: string = 'date') => {
@@ -233,8 +235,32 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
 
   const renderCard = (item: any) => {
     const Icon = item.icon;
+    
+    const handleCardClick = () => {
+      // Track view event
+      trackEvent({
+        eventType: 'view',
+        contentType: item.type as any,
+        contentId: item.id
+      });
+      
+      if (item.type === 'event' && onViewEventDetails) {
+        onViewEventDetails(item);
+      }
+    };
+    
+    const handleLinkClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      // Track click event
+      trackEvent({
+        eventType: 'click',
+        contentType: item.type as any,
+        contentId: item.id
+      });
+    };
+    
     return (
-      <Card key={`${item.type}-${item.id}`} className="hover:shadow-lg transition-shadow">
+      <Card key={`${item.type}-${item.id}`} className="hover:shadow-lg transition-shadow cursor-pointer" onClick={handleCardClick}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <Badge className={getTypeColor(item.type)}>
@@ -271,7 +297,10 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => onViewEventDetails(item)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCardClick();
+                }}
                 className="w-full mt-2"
               >
                 View Details
@@ -284,7 +313,12 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
                 asChild
                 className="w-full mt-2"
               >
-                <a href={item.source_url} target="_blank" rel="noopener noreferrer">
+                <a 
+                  href={item.source_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  onClick={handleLinkClick}
+                >
                   <ExternalLink className="h-3 w-3 mr-1" />
                   Learn More
                 </a>

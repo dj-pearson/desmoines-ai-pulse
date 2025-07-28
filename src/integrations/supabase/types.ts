@@ -56,6 +56,39 @@ export type Database = {
         }
         Relationships: []
       }
+      content_metrics: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          date: string
+          hour: number | null
+          id: string
+          metric_type: string
+          metric_value: number | null
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          date?: string
+          hour?: number | null
+          id?: string
+          metric_type: string
+          metric_value?: number | null
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          date?: string
+          hour?: number | null
+          id?: string
+          metric_type?: string
+          metric_value?: number | null
+        }
+        Relationships: []
+      }
       events: {
         Row: {
           category: string
@@ -320,6 +353,144 @@ export type Database = {
         }
         Relationships: []
       }
+      search_analytics: {
+        Row: {
+          category: string | null
+          clicked_result_id: string | null
+          created_at: string
+          date_filter: Json | null
+          id: string
+          location: string | null
+          price_filter: string | null
+          query: string
+          results_count: number | null
+          session_id: string
+          user_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          clicked_result_id?: string | null
+          created_at?: string
+          date_filter?: Json | null
+          id?: string
+          location?: string | null
+          price_filter?: string | null
+          query: string
+          results_count?: number | null
+          session_id: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          clicked_result_id?: string | null
+          created_at?: string
+          date_filter?: Json | null
+          id?: string
+          location?: string | null
+          price_filter?: string | null
+          query?: string
+          results_count?: number | null
+          session_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      trending_scores: {
+        Row: {
+          computed_at: string
+          content_id: string
+          content_type: string
+          date: string
+          id: string
+          rank: number | null
+          score: number
+          searches_24h: number | null
+          searches_7d: number | null
+          velocity_score: number | null
+          views_24h: number | null
+          views_7d: number | null
+        }
+        Insert: {
+          computed_at?: string
+          content_id: string
+          content_type: string
+          date?: string
+          id?: string
+          rank?: number | null
+          score?: number
+          searches_24h?: number | null
+          searches_7d?: number | null
+          velocity_score?: number | null
+          views_24h?: number | null
+          views_7d?: number | null
+        }
+        Update: {
+          computed_at?: string
+          content_id?: string
+          content_type?: string
+          date?: string
+          id?: string
+          rank?: number | null
+          score?: number
+          searches_24h?: number | null
+          searches_7d?: number | null
+          velocity_score?: number | null
+          views_24h?: number | null
+          views_7d?: number | null
+        }
+        Relationships: []
+      }
+      user_analytics: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          device_type: string | null
+          event_type: string
+          filters_used: Json | null
+          id: string
+          ip_address: unknown | null
+          page_url: string | null
+          referrer: string | null
+          search_query: string | null
+          session_id: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          device_type?: string | null
+          event_type: string
+          filters_used?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          page_url?: string | null
+          referrer?: string | null
+          search_query?: string | null
+          session_id: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          device_type?: string | null
+          event_type?: string
+          filters_used?: Json | null
+          id?: string
+          ip_address?: unknown | null
+          page_url?: string | null
+          referrer?: string | null
+          search_query?: string | null
+          session_id?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_event_feedback: {
         Row: {
           created_at: string
@@ -422,6 +593,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_trending_scores: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
