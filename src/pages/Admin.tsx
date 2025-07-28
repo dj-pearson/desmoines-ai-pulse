@@ -297,15 +297,15 @@ export default function Admin() {
               </TabsTrigger>
               {canManageContent() && (
                 <>
-                  <TabsTrigger value="ai-crawler" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Bot className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">AI Crawler</span>
-                    <span className="sm:hidden">AI</span>
-                  </TabsTrigger>
                   <TabsTrigger value="scraping" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
                     <Zap className="h-3 w-3 md:h-4 md:w-4" />
                     <span className="hidden sm:inline">Scraping</span>
                     <span className="sm:hidden">Scrape</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="ai-crawler" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Database className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">AI Crawler</span>
+                    <span className="sm:hidden">AI</span>
                   </TabsTrigger>
                   <TabsTrigger value="events" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
                     <Calendar className="h-3 w-3 md:h-4 md:w-4" />
