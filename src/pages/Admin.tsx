@@ -72,23 +72,30 @@ export default function Admin() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-mobile-caption text-muted-foreground">Loading admin dashboard...</p>
+        </div>
       </div>
     );
   }
 
   if (!hasAdminAccess) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <Card className="p-6 max-w-md">
+      <div className="min-h-screen bg-background flex items-center justify-center mobile-padding">
+        <Card className="mobile-padding max-w-md w-full">
           <div className="text-center">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-            <p className="text-gray-600 mb-4">
+            <AlertTriangle className="h-8 w-8 md:h-12 md:w-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-mobile-title md:text-xl font-semibold mb-2">Access Denied</h2>
+            <p className="text-muted-foreground mb-4 text-mobile-caption">
               You don't have permission to access the admin dashboard.
             </p>
-            <Button onClick={() => navigate("/")} variant="outline">
+            <Button 
+              onClick={() => navigate("/")} 
+              variant="outline"
+              className="touch-target"
+            >
               Go Home
             </Button>
           </div>
@@ -165,85 +172,102 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white border-b px-6 py-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-background safe-area-top">
+      {/* Mobile-First Admin Header */}
+      <div className="bg-card border-b mobile-padding py-3 md:py-4 sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-card/95">
+        <div className="container mx-auto">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2 md:gap-3">
               {getRoleIcon()}
-              <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+              <h1 className="text-mobile-title md:text-2xl font-bold">Admin Dashboard</h1>
               {getRoleBadge()}
             </div>
-            <Button variant="outline" onClick={() => navigate("/")}>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/")}
+              className="touch-target self-start"
+            >
               Back to Site
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto p-6">
+      <div className="container mx-auto mobile-padding py-4 md:py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <Database className="h-4 w-4" />
-              Overview
-            </TabsTrigger>
-            {canManageContent() && (
-              <>
-                <TabsTrigger value="ai-crawler" className="flex items-center gap-2">
-                  <Bot className="h-4 w-4" />
-                  AI Crawler
-                </TabsTrigger>
-                <TabsTrigger value="scraping" className="flex items-center gap-2">
-                  <Zap className="h-4 w-4" />
-                  Scraping
-                </TabsTrigger>
-                <TabsTrigger value="events" className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Events
-                </TabsTrigger>
-                <TabsTrigger value="restaurants" className="flex items-center gap-2">
-                  <Utensils className="h-4 w-4" />
-                  Restaurants
-                </TabsTrigger>
-                <TabsTrigger value="attractions" className="flex items-center gap-2">
-                  <Camera className="h-4 w-4" />
-                  Attractions
-                </TabsTrigger>
-                <TabsTrigger value="playgrounds" className="flex items-center gap-2">
-                  <Play className="h-4 w-4" />
-                  Playgrounds
-                </TabsTrigger>
-                <TabsTrigger value="restaurant-openings" className="flex items-center gap-2">
-                  <Building className="h-4 w-4" />
-                  Restaurant Openings
-                </TabsTrigger>
-              </>
-            )}
-            {canManageUsers() && (
-              <TabsTrigger value="users" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                User Management
+          {/* Mobile-Optimized Tab Navigation */}
+          <div className="mb-4 md:mb-6 overflow-x-auto">
+            <TabsList className="flex w-max sm:w-auto gap-1 p-1">
+              <TabsTrigger value="overview" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                <Database className="h-3 w-3 md:h-4 md:w-4" />
+                <span className="hidden sm:inline">Overview</span>
+                <span className="sm:hidden">Info</span>
               </TabsTrigger>
-            )}
-          </TabsList>
+              {canManageContent() && (
+                <>
+                  <TabsTrigger value="ai-crawler" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Bot className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">AI Crawler</span>
+                    <span className="sm:hidden">AI</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="scraping" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Zap className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">Scraping</span>
+                    <span className="sm:hidden">Scrape</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="events" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Calendar className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">Events</span>
+                    <span className="sm:hidden">Events</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="restaurants" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Utensils className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">Restaurants</span>
+                    <span className="sm:hidden">Food</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="attractions" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Camera className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">Attractions</span>
+                    <span className="sm:hidden">Attract</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="playgrounds" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Play className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">Playgrounds</span>
+                    <span className="sm:hidden">Play</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="restaurant-openings" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Building className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">Restaurant Openings</span>
+                    <span className="sm:hidden">Open</span>
+                  </TabsTrigger>
+                </>
+              )}
+              {canManageUsers() && (
+                <TabsTrigger value="users" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                  <Users className="h-3 w-3 md:h-4 md:w-4" />
+                  <span className="hidden sm:inline">User Management</span>
+                  <span className="sm:hidden">Users</span>
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
 
           <TabsContent value="overview">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
+                <CardHeader className="mobile-padding">
+                  <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
+                    <Shield className="h-4 w-4 md:h-5 md:w-5" />
                     Your Role
                   </CardTitle>
-                  <CardDescription>Current access level</CardDescription>
+                  <CardDescription className="text-mobile-caption">Current access level</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold flex items-center gap-2">
+                <CardContent className="mobile-padding pt-0">
+                  <div className="text-xl md:text-2xl font-bold flex items-center gap-2">
                     {getRoleIcon()}
-                    {userRole.replace('_', ' ')}
+                    <span className="break-words">{userRole.replace('_', ' ')}</span>
                   </div>
-                  <div className="mt-4 text-sm text-gray-600">
+                  <div className="mt-3 md:mt-4 text-mobile-caption text-muted-foreground">
                     {isRootAdmin && "✅ Full system access"}
                     {userRole === 'admin' && !isRootAdmin && "✅ Administrative access"}
                     {userRole === 'moderator' && "✅ Content management access"}
@@ -252,38 +276,38 @@ export default function Admin() {
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
+                <CardHeader className="mobile-padding">
+                  <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
+                    <Settings className="h-4 w-4 md:h-5 md:w-5" />
                     Permissions
                   </CardTitle>
-                  <CardDescription>What you can do</CardDescription>
+                  <CardDescription className="text-mobile-caption">What you can do</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="space-y-2 text-sm">
+                <CardContent className="mobile-padding pt-0">
+                  <div className="space-y-2 text-mobile-caption">
                     {canManageContent() && <div className="text-green-600">✅ Manage content</div>}
                     {canManageUsers() && <div className="text-green-600">✅ Manage users</div>}
-                    {!canManageUsers() && <div className="text-gray-400">❌ User management</div>}
+                    {!canManageUsers() && <div className="text-muted-foreground">❌ User management</div>}
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
+                <CardHeader className="mobile-padding">
+                  <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
+                    <Users className="h-4 w-4 md:h-5 md:w-5" />
                     Quick Actions
                   </CardTitle>
-                  <CardDescription>Common tasks</CardDescription>
+                  <CardDescription className="text-mobile-caption">Common tasks</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="mobile-padding pt-0">
                   <div className="space-y-2">
                     {canManageContent() && (
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={() => setActiveTab("events")}
-                        className="w-full justify-start"
+                        className="w-full justify-start touch-target"
                       >
                         Manage Events
                       </Button>
@@ -293,7 +317,7 @@ export default function Admin() {
                         variant="outline" 
                         size="sm" 
                         onClick={() => setActiveTab("users")}
-                        className="w-full justify-start"
+                        className="w-full justify-start touch-target"
                       >
                         Manage Users
                       </Button>
