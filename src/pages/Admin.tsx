@@ -16,7 +16,7 @@ import SEOTools from "@/components/SEOTools";
 import { DomainHighlightManager } from "@/components/DomainHighlightManager";
 import EventReviewSystem from "@/components/EventReviewSystem";
 import AffiliateManager from "@/components/AffiliateManager";
-import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog, UserCheck, DollarSign } from "lucide-react";
+import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog, UserCheck, DollarSign, Menu, X } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -34,6 +34,7 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
   // Search state for each content type
   const [searchTerms, setSearchTerms] = useState({
@@ -268,24 +269,36 @@ export default function Admin() {
     <>
     <div className="flex h-screen bg-background">
       {/* Sidebar Navigation */}
-      <div className="w-64 bg-card border-r border-border flex flex-col">
+      <div className={`${sidebarCollapsed ? 'w-16' : 'w-64'} transition-all duration-300 bg-card border-r border-border flex flex-col`}>
         {/* Header */}
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-primary" />
-              <span className="font-semibold">Admin Dashboard</span>
-              {getRoleBadge()}
-            </div>
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                <span className="font-semibold">Admin Dashboard</span>
+                {getRoleBadge()}
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className={`${sidebarCollapsed ? 'w-full' : ''} flex-shrink-0`}
+            >
+              {sidebarCollapsed ? <Menu className="h-4 w-4" /> : <X className="h-4 w-4" />}
+            </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate("/")}
-            className="w-full mt-3"
-          >
-            Back to Site
-          </Button>
+          {!sidebarCollapsed && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/")}
+              className="w-full mt-3"
+            >
+              Back to Site
+            </Button>
+          )}
         </div>
 
         {/* Navigation Menu */}
@@ -293,186 +306,205 @@ export default function Admin() {
           <div className="space-y-2">
             <button
               onClick={() => setActiveTab("overview")}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+              className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                 activeTab === "overview" 
                   ? "bg-primary text-primary-foreground" 
                   : "hover:bg-accent hover:text-accent-foreground"
               }`}
+              title={sidebarCollapsed ? "Overview" : ""}
             >
               <Database className="h-4 w-4" />
-              <span>Overview</span>
+              {!sidebarCollapsed && <span>Overview</span>}
             </button>
 
             {canManageContent() && (
               <>
-                <div className="pt-4 pb-2">
-                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Content Management
-                  </h3>
-                </div>
+                {!sidebarCollapsed && (
+                  <div className="pt-4 pb-2">
+                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Content Management
+                    </h3>
+                  </div>
+                )}
                 
                 <button
                   onClick={() => setActiveTab("ai-crawler")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "ai-crawler" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "AI Crawler" : ""}
                 >
                   <Bot className="h-4 w-4" />
-                  <span>AI Crawler</span>
+                  {!sidebarCollapsed && <span>AI Crawler</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("scraping")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "scraping" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Scraping" : ""}
                 >
                   <Zap className="h-4 w-4" />
-                  <span>Scraping</span>
+                  {!sidebarCollapsed && <span>Scraping</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("events")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "events" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Events" : ""}
                 >
                   <Calendar className="h-4 w-4" />
-                  <span>Events</span>
+                  {!sidebarCollapsed && <span>Events</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("restaurants")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "restaurants" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Restaurants" : ""}
                 >
                   <Utensils className="h-4 w-4" />
-                  <span>Restaurants</span>
+                  {!sidebarCollapsed && <span>Restaurants</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("attractions")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "attractions" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Attractions" : ""}
                 >
                   <Camera className="h-4 w-4" />
-                  <span>Attractions</span>
+                  {!sidebarCollapsed && <span>Attractions</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("playgrounds")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "playgrounds" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Playgrounds" : ""}
                 >
                   <Play className="h-4 w-4" />
-                  <span>Playgrounds</span>
+                  {!sidebarCollapsed && <span>Playgrounds</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("restaurant-openings")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "restaurant-openings" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Restaurant Openings" : ""}
                 >
                   <Building className="h-4 w-4" />
-                  <span>Restaurant Openings</span>
+                  {!sidebarCollapsed && <span>Restaurant Openings</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("event-submissions")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "event-submissions" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Event Submissions" : ""}
                 >
                   <UserCheck className="h-4 w-4" />
-                  <span>Event Submissions</span>
+                  {!sidebarCollapsed && <span>Event Submissions</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("affiliate-manager")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "affiliate-manager" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Affiliate Links" : ""}
                 >
                   <DollarSign className="h-4 w-4" />
-                  <span>Affiliate Links</span>
+                  {!sidebarCollapsed && <span>Affiliate Links</span>}
                 </button>
               </>
             )}
 
             {canManageUsers() && (
               <>
-                <div className="pt-4 pb-2">
-                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    User Management
-                  </h3>
-                </div>
+                {!sidebarCollapsed && (
+                  <div className="pt-4 pb-2">
+                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      User Management
+                    </h3>
+                  </div>
+                )}
                 
                 <button
                   onClick={() => setActiveTab("users")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "users" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "User Management" : ""}
                 >
                   <Users className="h-4 w-4" />
-                  <span>User Management</span>
+                  {!sidebarCollapsed && <span>User Management</span>}
                 </button>
               </>
             )}
 
             {canManageContent() && (
               <>
-                <div className="pt-4 pb-2">
-                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    System Tools
-                  </h3>
-                </div>
+                {!sidebarCollapsed && (
+                  <div className="pt-4 pb-2">
+                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      System Tools
+                    </h3>
+                  </div>
+                )}
                 
                 <button
                   onClick={() => setActiveTab("settings")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "settings" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "Settings" : ""}
                 >
                   <Cog className="h-4 w-4" />
-                  <span>Settings</span>
+                  {!sidebarCollapsed && <span>Settings</span>}
                 </button>
 
                 <button
                   onClick={() => setActiveTab("seo")}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
                     activeTab === "seo" 
                       ? "bg-primary text-primary-foreground" 
                       : "hover:bg-accent hover:text-accent-foreground"
                   }`}
+                  title={sidebarCollapsed ? "SEO Tools" : ""}
                 >
                   <Globe className="h-4 w-4" />
-                  <span>SEO Tools</span>
+                  {!sidebarCollapsed && <span>SEO Tools</span>}
                 </button>
               </>
             )}
