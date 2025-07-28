@@ -2,12 +2,66 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
+/* Mobile-First Design System - Optimized for GEO and Performance
+All colors MUST be HSL. Touch targets minimum 44px.
 */
+
+/* Critical CSS for mobile performance */
+@layer utilities {
+  /* Mobile-first touch targets */
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
+  }
+  
+  /* Mobile-optimized spacing */
+  .mobile-padding {
+    @apply px-4 py-3;
+  }
+  
+  .mobile-margin {
+    @apply mx-4 my-3;
+  }
+  
+  /* Performance-optimized animations */
+  .smooth-transition {
+    @apply transition-all duration-200 ease-out;
+  }
+  
+  /* Mobile-first text sizes */
+  .text-mobile-hero {
+    @apply text-2xl font-bold leading-tight;
+  }
+  
+  .text-mobile-title {
+    @apply text-xl font-semibold leading-tight;
+  }
+  
+  .text-mobile-body {
+    @apply text-base leading-relaxed;
+  }
+  
+  .text-mobile-caption {
+    @apply text-sm leading-normal;
+  }
+  
+  /* Mobile-optimized grid */
+  .mobile-grid {
+    @apply grid grid-cols-1 gap-4;
+  }
+  
+  /* Safe area support */
+  .safe-area-top {
+    @apply pt-safe-top;
+  }
+  
+  .safe-area-bottom {
+    @apply pb-safe-bottom;
+  }
+}
 
 @layer base {
   :root {
+    /* Mobile-optimized color palette for Des Moines Insider */
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
 
@@ -17,12 +71,18 @@ All colors MUST be HSL.
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary: Des Moines blue - optimized for mobile contrast */
+    --primary: 214 100% 35%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 214 100% 30%;
+    --primary-light: 214 100% 85%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Secondary: Iowa gold accent */
+    --secondary: 45 100% 60%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --secondary-hover: 45 100% 55%;
 
+    /* Neutral grays for mobile readability */
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
 
@@ -32,11 +92,28 @@ All colors MUST be HSL.
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
+    /* Mobile-optimized borders and inputs */
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --ring: 214 100% 35%;
 
-    --radius: 0.5rem;
+    /* Mobile-friendly radius */
+    --radius: 0.75rem;
+    
+    /* Mobile spacing system */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    
+    /* Mobile touch targets */
+    --touch-target: 44px;
+    
+    /* Performance-optimized shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1);
 
     --sidebar-background: 0 0% 98%;
 
@@ -101,5 +178,41 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    /* Mobile-first font optimization */
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Mobile viewport handling */
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+  
+  /* Mobile-first responsive typography */
+  html {
+    font-size: 16px; /* Mobile base */
+  }
+  
+  @media (min-width: 768px) {
+    html {
+      font-size: 18px; /* Tablet */
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    html {
+      font-size: 20px; /* Desktop */
+    }
+  }
+  
+  /* Safe area support for mobile devices */
+  @supports (padding: max(0px)) {
+    .safe-area-top {
+      padding-top: max(1rem, env(safe-area-inset-top));
+    }
+    
+    .safe-area-bottom {
+      padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
   }
 }
