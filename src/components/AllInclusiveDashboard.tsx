@@ -7,6 +7,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Calendar, MapPin, ExternalLink, Utensils, Palette, TreePine } from "lucide-react";
 import { format, isToday, isTomorrow, isThisWeek, isWeekend, addWeeks, isWithinInterval, startOfWeek, endOfWeek, addDays, startOfDay, endOfDay } from "date-fns";
 import { useAnalytics } from "@/hooks/useAnalytics";
@@ -30,11 +39,13 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
   const { playgrounds: allPlaygrounds, isLoading: playgroundsLoading } = usePlaygrounds({ limit: 100 });
 
   const [activeTab, setActiveTab] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
   const { trackEvent } = useAnalytics();
 
   // Comprehensive filtering function
   const applyFilters = (items: any[], itemType: string, dateField: string = 'date') => {
-    if (!filters) return items.slice(0, 12); // Default limit if no filters
+    if (!filters) return items; // Return all items for pagination
 
     let filtered = [...items];
 
@@ -168,7 +179,7 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
       });
     }
 
-    return filtered.slice(0, 12); // Limit results
+    return filtered; // Return all filtered results for pagination
   };
 
   // Apply filters to each data type
@@ -221,7 +232,103 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
     ...restaurantOpenings.map(opening => ({ ...opening, type: 'restaurant', icon: Utensils })),
     ...attractions.map(attraction => ({ ...attraction, type: 'attraction', icon: Palette })),
     ...playgrounds.map(playground => ({ ...playground, type: 'playground', icon: TreePine }))
-  ].slice(0, 12);
+  ];
+
+  // Pagination logic
+  const getItemsForTab = (tabItems: any[]) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return tabItems.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = (totalItems: number) => {
+    return Math.ceil(totalItems / itemsPerPage);
+  };
+
+  const getCurrentTabItems = () => {
+    switch (activeTab) {
+      case 'event': return events;
+      case 'restaurant': return restaurantOpenings;
+      case 'attraction': return attractions;
+      case 'playground': return playgrounds;
+      default: return allItems;
+    }
+  };
+
+  const currentTabItems = getCurrentTabItems();
+  const paginatedItems = getItemsForTab(currentTabItems);
+  const totalPages = getTotalPages(currentTabItems.length);
+
+  // Reset pagination when switching tabs
+  const handleTabChange = (value: string) => {
+    setActiveTab(value);
+    setCurrentPage(1);
+  };
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="mt-8 flex justify-center">
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (currentPage > 1) setCurrentPage(currentPage - 1);
+                }}
+                className={currentPage <= 1 ? "pointer-events-none opacity-50" : ""}
+              />
+            </PaginationItem>
+            
+            {[...Array(totalPages)].map((_, index) => {
+              const page = index + 1;
+              const showPage = page === 1 || page === totalPages || (page >= currentPage - 1 && page <= currentPage + 1);
+              
+              if (!showPage) {
+                if (page === currentPage - 2 || page === currentPage + 2) {
+                  return (
+                    <PaginationItem key={page}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  );
+                }
+                return null;
+              }
+              
+              return (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(page);
+                    }}
+                    isActive={currentPage === page}
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              );
+            })}
+            
+            <PaginationItem>
+              <PaginationNext 
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                }}
+                className={currentPage >= totalPages ? "pointer-events-none opacity-50" : ""}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
+  };
 
   const getTypeColor = (type: string) => {
     switch (type) {
@@ -346,43 +453,58 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
           </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-5 mb-6 md:mb-8 h-auto">
-            <TabsTrigger value="all" className="text-xs md:text-sm py-2 px-1 md:px-3">All</TabsTrigger>
-            <TabsTrigger value="event" className="text-xs md:text-sm py-2 px-1 md:px-3">Events</TabsTrigger>
-            <TabsTrigger value="restaurant" className="text-xs md:text-sm py-2 px-1 md:px-3">Restaurants</TabsTrigger>
-            <TabsTrigger value="attraction" className="text-xs md:text-sm py-2 px-1 md:px-3">Attractions</TabsTrigger>
-            <TabsTrigger value="playground" className="text-xs md:text-sm py-2 px-1 md:px-3">Playgrounds</TabsTrigger>
+            <TabsTrigger value="all" className="text-xs md:text-sm py-2 px-1 md:px-3">
+              All ({allItems.length})
+            </TabsTrigger>
+            <TabsTrigger value="event" className="text-xs md:text-sm py-2 px-1 md:px-3">
+              Events ({events.length})
+            </TabsTrigger>
+            <TabsTrigger value="restaurant" className="text-xs md:text-sm py-2 px-1 md:px-3">
+              Restaurants ({restaurantOpenings.length})
+            </TabsTrigger>
+            <TabsTrigger value="attraction" className="text-xs md:text-sm py-2 px-1 md:px-3">
+              Attractions ({attractions.length})
+            </TabsTrigger>
+            <TabsTrigger value="playground" className="text-xs md:text-sm py-2 px-1 md:px-3">
+              Playgrounds ({playgrounds.length})
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="all">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allItems.map(renderCard)}
+              {paginatedItems.map(renderCard)}
             </div>
+            {renderPagination()}
           </TabsContent>
 
           <TabsContent value="event">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {events.slice(0, 9).map(event => renderCard({ ...event, type: 'event', icon: Calendar }))}
+              {paginatedItems.map(event => renderCard({ ...event, type: 'event', icon: Calendar }))}
             </div>
+            {renderPagination()}
           </TabsContent>
 
           <TabsContent value="restaurant">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {restaurantOpenings.slice(0, 9).map(opening => renderCard({ ...opening, type: 'restaurant', icon: Utensils }))}
+              {paginatedItems.map(opening => renderCard({ ...opening, type: 'restaurant', icon: Utensils }))}
             </div>
+            {renderPagination()}
           </TabsContent>
 
           <TabsContent value="attraction">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {attractions.slice(0, 9).map(attraction => renderCard({ ...attraction, type: 'attraction', icon: Palette }))}
+              {paginatedItems.map(attraction => renderCard({ ...attraction, type: 'attraction', icon: Palette }))}
             </div>
+            {renderPagination()}
           </TabsContent>
 
           <TabsContent value="playground">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {playgrounds.slice(0, 9).map(playground => renderCard({ ...playground, type: 'playground', icon: TreePine }))}
+              {paginatedItems.map(playground => renderCard({ ...playground, type: 'playground', icon: TreePine }))}
             </div>
+            {renderPagination()}
           </TabsContent>
         </Tabs>
       </div>

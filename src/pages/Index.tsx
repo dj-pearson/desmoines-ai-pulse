@@ -9,6 +9,7 @@ import SmartEventNavigation from "@/components/SmartEventNavigation";
 import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
+import { RatingSystem } from "@/components/RatingSystem";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -293,6 +294,15 @@ export default function Index() {
                       Enhanced with AI
                     </p>
                   )}
+                </div>
+
+                {/* Rating System */}
+                <div className="border-t pt-4">
+                  <RatingSystem 
+                    contentType="event"
+                    contentId={selectedEvent.id}
+                    compact={true}
+                  />
                 </div>
 
                 {selectedEvent.source_url && (

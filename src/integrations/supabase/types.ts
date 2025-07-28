@@ -219,6 +219,39 @@ export type Database = {
         }
         Relationships: []
       }
+      content_rating_aggregates: {
+        Row: {
+          average_rating: number
+          content_id: string
+          content_type: Database["public"]["Enums"]["content_type"]
+          id: string
+          last_updated: string
+          rating_distribution: Json | null
+          total_ratings: number
+          weighted_average: number
+        }
+        Insert: {
+          average_rating?: number
+          content_id: string
+          content_type: Database["public"]["Enums"]["content_type"]
+          id?: string
+          last_updated?: string
+          rating_distribution?: Json | null
+          total_ratings?: number
+          weighted_average?: number
+        }
+        Update: {
+          average_rating?: number
+          content_id?: string
+          content_type?: Database["public"]["Enums"]["content_type"]
+          id?: string
+          last_updated?: string
+          rating_distribution?: Json | null
+          total_ratings?: number
+          weighted_average?: number
+        }
+        Relationships: []
+      }
       domain_highlights: {
         Row: {
           created_at: string
@@ -384,6 +417,79 @@ export type Database = {
         }
         Relationships: []
       }
+      rating_abuse_reports: {
+        Row: {
+          created_at: string
+          id: string
+          rating_id: string
+          reason: string
+          reported_by: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          rating_id: string
+          reason: string
+          reported_by: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          rating_id?: string
+          reason?: string
+          reported_by?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rating_abuse_reports_rating_id_fkey"
+            columns: ["rating_id"]
+            isOneToOne: false
+            referencedRelation: "user_ratings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rating_helpful_votes: {
+        Row: {
+          created_at: string
+          id: string
+          is_helpful: boolean
+          rating_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_helpful: boolean
+          rating_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_helpful?: boolean
+          rating_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rating_helpful_votes_rating_id_fkey"
+            columns: ["rating_id"]
+            isOneToOne: false
+            referencedRelation: "user_ratings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurant_openings: {
         Row: {
           created_at: string | null
@@ -393,6 +499,7 @@ export type Database = {
           location: string | null
           name: string
           opening_date: string | null
+          opening_timeframe: string | null
           source_url: string | null
           status: string | null
           updated_at: string | null
@@ -405,6 +512,7 @@ export type Database = {
           location?: string | null
           name: string
           opening_date?: string | null
+          opening_timeframe?: string | null
           source_url?: string | null
           status?: string | null
           updated_at?: string | null
@@ -417,6 +525,7 @@ export type Database = {
           location?: string | null
           name?: string
           opening_date?: string | null
+          opening_timeframe?: string | null
           source_url?: string | null
           status?: string | null
           updated_at?: string | null
@@ -433,9 +542,14 @@ export type Database = {
           is_featured: boolean | null
           location: string | null
           name: string
+          opening: string | null
+          opening_date: string | null
+          opening_timeframe: string | null
           phone: string | null
           price_range: string | null
           rating: number | null
+          source_url: string | null
+          status: string | null
           updated_at: string | null
           website: string | null
         }
@@ -448,9 +562,14 @@ export type Database = {
           is_featured?: boolean | null
           location?: string | null
           name: string
+          opening?: string | null
+          opening_date?: string | null
+          opening_timeframe?: string | null
           phone?: string | null
           price_range?: string | null
           rating?: number | null
+          source_url?: string | null
+          status?: string | null
           updated_at?: string | null
           website?: string | null
         }
@@ -463,9 +582,14 @@ export type Database = {
           is_featured?: boolean | null
           location?: string | null
           name?: string
+          opening?: string | null
+          opening_date?: string | null
+          opening_timeframe?: string | null
           phone?: string | null
           price_range?: string | null
           rating?: number | null
+          source_url?: string | null
+          status?: string | null
           updated_at?: string | null
           website?: string | null
         }
@@ -757,6 +881,75 @@ export type Database = {
           },
         ]
       }
+      user_ratings: {
+        Row: {
+          content_id: string
+          content_type: Database["public"]["Enums"]["content_type"]
+          created_at: string
+          id: string
+          is_verified: boolean | null
+          rating: Database["public"]["Enums"]["rating_value"]
+          review_text: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content_id: string
+          content_type: Database["public"]["Enums"]["content_type"]
+          created_at?: string
+          id?: string
+          is_verified?: boolean | null
+          rating: Database["public"]["Enums"]["rating_value"]
+          review_text?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content_id?: string
+          content_type?: Database["public"]["Enums"]["content_type"]
+          created_at?: string
+          id?: string
+          is_verified?: boolean | null
+          rating?: Database["public"]["Enums"]["rating_value"]
+          review_text?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_reputation: {
+        Row: {
+          created_at: string
+          helpful_votes: number
+          id: string
+          level: Database["public"]["Enums"]["reputation_level"]
+          points: number
+          total_ratings: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          helpful_votes?: number
+          id?: string
+          level?: Database["public"]["Enums"]["reputation_level"]
+          points?: number
+          total_ratings?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          helpful_votes?: number
+          id?: string
+          level?: Database["public"]["Enums"]["reputation_level"]
+          points?: number
+          total_ratings?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           assigned_at: string
@@ -792,6 +985,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calculate_reputation_level: {
+        Args: { points: number }
+        Returns: Database["public"]["Enums"]["reputation_level"]
+      }
       calculate_trending_scores: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -809,6 +1006,10 @@ export type Database = {
           cta_text: string
         }[]
       }
+      get_user_reputation_weight: {
+        Args: { user_id: string }
+        Returns: number
+      }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
@@ -816,6 +1017,17 @@ export type Database = {
       get_user_role_simple: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      update_content_rating_aggregate: {
+        Args: {
+          p_content_type: Database["public"]["Enums"]["content_type"]
+          p_content_id: string
+        }
+        Returns: undefined
+      }
+      update_user_reputation: {
+        Args: { p_user_id: string }
+        Returns: undefined
       }
       user_has_role_or_higher: {
         Args: {
@@ -833,7 +1045,17 @@ export type Database = {
         | "active"
         | "completed"
         | "cancelled"
+      content_type: "event" | "attraction" | "restaurant" | "playground"
       placement_type: "top_banner" | "featured_spot" | "below_fold"
+      rating_value: "1" | "2" | "3" | "4" | "5"
+      reputation_level:
+        | "new"
+        | "bronze"
+        | "silver"
+        | "gold"
+        | "platinum"
+        | "moderator"
+        | "admin"
       user_role: "user" | "moderator" | "admin" | "root_admin"
     }
     CompositeTypes: {
@@ -970,7 +1192,18 @@ export const Constants = {
         "completed",
         "cancelled",
       ],
+      content_type: ["event", "attraction", "restaurant", "playground"],
       placement_type: ["top_banner", "featured_spot", "below_fold"],
+      rating_value: ["1", "2", "3", "4", "5"],
+      reputation_level: [
+        "new",
+        "bronze",
+        "silver",
+        "gold",
+        "platinum",
+        "moderator",
+        "admin",
+      ],
       user_role: ["user", "moderator", "admin", "root_admin"],
     },
   },
