@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Calendar, MapPin } from "lucide-react";
-import { useFeaturedRestaurants } from "@/hooks/useSupabase";
+import { useRestaurantOpenings } from "@/hooks/useSupabase";
 
 const statusConfig = {
   opening_soon: { label: "Opening Soon", color: "bg-yellow-500" },
@@ -19,7 +19,7 @@ const getStatusConfig = (status: string | undefined) => {
 };
 
 export function RestaurantOpenings() {
-  const { data: restaurants = [], isLoading } = useFeaturedRestaurants();
+  const { data: restaurants = [], isLoading } = useRestaurantOpenings();
 
   if (isLoading) {
     return (
