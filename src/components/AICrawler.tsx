@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Globe,
   Bot,
@@ -24,8 +25,10 @@ import {
   Play,
   Camera,
   Building,
+  Database,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import URLSourceManager from "./URLSourceManager";
 
 interface CrawlResult {
   success: boolean;
@@ -43,6 +46,11 @@ const AICrawler: React.FC = () => {
   const [category, setCategory] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<CrawlResult | null>(null);
+
+  const handleSourceSelect = (source: any) => {
+    setUrl(source.url);
+    setCategory(source.category);
+  };
 
   const categories = [
     {
@@ -166,19 +174,26 @@ const AICrawler: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-blue-500" />
-            AI Website Crawler
-          </CardTitle>
-          <p className="text-sm text-gray-600">
-            Use AI to automatically extract and categorize content from any
-            website. The AI will intelligently parse the website and create
-            database entries for events, restaurants, playgrounds, and more.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <Tabs defaultValue="crawler" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="crawler">AI Crawler</TabsTrigger>
+          <TabsTrigger value="sources">URL Sources</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="crawler" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="h-5 w-5 text-blue-500" />
+                AI Website Crawler
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Use AI to automatically extract and categorize content from any
+                website. The AI will intelligently parse the website and create
+                database entries for events, restaurants, playgrounds, and more.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
           {/* URL Input */}
           <div className="space-y-2">
             <Label htmlFor="crawl-url" className="flex items-center gap-2">
@@ -326,33 +341,42 @@ const AICrawler: React.FC = () => {
         </Card>
       )}
 
-      {/* Usage Tips */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">💡 Tips for Best Results</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-xs text-gray-600">
-          <ul className="list-disc list-inside space-y-1">
-            <li>
-              Now works with JavaScript-heavy sites! Waits for content to load dynamically
-            </li>
-            <li>
-              Event sites work best when they have clear dates, titles, and
-              locations
-            </li>
-            <li>
-              Restaurant sites should have names, addresses, and cuisine
-              information
-            </li>
-            <li>The AI will automatically detect and skip duplicate entries</li>
-            <li>Large websites may take 30-60 seconds to process completely</li>
-            <li>
-              Try specific pages (like /events or /menu) rather than homepage
-              for better results
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
+          {/* Usage Tips */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">💡 Tips for Best Results</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs text-gray-600">
+              <ul className="list-disc list-inside space-y-1">
+                <li>
+                  Now works with JavaScript-heavy sites! Waits for content to load dynamically
+                </li>
+                <li>
+                  Event sites work best when they have clear dates, titles, and
+                  locations
+                </li>
+                <li>
+                  Restaurant sites should have names, addresses, and cuisine
+                  information
+                </li>
+                <li>The AI will automatically detect and skip duplicate entries</li>
+                <li>Large websites may take 30-60 seconds to process completely</li>
+                <li>
+                  Try specific pages (like /events or /menu) rather than homepage
+                  for better results
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sources" className="space-y-6">
+          <URLSourceManager 
+            onSelectSource={handleSourceSelect}
+            selectedCategory={category}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

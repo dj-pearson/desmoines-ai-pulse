@@ -440,6 +440,51 @@ export type Database = {
         }
         Relationships: []
       }
+      url_sources: {
+        Row: {
+          category: string
+          crawl_frequency: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          last_crawled: string | null
+          name: string
+          success_rate: number | null
+          total_crawls: number | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          category: string
+          crawl_frequency?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_crawled?: string | null
+          name: string
+          success_rate?: number | null
+          total_crawls?: number | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          category?: string
+          crawl_frequency?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_crawled?: string | null
+          name?: string
+          success_rate?: number | null
+          total_crawls?: number | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       user_analytics: {
         Row: {
           content_id: string
