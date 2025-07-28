@@ -25,10 +25,10 @@ export default function Header() {
   };
 
   const navigationLinks = [
-    { href: "/", label: "Events", icon: Calendar },
+    { href: "/events", label: "Events", icon: Calendar },
     { href: "/restaurants", label: "Restaurants", icon: MapPin },
-    { href: "/", label: "Attractions", icon: Camera },
-    { href: "/", label: "Playgrounds", icon: Gamepad2 },
+    { href: "/attractions", label: "Attractions", icon: Camera },
+    { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
   ];
 
   return (
