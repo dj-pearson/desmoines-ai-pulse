@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -135,16 +136,54 @@ export default function Advertise() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-4">Advertise with Des Moines Insider</h1>
-          <p className="text-muted-foreground text-lg">
-            Reach thousands of locals looking for events, restaurants, and attractions in Des Moines
-          </p>
-        </div>
+    <div className="min-h-screen bg-background">
+      {/* SEO Headers */}
+      <Helmet>
+        <title>Advertise with Des Moines Insider - Reach Local Audiences</title>
+        <meta name="description" content="Advertise your business with Des Moines Insider. Reach thousands of locals looking for events, restaurants, and attractions in Des Moines, Iowa." />
+        <meta name="keywords" content="Des Moines advertising, local marketing, Iowa business promotion, event advertising" />
+        <meta property="og:title" content="Advertise with Des Moines Insider" />
+        <meta property="og:description" content="Reach thousands of locals looking for events, restaurants, and attractions in Des Moines" />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content="https://desmoinesinsider.com/advertise" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Advertise with Des Moines Insider" />
+        <meta name="twitter:description" content="Reach thousands of locals looking for events, restaurants, and attractions in Des Moines" />
+      </Helmet>
 
-        <div className="grid md:grid-cols-2 gap-8">
+      {/* Hero Section */}
+      <section className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 py-16">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto text-center">
+            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-foreground">
+              Advertise with Des Moines Insider
+            </h1>
+            <p className="text-muted-foreground text-xl md:text-2xl mb-8 leading-relaxed">
+              Reach thousands of locals looking for events, restaurants, and attractions in Des Moines
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+              <div className="bg-card p-6 rounded-lg border">
+                <div className="text-3xl font-bold text-primary mb-2">50K+</div>
+                <div className="text-sm text-muted-foreground">Monthly Visitors</div>
+              </div>
+              <div className="bg-card p-6 rounded-lg border">
+                <div className="text-3xl font-bold text-primary mb-2">15K+</div>
+                <div className="text-sm text-muted-foreground">Newsletter Subscribers</div>
+              </div>
+              <div className="bg-card p-6 rounded-lg border">
+                <div className="text-3xl font-bold text-primary mb-2">95%</div>
+                <div className="text-sm text-muted-foreground">Local Audience</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Main Content */}
+      <section className="py-12">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="grid md:grid-cols-2 gap-8">
           <div className="space-y-6">
             <Card>
               <CardHeader>
@@ -357,7 +396,9 @@ export default function Advertise() {
             </Card>
           </div>
         </div>
-      </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
