@@ -57,6 +57,12 @@ serve(async (req) => {
     // Remove status field if it exists before updating database
     delete enhancedData.status;
     
+    // Handle field mapping for different content types
+    if (contentType === 'event' && enhancedData.name) {
+      enhancedData.title = enhancedData.name;
+      delete enhancedData.name;
+    }
+    
     // Update the database with enhanced information
     const tableName = getTableName(contentType);
     const { data, error } = await supabase
@@ -115,6 +121,24 @@ function createSearchQuery(contentType: string, currentData: any): string {
 }
 
 async function enhanceContentWithAI(searchQuery: string, currentData: any, contentType: string) {
+  // Define the appropriate description field for each content type
+  const getDescriptionFields = (type: string) => {
+    switch (type) {
+      case 'event':
+        return {
+          input: 'original_description',
+          output: 'enhanced_description'
+        };
+      default:
+        return {
+          input: 'description',
+          output: 'description'
+        };
+    }
+  };
+
+  const descFields = getDescriptionFields(contentType);
+  
   const prompt = `You are a data researcher. I need you to help me find accurate, up-to-date information about a ${contentType}.
 
 Current data: ${JSON.stringify(currentData, null, 2)}
@@ -130,7 +154,7 @@ Please provide accurate, verified information in this exact JSON format (only in
   "location": "Complete address if different from current",
   "phone": "Phone number in (xxx) xxx-xxxx format",
   "website": "Official website URL",
-  "description": "Brief, factual description (2-3 sentences max)",
+  "${descFields.output}": "Brief, factual description (2-3 sentences max)",
   ${contentType === 'restaurant' ? `"cuisine": "Type of cuisine",
   "price_range": "$", "$$", "$$$", or "$$$$",` : ''}
   ${contentType === 'event' ? `"venue": "Event venue name",
