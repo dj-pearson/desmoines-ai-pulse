@@ -89,7 +89,7 @@ const fieldConfigs = {
       { key: "location", label: "Location", type: "input" },
       { key: "cuisine", label: "Cuisine Type", type: "input" },
       { key: "opening_date", label: "Opening Date", type: "date" },
-      { key: "status", label: "Status", type: "select", options: ["announced", "opening_soon", "soft_opening", "open", "delayed", "cancelled"] },
+      { key: "status", label: "Status", type: "select", options: ["open", "opening_soon", "newly_opened", "announced", "closed"] },
       { key: "source_url", label: "Source URL", type: "input" },
     ]
   }
