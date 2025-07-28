@@ -29,6 +29,34 @@ serve(async (req) => {
     // Use AI to research and enhance the content
     const enhancedData = await enhanceContentWithAI(searchQuery, currentData, contentType);
     
+    // Check if AI found any data to enhance
+    if (enhancedData.status === "no_data_found") {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'No additional data found to enhance content',
+          data: currentData
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (enhancedData.status === "parsing_error") {
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'AI response could not be parsed'
+        }),
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
+    // Remove status field if it exists before updating database
+    delete enhancedData.status;
+    
     // Update the database with enhanced information
     const tableName = getTableName(contentType);
     const { data, error } = await supabase
@@ -93,7 +121,9 @@ Current data: ${JSON.stringify(currentData, null, 2)}
 
 Search context: "${searchQuery}"
 
-Please provide accurate, verified information in this exact JSON format (only include fields that need updating or are missing):
+CRITICAL: You MUST always return a JSON object, even if you can only verify partial information. If you cannot verify certain fields, simply omit them from the JSON response.
+
+Please provide accurate, verified information in this exact JSON format (only include fields that you can verify or reasonably infer):
 
 {
   "name": "Accurate business/venue name",
@@ -111,7 +141,9 @@ Please provide accurate, verified information in this exact JSON format (only in
   "rating": 4.5
 }
 
-Only return the JSON object with fields that have accurate information. If you cannot verify a field, omit it entirely.`;
+IMPORTANT: Always return valid JSON. If you cannot verify ANY information, return: {"status": "no_data_found"}
+
+Do not include any explanatory text outside the JSON. Return only the JSON object.`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -146,12 +178,16 @@ Only return the JSON object with fields that have accurate information. If you c
     
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       cleanedResponse = cleanedResponse.substring(firstBrace, lastBrace + 1);
+      return JSON.parse(cleanedResponse);
+    } else {
+      // No JSON found in the response, Claude refused to provide data
+      console.log('No JSON found in AI response, Claude refused to provide data');
+      return { status: "no_data_found" };
     }
-    
-    return JSON.parse(cleanedResponse);
   } catch (parseError) {
     console.error('Failed to parse AI response:', enhancedContent);
-    throw new Error('AI returned invalid JSON response');
+    // Return a safe fallback instead of throwing
+    return { status: "parsing_error" };
   }
 }
 
