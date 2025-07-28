@@ -15,7 +15,8 @@ import ScrapingJobManager from "@/components/ScrapingJobManager";
 import SEOTools from "@/components/SEOTools";
 import { DomainHighlightManager } from "@/components/DomainHighlightManager";
 import EventReviewSystem from "@/components/EventReviewSystem";
-import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog, UserCheck } from "lucide-react";
+import AffiliateManager from "@/components/AffiliateManager";
+import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog, UserCheck, DollarSign } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -297,15 +298,15 @@ export default function Admin() {
               </TabsTrigger>
               {canManageContent() && (
                 <>
+                  <TabsTrigger value="ai-crawler" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                    <Bot className="h-3 w-3 md:h-4 md:w-4" />
+                    <span className="hidden sm:inline">AI Crawler</span>
+                    <span className="sm:hidden">AI</span>
+                  </TabsTrigger>
                   <TabsTrigger value="scraping" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
                     <Zap className="h-3 w-3 md:h-4 md:w-4" />
                     <span className="hidden sm:inline">Scraping</span>
                     <span className="sm:hidden">Scrape</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="ai-crawler" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
-                    <Database className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">AI Crawler</span>
-                    <span className="sm:hidden">AI</span>
                   </TabsTrigger>
                   <TabsTrigger value="events" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
                     <Calendar className="h-3 w-3 md:h-4 md:w-4" />
@@ -339,6 +340,13 @@ export default function Admin() {
                   <UserCheck className="h-3 w-3 md:h-4 md:w-4" />
                   <span className="hidden sm:inline">Event Submissions</span>
                   <span className="sm:hidden">Submissions</span>
+                </TabsTrigger>
+              )}
+              {canManageContent() && (
+                <TabsTrigger value="affiliate-manager" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                  <DollarSign className="h-3 w-3 md:h-4 md:w-4" />
+                  <span className="hidden sm:inline">Affiliate Links</span>
+                  <span className="sm:hidden">Affiliate</span>
                 </TabsTrigger>
               )}
               {canManageUsers() && (
@@ -658,6 +666,10 @@ export default function Admin() {
 
               <TabsContent value="event-submissions">
                 <EventReviewSystem />
+              </TabsContent>
+
+              <TabsContent value="affiliate-manager">
+                <AffiliateManager />
               </TabsContent>
 
               <TabsContent value="seo">
