@@ -57,12 +57,6 @@ serve(async (req) => {
     // Remove status field if it exists before updating database
     delete enhancedData.status;
     
-    // Handle field mapping for different content types
-    if (contentType === 'event' && enhancedData.name) {
-      enhancedData.title = enhancedData.name;
-      delete enhancedData.name;
-    }
-    
     // Update the database with enhanced information
     const tableName = getTableName(contentType);
     const { data, error } = await supabase
@@ -121,23 +115,43 @@ function createSearchQuery(contentType: string, currentData: any): string {
 }
 
 async function enhanceContentWithAI(searchQuery: string, currentData: any, contentType: string) {
-  // Define the appropriate description field for each content type
-  const getDescriptionFields = (type: string) => {
+  // Define the available fields for each content type based on actual database schema
+  const getAvailableFields = (type: string) => {
     switch (type) {
       case 'event':
         return {
-          input: 'original_description',
-          output: 'enhanced_description'
+          nameField: 'title',
+          descriptionField: 'enhanced_description',
+          availableFields: ['title', 'location', 'venue', 'price', 'enhanced_description', 'image_url']
+        };
+      case 'restaurant':
+        return {
+          nameField: 'name',
+          descriptionField: 'description',
+          availableFields: ['name', 'location', 'phone', 'website', 'description', 'cuisine', 'price_range', 'rating', 'image_url']
+        };
+      case 'attraction':
+        return {
+          nameField: 'name',
+          descriptionField: 'description',
+          availableFields: ['name', 'location', 'website', 'description', 'type', 'rating', 'image_url']
+        };
+      case 'playground':
+        return {
+          nameField: 'name',
+          descriptionField: 'description',
+          availableFields: ['name', 'location', 'description', 'amenities', 'age_range', 'rating', 'image_url']
         };
       default:
         return {
-          input: 'description',
-          output: 'description'
+          nameField: 'name',
+          descriptionField: 'description',
+          availableFields: ['name', 'location', 'description']
         };
     }
   };
 
-  const descFields = getDescriptionFields(contentType);
+  const fieldConfig = getAvailableFields(contentType);
   
   const prompt = `You are a data researcher. I need you to help me find accurate, up-to-date information about a ${contentType}.
 
@@ -147,22 +161,29 @@ Search context: "${searchQuery}"
 
 CRITICAL: You MUST always return a JSON object, even if you can only verify partial information. If you cannot verify certain fields, simply omit them from the JSON response.
 
-Please provide accurate, verified information in this exact JSON format (only include fields that you can verify or reasonably infer):
+Please provide accurate, verified information using ONLY these available fields for ${contentType}:
+${fieldConfig.availableFields.map(field => `- ${field}`).join('\n')}
+
+Return in this JSON format (only include fields you can verify):
 
 {
-  "name": "Accurate business/venue name",
-  "location": "Complete address if different from current",
-  "phone": "Phone number in (xxx) xxx-xxxx format",
-  "website": "Official website URL",
-  "${descFields.output}": "Brief, factual description (2-3 sentences max)",
-  ${contentType === 'restaurant' ? `"cuisine": "Type of cuisine",
-  "price_range": "$", "$$", "$$$", or "$$$$",` : ''}
-  ${contentType === 'event' ? `"venue": "Event venue name",
-  "price": "Ticket price or 'Free'",` : ''}
-  ${contentType === 'attraction' ? `"type": "Type of attraction",` : ''}
-  ${contentType === 'playground' ? `"amenities": ["list", "of", "amenities"],
-  "age_range": "Age range like '2-12 years'",` : ''}
-  "rating": 4.5
+  ${fieldConfig.availableFields.map(field => {
+    if (field === fieldConfig.nameField) return `"${field}": "Accurate business/venue name"`;
+    if (field === 'location') return `"location": "Complete address if different from current"`;
+    if (field === 'phone') return `"phone": "Phone number in (xxx) xxx-xxxx format"`;
+    if (field === 'website') return `"website": "Official website URL"`;
+    if (field === fieldConfig.descriptionField) return `"${field}": "Brief, factual description (2-3 sentences max)"`;
+    if (field === 'cuisine') return `"cuisine": "Type of cuisine"`;
+    if (field === 'price_range') return `"price_range": "$", "$$", "$$$", or "$$$$"`;
+    if (field === 'venue') return `"venue": "Event venue name"`;
+    if (field === 'price') return `"price": "Ticket price or 'Free'"`;
+    if (field === 'type') return `"type": "Type of attraction"`;
+    if (field === 'amenities') return `"amenities": ["list", "of", "amenities"]`;
+    if (field === 'age_range') return `"age_range": "Age range like '2-12 years'"`;
+    if (field === 'rating') return `"rating": 4.5`;
+    if (field === 'image_url') return `"image_url": "URL to image"`;
+    return `"${field}": "appropriate value"`;
+  }).join(',\n  ')}
 }
 
 IMPORTANT: Always return valid JSON. If you cannot verify ANY information, return: {"status": "no_data_found"}
