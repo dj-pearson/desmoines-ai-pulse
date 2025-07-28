@@ -7,17 +7,19 @@ export default function Restaurants() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-foreground mb-4">
+      <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
+        {/* Mobile-First Header Section */}
+        <div className="text-center mb-8 md:mb-12">
+          <h1 className="text-mobile-hero md:text-4xl font-bold text-foreground mb-3 md:mb-4">
             Des Moines Restaurants
           </h1>
-          <p className="text-xl text-muted-foreground max-w-3xl mx-auto">
+          <p className="text-mobile-body md:text-xl text-muted-foreground max-w-3xl mx-auto px-2">
             Discover the latest restaurant openings, established favorites, and hidden gems 
             throughout the Des Moines metro area.
           </p>
         </div>
 
+        {/* Mobile-Optimized Content */}
         <RestaurantOpenings />
       </main>
 
