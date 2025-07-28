@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -41,6 +41,27 @@ export default function Admin() {
     playgrounds: "",
     restaurantOpenings: ""
   });
+  
+  // Debounced search handlers to prevent input focus loss
+  const handleEventsSearch = useCallback((search: string) => {
+    setSearchTerms(prev => ({ ...prev, events: search }));
+  }, []);
+  
+  const handleRestaurantsSearch = useCallback((search: string) => {
+    setSearchTerms(prev => ({ ...prev, restaurants: search }));
+  }, []);
+  
+  const handleAttractionsSearch = useCallback((search: string) => {
+    setSearchTerms(prev => ({ ...prev, attractions: search }));
+  }, []);
+  
+  const handlePlaygroundsSearch = useCallback((search: string) => {
+    setSearchTerms(prev => ({ ...prev, playgrounds: search }));
+  }, []);
+  
+  const handleRestaurantOpeningsSearch = useCallback((search: string) => {
+    setSearchTerms(prev => ({ ...prev, restaurantOpenings: search }));
+  }, []);
   
   // Edit dialog state
   const [editDialog, setEditDialog] = useState<{
@@ -467,7 +488,7 @@ export default function Admin() {
                     totalCount={events.events.length}
                     onEdit={(item) => handleEdit("event", item)}
                     onDelete={(id) => handleDelete("event", id)}
-                    onSearch={(search) => setSearchTerms(prev => ({ ...prev, events: search }))}
+                    onSearch={handleEventsSearch}
                     onFilter={(filter) => console.log('Filter events:', filter)}
                     onCreate={() => console.log('Create new event')}
                     onRefresh={events.refetch}
@@ -483,7 +504,7 @@ export default function Admin() {
                   totalCount={restaurants.restaurants.length}
                   onEdit={(item) => handleEdit("restaurant", item)}
                   onDelete={(id) => handleDelete("restaurant", id)}
-                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, restaurants: search }))}
+                  onSearch={handleRestaurantsSearch}
                   onFilter={(filter) => console.log('Filter restaurants:', filter)}
                   onCreate={() => console.log('Create new restaurant')}
                 />
@@ -497,7 +518,7 @@ export default function Admin() {
                   totalCount={attractions.attractions.length}
                   onEdit={(item) => handleEdit("attraction", item)}
                   onDelete={(id) => handleDelete("attraction", id)}
-                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, attractions: search }))}
+                  onSearch={handleAttractionsSearch}
                   onFilter={(filter) => console.log('Filter attractions:', filter)}
                   onCreate={() => console.log('Create new attraction')}
                 />
@@ -511,7 +532,7 @@ export default function Admin() {
                   totalCount={playgrounds.playgrounds.length}
                   onEdit={(item) => handleEdit("playground", item)}
                   onDelete={(id) => handleDelete("playground", id)}
-                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, playgrounds: search }))}
+                  onSearch={handlePlaygroundsSearch}
                   onFilter={(filter) => console.log('Filter playgrounds:', filter)}
                   onCreate={() => console.log('Create new playground')}
                 />
@@ -551,7 +572,7 @@ export default function Admin() {
                   }).length}
                   onEdit={(item) => handleEdit("restaurant", item)} // Use "restaurant" type instead of "restaurant_opening"
                   onDelete={(id) => handleDelete("restaurant", id)}
-                  onSearch={(search) => setSearchTerms(prev => ({ ...prev, restaurantOpenings: search }))}
+                  onSearch={handleRestaurantOpeningsSearch}
                   onFilter={(filter) => console.log('Filter restaurant openings:', filter)}
                   onCreate={() => console.log('Create new restaurant opening')}
                 />
