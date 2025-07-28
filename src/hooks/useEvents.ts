@@ -36,7 +36,7 @@ export function useEvents(filters: EventFilters = {}) {
       let query = supabase
         .from("events")
         .select("*", { count: "exact" })
-        .order("created_at", { ascending: false });
+        .order("date", { ascending: true }); // Sort by event date, not created_at
 
       // Apply filters
       if (filters.status && filters.status !== "all") {
