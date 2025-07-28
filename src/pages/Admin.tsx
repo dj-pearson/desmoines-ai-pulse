@@ -14,7 +14,8 @@ import ScraperConfigWizard from "@/components/ScraperConfigWizard";
 import ScrapingJobManager from "@/components/ScrapingJobManager";
 import SEOTools from "@/components/SEOTools";
 import { DomainHighlightManager } from "@/components/DomainHighlightManager";
-import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog } from "lucide-react";
+import EventReviewSystem from "@/components/EventReviewSystem";
+import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog, UserCheck } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -333,6 +334,13 @@ export default function Admin() {
                   </TabsTrigger>
                 </>
               )}
+              {canManageContent() && (
+                <TabsTrigger value="event-submissions" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
+                  <UserCheck className="h-3 w-3 md:h-4 md:w-4" />
+                  <span className="hidden sm:inline">Event Submissions</span>
+                  <span className="sm:hidden">Submissions</span>
+                </TabsTrigger>
+              )}
               {canManageUsers() && (
                 <TabsTrigger value="users" className="flex items-center gap-1 md:gap-2 text-xs md:text-sm">
                   <Users className="h-3 w-3 md:h-4 md:w-4" />
@@ -646,6 +654,10 @@ export default function Admin() {
                     </div>
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="event-submissions">
+                <EventReviewSystem />
               </TabsContent>
 
               <TabsContent value="seo">

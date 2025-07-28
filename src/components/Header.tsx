@@ -8,6 +8,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { Link } from "react-router-dom";
 import { User, LogOut, Settings, Shield, Menu, Calendar, MapPin, Camera, Gamepad2 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
+import SubmitEventButton from "./SubmitEventButton";
 
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
@@ -90,6 +91,16 @@ export default function Header() {
                     </Link>
                   ))}
                   
+                  {/* Mobile Submit Event and Advertise Buttons */}
+                  <div className="border-t pt-4 mt-4 space-y-2">
+                    <div onClick={() => setIsMobileMenuOpen(false)}>
+                      <SubmitEventButton />
+                    </div>
+                    <div onClick={() => setIsMobileMenuOpen(false)}>
+                      <AdvertiseButton />
+                    </div>
+                  </div>
+                  
                   {/* Mobile User Actions */}
                   {isAuthenticated ? (
                     <>
@@ -163,6 +174,7 @@ export default function Header() {
 
             {/* Desktop User Actions */}
             <div className="hidden lg:flex items-center gap-3">
+              <SubmitEventButton />
               <AdvertiseButton />
               {isAuthenticated ? (
                 <>
