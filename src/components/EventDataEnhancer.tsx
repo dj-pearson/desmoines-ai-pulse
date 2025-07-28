@@ -55,65 +55,81 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
   const [currentStep, setCurrentStep] = useState<"select" | "process" | "complete">("select");
   const [mode, setMode] = useState<"individual" | "bulk">("individual");
   const [selectedDomain, setSelectedDomain] = useState("");
+  const [customDomain, setCustomDomain] = useState("");
   const [batchSize, setBatchSize] = useState(5);
 
-  // Get unique domains from events with source URLs
+  // Get unique domains from events with source URLs, plus common ones
   const domains = useMemo(() => {
     const domainSet = new Set<string>();
+    
+    // Add common domains that might not have proper URLs yet
+    domainSet.add("catchdesmoines.com");
+    domainSet.add("www.catchdesmoines.com");
+    
     events.forEach(event => {
       if (event.sourceUrl) {
         try {
           const url = new URL(event.sourceUrl);
           domainSet.add(url.hostname);
         } catch {
-          // Invalid URL, skip
+          // Try to extract domain from malformed URLs
+          const match = event.sourceUrl.match(/(?:https?:\/\/)?(?:www\.)?([^\/\s]+)/);
+          if (match && match[1]) {
+            domainSet.add(match[1]);
+          }
         }
       }
     });
     return Array.from(domainSet).sort();
   }, [events]);
 
-  // Filter events by selected domain
+  // Filter events by selected domain (using custom domain if provided)
   const filteredEvents = useMemo(() => {
     if (mode === "individual") {
       return events;
     }
     
-    if (!selectedDomain) {
+    const targetDomain = customDomain || selectedDomain;
+    if (!targetDomain) {
       return events;
     }
 
     return events.filter(event => {
       if (!event.sourceUrl) return false;
-      try {
-        const url = new URL(event.sourceUrl);
-        return url.hostname === selectedDomain;
-      } catch {
-        return false;
-      }
+      
+      // Check if the source URL contains the target domain
+      const normalizedUrl = event.sourceUrl.toLowerCase();
+      const normalizedDomain = targetDomain.toLowerCase();
+      
+      // Handle various URL formats
+      return normalizedUrl.includes(normalizedDomain) ||
+             normalizedUrl.includes(`www.${normalizedDomain}`) ||
+             normalizedUrl.includes(normalizedDomain.replace('www.', ''));
     });
-  }, [events, mode, selectedDomain]);
+  }, [events, mode, selectedDomain, customDomain]);
 
   const domainEventCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     domains.forEach(domain => {
       counts[domain] = events.filter(event => {
         if (!event.sourceUrl) return false;
-        try {
-          const url = new URL(event.sourceUrl);
-          return url.hostname === domain;
-        } catch {
-          return false;
-        }
+        
+        // More flexible domain matching
+        const normalizedUrl = event.sourceUrl.toLowerCase();
+        const normalizedDomain = domain.toLowerCase();
+        
+        return normalizedUrl.includes(normalizedDomain) ||
+               normalizedUrl.includes(`www.${normalizedDomain}`) ||
+               normalizedUrl.includes(normalizedDomain.replace('www.', ''));
       }).length;
     });
     return counts;
   }, [events, domains]);
 
-  // Clear selection when changing mode or domain
+  // Clear selection when changing mode, domain, or custom domain
   useEffect(() => {
     setSelectedEvents(new Set());
-  }, [mode, selectedDomain]);
+  }, [mode, selectedDomain, customDomain]);
 
   const handleEventSelection = useCallback((eventId: string, checked: boolean) => {
     setSelectedEvents(prev => {
@@ -165,6 +181,11 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
   const processEvents = async () => {
     if (selectedEvents.size === 0 || selectedFields.size === 0) {
       toast.error("Please select events and fields to process");
+      return;
+    }
+
+    if (mode === "bulk" && !selectedDomain && !customDomain) {
+      toast.error("Please select a domain or enter a custom domain for bulk processing");
       return;
     }
 
@@ -309,6 +330,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     setIsProcessing(false);
     setMode("individual");
     setSelectedDomain("");
+    setCustomDomain("");
     setBatchSize(5);
   };
 
@@ -402,20 +424,47 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                   </Alert>
 
                   {/* Domain Selection */}
-                  <div className="space-y-2">
-                    <Label htmlFor="domain">Select Domain to Process</Label>
-                    <Select value={selectedDomain} onValueChange={setSelectedDomain}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose a domain..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {domains.map((domain) => (
-                          <SelectItem key={domain} value={domain}>
-                            {domain} ({domainEventCounts[domain]} events)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <div className="space-y-4">
+                    <Label>Select Domain to Process</Label>
+                    
+                    {/* Predefined Domain Dropdown */}
+                    <div className="space-y-2">
+                      <Label htmlFor="domain" className="text-sm text-muted-foreground">Choose from detected domains:</Label>
+                      <Select value={selectedDomain} onValueChange={(value) => {
+                        setSelectedDomain(value);
+                        setCustomDomain(""); // Clear custom domain when selecting from dropdown
+                      }}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose a domain..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {domains.map((domain) => (
+                            <SelectItem key={domain} value={domain}>
+                              {domain} ({domainEventCounts[domain]} events)
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Custom Domain Input */}
+                    <div className="space-y-2">
+                      <Label htmlFor="customDomain" className="text-sm text-muted-foreground">Or type a custom domain:</Label>
+                      <Input
+                        id="customDomain"
+                        placeholder="e.g., catchdesmoines.com"
+                        value={customDomain}
+                        onChange={(e) => {
+                          setCustomDomain(e.target.value);
+                          setSelectedDomain(""); // Clear dropdown selection when typing custom domain
+                        }}
+                      />
+                      {customDomain && (
+                        <p className="text-xs text-muted-foreground">
+                          Custom domain will match URLs containing: {customDomain}
+                        </p>
+                      )}
+                    </div>
                   </div>
 
                   {/* Batch Size Selection */}
@@ -486,11 +535,11 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                 </div>
               </div>
               
-              {mode === "bulk" && selectedDomain && (
+              {mode === "bulk" && (selectedDomain || customDomain) && (
                 <div className="p-3 bg-muted rounded-md">
                   <div className="text-sm font-medium">Domain Filter Active</div>
                   <div className="text-xs text-muted-foreground">
-                    Showing {filteredEvents.length} events from {selectedDomain}
+                    Showing {filteredEvents.length} events from {customDomain || selectedDomain}
                   </div>
                 </div>
               )}
