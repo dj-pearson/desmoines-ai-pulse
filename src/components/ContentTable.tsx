@@ -5,7 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { Edit, Trash2, Search, Filter, Star, Plus } from "lucide-react";
+import { Edit, Trash2, Search, Filter, Star, Plus, Sparkles } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening";
 
@@ -112,6 +114,7 @@ export default function ContentTable({
   const config = tableConfigs[type];
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [enhancingId, setEnhancingId] = useState<string | null>(null);
 
   const handleSearch = (value: string) => {
     setSearchTerm(value);
@@ -122,6 +125,34 @@ export default function ContentTable({
     const newFilters = { ...activeFilters, [filterKey]: value };
     setActiveFilters(newFilters);
     onFilter(newFilters);
+  };
+
+  const handleEnhanceContent = async (item: any) => {
+    setEnhancingId(item.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('enhance-content', {
+        body: { 
+          contentType: type,
+          contentId: item.id,
+          currentData: item
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success('Content enhanced successfully!');
+        // Trigger a refresh of the data
+        onSearch(searchTerm);
+      } else {
+        throw new Error(data.error || 'Enhancement failed');
+      }
+    } catch (error) {
+      console.error('Enhancement error:', error);
+      toast.error('Failed to enhance content: ' + (error as Error).message);
+    } finally {
+      setEnhancingId(null);
+    }
   };
 
   const renderCellContent = (item: any, column: any) => {
@@ -274,28 +305,36 @@ export default function ContentTable({
                         {renderCellContent(item, column)}
                       </TableCell>
                     ))}
-                    <TableCell>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => onEdit(item)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => {
-                            if (confirm(`Are you sure you want to delete this ${type}?`)) {
-                              onDelete(item.id);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+                     <TableCell>
+                       <div className="flex gap-2">
+                         <Button
+                           size="sm"
+                           variant="outline"
+                           onClick={() => onEdit(item)}
+                         >
+                           <Edit className="h-4 w-4" />
+                         </Button>
+                         <Button
+                           size="sm"
+                           variant="outline"
+                           onClick={() => handleEnhanceContent(item)}
+                           disabled={enhancingId === item.id}
+                         >
+                           <Sparkles className="h-4 w-4" />
+                         </Button>
+                         <Button
+                           size="sm"
+                           variant="destructive"
+                           onClick={() => {
+                             if (confirm(`Are you sure you want to delete this ${type}?`)) {
+                               onDelete(item.id);
+                             }
+                           }}
+                         >
+                           <Trash2 className="h-4 w-4" />
+                         </Button>
+                       </div>
+                     </TableCell>
                   </TableRow>
                 ))
               )}
