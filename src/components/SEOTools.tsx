@@ -378,7 +378,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
     <lastBuildDate>${currentDate}</lastBuildDate>
     <atom:link href="${baseUrl}/rss.xml" rel="self" type="application/rss+xml"/>
     <image>
-      <url>${baseUrl}/logo.png</url>
+      <url>${baseUrl}/DMI-Logo2.png</url>
       <title>Des Moines Insider</title>
       <link>${baseUrl}</link>
     </image>`;

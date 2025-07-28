@@ -38,9 +38,11 @@ export default function Header() {
         <div className="flex justify-between items-center touch-target">
           {/* Logo - Mobile Optimized */}
           <Link to="/" className="flex items-center smooth-transition hover:opacity-80">
-            <h1 className="text-mobile-title md:text-2xl font-bold text-primary truncate max-w-[200px] sm:max-w-none">
-              Des Moines Insider
-            </h1>
+            <img 
+              src="/DMI-Logo-Header.png" 
+              alt="Des Moines Insider" 
+              className="h-8 md:h-10 w-auto"
+            />
           </Link>
 
           {/* Desktop Navigation */}
