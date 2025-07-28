@@ -100,10 +100,15 @@ export function RestaurantOpenings() {
                   </div>
                 )}
                 
-                {opening.openingDate && (
+                {(opening.openingDate || opening.openingTimeframe) && (
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4 flex-shrink-0" />
-                    <span>{new Date(opening.openingDate).toLocaleDateString()}</span>
+                    <span>
+                      {opening.openingDate 
+                        ? new Date(opening.openingDate).toLocaleDateString()
+                        : opening.openingTimeframe
+                      }
+                    </span>
                   </div>
                 )}
               </div>

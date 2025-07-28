@@ -286,10 +286,12 @@ export default function AllInclusiveDashboard({ onViewEventDetails, filters }: A
                 <span className="mobile-safe-text">{formatDate(item.date)}</span>
               </div>
             )}
-            {item.opening_date && (
+            {(item.opening_date || item.openingTimeframe) && (
               <div className="flex items-start text-mobile-caption text-muted-foreground">
                 <Calendar className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
-                <span className="mobile-safe-text">Opens: {formatDate(item.opening_date)}</span>
+                <span className="mobile-safe-text">
+                  Opens: {item.opening_date ? formatDate(item.opening_date) : item.openingTimeframe}
+                </span>
               </div>
             )}
             <p className="text-sm text-muted-foreground line-clamp-2">

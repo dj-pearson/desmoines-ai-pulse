@@ -57,6 +57,7 @@ const tableConfigs = {
       { key: "location", label: "Location", type: "text" },
       { key: "price_range", label: "Price", type: "badge" },
       { key: "opening_date", label: "Opening Date", type: "date" },
+      { key: "opening_timeframe", label: "Opening Timeframe", type: "text" },
       { key: "status", label: "Status", type: "badge" },
       { key: "phone", label: "Phone", type: "text" },
       { key: "website", label: "Website", type: "link" },
