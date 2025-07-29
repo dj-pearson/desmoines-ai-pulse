@@ -548,6 +548,7 @@ export type Database = {
           phone: string | null
           price_range: string | null
           rating: number | null
+          slug: string | null
           source_url: string | null
           status: string | null
           updated_at: string | null
@@ -568,6 +569,7 @@ export type Database = {
           phone?: string | null
           price_range?: string | null
           rating?: number | null
+          slug?: string | null
           source_url?: string | null
           status?: string | null
           updated_at?: string | null
@@ -588,6 +590,7 @@ export type Database = {
           phone?: string | null
           price_range?: string | null
           rating?: number | null
+          slug?: string | null
           source_url?: string | null
           status?: string | null
           updated_at?: string | null

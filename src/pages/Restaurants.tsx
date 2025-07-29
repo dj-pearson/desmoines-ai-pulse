@@ -156,7 +156,7 @@ export default function Restaurants() {
                 {restaurants.map((restaurant) => (
                   <Link
                     key={restaurant.id}
-                    to={`/restaurants/${restaurant.id}`}
+                    to={`/restaurants/${restaurant.slug || restaurant.id}`}
                     className="block hover:scale-105 transition-transform duration-200"
                   >
                     <Card className="h-full hover:shadow-lg transition-shadow">

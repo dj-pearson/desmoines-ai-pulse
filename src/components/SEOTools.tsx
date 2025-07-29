@@ -136,7 +136,8 @@ export default function SEOTools() {
     // Add dynamic event pages
     events.forEach(event => {
       const eventDate = event.date ? new Date(event.date).toISOString().split('T')[0] : currentDate;
-      const slug = createSlug(event.title);
+      // Use database slug if available, fallback to generated slug
+      const slug = (event as any).slug || createSlug(event.title);
       sitemap += `
   <url>
     <loc>${baseUrl}/events/${slug}</loc>
@@ -148,37 +149,55 @@ export default function SEOTools() {
 
     // Add restaurant pages
     restaurants.forEach(restaurant => {
-      const slug = createSlug(restaurant.name);
+      // Use database slug if available, fallback to generated slug for backward compatibility
+      const slug = restaurant.slug || createSlug(restaurant.name);
+      const lastmod = restaurant.updated_at 
+        ? new Date(restaurant.updated_at).toISOString().split('T')[0] 
+        : currentDate;
+      const priority = restaurant.is_featured ? 0.8 : 0.6;
+      
       sitemap += `
   <url>
     <loc>${baseUrl}/restaurants/${slug}</loc>
-    <lastmod>${currentDate}</lastmod>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>${priority}</priority>
   </url>`;
     });
 
     // Add attraction pages
     attractions.forEach(attraction => {
-      const slug = createSlug(attraction.name);
+      // Use database slug if available, fallback to generated slug
+      const slug = (attraction as any).slug || createSlug(attraction.name);
+      const lastmod = attraction.updated_at 
+        ? new Date(attraction.updated_at).toISOString().split('T')[0] 
+        : currentDate;
+      const priority = attraction.is_featured ? 0.7 : 0.6;
+      
       sitemap += `
   <url>
     <loc>${baseUrl}/attractions/${slug}</loc>
-    <lastmod>${currentDate}</lastmod>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>${priority}</priority>
   </url>`;
     });
 
     // Add playground pages
     playgrounds.forEach(playground => {
-      const slug = createSlug(playground.name);
+      // Use database slug if available, fallback to generated slug
+      const slug = (playground as any).slug || createSlug(playground.name);
+      const lastmod = playground.updated_at 
+        ? new Date(playground.updated_at).toISOString().split('T')[0] 
+        : currentDate;
+      const priority = playground.is_featured ? 0.7 : 0.6;
+      
       sitemap += `
   <url>
     <loc>${baseUrl}/playgrounds/${slug}</loc>
-    <lastmod>${currentDate}</lastmod>
+    <lastmod>${lastmod}</lastmod>
     <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
+    <priority>${priority}</priority>
   </url>`;
     });
 

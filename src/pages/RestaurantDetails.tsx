@@ -37,12 +37,23 @@ export default function RestaurantDetails() {
   } = useQuery({
     queryKey: ["restaurant", slug],
     queryFn: async () => {
-      // Try to find by ID (current system)
-      const { data, error } = await supabase
+      // First try to find by slug, then fall back to ID for backward compatibility
+      let { data, error } = await supabase
         .from("restaurants")
         .select("*")
-        .eq("id", slug)
+        .eq("slug", slug)
         .maybeSingle();
+
+      // If not found by slug, try by ID (backward compatibility)
+      if (!data && !error) {
+        const result = await supabase
+          .from("restaurants")
+          .select("*")
+          .eq("id", slug)
+          .maybeSingle();
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) throw error;
       return data;
@@ -396,7 +407,7 @@ export default function RestaurantDetails() {
                 {relatedRestaurants.map((related) => (
                   <Link
                     key={related.id}
-                    to={`/restaurants/${related.id}`}
+                    to={`/restaurants/${related.slug || related.id}`}
                     className="group"
                   >
                     <Card className="h-full hover:shadow-lg transition-all duration-300 group-hover:scale-105 border border-gray-200">
