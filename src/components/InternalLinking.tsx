@@ -62,14 +62,17 @@ export function InternalLinking({
   });
 
   const { data: featuredContent } = useQuery({
-    queryKey: ["featured-content"],
+    queryKey: ["featured-content", new Date().toDateString()], // Force cache refresh daily
     queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+      console.log('InternalLinking: Fetching featured content for date >=', today);
+      
       const [eventsResult, restaurantsResult] = await Promise.all([
         supabase
           .from("events")
           .select("id, title, date, category")
           .eq("is_featured", true)
-          .gte("date", new Date().toISOString().split("T")[0])
+          .gte("date", today)
           .order("date", { ascending: true })
           .limit(2),
         supabase
@@ -79,6 +82,7 @@ export function InternalLinking({
           .limit(2),
       ]);
 
+      console.log('InternalLinking: Featured events found:', eventsResult.data?.length);
       return {
         events: eventsResult.data || [],
         restaurants: restaurantsResult.data || [],

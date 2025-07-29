@@ -33,10 +33,13 @@ export function useEvents(filters: EventFilters = {}) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
+      const today = new Date().toISOString().split('T')[0];
+      console.log('useEvents: Fetching events for date >=', today);
+
       let query = supabase
         .from("events")
         .select("*", { count: "exact" })
-        .gte("date", new Date().toISOString().split('T')[0]) // Only today and future events
+        .gte("date", today) // Only today and future events
         .order("date", { ascending: true }); // Sort by event date, not created_at
 
       // Apply filters
@@ -81,6 +84,8 @@ export function useEvents(filters: EventFilters = {}) {
         throw error;
       }
 
+      console.log('useEvents: Found', data?.length, 'events from', today, 'onwards');
+      
       setState({
         events: data || [],
         isLoading: false,

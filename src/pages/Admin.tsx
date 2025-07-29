@@ -54,12 +54,14 @@ import { useScraping } from "@/hooks/useScraping";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
+import { useClearEventCache } from "@/hooks/useClearEventCache";
 
 export default function Admin() {
   const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } =
     useAdminAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { clearEventCache } = useClearEventCache();
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);
@@ -719,6 +721,19 @@ export default function Admin() {
                           Manage Users
                         </Button>
                       )}
+                      
+                      {/* Debug: Clear Event Cache */}
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => {
+                          clearEventCache();
+                          toast.success("Event cache cleared! Refresh the page to see fresh data.");
+                        }}
+                        className="w-full justify-start touch-target"
+                      >
+                        Clear Event Cache (Debug)
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

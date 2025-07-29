@@ -4,32 +4,39 @@ import { Event, RestaurantOpening, Restaurant, Attraction, Playground } from "@/
 
 // Events hooks
 export function useFeaturedEvents() {
+  const today = new Date().toISOString().split('T')[0];
+  
   return useQuery<Event[]>({
-    queryKey: ['events', 'featured'],
+    queryKey: ['events', 'featured', today], // Include today's date to force cache refresh
     queryFn: async () => {
+      console.log('Fetching featured events for date >= ', today);
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('is_featured', true)
-        .gte('date', new Date().toISOString().split('T')[0]) // Only today and future events
+        .gte('date', today) // Only today and future events
         .order('date', { ascending: true })
         .limit(6);
       
       if (error) throw error;
+      console.log('Featured events fetched:', data?.length, 'events');
       return data?.map(transformEvent) || [];
     },
   });
 }
 
 export function useEvents(filters?: { category?: string; location?: string; date?: string }) {
+  const today = new Date().toISOString().split('T')[0];
+  
   return useQuery<Event[]>({
-    queryKey: ['events', filters],
+    queryKey: ['events', filters, today], // Include today's date to force cache refresh
     queryFn: async () => {
       let query = supabase.from('events').select('*');
       
       // Always filter to only show today and future events
-      const today = new Date().toISOString().split('T')[0];
-      query = query.gte('date', filters?.date || today);
+      const dateFilter = filters?.date || today;
+      console.log('Fetching events for date >=', dateFilter);
+      query = query.gte('date', dateFilter);
       
       if (filters?.category) {
         query = query.ilike('category', `%${filters.category}%`);
@@ -41,6 +48,7 @@ export function useEvents(filters?: { category?: string; location?: string; date
       const { data, error } = await query.order('date', { ascending: true });
       
       if (error) throw error;
+      console.log('Events fetched:', data?.length, 'events');
       return data?.map(transformEvent) || [];
     },
   });
