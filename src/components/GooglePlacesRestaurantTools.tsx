@@ -67,50 +67,8 @@ export default function GooglePlacesRestaurantTools() {
   >([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isCheckingClosed, setIsCheckingClosed] = useState(false);
-  const [isTesting, setIsTesting] = useState(false);
   const [searchResults, setSearchResults] = useState<string>("");
-  const [testResults, setTestResults] = useState<string>("");
   const { toast } = useToast();
-
-  const testGoogleAPI = async () => {
-    setIsTesting(true);
-    setTestResults("");
-
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "test-google-api"
-      );
-
-      if (error) throw error;
-
-      setTestResults(JSON.stringify(data, null, 2));
-
-      if (data.geocoding?.status === "OK" && data.places?.status === "OK") {
-        toast({
-          title: "API Test Successful",
-          description: "Google APIs are working correctly",
-        });
-      } else {
-        toast({
-          title: "API Test Failed",
-          description: `Geocoding: ${data.geocoding?.status}, Places: ${
-            data.places?.status || "Not tested"
-          }`,
-          variant: "destructive",
-        });
-      }
-    } catch (error) {
-      console.error("Error testing API:", error);
-      setTestResults(`Error: ${error.message}`);
-      toast({
-        title: "API Test Failed",
-        description: "Failed to test Google API configuration",
-        variant: "destructive",
-      });
-    } finally {
-      setIsTesting(false);
-    }
-  };
 
   const searchNewRestaurants = async () => {
     if (!searchLocation.trim()) {
@@ -331,36 +289,6 @@ export default function GooglePlacesRestaurantTools() {
             </AlertDescription>
           </Alert>
 
-          {/* API Test Button */}
-          <div className="space-y-4">
-            <Button
-              onClick={testGoogleAPI}
-              disabled={isTesting}
-              variant="outline"
-              className="w-full"
-            >
-              {isTesting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Testing API...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Test Google API Configuration
-                </>
-              )}
-            </Button>
-
-            {testResults && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm">API Test Results:</h4>
-                <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-40">
-                  {testResults}
-                </pre>
-              </div>
-            )}
-          </div>
         </CardContent>
       </Card>
 
