@@ -290,14 +290,21 @@ export default function RestaurantDetails() {
             <div className="relative h-80 overflow-hidden">
               {restaurant.image_url ? (
                 <>
+                  {/* Gradient fallback while image loads */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500"></div>
                   <img 
                     src={restaurant.image_url} 
                     alt={restaurant.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-opacity duration-500"
+                    onLoad={(e) => {
+                      // Fade in the image once loaded
+                      e.currentTarget.style.opacity = '1';
+                    }}
                     onError={(e) => {
                       // Fallback to gradient background if image fails to load
                       e.currentTarget.style.display = 'none';
                     }}
+                    style={{ opacity: 0 }}
                   />
                   <div className="absolute inset-0 bg-black/40"></div>
                 </>
