@@ -147,6 +147,7 @@ serve(async (req) => {
     const placesData = await placesResponse.json();
     console.log("Places API response received");
     console.log("Places found:", placesData.places?.length || 0);
+    console.log("First place sample:", placesData.places?.[0]);
 
     if (!placesData.places) {
       console.log("No places found in response");
@@ -196,7 +197,7 @@ serve(async (req) => {
 
     // Convert the new API format to our expected format
     const detailedRestaurants: GooglePlacesResult[] = filteredRestaurants.map((place: any) => {
-      return {
+      const mapped = {
         place_id: place.id,
         name: place.name,
         formatted_address: place.formattedAddress,
@@ -211,6 +212,8 @@ serve(async (req) => {
         formatted_phone_number: place.nationalPhoneNumber,
         website: place.websiteUri,
       };
+      console.log("Mapped restaurant:", mapped);
+      return mapped;
     });
 
     return new Response(
@@ -234,7 +237,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: error.message || "An unexpected error occurred",
-        details: Deno.env.get("NODE_ENV") === "development" ? error.stack : undefined,
+        details: globalThis.Deno?.env?.get("NODE_ENV") === "development" ? error.stack : undefined,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
