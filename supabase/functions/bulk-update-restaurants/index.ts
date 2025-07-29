@@ -60,9 +60,24 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey)
 
-    const { batchSize = 10, forceUpdate = false } = await req.json()
+    const { batchSize = 10, forceUpdate = false, clearEnhanced = false } = await req.json()
 
-    console.log(`Starting bulk restaurant update with batch size: ${batchSize}`)
+    console.log(`Starting bulk restaurant update with batch size: ${batchSize}, forceUpdate: ${forceUpdate}, clearEnhanced: ${clearEnhanced}`)
+
+    // Clear enhanced status if requested
+    if (clearEnhanced) {
+      console.log('Clearing enhanced status for all restaurants...')
+      const { error: clearError } = await supabase
+        .from('restaurants')
+        .update({ enhanced: null })
+        .neq('id', '00000000-0000-0000-0000-000000000000') // Update all rows
+      
+      if (clearError) {
+        console.error('Error clearing enhanced status:', clearError)
+      } else {
+        console.log('Enhanced status cleared successfully')
+      }
+    }
 
     // Get restaurants that need updating
     let query = supabase

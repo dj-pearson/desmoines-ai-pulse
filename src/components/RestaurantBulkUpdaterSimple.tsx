@@ -22,14 +22,16 @@ import {
 
 export function RestaurantBulkUpdaterSimple() {
   const { updateRestaurants, isLoading, progress, result, clearResult } = useBulkRestaurantUpdate();
-  const [batchSize, setBatchSize] = useState(10);
+  const [batchSize, setBatchSize] = useState(3); // Smaller batch for testing
   const [forceUpdate, setForceUpdate] = useState(false);
+  const [clearEnhanced, setClearEnhanced] = useState(false);
 
   const handleUpdate = async () => {
     try {
       await updateRestaurants({
         batchSize,
-        forceUpdate
+        forceUpdate,
+        clearEnhanced
       });
     } catch (error) {
       console.error('Update failed:', error);
@@ -55,7 +57,7 @@ export function RestaurantBulkUpdaterSimple() {
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Update Configuration</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="batchSize">Batch Size</Label>
                 <Input
@@ -84,6 +86,21 @@ export function RestaurantBulkUpdaterSimple() {
                 </div>
                 <p className="text-sm text-muted-foreground">
                   Update all restaurants, including already enhanced ones
+                </p>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="clearEnhanced"
+                    checked={clearEnhanced}
+                    onCheckedChange={(checked) => setClearEnhanced(checked === true)}
+                    disabled={isLoading}
+                  />
+                  <Label htmlFor="clearEnhanced">Clear Enhanced Status</Label>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Reset enhancement status before updating (for testing)
                 </p>
               </div>
             </div>

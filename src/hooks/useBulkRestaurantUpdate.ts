@@ -17,6 +17,7 @@ interface BulkUpdateResult {
 interface BulkUpdateOptions {
   batchSize?: number;
   forceUpdate?: boolean;
+  clearEnhanced?: boolean;
 }
 
 export function useBulkRestaurantUpdate() {
@@ -30,14 +31,15 @@ export function useBulkRestaurantUpdate() {
       setProgress('Starting bulk restaurant update...');
       setResult(null);
 
-      const { batchSize = 10, forceUpdate = false } = options;
+      const { batchSize = 10, forceUpdate = false, clearEnhanced = false } = options;
 
       setProgress(`Updating restaurants (batch size: ${batchSize})...`);
 
       const { data, error } = await supabase.functions.invoke('bulk-update-restaurants', {
         body: {
           batchSize,
-          forceUpdate
+          forceUpdate,
+          clearEnhanced
         }
       });
 
