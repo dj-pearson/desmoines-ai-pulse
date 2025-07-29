@@ -34,12 +34,21 @@ import {
 const getProxiedImageUrl = (originalUrl: string | null): string | null => {
   if (!originalUrl) return null;
 
-  // If it's a Google Places API URL, use our proxy
-  if (originalUrl.includes("places.googleapis.com")) {
+  console.log("Original image URL:", originalUrl);
+
+  // Google Places API URLs require proxy due to CORS
+  if (
+    originalUrl.includes("places.googleapis.com") ||
+    originalUrl.includes("googleusercontent.com")
+  ) {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    return `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(
-      originalUrl
-    )}`;
+    if (supabaseUrl) {
+      const proxiedUrl = `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(
+        originalUrl
+      )}`;
+      console.log("Using proxy URL:", proxiedUrl);
+      return proxiedUrl;
+    }
   }
 
   // For other URLs, use as-is
@@ -322,7 +331,27 @@ export default function RestaurantDetails() {
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      // Show gradient fallback if image fails to load
+                      console.error("Image failed to load:", {
+                        proxiedUrl: proxiedImageUrl,
+                        originalUrl: restaurant.image_url,
+                        error: e,
+                      });
+
+                      // Try original URL as fallback if proxy failed
+                      if (
+                        restaurant.image_url &&
+                        e.currentTarget.src !== restaurant.image_url
+                      ) {
+                        console.log("Trying original URL as fallback...");
+                        e.currentTarget.src = restaurant.image_url;
+                        return;
+                      }
+
+                      // If both failed, show gradient fallback
+                      console.log(
+                        "Both proxied and original URLs failed, showing gradient"
+                      );
+                      // Hide the image and show gradient fallback
                       e.currentTarget.style.display = "none";
                       const gradientFallback =
                         e.currentTarget.parentElement?.querySelector(
@@ -331,20 +360,23 @@ export default function RestaurantDetails() {
                       if (gradientFallback) {
                         gradientFallback.style.display = "block";
                       }
-                      console.log(
-                        "Failed to load proxied image:",
-                        proxiedImageUrl
-                      );
-                      console.log("Original image URL:", restaurant.image_url);
                     }}
                     onLoad={(e) => {
-                      console.log(
-                        "Successfully loaded proxied image:",
-                        proxiedImageUrl
-                      );
+                      console.log("Image loaded successfully:", {
+                        proxiedUrl: proxiedImageUrl,
+                        originalUrl: restaurant.image_url,
+                      });
+                      // Ensure gradient is hidden when image loads
+                      const gradientFallback =
+                        e.currentTarget.parentElement?.querySelector(
+                          ".gradient-fallback"
+                        ) as HTMLElement;
+                      if (gradientFallback) {
+                        gradientFallback.style.display = "none";
+                      }
                     }}
                   />
-                  {/* Gradient fallback - hidden by default when image loads */}
+                  {/* Gradient fallback - shows when image fails */}
                   <div
                     className="gradient-fallback absolute inset-0 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 z-10"
                     style={{ display: "none" }}
