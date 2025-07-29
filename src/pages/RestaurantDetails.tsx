@@ -402,12 +402,6 @@ export default function RestaurantDetails() {
                   <p className="text-xl text-white/90 font-medium drop-shadow-lg">
                     {restaurant.cuisine} Cuisine
                   </p>
-                  {/* Debug info for development */}
-                  {imageUrl && (
-                    <p className="text-xs text-white/60 mt-2">
-                      Image loaded via proxy
-                    </p>
-                  )}
                 </div>
               </div>
               {/* Decorative elements only when no image */}
