@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
-import { supabase } from "@/integrations/supabase/client";
+import { useSmartRecommendations } from "@/hooks/useSmartRecommendations";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import EventCard from "@/components/EventCard";
-import { Heart, TrendingUp, MapPin, Calendar, Brain, Sparkles } from "lucide-react";
+import { Heart, TrendingUp, MapPin, Calendar, Brain, Sparkles, RefreshCw } from "lucide-react";
 import { Event } from "@/lib/types";
 
 interface PersonalizedDashboardProps {
@@ -17,42 +17,13 @@ interface PersonalizedDashboardProps {
 export default function PersonalizedDashboard({ onViewEventDetails }: PersonalizedDashboardProps) {
   const { user } = useAuth();
   const { profile } = useProfile();
-  const [personalizedEvents, setPersonalizedEvents] = useState<Event[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [confidence, setConfidence] = useState(0);
-  const [reasoning, setReasoning] = useState("");
-
-  // Fetch AI-powered personalized recommendations
-  const fetchPersonalizedRecommendations = async () => {
-    if (!user) return;
-
-    try {
-      setIsLoading(true);
-      
-      const { data, error } = await supabase.functions.invoke('personalized-recommendations', {
-        body: { userId: user.id }
-      });
-
-      if (error) {
-        console.error('Error fetching personalized recommendations:', error);
-        return;
-      }
-
-      setPersonalizedEvents(data.recommendations || []);
-      setConfidence(data.confidence || 0);
-      setReasoning(data.reasoning || "");
-    } catch (error) {
-      console.error('Error fetching recommendations:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-      fetchPersonalizedRecommendations();
-    }
-  }, [user]);
+  const { 
+    recommendations, 
+    isLoading, 
+    confidence, 
+    error, 
+    refreshRecommendations 
+  } = useSmartRecommendations();
 
   const getPersonalizedGreeting = () => {
     const interests = profile?.interests || [];
@@ -70,7 +41,17 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
     };
 
     const mappedInterests = interests.slice(0, 2).map(i => interestMap[i]).filter(Boolean);
-    return `AI-curated ${mappedInterests.join(" and ")} just for you`;
+    return `Smart recommendations${mappedInterests.length > 0 ? ` for ${mappedInterests.join(" and ")}` : ""} just for you`;
+  };
+
+  const getRecommendationTypeColor = (type: string) => {
+    switch (type) {
+      case 'collaborative': return 'bg-blue-500';
+      case 'content_based': return 'bg-green-500';
+      case 'trending': return 'bg-orange-500';
+      case 'hybrid': return 'bg-purple-500';
+      default: return 'bg-accent';
+    }
   };
 
   if (isLoading) {
@@ -107,7 +88,7 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
             <div className="flex items-center justify-center gap-2 mb-6">
               <Sparkles className="h-4 w-4 text-accent" />
               <span className="text-sm text-neutral-500">
-                {Math.round(confidence * 100)}% confidence • {reasoning}
+                {Math.round(confidence * 100)}% confidence • Hybrid AI recommendations
               </span>
             </div>
           )}
@@ -124,28 +105,54 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
           )}
         </div>
 
-        {personalizedEvents.length > 0 ? (
+        {error && (
+          <Card className="text-center py-8 mb-8 border-destructive">
+            <CardContent className="pt-6">
+              <p className="text-destructive mb-4">Error loading recommendations: {error}</p>
+              <Button variant="outline" onClick={refreshRecommendations}>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {recommendations.length > 0 ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-              {personalizedEvents.map((event) => (
-                <div key={event.id} className="relative">
-                  <div className="absolute -top-2 -right-2 z-10">
-                    <Badge className="bg-accent text-white">
-                      <TrendingUp className="h-3 w-3 mr-1" />
-                      Recommended
+              {recommendations.map((rec) => (
+                <div key={rec.event.id} className="relative">
+                  <div className="absolute -top-2 -right-2 z-10 flex flex-col gap-1">
+                    <Badge className={`${getRecommendationTypeColor(rec.recommendationType)} text-white text-xs`}>
+                      <Brain className="h-3 w-3 mr-1" />
+                      {rec.recommendationType === 'hybrid' ? 'Smart Pick' : 
+                       rec.recommendationType === 'collaborative' ? 'Similar Users' :
+                       rec.recommendationType === 'content_based' ? 'Your Interests' :
+                       'Trending'}
                     </Badge>
+                    {rec.score > 0.8 && (
+                      <Badge variant="secondary" className="text-xs">
+                        <Sparkles className="h-3 w-3 mr-1" />
+                        {Math.round(rec.score * 100)}% match
+                      </Badge>
+                    )}
                   </div>
                   <EventCard 
-                    event={event} 
+                    event={rec.event} 
                     onViewDetails={onViewEventDetails}
                   />
+                  {rec.reasoning.length > 0 && (
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      <p className="line-clamp-2">{rec.reasoning.join(" • ")}</p>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
 
             <div className="text-center">
-              <Button variant="outline" className="mr-4" onClick={fetchPersonalizedRecommendations}>
-                <TrendingUp className="h-4 w-4 mr-2" />
+              <Button variant="outline" className="mr-4" onClick={refreshRecommendations} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh Recommendations
               </Button>
               <Button variant="ghost">
@@ -157,16 +164,16 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
         ) : (
           <Card className="text-center py-12">
             <CardHeader>
-              <CardTitle>Building Your AI Profile</CardTitle>
+              <CardTitle>Building Your Smart Profile</CardTitle>
               <CardDescription>
-                Rate some events with thumbs up/down to help our AI learn your preferences.
-                The more feedback you provide, the better our recommendations become!
+                Start rating events with thumbs up/down and star ratings to help our hybrid AI system learn your preferences.
+                Our algorithm combines collaborative filtering, content analysis, and trending data for personalized recommendations.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" onClick={fetchPersonalizedRecommendations}>
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Try Again
+              <Button variant="outline" onClick={refreshRecommendations} disabled={isLoading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+                Generate Recommendations
               </Button>
             </CardContent>
           </Card>
