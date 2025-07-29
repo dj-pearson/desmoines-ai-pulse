@@ -108,17 +108,17 @@ export default function GooglePlacesRestaurantTools() {
 
       if (data?.restaurants) {
         if (append) {
-          setNewRestaurants(prev => [...prev, ...data.restaurants]);
+          setNewRestaurants((prev) => [...prev, ...data.restaurants]);
         } else {
           setNewRestaurants(data.restaurants);
         }
-        
+
         setHasMoreResults(data.has_more || false);
         setSearchOffset(currentOffset + 20);
-        
+
         const resultMessage = `Found ${data.restaurants.length} new restaurants (${data.total_places_searched} total searched, ${data.existing_restaurants_count} already in database)`;
         setSearchResults(resultMessage);
-        
+
         toast({
           title: append ? "More Results Loaded" : "Search Complete",
           description: resultMessage,
@@ -307,7 +307,6 @@ export default function GooglePlacesRestaurantTools() {
               </ol>
             </AlertDescription>
           </Alert>
-
         </CardContent>
       </Card>
 
@@ -364,7 +363,7 @@ export default function GooglePlacesRestaurantTools() {
                 </>
               )}
             </Button>
-            
+
             {hasMoreResults && (
               <Button
                 onClick={() => searchNewRestaurants(true)}

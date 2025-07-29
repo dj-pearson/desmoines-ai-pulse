@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,7 +50,11 @@ serve(async (req) => {
   }
 
   try {
-    const { location, radius, offset = 0 }: GooglePlacesSearchRequest = await req.json();
+    const {
+      location,
+      radius,
+      offset = 0,
+    }: GooglePlacesSearchRequest = await req.json();
 
     const GOOGLE_API_KEY = globalThis.Deno?.env?.get("GOOGLE_SEARCH_API");
     if (!GOOGLE_API_KEY) {
@@ -58,11 +62,19 @@ serve(async (req) => {
     }
 
     // Initialize Supabase client
-    const supabaseUrl = globalThis.Deno?.env?.get('SUPABASE_URL') ?? '';
-    const supabaseAnonKey = globalThis.Deno?.env?.get('SUPABASE_ANON_KEY') ?? '';
+    const supabaseUrl = globalThis.Deno?.env?.get("SUPABASE_URL") ?? "";
+    const supabaseAnonKey =
+      globalThis.Deno?.env?.get("SUPABASE_ANON_KEY") ?? "";
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    console.log("Starting search for location:", location, "radius:", radius, "offset:", offset);
+    console.log(
+      "Starting search for location:",
+      location,
+      "radius:",
+      radius,
+      "offset:",
+      offset
+    );
     console.log("API key configured:", GOOGLE_API_KEY ? "Yes" : "No");
 
     // First, geocode the location to get coordinates
@@ -167,18 +179,26 @@ serve(async (req) => {
     // Get existing restaurants from database to avoid duplicates
     console.log("Fetching existing restaurants from database...");
     const { data: existingRestaurants, error: dbError } = await supabase
-      .from('restaurants')
-      .select('name, location, google_place_id')
-      .not('google_place_id', 'is', null);
+      .from("restaurants")
+      .select("name, location, google_place_id")
+      .not("google_place_id", "is", null);
 
     if (dbError) {
       console.error("Error fetching existing restaurants:", dbError);
       // Continue without filtering if database error
     }
 
-    const existingPlaceIds = new Set(existingRestaurants?.map(r => r.google_place_id) || []);
-    const existingNames = new Set(existingRestaurants?.map(r => r.name.toLowerCase()) || []);
-    console.log("Found", existingPlaceIds.size, "existing restaurants in database");
+    const existingPlaceIds = new Set(
+      existingRestaurants?.map((r) => r.google_place_id) || []
+    );
+    const existingNames = new Set(
+      existingRestaurants?.map((r) => r.name.toLowerCase()) || []
+    );
+    console.log(
+      "Found",
+      existingPlaceIds.size,
+      "existing restaurants in database"
+    );
 
     // Filter out fast food chains and already existing restaurants
     const filteredRestaurants = placesData.places.filter((place: any) => {
@@ -215,18 +235,28 @@ serve(async (req) => {
         place.name ||
         ""
       ).toLowerCase();
-      
+
       const isChain = fastFoodChains.some((chain) => nameLower.includes(chain));
 
       // Only include actual restaurants (not just food)
       const isRestaurant = place.types?.includes("restaurant") || false;
 
       // Check if restaurant already exists in database
-      const isExisting = existingPlaceIds.has(place.id) || existingNames.has(nameLower);
+      const isExisting =
+        existingPlaceIds.has(place.id) || existingNames.has(nameLower);
 
-      console.log(`Filtering ${nameLower}: chain=${isChain}, restaurant=${isRestaurant}, existing=${isExisting}, operational=${place.businessStatus === "OPERATIONAL"}`);
+      console.log(
+        `Filtering ${nameLower}: chain=${isChain}, restaurant=${isRestaurant}, existing=${isExisting}, operational=${
+          place.businessStatus === "OPERATIONAL"
+        }`
+      );
 
-      return !isChain && isRestaurant && !isExisting && place.businessStatus === "OPERATIONAL";
+      return (
+        !isChain &&
+        isRestaurant &&
+        !isExisting &&
+        place.businessStatus === "OPERATIONAL"
+      );
     });
 
     // Convert the new API format to our expected format
@@ -258,7 +288,9 @@ serve(async (req) => {
       }
     );
 
-    console.log(`Filtered results: ${filteredRestaurants.length} new restaurants found (${placesData.places.length} total places returned)`);
+    console.log(
+      `Filtered results: ${filteredRestaurants.length} new restaurants found (${placesData.places.length} total places returned)`
+    );
 
     return new Response(
       JSON.stringify({
