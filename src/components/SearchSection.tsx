@@ -67,11 +67,11 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
       } else if (category === "Restaurants") {
         const { data, error } = await supabase
           .from("restaurants")
-          .select("cuisine_type");
+          .select("cuisine");
 
         if (error) throw error;
         const uniqueCuisines = [
-          ...new Set(data.map((restaurant) => restaurant.cuisine_type)),
+          ...new Set(data.map((restaurant) => restaurant.cuisine)),
         ].filter(Boolean);
         return uniqueCuisines.sort();
       }
@@ -129,7 +129,13 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
   const handleCategoryChange = (newCategory: string) => {
     setCategory(newCategory);
-    handleFilterChange({ category: newCategory });
+    setSubcategory(""); // Reset subcategory when category changes
+    handleFilterChange({ category: newCategory, subcategory: "" });
+  };
+
+  const handleSubcategoryChange = (newSubcategory: string) => {
+    setSubcategory(newSubcategory);
+    handleFilterChange({ subcategory: newSubcategory });
   };
 
   const handleLocationChange = (newLocation: string) => {
@@ -144,7 +150,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    onSearch({ query, category, dateFilter, location, priceRange }, true); // Scroll when explicitly searching
+    onSearch({ query, category, subcategory, dateFilter, location, priceRange }, true); // Scroll when explicitly searching
   };
 
   const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -203,6 +209,25 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                   <SelectItem value="Playgrounds">Playgrounds</SelectItem>
                 </SelectContent>
               </Select>
+              
+              {/* Subcategory Dropdown - Shows when Events or Restaurants is selected */}
+              {(category === "Events" || category === "Restaurants") && subcategories && subcategories.length > 0 && (
+                <Select value={subcategory} onValueChange={handleSubcategoryChange}>
+                  <SelectTrigger className="touch-target w-full sm:w-48 bg-background/95 backdrop-blur border-0">
+                    <SelectValue placeholder={category === "Events" ? "Event type" : "Cuisine type"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">
+                      {category === "Events" ? "All Events" : "All Cuisines"}
+                    </SelectItem>
+                    {subcategories.map((sub) => (
+                      <SelectItem key={sub} value={sub}>
+                        {sub}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
 
             <Button

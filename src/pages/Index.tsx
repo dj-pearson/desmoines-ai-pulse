@@ -55,6 +55,7 @@ export default function Index() {
     filters: {
       query: string;
       category: string;
+      subcategory?: string;
       dateFilter?: {
         start?: Date;
         end?: Date;
