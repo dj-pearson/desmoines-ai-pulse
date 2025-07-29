@@ -68,9 +68,11 @@ export default function GooglePlacesRestaurantTools() {
   const [isSearching, setIsSearching] = useState(false);
   const [isCheckingClosed, setIsCheckingClosed] = useState(false);
   const [searchResults, setSearchResults] = useState<string>("");
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [hasMoreResults, setHasMoreResults] = useState(false);
   const { toast } = useToast();
 
-  const searchNewRestaurants = async () => {
+  const searchNewRestaurants = async (append = false) => {
     if (!searchLocation.trim()) {
       toast({
         title: "Error",
@@ -81,7 +83,13 @@ export default function GooglePlacesRestaurantTools() {
     }
 
     setIsSearching(true);
-    setSearchResults("");
+    if (!append) {
+      setSearchResults("");
+      setSearchOffset(0);
+      setNewRestaurants([]);
+    }
+
+    const currentOffset = append ? searchOffset : 0;
 
     try {
       // Call Supabase Edge Function for Google Places search
@@ -91,6 +99,7 @@ export default function GooglePlacesRestaurantTools() {
           body: {
             location: searchLocation,
             radius: parseInt(searchRadius),
+            offset: currentOffset,
           },
         }
       );
@@ -98,11 +107,21 @@ export default function GooglePlacesRestaurantTools() {
       if (error) throw error;
 
       if (data?.restaurants) {
-        setNewRestaurants(data.restaurants);
-        setSearchResults(`Found ${data.restaurants.length} new restaurants`);
+        if (append) {
+          setNewRestaurants(prev => [...prev, ...data.restaurants]);
+        } else {
+          setNewRestaurants(data.restaurants);
+        }
+        
+        setHasMoreResults(data.has_more || false);
+        setSearchOffset(currentOffset + 20);
+        
+        const resultMessage = `Found ${data.restaurants.length} new restaurants (${data.total_places_searched} total searched, ${data.existing_restaurants_count} already in database)`;
+        setSearchResults(resultMessage);
+        
         toast({
-          title: "Search Complete",
-          description: `Found ${data.restaurants.length} potential new restaurants`,
+          title: append ? "More Results Loaded" : "Search Complete",
+          description: resultMessage,
         });
       } else {
         setSearchResults("No new restaurants found");
@@ -327,23 +346,46 @@ export default function GooglePlacesRestaurantTools() {
             </div>
           </div>
 
-          <Button
-            onClick={searchNewRestaurants}
-            disabled={isSearching}
-            className="w-full"
-          >
-            {isSearching ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Searching...
-              </>
-            ) : (
-              <>
-                <Search className="h-4 w-4 mr-2" />
-                Search for New Restaurants
-              </>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => searchNewRestaurants(false)}
+              disabled={isSearching}
+              className="flex-1"
+            >
+              {isSearching ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" />
+                  Search New Restaurants
+                </>
+              )}
+            </Button>
+            
+            {hasMoreResults && (
+              <Button
+                onClick={() => searchNewRestaurants(true)}
+                disabled={isSearching}
+                variant="outline"
+                className="flex-1"
+              >
+                {isSearching ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Load More
+                  </>
+                )}
+              </Button>
             )}
-          </Button>
+          </div>
 
           {searchResults && (
             <Alert>
