@@ -159,14 +159,21 @@ serve(async (req) => {
         }
 
         // Build the update object
-        const update: RestaurantUpdate = {
-          id: restaurant.id,
-          name: restaurant.name,
+        const update: any = {
           enhanced: 'completed',
           updated_at: new Date().toISOString()
         }
 
         if (placeDetails) {
+          console.log(`Processing place details for ${restaurant.name}:`, {
+            hasEditorialSummary: !!placeDetails.editorialSummary?.text,
+            rating: placeDetails.rating,
+            hasPhone: !!placeDetails.nationalPhoneNumber,
+            hasWebsite: !!placeDetails.websiteUri,
+            hasPhotos: placeDetails.photos?.length || 0,
+            types: placeDetails.types
+          })
+
           // Extract cuisine from place types
           const cuisineTypes = placeDetails.types?.filter(type => 
             type.includes('restaurant') || 
@@ -227,18 +234,39 @@ serve(async (req) => {
             return 'Restaurant'
           }
 
-          update.cuisine = getCuisineName(cuisineTypes)
-          update.location = placeDetails.formattedAddress
-          update.rating = placeDetails.rating ? Math.round(placeDetails.rating * 10) / 10 : undefined
-          
-          // Use editorial summary as description if available
-          if (placeDetails.editorialSummary?.text) {
-            update.description = placeDetails.editorialSummary.text
+          // Only update fields that have actual data
+          const cuisineName = getCuisineName(cuisineTypes)
+          if (cuisineName && cuisineName !== 'Restaurant') {
+            update.cuisine = cuisineName
           }
           
-          update.phone = placeDetails.nationalPhoneNumber
-          update.website = placeDetails.websiteUri
-          update.google_place_id = placeId
+          if (placeDetails.formattedAddress) {
+            update.location = placeDetails.formattedAddress
+          }
+          
+          if (placeDetails.rating) {
+            update.rating = Math.round(placeDetails.rating * 10) / 10
+          }
+          
+          // Use editorial summary as description if available and replace "Discovered via Google Places API"
+          if (placeDetails.editorialSummary?.text) {
+            update.description = placeDetails.editorialSummary.text
+          } else if (restaurant.description === 'Discovered via Google Places API' || !restaurant.description) {
+            // If no editorial summary but current description is generic or null, set to null
+            update.description = null
+          }
+          
+          if (placeDetails.nationalPhoneNumber) {
+            update.phone = placeDetails.nationalPhoneNumber
+          }
+          
+          if (placeDetails.websiteUri) {
+            update.website = placeDetails.websiteUri
+          }
+          
+          if (placeId) {
+            update.google_place_id = placeId
+          }
 
           // Get the main photo URL
           if (placeDetails.photos && placeDetails.photos.length > 0) {
@@ -246,6 +274,8 @@ serve(async (req) => {
             // Use the Google Places Photo API to get the actual image URL
             update.image_url = `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=1200&maxHeightPx=800&key=${googleApiKey}`
           }
+          
+          console.log(`Update object for ${restaurant.name}:`, update)
         } else if (placeId) {
           // We found a place ID but couldn't get details, still save the place ID
           update.google_place_id = placeId
@@ -272,10 +302,13 @@ serve(async (req) => {
       console.log(`Updating ${updates.length} restaurants in database`)
       
       for (const update of updates) {
+        console.log(`Updating restaurant ${update.name} (ID: ${update.id}) with data:`, JSON.stringify(update, null, 2))
+        
         const { error: updateError } = await supabase
           .from('restaurants')
           .update(update)
           .eq('id', update.id)
+          .select()
 
         if (updateError) {
           console.error(`Failed to update restaurant ${update.name}:`, updateError)
@@ -286,6 +319,7 @@ serve(async (req) => {
           })
         } else {
           updatedCount++
+          console.log(`Successfully updated restaurant ${update.name}`)
         }
       }
     }
