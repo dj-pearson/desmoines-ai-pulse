@@ -32,19 +32,20 @@ export interface UserSubmittedEvent {
 export function useUserSubmittedEvents() {
   const { user } = useAuth();
   
-  return useQuery<UserSubmittedEvent[]>({
+  return useQuery({
     queryKey: ['user-submitted-events', user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<UserSubmittedEvent[]> => {
       if (!user) throw new Error('User not authenticated');
       
-      const { data, error } = await supabase
+      // Use any for now since the table types may not be fully generated
+      const { data, error } = await (supabase as any)
         .from('user_submitted_events')
         .select('*')
         .eq('user_id', user.id)
         .order('submitted_at', { ascending: false });
       
       if (error) throw error;
-      return data || [];
+      return (data || []) as UserSubmittedEvent[];
     },
     enabled: !!user,
   });
@@ -58,7 +59,7 @@ export function useSubmitEvent() {
     mutationFn: async (eventData: Omit<UserSubmittedEvent, 'id' | 'user_id' | 'status' | 'submitted_at' | 'created_at' | 'updated_at'>) => {
       if (!user) throw new Error('User not authenticated');
       
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_submitted_events')
         .insert([
           {
@@ -83,7 +84,7 @@ export function useUpdateEvent() {
   
   return useMutation({
     mutationFn: async ({ id, ...eventData }: Partial<UserSubmittedEvent> & { id: string }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_submitted_events')
         .update(eventData)
         .eq('id', id)
@@ -104,7 +105,7 @@ export function useDeleteEvent() {
   
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('user_submitted_events')
         .delete()
         .eq('id', id);
@@ -119,10 +120,10 @@ export function useDeleteEvent() {
 
 // For admin use - get all submitted events
 export function useAllSubmittedEvents() {
-  return useQuery<UserSubmittedEvent[]>({
+  return useQuery({
     queryKey: ['all-submitted-events'],
-    queryFn: async () => {
-      const { data, error } = await supabase
+    queryFn: async (): Promise<UserSubmittedEvent[]> => {
+      const { data, error } = await (supabase as any)
         .from('user_submitted_events')
         .select(`
           *,
@@ -131,7 +132,7 @@ export function useAllSubmittedEvents() {
         .order('submitted_at', { ascending: false });
       
       if (error) throw error;
-      return data || [];
+      return (data || []) as UserSubmittedEvent[];
     },
   });
 }
@@ -150,7 +151,7 @@ export function useReviewEvent() {
       status: 'approved' | 'rejected' | 'needs_revision'; 
       admin_notes?: string;
     }) => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('user_submitted_events')
         .update({
           status,

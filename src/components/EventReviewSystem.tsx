@@ -82,15 +82,15 @@ export default function EventReviewSystem() {
   };
 
   const filteredEvents = (status: string) => {
-    if (!events) return [];
+    if (!events || !Array.isArray(events)) return [];
     if (status === 'all') return events;
     return events.filter(event => event.status === status);
   };
 
-  const pendingCount = events?.filter(e => e.status === 'pending').length || 0;
-  const approvedCount = events?.filter(e => e.status === 'approved').length || 0;
-  const rejectedCount = events?.filter(e => e.status === 'rejected').length || 0;
-  const needsRevisionCount = events?.filter(e => e.status === 'needs_revision').length || 0;
+  const pendingCount = (events && Array.isArray(events)) ? events.filter(e => e.status === 'pending').length : 0;
+  const approvedCount = (events && Array.isArray(events)) ? events.filter(e => e.status === 'approved').length : 0;
+  const rejectedCount = (events && Array.isArray(events)) ? events.filter(e => e.status === 'rejected').length : 0;
+  const needsRevisionCount = (events && Array.isArray(events)) ? events.filter(e => e.status === 'needs_revision').length : 0;
 
   if (isLoading) {
     return (
