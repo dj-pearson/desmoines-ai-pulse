@@ -33,13 +33,15 @@ import {
 // Helper function to get proxied image URL
 const getProxiedImageUrl = (originalUrl: string | null): string | null => {
   if (!originalUrl) return null;
-  
+
   // If it's a Google Places API URL, use our proxy
-  if (originalUrl.includes('places.googleapis.com')) {
+  if (originalUrl.includes("places.googleapis.com")) {
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    return `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+    return `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(
+      originalUrl
+    )}`;
   }
-  
+
   // For other URLs, use as-is
   return originalUrl;
 };
@@ -177,11 +179,11 @@ export default function RestaurantDetails() {
 
   // Debug logging for image URL
   const proxiedImageUrl = getProxiedImageUrl(restaurant?.image_url);
-  console.log('Restaurant data:', {
+  console.log("Restaurant data:", {
     name: restaurant?.name,
     image_url: restaurant?.image_url,
     proxied_url: proxiedImageUrl,
-    hasImageUrl: !!restaurant?.image_url
+    hasImageUrl: !!restaurant?.image_url,
   });
 
   // Generate comprehensive SEO data
@@ -313,30 +315,42 @@ export default function RestaurantDetails() {
             <div className="relative h-80 overflow-hidden">
               {proxiedImageUrl ? (
                 <>
-                  <img 
-                    src={proxiedImageUrl} 
+                  <img
+                    src={proxiedImageUrl}
                     alt={restaurant.name}
-                    className="absolute inset-0 w-full h-full object-cover z-10"
+                    className="absolute inset-0 w-full h-full object-cover z-20"
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       // Show gradient fallback if image fails to load
-                      e.currentTarget.style.display = 'none';
-                      const gradientFallback = e.currentTarget.parentElement?.querySelector('.gradient-fallback');
+                      e.currentTarget.style.display = "none";
+                      const gradientFallback =
+                        e.currentTarget.parentElement?.querySelector(
+                          ".gradient-fallback"
+                        );
                       if (gradientFallback) {
-                        gradientFallback.style.display = 'block';
+                        gradientFallback.style.display = "block";
                       }
-                      console.log('Failed to load proxied image:', proxiedImageUrl);
-                      console.log('Original image URL:', restaurant.image_url);
+                      console.log(
+                        "Failed to load proxied image:",
+                        proxiedImageUrl
+                      );
+                      console.log("Original image URL:", restaurant.image_url);
                     }}
                     onLoad={(e) => {
-                      console.log('Successfully loaded proxied image:', proxiedImageUrl);
+                      console.log(
+                        "Successfully loaded proxied image:",
+                        proxiedImageUrl
+                      );
                     }}
                   />
                   {/* Gradient fallback - hidden by default when image loads */}
-                  <div className="gradient-fallback absolute inset-0 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500" style={{display: 'none'}}></div>
+                  <div
+                    className="gradient-fallback absolute inset-0 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 z-10"
+                    style={{ display: "none" }}
+                  ></div>
                   {/* Much lighter overlay to preserve image visibility */}
-                  <div className="absolute inset-0 bg-black/15 z-20"></div>
+                  <div className="absolute inset-0 bg-black/15 z-25"></div>
                 </>
               ) : (
                 <>
@@ -584,13 +598,17 @@ export default function RestaurantDetails() {
                         {/* Restaurant Image */}
                         {related.image_url && (
                           <div className="relative h-32 overflow-hidden bg-gradient-to-r from-gray-200 to-gray-300">
-                            <img 
-                              src={getProxiedImageUrl(related.image_url) || related.image_url} 
+                            <img
+                              src={
+                                getProxiedImageUrl(related.image_url) ||
+                                related.image_url
+                              }
                               alt={related.name}
                               className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                               onError={(e) => {
                                 // Hide image container if image fails to load
-                                e.currentTarget.parentElement.style.display = 'none';
+                                e.currentTarget.parentElement.style.display =
+                                  "none";
                               }}
                             />
                             <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors z-10"></div>
