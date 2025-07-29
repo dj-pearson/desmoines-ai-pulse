@@ -26,7 +26,7 @@ export interface RestaurantOpening {
   cuisine?: string;
   openingDate?: string;
   openingTimeframe?: string;
-  status: 'opening_soon' | 'newly_opened' | 'announced';
+  status: "opening_soon" | "newly_opened" | "announced";
   sourceUrl?: string;
   createdAt: string;
   updatedAt?: string;
@@ -46,7 +46,7 @@ export interface Restaurant {
   isFeatured?: boolean;
   openingDate?: string;
   openingTimeframe?: string;
-  status?: 'open' | 'opening_soon' | 'newly_opened' | 'announced' | 'closed';
+  status?: "open" | "opening_soon" | "newly_opened" | "announced" | "closed";
   sourceUrl?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -79,3 +79,18 @@ export interface Playground {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// Union type for admin content management
+export type ContentItem =
+  | Event
+  | Restaurant
+  | Attraction
+  | Playground
+  | RestaurantOpening;
+
+export type ContentType =
+  | "event"
+  | "restaurant"
+  | "attraction"
+  | "playground"
+  | "restaurant_opening";

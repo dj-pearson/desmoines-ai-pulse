@@ -1,27 +1,33 @@
 import React, { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Globe, 
-  FileText, 
-  Bot, 
-  Search, 
-  Share2, 
-  Rss, 
-  Copy, 
-  Download, 
+import {
+  Globe,
+  FileText,
+  Bot,
+  Search,
+  Share2,
+  Rss,
+  Copy,
+  Download,
   CheckCircle,
   ExternalLink,
   MapPin,
   Calendar,
   Utensils,
   Camera,
-  Play
+  Play,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEvents } from "@/hooks/useEvents";
@@ -41,9 +47,11 @@ interface SEOGenerator {
 
 export default function SEOTools() {
   const { toast } = useToast();
-  const [generatedContent, setGeneratedContent] = useState<Record<string, string>>({});
+  const [generatedContent, setGeneratedContent] = useState<
+    Record<string, string>
+  >({});
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
-  
+
   // Data hooks
   const { events } = useEvents({ limit: 1000 });
   const { restaurants } = useRestaurants();
@@ -54,58 +62,59 @@ export default function SEOTools() {
     {
       id: "sitemap",
       title: "Sitemap.xml",
-      description: "Generate comprehensive sitemap with all pages for search engines",
+      description:
+        "Generate comprehensive sitemap with all pages for search engines",
       icon: <Search className="h-5 w-5" />,
-      category: "crawlers"
+      category: "crawlers",
     },
     {
       id: "robots",
       title: "Robots.txt",
       description: "Control crawler access and specify sitemap location",
       icon: <Bot className="h-5 w-5" />,
-      category: "crawlers"
+      category: "crawlers",
     },
     {
       id: "llms",
       title: "LLMs.txt",
       description: "Instructions for AI crawlers (Perplexity, OpenAI, etc.)",
       icon: <Bot className="h-5 w-5" />,
-      category: "crawlers"
+      category: "crawlers",
     },
     {
       id: "schema",
       title: "Schema.org Markup",
       description: "Structured data for events, restaurants, and attractions",
       icon: <FileText className="h-5 w-5" />,
-      category: "meta"
+      category: "meta",
     },
     {
       id: "opengraph",
       title: "Open Graph Tags",
       description: "Social media sharing optimization",
       icon: <Share2 className="h-5 w-5" />,
-      category: "meta"
+      category: "meta",
     },
     {
       id: "rss",
       title: "RSS Feed",
       description: "XML feed for events and content updates",
       icon: <Rss className="h-5 w-5" />,
-      category: "content"
-    }
+      category: "content",
+    },
   ];
 
   const createSlug = (name: string): string => {
     return name
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
   };
 
   const generateSitemap = () => {
     const baseUrl = "https://desmoinesinsider.com";
-    const currentDate = new Date().toISOString().split('T')[0];
-    
+    const currentDate = new Date().toISOString().split("T")[0];
+
     let sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
@@ -134,8 +143,10 @@ export default function SEOTools() {
   </url>`;
 
     // Add dynamic event pages
-    events.forEach(event => {
-      const eventDate = event.date ? new Date(event.date).toISOString().split('T')[0] : currentDate;
+    events.forEach((event) => {
+      const eventDate = event.date
+        ? new Date(event.date).toISOString().split("T")[0]
+        : currentDate;
       // Events don't have slug field yet, use generated slug
       const slug = createSlug(event.title);
       sitemap += `
@@ -148,14 +159,14 @@ export default function SEOTools() {
     });
 
     // Add restaurant pages
-    restaurants.forEach(restaurant => {
+    restaurants.forEach((restaurant) => {
       // Use database slug if available, fallback to generated slug for backward compatibility
       const slug = restaurant.slug || createSlug(restaurant.name);
-      const lastmod = restaurant.updated_at 
-        ? new Date(restaurant.updated_at).toISOString().split('T')[0] 
+      const lastmod = restaurant.updated_at
+        ? new Date(restaurant.updated_at).toISOString().split("T")[0]
         : currentDate;
       const priority = restaurant.is_featured ? 0.8 : 0.6;
-      
+
       sitemap += `
   <url>
     <loc>${baseUrl}/restaurants/${slug}</loc>
@@ -166,14 +177,14 @@ export default function SEOTools() {
     });
 
     // Add attraction pages
-    attractions.forEach(attraction => {
+    attractions.forEach((attraction) => {
       // Attractions don't have slug field yet, use generated slug
       const slug = createSlug(attraction.name);
-      const lastmod = attraction.updated_at 
-        ? new Date(attraction.updated_at).toISOString().split('T')[0] 
+      const lastmod = attraction.updated_at
+        ? new Date(attraction.updated_at).toISOString().split("T")[0]
         : currentDate;
       const priority = attraction.is_featured ? 0.7 : 0.6;
-      
+
       sitemap += `
   <url>
     <loc>${baseUrl}/attractions/${slug}</loc>
@@ -184,14 +195,14 @@ export default function SEOTools() {
     });
 
     // Add playground pages
-    playgrounds.forEach(playground => {
+    playgrounds.forEach((playground) => {
       // Playgrounds don't have slug field yet, use generated slug
       const slug = createSlug(playground.name);
-      const lastmod = playground.updated_at 
-        ? new Date(playground.updated_at).toISOString().split('T')[0] 
+      const lastmod = playground.updated_at
+        ? new Date(playground.updated_at).toISOString().split("T")[0]
         : currentDate;
       const priority = playground.is_featured ? 0.7 : 0.6;
-      
+
       sitemap += `
   <url>
     <loc>${baseUrl}/playgrounds/${slug}</loc>
@@ -295,53 +306,63 @@ Last updated: ${new Date().toLocaleDateString()}`;
     const businessSchema = {
       "@context": "https://schema.org",
       "@type": "LocalBusiness",
-      "name": "Des Moines Insider",
-      "description": "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",
-      "url": "https://desmoinesinsider.com",
-      "address": {
+      name: "Des Moines Insider",
+      description:
+        "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",
+      url: "https://desmoinesinsider.com",
+      address: {
         "@type": "PostalAddress",
-        "addressLocality": "Des Moines",
-        "addressRegion": "Iowa",
-        "addressCountry": "US"
+        addressLocality: "Des Moines",
+        addressRegion: "Iowa",
+        addressCountry: "US",
       },
-      "geo": {
+      geo: {
         "@type": "GeoCoordinates",
-        "latitude": "41.5868",
-        "longitude": "-93.6250"
+        latitude: "41.5868",
+        longitude: "-93.6250",
       },
-      "areaServed": {
+      areaServed: {
         "@type": "Place",
-        "name": "Des Moines Metro Area"
+        name: "Des Moines Metro Area",
       },
-      "serviceType": ["Event Discovery", "Restaurant Recommendations", "Local Attractions Guide"],
-      "knowsAbout": ["Des Moines Events", "Iowa Restaurants", "Local Attractions", "Family Activities"]
+      serviceType: [
+        "Event Discovery",
+        "Restaurant Recommendations",
+        "Local Attractions Guide",
+      ],
+      knowsAbout: [
+        "Des Moines Events",
+        "Iowa Restaurants",
+        "Local Attractions",
+        "Family Activities",
+      ],
     };
 
     const eventListSchema = {
       "@context": "https://schema.org",
       "@type": "ItemList",
-      "name": "Des Moines Events",
-      "description": "Comprehensive list of events in Des Moines, Iowa",
-      "numberOfItems": events.length,
-      "itemListElement": events.slice(0, 10).map((event, index) => ({
+      name: "Des Moines Events",
+      description: "Comprehensive list of events in Des Moines, Iowa",
+      numberOfItems: events.length,
+      itemListElement: events.slice(0, 10).map((event, index) => ({
         "@type": "ListItem",
-        "position": index + 1,
-        "item": {
+        position: index + 1,
+        item: {
           "@type": "Event",
-          "name": event.title,
-          "description": event.enhanced_description || event.original_description,
-          "startDate": event.date,
-          "location": {
+          name: event.title,
+          description: event.enhanced_description || event.original_description,
+          startDate: event.date,
+          location: {
             "@type": "Place",
-            "name": event.venue,
-            "address": event.location
+            name: event.venue,
+            address: event.location,
           },
-          "organizer": {
+          organizer: {
             "@type": "Organization",
-            "name": "Des Moines Insider"
-          }
-        }
-      }))
+            name: "Des Moines Insider",
+          },
+        },
+      })),
     };
 
     return `<!-- Business Schema -->
@@ -386,7 +407,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
   const generateRSSFeed = () => {
     const baseUrl = "https://desmoinesinsider.com";
     const currentDate = new Date().toISOString();
-    
+
     let rss = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
@@ -403,14 +424,20 @@ ${JSON.stringify(eventListSchema, null, 2)}
     </image>`;
 
     // Add recent events as RSS items
-    events.slice(0, 20).forEach(event => {
-      const eventDate = event.date ? new Date(event.date).toISOString() : currentDate;
+    events.slice(0, 20).forEach((event) => {
+      const eventDate = event.date
+        ? new Date(event.date).toISOString()
+        : currentDate;
       const slug = createSlug(event.title);
       rss += `
     <item>
       <title>${event.title}</title>
       <link>${baseUrl}/events/${slug}</link>
-      <description><![CDATA[${event.enhanced_description || event.original_description || 'Event details'}]]></description>
+      <description><![CDATA[${
+        event.enhanced_description ||
+        event.original_description ||
+        "Event details"
+      }]]></description>
       <category>Events</category>
       <pubDate>${eventDate}</pubDate>
       <guid>${baseUrl}/events/${slug}</guid>
@@ -424,11 +451,11 @@ ${JSON.stringify(eventListSchema, null, 2)}
   };
 
   const handleGenerate = async (generatorId: string) => {
-    setIsGenerating(prev => ({ ...prev, [generatorId]: true }));
-    
+    setIsGenerating((prev) => ({ ...prev, [generatorId]: true }));
+
     try {
       let content = "";
-      
+
       switch (generatorId) {
         case "sitemap":
           content = generateSitemap();
@@ -451,11 +478,13 @@ ${JSON.stringify(eventListSchema, null, 2)}
         default:
           throw new Error("Unknown generator");
       }
-      
-      setGeneratedContent(prev => ({ ...prev, [generatorId]: content }));
+
+      setGeneratedContent((prev) => ({ ...prev, [generatorId]: content }));
       toast({
         title: "Generated Successfully",
-        description: `${generators.find(g => g.id === generatorId)?.title} has been generated`,
+        description: `${
+          generators.find((g) => g.id === generatorId)?.title
+        } has been generated`,
       });
     } catch (error) {
       toast({
@@ -464,7 +493,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
         variant: "destructive",
       });
     } finally {
-      setIsGenerating(prev => ({ ...prev, [generatorId]: false }));
+      setIsGenerating((prev) => ({ ...prev, [generatorId]: false }));
     }
   };
 
@@ -485,9 +514,9 @@ ${JSON.stringify(eventListSchema, null, 2)}
   };
 
   const handleDownload = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'text/plain' });
+    const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = filename;
     document.body.appendChild(a);
@@ -498,30 +527,33 @@ ${JSON.stringify(eventListSchema, null, 2)}
 
   const getFileExtension = (generatorId: string) => {
     const extensions = {
-      sitemap: '.xml',
-      robots: '.txt',
-      llms: '.txt',
-      schema: '.html',
-      opengraph: '.html',
-      rss: '.xml'
+      sitemap: ".xml",
+      robots: ".txt",
+      llms: ".txt",
+      schema: ".html",
+      opengraph: ".html",
+      rss: ".xml",
     };
-    return extensions[generatorId as keyof typeof extensions] || '.txt';
+    return extensions[generatorId as keyof typeof extensions] || ".txt";
   };
 
   const categorizedGenerators = {
-    crawlers: generators.filter(g => g.category === "crawlers"),
-    meta: generators.filter(g => g.category === "meta"),
-    content: generators.filter(g => g.category === "content")
+    crawlers: generators.filter((g) => g.category === "crawlers"),
+    meta: generators.filter((g) => g.category === "meta"),
+    content: generators.filter((g) => g.category === "content"),
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center mb-8">
-        <h2 className="text-mobile-title md:text-3xl font-bold mb-4">SEO Tools & Generators</h2>
+        <h2 className="text-mobile-title md:text-3xl font-bold mb-4">
+          SEO Tools & Generators
+        </h2>
         <p className="text-muted-foreground max-w-3xl mx-auto">
-          Generate essential SEO files optimized for both traditional search engines and AI crawlers. 
-          Perfect for GEO (Generative Engine Optimization) and maximum discoverability.
+          Generate essential SEO files optimized for both traditional search
+          engines and AI crawlers. Perfect for GEO (Generative Engine
+          Optimization) and maximum discoverability.
         </p>
       </div>
 
@@ -565,7 +597,8 @@ ${JSON.stringify(eventListSchema, null, 2)}
             AI Crawler Files
           </CardTitle>
           <CardDescription>
-            Essential files for search engines and AI crawlers like Google, Perplexity, OpenAI
+            Essential files for search engines and AI crawlers like Google,
+            Perplexity, OpenAI
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -589,14 +622,19 @@ ${JSON.stringify(eventListSchema, null, 2)}
                   >
                     {isGenerating[generator.id] ? "Generating..." : "Generate"}
                   </Button>
-                  
+
                   {generatedContent[generator.id] && (
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleCopy(generatedContent[generator.id], generator.title)}
+                          onClick={() =>
+                            handleCopy(
+                              generatedContent[generator.id],
+                              generator.title
+                            )
+                          }
                           className="flex-1"
                         >
                           <Copy className="h-4 w-4 mr-1" />
@@ -605,10 +643,12 @@ ${JSON.stringify(eventListSchema, null, 2)}
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDownload(
-                            generatedContent[generator.id], 
-                            generator.id + getFileExtension(generator.id)
-                          )}
+                          onClick={() =>
+                            handleDownload(
+                              generatedContent[generator.id],
+                              generator.id + getFileExtension(generator.id)
+                            )
+                          }
                           className="flex-1"
                         >
                           <Download className="h-4 w-4 mr-1" />
@@ -661,14 +701,19 @@ ${JSON.stringify(eventListSchema, null, 2)}
                   >
                     {isGenerating[generator.id] ? "Generating..." : "Generate"}
                   </Button>
-                  
+
                   {generatedContent[generator.id] && (
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleCopy(generatedContent[generator.id], generator.title)}
+                          onClick={() =>
+                            handleCopy(
+                              generatedContent[generator.id],
+                              generator.title
+                            )
+                          }
                           className="flex-1"
                         >
                           <Copy className="h-4 w-4 mr-1" />
@@ -677,10 +722,12 @@ ${JSON.stringify(eventListSchema, null, 2)}
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDownload(
-                            generatedContent[generator.id], 
-                            generator.id + getFileExtension(generator.id)
-                          )}
+                          onClick={() =>
+                            handleDownload(
+                              generatedContent[generator.id],
+                              generator.id + getFileExtension(generator.id)
+                            )
+                          }
                           className="flex-1"
                         >
                           <Download className="h-4 w-4 mr-1" />
@@ -708,9 +755,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
             <Rss className="h-5 w-5" />
             Content Feeds
           </CardTitle>
-          <CardDescription>
-            RSS feeds and content syndication
-          </CardDescription>
+          <CardDescription>RSS feeds and content syndication</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mobile-grid sm:grid-cols-2 gap-4">
@@ -733,14 +778,19 @@ ${JSON.stringify(eventListSchema, null, 2)}
                   >
                     {isGenerating[generator.id] ? "Generating..." : "Generate"}
                   </Button>
-                  
+
                   {generatedContent[generator.id] && (
                     <div className="space-y-2">
                       <div className="flex gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleCopy(generatedContent[generator.id], generator.title)}
+                          onClick={() =>
+                            handleCopy(
+                              generatedContent[generator.id],
+                              generator.title
+                            )
+                          }
                           className="flex-1"
                         >
                           <Copy className="h-4 w-4 mr-1" />
@@ -749,10 +799,12 @@ ${JSON.stringify(eventListSchema, null, 2)}
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDownload(
-                            generatedContent[generator.id], 
-                            generator.id + getFileExtension(generator.id)
-                          )}
+                          onClick={() =>
+                            handleDownload(
+                              generatedContent[generator.id],
+                              generator.id + getFileExtension(generator.id)
+                            )
+                          }
                           className="flex-1"
                         >
                           <Download className="h-4 w-4 mr-1" />
@@ -779,9 +831,14 @@ ${JSON.stringify(eventListSchema, null, 2)}
         <AlertDescription>
           <strong>Implementation Tips:</strong>
           <ul className="list-disc list-inside mt-2 space-y-1 text-sm">
-            <li>Place sitemap.xml and robots.txt in your website root directory</li>
+            <li>
+              Place sitemap.xml and robots.txt in your website root directory
+            </li>
             <li>Add schema markup to your HTML head section</li>
-            <li>Test generated files with Google Search Console and Rich Results Test</li>
+            <li>
+              Test generated files with Google Search Console and Rich Results
+              Test
+            </li>
             <li>Update sitemap.xml regularly as you add new content</li>
             <li>Monitor crawl stats in search console after implementing</li>
           </ul>
