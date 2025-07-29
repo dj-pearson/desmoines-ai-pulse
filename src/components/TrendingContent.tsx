@@ -14,7 +14,7 @@ interface TrendingContentProps {
   className?: string;
 }
 
-export function TrendingContent({ 
+export default function TrendingContent({ 
   contentType, 
   timeWindow = '24h', 
   limit = 6,
