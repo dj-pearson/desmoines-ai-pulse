@@ -52,11 +52,11 @@ serve(async (req) => {
         const response = await fetch(
           `https://places.googleapis.com/v1/places/${restaurant.google_place_id}`,
           {
-            method: 'GET',
+            method: "GET",
             headers: {
-              'X-Goog-Api-Key': GOOGLE_API_KEY,
-              'X-Goog-FieldMask': 'id,name,businessStatus'
-            }
+              "X-Goog-Api-Key": GOOGLE_API_KEY,
+              "X-Goog-FieldMask": "id,name,businessStatus",
+            },
           }
         );
 

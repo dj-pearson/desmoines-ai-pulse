@@ -105,7 +105,7 @@ serve(async (req) => {
     // Search for restaurants using Places API (New)
     const placesUrl = `https://places.googleapis.com/v1/places:searchNearby`;
     console.log("Places search URL (New API):", placesUrl);
-    
+
     const placesRequestBody = {
       includedTypes: ["restaurant"],
       maxResultCount: 20,
@@ -113,22 +113,23 @@ serve(async (req) => {
         circle: {
           center: {
             latitude: lat,
-            longitude: lng
+            longitude: lng,
           },
-          radius: radius
-        }
+          radius: radius,
+        },
       },
-      languageCode: "en"
+      languageCode: "en",
     };
-    
+
     const placesResponse = await fetch(placesUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_API_KEY,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.businessStatus,places.rating,places.userRatingCount,places.priceLevel,places.types,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri'
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_API_KEY,
+        "X-Goog-FieldMask":
+          "places.id,places.displayName,places.formattedAddress,places.businessStatus,places.rating,places.userRatingCount,places.priceLevel,places.types,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri",
       },
-      body: JSON.stringify(placesRequestBody)
+      body: JSON.stringify(placesRequestBody),
     });
 
     if (!placesResponse.ok) {
@@ -155,66 +156,71 @@ serve(async (req) => {
     }
 
     // Filter out fast food chains and already existing restaurants
-    const filteredRestaurants = placesData.places.filter(
-      (place: any) => {
-        // Skip fast food chains (common chain indicators)
-        const fastFoodChains = [
-          "mcdonald",
-          "burger king",
-          "kfc",
-          "taco bell",
-          "subway",
-          "pizza hut",
-          "domino",
-          "papa john",
-          "wendys",
-          "arbys",
-          "dairy queen",
-          "sonic",
-          "popeyes",
-          "chipotle",
-          "panera",
-          "jimmy john",
-          "starbucks",
-          "dunkin",
-        ];
+    const filteredRestaurants = placesData.places.filter((place: any) => {
+      // Skip fast food chains (common chain indicators)
+      const fastFoodChains = [
+        "mcdonald",
+        "burger king",
+        "kfc",
+        "taco bell",
+        "subway",
+        "pizza hut",
+        "domino",
+        "papa john",
+        "wendys",
+        "arbys",
+        "dairy queen",
+        "sonic",
+        "popeyes",
+        "chipotle",
+        "panera",
+        "jimmy john",
+        "starbucks",
+        "dunkin",
+      ];
 
-        const nameLower = (place.displayName?.text || place.displayName || place.name || '').toLowerCase();
-        const isChain = fastFoodChains.some((chain) =>
-          nameLower.includes(chain)
-        );
+      const nameLower = (
+        place.displayName?.text ||
+        place.displayName ||
+        place.name ||
+        ""
+      ).toLowerCase();
+      const isChain = fastFoodChains.some((chain) => nameLower.includes(chain));
 
-        // Only include actual restaurants (not just food)
-        const isRestaurant = place.types?.includes("restaurant") || false;
+      // Only include actual restaurants (not just food)
+      const isRestaurant = place.types?.includes("restaurant") || false;
 
-        return (
-          !isChain && 
-          isRestaurant && 
-          place.businessStatus === "OPERATIONAL"
-        );
-      }
-    );
+      return !isChain && isRestaurant && place.businessStatus === "OPERATIONAL";
+    });
 
     // Convert the new API format to our expected format
-    const detailedRestaurants: GooglePlacesResult[] = filteredRestaurants.map((place: any) => {
-      const mapped = {
-        place_id: place.id,
-        name: place.displayName?.text || place.displayName || place.name || 'Unknown Restaurant',
-        formatted_address: place.formattedAddress,
-        business_status: place.businessStatus,
-        rating: place.rating,
-        user_ratings_total: place.userRatingCount,
-        price_level: place.priceLevel,
-        types: place.types || [],
-        opening_hours: place.currentOpeningHours ? {
-          open_now: place.currentOpeningHours.openNow
-        } : undefined,
-        formatted_phone_number: place.nationalPhoneNumber,
-        website: place.websiteUri,
-      };
-      console.log("Mapped restaurant:", mapped);
-      return mapped;
-    });
+    const detailedRestaurants: GooglePlacesResult[] = filteredRestaurants.map(
+      (place: any) => {
+        const mapped = {
+          place_id: place.id,
+          name:
+            place.displayName?.text ||
+            place.displayName ||
+            place.name ||
+            "Unknown Restaurant",
+          formatted_address: place.formattedAddress,
+          business_status: place.businessStatus,
+          rating: place.rating,
+          user_ratings_total: place.userRatingCount,
+          price_level: place.priceLevel,
+          types: place.types || [],
+          opening_hours: place.currentOpeningHours
+            ? {
+                open_now: place.currentOpeningHours.openNow,
+              }
+            : undefined,
+          formatted_phone_number: place.nationalPhoneNumber,
+          website: place.websiteUri,
+        };
+        console.log("Mapped restaurant:", mapped);
+        return mapped;
+      }
+    );
 
     return new Response(
       JSON.stringify({
@@ -237,7 +243,10 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: error.message || "An unexpected error occurred",
-        details: globalThis.Deno?.env?.get("NODE_ENV") === "development" ? error.stack : undefined,
+        details:
+          globalThis.Deno?.env?.get("NODE_ENV") === "development"
+            ? error.stack
+            : undefined,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
