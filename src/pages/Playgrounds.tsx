@@ -1,6 +1,9 @@
+import React, { useState, useMemo } from "react";
+import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
+import { useToast } from "@/hooks/use-toast";
 import {
   Card,
   CardContent,
@@ -9,7 +12,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Star, Users } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { MapPin, Star, Users, Filter } from "lucide-react";
 import { Link } from "react-router-dom";
 
 const createSlug = (name: string): string => {
@@ -20,10 +32,160 @@ const createSlug = (name: string): string => {
 };
 
 export default function Playgrounds() {
-  const { playgrounds, isLoading, error } = usePlaygrounds();
+  const { toast } = useToast();
+  
+  // Filter states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedAgeRange, setSelectedAgeRange] = useState("all");
+  const [location, setLocation] = useState("any-location");
+  const [showFilters, setShowFilters] = useState(false);
+  const [featuredOnly, setFeaturedOnly] = useState("all");
+
+  // Get all playgrounds first
+  const { playgrounds: allPlaygrounds, isLoading, error } = usePlaygrounds();
+
+  // Get unique age ranges and locations for filter options
+  const ageRanges = useMemo(() => {
+    const uniqueRanges = new Set(
+      allPlaygrounds
+        .map((playground) => playground.age_range)
+        .filter(Boolean)
+    );
+    return Array.from(uniqueRanges).sort();
+  }, [allPlaygrounds]);
+
+  const locations = useMemo(() => {
+    const uniqueLocations = new Set(
+      allPlaygrounds
+        .map((playground) => playground.location)
+        .filter(Boolean)
+        .map((loc) => {
+          // Extract city/area from full address
+          const parts = loc.split(",");
+          return parts[parts.length - 2]?.trim() || parts[0]?.trim() || loc;
+        })
+    );
+    return Array.from(uniqueLocations).sort();
+  }, [allPlaygrounds]);
+
+  // Apply filters
+  const filteredPlaygrounds = useMemo(() => {
+    return allPlaygrounds.filter((playground) => {
+      // Search filter
+      if (searchQuery) {
+        const searchLower = searchQuery.toLowerCase();
+        const matchesSearch =
+          playground.name.toLowerCase().includes(searchLower) ||
+          playground.description?.toLowerCase().includes(searchLower) ||
+          playground.location?.toLowerCase().includes(searchLower) ||
+          playground.amenities?.some((amenity) =>
+            amenity.toLowerCase().includes(searchLower)
+          );
+        if (!matchesSearch) return false;
+      }
+
+      // Age range filter
+      if (selectedAgeRange !== "all" && playground.age_range !== selectedAgeRange) {
+        return false;
+      }
+
+      // Location filter
+      if (location !== "any-location") {
+        const playgroundLocation = playground.location || "";
+        if (!playgroundLocation.toLowerCase().includes(location.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Featured filter
+      if (featuredOnly === "featured" && !playground.is_featured) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [allPlaygrounds, searchQuery, selectedAgeRange, location, featuredOnly]);
+
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setSelectedAgeRange("all");
+    setLocation("any-location");
+    setFeaturedOnly("all");
+    toast({
+      title: "Filters Cleared",
+      description: "All filters have been reset",
+    });
+  };
+
+  // SEO data
+  const seoTitle = searchQuery
+    ? `"${searchQuery}" Playgrounds in Des Moines`
+    : selectedAgeRange && selectedAgeRange !== "all"
+    ? `Playgrounds for Ages ${selectedAgeRange} in Des Moines`
+    : "Playgrounds in Des Moines - Family Fun & Children's Recreation";
+
+  const seoDescription = `Discover ${searchQuery ? `"${searchQuery}" ` : ""}${
+    selectedAgeRange && selectedAgeRange !== "all"
+      ? `playgrounds for ages ${selectedAgeRange} ` 
+      : ""
+  }in Des Moines, Iowa. Find the perfect playground for your family with accessible equipment, fun activities, and safe play areas.`;
+
+  const playgroundKeywords = [
+    "Des Moines playgrounds",
+    "Iowa playgrounds", 
+    "children recreation",
+    "family activities Des Moines",
+    "parks",
+    "playground equipment",
+    "kids activities",
+    "family fun",
+    ...(selectedAgeRange && selectedAgeRange !== "all" 
+      ? [`ages ${selectedAgeRange}`] 
+      : []),
+    ...(searchQuery ? [searchQuery] : []),
+  ];
+
+  const playgroundsSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList", 
+    name: "Des Moines Playgrounds",
+    description: seoDescription,
+    numberOfItems: filteredPlaygrounds?.length || 0,
+    itemListElement:
+      filteredPlaygrounds?.slice(0, 10).map((playground, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        item: {
+          "@type": "Park",
+          name: playground.name,
+          description: playground.description,
+          image: playground.image_url,
+          address: {
+            "@type": "PostalAddress",
+            addressLocality: "Des Moines",
+            addressRegion: "Iowa",
+            addressCountry: "US"
+          }
+        }
+      })) || []
+  };
 
   return (
     <div className="min-h-screen bg-background">
+      <Helmet>
+        <title>{seoTitle}</title>
+        <meta name="description" content={seoDescription} />
+        <meta name="keywords" content={playgroundKeywords.join(", ")} />
+        <meta property="og:title" content={seoTitle} />
+        <meta property="og:description" content={seoDescription} />
+        <meta property="og:type" content="website" />
+        <meta property="og:image" content="https://desmoinesinsider.com/og-image.jpg" />
+        
+        {/* JSON-LD Structured Data */}
+        <script type="application/ld+json">
+          {JSON.stringify(playgroundsSchema)}
+        </script>
+      </Helmet>
       <Header />
 
       {/* Hero Section with DMI Brand Colors */}
@@ -37,10 +199,126 @@ export default function Playgrounds() {
             Find the perfect playground for your family with accessible
             equipment and fun activities
           </p>
+
+          {/* Search Bar */}
+          <div className="max-w-2xl mx-auto">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <Input
+                  type="text"
+                  placeholder="Search playgrounds..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white"
+                />
+              </div>
+              <Button
+                onClick={() => setShowFilters(!showFilters)}
+                variant="secondary"
+                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+              >
+                <Filter className="h-4 w-4 mr-2" />
+                Filters
+              </Button>
+            </div>
+          </div>
         </div>
       </section>
 
-      <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
+      <main className="container mx-auto px-4 py-8">
+        {/* Filters Section */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Age Range Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Age Range
+                </label>
+                <Select
+                  value={selectedAgeRange}
+                  onValueChange={setSelectedAgeRange}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Ages</SelectItem>
+                    {ageRanges?.map((range) => (
+                      <SelectItem key={range} value={range}>
+                        {range}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Location Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Location
+                </label>
+                <Select value={location} onValueChange={setLocation}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="any-location">Any location</SelectItem>
+                    <SelectItem value="downtown">Downtown</SelectItem>
+                    <SelectItem value="west-des-moines">
+                      West Des Moines
+                    </SelectItem>
+                    <SelectItem value="ankeny">Ankeny</SelectItem>
+                    <SelectItem value="urbandale">Urbandale</SelectItem>
+                    <SelectItem value="clive">Clive</SelectItem>
+                    {locations?.map((loc) => (
+                      <SelectItem key={loc} value={loc.toLowerCase()}>
+                        {loc}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Featured Filter */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Featured
+                </label>
+                <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Playgrounds</SelectItem>
+                    <SelectItem value="featured">Featured Only</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="flex justify-between mt-6">
+              <Button variant="outline" onClick={handleClearFilters}>
+                Clear Filters
+              </Button>
+              <div className="text-sm text-gray-500">
+                {filteredPlaygrounds?.length || 0} playgrounds found
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Results Header */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-bold">
+            {searchQuery
+              ? `Search results for "${searchQuery}"`
+              : selectedAgeRange && selectedAgeRange !== "all"
+              ? `Playgrounds for Ages ${selectedAgeRange}`
+              : "Des Moines Playgrounds"}
+          </h2>
+        </div>
+
         {/* Content */}
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -62,13 +340,17 @@ export default function Playgrounds() {
               Error loading playgrounds. Please try again later.
             </p>
           </div>
-        ) : playgrounds.length === 0 ? (
+        ) : filteredPlaygrounds.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-muted-foreground">No playgrounds found.</p>
+            <p className="text-muted-foreground">
+              {searchQuery || selectedAgeRange !== "all" || location !== "any-location" 
+                ? "No playgrounds match your current filters." 
+                : "No playgrounds found."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {playgrounds.map((playground) => (
+            {filteredPlaygrounds.map((playground) => (
               <Link
                 key={playground.id}
                 to={`/playgrounds/${createSlug(playground.name)}`}
