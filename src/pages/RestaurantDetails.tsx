@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import SEOHead from "@/components/SEOHead";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import {
   MapPin,
   Phone,
@@ -108,46 +110,54 @@ export default function RestaurantDetails() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse">
-            <div className="h-8 w-32 bg-gray-300 rounded mb-6"></div>
-            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
-              <div className="h-64 bg-gray-300"></div>
-              <div className="p-8">
-                <div className="h-8 bg-gray-300 rounded mb-4"></div>
-                <div className="h-4 bg-gray-300 rounded mb-2"></div>
-                <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+      <>
+        <Header />
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
+          <div className="container mx-auto px-4 py-8">
+            <div className="animate-pulse">
+              <div className="h-8 w-32 bg-gray-300 rounded mb-6"></div>
+              <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+                <div className="h-64 bg-gray-300"></div>
+                <div className="p-8">
+                  <div className="h-8 bg-gray-300 rounded mb-4"></div>
+                  <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                  <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+        <Footer />
+      </>
     );
   }
 
   if (error || !restaurant) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
-        <Card className="max-w-md mx-auto text-center">
-          <CardContent className="p-8">
-            <Utensils className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">
-              Restaurant Not Found
-            </h2>
-            <p className="text-gray-600 mb-6">
-              The restaurant you're looking for doesn't exist or has been
-              removed.
-            </p>
-            <Link to="/restaurants">
-              <Button className="bg-amber-600 hover:bg-amber-700">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Restaurants
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
+      <>
+        <Header />
+        <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
+          <Card className="max-w-md mx-auto text-center">
+            <CardContent className="p-8">
+              <Utensils className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                Restaurant Not Found
+              </h2>
+              <p className="text-gray-600 mb-6">
+                The restaurant you're looking for doesn't exist or has been
+                removed.
+              </p>
+              <Link to="/restaurants">
+                <Button className="bg-amber-600 hover:bg-amber-700">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Back to Restaurants
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+        <Footer />
+      </>
     );
   }
 
@@ -223,6 +233,7 @@ export default function RestaurantDetails() {
 
   return (
     <>
+      <Header />
       {restaurant && (
         <SEOHead
           title={seoTitle}
@@ -275,25 +286,49 @@ export default function RestaurantDetails() {
 
           {/* Main Restaurant Card */}
           <Card className="bg-white/95 backdrop-blur-sm shadow-2xl rounded-3xl overflow-hidden border-0 mb-8">
-            {/* Hero Section */}
-            <div className="relative h-80 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 overflow-hidden">
-              <div className="absolute inset-0 bg-black/20"></div>
+            {/* Hero Section with Google Image */}
+            <div className="relative h-80 overflow-hidden">
+              {restaurant.image_url ? (
+                <>
+                  <img 
+                    src={restaurant.image_url} 
+                    alt={restaurant.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to gradient background if image fails to load
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-black/40"></div>
+                </>
+              ) : (
+                <>
+                  <div className="absolute inset-0 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500"></div>
+                  <div className="absolute inset-0 bg-black/20"></div>
+                </>
+              )}
               <div className="absolute inset-0 flex items-center justify-center">
                 <div className="text-center text-white">
-                  <div className="flex items-center justify-center mb-4">
-                    <Utensils className="h-16 w-16 text-white/80" />
-                  </div>
-                  <h1 className="text-5xl font-bold mb-2 tracking-tight">
+                  {!restaurant.image_url && (
+                    <div className="flex items-center justify-center mb-4">
+                      <Utensils className="h-16 w-16 text-white/80" />
+                    </div>
+                  )}
+                  <h1 className="text-5xl font-bold mb-2 tracking-tight drop-shadow-lg">
                     {restaurant.name}
                   </h1>
-                  <p className="text-xl text-white/90 font-medium">
+                  <p className="text-xl text-white/90 font-medium drop-shadow-md">
                     {restaurant.cuisine} Cuisine
                   </p>
                 </div>
               </div>
-              {/* Decorative elements */}
-              <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full animate-pulse"></div>
-              <div className="absolute bottom-10 right-10 w-32 h-32 bg-white/5 rounded-full animate-pulse delay-1000"></div>
+              {/* Decorative elements only when no image */}
+              {!restaurant.image_url && (
+                <>
+                  <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full animate-pulse"></div>
+                  <div className="absolute bottom-10 right-10 w-32 h-32 bg-white/5 rounded-full animate-pulse delay-1000"></div>
+                </>
+              )}
             </div>
 
             {/* Restaurant Info */}
@@ -502,7 +537,22 @@ export default function RestaurantDetails() {
                       to={`/restaurants/${related.slug || related.id}`}
                       className="group"
                     >
-                      <Card className="h-full hover:shadow-lg transition-all duration-300 group-hover:scale-105 border border-gray-200">
+                      <Card className="h-full hover:shadow-lg transition-all duration-300 group-hover:scale-105 border border-gray-200 overflow-hidden">
+                        {/* Restaurant Image */}
+                        {related.image_url && (
+                          <div className="relative h-32 overflow-hidden">
+                            <img 
+                              src={related.image_url} 
+                              alt={related.name}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              onError={(e) => {
+                                // Hide image container if image fails to load
+                                e.currentTarget.parentElement.style.display = 'none';
+                              }}
+                            />
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
+                          </div>
+                        )}
                         <CardContent className="p-6">
                           <div className="flex items-center justify-between mb-3">
                             <h4 className="font-semibold text-gray-800 group-hover:text-amber-600 transition-colors">
@@ -534,6 +584,7 @@ export default function RestaurantDetails() {
           )}
         </div>
       </div>
+      <Footer />
     </>
   );
 }
