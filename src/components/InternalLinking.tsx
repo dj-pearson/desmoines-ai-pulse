@@ -3,7 +3,14 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, MapPin, ChefHat, Music, Theater, PartyPopper } from "lucide-react";
+import {
+  Calendar,
+  MapPin,
+  ChefHat,
+  Music,
+  Theater,
+  PartyPopper,
+} from "lucide-react";
 
 interface InternalLinkingProps {
   currentType?: "event" | "restaurant" | "attraction" | "playground";
@@ -12,7 +19,12 @@ interface InternalLinkingProps {
   cuisine?: string;
 }
 
-export function InternalLinking({ currentType, currentId, category, cuisine }: InternalLinkingProps) {
+export function InternalLinking({
+  currentType,
+  currentId,
+  category,
+  cuisine,
+}: InternalLinkingProps) {
   const { data: relatedEvents } = useQuery({
     queryKey: ["related-events", category, currentId],
     queryFn: async () => {
@@ -22,7 +34,7 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
         .select("id, title, date, category")
         .eq("category", category)
         .neq("id", currentId || "")
-        .gte("date", new Date().toISOString().split('T')[0])
+        .gte("date", new Date().toISOString().split("T")[0])
         .order("date", { ascending: true })
         .limit(3);
 
@@ -57,7 +69,7 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
           .from("events")
           .select("id, title, date, category")
           .eq("is_featured", true)
-          .gte("date", new Date().toISOString().split('T')[0])
+          .gte("date", new Date().toISOString().split("T")[0])
           .order("date", { ascending: true })
           .limit(2),
         supabase
@@ -98,14 +110,16 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
           <h3 className="font-semibold text-lg mb-4">More {category} Events</h3>
           <div className="space-y-3">
             {relatedEvents.map((event) => (
-              <Link 
+              <Link
                 key={event.id}
                 to={`/events/${event.id}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
-                    <h4 className="font-medium text-sm line-clamp-2">{event.title}</h4>
+                    <h4 className="font-medium text-sm line-clamp-2">
+                      {event.title}
+                    </h4>
                     <p className="text-xs text-muted-foreground mt-1">
                       {new Date(event.date).toLocaleDateString()}
                     </p>
@@ -118,7 +132,7 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
               </Link>
             ))}
           </div>
-          <Link 
+          <Link
             to={`/events/category/${category?.toLowerCase()}`}
             className="inline-block mt-4 text-sm text-[#DC143C] hover:underline"
           >
@@ -129,14 +143,20 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
     );
   }
 
-  if (currentType === "restaurant" && relatedRestaurants && relatedRestaurants.length > 0) {
+  if (
+    currentType === "restaurant" &&
+    relatedRestaurants &&
+    relatedRestaurants.length > 0
+  ) {
     return (
       <Card>
         <CardContent className="p-6">
-          <h3 className="font-semibold text-lg mb-4">More {cuisine} Restaurants</h3>
+          <h3 className="font-semibold text-lg mb-4">
+            More {cuisine} Restaurants
+          </h3>
           <div className="space-y-3">
             {relatedRestaurants.map((restaurant) => (
-              <Link 
+              <Link
                 key={restaurant.id}
                 to={`/restaurants/${restaurant.id}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
@@ -159,7 +179,7 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
               </Link>
             ))}
           </div>
-          <Link 
+          <Link
             to={`/restaurants/cuisine/${cuisine?.toLowerCase()}`}
             className="inline-block mt-4 text-sm text-[#DC143C] hover:underline"
           >
@@ -171,21 +191,27 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
   }
 
   // Show featured content as fallback
-  if (featuredContent && (featuredContent.events.length > 0 || featuredContent.restaurants.length > 0)) {
+  if (
+    featuredContent &&
+    (featuredContent.events.length > 0 ||
+      featuredContent.restaurants.length > 0)
+  ) {
     return (
       <Card>
         <CardContent className="p-6">
           <h3 className="font-semibold text-lg mb-4">Featured in Des Moines</h3>
           <div className="space-y-3">
             {featuredContent.events.map((event) => (
-              <Link 
+              <Link
                 key={event.id}
                 to={`/events/${event.id}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1">
-                    <h4 className="font-medium text-sm line-clamp-2">{event.title}</h4>
+                    <h4 className="font-medium text-sm line-clamp-2">
+                      {event.title}
+                    </h4>
                     <p className="text-xs text-muted-foreground mt-1">
                       {new Date(event.date).toLocaleDateString()}
                     </p>
@@ -198,7 +224,7 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
               </Link>
             ))}
             {featuredContent.restaurants.map((restaurant) => (
-              <Link 
+              <Link
                 key={restaurant.id}
                 to={`/restaurants/${restaurant.id}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"

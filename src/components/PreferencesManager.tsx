@@ -1,36 +1,101 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Coffee, Music, Gamepad2, Palette, Heart, Camera, User, Calendar, MapPin, Settings, Save, TrendingUp } from "lucide-react";
+import {
+  Coffee,
+  Music,
+  Gamepad2,
+  Palette,
+  Heart,
+  Camera,
+  User,
+  Calendar,
+  MapPin,
+  Settings,
+  Save,
+  TrendingUp,
+} from "lucide-react";
 
 const INTERESTS = [
-  { id: "food", label: "Food & Dining", icon: Coffee, description: "Restaurants, food festivals, culinary events" },
-  { id: "music", label: "Music & Concerts", icon: Music, description: "Live music, concerts, festivals" },
-  { id: "sports", label: "Sports & Recreation", icon: Gamepad2, description: "Games, athletics, recreational activities" },
-  { id: "arts", label: "Arts & Culture", icon: Palette, description: "Museums, galleries, theater, cultural events" },
-  { id: "nightlife", label: "Nightlife & Entertainment", icon: Heart, description: "Bars, clubs, evening entertainment" },
-  { id: "outdoor", label: "Outdoor Activities", icon: Camera, description: "Parks, nature, outdoor adventures" },
-  { id: "family", label: "Family Events", icon: User, description: "Kid-friendly activities, family outings" },
-  { id: "networking", label: "Business & Networking", icon: Calendar, description: "Professional events, meetups" },
+  {
+    id: "food",
+    label: "Food & Dining",
+    icon: Coffee,
+    description: "Restaurants, food festivals, culinary events",
+  },
+  {
+    id: "music",
+    label: "Music & Concerts",
+    icon: Music,
+    description: "Live music, concerts, festivals",
+  },
+  {
+    id: "sports",
+    label: "Sports & Recreation",
+    icon: Gamepad2,
+    description: "Games, athletics, recreational activities",
+  },
+  {
+    id: "arts",
+    label: "Arts & Culture",
+    icon: Palette,
+    description: "Museums, galleries, theater, cultural events",
+  },
+  {
+    id: "nightlife",
+    label: "Nightlife & Entertainment",
+    icon: Heart,
+    description: "Bars, clubs, evening entertainment",
+  },
+  {
+    id: "outdoor",
+    label: "Outdoor Activities",
+    icon: Camera,
+    description: "Parks, nature, outdoor adventures",
+  },
+  {
+    id: "family",
+    label: "Family Events",
+    icon: User,
+    description: "Kid-friendly activities, family outings",
+  },
+  {
+    id: "networking",
+    label: "Business & Networking",
+    icon: Calendar,
+    description: "Professional events, meetups",
+  },
 ];
 
 const LOCATIONS = [
   "Downtown Des Moines",
-  "West Des Moines", 
+  "West Des Moines",
   "Ankeny",
   "Urbandale",
   "Clive",
   "Johnston",
   "Altoona",
-  "Other"
+  "Other",
 ];
 
 export default function PreferencesManager() {
@@ -51,19 +116,22 @@ export default function PreferencesManager() {
       setFormData({
         interests: profile.interests || [],
         location: profile.location || "",
-        emailNotifications: profile.communication_preferences?.email_notifications ?? true,
-        smsNotifications: profile.communication_preferences?.sms_notifications ?? false,
-        eventRecommendations: profile.communication_preferences?.event_recommendations ?? true,
+        emailNotifications:
+          profile.communication_preferences?.email_notifications ?? true,
+        smsNotifications:
+          profile.communication_preferences?.sms_notifications ?? false,
+        eventRecommendations:
+          profile.communication_preferences?.event_recommendations ?? true,
       });
     }
   }, [profile]);
 
   const handleInterestToggle = (interestId: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       interests: prev.interests.includes(interestId)
-        ? prev.interests.filter(id => id !== interestId)
-        : [...prev.interests, interestId]
+        ? prev.interests.filter((id) => id !== interestId)
+        : [...prev.interests, interestId],
     }));
   };
 
@@ -79,12 +147,13 @@ export default function PreferencesManager() {
           email_notifications: formData.emailNotifications,
           sms_notifications: formData.smsNotifications,
           event_recommendations: formData.eventRecommendations,
-        }
+        },
       });
 
       toast({
         title: "Preferences Updated!",
-        description: "Your event recommendations will be updated based on your new preferences.",
+        description:
+          "Your event recommendations will be updated based on your new preferences.",
       });
     } catch (error) {
       toast({
@@ -132,7 +201,8 @@ export default function PreferencesManager() {
             Your Interests
           </CardTitle>
           <CardDescription>
-            Select topics you're interested in. We'll use these to recommend relevant events.
+            Select topics you're interested in. We'll use these to recommend
+            relevant events.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -140,7 +210,7 @@ export default function PreferencesManager() {
             {INTERESTS.map((interest) => {
               const Icon = interest.icon;
               const isSelected = formData.interests.includes(interest.id);
-              
+
               return (
                 <div
                   key={interest.id}
@@ -185,9 +255,11 @@ export default function PreferencesManager() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Select 
-            value={formData.location} 
-            onValueChange={(value) => setFormData(prev => ({ ...prev, location: value }))}
+          <Select
+            value={formData.location}
+            onValueChange={(value) =>
+              setFormData((prev) => ({ ...prev, location: value }))
+            }
           >
             <SelectTrigger>
               <SelectValue placeholder="Select your preferred area" />
@@ -215,34 +287,43 @@ export default function PreferencesManager() {
             <Checkbox
               id="emailNotifications"
               checked={formData.emailNotifications}
-              onCheckedChange={(checked) => 
-                setFormData(prev => ({ ...prev, emailNotifications: !!checked }))
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  emailNotifications: !!checked,
+                }))
               }
             />
             <Label htmlFor="emailNotifications">
               Email notifications about new events
             </Label>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             <Checkbox
               id="smsNotifications"
               checked={formData.smsNotifications}
-              onCheckedChange={(checked) => 
-                setFormData(prev => ({ ...prev, smsNotifications: !!checked }))
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  smsNotifications: !!checked,
+                }))
               }
             />
             <Label htmlFor="smsNotifications">
               SMS notifications for urgent updates
             </Label>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             <Checkbox
               id="eventRecommendations"
               checked={formData.eventRecommendations}
-              onCheckedChange={(checked) => 
-                setFormData(prev => ({ ...prev, eventRecommendations: !!checked }))
+              onCheckedChange={(checked) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  eventRecommendations: !!checked,
+                }))
               }
             />
             <Label htmlFor="eventRecommendations">
@@ -253,11 +334,7 @@ export default function PreferencesManager() {
       </Card>
 
       <div className="flex justify-center gap-4">
-        <Button 
-          onClick={handleSave} 
-          disabled={isUpdating}
-          className="min-w-32"
-        >
+        <Button onClick={handleSave} disabled={isUpdating} className="min-w-32">
           <Save className="h-4 w-4 mr-2" />
           {isUpdating ? "Saving..." : "Save Preferences"}
         </Button>
@@ -271,7 +348,7 @@ export default function PreferencesManager() {
                 🎯 Your Personalized Experience
               </h4>
               <p className="text-sm text-neutral-600">
-                Based on your {formData.interests.length} selected interests, 
+                Based on your {formData.interests.length} selected interests,
                 we'll recommend events that match your preferences and location.
               </p>
             </div>

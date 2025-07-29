@@ -1,12 +1,34 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { Link } from "react-router-dom";
-import { User, LogOut, Settings, Shield, Menu, Calendar, MapPin, Camera, Gamepad2 } from "lucide-react";
+import {
+  User,
+  LogOut,
+  Settings,
+  Shield,
+  Menu,
+  Calendar,
+  MapPin,
+  Camera,
+  Gamepad2,
+} from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
 
@@ -38,10 +60,13 @@ export default function Header() {
       <div className="container mx-auto mobile-padding">
         <div className="flex justify-between items-center touch-target">
           {/* Logo - Mobile Optimized */}
-          <Link to="/" className="flex items-center smooth-transition hover:opacity-80">
-            <img 
-              src="/DMI-Logo-Header.png" 
-              alt="Des Moines Insider" 
+          <Link
+            to="/"
+            className="flex items-center smooth-transition hover:opacity-80"
+          >
+            <img
+              src="/DMI-Logo-Header.png"
+              alt="Des Moines Insider"
               className="h-8 md:h-10 w-auto"
             />
           </Link>
@@ -87,10 +112,12 @@ export default function Header() {
                       className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
                     >
                       <link.icon className="h-5 w-5 text-[#DC143C]" />
-                      <span className="text-mobile-body font-medium">{link.label}</span>
+                      <span className="text-mobile-body font-medium">
+                        {link.label}
+                      </span>
                     </Link>
                   ))}
-                  
+
                   {/* Mobile Submit Event and Advertise Buttons */}
                   <div className="border-t pt-4 mt-4 space-y-2">
                     <div onClick={() => setIsMobileMenuOpen(false)}>
@@ -100,7 +127,7 @@ export default function Header() {
                       <AdvertiseButton />
                     </div>
                   </div>
-                  
+
                   {/* Mobile User Actions */}
                   {isAuthenticated ? (
                     <>
@@ -122,7 +149,7 @@ export default function Header() {
                             </p>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-2">
                           <Link
                             to="/profile"
@@ -132,7 +159,7 @@ export default function Header() {
                             <User className="h-5 w-5" />
                             <span className="text-mobile-body">Profile</span>
                           </Link>
-                          
+
                           {isAdmin && (
                             <Link
                               to="/admin"
@@ -143,7 +170,7 @@ export default function Header() {
                               <span className="text-mobile-body">Admin</span>
                             </Link>
                           )}
-                          
+
                           <button
                             onClick={() => {
                               handleLogout();
@@ -180,16 +207,23 @@ export default function Header() {
                 <>
                   {isAdmin && (
                     <Link to="/admin">
-                      <Button variant="outline" size="sm" className="touch-target">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="touch-target"
+                      >
                         <Shield className="h-4 w-4 mr-2" />
                         Admin
                       </Button>
                     </Link>
                   )}
-                  
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="relative touch-target rounded-full">
+                      <Button
+                        variant="ghost"
+                        className="relative touch-target rounded-full"
+                      >
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                             {getInitials()}
@@ -197,7 +231,11 @@ export default function Header() {
                         </Avatar>
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56" align="end" forceMount>
+                    <DropdownMenuContent
+                      className="w-56"
+                      align="end"
+                      forceMount
+                    >
                       <div className="flex items-center justify-start gap-2 p-2">
                         <div className="flex flex-col space-y-1 leading-none">
                           {profile && (

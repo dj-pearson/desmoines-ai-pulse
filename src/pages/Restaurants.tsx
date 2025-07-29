@@ -111,13 +111,13 @@ export default function Restaurants() {
               Discover Des Moines Dining
             </h1>
             <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
-              Find the best restaurants, local favorites, and new dining experiences in the capital city
+              Find the best restaurants, local favorites, and new dining
+              experiences in the capital city
             </p>
           </div>
         </section>
 
         <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
-
           {/* Mobile-Optimized Content */}
           <div className="space-y-8">
             {/* Restaurant Openings Section */}
@@ -224,7 +224,10 @@ export default function Restaurants() {
                               {restaurant.name}
                             </CardTitle>
                             {restaurant.is_featured && (
-                              <Badge variant="secondary" className="shrink-0 bg-[#DC143C] text-white hover:bg-[#DC143C]/90">
+                              <Badge
+                                variant="secondary"
+                                className="shrink-0 bg-[#DC143C] text-white hover:bg-[#DC143C]/90"
+                              >
                                 Featured
                               </Badge>
                             )}

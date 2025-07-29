@@ -21,6 +21,7 @@ import SEOTools from "@/components/SEOTools";
 import { DomainHighlightManager } from "@/components/DomainHighlightManager";
 import EventReviewSystem from "@/components/EventReviewSystem";
 import AffiliateManager from "@/components/AffiliateManager";
+import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
 import {
   Shield,
   Users,
@@ -821,20 +822,26 @@ export default function Admin() {
             )}
 
             {canManageContent() && activeTab === "restaurants" && (
-              <ContentTable
-                type="restaurant"
-                items={restaurants.restaurants}
-                isLoading={restaurants.isLoading}
-                totalCount={restaurants.restaurants.length}
-                searchValue={inputValues.restaurants}
-                onEdit={(item) => handleEdit("restaurant", item)}
-                onDelete={(id) => handleDelete("restaurant", id)}
-                onSearch={handleRestaurantsSearch}
-                onFilter={(filter) =>
-                  console.log("Filter restaurants:", filter)
-                }
-                onCreate={() => console.log("Create new restaurant")}
-              />
+              <div className="space-y-6">
+                {/* Google Places Restaurant Tools */}
+                <GooglePlacesRestaurantTools />
+
+                {/* Restaurant Content Table */}
+                <ContentTable
+                  type="restaurant"
+                  items={restaurants.restaurants}
+                  isLoading={restaurants.isLoading}
+                  totalCount={restaurants.restaurants.length}
+                  searchValue={inputValues.restaurants}
+                  onEdit={(item) => handleEdit("restaurant", item)}
+                  onDelete={(id) => handleDelete("restaurant", id)}
+                  onSearch={handleRestaurantsSearch}
+                  onFilter={(filter) =>
+                    console.log("Filter restaurants:", filter)
+                  }
+                  onCreate={() => console.log("Create new restaurant")}
+                />
+              </div>
             )}
 
             {canManageContent() && activeTab === "attractions" && (
