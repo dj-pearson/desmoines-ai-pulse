@@ -71,9 +71,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
           .lte("rating", filters.rating[1]);
       }
 
-      // Apply location filter (array) - now using city column for exact matches
+      // Apply location filter (array) - using location column for matches
       if (filters.location && filters.location.length > 0) {
-        query = query.in("city", filters.location);
+        query = query.in("location", filters.location);
       }
 
       // Apply featured filter
@@ -247,24 +247,24 @@ export function useRestaurantFilterOptions() {
           .select("cuisine")
           .not("cuisine", "is", null);
 
-        // Get unique cities from the city column
-        const { data: cityData } = await supabase
+        // Get unique locations from the location column
+        const { data: locationData } = await supabase
           .from("restaurants")
-          .select("city")
-          .not("city", "is", null);
+          .select("location")
+          .not("location", "is", null);
 
         const uniqueCuisines = [
           ...new Set(cuisineData?.map((r) => r.cuisine).filter(Boolean)),
         ] as string[];
 
-        // Use the city column directly for cleaner city filtering
-        const uniqueCities = [
-          ...new Set(cityData?.map((r) => r.city).filter(Boolean)),
+        // Use the location column for location filtering
+        const uniqueLocations = [
+          ...new Set(locationData?.map((r) => r.location).filter(Boolean)),
         ] as string[];
 
         setOptions({
           cuisines: uniqueCuisines.sort(),
-          locations: uniqueCities.sort(),
+          locations: uniqueLocations.sort(),
           tags: [
             "Takeout",
             "Delivery",

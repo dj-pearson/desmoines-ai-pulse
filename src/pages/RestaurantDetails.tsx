@@ -327,7 +327,7 @@ export default function RestaurantDetails() {
                       const gradientFallback =
                         e.currentTarget.parentElement?.querySelector(
                           ".gradient-fallback"
-                        );
+                        ) as HTMLElement;
                       if (gradientFallback) {
                         gradientFallback.style.display = "block";
                       }

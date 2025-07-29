@@ -271,73 +271,65 @@ export default function Admin() {
 
   const handleCreate = (contentType: ContentType) => {
     // Create an empty item with default values based on content type
-    let emptyItem: any = {};
-    
+    let emptyItem: Partial<ContentItem> = {};
+
     if (contentType === "restaurant") {
       emptyItem = {
         name: "",
         description: "",
         location: "",
         cuisine: "",
-        price_range: "$$",
+        priceRange: "$$",
         phone: "",
         website: "",
         rating: null,
-        image_url: "",
+        imageUrl: "",
         status: "open",
-        amenities: [],
-        opening_date: null,
-        opening_timeframe: "",
-        is_featured: false,
+        openingDate: null,
+        openingTimeframe: "",
+        isFeatured: false,
       };
     } else if (contentType === "event") {
       emptyItem = {
         title: "",
-        original_description: "",
+        originalDescription: "",
         date: new Date(),
         location: "",
         venue: "",
         category: "General",
         price: "",
-        source_url: "",
-        is_featured: false,
-        is_enhanced: false,
+        sourceUrl: "",
+        isFeatured: false,
+        isEnhanced: false,
       };
     } else if (contentType === "attraction") {
       emptyItem = {
         name: "",
         description: "",
         location: "",
-        category: "",
+        type: "",
         website: "",
-        phone: "",
-        image_url: "",
+        imageUrl: "",
         rating: null,
-        price_range: "$$",
-        status: "open",
-        amenities: [],
-        is_featured: false,
+        isFeatured: false,
       };
     } else if (contentType === "playground") {
       emptyItem = {
         name: "",
         description: "",
         location: "",
-        age_range: "",
-        features: [],
-        safety_features: [],
-        accessibility_features: [],
-        image_url: "",
+        ageRange: "",
+        amenities: [],
+        imageUrl: "",
         rating: null,
-        status: "open",
-        is_featured: false,
+        isFeatured: false,
       };
     }
 
     setEditDialog({
       open: true,
       contentType,
-      item: { ...emptyItem, isNew: true }, // Mark as new for the dialog
+      item: { ...emptyItem, isNew: true } as unknown as ContentItem, // Mark as new for the dialog
     });
   };
 
@@ -795,14 +787,16 @@ export default function Admin() {
                           Manage Users
                         </Button>
                       )}
-                      
+
                       {/* Debug: Clear Event Cache */}
                       <Button
                         variant="destructive"
                         size="sm"
                         onClick={() => {
                           clearEventCache();
-                          toast.success("Event cache cleared! Refresh the page to see fresh data.");
+                          toast.success(
+                            "Event cache cleared! Refresh the page to see fresh data."
+                          );
                         }}
                         className="w-full justify-start touch-target"
                       >
@@ -820,7 +814,7 @@ export default function Admin() {
               <div className="space-y-6">
                 {/* Cron Monitor */}
                 <CronMonitor />
-                
+
                 {/* Original Scraping Management */}
                 <Card>
                   <CardHeader>
@@ -834,66 +828,66 @@ export default function Admin() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex gap-4">
-                      <Button
-                        onClick={() => setShowScraperWizard(true)}
-                        className="flex items-center gap-2"
-                      >
-                        <Bot className="h-4 w-4" />
-                        Create New Scraper
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowJobManager(true)}
-                      >
-                        <Settings className="h-4 w-4 mr-2" />
-                        Manage Existing
-                      </Button>
-                    </div>
+                    <div className="space-y-4">
+                      <div className="flex gap-4">
+                        <Button
+                          onClick={() => setShowScraperWizard(true)}
+                          className="flex items-center gap-2"
+                        >
+                          <Bot className="h-4 w-4" />
+                          Create New Scraper
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowJobManager(true)}
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Manage Existing
+                        </Button>
+                      </div>
 
-                    {scraping.jobs.length > 0 ? (
-                      <div className="grid gap-4">
-                        {scraping.jobs.map((job) => (
-                          <Card key={job.id} className="p-4">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="font-semibold">{job.name}</h4>
-                                <p className="text-sm text-muted-foreground">
-                                  Last run:{" "}
-                                  {job.lastRun
-                                    ? new Date(job.lastRun).toLocaleString()
-                                    : "Never"}
-                                </p>
-                                <p className="text-sm text-muted-foreground">
-                                  Events found: {job.eventsFound || 0}
-                                </p>
+                      {scraping.jobs.length > 0 ? (
+                        <div className="grid gap-4">
+                          {scraping.jobs.map((job) => (
+                            <Card key={job.id} className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h4 className="font-semibold">{job.name}</h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    Last run:{" "}
+                                    {job.lastRun
+                                      ? new Date(job.lastRun).toLocaleString()
+                                      : "Never"}
+                                  </p>
+                                  <p className="text-sm text-muted-foreground">
+                                    Events found: {job.eventsFound || 0}
+                                  </p>
+                                </div>
+                                <Badge
+                                  variant={
+                                    job.status === "running"
+                                      ? "default"
+                                      : "secondary"
+                                  }
+                                >
+                                  {job.status}
+                                </Badge>
                               </div>
-                              <Badge
-                                variant={
-                                  job.status === "running"
-                                    ? "default"
-                                    : "secondary"
-                                }
-                              >
-                                {job.status}
-                              </Badge>
-                            </div>
-                          </Card>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                        <p>No scraping jobs configured yet.</p>
-                        <p className="text-sm">
-                          Create your first automated scraper to get started.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>No scraping jobs configured yet.</p>
+                          <p className="text-sm">
+                            Create your first automated scraper to get started.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             )}
 

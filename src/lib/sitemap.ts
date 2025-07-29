@@ -53,12 +53,12 @@ export class SitemapGenerator {
     try {
       const { data: events, error: eventsError } = await supabase
         .from("events")
-        .select("id, title, slug, updated_at, created_at")
+        .select("id, title, updated_at, created_at")
         .order("created_at", { ascending: false });
 
       if (!eventsError && events) {
         events.forEach((event) => {
-          const slug = event.slug || this.createSlug(event.title);
+          const slug = this.createSlug(event.title);
           const lastmod =
             event.updated_at || event.created_at || this.currentDate;
           urls.push({

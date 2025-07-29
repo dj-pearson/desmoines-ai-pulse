@@ -16,6 +16,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { Event, RestaurantOpening } from "@/lib/types";
 import {
   Calendar,
   MapPin,
@@ -40,8 +41,62 @@ import {
 } from "date-fns";
 import { useAnalytics } from "@/hooks/useAnalytics";
 
+// Type definitions for dashboard items
+type DashboardItem = {
+  id: string;
+  title?: string;
+  name?: string;
+  description?: string;
+  location?: string;
+  type?: string;
+  date?: string | Date;
+  category?: string;
+  cuisine?: string;
+  venue?: string;
+  price?: string;
+  rating?: number;
+  enhanced_description?: string;
+  original_description?: string;
+  opening_date?: string;
+  openingTimeframe?: string;
+  source_url?: string;
+  sourceUrl?: string;
+  icon?: React.ComponentType;
+  [key: string]: unknown;
+};
+
+// Helper function to get item type safely
+const getItemType = (
+  item: DashboardItem
+):
+  | "event"
+  | "attraction"
+  | "restaurant"
+  | "playground"
+  | "page"
+  | "search_result" => {
+  if (item.type) {
+    switch (item.type) {
+      case "event":
+        return "event";
+      case "restaurant":
+        return "restaurant";
+      case "attraction":
+        return "attraction";
+      case "playground":
+        return "playground";
+      default:
+        return "page";
+    }
+  }
+  if (item.date) return "event";
+  if (item.cuisine || item.opening_date || item.openingTimeframe)
+    return "restaurant";
+  return "page";
+};
+
 interface AllInclusiveDashboardProps {
-  onViewEventDetails?: (event: any) => void;
+  onViewEventDetails?: (event: Event) => void;
   filters?: {
     query?: string;
     category?: string;
@@ -79,7 +134,7 @@ export default function AllInclusiveDashboard({
 
   // Comprehensive filtering function
   const applyFilters = (
-    items: any[],
+    items: DashboardItem[],
     itemType: string,
     dateField: string = "date"
   ) => {
@@ -262,7 +317,7 @@ export default function AllInclusiveDashboard({
       const now = new Date();
 
       filtered = filtered.filter((item) => {
-        const itemDate = new Date(item[dateField]);
+        const itemDate = new Date(item[dateField] as string | Date);
 
         if (dateFilter.mode === "single" && dateFilter.start) {
           const filterDate = startOfDay(dateFilter.start);
@@ -298,13 +353,14 @@ export default function AllInclusiveDashboard({
                 start: thisWeekStart,
                 end: thisWeekEnd,
               });
-            case "this-weekend":
+            case "this-weekend": {
               const saturday = addDays(thisWeekStart, 6);
               const sunday = addDays(thisWeekStart, 7);
               return isWithinInterval(itemDate, {
                 start: saturday,
                 end: sunday,
               });
+            }
             case "next-week":
               return isWithinInterval(itemDate, {
                 start: nextWeekStart,
@@ -322,15 +378,32 @@ export default function AllInclusiveDashboard({
     return filtered; // Return all filtered results for pagination
   };
 
+  // Transform data to add type field for consistency
+  const eventsWithType = (allEvents || []).map((event) => ({
+    ...event,
+    type: "event",
+  }));
+  const restaurantOpeningsWithType = (allRestaurantOpenings || []).map(
+    (item) => ({ ...item, type: "restaurant" })
+  );
+  const attractionsWithType = (allAttractions || []).map((item) => ({
+    ...item,
+    type: "attraction",
+  }));
+  const playgroundsWithType = (allPlaygrounds || []).map((item) => ({
+    ...item,
+    type: "playground",
+  }));
+
   // Apply filters to each data type
-  const events = applyFilters(allEvents || [], "event");
+  const events = applyFilters(eventsWithType, "event");
   const restaurantOpenings = applyFilters(
-    allRestaurantOpenings || [],
+    restaurantOpeningsWithType,
     "restaurant",
     "opening_date"
   );
-  const attractions = applyFilters(allAttractions || [], "attraction");
-  const playgrounds = applyFilters(allPlaygrounds || [], "playground");
+  const attractions = applyFilters(attractionsWithType, "attraction");
+  const playgrounds = applyFilters(playgroundsWithType, "playground");
 
   const formatDate = (date: string | Date) => {
     try {
@@ -395,7 +468,7 @@ export default function AllInclusiveDashboard({
   ];
 
   // Pagination logic
-  const getItemsForTab = (tabItems: any[]) => {
+  const getItemsForTab = (tabItems: DashboardItem[]) => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     return tabItems.slice(startIndex, endIndex);
@@ -519,7 +592,7 @@ export default function AllInclusiveDashboard({
     }
   };
 
-  const renderCard = (item: any) => {
+  const renderCard = (item: DashboardItem) => {
     // Ensure icon exists, provide default based on type if missing
     const Icon =
       item.icon ||
@@ -537,12 +610,12 @@ export default function AllInclusiveDashboard({
       // Track view event
       trackEvent({
         eventType: "view",
-        contentType: item.type as any,
+        contentType: getItemType(item),
         contentId: item.id,
       });
 
       if (item.type === "event" && onViewEventDetails) {
-        onViewEventDetails(item);
+        onViewEventDetails(item as Event);
       }
     };
 
@@ -551,7 +624,7 @@ export default function AllInclusiveDashboard({
       // Track click event
       trackEvent({
         eventType: "click",
-        contentType: item.type as any,
+        contentType: getItemType(item),
         contentId: item.id,
       });
     };
