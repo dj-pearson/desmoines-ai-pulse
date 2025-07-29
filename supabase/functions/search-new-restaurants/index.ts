@@ -126,7 +126,7 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_API_KEY,
-        'X-Goog-FieldMask': 'places.id,places.name,places.formattedAddress,places.businessStatus,places.rating,places.userRatingCount,places.priceLevel,places.types,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri'
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.businessStatus,places.rating,places.userRatingCount,places.priceLevel,places.types,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri'
       },
       body: JSON.stringify(placesRequestBody)
     });
@@ -179,7 +179,7 @@ serve(async (req) => {
           "dunkin",
         ];
 
-        const nameLower = place.name?.toLowerCase() || '';
+        const nameLower = (place.displayName?.text || place.displayName || place.name || '').toLowerCase();
         const isChain = fastFoodChains.some((chain) =>
           nameLower.includes(chain)
         );
@@ -199,7 +199,7 @@ serve(async (req) => {
     const detailedRestaurants: GooglePlacesResult[] = filteredRestaurants.map((place: any) => {
       const mapped = {
         place_id: place.id,
-        name: place.name,
+        name: place.displayName?.text || place.displayName || place.name || 'Unknown Restaurant',
         formatted_address: place.formattedAddress,
         business_status: place.businessStatus,
         rating: place.rating,

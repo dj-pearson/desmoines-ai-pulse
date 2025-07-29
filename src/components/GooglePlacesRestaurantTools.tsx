@@ -237,7 +237,7 @@ export default function GooglePlacesRestaurantTools() {
         price_range: priceRange,
         google_place_id: restaurant.place_id,
         cuisine: restaurant.cuisine_type || "American",
-        status: "active",
+        status: "open",
         description: `Discovered via Google Places API`,
         is_featured: false,
       });
