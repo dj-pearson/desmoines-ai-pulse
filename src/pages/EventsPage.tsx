@@ -1,22 +1,78 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { Calendar, MapPin, Tag } from "lucide-react";
+import { Calendar, MapPin, Tag, Search, Filter } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Helmet } from "react-helmet-async";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
+import SEOHead from "@/components/SEOHead";
+import InteractiveDateSelector from "@/components/InteractiveDateSelector";
+import { useToast } from "@/hooks/use-toast";
 
 export default function EventsPage() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [dateFilter, setDateFilter] = useState<{
+    start?: Date;
+    end?: Date;
+    mode: "single" | "range" | "preset";
+    preset?: string;
+  } | null>(null);
+  const [location, setLocation] = useState("any-location");
+  const [priceRange, setPriceRange] = useState("any-price");
+  const [showFilters, setShowFilters] = useState(false);
+  const { toast } = useToast();
+
   const { data: events, isLoading } = useQuery({
-    queryKey: ["all-events"],
+    queryKey: [
+      "events",
+      searchQuery,
+      selectedCategory,
+      dateFilter,
+      location,
+      priceRange,
+    ],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from("events")
         .select("*")
-        .gte("date", new Date().toISOString().split('T')[0])
+        .gte("date", new Date().toISOString().split("T")[0])
         .order("date", { ascending: true });
 
+      // Apply filters
+      if (searchQuery) {
+        query = query.or(
+          `title.ilike.%${searchQuery}%,original_description.ilike.%${searchQuery}%,enhanced_description.ilike.%${searchQuery}%`
+        );
+      }
+
+      if (selectedCategory && selectedCategory !== "all") {
+        query = query.eq("category", selectedCategory);
+      }
+
+      if (dateFilter && dateFilter.start) {
+        const startDate = dateFilter.start.toISOString().split("T")[0];
+        query = query.gte("date", startDate);
+
+        if (dateFilter.end) {
+          const endDate = dateFilter.end.toISOString().split("T")[0];
+          query = query.lte("date", endDate);
+        }
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },
@@ -28,94 +84,310 @@ export default function EventsPage() {
       const { data, error } = await supabase
         .from("events")
         .select("category")
-        .gte("date", new Date().toISOString().split('T')[0]);
+        .gte("date", new Date().toISOString().split("T")[0]);
 
       if (error) throw error;
-      const uniqueCategories = [...new Set(data.map(event => event.category))];
-      return uniqueCategories;
+      const uniqueCategories = [
+        ...new Set(data.map((event) => event.category)),
+      ].filter(Boolean);
+      return uniqueCategories.sort();
     },
   });
 
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory("all");
+    setDateFilter(null);
+    setLocation("any-location");
+    setPriceRange("any-price");
+    toast({
+      title: "Filters Cleared",
+      description: "All filters have been reset",
+    });
+  };
+
+  // SEO data
+  const seoTitle = searchQuery
+    ? `"${searchQuery}" Events in Des Moines`
+    : selectedCategory && selectedCategory !== "all"
+    ? `${selectedCategory} Events in Des Moines`
+    : "Events in Des Moines - Upcoming Activities & Entertainment";
+
+  const seoDescription = `Discover ${searchQuery ? `"${searchQuery}" ` : ""}${
+    selectedCategory && selectedCategory !== "all"
+      ? selectedCategory.toLowerCase() + " "
+      : ""
+  }events in Des Moines, Iowa. Find concerts, festivals, community gatherings, and entertainment activities happening now.`;
+
+  const eventKeywords = [
+    "Des Moines events",
+    "Iowa events",
+    "upcoming events",
+    "things to do Des Moines",
+    "entertainment",
+    "concerts",
+    "festivals",
+    "community events",
+    ...(selectedCategory && selectedCategory !== "all"
+      ? [selectedCategory.toLowerCase()]
+      : []),
+    ...(searchQuery ? [searchQuery] : []),
+  ];
+
+  const eventsSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: "Des Moines Events",
+    description: seoDescription,
+    numberOfItems: events?.length || 0,
+    itemListElement:
+      events?.slice(0, 10).map((event, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        item: {
+          "@type": "Event",
+          name: event.title,
+          description: event.enhanced_description || event.original_description,
+          startDate: event.date,
+          location: {
+            "@type": "Place",
+            name: event.venue || event.location,
+            address: event.location,
+          },
+        },
+      })) || [],
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-1/3"></div>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="h-48 bg-muted rounded"></div>
-              ))}
+      <>
+        <SEOHead
+          title="Loading Events..."
+          description="Loading upcoming events in Des Moines"
+          type="website"
+        />
+        <div className="min-h-screen bg-background">
+          <Header />
+          <div className="container mx-auto px-4 py-8">
+            <div className="animate-pulse space-y-4">
+              <div className="h-8 bg-muted rounded w-1/3"></div>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="h-48 bg-muted rounded"></div>
+                ))}
+              </div>
             </div>
           </div>
+          <Footer />
         </div>
-      </div>
+      </>
     );
   }
 
   return (
     <>
-      <Helmet>
-        <title>Events in Des Moines - Upcoming Activities & Entertainment</title>
-        <meta name="description" content="Discover upcoming events in Des Moines. From concerts and festivals to community gatherings and entertainment." />
-        <meta property="og:title" content="Events in Des Moines" />
-        <meta property="og:description" content="Discover upcoming events in Des Moines. From concerts and festivals to community gatherings and entertainment." />
-        <meta property="og:type" content="website" />
-      </Helmet>
+      <SEOHead
+        title={seoTitle}
+        description={seoDescription}
+        type="website"
+        keywords={eventKeywords}
+        structuredData={eventsSchema}
+        url="/events"
+        breadcrumbs={[
+          { name: "Home", url: "/" },
+          { name: "Events", url: "/events" },
+        ]}
+      />
 
       <div className="min-h-screen bg-background">
-        {/* Breadcrumb */}
-        <div className="border-b">
-          <div className="container mx-auto px-4 py-3">
-            <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <Link to="/" className="hover:text-primary transition-colors">Home</Link>
-              <span>/</span>
-              <span className="text-foreground">Events</span>
-            </nav>
-          </div>
-        </div>
+        <Header />
 
-        <div className="container mx-auto px-4 py-8">
-          {/* Header */}
-          <div className="space-y-4 mb-8">
-            <h1 className="text-3xl md:text-4xl font-bold">Upcoming Events</h1>
-            <p className="text-muted-foreground text-lg">
-              Discover the best events happening in Des Moines
+        {/* Hero Section */}
+        <section className="relative bg-gradient-to-br from-blue-600 via-purple-500 to-pink-500 overflow-hidden">
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
+              Discover Des Moines Events
+            </h1>
+            <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
+              Find concerts, festivals, community gatherings, and entertainment
+              activities happening now
             </p>
-          </div>
 
-          {/* Categories */}
+            {/* Search Bar */}
+            <div className="max-w-2xl mx-auto">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
+                  <Input
+                    type="text"
+                    placeholder="Search events..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white"
+                  />
+                </div>
+                <Button
+                  onClick={() => setShowFilters(!showFilters)}
+                  variant="secondary"
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filters
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <main className="container mx-auto px-4 py-8">
+          {/* Filters Section */}
+          {showFilters && (
+            <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Category Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Category
+                  </label>
+                  <Select
+                    value={selectedCategory}
+                    onValueChange={setSelectedCategory}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories?.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Date Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Date
+                  </label>
+                  <InteractiveDateSelector
+                    onDateChange={setDateFilter}
+                    className="w-full"
+                  />
+                </div>
+
+                {/* Location Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Location
+                  </label>
+                  <Select value={location} onValueChange={setLocation}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any-location">Any location</SelectItem>
+                      <SelectItem value="downtown">Downtown</SelectItem>
+                      <SelectItem value="west-des-moines">
+                        West Des Moines
+                      </SelectItem>
+                      <SelectItem value="ankeny">Ankeny</SelectItem>
+                      <SelectItem value="urbandale">Urbandale</SelectItem>
+                      <SelectItem value="clive">Clive</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Price Filter */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Price Range
+                  </label>
+                  <Select value={priceRange} onValueChange={setPriceRange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any-price">Any price</SelectItem>
+                      <SelectItem value="free">Free</SelectItem>
+                      <SelectItem value="under-25">Under $25</SelectItem>
+                      <SelectItem value="25-50">$25 - $50</SelectItem>
+                      <SelectItem value="50-100">$50 - $100</SelectItem>
+                      <SelectItem value="over-100">Over $100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="flex justify-between mt-6">
+                <Button variant="outline" onClick={handleClearFilters}>
+                  Clear Filters
+                </Button>
+                <div className="text-sm text-gray-500">
+                  {events?.length || 0} events found
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Category Filters */}
           {categories && categories.length > 0 && (
             <div className="mb-8">
-              <h2 className="text-xl font-semibold mb-4">Browse by Category</h2>
+              <h2 className="text-lg font-semibold mb-4">Browse by Category</h2>
               <div className="flex flex-wrap gap-2">
+                <Button
+                  key="all"
+                  variant={selectedCategory === "all" ? "default" : "outline"}
+                  onClick={() => setSelectedCategory("all")}
+                  className="text-sm"
+                >
+                  All Events
+                </Button>
                 {categories.map((category) => (
-                  <Link
+                  <Button
                     key={category}
-                    to={`/events/category/${category.toLowerCase()}`}
-                    className="hover:scale-105 transition-transform"
+                    variant={
+                      selectedCategory === category ? "default" : "outline"
+                    }
+                    onClick={() => setSelectedCategory(category)}
+                    className="text-sm"
                   >
-                    <Badge variant="outline" className="text-sm py-2 px-4">
-                      <Tag className="h-3 w-3 mr-1" />
-                      {category}
-                    </Badge>
-                  </Link>
+                    <Tag className="h-3 w-3 mr-1" />
+                    {category}
+                  </Button>
                 ))}
               </div>
             </div>
           )}
 
+          {/* Results Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">
+              {searchQuery
+                ? `Search results for "${searchQuery}"`
+                : selectedCategory && selectedCategory !== "all"
+                ? `${selectedCategory} Events`
+                : "Upcoming Events"}
+            </h2>
+            <div className="text-sm text-gray-500">
+              {events?.length || 0} events
+            </div>
+          </div>
+
           {/* Events Grid */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {events?.map((event) => (
               <Link key={event.id} to={`/events/${event.id}`}>
-                <Card className="h-full hover:shadow-lg transition-shadow">
+                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   {event.image_url && (
                     <div className="aspect-video overflow-hidden rounded-t-lg">
-                      <img 
-                        src={event.image_url} 
+                      <img
+                        src={event.image_url}
                         alt={event.title}
                         className="w-full h-full object-cover"
+                        loading="lazy"
                       />
                     </div>
                   )}
@@ -123,27 +395,46 @@ export default function EventsPage() {
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <Badge variant="outline">{event.category}</Badge>
-                        {event.is_featured && <Badge>Featured</Badge>}
+                        {event.is_featured && (
+                          <Badge className="bg-blue-600">Featured</Badge>
+                        )}
                       </div>
-                      
-                      <h3 className="font-semibold text-lg line-clamp-2">{event.title}</h3>
-                      
+
+                      <h3 className="font-semibold text-lg line-clamp-2">
+                        {event.title}
+                      </h3>
+
                       <div className="space-y-2 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
-                          <span>{format(new Date(event.date), "MMM d, yyyy")}</span>
+                          <span>
+                            {format(
+                              new Date(event.date),
+                              "MMM d, yyyy 'at' h:mm a"
+                            )}
+                          </span>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <MapPin className="h-4 w-4" />
-                          <span className="line-clamp-1">{event.venue || event.location}</span>
+                          <span className="line-clamp-1">
+                            {event.venue || event.location}
+                          </span>
                         </div>
                       </div>
-                      
-                      {(event.enhanced_description || event.original_description) && (
+
+                      {(event.enhanced_description ||
+                        event.original_description) && (
                         <p className="text-sm text-muted-foreground line-clamp-2">
-                          {event.enhanced_description || event.original_description}
+                          {event.enhanced_description ||
+                            event.original_description}
                         </p>
+                      )}
+
+                      {event.price && (
+                        <div className="text-sm font-medium text-green-600">
+                          {event.price}
+                        </div>
                       )}
                     </div>
                   </CardContent>
@@ -152,13 +443,26 @@ export default function EventsPage() {
             ))}
           </div>
 
+          {/* No Results State */}
           {(!events || events.length === 0) && (
-            <div className="text-center py-12">
-              <h3 className="text-lg font-medium mb-2">No events found</h3>
-              <p className="text-muted-foreground">Check back soon for upcoming events!</p>
+            <div className="text-center py-16">
+              <Calendar className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-xl font-medium mb-2">No events found</h3>
+              <p className="text-muted-foreground mb-6">
+                {searchQuery || selectedCategory !== "all"
+                  ? "Try adjusting your search criteria or filters"
+                  : "Check back soon for upcoming events!"}
+              </p>
+              {(searchQuery || selectedCategory !== "all") && (
+                <Button onClick={handleClearFilters} variant="outline">
+                  Clear Filters
+                </Button>
+              )}
             </div>
           )}
-        </div>
+        </main>
+
+        <Footer />
       </div>
     </>
   );
