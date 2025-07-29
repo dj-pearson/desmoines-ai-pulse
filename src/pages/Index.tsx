@@ -10,6 +10,7 @@ import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
 import LocalContentSection from "@/components/LocalContentSection";
+import TrendingContent from "@/components/TrendingContent";
 import { RatingSystem } from "@/components/RatingSystem";
 import { Button } from "@/components/ui/button";
 import {
@@ -284,6 +285,19 @@ export default function Index() {
                   </section>
                 </>
               )}
+
+              {/* Trending Content Section with Personalization */}
+              <section className="py-6 md:py-8 mobile-padding">
+                <div className="container mx-auto">
+                  <TrendingContent 
+                    timeWindow="24h" 
+                    limit={6}
+                    showPersonalized={true}
+                    className="mb-8"
+                  />
+                </div>
+              </section>
+
               <div className="mobile-padding">
                 <MostSearched />
               </div>

@@ -345,11 +345,15 @@ SELECT
   (SELECT COUNT(DISTINCT user_id) FROM public.user_interactions_enhanced WHERE timestamp >= CURRENT_DATE AND user_id IS NOT NULL) as unique_users_today,
   
   -- Popular content today
-  (SELECT jsonb_agg(jsonb_build_object('content_type', content_type, 'content_id', content_id, 'score', score_24h))
-   FROM public.trending_scores_realtime 
-   WHERE date = CURRENT_DATE 
-   ORDER BY score_24h DESC 
-   LIMIT 10) as trending_content,
+  (SELECT jsonb_agg(trending_item ORDER BY score DESC)
+   FROM (
+     SELECT jsonb_build_object('content_type', content_type, 'content_id', content_id, 'score', score_24h) as trending_item,
+            score_24h as score
+     FROM public.trending_scores_realtime 
+     WHERE date = CURRENT_DATE 
+     ORDER BY score_24h DESC 
+     LIMIT 10
+   ) trending_subquery) as trending_content,
    
   -- Device breakdown
   (SELECT jsonb_object_agg(device_type, count)
