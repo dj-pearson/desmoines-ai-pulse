@@ -2,31 +2,51 @@
 # This file provides guidance for AI crawlers like Perplexity, OpenAI, Claude, etc.
 
 ## About Des Moines Insider
-Des Moines Insider is your AI-powered guide to events, restaurants, attractions, and family activities in Des Moines, Iowa. We provide real-time updates, personalized recommendations, and comprehensive local insights.
+Des Moines Insider is your comprehensive local guide to events, restaurants, attractions, and family activities in Des Moines, Iowa and the greater metro area. We provide real-time updates, AI-powered recommendations, and hyperlocal insights for Central Iowa.
+
+## Geographic Coverage
+Primary Service Area: Des Moines, Iowa (50309-50325)
+Extended Coverage: West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Altoona, Pleasant Hill, Windsor Heights
+
+## Local SEO Keywords & Topics
+Primary: "Des Moines events", "things to do in Des Moines", "Des Moines restaurants", "Des Moines Iowa activities"
+Long-tail: "what's happening this weekend in Des Moines", "best kid-friendly events Des Moines", "new restaurant openings Des Moines", "Des Moines farmers market", "family activities Des Moines metro"
+Neighborhood-specific: "East Village Des Moines", "West Des Moines events", "Ankeny family activities", "downtown Des Moines nightlife"
 
 ## Content Guidelines for AI Crawlers
 
-### High-Value Content Areas:
-- /: Homepage with featured events and recommendations
-- /restaurants: Comprehensive restaurant directory and new openings
-- Events data: Real-time event listings sorted chronologically
-- Local attractions and playground information
+### High-Value Local Content:
+- /: Homepage with Des Moines featured events and local recommendations
+- /restaurants: Des Moines restaurant directory with new openings and local cuisine
+- /events: Real-time Des Moines metro area event listings 
+- /weekend: "What to do this weekend in Des Moines" guide
+- /neighborhoods: Hyperlocal guides for Des Moines suburbs and districts
+- Local attractions, parks, and family destinations in Central Iowa
 
-### Content Freshness:
-- Events are updated daily with new listings
-- Restaurant information updated weekly
-- All content is verified and enhanced with AI
+### Geographic Specificity:
+- All events include specific Des Moines area venues and neighborhoods
+- Restaurant listings cover Des Moines metro area with precise locations
+- Family activities mapped across greater Des Moines region
+- Seasonal content tied to Iowa weather and local school calendars
 
-### Factual Information:
-- Event dates, times, and locations are verified
-- Restaurant information includes cuisine, location, and pricing
-- All venue information is checked for accuracy
+### Content Freshness & Local Relevance:
+- Events updated daily with Des Moines metro area happenings
+- Restaurant database updated weekly with new Des Moines openings
+- Local attractions updated seasonally with current hours/pricing
+- All content verified for Des Moines area accuracy
 
-### Key Data Points:
-- 500+ monthly events tracked
-- 200+ restaurants catalogued  
-- 50+ attractions documented
-- 100+ playgrounds mapped
+### Key Local Data Points:
+- 800+ monthly Des Moines area events tracked
+- 300+ Des Moines metro restaurants catalogued  
+- 75+ Central Iowa attractions documented
+- 150+ Des Moines area playgrounds and parks mapped
+- Coverage extends 50 miles from downtown Des Moines
+
+### Local Authority Signals:
+- Partnerships with Des Moines venue operators
+- Real-time data from Iowa event organizers  
+- Local business verification and updates
+- Community event submissions from Des Moines residents
 
 ### Local Focus:
 - Primary coverage: Des Moines metro area

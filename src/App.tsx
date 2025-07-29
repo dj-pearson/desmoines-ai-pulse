@@ -22,6 +22,9 @@ const PlaygroundDetails = lazy(() => import("./pages/PlaygroundDetails"));
 const EventsPage = lazy(() => import("./pages/EventsPage"));
 const Advertise = lazy(() => import("./pages/Advertise"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
+const WeekendPage = lazy(() => import("./pages/WeekendPage"));
+const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
+const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
 
 // Mobile-optimized loading component
 const PageLoader = () => (
@@ -66,6 +69,9 @@ const App = () => (
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
             <Route path="/advertise" element={<Advertise />} />
             <Route path="/campaigns" element={<CampaignDashboard />} />
+            <Route path="/weekend" element={<WeekendPage />} />
+            <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
+            <Route path="/neighborhoods/:neighborhood" element={<NeighborhoodPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

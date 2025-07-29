@@ -9,6 +9,7 @@ import SmartEventNavigation from "@/components/SmartEventNavigation";
 import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
+import LocalContentSection from "@/components/LocalContentSection";
 import { RatingSystem } from "@/components/RatingSystem";
 import { Button } from "@/components/ui/button";
 import {
@@ -324,6 +325,13 @@ export default function Index() {
           {/* GEO-optimized content section */}
           <section className="py-16 bg-muted/30">
             <GEOContent />
+          </section>
+
+          {/* Local Content Section for Des Moines SEO */}
+          <section className="py-16">
+            <div className="container mx-auto px-4">
+              <LocalContentSection />
+            </div>
           </section>
 
           <Newsletter />
