@@ -30,24 +30,28 @@ import {
   CreditCard,
 } from "lucide-react";
 
-// Helper function to get image URL - prioritize non-Google sources
+// Helper function to get image URL - test direct Google Places loading
 const getImageUrl = (originalUrl: string | null): string | null => {
   if (!originalUrl) return null;
 
   console.log("Original image URL:", originalUrl);
 
+  // Let's test if Google Places images actually work directly
+  // since the related restaurants are showing images successfully
+  return originalUrl;
+
   // Google Places images have CORS restrictions and need server-side proxy
   // For now, we'll skip them and use gradient fallback
-  if (
-    originalUrl.includes("places.googleapis.com") ||
-    originalUrl.includes("googleusercontent.com")
-  ) {
-    console.log("Google Places image detected - will use gradient fallback");
-    return null; // This will trigger the gradient fallback
-  }
+  // if (
+  //   originalUrl.includes("places.googleapis.com") ||
+  //   originalUrl.includes("googleusercontent.com")
+  // ) {
+  //   console.log("Google Places image detected - will use gradient fallback");
+  //   return null; // This will trigger the gradient fallback
+  // }
 
   // For other URLs (uploaded images, etc.), use as-is
-  return originalUrl;
+  // return originalUrl;
 };
 
 export default function RestaurantDetails() {
