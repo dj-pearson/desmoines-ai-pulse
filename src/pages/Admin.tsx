@@ -268,6 +268,78 @@ export default function Admin() {
     });
   };
 
+  const handleCreate = (contentType: ContentType) => {
+    // Create an empty item with default values based on content type
+    let emptyItem: any = {};
+    
+    if (contentType === "restaurant") {
+      emptyItem = {
+        name: "",
+        description: "",
+        location: "",
+        cuisine: "",
+        price_range: "$$",
+        phone: "",
+        website: "",
+        rating: null,
+        image_url: "",
+        status: "open",
+        amenities: [],
+        opening_date: null,
+        opening_timeframe: "",
+        is_featured: false,
+      };
+    } else if (contentType === "event") {
+      emptyItem = {
+        title: "",
+        original_description: "",
+        date: new Date(),
+        location: "",
+        venue: "",
+        category: "General",
+        price: "",
+        source_url: "",
+        is_featured: false,
+        is_enhanced: false,
+      };
+    } else if (contentType === "attraction") {
+      emptyItem = {
+        name: "",
+        description: "",
+        location: "",
+        category: "",
+        website: "",
+        phone: "",
+        image_url: "",
+        rating: null,
+        price_range: "$$",
+        status: "open",
+        amenities: [],
+        is_featured: false,
+      };
+    } else if (contentType === "playground") {
+      emptyItem = {
+        name: "",
+        description: "",
+        location: "",
+        age_range: "",
+        features: [],
+        safety_features: [],
+        accessibility_features: [],
+        image_url: "",
+        rating: null,
+        status: "open",
+        is_featured: false,
+      };
+    }
+
+    setEditDialog({
+      open: true,
+      contentType,
+      item: { ...emptyItem, isNew: true }, // Mark as new for the dialog
+    });
+  };
+
   const handleDelete = async (contentType: string, id: string) => {
     try {
       const tableNameMap: Record<
@@ -837,7 +909,7 @@ export default function Admin() {
                   onDelete={(id) => handleDelete("event", id)}
                   onSearch={handleEventsSearch}
                   onFilter={(filter) => console.log("Filter events:", filter)}
-                  onCreate={() => console.log("Create new event")}
+                  onCreate={() => handleCreate("event")}
                   onRefresh={events.refetch}
                 />
               </div>
@@ -861,7 +933,7 @@ export default function Admin() {
                   onFilter={(filter) =>
                     console.log("Filter restaurants:", filter)
                   }
-                  onCreate={() => console.log("Create new restaurant")}
+                  onCreate={() => handleCreate("restaurant")}
                 />
               </div>
             )}
@@ -879,7 +951,7 @@ export default function Admin() {
                 onFilter={(filter) =>
                   console.log("Filter attractions:", filter)
                 }
-                onCreate={() => console.log("Create new attraction")}
+                onCreate={() => handleCreate("attraction")}
               />
             )}
 
@@ -896,7 +968,7 @@ export default function Admin() {
                 onFilter={(filter) =>
                   console.log("Filter playgrounds:", filter)
                 }
-                onCreate={() => console.log("Create new playground")}
+                onCreate={() => handleCreate("playground")}
               />
             )}
 

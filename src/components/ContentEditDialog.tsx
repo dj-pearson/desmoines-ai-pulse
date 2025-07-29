@@ -179,6 +179,7 @@ export default function ContentEditDialog({
       
       console.log('Original form data:', formData);
       console.log('Content type:', contentType);
+      console.log('Is new item:', item.isNew);
       
       // Format dates properly
       config.fields.forEach(field => {
@@ -195,36 +196,56 @@ export default function ContentEditDialog({
       delete saveData.id;
       delete saveData.created_at;
       delete saveData.updated_at;
+      delete saveData.isNew; // Remove the isNew flag
 
       console.log('Save data after processing:', saveData);
 
       const tableName = getTableName(contentType);
       console.log('Table name:', tableName);
-      console.log('Item ID:', item.id);
 
-      // Let's first check if the record exists
-      const { data: existingRecord, error: checkError } = await supabase
-        .from(tableName)
-        .select('*')
-        .eq('id', item.id)
-        .maybeSingle();
+      let result, error;
 
-      console.log('Existing record check:', { existingRecord, checkError });
+      if (item.isNew) {
+        // Creating a new item
+        console.log('Creating new item...');
+        const createResult = await supabase
+          .from(tableName)
+          .insert(saveData)
+          .select();
+        
+        result = createResult.data;
+        error = createResult.error;
+      } else {
+        // Updating existing item
+        console.log('Updating existing item with ID:', item.id);
+        
+        // First check if the record exists
+        const { data: existingRecord, error: checkError } = await supabase
+          .from(tableName)
+          .select('*')
+          .eq('id', item.id)
+          .maybeSingle();
 
-      if (!existingRecord) {
-        console.error('Record not found in table:', tableName);
-        throw new Error(`Record with ID ${item.id} not found in ${tableName} table`);
+        console.log('Existing record check:', { existingRecord, checkError });
+
+        if (!existingRecord) {
+          console.error('Record not found in table:', tableName);
+          throw new Error(`Record with ID ${item.id} not found in ${tableName} table`);
+        }
+
+        console.log('Full existing record:', existingRecord);
+        console.log('Fields we are trying to update:', Object.keys(saveData));
+        console.log('Update values:', saveData);
+
+        const updateResult = await supabase
+          .from(tableName)
+          .update(saveData)
+          .eq('id', item.id)
+          .select();
+        
+        result = updateResult.data;
+        error = updateResult.error;
       }
-
-      console.log('Full existing record:', existingRecord);
-      console.log('Fields we are trying to update:', Object.keys(saveData));
-      console.log('Update values:', saveData);
-
-      const { data: result, error } = await supabase
-        .from(tableName)
-        .update(saveData)
-        .eq('id', item.id)
-        .select();
 
       console.log('Supabase response:', { result, error });
 
@@ -234,12 +255,13 @@ export default function ContentEditDialog({
       }
 
       if (!result || result.length === 0) {
-        console.error('No rows were updated! This suggests the ID was not found.');
-        throw new Error('No rows were updated. The record may not exist.');
+        console.error('No rows were affected!');
+        throw new Error(`No rows were ${item.isNew ? 'created' : 'updated'}.`);
       }
 
-      console.log('Save successful! Updated data:', result);
-      toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} updated successfully!`);
+      console.log('Save successful! Result data:', result);
+      const action = item.isNew ? 'created' : 'updated';
+      toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} ${action} successfully!`);
       onSave();
       onOpenChange(false);
     } catch (error) {
@@ -448,10 +470,13 @@ export default function ContentEditDialog({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Edit {contentType.charAt(0).toUpperCase() + contentType.slice(1).replace('_', ' ')}
+            {item.isNew ? 'Create' : 'Edit'} {contentType.charAt(0).toUpperCase() + contentType.slice(1).replace('_', ' ')}
           </DialogTitle>
           <DialogDescription>
-            Make changes to this {contentType.replace('_', ' ')} record. Click save when you're done.
+            {item.isNew 
+              ? `Add a new ${contentType.replace('_', ' ')} record. Fill out the form and click save.`
+              : `Make changes to this ${contentType.replace('_', ' ')} record. Click save when you're done.`
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -481,7 +506,10 @@ export default function ContentEditDialog({
             disabled={isLoading}
           >
             <Save className="h-4 w-4 mr-2" />
-            {isLoading ? "Saving..." : "Save Changes"}
+            {isLoading 
+              ? (item.isNew ? "Creating..." : "Saving...") 
+              : (item.isNew ? "Create" : "Save Changes")
+            }
           </Button>
         </DialogFooter>
       </DialogContent>
