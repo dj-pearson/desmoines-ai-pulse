@@ -22,6 +22,7 @@ import { DomainHighlightManager } from "@/components/DomainHighlightManager";
 import EventReviewSystem from "@/components/EventReviewSystem";
 import AffiliateManager from "@/components/AffiliateManager";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
+import { CronMonitor } from "@/components/CronMonitor";
 import {
   Shield,
   Users,
@@ -743,18 +744,23 @@ export default function Admin() {
             {canManageContent() && activeTab === "ai-crawler" && <AICrawler />}
 
             {canManageContent() && activeTab === "scraping" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-purple-600" />
-                    Automated Scraping Management
-                  </CardTitle>
-                  <CardDescription>
-                    Configure and manage automated scrapers for events,
-                    restaurants, and more
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
+              <div className="space-y-6">
+                {/* Cron Monitor */}
+                <CronMonitor />
+                
+                {/* Original Scraping Management */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-purple-600" />
+                      Automated Scraping Management
+                    </CardTitle>
+                    <CardDescription>
+                      Configure and manage automated scrapers for events,
+                      restaurants, and more
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
                   <div className="space-y-4">
                     <div className="flex gap-4">
                       <Button
@@ -815,6 +821,7 @@ export default function Admin() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             )}
 
             {canManageContent() && activeTab === "events" && (
