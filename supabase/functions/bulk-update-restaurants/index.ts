@@ -175,6 +175,8 @@ serve(async (req) => {
 
         // Build the update object
         const update: any = {
+          id: restaurant.id,
+          name: restaurant.name,
           enhanced: 'completed',
           updated_at: new Date().toISOString()
         }
