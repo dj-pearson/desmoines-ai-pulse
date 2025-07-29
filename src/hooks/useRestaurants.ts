@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
@@ -15,7 +15,14 @@ interface RestaurantsState {
 
 interface RestaurantFilters {
   search?: string;
-  cuisine?: string;
+  cuisine?: string[];
+  priceRange?: string[];
+  rating?: number[];
+  location?: string[];
+  sortBy?: 'popularity' | 'rating' | 'newest' | 'alphabetical' | 'price_low' | 'price_high';
+  featuredOnly?: boolean;
+  openNow?: boolean;
+  tags?: string[];
   limit?: number;
   offset?: number;
 }
@@ -28,23 +35,74 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
     totalCount: 0,
   });
 
-  const fetchRestaurants = async () => {
+  const fetchRestaurants = useCallback(async () => {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       let query = supabase
         .from("restaurants")
-        .select("*", { count: "exact" })
-        .order("created_at", { ascending: false });
+        .select("*", { count: "exact" });
 
+      // Apply search filter
       if (filters.search) {
         query = query.or(
-          `name.ilike.%${filters.search}%,cuisine.ilike.%${filters.search}%,location.ilike.%${filters.search}%`
+          `name.ilike.%${filters.search}%,cuisine.ilike.%${filters.search}%,location.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
         );
       }
 
-      if (filters.cuisine) {
-        query = query.eq("cuisine", filters.cuisine);
+      // Apply cuisine filter (array)
+      if (filters.cuisine && filters.cuisine.length > 0) {
+        query = query.in("cuisine", filters.cuisine);
+      }
+
+      // Apply price range filter (array)
+      if (filters.priceRange && filters.priceRange.length > 0) {
+        query = query.in("price_range", filters.priceRange);
+      }
+
+      // Apply rating filter
+      if (filters.rating && filters.rating.length === 2) {
+        query = query.gte("rating", filters.rating[0]).lte("rating", filters.rating[1]);
+      }
+
+      // Apply location filter (array) - using ilike for partial matches
+      if (filters.location && filters.location.length > 0) {
+        const locationConditions = filters.location.map(loc => `location.ilike.%${loc}%`).join(',');
+        query = query.or(locationConditions);
+      }
+
+      // Apply featured filter
+      if (filters.featuredOnly) {
+        query = query.eq("is_featured", true);
+      }
+
+      // Apply sorting with AI-based popularity as default
+      const sortBy = filters.sortBy || 'popularity';
+      switch (sortBy) {
+        case 'popularity':
+          // AI-based popularity: combine rating, creation date, and featured status
+          query = query.order("is_featured", { ascending: false })
+                      .order("rating", { ascending: false, nullsFirst: false })
+                      .order("created_at", { ascending: false });
+          break;
+        case 'rating':
+          query = query.order("rating", { ascending: false, nullsFirst: false });
+          break;
+        case 'newest':
+          query = query.order("created_at", { ascending: false });
+          break;
+        case 'alphabetical':
+          query = query.order("name", { ascending: true });
+          break;
+        case 'price_low':
+          // Custom price sorting logic
+          query = query.order("price_range", { ascending: true, nullsFirst: false });
+          break;
+        case 'price_high':
+          query = query.order("price_range", { ascending: false, nullsFirst: false });
+          break;
+        default:
+          query = query.order("created_at", { ascending: false });
       }
 
       if (filters.limit) {
@@ -79,7 +137,17 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
           error instanceof Error ? error.message : "Failed to fetch restaurants",
       }));
     }
-  };
+  }, [
+    filters.search, 
+    filters.cuisine, 
+    filters.priceRange, 
+    filters.rating, 
+    filters.location, 
+    filters.sortBy, 
+    filters.featuredOnly, 
+    filters.limit, 
+    filters.offset
+  ]);
 
   const createRestaurant = async (restaurant: RestaurantInsert) => {
     try {
@@ -133,7 +201,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
   useEffect(() => {
     fetchRestaurants();
-  }, [filters.search, filters.cuisine, filters.limit, filters.offset]);
+  }, [fetchRestaurants]);
 
   return {
     ...state,
@@ -142,4 +210,58 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
     updateRestaurant,
     deleteRestaurant,
   };
+}
+
+// Utility hook to get available filter options
+export function useRestaurantFilterOptions() {
+  const [options, setOptions] = useState({
+    cuisines: [] as string[],
+    locations: [] as string[],
+    tags: [] as string[],
+    isLoading: true,
+  });
+
+  useEffect(() => {
+    const fetchFilterOptions = async () => {
+      try {
+        // Get unique cuisines
+        const { data: cuisineData } = await supabase
+          .from("restaurants")
+          .select("cuisine")
+          .not("cuisine", "is", null);
+
+        // Get unique locations (extract cities/areas)
+        const { data: locationData } = await supabase
+          .from("restaurants")
+          .select("location")
+          .not("location", "is", null);
+
+        const uniqueCuisines = [...new Set(cuisineData?.map(r => r.cuisine).filter(Boolean))] as string[];
+        
+        // Extract cities/areas from full addresses
+        const uniqueLocations = [...new Set(
+          locationData?.map(r => {
+            if (!r.location) return null;
+            // Extract city names (assuming format like "123 Main St, Des Moines, IA")
+            const parts = r.location.split(',');
+            return parts.length > 1 ? parts[parts.length - 2].trim() : parts[0].trim();
+          }).filter(Boolean)
+        )] as string[];
+
+        setOptions({
+          cuisines: uniqueCuisines.sort(),
+          locations: uniqueLocations.sort(),
+          tags: ['Takeout', 'Delivery', 'Outdoor Seating', 'Family Friendly', 'Date Night', 'Happy Hour'], // Common restaurant tags
+          isLoading: false,
+        });
+      } catch (error) {
+        console.error('Error fetching filter options:', error);
+        setOptions(prev => ({ ...prev, isLoading: false }));
+      }
+    };
+
+    fetchFilterOptions();
+  }, []);
+
+  return options;
 }

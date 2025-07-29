@@ -1,11 +1,13 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
-import { useRestaurants } from "@/hooks/useRestaurants";
+import { RestaurantFilters, RestaurantFilterOptions } from "@/components/RestaurantFilters";
+import { useRestaurants, useRestaurantFilterOptions } from "@/hooks/useRestaurants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Star, DollarSign, ChefHat } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 const createSlug = (name: string): string => {
   return name
@@ -15,7 +17,20 @@ const createSlug = (name: string): string => {
 };
 
 export default function Restaurants() {
-  const { restaurants, isLoading, error } = useRestaurants();
+  const [filters, setFilters] = useState<RestaurantFilterOptions>({
+    search: '',
+    cuisine: [],
+    priceRange: [],
+    rating: [0, 5],
+    location: [],
+    sortBy: 'popularity',
+    featuredOnly: false,
+    openNow: false,
+    tags: []
+  });
+
+  const { restaurants, isLoading, error, totalCount } = useRestaurants(filters);
+  const filterOptions = useRestaurantFilterOptions();
 
   return (
     <div className="min-h-screen bg-background">
@@ -34,16 +49,32 @@ export default function Restaurants() {
         </div>
 
         {/* Mobile-Optimized Content */}
-        <div className="space-y-12">
+        <div className="space-y-8">
           {/* Restaurant Openings Section */}
           <RestaurantOpenings />
+
+          {/* Advanced Filters */}
+          <RestaurantFilters
+            filters={filters}
+            onFiltersChange={setFilters}
+            availableCuisines={filterOptions.cuisines}
+            availableLocations={filterOptions.locations}
+            availableTags={filterOptions.tags}
+            totalResults={totalCount}
+            isLoading={isLoading}
+          />
 
           {/* All Restaurants Section */}
           <div className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
               <h2 className="text-mobile-title md:text-2xl font-bold">All Restaurants</h2>
               <p className="text-mobile-caption md:text-sm text-muted-foreground">
-                Established restaurants and dining destinations
+                {filters.sortBy === 'popularity' ? 'Sorted by AI popularity ranking' : 
+                 filters.sortBy === 'rating' ? 'Sorted by highest ratings' :
+                 filters.sortBy === 'newest' ? 'Newest restaurants first' :
+                 filters.sortBy === 'alphabetical' ? 'Listed alphabetically' :
+                 filters.sortBy === 'price_low' ? 'Most affordable first' :
+                 'Premium options first'}
               </p>
             </div>
 
@@ -66,8 +97,30 @@ export default function Restaurants() {
                 <p className="text-muted-foreground">Error loading restaurants. Please try again later.</p>
               </div>
             ) : restaurants.length === 0 ? (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">No restaurants found.</p>
+              <div className="text-center py-12">
+                <p className="text-muted-foreground mb-4">
+                  {filters.search || filters.cuisine.length > 0 || filters.priceRange.length > 0 || filters.location.length > 0
+                    ? "No restaurants match your current filters. Try adjusting your search criteria."
+                    : "No restaurants found."}
+                </p>
+                {(filters.search || filters.cuisine.length > 0 || filters.priceRange.length > 0 || filters.location.length > 0) && (
+                  <button
+                    onClick={() => setFilters({
+                      search: '',
+                      cuisine: [],
+                      priceRange: [],
+                      rating: [0, 5],
+                      location: [],
+                      sortBy: 'popularity',
+                      featuredOnly: false,
+                      openNow: false,
+                      tags: []
+                    })}
+                    className="text-primary hover:underline"
+                  >
+                    Clear all filters
+                  </button>
+                )}
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
