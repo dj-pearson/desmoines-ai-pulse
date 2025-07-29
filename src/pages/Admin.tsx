@@ -22,6 +22,7 @@ import { DomainHighlightManager } from "@/components/DomainHighlightManager";
 import EventReviewSystem from "@/components/EventReviewSystem";
 import AffiliateManager from "@/components/AffiliateManager";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
+import { RestaurantBulkUpdater } from "@/components/RestaurantBulkUpdater";
 import { CronMonitor } from "@/components/CronMonitor";
 import {
   Shield,
@@ -919,6 +920,9 @@ export default function Admin() {
               <div className="space-y-6">
                 {/* Google Places Restaurant Tools */}
                 <GooglePlacesRestaurantTools />
+
+                {/* Bulk Restaurant Updater */}
+                <RestaurantBulkUpdater />
 
                 {/* Restaurant Content Table */}
                 <ContentTable
