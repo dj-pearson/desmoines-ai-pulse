@@ -374,11 +374,11 @@ Return empty array [] if no attractions found.`,
 
 // Filter out past events
 function filterFutureEvents(events: any[]): any[] {
-  const currentDate = new Date('2025-07-26'); // Current date
-  
-  return events.filter(event => {
+  const currentDate = new Date("2025-07-26"); // Current date
+
+  return events.filter((event) => {
     if (!event.date) return true; // Keep events without dates
-    
+
     try {
       const eventDate = new Date(event.date);
       return eventDate >= currentDate;
@@ -727,11 +727,16 @@ Deno.serve(async (req) => {
     );
 
     // Filter out past events for events category
-    const filteredItems = category === 'events' 
-      ? filterFutureEvents(extractedItems)
-      : extractedItems;
+    const filteredItems =
+      category === "events"
+        ? filterFutureEvents(extractedItems)
+        : extractedItems;
 
-    console.log(`🕒 After filtering past events: ${filteredItems.length} items (removed ${extractedItems.length - filteredItems.length} past events)`);
+    console.log(
+      `🕒 After filtering past events: ${filteredItems.length} items (removed ${
+        extractedItems.length - filteredItems.length
+      } past events)`
+    );
 
     if (filteredItems.length === 0) {
       return new Response(
