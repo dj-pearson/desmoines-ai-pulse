@@ -48,15 +48,21 @@ serve(async (req) => {
       }
 
       try {
-        // Check restaurant status using Google Places API
+        // Check restaurant status using Google Places API (New)
         const response = await fetch(
-          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${restaurant.google_place_id}&fields=place_id,name,business_status&key=${GOOGLE_API_KEY}`
+          `https://places.googleapis.com/v1/places/${restaurant.google_place_id}`,
+          {
+            method: 'GET',
+            headers: {
+              'X-Goog-Api-Key': GOOGLE_API_KEY,
+              'X-Goog-FieldMask': 'id,name,businessStatus'
+            }
+          }
         );
 
-        const data = await response.json();
-
-        if (data.status === "OK" && data.result) {
-          const googleStatus = data.result.business_status;
+        if (response.ok) {
+          const data = await response.json();
+          const googleStatus = data.businessStatus;
 
           // Check if restaurant is permanently closed or temporarily closed
           if (
@@ -71,7 +77,7 @@ serve(async (req) => {
               needs_update: true,
             });
           }
-        } else if (data.status === "NOT_FOUND") {
+        } else if (response.status === 404) {
           // Place no longer exists
           closedRestaurants.push({
             id: restaurant.id,

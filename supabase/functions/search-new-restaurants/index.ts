@@ -102,11 +102,34 @@ serve(async (req) => {
     const { lat, lng } = geocodeData.results[0].geometry.location;
     console.log("Geocoded coordinates:", lat, lng);
 
-    // Search for restaurants using Places API
-    const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=restaurant&key=${GOOGLE_API_KEY}`;
-    console.log("Places search URL:", placesUrl.replace(GOOGLE_API_KEY, "***"));
-
-    const placesResponse = await fetch(placesUrl);
+    // Search for restaurants using Places API (New)
+    const placesUrl = `https://places.googleapis.com/v1/places:searchNearby`;
+    console.log("Places search URL (New API):", placesUrl);
+    
+    const placesRequestBody = {
+      includedTypes: ["restaurant"],
+      maxResultCount: 20,
+      locationRestriction: {
+        circle: {
+          center: {
+            latitude: lat,
+            longitude: lng
+          },
+          radius: radius
+        }
+      },
+      languageCode: "en"
+    };
+    
+    const placesResponse = await fetch(placesUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.name,places.formattedAddress,places.businessStatus,places.rating,places.userRatingCount,places.priceLevel,places.types,places.currentOpeningHours,places.nationalPhoneNumber,places.websiteUri'
+      },
+      body: JSON.stringify(placesRequestBody)
+    });
 
     if (!placesResponse.ok) {
       console.error(
@@ -114,31 +137,25 @@ serve(async (req) => {
         placesResponse.status,
         placesResponse.statusText
       );
+      const errorText = await placesResponse.text();
+      console.error("Places API error response:", errorText);
       throw new Error(
-        `Places API request failed with status: ${placesResponse.status}`
+        `Places API request failed with status: ${placesResponse.status} - ${errorText}`
       );
     }
 
     const placesData = await placesResponse.json();
-    console.log("Places API response status:", placesData.status);
-    console.log("Places found:", placesData.results?.length || 0);
+    console.log("Places API response received");
+    console.log("Places found:", placesData.places?.length || 0);
 
-    if (placesData.status !== "OK") {
-      console.error(
-        "Places API error:",
-        placesData.status,
-        placesData.error_message
-      );
-      throw new Error(
-        `Google Places API error: ${placesData.status} - ${
-          placesData.error_message || "Unknown error"
-        }`
-      );
+    if (!placesData.places) {
+      console.log("No places found in response");
+      placesData.places = [];
     }
 
     // Filter out fast food chains and already existing restaurants
-    const filteredRestaurants = placesData.results.filter(
-      (place: GooglePlace) => {
+    const filteredRestaurants = placesData.places.filter(
+      (place: any) => {
         // Skip fast food chains (common chain indicators)
         const fastFoodChains = [
           "mcdonald",
@@ -161,45 +178,40 @@ serve(async (req) => {
           "dunkin",
         ];
 
-        const nameLower = place.name.toLowerCase();
+        const nameLower = place.name?.toLowerCase() || '';
         const isChain = fastFoodChains.some((chain) =>
           nameLower.includes(chain)
         );
 
         // Only include actual restaurants (not just food)
-        const isRestaurant =
-          place.types.includes("restaurant") &&
-          !place.types.includes("gas_station") &&
-          !place.types.includes("convenience_store");
+        const isRestaurant = place.types?.includes("restaurant") || false;
 
         return (
-          !isChain && isRestaurant && place.business_status === "OPERATIONAL"
+          !isChain && 
+          isRestaurant && 
+          place.businessStatus === "OPERATIONAL"
         );
       }
     );
 
-    // Get detailed information for each restaurant
-    const detailedRestaurants: GooglePlacesResult[] = [];
-
-    for (const place of filteredRestaurants.slice(0, 20)) {
-      // Limit to 20 to avoid API limits
-      try {
-        const detailsResponse = await fetch(
-          `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=place_id,name,formatted_address,formatted_phone_number,website,rating,user_ratings_total,price_level,types,business_status,opening_hours&key=${GOOGLE_API_KEY}`
-        );
-
-        const detailsData = await detailsResponse.json();
-
-        if (detailsData.status === "OK") {
-          detailedRestaurants.push(detailsData.result);
-        }
-
-        // Add small delay to avoid rate limiting
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } catch (error) {
-        console.error(`Error getting details for ${place.name}:`, error);
-      }
-    }
+    // Convert the new API format to our expected format
+    const detailedRestaurants: GooglePlacesResult[] = filteredRestaurants.map((place: any) => {
+      return {
+        place_id: place.id,
+        name: place.name,
+        formatted_address: place.formattedAddress,
+        business_status: place.businessStatus,
+        rating: place.rating,
+        user_ratings_total: place.userRatingCount,
+        price_level: place.priceLevel,
+        types: place.types || [],
+        opening_hours: place.currentOpeningHours ? {
+          open_now: place.currentOpeningHours.openNow
+        } : undefined,
+        formatted_phone_number: place.nationalPhoneNumber,
+        website: place.websiteUri,
+      };
+    });
 
     return new Response(
       JSON.stringify({
@@ -222,8 +234,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: error.message || "An unexpected error occurred",
-        details:
-          process.env.NODE_ENV === "development" ? error.stack : undefined,
+        details: Deno.env.get("NODE_ENV") === "development" ? error.stack : undefined,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
