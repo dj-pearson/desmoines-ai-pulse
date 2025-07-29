@@ -136,8 +136,8 @@ export default function SEOTools() {
     // Add dynamic event pages
     events.forEach(event => {
       const eventDate = event.date ? new Date(event.date).toISOString().split('T')[0] : currentDate;
-      // Use database slug if available, fallback to generated slug
-      const slug = (event as any).slug || createSlug(event.title);
+      // Events don't have slug field yet, use generated slug
+      const slug = createSlug(event.title);
       sitemap += `
   <url>
     <loc>${baseUrl}/events/${slug}</loc>
@@ -167,8 +167,8 @@ export default function SEOTools() {
 
     // Add attraction pages
     attractions.forEach(attraction => {
-      // Use database slug if available, fallback to generated slug
-      const slug = (attraction as any).slug || createSlug(attraction.name);
+      // Attractions don't have slug field yet, use generated slug
+      const slug = createSlug(attraction.name);
       const lastmod = attraction.updated_at 
         ? new Date(attraction.updated_at).toISOString().split('T')[0] 
         : currentDate;
@@ -185,8 +185,8 @@ export default function SEOTools() {
 
     // Add playground pages
     playgrounds.forEach(playground => {
-      // Use database slug if available, fallback to generated slug
-      const slug = (playground as any).slug || createSlug(playground.name);
+      // Playgrounds don't have slug field yet, use generated slug
+      const slug = createSlug(playground.name);
       const lastmod = playground.updated_at 
         ? new Date(playground.updated_at).toISOString().split('T')[0] 
         : currentDate;
