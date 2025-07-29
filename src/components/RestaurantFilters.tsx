@@ -3,23 +3,29 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { 
-  Search, 
-  Filter, 
-  X, 
-  MapPin, 
-  Star, 
-  DollarSign, 
-  ChefHat, 
+import {
+  Search,
+  Filter,
+  X,
+  MapPin,
+  Star,
+  DollarSign,
+  ChefHat,
   Clock,
   TrendingUp,
   Sparkles,
-  SlidersHorizontal
+  SlidersHorizontal,
 } from "lucide-react";
 
 export interface RestaurantFilterOptions {
@@ -28,7 +34,13 @@ export interface RestaurantFilterOptions {
   priceRange: string[];
   rating: number[];
   location: string[];
-  sortBy: 'popularity' | 'rating' | 'newest' | 'alphabetical' | 'price_low' | 'price_high';
+  sortBy:
+    | "popularity"
+    | "rating"
+    | "newest"
+    | "alphabetical"
+    | "price_low"
+    | "price_high";
   featuredOnly: boolean;
   openNow: boolean;
   tags: string[];
@@ -45,19 +57,49 @@ interface RestaurantFiltersProps {
 }
 
 const priceRangeOptions = [
-  { value: '$', label: '$ - Budget Friendly', description: 'Under $15' },
-  { value: '$$', label: '$$ - Moderate', description: '$15-30' },
-  { value: '$$$', label: '$$$ - Upscale', description: '$30-50' },
-  { value: '$$$$', label: '$$$$ - Fine Dining', description: '$50+' }
+  { value: "$", label: "$ - Budget Friendly", description: "Under $15" },
+  { value: "$$", label: "$$ - Moderate", description: "$15-30" },
+  { value: "$$$", label: "$$$ - Upscale", description: "$30-50" },
+  { value: "$$$$", label: "$$$$ - Fine Dining", description: "$50+" },
 ];
 
 const sortOptions = [
-  { value: 'popularity', label: 'AI Popularity', icon: TrendingUp, description: 'Smart ranking based on reviews, ratings, and trends' },
-  { value: 'rating', label: 'Highest Rated', icon: Star, description: 'Best customer ratings first' },
-  { value: 'newest', label: 'Newest First', icon: Clock, description: 'Recently added restaurants' },
-  { value: 'alphabetical', label: 'A-Z', icon: SlidersHorizontal, description: 'Alphabetical order' },
-  { value: 'price_low', label: 'Price: Low to High', icon: DollarSign, description: 'Most affordable first' },
-  { value: 'price_high', label: 'Price: High to Low', icon: DollarSign, description: 'Premium options first' }
+  {
+    value: "popularity",
+    label: "AI Popularity",
+    icon: TrendingUp,
+    description: "Smart ranking based on reviews, ratings, and trends",
+  },
+  {
+    value: "rating",
+    label: "Highest Rated",
+    icon: Star,
+    description: "Best customer ratings first",
+  },
+  {
+    value: "newest",
+    label: "Newest First",
+    icon: Clock,
+    description: "Recently added restaurants",
+  },
+  {
+    value: "alphabetical",
+    label: "A-Z",
+    icon: SlidersHorizontal,
+    description: "Alphabetical order",
+  },
+  {
+    value: "price_low",
+    label: "Price: Low to High",
+    icon: DollarSign,
+    description: "Most affordable first",
+  },
+  {
+    value: "price_high",
+    label: "Price: High to Low",
+    icon: DollarSign,
+    description: "Premium options first",
+  },
 ];
 
 export function RestaurantFilters({
@@ -67,11 +109,11 @@ export function RestaurantFilters({
   availableLocations,
   availableTags,
   totalResults,
-  isLoading = false
+  isLoading = false,
 }: RestaurantFiltersProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [searchInput, setSearchInput] = useState(filters.search);
-  
+
   // Debounced search
   const debouncedUpdateSearch = useCallback(() => {
     if (searchInput !== filters.search) {
@@ -88,27 +130,30 @@ export function RestaurantFilters({
     onFiltersChange({ ...filters, [key]: value });
   };
 
-  const toggleArrayFilter = (key: 'cuisine' | 'priceRange' | 'location' | 'tags', value: string) => {
+  const toggleArrayFilter = (
+    key: "cuisine" | "priceRange" | "location" | "tags",
+    value: string
+  ) => {
     const currentArray = filters[key] as string[];
     const newArray = currentArray.includes(value)
-      ? currentArray.filter(item => item !== value)
+      ? currentArray.filter((item) => item !== value)
       : [...currentArray, value];
     updateFilter(key, newArray);
   };
 
   const clearAllFilters = () => {
     onFiltersChange({
-      search: '',
+      search: "",
       cuisine: [],
       priceRange: [],
       rating: [0, 5],
       location: [],
-      sortBy: 'popularity',
+      sortBy: "popularity",
       featuredOnly: false,
       openNow: false,
-      tags: []
+      tags: [],
     });
-    setSearchInput('');
+    setSearchInput("");
   };
 
   const getActiveFilterCount = () => {
@@ -145,9 +190,9 @@ export function RestaurantFilters({
 
             {/* Sort Dropdown */}
             <div className="flex gap-2">
-              <Select 
-                value={filters.sortBy} 
-                onValueChange={(value) => updateFilter('sortBy', value)}
+              <Select
+                value={filters.sortBy}
+                onValueChange={(value) => updateFilter("sortBy", value)}
               >
                 <SelectTrigger className="w-48">
                   <SelectValue placeholder="Sort by" />
@@ -161,7 +206,9 @@ export function RestaurantFilters({
                           <Icon className="h-4 w-4" />
                           <div>
                             <div className="font-medium">{option.label}</div>
-                            <div className="text-xs text-muted-foreground">{option.description}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {option.description}
+                            </div>
                           </div>
                         </div>
                       </SelectItem>
@@ -179,7 +226,10 @@ export function RestaurantFilters({
                 <Filter className="h-4 w-4 mr-2" />
                 Filters
                 {activeFilterCount > 0 && (
-                  <Badge variant="destructive" className="ml-2 h-5 w-5 rounded-full p-0 text-xs">
+                  <Badge
+                    variant="destructive"
+                    className="ml-2 h-5 w-5 rounded-full p-0 text-xs"
+                  >
                     {activeFilterCount}
                   </Badge>
                 )}
@@ -194,7 +244,7 @@ export function RestaurantFilters({
                 "Searching..."
               ) : (
                 <>
-                  {totalResults} restaurant{totalResults !== 1 ? 's' : ''} found
+                  {totalResults} restaurant{totalResults !== 1 ? "s" : ""} found
                   {activeFilterCount > 0 && (
                     <Button
                       variant="ghost"
@@ -208,7 +258,7 @@ export function RestaurantFilters({
                 </>
               )}
             </p>
-            
+
             {/* Quick Filter Tags */}
             <div className="flex gap-1 flex-wrap">
               {filters.featuredOnly && (
@@ -237,14 +287,17 @@ export function RestaurantFilters({
                 <SlidersHorizontal className="h-5 w-5" />
                 Advanced Filters
               </span>
-              <Button variant="ghost" size="sm" onClick={() => setIsExpanded(false)}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(false)}
+              >
                 <X className="h-4 w-4" />
               </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              
               {/* Cuisine Types */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 text-sm font-medium">
@@ -255,9 +308,13 @@ export function RestaurantFilters({
                   {availableCuisines.map((cuisine) => (
                     <Badge
                       key={cuisine}
-                      variant={filters.cuisine.includes(cuisine) ? "default" : "outline"}
+                      variant={
+                        filters.cuisine.includes(cuisine)
+                          ? "default"
+                          : "outline"
+                      }
                       className="cursor-pointer hover:bg-primary/80 transition-colors"
-                      onClick={() => toggleArrayFilter('cuisine', cuisine)}
+                      onClick={() => toggleArrayFilter("cuisine", cuisine)}
                     >
                       {cuisine}
                       {filters.cuisine.includes(cuisine) && (
@@ -280,10 +337,12 @@ export function RestaurantFilters({
                       key={option.value}
                       className={`p-2 rounded-md border cursor-pointer transition-colors ${
                         filters.priceRange.includes(option.value)
-                          ? 'border-primary bg-primary/10'
-                          : 'border-border hover:border-primary/50'
+                          ? "border-primary bg-primary/10"
+                          : "border-border hover:border-primary/50"
                       }`}
-                      onClick={() => toggleArrayFilter('priceRange', option.value)}
+                      onClick={() =>
+                        toggleArrayFilter("priceRange", option.value)
+                      }
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{option.label}</span>
@@ -291,7 +350,9 @@ export function RestaurantFilters({
                           <X className="h-3 w-3" />
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground">{option.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {option.description}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -307,9 +368,13 @@ export function RestaurantFilters({
                   {availableLocations.map((location) => (
                     <Badge
                       key={location}
-                      variant={filters.location.includes(location) ? "default" : "outline"}
+                      variant={
+                        filters.location.includes(location)
+                          ? "default"
+                          : "outline"
+                      }
                       className="cursor-pointer hover:bg-primary/80 transition-colors"
-                      onClick={() => toggleArrayFilter('location', location)}
+                      onClick={() => toggleArrayFilter("location", location)}
                     >
                       {location}
                       {filters.location.includes(location) && (
@@ -331,7 +396,7 @@ export function RestaurantFilters({
               </Label>
               <Slider
                 value={filters.rating}
-                onValueChange={(value) => updateFilter('rating', value)}
+                onValueChange={(value) => updateFilter("rating", value)}
                 max={5}
                 min={0}
                 step={0.5}
@@ -351,14 +416,20 @@ export function RestaurantFilters({
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-yellow-500" />
                   <div>
-                    <Label htmlFor="featured" className="font-medium">Featured Only</Label>
-                    <p className="text-xs text-muted-foreground">Show editor's picks</p>
+                    <Label htmlFor="featured" className="font-medium">
+                      Featured Only
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Show editor's picks
+                    </p>
                   </div>
                 </div>
                 <Switch
                   id="featured"
                   checked={filters.featuredOnly}
-                  onCheckedChange={(checked) => updateFilter('featuredOnly', checked)}
+                  onCheckedChange={(checked) =>
+                    updateFilter("featuredOnly", checked)
+                  }
                 />
               </div>
 
@@ -366,14 +437,20 @@ export function RestaurantFilters({
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-green-500" />
                   <div>
-                    <Label htmlFor="openNow" className="font-medium">Open Now</Label>
-                    <p className="text-xs text-muted-foreground">Currently serving</p>
+                    <Label htmlFor="openNow" className="font-medium">
+                      Open Now
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Currently serving
+                    </p>
                   </div>
                 </div>
                 <Switch
                   id="openNow"
                   checked={filters.openNow}
-                  onCheckedChange={(checked) => updateFilter('openNow', checked)}
+                  onCheckedChange={(checked) =>
+                    updateFilter("openNow", checked)
+                  }
                 />
               </div>
             </div>
@@ -386,9 +463,11 @@ export function RestaurantFilters({
                   {availableTags.map((tag) => (
                     <Badge
                       key={tag}
-                      variant={filters.tags.includes(tag) ? "default" : "outline"}
+                      variant={
+                        filters.tags.includes(tag) ? "default" : "outline"
+                      }
                       className="cursor-pointer hover:bg-primary/80 transition-colors"
-                      onClick={() => toggleArrayFilter('tags', tag)}
+                      onClick={() => toggleArrayFilter("tags", tag)}
                     >
                       #{tag}
                       {filters.tags.includes(tag) && (

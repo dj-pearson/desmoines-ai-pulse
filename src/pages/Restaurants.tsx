@@ -1,9 +1,21 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
-import { RestaurantFilters, RestaurantFilterOptions } from "@/components/RestaurantFilters";
-import { useRestaurants, useRestaurantFilterOptions } from "@/hooks/useRestaurants";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  RestaurantFilters,
+  RestaurantFilterOptions,
+} from "@/components/RestaurantFilters";
+import {
+  useRestaurants,
+  useRestaurantFilterOptions,
+} from "@/hooks/useRestaurants";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Star, DollarSign, ChefHat } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -12,21 +24,21 @@ import { useState } from "react";
 const createSlug = (name: string): string => {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 };
 
 export default function Restaurants() {
   const [filters, setFilters] = useState<RestaurantFilterOptions>({
-    search: '',
+    search: "",
     cuisine: [],
     priceRange: [],
     rating: [0, 5],
     location: [],
-    sortBy: 'popularity',
+    sortBy: "popularity",
     featuredOnly: false,
     openNow: false,
-    tags: []
+    tags: [],
   });
 
   const { restaurants, isLoading, error, totalCount } = useRestaurants(filters);
@@ -35,7 +47,7 @@ export default function Restaurants() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
         {/* Mobile-First Header Section */}
         <div className="text-center mb-8 md:mb-12">
@@ -43,8 +55,8 @@ export default function Restaurants() {
             Des Moines Restaurants
           </h1>
           <p className="text-mobile-body md:text-xl text-muted-foreground max-w-3xl mx-auto px-2">
-            Discover the latest restaurant openings, established favorites, and hidden gems 
-            throughout the Des Moines metro area.
+            Discover the latest restaurant openings, established favorites, and
+            hidden gems throughout the Des Moines metro area.
           </p>
         </div>
 
@@ -67,14 +79,21 @@ export default function Restaurants() {
           {/* All Restaurants Section */}
           <div className="space-y-4 md:space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
-              <h2 className="text-mobile-title md:text-2xl font-bold">All Restaurants</h2>
+              <h2 className="text-mobile-title md:text-2xl font-bold">
+                All Restaurants
+              </h2>
               <p className="text-mobile-caption md:text-sm text-muted-foreground">
-                {filters.sortBy === 'popularity' ? 'Sorted by AI popularity ranking' : 
-                 filters.sortBy === 'rating' ? 'Sorted by highest ratings' :
-                 filters.sortBy === 'newest' ? 'Newest restaurants first' :
-                 filters.sortBy === 'alphabetical' ? 'Listed alphabetically' :
-                 filters.sortBy === 'price_low' ? 'Most affordable first' :
-                 'Premium options first'}
+                {filters.sortBy === "popularity"
+                  ? "Sorted by AI popularity ranking"
+                  : filters.sortBy === "rating"
+                  ? "Sorted by highest ratings"
+                  : filters.sortBy === "newest"
+                  ? "Newest restaurants first"
+                  : filters.sortBy === "alphabetical"
+                  ? "Listed alphabetically"
+                  : filters.sortBy === "price_low"
+                  ? "Most affordable first"
+                  : "Premium options first"}
               </p>
             </div>
 
@@ -94,28 +113,38 @@ export default function Restaurants() {
               </div>
             ) : error ? (
               <div className="text-center py-8">
-                <p className="text-muted-foreground">Error loading restaurants. Please try again later.</p>
+                <p className="text-muted-foreground">
+                  Error loading restaurants. Please try again later.
+                </p>
               </div>
             ) : restaurants.length === 0 ? (
               <div className="text-center py-12">
                 <p className="text-muted-foreground mb-4">
-                  {filters.search || filters.cuisine.length > 0 || filters.priceRange.length > 0 || filters.location.length > 0
+                  {filters.search ||
+                  filters.cuisine.length > 0 ||
+                  filters.priceRange.length > 0 ||
+                  filters.location.length > 0
                     ? "No restaurants match your current filters. Try adjusting your search criteria."
                     : "No restaurants found."}
                 </p>
-                {(filters.search || filters.cuisine.length > 0 || filters.priceRange.length > 0 || filters.location.length > 0) && (
+                {(filters.search ||
+                  filters.cuisine.length > 0 ||
+                  filters.priceRange.length > 0 ||
+                  filters.location.length > 0) && (
                   <button
-                    onClick={() => setFilters({
-                      search: '',
-                      cuisine: [],
-                      priceRange: [],
-                      rating: [0, 5],
-                      location: [],
-                      sortBy: 'popularity',
-                      featuredOnly: false,
-                      openNow: false,
-                      tags: []
-                    })}
+                    onClick={() =>
+                      setFilters({
+                        search: "",
+                        cuisine: [],
+                        priceRange: [],
+                        rating: [0, 5],
+                        location: [],
+                        sortBy: "popularity",
+                        featuredOnly: false,
+                        openNow: false,
+                        tags: [],
+                      })
+                    }
                     className="text-primary hover:underline"
                   >
                     Clear all filters
@@ -125,8 +154,8 @@ export default function Restaurants() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {restaurants.map((restaurant) => (
-                  <Link 
-                    key={restaurant.id} 
+                  <Link
+                    key={restaurant.id}
                     to={`/restaurants/${restaurant.id}`}
                     className="block hover:scale-105 transition-transform duration-200"
                   >
@@ -137,14 +166,18 @@ export default function Restaurants() {
                             {restaurant.name}
                           </CardTitle>
                           {restaurant.is_featured && (
-                            <Badge variant="secondary" className="shrink-0">Featured</Badge>
+                            <Badge variant="secondary" className="shrink-0">
+                              Featured
+                            </Badge>
                           )}
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           {restaurant.cuisine && (
                             <div className="flex items-center gap-1">
                               <ChefHat className="h-4 w-4" />
-                              <span className="line-clamp-1">{restaurant.cuisine}</span>
+                              <span className="line-clamp-1">
+                                {restaurant.cuisine}
+                              </span>
                             </div>
                           )}
                           {restaurant.rating && (
@@ -156,7 +189,9 @@ export default function Restaurants() {
                           {restaurant.price_range && (
                             <div className="flex items-center gap-1">
                               <DollarSign className="h-4 w-4" />
-                              <span className="text-green-600 font-medium">{restaurant.price_range}</span>
+                              <span className="text-green-600 font-medium">
+                                {restaurant.price_range}
+                              </span>
                             </div>
                           )}
                         </div>

@@ -19,7 +19,13 @@ interface RestaurantFilters {
   priceRange?: string[];
   rating?: number[];
   location?: string[];
-  sortBy?: 'popularity' | 'rating' | 'newest' | 'alphabetical' | 'price_low' | 'price_high';
+  sortBy?:
+    | "popularity"
+    | "rating"
+    | "newest"
+    | "alphabetical"
+    | "price_low"
+    | "price_high";
   featuredOnly?: boolean;
   openNow?: boolean;
   tags?: string[];
@@ -39,9 +45,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      let query = supabase
-        .from("restaurants")
-        .select("*", { count: "exact" });
+      let query = supabase.from("restaurants").select("*", { count: "exact" });
 
       // Apply search filter
       if (filters.search) {
@@ -62,12 +66,16 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       // Apply rating filter
       if (filters.rating && filters.rating.length === 2) {
-        query = query.gte("rating", filters.rating[0]).lte("rating", filters.rating[1]);
+        query = query
+          .gte("rating", filters.rating[0])
+          .lte("rating", filters.rating[1]);
       }
 
       // Apply location filter (array) - using ilike for partial matches
       if (filters.location && filters.location.length > 0) {
-        const locationConditions = filters.location.map(loc => `location.ilike.%${loc}%`).join(',');
+        const locationConditions = filters.location
+          .map((loc) => `location.ilike.%${loc}%`)
+          .join(",");
         query = query.or(locationConditions);
       }
 
@@ -77,32 +85,36 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       }
 
       // Apply sorting with AI-based popularity as default
-      const sortBy = filters.sortBy || 'popularity';
+      const sortBy = filters.sortBy || "popularity";
       switch (sortBy) {
-        case 'popularity':
+        case "popularity":
           // AI-based popularity: use calculated popularity_score
-          query = query.order("popularity_score", { ascending: false })
-                      .order("is_featured", { ascending: false })
-                      .order("created_at", { ascending: false });
+          query = query
+            .order("popularity_score", { ascending: false })
+            .order("is_featured", { ascending: false })
+            .order("created_at", { ascending: false });
           break;
-        case 'rating':
-          query = query.order("rating", { ascending: false, nullsFirst: false })
-                      .order("popularity_score", { ascending: false });
+        case "rating":
+          query = query
+            .order("rating", { ascending: false, nullsFirst: false })
+            .order("popularity_score", { ascending: false });
           break;
-        case 'newest':
+        case "newest":
           query = query.order("created_at", { ascending: false });
           break;
-        case 'alphabetical':
+        case "alphabetical":
           query = query.order("name", { ascending: true });
           break;
-        case 'price_low':
+        case "price_low":
           // Custom price sorting logic ($ < $$ < $$$ < $$$$)
-          query = query.order("price_range", { ascending: true, nullsFirst: false })
-                      .order("popularity_score", { ascending: false });
+          query = query
+            .order("price_range", { ascending: true, nullsFirst: false })
+            .order("popularity_score", { ascending: false });
           break;
-        case 'price_high':
-          query = query.order("price_range", { ascending: false, nullsFirst: false })
-                      .order("popularity_score", { ascending: false });
+        case "price_high":
+          query = query
+            .order("price_range", { ascending: false, nullsFirst: false })
+            .order("popularity_score", { ascending: false });
           break;
         default:
           query = query.order("popularity_score", { ascending: false });
@@ -137,19 +149,21 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         ...prev,
         isLoading: false,
         error:
-          error instanceof Error ? error.message : "Failed to fetch restaurants",
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch restaurants",
       }));
     }
   }, [
-    filters.search, 
-    filters.cuisine, 
-    filters.priceRange, 
-    filters.rating, 
-    filters.location, 
-    filters.sortBy, 
-    filters.featuredOnly, 
-    filters.limit, 
-    filters.offset
+    filters.search,
+    filters.cuisine,
+    filters.priceRange,
+    filters.rating,
+    filters.location,
+    filters.sortBy,
+    filters.featuredOnly,
+    filters.limit,
+    filters.offset,
   ]);
 
   const createRestaurant = async (restaurant: RestaurantInsert) => {
@@ -191,7 +205,10 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
   const deleteRestaurant = async (id: string) => {
     try {
-      const { error } = await supabase.from("restaurants").delete().eq("id", id);
+      const { error } = await supabase
+        .from("restaurants")
+        .delete()
+        .eq("id", id);
 
       if (error) throw error;
 
@@ -239,27 +256,42 @@ export function useRestaurantFilterOptions() {
           .select("location")
           .not("location", "is", null);
 
-        const uniqueCuisines = [...new Set(cuisineData?.map(r => r.cuisine).filter(Boolean))] as string[];
-        
+        const uniqueCuisines = [
+          ...new Set(cuisineData?.map((r) => r.cuisine).filter(Boolean)),
+        ] as string[];
+
         // Extract cities/areas from full addresses
-        const uniqueLocations = [...new Set(
-          locationData?.map(r => {
-            if (!r.location) return null;
-            // Extract city names (assuming format like "123 Main St, Des Moines, IA")
-            const parts = r.location.split(',');
-            return parts.length > 1 ? parts[parts.length - 2].trim() : parts[0].trim();
-          }).filter(Boolean)
-        )] as string[];
+        const uniqueLocations = [
+          ...new Set(
+            locationData
+              ?.map((r) => {
+                if (!r.location) return null;
+                // Extract city names (assuming format like "123 Main St, Des Moines, IA")
+                const parts = r.location.split(",");
+                return parts.length > 1
+                  ? parts[parts.length - 2].trim()
+                  : parts[0].trim();
+              })
+              .filter(Boolean)
+          ),
+        ] as string[];
 
         setOptions({
           cuisines: uniqueCuisines.sort(),
           locations: uniqueLocations.sort(),
-          tags: ['Takeout', 'Delivery', 'Outdoor Seating', 'Family Friendly', 'Date Night', 'Happy Hour'], // Common restaurant tags
+          tags: [
+            "Takeout",
+            "Delivery",
+            "Outdoor Seating",
+            "Family Friendly",
+            "Date Night",
+            "Happy Hour",
+          ], // Common restaurant tags
           isLoading: false,
         });
       } catch (error) {
-        console.error('Error fetching filter options:', error);
-        setOptions(prev => ({ ...prev, isLoading: false }));
+        console.error("Error fetching filter options:", error);
+        setOptions((prev) => ({ ...prev, isLoading: false }));
       }
     };
 
