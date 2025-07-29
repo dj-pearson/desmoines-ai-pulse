@@ -332,36 +332,6 @@ export default function EventsPage() {
             </div>
           )}
 
-          {/* Quick Category Filters */}
-          {categories && categories.length > 0 && (
-            <div className="mb-8">
-              <h2 className="text-lg font-semibold mb-4">Browse by Category</h2>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  key="all"
-                  variant={selectedCategory === "all" ? "default" : "outline"}
-                  onClick={() => setSelectedCategory("all")}
-                  className="text-sm"
-                >
-                  All Events
-                </Button>
-                {categories.map((category) => (
-                  <Button
-                    key={category}
-                    variant={
-                      selectedCategory === category ? "default" : "outline"
-                    }
-                    onClick={() => setSelectedCategory(category)}
-                    className="text-sm"
-                  >
-                    <Tag className="h-3 w-3 mr-1" />
-                    {category}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Results Header */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">

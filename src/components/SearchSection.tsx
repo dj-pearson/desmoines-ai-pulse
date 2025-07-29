@@ -134,8 +134,10 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   };
 
   const handleSubcategoryChange = (newSubcategory: string) => {
-    setSubcategory(newSubcategory);
-    handleFilterChange({ subcategory: newSubcategory });
+    const subcategoryValue =
+      newSubcategory === "all-subcategories" ? "" : newSubcategory;
+    setSubcategory(subcategoryValue);
+    handleFilterChange({ subcategory: subcategoryValue });
   };
 
   const handleLocationChange = (newLocation: string) => {
@@ -229,7 +231,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                       />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">
+                      <SelectItem value="all-subcategories">
                         {category === "Events" ? "All Events" : "All Cuisines"}
                       </SelectItem>
                       {subcategories.map((sub) => (
