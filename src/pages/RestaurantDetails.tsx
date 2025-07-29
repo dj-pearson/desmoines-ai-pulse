@@ -1,12 +1,31 @@
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MapPin, ExternalLink, Phone, Star, DollarSign, Share2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Helmet } from "react-helmet-async";
+import { 
+  MapPin, 
+  Phone, 
+  ExternalLink, 
+  Star, 
+  Clock, 
+  DollarSign, 
+  ArrowLeft,
+  Navigation,
+  Share2,
+  Heart,
+  MessageCircle,
+  Award,
+  Users,
+  Calendar,
+  Utensils,
+  Wifi,
+  Car,
+  CreditCard
+} from "lucide-react";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -14,6 +33,7 @@ export default function RestaurantDetails() {
   const { data: restaurant, isLoading, error } = useQuery({
     queryKey: ["restaurant", slug],
     queryFn: async () => {
+      // Try to find by ID (current system)
       const { data, error } = await supabase
         .from("restaurants")
         .select("*")
@@ -37,9 +57,9 @@ export default function RestaurantDetails() {
         .limit(3);
 
       if (error) throw error;
-      return data;
+      return data || [];
     },
-    enabled: !!restaurant?.cuisine,
+    enabled: !!restaurant,
   });
 
   const handleShare = async () => {
@@ -47,11 +67,13 @@ export default function RestaurantDetails() {
       try {
         await navigator.share({
           title: restaurant.name,
-          text: restaurant.description || `Check out ${restaurant.name} in Des Moines`,
+          text: `Check out ${restaurant.name} - ${restaurant.cuisine} cuisine in Des Moines`,
           url: window.location.href,
         });
       } catch (error) {
-        console.log("Error sharing:", error);
+        // Fallback to clipboard
+        navigator.clipboard.writeText(window.location.href);
+        toast.success("Link copied to clipboard!");
       }
     } else {
       navigator.clipboard.writeText(window.location.href);
@@ -59,16 +81,28 @@ export default function RestaurantDetails() {
     }
   };
 
+  const formatPrice = (price: string) => {
+    const count = price?.length || 1;
+    return "$".repeat(Math.min(count, 4));
+  };
+
+  const formatRating = (rating: number) => {
+    return rating ? rating.toFixed(1) : "N/A";
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
         <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse space-y-4">
-            <div className="h-8 bg-muted rounded w-3/4"></div>
-            <div className="h-64 bg-muted rounded"></div>
-            <div className="space-y-2">
-              <div className="h-4 bg-muted rounded"></div>
-              <div className="h-4 bg-muted rounded w-5/6"></div>
+          <div className="animate-pulse">
+            <div className="h-8 w-32 bg-gray-300 rounded mb-6"></div>
+            <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+              <div className="h-64 bg-gray-300"></div>
+              <div className="p-8">
+                <div className="h-8 bg-gray-300 rounded mb-4"></div>
+                <div className="h-4 bg-gray-300 rounded mb-2"></div>
+                <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -78,207 +112,262 @@ export default function RestaurantDetails() {
 
   if (error || !restaurant) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold text-destructive">Restaurant Not Found</h1>
-          <p className="text-muted-foreground">The restaurant you're looking for doesn't exist.</p>
-          <Button asChild>
-            <Link to="/">Return Home</Link>
-          </Button>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100 flex items-center justify-center">
+        <Card className="max-w-md mx-auto text-center">
+          <CardContent className="p-8">
+            <Utensils className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Restaurant Not Found</h2>
+            <p className="text-gray-600 mb-6">The restaurant you're looking for doesn't exist or has been removed.</p>
+            <Link to="/restaurants">
+              <Button className="bg-amber-600 hover:bg-amber-700">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Restaurants
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <>
-      <Helmet>
-        <title>{restaurant.name} - Des Moines Restaurants</title>
-        <meta name="description" content={restaurant.description || `${restaurant.name} - ${restaurant.cuisine} restaurant in Des Moines`} />
-        <meta property="og:title" content={restaurant.name} />
-        <meta property="og:description" content={restaurant.description || `${restaurant.name} - ${restaurant.cuisine} restaurant in Des Moines`} />
-        <meta property="og:type" content="restaurant" />
-        <meta property="og:url" content={window.location.href} />
-        {restaurant.image_url && <meta property="og:image" content={restaurant.image_url} />}
-        <script type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Restaurant",
-            name: restaurant.name,
-            description: restaurant.description,
-            image: restaurant.image_url,
-            address: restaurant.location,
-            telephone: restaurant.phone,
-            url: restaurant.website,
-            servesCuisine: restaurant.cuisine,
-            priceRange: restaurant.price_range,
-            aggregateRating: restaurant.rating ? {
-              "@type": "AggregateRating",
-              ratingValue: restaurant.rating,
-              ratingCount: 1,
-            } : undefined,
-          })}
-        </script>
-      </Helmet>
-
-      <div className="min-h-screen bg-background">
-        {/* Breadcrumb */}
-        <div className="border-b">
-          <div className="container mx-auto px-4 py-3">
-            <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <Link to="/" className="hover:text-primary transition-colors">Home</Link>
-              <span>/</span>
-              <Link to="/restaurants" className="hover:text-primary transition-colors">Restaurants</Link>
-              {restaurant.cuisine && (
-                <>
-                  <span>/</span>
-                  <Link to={`/restaurants/cuisine/${restaurant.cuisine.toLowerCase()}`} className="hover:text-primary transition-colors">{restaurant.cuisine}</Link>
-                </>
-              )}
-              <span>/</span>
-              <span className="text-foreground">{restaurant.name}</span>
-            </nav>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Header Navigation */}
+        <div className="flex items-center justify-between mb-8">
+          <Link to="/restaurants">
+            <Button variant="outline" className="bg-white/80 backdrop-blur-sm border-amber-200 hover:bg-amber-50">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Restaurants
+            </Button>
+          </Link>
+          
+          <div className="flex gap-2">
+            <Button onClick={handleShare} variant="outline" size="sm" className="bg-white/80 backdrop-blur-sm border-amber-200">
+              <Share2 className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="bg-white/80 backdrop-blur-sm border-amber-200">
+              <Heart className="h-4 w-4" />
+            </Button>
           </div>
         </div>
 
-        <div className="container mx-auto px-4 py-8">
-          <div className="grid lg:grid-cols-3 gap-8">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Header */}
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-4">
-                  <h1 className="text-3xl md:text-4xl font-bold leading-tight">{restaurant.name}</h1>
-                  <Button variant="outline" size="sm" onClick={handleShare}>
-                    <Share2 className="h-4 w-4" />
-                  </Button>
+        {/* Main Restaurant Card */}
+        <Card className="bg-white/95 backdrop-blur-sm shadow-2xl rounded-3xl overflow-hidden border-0 mb-8">
+          {/* Hero Section */}
+          <div className="relative h-80 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500 overflow-hidden">
+            <div className="absolute inset-0 bg-black/20"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center text-white">
+                <div className="flex items-center justify-center mb-4">
+                  <Utensils className="h-16 w-16 text-white/80" />
                 </div>
-                
-                <div className="flex items-center gap-4">
-                  {restaurant.cuisine && (
-                    <Badge variant="outline">{restaurant.cuisine}</Badge>
-                  )}
-                  {restaurant.is_featured && (
-                    <Badge>Featured</Badge>
-                  )}
-                  {restaurant.rating && (
-                    <div className="flex items-center gap-1">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium">{restaurant.rating}</span>
-                    </div>
-                  )}
+                <h1 className="text-5xl font-bold mb-2 tracking-tight">{restaurant.name}</h1>
+                <p className="text-xl text-white/90 font-medium">{restaurant.cuisine} Cuisine</p>
+              </div>
+            </div>
+            {/* Decorative elements */}
+            <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full animate-pulse"></div>
+            <div className="absolute bottom-10 right-10 w-32 h-32 bg-white/5 rounded-full animate-pulse delay-1000"></div>
+          </div>
+
+          {/* Restaurant Info */}
+          <CardContent className="p-8">
+            {/* Key Stats Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <div className="text-center p-4 bg-amber-50 rounded-xl">
+                <Star className="h-6 w-6 text-amber-500 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-gray-800">{formatRating(restaurant.rating)}</div>
+                <div className="text-sm text-gray-600">Rating</div>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-xl">
+                <DollarSign className="h-6 w-6 text-green-500 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-gray-800">{formatPrice(restaurant.price_range)}</div>
+                <div className="text-sm text-gray-600">Price Range</div>
+              </div>
+              <div className="text-center p-4 bg-blue-50 rounded-xl">
+                <Users className="h-6 w-6 text-blue-500 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-gray-800">N/A</div>
+                <div className="text-sm text-gray-600">Reviews</div>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-xl">
+                <Award className="h-6 w-6 text-purple-500 mx-auto mb-2" />
+                <div className="text-2xl font-bold text-gray-800">{restaurant.is_featured ? "Yes" : "No"}</div>
+                <div className="text-sm text-gray-600">Featured</div>
+              </div>
+            </div>
+
+            <Separator className="my-8" />
+
+            {/* Details Grid */}
+            <div className="grid md:grid-cols-2 gap-8">
+              {/* Contact & Location */}
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <MapPin className="h-5 w-5 mr-2 text-amber-600" />
+                    Location & Contact
+                  </h3>
+                  <div className="space-y-3">
+                    {restaurant.location && (
+                      <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                        <MapPin className="h-5 w-5 text-gray-500 mt-0.5" />
+                        <div>
+                          <p className="text-gray-800">{restaurant.location}</p>
+                          <Button variant="link" className="h-auto p-0 text-amber-600 hover:text-amber-700">
+                            <Navigation className="h-4 w-4 mr-1" />
+                            Get Directions
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {restaurant.phone && (
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <Phone className="h-5 w-5 text-gray-500" />
+                        <a href={`tel:${restaurant.phone}`} className="text-gray-800 hover:text-amber-600 transition-colors">
+                          {restaurant.phone}
+                        </a>
+                      </div>
+                    )}
+
+                    {restaurant.website && (
+                      <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                        <ExternalLink className="h-5 w-5 text-gray-500" />
+                        <a 
+                          href={restaurant.website} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-amber-600 hover:text-amber-700 transition-colors"
+                        >
+                          Visit Website
+                        </a>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Restaurant Image */}
-              {restaurant.image_url && (
-                <div className="aspect-video rounded-lg overflow-hidden">
-                  <img 
-                    src={restaurant.image_url} 
-                    alt={restaurant.name}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-              )}
-
-              {/* Description */}
-              {restaurant.description && (
-                <Card>
-                  <CardContent className="p-6">
-                    <h2 className="text-xl font-semibold mb-4">About {restaurant.name}</h2>
-                    <div className="prose prose-sm max-w-none text-muted-foreground">
-                      {restaurant.description}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Restaurant Details */}
-              <Card>
-                <CardContent className="p-6 space-y-4">
-                  <h3 className="font-semibold text-lg">Restaurant Info</h3>
-                  
+              {/* Restaurant Info */}
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                    <Utensils className="h-5 w-5 mr-2 text-amber-600" />
+                    Restaurant Details
+                  </h3>
                   <div className="space-y-3">
-                    {restaurant.location && (
-                      <div className="flex items-start gap-3">
-                        <MapPin className="h-5 w-5 text-primary mt-0.5" />
-                        <div>
-                          <p className="font-medium">Location</p>
-                          <p className="text-sm text-muted-foreground">{restaurant.location}</p>
-                        </div>
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <span className="text-gray-600">Cuisine Type</span>
+                      <Badge variant="secondary" className="bg-amber-100 text-amber-800">
+                        {restaurant.cuisine}
+                      </Badge>
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <span className="text-gray-600">Price Range</span>
+                      <span className="text-gray-800 font-medium">{formatPrice(restaurant.price_range)}</span>
+                    </div>
+
+                    {restaurant.opening && (
+                      <div className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
+                        <span className="text-gray-600 flex items-center">
+                          <Clock className="h-4 w-4 mr-1" />
+                          Hours
+                        </span>
+                        <span className="text-gray-800 text-right">{restaurant.opening}</span>
                       </div>
                     )}
 
-                    {restaurant.phone && (
-                      <div className="flex items-start gap-3">
-                        <Phone className="h-5 w-5 text-primary mt-0.5" />
-                        <div>
-                          <p className="font-medium">Phone</p>
-                          <a href={`tel:${restaurant.phone}`} className="text-sm text-primary hover:underline">
-                            {restaurant.phone}
-                          </a>
-                        </div>
-                      </div>
-                    )}
-
-                    {restaurant.price_range && (
-                      <div className="flex items-start gap-3">
-                        <DollarSign className="h-5 w-5 text-primary mt-0.5" />
-                        <div>
-                          <p className="font-medium">Price Range</p>
-                          <p className="text-sm text-muted-foreground">{restaurant.price_range}</p>
+                    {restaurant.is_featured && (
+                      <div className="p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                        <div className="flex items-center text-amber-700">
+                          <Award className="h-5 w-5 mr-2" />
+                          <span className="font-medium">Featured Restaurant</span>
                         </div>
                       </div>
                     )}
                   </div>
-
-                  {restaurant.website && (
-                    <div className="pt-4">
-                      <Button asChild className="w-full">
-                        <a href={restaurant.website} target="_blank" rel="noopener noreferrer">
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Visit Website
-                        </a>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Related Restaurants */}
-              {relatedRestaurants && relatedRestaurants.length > 0 && (
-                <Card>
-                  <CardContent className="p-6">
-                    <h3 className="font-semibold text-lg mb-4">Similar Restaurants</h3>
-                    <div className="space-y-3">
-                      {relatedRestaurants.map((relatedRestaurant) => (
-                        <Link 
-                          key={relatedRestaurant.id}
-                          to={`/restaurants/${relatedRestaurant.id}`}
-                          className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                        >
-                          <h4 className="font-medium text-sm">{relatedRestaurant.name}</h4>
-                          <p className="text-xs text-muted-foreground mt-1">{relatedRestaurant.cuisine}</p>
-                        </Link>
-                      ))}
-                    </div>
-                    {restaurant.cuisine && (
-                      <Button asChild variant="outline" className="w-full mt-4">
-                        <Link to={`/restaurants/cuisine/${restaurant.cuisine.toLowerCase()}`}>
-                          View All {restaurant.cuisine} Restaurants
-                        </Link>
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              )}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+
+            {/* Description */}
+            {restaurant.description && (
+              <>
+                <Separator className="my-8" />
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-800 mb-4">About {restaurant.name}</h3>
+                  <p className="text-gray-700 leading-relaxed text-lg">{restaurant.description}</p>
+                </div>
+              </>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-4 mt-8 pt-6 border-t border-gray-100">
+              {restaurant.phone && (
+                <Button className="bg-amber-600 hover:bg-amber-700 text-white">
+                  <Phone className="h-4 w-4 mr-2" />
+                  Call Now
+                </Button>
+              )}
+              {restaurant.website && (
+                <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Visit Website
+                </Button>
+              )}
+              <Button variant="outline" className="border-amber-200 text-amber-700 hover:bg-amber-50">
+                <MessageCircle className="h-4 w-4 mr-2" />
+                Write Review
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Related Restaurants */}
+        {relatedRestaurants && relatedRestaurants.length > 0 && (
+          <Card className="bg-white/95 backdrop-blur-sm shadow-xl rounded-2xl border-0">
+            <CardHeader>
+              <h3 className="text-2xl font-bold text-gray-800">More {restaurant.cuisine} Restaurants</h3>
+              <p className="text-gray-600">Discover other great {restaurant.cuisine} options in Des Moines</p>
+            </CardHeader>
+            <CardContent>
+              <div className="grid md:grid-cols-3 gap-6">
+                {relatedRestaurants.map((related) => (
+                  <Link 
+                    key={related.id} 
+                    to={`/restaurants/${related.id}`}
+                    className="group"
+                  >
+                    <Card className="h-full hover:shadow-lg transition-all duration-300 group-hover:scale-105 border border-gray-200">
+                      <CardContent className="p-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="font-semibold text-gray-800 group-hover:text-amber-600 transition-colors">
+                            {related.name}
+                          </h4>
+                          <div className="flex items-center text-sm text-gray-600">
+                            <Star className="h-4 w-4 text-amber-400 mr-1" />
+                            {formatRating(related.rating)}
+                          </div>
+                        </div>
+                        <p className="text-gray-600 text-sm mb-2">{related.location}</p>
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="text-xs">
+                            {related.cuisine}
+                          </Badge>
+                          <span className="text-sm font-medium text-gray-700">
+                            {formatPrice(related.price_range)}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
-    </>
+    </div>
   );
 }
