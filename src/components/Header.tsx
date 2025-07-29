@@ -52,7 +52,7 @@ export default function Header() {
               <Link
                 key={link.href}
                 to={link.href}
-                className="flex items-center gap-2 text-muted-foreground hover:text-primary smooth-transition touch-target"
+                className="flex items-center gap-2 text-muted-foreground hover:text-[#DC143C] smooth-transition touch-target"
               >
                 <link.icon className="h-4 w-4" />
                 {link.label}
@@ -86,7 +86,7 @@ export default function Header() {
                       onClick={() => setIsMobileMenuOpen(false)}
                       className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
                     >
-                      <link.icon className="h-5 w-5 text-primary" />
+                      <link.icon className="h-5 w-5 text-[#DC143C]" />
                       <span className="text-mobile-body font-medium">{link.label}</span>
                     </Link>
                   ))}

@@ -20,17 +20,20 @@ export default function Playgrounds() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
-        {/* Mobile-First Header Section */}
-        <div className="text-center mb-8 md:mb-12">
-          <h1 className="text-mobile-hero md:text-4xl font-bold text-foreground mb-3 md:mb-4">
-            Des Moines Playgrounds
+      {/* Hero Section with DMI Brand Colors */}
+      <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden">
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
+            Discover Des Moines Playgrounds
           </h1>
-          <p className="text-mobile-body md:text-xl text-muted-foreground max-w-3xl mx-auto px-2">
-            Find the perfect playground for your family with accessible equipment, 
-            amenities, and fun activities throughout the Des Moines area.
+          <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
+            Find the perfect playground for your family with accessible equipment and fun activities
           </p>
         </div>
+      </section>
+      
+      <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
 
         {/* Content */}
         {isLoading ? (

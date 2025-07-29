@@ -120,7 +120,7 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
           </div>
           <Link 
             to={`/events/category/${category?.toLowerCase()}`}
-            className="inline-block mt-4 text-sm text-primary hover:underline"
+            className="inline-block mt-4 text-sm text-[#DC143C] hover:underline"
           >
             View all {category} events →
           </Link>
@@ -161,7 +161,7 @@ export function InternalLinking({ currentType, currentId, category, cuisine }: I
           </div>
           <Link 
             to={`/restaurants/cuisine/${cuisine?.toLowerCase()}`}
-            className="inline-block mt-4 text-sm text-primary hover:underline"
+            className="inline-block mt-4 text-sm text-[#DC143C] hover:underline"
           >
             View all {cuisine} restaurants →
           </Link>

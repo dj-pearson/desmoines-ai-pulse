@@ -507,7 +507,7 @@ export default function AllInclusiveDashboard({
   const getTypeColor = (type: string) => {
     switch (type) {
       case "event":
-        return "bg-primary text-primary-foreground";
+        return "bg-[#DC143C] text-white";
       case "restaurant":
         return "bg-orange-500 text-white";
       case "attraction":

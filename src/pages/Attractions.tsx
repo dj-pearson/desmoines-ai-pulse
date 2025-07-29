@@ -20,17 +20,20 @@ export default function Attractions() {
     <div className="min-h-screen bg-background">
       <Header />
       
-      <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
-        {/* Mobile-First Header Section */}
-        <div className="text-center mb-8 md:mb-12">
-          <h1 className="text-mobile-hero md:text-4xl font-bold text-foreground mb-3 md:mb-4">
-            Des Moines Attractions
+      {/* Hero Section with DMI Brand Colors */}
+      <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden">
+        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
+            Discover Des Moines Attractions
           </h1>
-          <p className="text-mobile-body md:text-xl text-muted-foreground max-w-3xl mx-auto px-2">
-            Discover museums, parks, entertainment venues, and cultural attractions 
-            throughout the Des Moines metro area.
+          <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
+            Explore museums, parks, entertainment venues, and cultural attractions throughout the capital city
           </p>
         </div>
+      </section>
+      
+      <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
 
         {/* Content */}
         {isLoading ? (

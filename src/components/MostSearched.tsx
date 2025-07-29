@@ -16,7 +16,7 @@ export default function MostSearched() {
   const handleItemClick = (contentType: string, contentId: string) => {
     trackEvent({
       eventType: 'click',
-      contentType: contentType as any,
+      contentType: contentType as 'restaurant' | 'event' | 'attraction' | 'playground',
       contentId: contentId
     });
   };
@@ -49,7 +49,7 @@ export default function MostSearched() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <TrendingUp className="h-6 w-6 text-primary" />
+            <TrendingUp className="h-6 w-6 text-[#DC143C]" />
             <h3 className="text-3xl font-bold text-foreground">
               {hasRealTrendingData || hasRealSearchData ? 'Trending Now' : 'Popular Discoveries'}
             </h3>
@@ -74,7 +74,7 @@ export default function MostSearched() {
           {/* Popular Searches */}
           <div>
             <div className="flex items-center mb-6">
-              <Search className="h-6 w-6 text-primary mr-2" />
+              <Search className="h-6 w-6 text-[#DC143C] mr-2" />
               <h4 className="text-xl font-semibold">
                 {hasRealSearchData ? 'Top Searches' : 'Popular Searches'}
               </h4>
@@ -110,7 +110,7 @@ export default function MostSearched() {
           {/* Top Restaurants */}
           <div>
             <div className="flex items-center mb-6">
-              <Utensils className="h-6 w-6 text-primary mr-2" />
+              <Utensils className="h-6 w-6 text-[#DC143C] mr-2" />
               <h4 className="text-xl font-semibold">
                 {hasRealTrendingData ? 'Trending Restaurants' : 'Top Restaurants'}
               </h4>
@@ -177,7 +177,7 @@ export default function MostSearched() {
           {/* Top Attractions */}
           <div>
             <div className="flex items-center mb-6">
-              <MapPin className="h-6 w-6 text-primary mr-2" />
+              <MapPin className="h-6 w-6 text-[#DC143C] mr-2" />
               <h4 className="text-xl font-semibold">
                 {hasRealTrendingData ? 'Trending Attractions' : 'Top Attractions'}
               </h4>
@@ -235,7 +235,7 @@ export default function MostSearched() {
           {/* Top Playgrounds */}
           <div>
             <div className="flex items-center mb-6">
-              <Baby className="h-6 w-6 text-primary mr-2" />
+              <Baby className="h-6 w-6 text-[#DC143C] mr-2" />
               <h4 className="text-xl font-semibold">
                 {hasRealTrendingData ? 'Trending Playgrounds' : 'Top Playgrounds'}
               </h4>

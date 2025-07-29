@@ -103,17 +103,20 @@ export default function Restaurants() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
-          {/* Mobile-First Header Section */}
-          <div className="text-center mb-8 md:mb-12">
-            <h1 className="text-mobile-hero md:text-4xl font-bold text-foreground mb-3 md:mb-4">
-              Des Moines Restaurants
+        {/* Hero Section with DMI Brand Colors */}
+        <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden">
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
+              Discover Des Moines Dining
             </h1>
-            <p className="text-mobile-body md:text-xl text-muted-foreground max-w-3xl mx-auto px-2">
-              Discover the latest restaurant openings, established favorites,
-              and hidden gems throughout the Des Moines metro area.
+            <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
+              Find the best restaurants, local favorites, and new dining experiences in the capital city
             </p>
           </div>
+        </section>
+
+        <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
 
           {/* Mobile-Optimized Content */}
           <div className="space-y-8">
@@ -221,7 +224,7 @@ export default function Restaurants() {
                               {restaurant.name}
                             </CardTitle>
                             {restaurant.is_featured && (
-                              <Badge variant="secondary" className="shrink-0">
+                              <Badge variant="secondary" className="shrink-0 bg-[#DC143C] text-white hover:bg-[#DC143C]/90">
                                 Featured
                               </Badge>
                             )}
@@ -244,7 +247,7 @@ export default function Restaurants() {
                             {restaurant.price_range && (
                               <div className="flex items-center gap-1">
                                 <DollarSign className="h-4 w-4" />
-                                <span className="text-green-600 font-medium">
+                                <span className="text-[#2D1B69] font-medium">
                                   {restaurant.price_range}
                                 </span>
                               </div>

@@ -561,28 +561,28 @@ ${JSON.stringify(eventListSchema, null, 2)}
       <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card className="text-center">
           <CardContent className="pt-4">
-            <Calendar className="h-8 w-8 mx-auto text-primary mb-2" />
+            <Calendar className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
             <div className="text-2xl font-bold">{events.length}</div>
             <div className="text-sm text-muted-foreground">Events</div>
           </CardContent>
         </Card>
         <Card className="text-center">
           <CardContent className="pt-4">
-            <Utensils className="h-8 w-8 mx-auto text-primary mb-2" />
+            <Utensils className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
             <div className="text-2xl font-bold">{restaurants.length}</div>
             <div className="text-sm text-muted-foreground">Restaurants</div>
           </CardContent>
         </Card>
         <Card className="text-center">
           <CardContent className="pt-4">
-            <Camera className="h-8 w-8 mx-auto text-primary mb-2" />
+            <Camera className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
             <div className="text-2xl font-bold">{attractions.length}</div>
             <div className="text-sm text-muted-foreground">Attractions</div>
           </CardContent>
         </Card>
         <Card className="text-center">
           <CardContent className="pt-4">
-            <Play className="h-8 w-8 mx-auto text-primary mb-2" />
+            <Play className="h-8 w-8 mx-auto text-[#DC143C] mb-2" />
             <div className="text-2xl font-bold">{playgrounds.length}</div>
             <div className="text-sm text-muted-foreground">Playgrounds</div>
           </CardContent>

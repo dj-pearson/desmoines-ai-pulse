@@ -176,7 +176,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   };
 
   return (
-    <section className="py-8 md:py-20 bg-gradient-to-r from-primary to-primary/80 mobile-padding">
+    <section className="py-8 md:py-20 bg-gradient-to-r from-[#2D1B69] to-[#8B0000] mobile-padding">
       <div className="container mx-auto text-center">
         <h2 className="text-mobile-title md:text-4xl lg:text-6xl font-bold text-primary-foreground mb-3 md:mb-6 mobile-safe-text">
           Discover Des Moines

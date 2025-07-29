@@ -35,7 +35,7 @@ export default function Newsletter() {
   };
 
   return (
-    <section className="py-16 bg-primary" id="newsletter">
+    <section className="py-16 bg-gradient-to-r from-[#2D1B69] to-[#8B0000]" id="newsletter">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <div className="flex justify-center mb-6">
           <Mail className="h-12 w-12 text-white" />

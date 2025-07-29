@@ -202,8 +202,8 @@ export default function EventsPage() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        {/* Hero Section */}
-        <section className="relative bg-gradient-to-br from-blue-600 via-purple-500 to-pink-500 overflow-hidden">
+        {/* Hero Section with DMI Brand Colors */}
+        <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden">
           <div className="absolute inset-0 bg-black/20"></div>
           <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
@@ -366,7 +366,7 @@ export default function EventsPage() {
                       <div className="flex items-center justify-between">
                         <Badge variant="outline">{event.category}</Badge>
                         {event.is_featured && (
-                          <Badge className="bg-blue-600">Featured</Badge>
+                          <Badge className="bg-[#DC143C]">Featured</Badge>
                         )}
                       </div>
 

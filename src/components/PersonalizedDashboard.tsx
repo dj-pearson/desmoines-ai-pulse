@@ -77,7 +77,7 @@ export default function PersonalizedDashboard({ onViewEventDetails }: Personaliz
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Brain className="h-6 w-6 text-primary" />
+            <Brain className="h-6 w-6 text-[#DC143C]" />
             <h3 className="text-3xl font-bold text-neutral-900">AI-Powered Recommendations</h3>
           </div>
           <p className="text-lg text-neutral-600 mb-4">

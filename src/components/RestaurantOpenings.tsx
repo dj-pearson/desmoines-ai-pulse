@@ -132,7 +132,7 @@ export function RestaurantOpenings() {
                     href={restaurant.sourceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-primary hover:text-primary/80 smooth-transition touch-target self-start"
+                    className="inline-flex items-center gap-1 text-xs text-[#DC143C] hover:text-[#8B0000] smooth-transition touch-target self-start"
                   >
                     Read More <ExternalLink className="h-3 w-3" />
                   </a>
