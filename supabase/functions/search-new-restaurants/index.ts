@@ -55,30 +55,57 @@ serve(async (req) => {
       throw new Error("Google API key not configured");
     }
 
+    console.log("Starting search for location:", location, "radius:", radius);
+    console.log("API key configured:", GOOGLE_API_KEY ? "Yes" : "No");
+
     // First, geocode the location to get coordinates
-    const geocodeResponse = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
-        location
-      )}&key=${GOOGLE_API_KEY}`
-    );
+    const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+      location
+    )}&key=${GOOGLE_API_KEY}`;
+    
+    console.log("Geocoding URL:", geocodeUrl.replace(GOOGLE_API_KEY, "***"));
+    
+    const geocodeResponse = await fetch(geocodeUrl);
+    
+    if (!geocodeResponse.ok) {
+      console.error("Geocode response not OK:", geocodeResponse.status, geocodeResponse.statusText);
+      throw new Error(`Geocoding request failed with status: ${geocodeResponse.status}`);
+    }
 
     const geocodeData = await geocodeResponse.json();
+    console.log("Geocode response status:", geocodeData.status);
+    console.log("Geocode results count:", geocodeData.results?.length || 0);
+
+    if (geocodeData.status !== "OK") {
+      console.error("Geocoding API error:", geocodeData.status, geocodeData.error_message);
+      throw new Error(`Geocoding API error: ${geocodeData.status} - ${geocodeData.error_message || "Unknown error"}`);
+    }
 
     if (!geocodeData.results?.length) {
-      throw new Error("Could not geocode location");
+      throw new Error("Could not geocode location - no results returned");
     }
 
     const { lat, lng } = geocodeData.results[0].geometry.location;
+    console.log("Geocoded coordinates:", lat, lng);
 
     // Search for restaurants using Places API
-    const placesResponse = await fetch(
-      `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=restaurant&key=${GOOGLE_API_KEY}`
-    );
+    const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=restaurant&key=${GOOGLE_API_KEY}`;
+    console.log("Places search URL:", placesUrl.replace(GOOGLE_API_KEY, "***"));
+    
+    const placesResponse = await fetch(placesUrl);
+    
+    if (!placesResponse.ok) {
+      console.error("Places response not OK:", placesResponse.status, placesResponse.statusText);
+      throw new Error(`Places API request failed with status: ${placesResponse.status}`);
+    }
 
     const placesData = await placesResponse.json();
+    console.log("Places API response status:", placesData.status);
+    console.log("Places found:", placesData.results?.length || 0);
 
     if (placesData.status !== "OK") {
-      throw new Error(`Google Places API error: ${placesData.status}`);
+      console.error("Places API error:", placesData.status, placesData.error_message);
+      throw new Error(`Google Places API error: ${placesData.status} - ${placesData.error_message || "Unknown error"}`);
     }
 
     // Filter out fast food chains and already existing restaurants
@@ -158,9 +185,16 @@ serve(async (req) => {
     );
   } catch (error) {
     console.error("Error in search-new-restaurants function:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name
+    });
+    
     return new Response(
       JSON.stringify({
         error: error.message || "An unexpected error occurred",
+        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
