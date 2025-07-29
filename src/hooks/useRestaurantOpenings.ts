@@ -2,9 +2,15 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
-type RestaurantOpening = Database["public"]["Tables"]["restaurant_openings"]["Row"];
-type RestaurantOpeningInsert = Database["public"]["Tables"]["restaurant_openings"]["Insert"];
-type RestaurantOpeningUpdate = Database["public"]["Tables"]["restaurant_openings"]["Update"];
+type RestaurantOpening = Database["public"]["Tables"]["restaurant_openings"]["Row"] & {
+  openingTimeframe?: string;
+};
+type RestaurantOpeningInsert = Database["public"]["Tables"]["restaurant_openings"]["Insert"] & {
+  openingTimeframe?: string;
+};
+type RestaurantOpeningUpdate = Database["public"]["Tables"]["restaurant_openings"]["Update"] & {
+  openingTimeframe?: string;
+};
 
 interface RestaurantOpeningsState {
   restaurantOpenings: RestaurantOpening[];

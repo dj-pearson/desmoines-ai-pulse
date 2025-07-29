@@ -47,6 +47,9 @@ const fieldConfigs = {
       { key: "website", label: "Website", type: "input" },
       { key: "rating", label: "Rating", type: "number", min: 0, max: 5, step: 0.1 },
       { key: "image_url", label: "Image URL", type: "input" },
+      { key: "opening_date", label: "Opening Date (Exact)", type: "date" },
+      { key: "opening_timeframe", label: "Opening Timeframe (e.g., Summer 2025)", type: "input" },
+      { key: "status", label: "Status", type: "select", options: ["open", "opening_soon", "newly_opened", "announced", "closed"] },
       { key: "is_featured", label: "Featured", type: "switch" },
     ]
   },
@@ -85,8 +88,9 @@ const fieldConfigs = {
       { key: "description", label: "Description", type: "textarea" },
       { key: "location", label: "Location", type: "input" },
       { key: "cuisine", label: "Cuisine Type", type: "input" },
-      { key: "opening_date", label: "Opening Date", type: "date" },
-      { key: "status", label: "Status", type: "select", options: ["announced", "opening_soon", "soft_opening", "open", "delayed", "cancelled"] },
+      { key: "opening_date", label: "Opening Date (Exact)", type: "date" },
+      { key: "opening_timeframe", label: "Opening Timeframe (e.g., Summer 2025)", type: "input" },
+      { key: "status", label: "Status", type: "select", options: ["open", "opening_soon", "newly_opened", "announced", "closed"] },
       { key: "source_url", label: "Source URL", type: "input" },
     ]
   }

@@ -25,6 +25,7 @@ export interface RestaurantOpening {
   location?: string;
   cuisine?: string;
   openingDate?: string;
+  openingTimeframe?: string;
   status: 'opening_soon' | 'newly_opened' | 'announced';
   sourceUrl?: string;
   createdAt: string;
@@ -43,6 +44,10 @@ export interface Restaurant {
   website?: string;
   imageUrl?: string;
   isFeatured?: boolean;
+  openingDate?: string;
+  openingTimeframe?: string;
+  status?: 'open' | 'opening_soon' | 'newly_opened' | 'announced' | 'closed';
+  sourceUrl?: string;
   createdAt?: string;
   updatedAt?: string;
 }

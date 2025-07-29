@@ -45,16 +45,18 @@ export function useEvents(filters?: { category?: string; location?: string; date
 }
 
 export function useRestaurantOpenings() {
-  return useQuery<RestaurantOpening[]>({
+  return useQuery<Restaurant[]>({
     queryKey: ['restaurant-openings'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('restaurant_openings')
+        .from('restaurants')
         .select('*')
-        .order('created_at', { ascending: false });
+        .neq('status', 'open')
+        .or('opening_date.not.is.null,opening_timeframe.not.is.null')
+        .order('opening_date', { ascending: true, nullsFirst: false });
       
       if (error) throw error;
-      return data?.map(transformRestaurantOpening) || [];
+      return data?.map(transformRestaurant) || [];
     },
   });
 }
@@ -155,6 +157,7 @@ function transformRestaurantOpening(opening: any): RestaurantOpening {
     location: opening.location,
     cuisine: opening.cuisine,
     openingDate: opening.opening_date,
+    openingTimeframe: opening.opening_timeframe,
     status: opening.status,
     sourceUrl: opening.source_url,
     createdAt: opening.created_at,
@@ -175,6 +178,10 @@ function transformRestaurant(restaurant: any): Restaurant {
     website: restaurant.website,
     imageUrl: restaurant.image_url,
     isFeatured: restaurant.is_featured,
+    openingDate: restaurant.opening_date,
+    openingTimeframe: restaurant.opening_timeframe,
+    status: restaurant.status,
+    sourceUrl: restaurant.source_url,
     createdAt: restaurant.created_at,
     updatedAt: restaurant.updated_at,
   };

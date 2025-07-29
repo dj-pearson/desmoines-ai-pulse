@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Globe,
   Bot,
@@ -24,20 +25,19 @@ import {
   Play,
   Camera,
   Building,
+  Database,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import URLSourceManager from "./URLSourceManager";
 
 interface CrawlResult {
   success: boolean;
-  message: string;
-  results: {
-    totalFound: number;
-    newItems: number;
-    duplicates: number;
-    inserted: number;
-    errors: number;
-  };
-  items?: Record<string, unknown>[];
+  totalFound: number;
+  futureEvents: number;
+  inserted: number;
+  updated: number;
+  errors: number;
+  url: string;
   error?: string;
 }
 
@@ -46,6 +46,11 @@ const AICrawler: React.FC = () => {
   const [category, setCategory] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [result, setResult] = useState<CrawlResult | null>(null);
+
+  const handleSourceSelect = (source: any) => {
+    setUrl(source.url);
+    setCategory(source.category);
+  };
 
   const categories = [
     {
@@ -105,14 +110,12 @@ const AICrawler: React.FC = () => {
     if (!url || !category) {
       setResult({
         success: false,
-        message: "Please provide both URL and category",
-        results: {
-          totalFound: 0,
-          newItems: 0,
-          duplicates: 0,
-          inserted: 0,
-          errors: 1,
-        },
+        totalFound: 0,
+        futureEvents: 0,
+        inserted: 0,
+        updated: 0,
+        errors: 1,
+        url: "",
         error: "URL and category are required",
       });
       return;
@@ -124,7 +127,7 @@ const AICrawler: React.FC = () => {
     try {
       console.log("Starting AI crawl...", { url, category });
 
-      const { data, error } = await supabase.functions.invoke("ai-crawler", {
+      const { data, error } = await supabase.functions.invoke("firecrawl-scraper", {
         body: { url, category },
       });
 
@@ -139,14 +142,12 @@ const AICrawler: React.FC = () => {
       console.error("AI crawl error:", error);
       setResult({
         success: false,
-        message: "Failed to crawl website",
-        results: {
-          totalFound: 0,
-          newItems: 0,
-          duplicates: 0,
-          inserted: 0,
-          errors: 1,
-        },
+        totalFound: 0,
+        futureEvents: 0,
+        inserted: 0,
+        updated: 0,
+        errors: 1,
+        url: url,
         error:
           error instanceof Error ? error.message : "Unknown error occurred",
       });
@@ -173,19 +174,26 @@ const AICrawler: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Bot className="h-5 w-5 text-blue-500" />
-            AI Website Crawler
-          </CardTitle>
-          <p className="text-sm text-gray-600">
-            Use AI to automatically extract and categorize content from any
-            website. The AI will intelligently parse the website and create
-            database entries for events, restaurants, playgrounds, and more.
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-6">
+      <Tabs defaultValue="crawler" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="crawler">AI Crawler</TabsTrigger>
+          <TabsTrigger value="sources">URL Sources</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="crawler" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bot className="h-5 w-5 text-blue-500" />
+                AI Website Crawler
+              </CardTitle>
+              <p className="text-sm text-gray-600">
+                Use AI to automatically extract and categorize content from any
+                website. The AI will intelligently parse the website and create
+                database entries for events, restaurants, playgrounds, and more.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
           {/* URL Input */}
           <div className="space-y-2">
             <Label htmlFor="crawl-url" className="flex items-center gap-2">
@@ -279,7 +287,11 @@ const AICrawler: React.FC = () => {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-sm">{result.message}</p>
+            <p className="text-sm">
+              {result.success
+                ? `Successfully processed ${result.url}. Found ${result.totalFound} events, ${result.inserted} inserted.`
+                : "Failed to crawl website"}
+            </p>
 
             {result.error && (
               <Alert className="border-red-200 bg-red-50">
@@ -291,112 +303,80 @@ const AICrawler: React.FC = () => {
             )}
 
             {result.success && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                 <div className="text-center p-3 bg-white rounded border">
                   <div className="text-2xl font-bold text-blue-600">
-                    {result.results.totalFound}
+                    {result.totalFound}
                   </div>
                   <div className="text-xs text-gray-600">Items Found</div>
                 </div>
                 <div className="text-center p-3 bg-white rounded border">
                   <div className="text-2xl font-bold text-green-600">
-                    {result.results.inserted}
+                    {result.futureEvents}
                   </div>
-                  <div className="text-xs text-gray-600">Inserted</div>
+                  <div className="text-xs text-gray-600">Future Events</div>
                 </div>
                 <div className="text-center p-3 bg-white rounded border">
-                  <div className="text-2xl font-bold text-yellow-600">
-                    {result.results.duplicates}
+                  <div className="text-2xl font-bold text-purple-600">
+                    {result.inserted}
                   </div>
-                  <div className="text-xs text-gray-600">Duplicates</div>
+                  <div className="text-xs text-gray-600">New Inserted</div>
+                </div>
+                <div className="text-center p-3 bg-white rounded border">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {result.updated}
+                  </div>
+                  <div className="text-xs text-gray-600">Updated</div>
                 </div>
                 <div className="text-center p-3 bg-white rounded border">
                   <div className="text-2xl font-bold text-red-600">
-                    {result.results.errors}
+                    {result.errors}
                   </div>
                   <div className="text-xs text-gray-600">Errors</div>
                 </div>
               </div>
             )}
 
-            {/* Preview of extracted items */}
-            {result.items && result.items.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-medium text-sm">
-                  Preview of extracted items:
-                </h4>
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {result.items.slice(0, 5).map((item, index) => {
-                    const itemData = item as Record<string, unknown>;
-                    const title = (itemData.title ||
-                      itemData.name ||
-                      "Unnamed Item") as string;
-                    const date = itemData.date as string;
-                    const location = (itemData.location ||
-                      itemData.venue) as string;
-                    const category = itemData.category as string;
-
-                    return (
-                      <div
-                        key={index}
-                        className="p-2 bg-white rounded border text-xs"
-                      >
-                        <div className="font-medium">{title}</div>
-                        {date && (
-                          <div className="text-gray-500 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {new Date(date).toLocaleDateString()}
-                          </div>
-                        )}
-                        {location && (
-                          <div className="text-gray-500 flex items-center gap-1">
-                            <MapPin className="h-3 w-3" />
-                            {location}
-                          </div>
-                        )}
-                        {category && (
-                          <Badge variant="secondary" className="text-xs mt-1">
-                            {category}
-                          </Badge>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
 
-      {/* Usage Tips */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">💡 Tips for Best Results</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-xs text-gray-600">
-          <ul className="list-disc list-inside space-y-1">
-            <li>
-              Use websites with clear, structured content (avoid heavily
-              JavaScript-based sites)
-            </li>
-            <li>
-              Event sites work best when they have clear dates, titles, and
-              locations
-            </li>
-            <li>
-              Restaurant sites should have names, addresses, and cuisine
-              information
-            </li>
-            <li>The AI will automatically detect and skip duplicate entries</li>
-            <li>Large websites may take 30-60 seconds to process completely</li>
-            <li>
-              Try specific pages (like /events or /menu) rather than homepage
-              for better results
-            </li>
-          </ul>
-        </CardContent>
-      </Card>
+          {/* Usage Tips */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm">💡 Tips for Best Results</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs text-gray-600">
+              <ul className="list-disc list-inside space-y-1">
+                <li>
+                  Now works with JavaScript-heavy sites! Waits for content to load dynamically
+                </li>
+                <li>
+                  Event sites work best when they have clear dates, titles, and
+                  locations
+                </li>
+                <li>
+                  Restaurant sites should have names, addresses, and cuisine
+                  information
+                </li>
+                <li>The AI will automatically detect and skip duplicate entries</li>
+                <li>Large websites may take 30-60 seconds to process completely</li>
+                <li>
+                  Try specific pages (like /events or /menu) rather than homepage
+                  for better results
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="sources" className="space-y-6">
+          <URLSourceManager 
+            onSelectSource={handleSourceSelect}
+            selectedCategory={category}
+          />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

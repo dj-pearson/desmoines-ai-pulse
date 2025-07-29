@@ -56,15 +56,25 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      const isAdmin = await checkIsAdmin(session?.user);
-
+      // Only synchronous state updates here to prevent deadlock
       setAuthState({
         user: session?.user || null,
         session,
         isLoading: false,
         isAuthenticated: !!session,
-        isAdmin,
+        isAdmin: false, // Will be updated after the timeout
       });
+
+      // Defer admin check to prevent Supabase deadlock
+      if (session?.user) {
+        setTimeout(async () => {
+          const isAdmin = await checkIsAdmin(session.user);
+          setAuthState(prev => ({
+            ...prev,
+            isAdmin
+          }));
+        }, 0);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -77,23 +87,27 @@ export function useAuth() {
       return false;
     }
 
-    // Check if user has admin role
-    // You can customize this logic based on your admin setup
-    // Option 1: Check user metadata
-    if (
-      user.user_metadata?.role === "admin" ||
-      user.app_metadata?.role === "admin"
-    ) {
-      return true;
+    // Check user role from user_roles table
+    try {
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!error && data?.role) {
+        return data.role === 'admin' || data.role === 'root_admin';
+      }
+    } catch (error) {
+      console.error("Error checking admin status:", error);
     }
 
-    // Option 2: Check email domain (for simple setup)
+    // Fallback to email check for backward compatibility
     const adminEmails = [
       "admin@desmoines.ai",
-      "admin@desmoinesinsider.com",
+      "admin@desmoinesinsider.com", 
       "pearson.performance@gmail.com",
-      "djpearson@pm.me", // Add user's actual email
-      // Add more admin emails as needed
+      "djpearson@pm.me", // Root admin email
     ];
 
     if (user.email && adminEmails.includes(user.email)) {
@@ -115,21 +129,34 @@ export function useAuth() {
         return false;
       }
 
-      // Check if user has admin access after successful login
-      if (data.session?.user) {
-        const isAdmin = await checkIsAdmin(data.session.user);
-
-        if (!isAdmin) {
-          console.log("❌ User does not have admin access, signing out");
-          await supabase.auth.signOut();
-          console.error("User does not have admin access");
-          return false;
-        }
-      }
-
       return !!data.session;
     } catch (error) {
       console.error("Login failed:", error);
+      return false;
+    }
+  };
+
+  const signup = async (email: string, password: string, metadata?: any): Promise<boolean> => {
+    try {
+      const redirectUrl = `${window.location.origin}/`;
+      
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: metadata
+        }
+      });
+
+      if (error) {
+        console.error("Signup error:", error);
+        return false;
+      }
+
+      return !!data.user;
+    } catch (error) {
+      console.error("Signup failed:", error);
       return false;
     }
   };
@@ -151,6 +178,7 @@ export function useAuth() {
   return {
     ...authState,
     login,
+    signup,
     logout,
     requireAdmin,
   };

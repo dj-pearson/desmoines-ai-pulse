@@ -88,48 +88,63 @@ function findBestEventUrl(originalUrl: string): string[] {
   return [...new Set(eventPaths)];
 }
 
-// Enhanced HTML content extraction
+// Try to find API endpoints or JSON data in the page
+async function findApiEndpoints(html: string, baseUrl: string): Promise<string[]> {
+  const apiEndpoints = [];
+  
+  // Look for common API patterns in script tags
+  const scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
+  
+  for (const script of scriptMatches) {
+    // Look for API endpoints in script content
+    const apiPatterns = [
+      /["']([^"']*\/api\/[^"']*events?[^"']*?)["']/gi,
+      /["']([^"']*\/events?\.json[^"']*?)["']/gi,
+      /["']([^"']*\/calendar[^"']*\.json[^"']*?)["']/gi,
+      /fetch\s*\(\s*["']([^"']*events?[^"']*?)["']/gi,
+      /ajax\s*\(\s*["']([^"']*events?[^"']*?)["']/gi,
+    ];
+    
+    for (const pattern of apiPatterns) {
+      let match;
+      while ((match = pattern.exec(script)) !== null) {
+        let endpoint = match[1];
+        if (endpoint.startsWith('/')) {
+          endpoint = new URL(endpoint, baseUrl).href;
+        }
+        if (endpoint.startsWith('http')) {
+          apiEndpoints.push(endpoint);
+        }
+      }
+    }
+  }
+  
+  // Look for data attributes or inline JSON
+  const dataMatches = [
+    ...html.matchAll(/data-events=["']([^"']+)["']/gi),
+    ...html.matchAll(/data-calendar=["']([^"']+)["']/gi),
+    ...html.matchAll(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/gi),
+    ...html.matchAll(/var\s+events\s*=\s*(\[.*?\]);/gi),
+  ];
+  
+  return [...new Set(apiEndpoints)];
+}
+
+// Enhanced HTML content extraction with better patterns for CatchDesMoines
 function extractRelevantContent(html: string): string {
-  // Remove scripts, styles, and other non-content elements
+  console.log(`🔍 Starting content extraction from ${html.length} character HTML`);
+  
+  // Simple approach: just clean HTML and limit size to avoid CPU timeout
   const cleanHtml = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "");
-
-  // Try to extract main content areas, but be more inclusive
-  const contentPatterns = [
-    /<main[^>]*>([\s\S]*?)<\/main>/gi,
-    /<article[^>]*>([\s\S]*?)<\/article>/gi,
-    /<section[^>]*>([\s\S]*?)<\/section>/gi,
-    /<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*class="[^"]*main[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*class="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*class="[^"]*calendar[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*class="[^"]*listing[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<div[^>]*id="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/div>/gi,
-    /<ul[^>]*class="[^"]*events?[^"]*"[^>]*>([\s\S]*?)<\/ul>/gi,
-  ];
-
-  let relevantContent = "";
-  for (const pattern of contentPatterns) {
-    const matches = cleanHtml.match(pattern);
-    if (matches) {
-      relevantContent += matches.join("\n\n--- SECTION ---\n\n");
-    }
-  }
-
-  // If no specific content areas found, extract more content but remove navigation/footer
-  if (!relevantContent || relevantContent.length < 1000) {
-    let fallbackContent = cleanHtml
-      .replace(/<nav\b[^<]*(?:(?!<\/nav>)<[^<]*)*<\/nav>/gi, "")
-      .replace(/<footer\b[^<]*(?:(?!<\/footer>)<[^<]*)*<\/footer>/gi, "")
-      .replace(/<header\b[^<]*(?:(?!<\/header>)<[^<]*)*<\/header>/gi, "");
-
-    relevantContent = fallbackContent.substring(0, 15000); // Increased limit
-  }
-
-  // Increase the limit significantly to capture more events
-  return relevantContent.substring(0, 20000); // Increased for more events
+  
+  // Limit to 15000 characters to avoid CPU timeout
+  const finalContent = cleanHtml.substring(0, 15000);
+  
+  console.log(`📏 Final content length: ${finalContent.length} characters (reduced from ${html.length})`);
+  return finalContent;
 }
 
 // AI-powered content extraction using Claude
@@ -142,95 +157,157 @@ async function extractContentWithAI(
   const relevantContent = extractRelevantContent(html);
 
   const prompts = {
-    events: `You are an expert at extracting event information from websites. Extract ALL individual events from this website content from ${url}.
+    events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${url}.
 
 CURRENT DATE: July 26, 2025
-IMPORTANT: Only extract events that are TODAY or in the FUTURE. Skip any events from the past.
-
 WEBSITE CONTENT:
 ${relevantContent}
 
-CRITICAL INSTRUCTIONS:
-1. FIND EVERY SINGLE EVENT - This is the most important requirement
-2. Look for ALL events in lists, tables, calendars, schedules, grids
-3. Extract events from repeating patterns like game schedules, concert lineups
-4. Scan the ENTIRE content thoroughly - don't stop after finding one event
-5. Include events even with partial information
-6. ONLY include events from July 26, 2025 onwards (skip past events)
+CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
 
-COMPREHENSIVE SEARCH PATTERNS:
-- Sports schedules (games, matches, tournaments)
-- Concert/music listings (shows, performances, artists)
-- Event calendars and directories
-- Show schedules and venue listings
-- Festival and community event lists
-- Recurring event series
+🎯 WHAT TO LOOK FOR:
+- ANY text that mentions specific event names or titles
+- Venue names that host events (fairgrounds, theaters, arenas, etc.)
+- Date patterns (July 26, Jul 26th, 7/26, 2025, etc.)
+- Event categories (concerts, festivals, sports, shows, fairs, etc.)
+- HTML structures: <article class="slide">, event cards, lists, grids
 
-For each FUTURE event found, extract:
-- title: Event name/title
-- description: Event details or description
-- date: Event date (YYYY-MM-DD HH:MM:SS format, must be July 26, 2025 or later)
-- location: Full address or location
-- venue: Venue name
-- category: Event type (Sports, Music, Entertainment, etc.)
-- price: Ticket price or "See website"
+🔍 SPECIFIC EVENT PATTERNS:
+- Look for proper nouns that sound like event names
+- Geographic venues (Warren County, Indianola, Des Moines locations)
+- Entertainment venues (theaters, halls, stadiums)
+- Event types (fair, festival, concert, show, game, exhibition)
+- Time indicators (daily, weekly, through August, etc.)
 
-EXTRACTION STRATEGY:
-1. First scan for date patterns (2025 dates, month names, etc.)
-2. Look for event titles near these dates
-3. Extract ALL events in lists or grids
-4. Check tables and structured data
-5. Look for recurring patterns of event information
+💡 EXTRACTION EXAMPLES:
+- "Warren County Fair" → title: "Warren County Fair"
+- "Anastasia the Musical" → title: "Anastasia the Musical" 
+- "National Senior Games" → title: "National Senior Games"
+- "Iowa Artists Sale-A-Bration" → title: "Iowa Artists Sale-A-Bration"
+- "Live Horse Racing" → title: "Live Horse Racing"
 
-FORMAT AS JSON ARRAY with ALL events:
+📅 DATE CONVERSION:
+- "Jul 26th" → "2025-07-26 19:00:00"
+- "August 1st" → "2025-08-01 19:00:00"
+- "Through July 28" → create events until that date
+- No specific time? → default to 7:00 PM (19:00:00)
+- Past dates (before July 26, 2025) → SKIP these events
+
+🏢 VENUE EXTRACTION:
+- Look for venue names near event titles
+- Common Des Moines venues: Wells Fargo Arena, Civic Center, etc.
+- County fairgrounds, high schools, parks
+- If unclear → use "Des Moines, IA" as location
+
+For EVERY event you find, extract:
+- title: Exact event name from content
+- description: Any details about the event
+- date: YYYY-MM-DD HH:MM:SS (future dates only)
+- location: City/state (default: "Des Moines, IA")
+- venue: Specific venue name
+- category: Music/Sports/Arts/Community/Entertainment/Festival
+- price: If mentioned, or "See website"
+
+CRITICAL SUCCESS FACTORS:
+✅ Extract events even with incomplete info
+✅ Use logical defaults for missing details
+✅ Convert all date formats consistently
+✅ Include recurring events as separate entries
+✅ Scan the ENTIRE content thoroughly
+
+FORMAT AS JSON ARRAY:
 [
   {
-    "title": "Event Title",
-    "description": "Event description",
+    "title": "Event Name",
+    "description": "Event details",
     "date": "2025-MM-DD HH:MM:SS",
-    "location": "Full address",
-    "venue": "Venue Name", 
-    "category": "Event Category",
-    "price": "Price or 'See website'"
+    "location": "Des Moines, IA",
+    "venue": "Venue Name",
+    "category": "Event Type",
+    "price": "Price or See website"
   }
 ]
 
-ABSOLUTELY CRITICAL: 
-- Extract EVERY event you can find, not just one
-- Skip events before July 26, 2025
-- If you find 5+ events, include them ALL
-- Return empty array [] only if NO future events exist`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY event mentioned in the content. If you see references to 10+ events, include ALL of them. Return empty array [] ONLY if literally no events are found anywhere in the content.`,
 
-    restaurants: `Extract all restaurants from this website content from ${url}.
+    restaurants: `You are an expert at extracting restaurant information from websites like Eater.com, Des Moines Register, and restaurant listing sites. Your task is to find EVERY SINGLE RESTAURANT mentioned in this content from ${url}.
 
 WEBSITE CONTENT:
 ${relevantContent}
 
-Please analyze this content and extract ALL restaurants you can find. For each restaurant, provide:
-- name: Restaurant name
-- cuisine: Type of cuisine (Italian, American, Asian, etc.)
-- location: Full address or location description
-- rating: Numerical rating if available (1-5 scale)
-- price_range: Price range ($, $$, $$$, $$$$, or specific ranges)
-- description: Brief description of the restaurant
-- phone: Phone number if available
-- website: Website URL if available
+CRITICAL PARSING INSTRUCTIONS FOR RESTAURANT SITES:
 
-Format as JSON array:
+🎯 WHAT TO LOOK FOR:
+- Restaurant names (often in headers, links, or bold text)
+- Food establishment mentions (cafes, bistros, breweries, bakeries, etc.)
+- Article structures with restaurant reviews or lists
+- Address information or neighborhood mentions
+- Menu items or cuisine descriptions
+- Chef or owner names associated with restaurants
+
+🔍 SPECIFIC RESTAURANT PATTERNS:
+- Look for proper nouns that sound like restaurant names
+- Food-related business names (ending in Kitchen, Grill, Bistro, etc.)
+- Geographic location indicators (downtown, West Des Moines, etc.)
+- Price indicators ($, $$, $$$, "affordable", "upscale")
+- Cuisine type mentions (Italian, Mexican, farm-to-table, etc.)
+- Restaurant review language ("must-try", "best", "favorite")
+
+💡 EXTRACTION EXAMPLES FROM COMMON PATTERNS:
+- "Fong's Pizza" → name: "Fong's Pizza", cuisine: "Pizza/Asian Fusion"
+- "Centro" → name: "Centro", cuisine: "Italian"
+- "Proof Restaurant" → name: "Proof Restaurant", cuisine: "American"
+- "Zombie Burger" → name: "Zombie Burger", cuisine: "Burgers"
+- "Alba Restaurant" → name: "Alba Restaurant", cuisine: "Contemporary"
+
+🏢 LOCATION EXTRACTION:
+- Look for Des Moines area neighborhoods (East Village, Beaverdale, etc.)
+- Street addresses when mentioned
+- Area descriptions ("downtown", "west side", etc.)
+- Default to "Des Moines, IA" if unclear
+
+📊 RATING & PRICE EXTRACTION:
+- Look for star ratings, numeric scores, or review language
+- Extract price indicators: $ (under $15), $$ ($15-30), $$$ ($30-50), $$$$ (over $50)
+- Convert descriptive pricing ("affordable", "moderate", "expensive")
+
+📝 DESCRIPTION EXTRACTION:
+- Pull menu highlights, specialties, or signature dishes
+- Include atmosphere descriptions ("casual", "upscale", "family-friendly")
+- Note any unique features or awards mentioned
+
+For EVERY restaurant you find, extract:
+- name: Exact restaurant name from content
+- cuisine: Type of cuisine (Italian, American, Mexican, Asian Fusion, etc.)
+- location: Address or area description (default: "Des Moines, IA")
+- rating: Numerical rating 1-5 if mentioned, or null
+- price_range: $, $$, $$$, or $$$$ based on content
+- description: Key details about food, atmosphere, or specialties
+- phone: Phone number if mentioned
+- website: Website URL if mentioned
+
+CRITICAL SUCCESS FACTORS:
+✅ Extract restaurants even with incomplete info
+✅ Use logical defaults for missing details
+✅ Look for both obvious restaurant names and food establishments
+✅ Include breweries, cafes, bakeries, and food trucks
+✅ Scan the ENTIRE content thoroughly for any food-related businesses
+
+FORMAT AS JSON ARRAY:
 [
   {
     "name": "Restaurant Name",
     "cuisine": "Cuisine Type",
-    "location": "Full address",
+    "location": "Des Moines, IA",
     "rating": 4.5,
     "price_range": "$$",
-    "description": "Restaurant description",
-    "phone": "Phone number",
-    "website": "Website URL"
+    "description": "Restaurant description and specialties",
+    "phone": "515-xxx-xxxx",
+    "website": "https://restaurant-website.com"
   }
 ]
 
-Return empty array [] if no restaurants found.`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY restaurant or food establishment mentioned in the content. If you see references to 10+ restaurants in a "best restaurants" list, include ALL of them. Return empty array [] ONLY if literally no restaurants are found anywhere in the content.`,
 
     restaurant_openings: `Extract information about new restaurant openings from this website content from ${url}.
 
@@ -259,32 +336,92 @@ Format as JSON array:
 
 Return empty array [] if no restaurant openings found.`,
 
-    playgrounds: `Extract all playgrounds or play areas from this website content from ${url}.
+    playgrounds: `You are an expert at extracting playground and children's recreation information from websites like visitdesmoines.com, Greater DSM, and family activity sites. Your task is to find EVERY SINGLE PLAYGROUND or children's recreational facility mentioned in this content from ${url}.
 
 WEBSITE CONTENT:
 ${relevantContent}
 
-Please analyze this content and extract ALL playgrounds, play areas, or children's recreational facilities. For each playground, provide:
-- name: Playground or park name
-- location: Full address or location description
-- description: Description of the playground features
-- age_range: Age range for children (e.g., "2-12 years", "All ages")
-- amenities: Array of amenities/features (swings, slides, climbing structures, etc.)
-- rating: Numerical rating if available (1-5 scale)
+CRITICAL PARSING INSTRUCTIONS FOR PLAYGROUND SITES:
 
-Format as JSON array:
+🎯 WHAT TO LOOK FOR:
+- Playground names (often park names or specific playground names)
+- Children's recreation areas, splash pads, adventure playgrounds
+- Parks with playground equipment mentioned
+- Family-friendly recreational facilities
+- Youth activity centers or outdoor play areas
+- Age-specific play structures or facilities
+
+🔍 SPECIFIC PLAYGROUND PATTERNS:
+- Look for proper nouns ending in "Park", "Playground", "Recreation Area"
+- Equipment mentions (swings, slides, climbing structures, zip lines)
+- Age-related language ("toddler", "kids", "children", "families")
+- Safety features (fenced, rubberized surfaces, shade structures)
+- Accessibility features (wheelchair accessible, inclusive design)
+- Special features (water play, sensory elements, themed playgrounds)
+
+💡 EXTRACTION EXAMPLES FROM COMMON PATTERNS:
+- "Gray's Lake Park Playground" → name: "Gray's Lake Park Playground"
+- "Walnut Woods State Park" → name: "Walnut Woods State Park Recreation Area"
+- "Copper Creek Lake Beach Playground" → name: "Copper Creek Lake Beach Playground"
+- "Jester Park Adventure Playground" → name: "Jester Park Adventure Playground"
+- "Union Park Community Center" → name: "Union Park Community Center Playground"
+
+🏢 LOCATION EXTRACTION:
+- Look for Des Moines area locations (West Des Moines, Ankeny, etc.)
+- Street addresses when mentioned (specific park addresses)
+- Neighborhood or area descriptions ("north side", "downtown area")
+- Cross streets or nearby landmarks for reference
+- Default to "Des Moines, IA" if area unclear
+
+🎪 AMENITIES EXTRACTION:
+- Standard equipment: swings, slides, monkey bars, see-saws
+- Modern features: zip lines, climbing walls, balance beams
+- Special areas: toddler sections, sensory play, splash zones
+- Safety features: fencing, shade structures, soft surfaces
+- Accessibility: ramps, inclusive equipment, wide pathways
+- Additional: picnic areas, restrooms, parking
+
+👶 AGE RANGE EXTRACTION:
+- Look for specific age mentions ("2-5 years", "school age", "toddlers")
+- Convert descriptive terms: "toddler" → "2-5 years", "school age" → "5-12 years"
+- Multiple age areas: "2-12 years" for mixed equipment
+- Default to "All ages" if not specified
+
+📝 DESCRIPTION EXTRACTION:
+- Highlight unique or special features
+- Include size references ("large", "small", "expansive")
+- Note themes or special designs (pirate ship, castle, nature-themed)
+- Mention nearby amenities (trails, lakes, sports facilities)
+- Include accessibility or safety features
+
+For EVERY playground you find, extract:
+- name: Exact playground or park name from content
+- location: Address or area description (default: "Des Moines, IA")
+- description: Key features, themes, or special attributes
+- age_range: Target age group (e.g., "2-12 years", "All ages")
+- amenities: Array of equipment and features
+- rating: Numerical rating 1-5 if mentioned, or null
+
+CRITICAL SUCCESS FACTORS:
+✅ Extract playgrounds even with incomplete info
+✅ Use logical defaults for missing details
+✅ Look for both obvious playground names and recreational facilities
+✅ Include splash pads, adventure courses, and nature play areas
+✅ Scan the ENTIRE content thoroughly for any child-friendly recreational spaces
+
+FORMAT AS JSON ARRAY:
 [
   {
     "name": "Playground Name",
-    "location": "Full address",
-    "description": "Playground description",
-    "age_range": "Age range",
-    "amenities": ["swings", "slides", "climbing structure"],
+    "location": "Des Moines, IA",
+    "description": "Playground features and description",
+    "age_range": "2-12 years",
+    "amenities": ["swings", "slides", "climbing structure", "splash pad"],
     "rating": 4.2
   }
 ]
 
-Return empty array [] if no playgrounds found.`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY playground or children's recreational facility mentioned in the content. If you see references to 10+ playgrounds in a "best playgrounds" list, include ALL of them. Return empty array [] ONLY if literally no playgrounds are found anywhere in the content.`,
 
     attractions: `Extract all attractions, tourist spots, or places of interest from this website content from ${url}.
 
@@ -314,56 +451,126 @@ Format as JSON array:
 Return empty array [] if no attractions found.`,
   };
 
-  try {
-    console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
-    console.log(
-      `📄 Content length being sent to AI: ${relevantContent.length} characters`
-    );
-    console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
+    try {
+      console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
+      console.log(
+        `📄 Content length being sent to AI: ${relevantContent.length} characters`
+      );
+      console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
 
-    const claudeResponse = await fetch(
-      "https://api.anthropic.com/v1/messages",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-0",
-          max_tokens: 6000, // Increased significantly for multiple events
-          messages: [
-            {
-              role: "user",
-              content: prompts[category as keyof typeof prompts],
-            },
-          ],
-        }),
+      // Try to find API endpoints first
+      if (category === 'events') {
+        const apiEndpoints = await findApiEndpoints(html, url);
+        if (apiEndpoints.length > 0) {
+          console.log(`🔍 Found potential API endpoints: ${apiEndpoints.join(', ')}`);
+          
+          // Try to fetch from API endpoints
+          for (const endpoint of apiEndpoints.slice(0, 3)) { // Try first 3 endpoints
+            try {
+              const apiResponse = await fetch(endpoint, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                  "Accept": "application/json, text/javascript, */*",
+                },
+              });
+              
+              if (apiResponse.ok) {
+                const apiData = await apiResponse.text();
+                if (apiData.length > 100) {
+                  console.log(`✅ Got API data from ${endpoint}: ${apiData.length} chars`);
+                  relevantContent = apiData + "\n\n--- ORIGINAL HTML ---\n\n" + relevantContent;
+                  break;
+                }
+              }
+            } catch (error) {
+              console.log(`⚠️ API endpoint failed ${endpoint}:`, error.message);
+            }
+          }
+        }
       }
-    );
+
+      const claudeResponse = await fetch(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": claudeApiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-sonnet-20241022", // Use stable model
+            max_tokens: 8000, // Increased for multiple events
+            temperature: 0.1, // Lower temperature for more precise extraction
+            messages: [
+              {
+                role: "user",
+                content: prompts[category as keyof typeof prompts],
+              },
+            ],
+          }),
+        }
+      );
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
       const responseText = claudeData.content?.[0]?.text?.trim();
+      
+      console.log(`🔍 Claude API response status: ${claudeResponse.status}`);
+      console.log(`🔍 Claude response structure check - content exists: ${!!claudeData.content}`);
+      console.log(`🔍 Claude response text length: ${responseText?.length || 0}`);
+      console.log(`🔍 Claude response preview: ${responseText?.substring(0, 1000) || 'No text'}...`);
 
       if (responseText) {
         try {
-          // Extract JSON from the response
-          const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            const extractedData = JSON.parse(jsonMatch[0]);
-            console.log(
-              `🤖 AI extracted ${extractedData.length} ${category} items from ${url}`
-            );
-            return extractedData;
+          // Extract JSON from the response - try multiple patterns
+          let jsonMatch = responseText.match(/\[[\s\S]*\]/);
+          
+          if (!jsonMatch) {
+            // Try to find JSON in code blocks
+            jsonMatch = responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
+                       responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
+            if (jsonMatch) jsonMatch[0] = jsonMatch[1];
           }
+          
+          if (!jsonMatch) {
+            console.error(`❌ No JSON array found in Claude response. Full response: ${responseText}`);
+            return [];
+          }
+          
+          console.log(`🔍 Extracted JSON string: ${jsonMatch[0].substring(0, 500)}...`);
+          
+          const extractedData = JSON.parse(jsonMatch[0]);
+          
+          if (!Array.isArray(extractedData)) {
+            console.error(`❌ Parsed data is not an array: ${typeof extractedData}`);
+            return [];
+          }
+          
+          console.log(`🤖 AI extracted ${extractedData.length} ${category} items from ${url}`);
+          
+          // Add source_url to each extracted item
+          const itemsWithSource = extractedData.map(item => ({
+            ...item,
+            source_url: url
+          }));
+          
+          // Log sample item for debugging
+          if (itemsWithSource.length > 0) {
+            console.log(`🔍 Sample extracted item: ${JSON.stringify(itemsWithSource[0])}`);
+          }
+          
+          return itemsWithSource;
         } catch (parseError) {
-          console.log(`⚠️ Could not parse AI response JSON:`, parseError);
+          console.error(`❌ Could not parse AI response JSON:`, parseError);
+          console.error(`❌ JSON string that failed to parse: ${responseText.substring(0, 2000)}`);
         }
+      } else {
+        console.error(`❌ No response text from Claude API`);
       }
     } else {
-      console.log(`⚠️ Claude API error: ${claudeResponse.status}`);
+      const errorText = await claudeResponse.text();
+      console.error(`❌ Claude API error: ${claudeResponse.status} - ${errorText}`);
     }
   } catch (error) {
     console.error(`❌ Error in AI content extraction:`, error);
@@ -423,43 +630,83 @@ async function checkForDuplicates(
   items: any[]
 ): Promise<{ newItems: any[]; duplicates: number }> {
   const tableName =
-    category === "restaurant_openings" ? "restaurant_openings" : category;
+    category === "restaurant_openings" ? "restaurants" : category;
   let duplicates = 0;
   const newItems = [];
 
+  // First remove duplicates within the batch itself
+  const seen = new Set();
+  const uniqueItems = [];
+  
   for (const item of items) {
-    const fingerprint = generateFingerprint(item, category);
-
-    let query;
+    let key;
     switch (category) {
       case "events":
-        query = supabase
-          .from(tableName)
-          .select("id")
-          .eq("title", item.title)
-          .eq("venue", item.venue);
-        if (item.date) {
-          query = query.eq("date", item.date);
-        }
+        key = `${item.title?.toLowerCase()?.trim()}|${item.venue?.toLowerCase()?.trim()}`;
         break;
-      case "restaurants":
-      case "restaurant_openings":
-      case "playgrounds":
-      case "attractions":
-        query = supabase
-          .from(tableName)
-          .select("id")
-          .eq("name", item.name)
-          .ilike("location", `%${item.location.substring(0, 20)}%`);
-        break;
+      default:
+        key = item.name?.toLowerCase()?.trim();
     }
-
-    const { data: existing } = await query.limit(1);
-
-    if (existing && existing.length > 0) {
-      console.log(`⚠️ Duplicate found: ${item.title || item.name}`);
-      duplicates++;
+    
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueItems.push(item);
     } else {
+      duplicates++;
+      console.log(`⚠️ Batch duplicate removed: ${item.title || item.name}`);
+    }
+  }
+
+  // Then check against database
+  for (const item of uniqueItems) {
+    const fingerprint = generateFingerprint(item, category);
+
+    try {
+      let query;
+      switch (category) {
+        case "events":
+          // Use case-insensitive matching for events
+          query = supabase
+            .from(tableName)
+            .select("id")
+            .ilike("title", item.title?.trim())
+            .ilike("venue", item.venue?.trim());
+          break;
+        case "restaurants":
+        case "playgrounds":
+        case "attractions":
+          query = supabase
+            .from(tableName)
+            .select("id")
+            .ilike("name", item.name?.trim());
+          break;
+        case "restaurant_openings":
+          // For restaurant openings, use exact name match to avoid false duplicates
+          query = supabase
+            .from(tableName)
+            .select("id")
+            .eq("name", item.name?.trim());
+          
+          // Debug for restaurant_openings
+          console.log(`🔍 Checking duplicate for restaurant opening: "${item.name?.trim()}" in table ${tableName} (exact match)`);
+          break;
+      }
+
+      const { data: existing, error } = await query.limit(1);
+
+      if (error) {
+        console.error(`Error checking duplicate for ${item.title || item.name}:`, error);
+        // On error, still add the item
+        newItems.push({ ...item, fingerprint });
+      } else if (existing && existing.length > 0) {
+        console.log(`⚠️ Database duplicate found: ${item.title || item.name}`);
+        duplicates++;
+      } else {
+        newItems.push({ ...item, fingerprint });
+      }
+    } catch (error) {
+      console.error(`Error processing item ${item.title || item.name}:`, error);
+      // On error, still add the item to avoid losing data
       newItems.push({ ...item, fingerprint });
     }
   }
@@ -474,7 +721,7 @@ async function insertData(
   items: any[]
 ): Promise<{ success: boolean; insertedCount: number; errors: any[] }> {
   const tableName =
-    category === "restaurant_openings" ? "restaurant_openings" : category;
+    category === "restaurant_openings" ? "restaurants" : category;
   const errors = [];
   let insertedCount = 0;
 
@@ -528,9 +775,13 @@ async function insertData(
             return {
               ...baseItem,
               name: item.name?.substring(0, 200) || "New Restaurant",
-              description: item.description?.substring(0, 500) || "",
-              location: item.location?.substring(0, 200) || "Des Moines, IA",
               cuisine: item.cuisine?.substring(0, 100) || "American",
+              location: item.location?.substring(0, 200) || "Des Moines, IA",
+              description: item.description?.substring(0, 500) || "",
+              phone: item.phone?.substring(0, 20) || null,
+              website: item.website?.substring(0, 200) || null,
+              price_range: item.price_range?.substring(0, 20) || null,
+              rating: item.rating || null,
               opening_date: item.opening_date
                 ? new Date(item.opening_date).toISOString().split("T")[0]
                 : null,
@@ -571,10 +822,16 @@ async function insertData(
 
       if (error) {
         console.error(`❌ Error inserting batch:`, error);
+        if (category === "restaurant_openings") {
+          console.error(`❌ Restaurant openings batch that failed:`, JSON.stringify(transformedBatch, null, 2));
+        }
         errors.push(error);
       } else {
         insertedCount += data.length;
         console.log(`✅ Inserted ${data.length} ${category} items`);
+        if (category === "restaurant_openings" && data.length > 0) {
+          console.log(`🍽️ Successfully inserted restaurant openings:`, data.map(d => d.name).join(', '));
+        }
       }
     } catch (error) {
       console.error(`❌ Error processing batch:`, error);
@@ -655,8 +912,17 @@ Deno.serve(async (req) => {
 
     console.log(`🚀 Starting AI crawl of ${url} for ${category}`);
 
-    // Try multiple URLs to find the best event page
-    const urlsToTry = findBestEventUrl(url);
+    // For CatchDesMoines and similar sites, try multiple strategies
+    const urlsToTry = category === 'events' ? [
+      url,
+      url.replace(/\/$/, '') + '/events/',
+      url.replace(/\/$/, '') + '/calendar/',
+      // Try common CatchDesMoines patterns
+      'https://www.catchdesmoines.com/events/',
+      'https://www.catchdesmoines.com/events/search/',
+      'https://www.catchdesmoines.com/calendar/',
+    ] : findBestEventUrl(url);
+    
     console.log(`🔍 Will try these URLs: ${urlsToTry.join(", ")}`);
 
     let bestHtml = "";
@@ -671,27 +937,37 @@ Deno.serve(async (req) => {
         const response = await fetch(tryUrl, {
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            "Accept-Encoding": "gzip, deflate, br",
+            "DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
           },
         });
 
         if (response.ok) {
           const html = await response.text();
 
-          // Quick test for event-related content
-          const eventContentTest = (
-            html.match(/event|concert|show|game|performance|calendar/gi) || []
-          ).length;
+          // Enhanced scoring for CatchDesMoines-style content
+          const eventKeywords = (html.match(/event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi) || []).length;
+          const venueKeywords = (html.match(/arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi) || []).length;
+          const dateKeywords = (html.match(/2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi) || []).length;
+          const titleKeywords = (html.match(/warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi) || []).length;
+          
+          const totalScore = eventKeywords + (venueKeywords * 2) + (dateKeywords * 1.5) + (titleKeywords * 3);
+          
           console.log(
-            `📊 ${tryUrl}: Found ${eventContentTest} event-related keywords in ${html.length} chars`
+            `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
           );
 
-          if (eventContentTest > maxEventContent) {
-            maxEventContent = eventContentTest;
+          if (totalScore > maxEventContent) {
+            maxEventContent = totalScore;
             bestHtml = html;
             bestUrl = tryUrl;
             console.log(
-              `✅ New best URL: ${tryUrl} (${eventContentTest} keywords)`
+              `✅ New best URL: ${tryUrl} (score: ${totalScore})`
             );
           }
         } else {
@@ -757,6 +1033,11 @@ Deno.serve(async (req) => {
     }
 
     console.log(`🤖 AI extracted ${filteredItems.length} ${category} items`);
+    
+    // Debug: Log a few sample items for restaurant_openings
+    if (category === "restaurant_openings" && filteredItems.length > 0) {
+      console.log(`🔍 Sample restaurant opening items:`, JSON.stringify(filteredItems.slice(0, 2), null, 2));
+    }
 
     // Check for duplicates
     const { newItems, duplicates } = await checkForDuplicates(
@@ -774,9 +1055,19 @@ Deno.serve(async (req) => {
 
     // Insert new items
     if (newItems.length > 0) {
+      console.log(`💾 Attempting to insert ${newItems.length} ${category} items`);
       const insertResult = await insertData(supabase, category, newItems);
       insertedCount = insertResult.insertedCount;
       insertErrors = insertResult.errors;
+      
+      if (category === "restaurant_openings") {
+        console.log(`🍽️ Restaurant openings insertion result: ${insertedCount} inserted, ${insertErrors.length} errors`);
+        if (insertErrors.length > 0) {
+          console.log(`❌ Restaurant opening insertion errors:`, insertErrors);
+        }
+      }
+    } else {
+      console.log(`⏭️ No new items to insert for ${category}`);
     }
 
     const response_data = {

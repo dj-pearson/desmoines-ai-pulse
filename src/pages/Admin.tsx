@@ -1,1181 +1,847 @@
-import React, { useState, useEffect } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect, useCallback } from "react";
+import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import {
-  Play,
-  Pause,
-  RefreshCw,
-  Settings,
-  Database,
-  Activity,
-  Users,
-  Calendar,
-  AlertTriangle,
-  CheckCircle,
-  XCircle,
-  Clock,
-  BarChart3,
-  Filter,
-  Search,
-  Download,
-  Upload,
-  Trash2,
-  Edit,
-  Eye,
-  Shield,
-  LogOut,
-  Plus,
-  Sparkles,
-  AlertCircle,
-  TrendingUp,
-} from "lucide-react";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import AdminLogin from "@/components/AdminLogin";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
+import ContentEditDialog from "@/components/ContentEditDialog";
+import UserRoleManager from "@/components/UserRoleManager";
+import ContentTable from "@/components/ContentTable";
+import AICrawler from "@/components/AICrawler";
+import ScraperConfigWizard from "@/components/ScraperConfigWizard";
+import ScrapingJobManager from "@/components/ScrapingJobManager";
+import SEOTools from "@/components/SEOTools";
+import { DomainHighlightManager } from "@/components/DomainHighlightManager";
+import EventReviewSystem from "@/components/EventReviewSystem";
+import AffiliateManager from "@/components/AffiliateManager";
+import { Shield, Users, FileText, Database, Crown, AlertTriangle, Settings, Bot, Zap, Calendar, Building, Utensils, Camera, Play, Globe, Cog, UserCheck, DollarSign, Menu, X } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
 import { useScraping } from "@/hooks/useScraping";
-import ScraperConfigWizard from "../components/ScraperConfigWizard";
-import EventEditor from "../components/EventEditor";
-import ContentEditor from "../components/ContentEditor";
-import ContentTable from "../components/ContentTable";
-import WebsiteAnalysisDialog from "@/components/WebsiteAnalysisDialog";
-import AICrawler from "@/components/AICrawler";
-
-// Scraping jobs data is now fetched from Supabase via useScraping hook
-
-const mockEvents = [
-  {
-    id: 1,
-    title: "Winter Art Festival",
-    venue: "Downtown Gallery",
-    date: "2025-02-15",
-    status: "approved",
-    views: 245,
-  },
-  {
-    id: 2,
-    title: "Food Truck Rally",
-    venue: "Gray's Lake Park",
-    date: "2025-02-20",
-    status: "pending",
-    views: 156,
-  },
-  {
-    id: 3,
-    title: "Tech Meetup",
-    venue: "Startup Hub",
-    date: "2025-02-25",
-    status: "flagged",
-    views: 89,
-  },
-];
-
-const mockSystemStats = {
-  totalEvents: 1247,
-  activeScrapers: 3,
-  dailyViews: 8542,
-  pendingReviews: 23,
-  systemHealth: 97,
-  apiCalls: 15672,
-  storageUsed: 75,
-  uptime: "99.8%",
-};
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function Admin() {
+  const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } = useAdminAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("overview");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
-  const [showEventEditor, setShowEventEditor] = useState(false);
-  const [showContentEditor, setShowContentEditor] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<any>(null);
-  const [selectedContent, setSelectedContent] = useState<any>(null);
-  const [contentType, setContentType] = useState<"event" | "restaurant" | "attraction" | "playground" | "restaurant_opening">("event");
-  const [showAnalysisDialog, setShowAnalysisDialog] = useState(false);
-  const [selectedScrapingJob, setSelectedScrapingJob] = useState<any>(null);
-  const [eventFilters, setEventFilters] = useState({
-    status: "all" as const,
-    search: "",
+  const [showJobManager, setShowJobManager] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Search state for each content type
+  const [searchTerms, setSearchTerms] = useState({
+    events: "",
+    restaurants: "",
+    attractions: "",
+    playgrounds: "",
+    restaurantOpenings: ""
   });
-  const [restaurantFilters, setRestaurantFilters] = useState({ search: "" });
-  const [attractionFilters, setAttractionFilters] = useState({ search: "" });
-  const [playgroundFilters, setPlaygroundFilters] = useState({ search: "" });
-  const [restaurantOpeningFilters, setRestaurantOpeningFilters] = useState({ search: "" });
-  
-  const { toast } = useToast();
-  const { isLoading, isAdmin, user, logout } = useAuth();
-  
-  const {
-    events,
-    isLoading: eventsLoading,
-    totalCount: eventsTotalCount,
-    refetch: refetchEvents,
-    updateEvent,
-    deleteEvent,
-  } = useEvents(eventFilters);
-  
-  const {
-    restaurants,
-    isLoading: restaurantsLoading,
-    totalCount: restaurantsTotalCount,
-    updateRestaurant,
-    deleteRestaurant,
-  } = useRestaurants(restaurantFilters);
-  
-  const {
-    attractions,
-    isLoading: attractionsLoading,
-    totalCount: attractionsTotalCount,
-    updateAttraction,
-    deleteAttraction,
-  } = useAttractions(attractionFilters);
-  
-  const {
-    playgrounds,
-    isLoading: playgroundsLoading,
-    totalCount: playgroundsTotalCount,
-    updatePlayground,
-    deletePlayground,
-  } = usePlaygrounds(playgroundFilters);
-  
-  const {
-    restaurantOpenings,
-    isLoading: restaurantOpeningsLoading,
-    totalCount: restaurantOpeningsTotalCount,
-    updateRestaurantOpening,
-    deleteRestaurantOpening,
-  } = useRestaurantOpenings(restaurantOpeningFilters);
-  
-  const {
-    jobs: scrapingJobs,
-    isLoading: scrapingIsLoading,
-    error: scrapingError,
-    isGlobalRunning,
-    runScrapingJob,
-    runAllJobs,
-    stopAllJobs,
-    addJob,
-    forceRefresh,
-  } = useScraping();
 
-  // Remove the useEffect that's causing infinite loop
-  // The scraping jobs will load naturally when the component mounts
+  // Separate state for input values to prevent re-renders
+  const [inputValues, setInputValues] = useState({
+    events: "",
+    restaurants: "",
+    attractions: "",
+    playgrounds: "",
+    restaurantOpenings: ""
+  });
 
-  // Show loading state
-  if (isLoading || scrapingIsLoading) {
+  // Debounce the search term updates
+  useEffect(() => {
+    const timeouts = {
+      events: setTimeout(() => setSearchTerms(prev => ({ ...prev, events: inputValues.events })), 300),
+      restaurants: setTimeout(() => setSearchTerms(prev => ({ ...prev, restaurants: inputValues.restaurants })), 300),
+      attractions: setTimeout(() => setSearchTerms(prev => ({ ...prev, attractions: inputValues.attractions })), 300),
+      playgrounds: setTimeout(() => setSearchTerms(prev => ({ ...prev, playgrounds: inputValues.playgrounds })), 300),
+      restaurantOpenings: setTimeout(() => setSearchTerms(prev => ({ ...prev, restaurantOpenings: inputValues.restaurantOpenings })), 300),
+    };
+
+    return () => {
+      Object.values(timeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [inputValues]);
+  
+  // Search handlers that only update input values (not search terms)
+  const handleEventsSearch = useCallback((search: string) => {
+    setInputValues(prev => ({ ...prev, events: search }));
+  }, []);
+  
+  const handleRestaurantsSearch = useCallback((search: string) => {
+    setInputValues(prev => ({ ...prev, restaurants: search }));
+  }, []);
+  
+  const handleAttractionsSearch = useCallback((search: string) => {
+    setInputValues(prev => ({ ...prev, attractions: search }));
+  }, []);
+  
+  const handlePlaygroundsSearch = useCallback((search: string) => {
+    setInputValues(prev => ({ ...prev, playgrounds: search }));
+  }, []);
+  
+  const handleRestaurantOpeningsSearch = useCallback((search: string) => {
+    setInputValues(prev => ({ ...prev, restaurantOpenings: search }));
+  }, []);
+  
+  // Edit dialog state
+  const [editDialog, setEditDialog] = useState<{
+    open: boolean;
+    contentType: "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening" | null;
+    item: any;
+  }>({
+    open: false,
+    contentType: null,
+    item: null
+  });
+
+  // Data hooks with search filters
+  const events = useEvents({ search: searchTerms.events });
+  const restaurants = useRestaurants({ search: searchTerms.restaurants });
+  const attractions = useAttractions({ search: searchTerms.attractions });
+  const playgrounds = usePlaygrounds({ search: searchTerms.playgrounds });
+  const restaurantOpenings = useRestaurantOpenings({ search: searchTerms.restaurantOpenings });
+  const scraping = useScraping();
+
+  useEffect(() => {
+    console.log("Admin useEffect:", {
+      user: user?.id || 'null',
+      userRole,
+      isLoading,
+      hasAdminAccess,
+      isRootAdmin
+    });
+    
+    // Wait for loading to complete
+    if (isLoading) {
+      return;
+    }
+    
+    if (!user) {
+      console.log("Redirecting to /auth - not authenticated");
+      navigate("/auth");
+    } else if (!hasAdminAccess) {
+      console.log("Redirecting to / - no admin access");
+      navigate("/");
+    }
+  }, [user, userRole, isLoading, hasAdminAccess, navigate]);
+
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading admin dashboard...</p>
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="text-center space-y-4">
+          <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto"></div>
+          <p className="text-mobile-caption text-muted-foreground">Loading admin dashboard...</p>
         </div>
       </div>
     );
   }
 
-  // Show login if not admin
-  if (!isAdmin) {
-    return <AdminLogin onLoginSuccess={() => window.location.reload()} />;
+  if (!hasAdminAccess) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center mobile-padding">
+        <Card className="mobile-padding max-w-md w-full">
+          <div className="text-center">
+            <AlertTriangle className="h-8 w-8 md:h-12 md:w-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-mobile-title md:text-xl font-semibold mb-2">Access Denied</h2>
+            <p className="text-muted-foreground mb-4 text-mobile-caption">
+              You don't have permission to access the admin dashboard.
+            </p>
+            <Button 
+              onClick={() => navigate("/")} 
+              variant="outline"
+              className="touch-target"
+            >
+              Go Home
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
   }
 
-  const handleStartScraping = async () => {
+  const getRoleIcon = () => {
+    if (isRootAdmin) return <Crown className="h-5 w-5" />;
+    if (userRole === 'admin') return <Shield className="h-5 w-5" />;
+    return <Users className="h-5 w-5" />;
+  };
+
+  const getRoleBadge = () => {
+    const variant = isRootAdmin ? "default" : userRole === 'admin' ? "destructive" : "secondary";
+    return (
+      <Badge variant={variant} className="ml-2">
+        {userRole.replace('_', ' ')}
+      </Badge>
+    );
+  };
+
+  const canManageContent = () => ['moderator', 'admin', 'root_admin'].includes(userRole);
+  const canManageUsers = () => ['admin', 'root_admin'].includes(userRole);
+
+  // Handler functions for content management
+  const handleEdit = (contentType: typeof editDialog.contentType, item: any) => {
+    setEditDialog({
+      open: true,
+      contentType,
+      item
+    });
+  };
+
+  const handleDelete = async (contentType: string, id: string) => {
     try {
-      await runAllJobs();
-      toast({
-        title: "Scraping Started",
-        description: "Event scraping process has been initiated.",
-      });
+      const tableName = contentType === 'restaurant_opening' ? 'restaurants' : 
+                       contentType === 'event' ? 'events' : 
+                       contentType === 'restaurant' ? 'restaurants' : 
+                       contentType === 'attraction' ? 'attractions' : 
+                       contentType === 'playground' ? 'playgrounds' : contentType + 's';
+      
+      const { error } = await supabase
+        .from(tableName as any)
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} deleted successfully!`);
+      
+      // Refresh the appropriate data
+      if (contentType === 'event') events.refetch();
+      else if (contentType === 'restaurant') restaurants.refetch();
+      else if (contentType === 'attraction') attractions.refetch();
+      else if (contentType === 'playground') playgrounds.refetch();
+      else if (contentType === 'restaurant_opening') restaurantOpenings.refetch();
+      
     } catch (error) {
-      toast({
-        title: "Scraping Failed",
-        description: "Failed to start scraping process.",
-        variant: "destructive",
-      });
+      console.error('Delete error:', error);
+      toast.error('Failed to delete: ' + (error as Error).message);
     }
   };
 
-  const handleStopScraping = async () => {
+  const handleSave = async () => {
+    // Refresh the appropriate data after save
+    const { contentType } = editDialog;
+    console.log('handleSave called for contentType:', contentType);
+    
     try {
-      await stopAllJobs();
-      toast({
-        title: "Scraping Stopped",
-        description: "Event scraping process has been stopped.",
-      });
-    } catch (error) {
-      toast({
-        title: "Stop Failed",
-        description: "Failed to stop scraping process.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleSaveScraperConfig = async (config: {
-    name: string;
-    url: string;
-    schedule: string;
-    selectors: {
-      title: string;
-      description: string;
-      date: string;
-      location: string;
-      price?: string;
-      category?: string;
-    };
-    category: string;
-    enabled: boolean;
-  }) => {
-    try {
-      await addJob({
-        name: config.name,
-        config: {
-          url: config.url,
-          selectors: config.selectors,
-          schedule: config.schedule,
-          isActive: config.enabled,
-        },
-      });
-
-      toast({
-        title: "Scraper Added",
-        description: `${config.name} has been configured and added to the scraping jobs.`,
-      });
-
-      setShowScraperWizard(false);
-    } catch (error) {
-      toast({
-        title: "Configuration Failed",
-        description: "Failed to save scraper configuration.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleEditEvent = (event: any) => {
-    setSelectedEvent(event);
-    setShowEventEditor(true);
-  };
-
-  const handleSaveEvent = async (updatedEvent: any) => {
-    try {
-      await updateEvent(updatedEvent.id, updatedEvent);
-      toast({
-        title: "Event Updated",
-        description: `"${updatedEvent.title}" has been successfully updated.`,
-      });
-      setShowEventEditor(false);
-      setSelectedEvent(null);
-    } catch (error) {
-      toast({
-        title: "Update Failed",
-        description: "Failed to update the event. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleEditContent = (type: typeof contentType, item: any) => {
-    setContentType(type);
-    setSelectedContent(item);
-    setShowContentEditor(true);
-  };
-
-  const handleSaveContent = async (updatedItem: any) => {
-    try {
-      switch (contentType) {
-        case "restaurant":
-          await updateRestaurant(updatedItem.id, updatedItem);
-          break;
-        case "attraction":
-          await updateAttraction(updatedItem.id, updatedItem);
-          break;
-        case "playground":
-          await updatePlayground(updatedItem.id, updatedItem);
-          break;
-        case "restaurant_opening":
-          await updateRestaurantOpening(updatedItem.id, updatedItem);
-          break;
-        default:
-          await updateEvent(updatedItem.id, updatedItem);
+      if (contentType === 'event') {
+        console.log('Refetching events...');
+        await events.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['events'] });
+      }
+      else if (contentType === 'restaurant') {
+        console.log('Refetching restaurants...');
+        await restaurants.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['restaurants'] });
+        // Also refresh restaurant openings since restaurants with opening_date show there
+        console.log('Refetching restaurant openings...');
+        await restaurantOpenings.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['restaurant_openings'] });
+      }
+      else if (contentType === 'attraction') {
+        console.log('Refetching attractions...');
+        await attractions.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['attractions'] });
+      }
+      else if (contentType === 'playground') {
+        console.log('Refetching playgrounds...');
+        await playgrounds.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['playgrounds'] });
+      }
+      else if (contentType === 'restaurant_opening') {
+        console.log('Refetching restaurant openings...');
+        await restaurantOpenings.refetch();
+        await queryClient.invalidateQueries({ queryKey: ['restaurant_openings'] });
       }
       
-      toast({
-        title: "Item Updated",
-        description: `The ${contentType} has been successfully updated.`,
-      });
-      setShowContentEditor(false);
-      setSelectedContent(null);
+      console.log('All refetches completed successfully');
     } catch (error) {
-      toast({
-        title: "Update Failed",
-        description: `Failed to update the ${contentType}. Please try again.`,
-        variant: "destructive",
-      });
+      console.error('Error during refetch:', error);
     }
-  };
-
-  const handleDeleteContent = async (type: typeof contentType, id: string) => {
-    try {
-      switch (type) {
-        case "event":
-          await deleteEvent(id);
-          break;
-        case "restaurant":
-          await deleteRestaurant(id);
-          break;
-        case "attraction":
-          await deleteAttraction(id);
-          break;
-        case "playground":
-          await deletePlayground(id);
-          break;
-        case "restaurant_opening":
-          await deleteRestaurantOpening(id);
-          break;
-      }
-      
-      toast({
-        title: "Item Deleted",
-        description: `The ${type} has been successfully deleted.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Delete Failed",
-        description: `Failed to delete the ${type}. Please try again.`,
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleAnalyzeWebsite = (scrapingJob: any) => {
-    setSelectedScrapingJob(scrapingJob);
-    setShowAnalysisDialog(true);
-  };
-
-  const handleDeleteEvent = async (eventId: string) => {
-    if (!confirm("Are you sure you want to delete this event?")) return;
-
-    try {
-      await deleteEvent(eventId);
-      toast({
-        title: "Event Deleted",
-        description: "The event has been successfully deleted.",
-      });
-    } catch (error) {
-      toast({
-        title: "Delete Failed",
-        description: "Failed to delete the event. Please try again.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "running":
-        return <Activity className="h-4 w-4 text-green-500" />;
-      case "completed":
-        return <CheckCircle className="h-4 w-4 text-blue-500" />;
-      case "failed":
-        return <XCircle className="h-4 w-4 text-red-500" />;
-      case "pending":
-        return <Clock className="h-4 w-4 text-yellow-500" />;
-      default:
-        return <AlertTriangle className="h-4 w-4 text-gray-500" />;
-    }
-  };
-
-  const getStatusBadge = (status: string) => {
-    const variants: Record<
-      string,
-      "default" | "secondary" | "destructive" | "outline"
-    > = {
-      approved: "default",
-      pending: "secondary",
-      flagged: "destructive",
-      running: "default",
-      completed: "secondary",
-      failed: "destructive",
-    };
-    return <Badge variant={variants[status] || "outline"}>{status}</Badge>;
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
+    <>
+    <div className="flex h-screen bg-background">
+      {/* Sidebar Navigation */}
+      <div className={`${sidebarCollapsed ? 'w-16' : 'w-64'} transition-all duration-300 bg-card border-r border-border flex flex-col`}>
         {/* Header */}
-        <div className="mb-8">
+        <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">
-                Admin Dashboard
-              </h1>
-              <p className="text-gray-600 mt-1">
-                Manage your Des Moines AI Pulse platform
-              </p>
-            </div>
-            <div className="flex items-center gap-4">
-              <Badge variant="outline" className="flex items-center gap-2">
-                <Shield className="h-4 w-4" />
-                {user?.email?.split("@")[0] || "Admin"}
-              </Badge>
-              <Button variant="outline" size="sm">
-                <Settings className="h-4 w-4 mr-2" />
-                Settings
-              </Button>
-              <Button variant="outline" size="sm" onClick={logout}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Logout
-              </Button>
-            </div>
+            {!sidebarCollapsed && (
+              <div className="flex items-center gap-2">
+                <Shield className="h-5 w-5 text-primary" />
+                <span className="font-semibold">Admin Dashboard</span>
+                {getRoleBadge()}
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              className={`${sidebarCollapsed ? 'w-full' : ''} flex-shrink-0`}
+            >
+              {sidebarCollapsed ? <Menu className="h-4 w-4" /> : <X className="h-4 w-4" />}
+            </Button>
           </div>
+          {!sidebarCollapsed && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/")}
+              className="w-full mt-3"
+            >
+              Back to Site
+            </Button>
+          )}
         </div>
 
-        <Tabs
-          value={activeTab}
-          onValueChange={setActiveTab}
-          className="space-y-6"
-        >
-          <TabsList className="grid w-full grid-cols-9">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="scraping">Scraping</TabsTrigger>
-            <TabsTrigger value="ai-crawler">AI Crawler</TabsTrigger>
-            <TabsTrigger value="events">Events</TabsTrigger>
-            <TabsTrigger value="restaurants">Restaurants</TabsTrigger>
-            <TabsTrigger value="attractions">Attractions</TabsTrigger>
-            <TabsTrigger value="playgrounds">Playgrounds</TabsTrigger>
-            <TabsTrigger value="openings">Openings</TabsTrigger>
-            <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
-          </TabsList>
+        {/* Navigation Menu */}
+        <nav className="flex-1 p-4 overflow-y-auto">
+          <div className="space-y-2">
+            <button
+              onClick={() => setActiveTab("overview")}
+              className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                activeTab === "overview" 
+                  ? "bg-primary text-primary-foreground" 
+                  : "hover:bg-accent hover:text-accent-foreground"
+              }`}
+              title={sidebarCollapsed ? "Overview" : ""}
+            >
+              <Database className="h-4 w-4" />
+              {!sidebarCollapsed && <span>Overview</span>}
+            </button>
 
-          {/* Overview Tab */}
-          <TabsContent value="overview" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Total Events
-                  </CardTitle>
-                  <Calendar className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {mockSystemStats.totalEvents.toLocaleString()}
+            {canManageContent() && (
+              <>
+                {!sidebarCollapsed && (
+                  <div className="pt-4 pb-2">
+                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      Content Management
+                    </h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    +12% from last month
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Daily Views
-                  </CardTitle>
-                  <Eye className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {mockSystemStats.dailyViews.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    +5% from yesterday
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Active Scrapers
-                  </CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {mockSystemStats.activeScrapers}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    All systems operational
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    Pending Reviews
-                  </CardTitle>
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">
-                    {mockSystemStats.pendingReviews}
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Requires attention
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>System Health</CardTitle>
-                  <CardDescription>
-                    Overall platform performance
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Overall Health</span>
-                      <span>{mockSystemStats.systemHealth}%</span>
-                    </div>
-                    <Progress
-                      value={mockSystemStats.systemHealth}
-                      className="h-2"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Storage Used</span>
-                      <span>{mockSystemStats.storageUsed}%</span>
-                    </div>
-                    <Progress
-                      value={mockSystemStats.storageUsed}
-                      className="h-2"
-                    />
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Uptime</span>
-                    <span className="font-medium">
-                      {mockSystemStats.uptime}
-                    </span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest system events</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <div className="flex-1">
-                        <p className="text-sm">Scraping job completed</p>
-                        <p className="text-xs text-muted-foreground">
-                          2 minutes ago
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Activity className="h-4 w-4 text-blue-500" />
-                      <div className="flex-1">
-                        <p className="text-sm">New events added to database</p>
-                        <p className="text-xs text-muted-foreground">
-                          15 minutes ago
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                      <div className="flex-1">
-                        <p className="text-sm">Event flagged for review</p>
-                        <p className="text-xs text-muted-foreground">
-                          1 hour ago
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Scraping Tab */}
-          <TabsContent value="scraping" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">Scraping Management</h2>
-                <p className="text-muted-foreground">
-                  Manage automated event collection
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => setShowScraperWizard(true)}
-                  variant="outline"
-                  className="bg-gradient-to-r from-purple-600 to-blue-600 text-white border-0 hover:from-purple-700 hover:to-blue-700"
+                )}
+                
+                <button
+                  onClick={() => setActiveTab("ai-crawler")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "ai-crawler" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "AI Crawler" : ""}
                 >
-                  <Sparkles className="h-4 w-4 mr-2" />
-                  Add New Scraper
-                </Button>
-                <Button
-                  onClick={
-                    isGlobalRunning ? handleStopScraping : handleStartScraping
-                  }
-                  variant={isGlobalRunning ? "destructive" : "default"}
+                  <Bot className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>AI Crawler</span>}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("scraping")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "scraping" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Scraping" : ""}
                 >
-                  {isGlobalRunning ? (
-                    <>
-                      <Pause className="h-4 w-4 mr-2" />
-                      Stop All
-                    </>
-                  ) : (
-                    <>
-                      <Play className="h-4 w-4 mr-2" />
-                      Start All
-                    </>
-                  )}
-                </Button>
-                <Button variant="outline" onClick={forceRefresh}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Refresh
-                </Button>
-              </div>
-            </div>
+                  <Zap className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Scraping</span>}
+                </button>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Scraping Jobs</CardTitle>
-                <CardDescription>
-                  Monitor and control individual scrapers
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Job Name</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Last Run</TableHead>
-                      <TableHead>Next Run</TableHead>
-                      <TableHead>Events Found</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scrapingError ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8">
-                          <div className="text-red-500">
-                            <p>Error loading scraping jobs:</p>
-                            <p className="text-sm mt-1">{scrapingError}</p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-2"
-                              onClick={forceRefresh}
-                            >
-                              Retry
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : scrapingJobs.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} className="text-center py-8">
-                          <div className="text-gray-500">
-                            <p>No scraping jobs found.</p>
-                            <p className="text-sm mt-1">
-                              Make sure the scraping_jobs table exists in your
-                              database.
-                            </p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="mt-2"
-                              onClick={forceRefresh}
-                            >
-                              Refresh
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      scrapingJobs.map((job) => (
-                        <TableRow key={job.id}>
-                          <TableCell className="font-medium">
-                            {job.name}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {getStatusIcon(job.status)}
-                              {getStatusBadge(job.status)}
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {job.lastRun
-                              ? new Date(job.lastRun).toLocaleString()
-                              : "Never"}
-                          </TableCell>
-                          <TableCell>
-                            {job.nextRun
-                              ? new Date(job.nextRun).toLocaleString()
-                              : "Not scheduled"}
-                          </TableCell>
-                          <TableCell>{job.eventsFound}</TableCell>
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => runScrapingJob(job.id)}
-                                disabled={
-                                  job.status === "running" || isGlobalRunning
-                                }
-                              >
-                                <Play className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleAnalyzeWebsite(job)}
-                              >
-                                <Settings className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                <button
+                  onClick={() => setActiveTab("events")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "events" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Events" : ""}
+                >
+                  <Calendar className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Events</span>}
+                </button>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Scraper Configuration</CardTitle>
-                <CardDescription>
-                  Add or modify scraping targets
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="scraper-name">Scraper Name</Label>
-                    <Input
-                      id="scraper-name"
-                      placeholder="e.g., Downtown Events"
-                    />
+                <button
+                  onClick={() => setActiveTab("restaurants")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "restaurants" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Restaurants" : ""}
+                >
+                  <Utensils className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Restaurants</span>}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("attractions")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "attractions" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Attractions" : ""}
+                >
+                  <Camera className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Attractions</span>}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("playgrounds")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "playgrounds" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Playgrounds" : ""}
+                >
+                  <Play className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Playgrounds</span>}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("restaurant-openings")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "restaurant-openings" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Restaurant Openings" : ""}
+                >
+                  <Building className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Restaurant Openings</span>}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("event-submissions")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "event-submissions" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Event Submissions" : ""}
+                >
+                  <UserCheck className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Event Submissions</span>}
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("affiliate-manager")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "affiliate-manager" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Affiliate Links" : ""}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Affiliate Links</span>}
+                </button>
+              </>
+            )}
+
+            {canManageUsers() && (
+              <>
+                {!sidebarCollapsed && (
+                  <div className="pt-4 pb-2">
+                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      User Management
+                    </h3>
                   </div>
-                  <div>
-                    <Label htmlFor="scraper-url">Target URL</Label>
-                    <Input
-                      id="scraper-url"
-                      placeholder="https://example.com/events"
-                    />
+                )}
+                
+                <button
+                  onClick={() => setActiveTab("users")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "users" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "User Management" : ""}
+                >
+                  <Users className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>User Management</span>}
+                </button>
+              </>
+            )}
+
+            {canManageContent() && (
+              <>
+                {!sidebarCollapsed && (
+                  <div className="pt-4 pb-2">
+                    <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      System Tools
+                    </h3>
                   </div>
-                </div>
-                <div>
-                  <Label htmlFor="scraper-schedule">Schedule (Cron)</Label>
-                  <Input id="scraper-schedule" placeholder="0 */6 * * *" />
-                </div>
-                <div>
-                  <Label htmlFor="scraper-selectors">CSS Selectors</Label>
-                  <Textarea
-                    id="scraper-selectors"
-                    placeholder="Enter CSS selectors for event data extraction"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Switch id="scraper-active" />
-                  <Label htmlFor="scraper-active">Active</Label>
-                </div>
-                <Button>Add Scraper</Button>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                )}
+                
+                <button
+                  onClick={() => setActiveTab("settings")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "settings" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "Settings" : ""}
+                >
+                  <Cog className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>Settings</span>}
+                </button>
 
-          {/* AI Crawler Tab */}
-          <TabsContent value="ai-crawler" className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold">AI Website Crawler</h2>
-                <p className="text-muted-foreground">
-                  Use AI to automatically extract content from any website
-                </p>
-              </div>
-            </div>
-            <AICrawler />
-          </TabsContent>
-
-          {/* Events Tab */}
-          <TabsContent value="events" className="space-y-6">
-            <ContentTable
-              type="event"
-              items={events}
-              isLoading={eventsLoading}
-              totalCount={eventsTotalCount}
-              onEdit={(item) => handleEditContent("event", item)}
-              onDelete={(id) => handleDeleteContent("event", id)}
-              onSearch={(search) => setEventFilters(prev => ({ ...prev, search }))}
-              onFilter={(filters) => setEventFilters(prev => ({ ...prev, ...filters }))}
-            />
-          </TabsContent>
-
-          {/* Restaurants Tab */}
-          <TabsContent value="restaurants" className="space-y-6">
-            <ContentTable
-              type="restaurant"
-              items={restaurants}
-              isLoading={restaurantsLoading}
-              totalCount={restaurantsTotalCount}
-              onEdit={(item) => handleEditContent("restaurant", item)}
-              onDelete={(id) => handleDeleteContent("restaurant", id)}
-              onSearch={(search) => setRestaurantFilters(prev => ({ ...prev, search }))}
-              onFilter={(filters) => setRestaurantFilters(prev => ({ ...prev, ...filters }))}
-            />
-          </TabsContent>
-
-          {/* Attractions Tab */}
-          <TabsContent value="attractions" className="space-y-6">
-            <ContentTable
-              type="attraction"
-              items={attractions}
-              isLoading={attractionsLoading}
-              totalCount={attractionsTotalCount}
-              onEdit={(item) => handleEditContent("attraction", item)}
-              onDelete={(id) => handleDeleteContent("attraction", id)}
-              onSearch={(search) => setAttractionFilters(prev => ({ ...prev, search }))}
-              onFilter={(filters) => setAttractionFilters(prev => ({ ...prev, ...filters }))}
-            />
-          </TabsContent>
-
-          {/* Playgrounds Tab */}
-          <TabsContent value="playgrounds" className="space-y-6">
-            <ContentTable
-              type="playground"
-              items={playgrounds}
-              isLoading={playgroundsLoading}
-              totalCount={playgroundsTotalCount}
-              onEdit={(item) => handleEditContent("playground", item)}
-              onDelete={(id) => handleDeleteContent("playground", id)}
-              onSearch={(search) => setPlaygroundFilters(prev => ({ ...prev, search }))}
-              onFilter={(filters) => setPlaygroundFilters(prev => ({ ...prev, ...filters }))}
-            />
-          </TabsContent>
-
-          {/* Restaurant Openings Tab */}
-          <TabsContent value="openings" className="space-y-6">
-            <ContentTable
-              type="restaurant_opening"
-              items={restaurantOpenings}
-              isLoading={restaurantOpeningsLoading}
-              totalCount={restaurantOpeningsTotalCount}
-              onEdit={(item) => handleEditContent("restaurant_opening", item)}
-              onDelete={(id) => handleDeleteContent("restaurant_opening", id)}
-              onSearch={(search) => setRestaurantOpeningFilters(prev => ({ ...prev, search }))}
-              onFilter={(filters) => setRestaurantOpeningFilters(prev => ({ ...prev, ...filters }))}
-            />
-          </TabsContent>
-
-          {/* Monitoring Tab */}
-          <TabsContent value="monitoring" className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold">System Monitoring</h2>
-              <p className="text-muted-foreground">
-                Monitor system performance and health
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
-                    API Performance
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm">Response Time</span>
-                      <span className="text-sm font-medium">124ms</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Success Rate</span>
-                      <span className="text-sm font-medium">99.2%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Requests/hour</span>
-                      <span className="text-sm font-medium">2,847</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Database className="h-5 w-5" />
-                    Database
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm">Query Time</span>
-                      <span className="text-sm font-medium">45ms</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Connections</span>
-                      <span className="text-sm font-medium">12/100</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Storage</span>
-                      <span className="text-sm font-medium">2.1GB</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5" />
-                    User Activity
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-sm">Active Users</span>
-                      <span className="text-sm font-medium">1,247</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Page Views</span>
-                      <span className="text-sm font-medium">8,542</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-sm">Bounce Rate</span>
-                      <span className="text-sm font-medium">32%</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>System Logs</CardTitle>
-                <CardDescription>
-                  Recent system activity and errors
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 font-mono text-sm">
-                  <div className="flex gap-4">
-                    <span className="text-muted-foreground">14:30:15</span>
-                    <span className="text-green-600">[INFO]</span>
-                    <span>
-                      Scraping job completed successfully - 45 events processed
-                    </span>
-                  </div>
-                  <div className="flex gap-4">
-                    <span className="text-muted-foreground">14:28:42</span>
-                    <span className="text-blue-600">[DEBUG]</span>
-                    <span>Database connection established</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <span className="text-muted-foreground">14:25:18</span>
-                    <span className="text-yellow-600">[WARN]</span>
-                    <span>
-                      High memory usage detected - 85% of available RAM
-                    </span>
-                  </div>
-                  <div className="flex gap-4">
-                    <span className="text-muted-foreground">14:22:55</span>
-                    <span className="text-red-600">[ERROR]</span>
-                    <span>
-                      Failed to connect to external API - timeout after 30s
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Content Tab */}
-          <TabsContent value="content" className="space-y-6">
-            <div>
-              <h2 className="text-2xl font-bold">Content Moderation</h2>
-              <p className="text-muted-foreground">
-                Review and manage platform content
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Pending Reviews</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-yellow-600">
-                    {mockSystemStats.pendingReviews}
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Events awaiting approval
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Flagged Content</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-red-600">7</div>
-                  <p className="text-sm text-muted-foreground">
-                    Content requiring attention
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Auto-Approved</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-green-600">156</div>
-                  <p className="text-sm text-muted-foreground">
-                    Events approved today
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Content Moderation Settings</CardTitle>
-                <CardDescription>
-                  Configure automatic content filtering
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Auto-approve trusted sources</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically approve events from verified venues
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Profanity filter</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Flag content containing inappropriate language
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label>Duplicate detection</Label>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically detect and merge duplicate events
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                <button
+                  onClick={() => setActiveTab("seo")}
+                  className={`w-full flex items-center ${sidebarCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-left transition-colors ${
+                    activeTab === "seo" 
+                      ? "bg-primary text-primary-foreground" 
+                      : "hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                  title={sidebarCollapsed ? "SEO Tools" : ""}
+                >
+                  <Globe className="h-4 w-4" />
+                  {!sidebarCollapsed && <span>SEO Tools</span>}
+                </button>
+              </>
+            )}
+          </div>
+        </nav>
       </div>
 
-      {/* Scraper Configuration Wizard */}
-      {showScraperWizard && (
-        <ScraperConfigWizard
-          onSave={handleSaveScraperConfig}
-          onClose={() => setShowScraperWizard(false)}
-        />
-      )}
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto p-6">
+          {activeTab === "overview" && (
+            <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+              <Card>
+                <CardHeader className="mobile-padding">
+                  <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
+                    <Shield className="h-4 w-4 md:h-5 md:w-5" />
+                    Your Role
+                  </CardTitle>
+                  <CardDescription className="text-mobile-caption">Current access level</CardDescription>
+                </CardHeader>
+                <CardContent className="mobile-padding pt-0">
+                  <div className="text-xl md:text-2xl font-bold flex items-center gap-2">
+                    {getRoleIcon()}
+                    <span className="break-words">{userRole.replace('_', ' ')}</span>
+                  </div>
+                  <div className="mt-3 md:mt-4 text-mobile-caption text-muted-foreground">
+                    {isRootAdmin && "✅ Full system access"}
+                    {userRole === 'admin' && !isRootAdmin && "✅ Administrative access"}
+                    {userRole === 'moderator' && "✅ Content management access"}
+                  </div>
+                </CardContent>
+              </Card>
 
-      {/* Event Editor Modal */}
-      {showEventEditor && selectedEvent && (
-        <EventEditor
-          event={selectedEvent}
-          onSave={handleSaveEvent}
-          onClose={() => {
-            setShowEventEditor(false);
-            setSelectedEvent(null);
-          }}
-        />
-      )}
+              <Card>
+                <CardHeader className="mobile-padding">
+                  <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
+                    <Settings className="h-4 w-4 md:h-5 md:w-5" />
+                    Permissions
+                  </CardTitle>
+                  <CardDescription className="text-mobile-caption">What you can do</CardDescription>
+                </CardHeader>
+                <CardContent className="mobile-padding pt-0">
+                  <div className="space-y-2 text-mobile-caption">
+                    {canManageContent() && <div className="text-green-600">✅ Manage content</div>}
+                    {canManageUsers() && <div className="text-green-600">✅ Manage users</div>}
+                    {!canManageUsers() && <div className="text-muted-foreground">❌ User management</div>}
+                  </div>
+                </CardContent>
+              </Card>
 
-      {/* Content Editor Modal */}
-      {showContentEditor && selectedContent && (
-        <ContentEditor
-          type={contentType}
-          item={selectedContent}
-          onSave={handleSaveContent}
-          onClose={() => {
-            setShowContentEditor(false);
-            setSelectedContent(null);
-          }}
-        />
-      )}
+              <Card>
+                <CardHeader className="mobile-padding">
+                  <CardTitle className="flex items-center gap-2 text-mobile-body md:text-lg">
+                    <Users className="h-4 w-4 md:h-5 md:w-5" />
+                    Quick Actions
+                  </CardTitle>
+                  <CardDescription className="text-mobile-caption">Common tasks</CardDescription>
+                </CardHeader>
+                <CardContent className="mobile-padding pt-0">
+                  <div className="space-y-2">
+                    {canManageContent() && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setActiveTab("events")}
+                        className="w-full justify-start touch-target"
+                      >
+                        Manage Events
+                      </Button>
+                    )}
+                    {canManageUsers() && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setActiveTab("users")}
+                        className="w-full justify-start touch-target"
+                      >
+                        Manage Users
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-      {/* Website Analysis Dialog */}
-      {showAnalysisDialog && selectedScrapingJob && (
-        <WebsiteAnalysisDialog
-          open={showAnalysisDialog}
-          onOpenChange={setShowAnalysisDialog}
-          onUpdate={() => {
-            // Refresh scraping jobs when selectors are updated
-            forceRefresh();
-          }}
-          scrapingJob={selectedScrapingJob}
-        />
-      )}
+          {canManageContent() && activeTab === "ai-crawler" && (
+            <AICrawler />
+          )}
+
+          {canManageContent() && activeTab === "scraping" && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="h-5 w-5 text-purple-600" />
+                      Automated Scraping Management
+                    </CardTitle>
+                    <CardDescription>
+                      Configure and manage automated scrapers for events, restaurants, and more
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <div className="flex gap-4">
+                        <Button 
+                          onClick={() => setShowScraperWizard(true)}
+                          className="flex items-center gap-2"
+                        >
+                          <Bot className="h-4 w-4" />
+                          Create New Scraper
+                        </Button>
+                        <Button 
+                          variant="outline"
+                          onClick={() => setShowJobManager(true)}
+                        >
+                          <Settings className="h-4 w-4 mr-2" />
+                          Manage Existing
+                        </Button>
+                      </div>
+                      
+                      {scraping.jobs.length > 0 ? (
+                        <div className="grid gap-4">
+                          {scraping.jobs.map((job) => (
+                            <Card key={job.id} className="p-4">
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <h4 className="font-semibold">{job.name}</h4>
+                                   <p className="text-sm text-muted-foreground">
+                                     Last run: {job.lastRun ? new Date(job.lastRun).toLocaleString() : 'Never'}
+                                   </p>
+                                   <p className="text-sm text-muted-foreground">
+                                     Events found: {job.eventsFound || 0}
+                                   </p>
+                                </div>
+                                <Badge variant={job.status === 'running' ? 'default' : 'secondary'}>
+                                  {job.status}
+                                </Badge>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <Bot className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                          <p>No scraping jobs configured yet.</p>
+                          <p className="text-sm">Create your first automated scraper to get started.</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+          )}
+
+          {canManageContent() && activeTab === "events" && (
+                <div className="space-y-6">
+                  <DomainHighlightManager />
+                  <ContentTable
+                    type="event"
+                    items={events.events}
+                    isLoading={events.isLoading}
+                    totalCount={events.events.length}
+                    searchValue={inputValues.events}
+                    onEdit={(item) => handleEdit("event", item)}
+                    onDelete={(id) => handleDelete("event", id)}
+                    onSearch={handleEventsSearch}
+                    onFilter={(filter) => console.log('Filter events:', filter)}
+                    onCreate={() => console.log('Create new event')}
+                    onRefresh={events.refetch}
+                  />
+                </div>
+              )}
+
+              {canManageContent() && activeTab === "restaurants" && (
+                <ContentTable
+                  type="restaurant"
+                  items={restaurants.restaurants}
+                  isLoading={restaurants.isLoading}
+                  totalCount={restaurants.restaurants.length}
+                  searchValue={inputValues.restaurants}
+                  onEdit={(item) => handleEdit("restaurant", item)}
+                  onDelete={(id) => handleDelete("restaurant", id)}
+                  onSearch={handleRestaurantsSearch}
+                  onFilter={(filter) => console.log('Filter restaurants:', filter)}
+                  onCreate={() => console.log('Create new restaurant')}
+                />
+              )}
+
+              {canManageContent() && activeTab === "attractions" && (
+                <ContentTable
+                  type="attraction"
+                  items={attractions.attractions}
+                  isLoading={attractions.isLoading}
+                  totalCount={attractions.attractions.length}
+                  searchValue={inputValues.attractions}
+                  onEdit={(item) => handleEdit("attraction", item)}
+                  onDelete={(id) => handleDelete("attraction", id)}
+                  onSearch={handleAttractionsSearch}
+                  onFilter={(filter) => console.log('Filter attractions:', filter)}
+                  onCreate={() => console.log('Create new attraction')}
+                />
+              )}
+
+              {canManageContent() && activeTab === "playgrounds" && (
+                <ContentTable
+                  type="playground"
+                  items={playgrounds.playgrounds}
+                  isLoading={playgrounds.isLoading}
+                  totalCount={playgrounds.playgrounds.length}
+                  searchValue={inputValues.playgrounds}
+                  onEdit={(item) => handleEdit("playground", item)}
+                  onDelete={(id) => handleDelete("playground", id)}
+                  onSearch={handlePlaygroundsSearch}
+                  onFilter={(filter) => console.log('Filter playgrounds:', filter)}
+                  onCreate={() => console.log('Create new playground')}
+                />
+              )}
+
+              {canManageContent() && activeTab === "restaurant-openings" && (
+                <ContentTable
+                  type="restaurant_opening"
+                  items={restaurants.restaurants.filter(r => {
+                    const matchesSearch = !searchTerms.restaurantOpenings || 
+                      r.name?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.cuisine?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.location?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase());
+                    
+                    const isOpening = r.status === 'opening_soon' || 
+                      r.status === 'newly_opened' || 
+                      r.status === 'announced' ||
+                      r.opening_date || 
+                      r.opening_timeframe;
+                    
+                    return matchesSearch && isOpening;
+                  })}
+                  isLoading={restaurants.isLoading}
+                  totalCount={restaurants.restaurants.filter(r => {
+                    const matchesSearch = !searchTerms.restaurantOpenings || 
+                      r.name?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.cuisine?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase()) ||
+                      r.location?.toLowerCase().includes(searchTerms.restaurantOpenings.toLowerCase());
+                    
+                    const isOpening = r.status === 'opening_soon' || 
+                      r.status === 'newly_opened' || 
+                      r.status === 'announced' ||
+                      r.opening_date || 
+                      r.opening_timeframe;
+                    
+                    return matchesSearch && isOpening;
+                  }).length}
+                  searchValue={inputValues.restaurantOpenings}
+                  onEdit={(item) => handleEdit("restaurant", item)} // Use "restaurant" type instead of "restaurant_opening"
+                  onDelete={(id) => handleDelete("restaurant", id)}
+                  onSearch={handleRestaurantOpeningsSearch}
+                  onFilter={(filter) => console.log('Filter restaurant openings:', filter)}
+                  onCreate={() => console.log('Create new restaurant opening')}
+                />
+              )}
+
+              {canManageContent() && activeTab === "event-submissions" && (
+                <EventReviewSystem />
+              )}
+
+              {canManageContent() && activeTab === "affiliate-manager" && (
+                <AffiliateManager />
+              )}
+
+          {canManageUsers() && activeTab === "users" && (
+            <UserRoleManager />
+          )}
+
+          {canManageContent() && activeTab === "settings" && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Cog className="h-5 w-5" />
+                      Application Settings
+                    </CardTitle>
+                    <CardDescription>
+                      Configure system settings and preferences
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-6">
+                      <Alert>
+                        <Settings className="h-4 w-4" />
+                        <AlertDescription>
+                          <strong>Coming Soon:</strong> Advanced configuration options including:
+                          <ul className="list-disc list-inside mt-2 space-y-1">
+                            <li>Site-wide settings and preferences</li>
+                            <li>Email notification templates</li>
+                            <li>Content moderation settings</li>
+                            <li>API rate limiting configuration</li>
+                            <li>Analytics and tracking preferences</li>
+                          </ul>
+                        </AlertDescription>
+                      </Alert>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {canManageContent() && activeTab === "seo" && (
+                <SEOTools />
+              )}
+        </div>
+      </div>
     </div>
+
+    {/* Scraper Configuration Wizard */}
+    {showScraperWizard && (
+      <ScraperConfigWizard
+        onSave={(config) => {
+          console.log('Save scraper config:', config);
+          setShowScraperWizard(false);
+        }}
+        onClose={() => setShowScraperWizard(false)}
+      />
+    )}
+
+    {/* Scraping Job Manager */}
+    {showJobManager && (
+      <ScrapingJobManager 
+        isOpen={showJobManager} 
+        onClose={() => setShowJobManager(false)} 
+      />
+    )}
+
+    {/* Content Edit Dialog */}
+    {editDialog.open && editDialog.contentType && editDialog.item && (
+      <ContentEditDialog
+        open={editDialog.open}
+        onOpenChange={(open) => setEditDialog(prev => ({ ...prev, open }))}
+        contentType={editDialog.contentType}
+        item={editDialog.item}
+        onSave={handleSave}
+      />
+    )}
+    </>
   );
 }

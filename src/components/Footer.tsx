@@ -7,7 +7,11 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="col-span-1 md:col-span-2">
-            <h3 className="text-2xl font-bold mb-4">Des Moines Insider</h3>
+            <img 
+              src="/DMI-Logo2.png" 
+              alt="Des Moines Insider" 
+              className="h-16 w-auto mb-4"
+            />
             <p className="text-neutral-400 mb-4">
               Your AI-powered guide to discovering the best events, dining, and attractions 
               in Des Moines. We curate and enhance local content to help you explore the capital city.
