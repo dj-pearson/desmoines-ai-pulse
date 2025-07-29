@@ -30,28 +30,23 @@ import {
   CreditCard,
 } from "lucide-react";
 
-// Helper function to get proxied image URL
-const getProxiedImageUrl = (originalUrl: string | null): string | null => {
+// Helper function to get image URL - prioritize non-Google sources
+const getImageUrl = (originalUrl: string | null): string | null => {
   if (!originalUrl) return null;
 
   console.log("Original image URL:", originalUrl);
 
-  // Google Places API URLs require proxy due to CORS
+  // Google Places images have CORS restrictions and need server-side proxy
+  // For now, we'll skip them and use gradient fallback
   if (
     originalUrl.includes("places.googleapis.com") ||
     originalUrl.includes("googleusercontent.com")
   ) {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    if (supabaseUrl) {
-      const proxiedUrl = `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(
-        originalUrl
-      )}`;
-      console.log("Using proxy URL:", proxiedUrl);
-      return proxiedUrl;
-    }
+    console.log("Google Places image detected - will use gradient fallback");
+    return null; // This will trigger the gradient fallback
   }
 
-  // For other URLs, use as-is
+  // For other URLs (uploaded images, etc.), use as-is
   return originalUrl;
 };
 
@@ -187,11 +182,11 @@ export default function RestaurantDetails() {
   }
 
   // Debug logging for image URL
-  const proxiedImageUrl = getProxiedImageUrl(restaurant?.image_url);
+  const imageUrl = getImageUrl(restaurant?.image_url);
   console.log("Restaurant data:", {
     name: restaurant?.name,
     image_url: restaurant?.image_url,
-    proxied_url: proxiedImageUrl,
+    processed_url: imageUrl,
     hasImageUrl: !!restaurant?.image_url,
   });
 
@@ -320,19 +315,19 @@ export default function RestaurantDetails() {
 
           {/* Main Restaurant Card */}
           <Card className="bg-white/95 backdrop-blur-sm shadow-2xl rounded-3xl overflow-hidden border-0 mb-8">
-            {/* Hero Section with Google Image */}
+            {/* Hero Section with Image or Gradient */}
             <div className="relative h-80 overflow-hidden">
-              {proxiedImageUrl ? (
+              {imageUrl ? (
                 <>
                   <img
-                    src={proxiedImageUrl}
+                    src={imageUrl}
                     alt={restaurant.name}
                     className="absolute inset-0 w-full h-full object-cover z-20"
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       console.error("Image failed to load:", {
-                        proxiedUrl: proxiedImageUrl,
+                        imageUrl: imageUrl,
                         originalUrl: restaurant.image_url,
                         error: e,
                       });
@@ -363,7 +358,7 @@ export default function RestaurantDetails() {
                     }}
                     onLoad={(e) => {
                       console.log("Image loaded successfully:", {
-                        proxiedUrl: proxiedImageUrl,
+                        imageUrl: imageUrl,
                         originalUrl: restaurant.image_url,
                       });
                       // Ensure gradient is hidden when image loads
@@ -392,7 +387,7 @@ export default function RestaurantDetails() {
               )}
               <div className="absolute inset-0 flex items-center justify-center z-30">
                 <div className="text-center text-white">
-                  {!proxiedImageUrl && (
+                  {!imageUrl && (
                     <div className="flex items-center justify-center mb-4">
                       <Utensils className="h-16 w-16 text-white/80" />
                     </div>
@@ -404,7 +399,7 @@ export default function RestaurantDetails() {
                     {restaurant.cuisine} Cuisine
                   </p>
                   {/* Debug info for development */}
-                  {proxiedImageUrl && (
+                  {imageUrl && (
                     <p className="text-xs text-white/60 mt-2">
                       Image loaded via proxy
                     </p>
@@ -412,7 +407,7 @@ export default function RestaurantDetails() {
                 </div>
               </div>
               {/* Decorative elements only when no image */}
-              {!proxiedImageUrl && (
+              {!imageUrl && (
                 <>
                   <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full animate-pulse"></div>
                   <div className="absolute bottom-10 right-10 w-32 h-32 bg-white/5 rounded-full animate-pulse delay-1000"></div>
@@ -632,7 +627,7 @@ export default function RestaurantDetails() {
                           <div className="relative h-32 overflow-hidden bg-gradient-to-r from-gray-200 to-gray-300">
                             <img
                               src={
-                                getProxiedImageUrl(related.image_url) ||
+                                getImageUrl(related.image_url) ||
                                 related.image_url
                               }
                               alt={related.name}
