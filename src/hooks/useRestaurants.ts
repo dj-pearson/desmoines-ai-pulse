@@ -80,13 +80,14 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       const sortBy = filters.sortBy || 'popularity';
       switch (sortBy) {
         case 'popularity':
-          // AI-based popularity: combine rating, creation date, and featured status
-          query = query.order("is_featured", { ascending: false })
-                      .order("rating", { ascending: false, nullsFirst: false })
+          // AI-based popularity: use calculated popularity_score
+          query = query.order("popularity_score", { ascending: false })
+                      .order("is_featured", { ascending: false })
                       .order("created_at", { ascending: false });
           break;
         case 'rating':
-          query = query.order("rating", { ascending: false, nullsFirst: false });
+          query = query.order("rating", { ascending: false, nullsFirst: false })
+                      .order("popularity_score", { ascending: false });
           break;
         case 'newest':
           query = query.order("created_at", { ascending: false });
@@ -95,14 +96,16 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
           query = query.order("name", { ascending: true });
           break;
         case 'price_low':
-          // Custom price sorting logic
-          query = query.order("price_range", { ascending: true, nullsFirst: false });
+          // Custom price sorting logic ($ < $$ < $$$ < $$$$)
+          query = query.order("price_range", { ascending: true, nullsFirst: false })
+                      .order("popularity_score", { ascending: false });
           break;
         case 'price_high':
-          query = query.order("price_range", { ascending: false, nullsFirst: false });
+          query = query.order("price_range", { ascending: false, nullsFirst: false })
+                      .order("popularity_score", { ascending: false });
           break;
         default:
-          query = query.order("created_at", { ascending: false });
+          query = query.order("popularity_score", { ascending: false });
       }
 
       if (filters.limit) {
