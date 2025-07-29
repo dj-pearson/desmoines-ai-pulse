@@ -181,7 +181,7 @@ export function RestaurantFilters({
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
               <Input
-                placeholder="Search restaurants, cuisines, or locations..."
+                placeholder="Search restaurants, cuisines, or cities..."
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
                 className="pl-10"
@@ -358,11 +358,11 @@ export function RestaurantFilters({
                 </div>
               </div>
 
-              {/* Location Areas */}
+              {/* City Areas */}
               <div className="space-y-3">
                 <Label className="flex items-center gap-2 text-sm font-medium">
                   <MapPin className="h-4 w-4" />
-                  Location
+                  City
                 </Label>
                 <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
                   {availableLocations.map((location) => (

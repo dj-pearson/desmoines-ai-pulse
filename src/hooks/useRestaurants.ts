@@ -50,7 +50,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       // Apply search filter
       if (filters.search) {
         query = query.or(
-          `name.ilike.%${filters.search}%,cuisine.ilike.%${filters.search}%,location.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+          `name.ilike.%${filters.search}%,cuisine.ilike.%${filters.search}%,city.ilike.%${filters.search}%,location.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
         );
       }
 
@@ -71,12 +71,9 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
           .lte("rating", filters.rating[1]);
       }
 
-      // Apply location filter (array) - using ilike for partial matches
+      // Apply location filter (array) - now using city column for exact matches
       if (filters.location && filters.location.length > 0) {
-        const locationConditions = filters.location
-          .map((loc) => `location.ilike.%${loc}%`)
-          .join(",");
-        query = query.or(locationConditions);
+        query = query.in("city", filters.location);
       }
 
       // Apply featured filter
@@ -250,35 +247,24 @@ export function useRestaurantFilterOptions() {
           .select("cuisine")
           .not("cuisine", "is", null);
 
-        // Get unique locations (extract cities/areas)
-        const { data: locationData } = await supabase
+        // Get unique cities from the city column
+        const { data: cityData } = await supabase
           .from("restaurants")
-          .select("location")
-          .not("location", "is", null);
+          .select("city")
+          .not("city", "is", null);
 
         const uniqueCuisines = [
           ...new Set(cuisineData?.map((r) => r.cuisine).filter(Boolean)),
         ] as string[];
 
-        // Extract cities/areas from full addresses
-        const uniqueLocations = [
-          ...new Set(
-            locationData
-              ?.map((r) => {
-                if (!r.location) return null;
-                // Extract city names (assuming format like "123 Main St, Des Moines, IA")
-                const parts = r.location.split(",");
-                return parts.length > 1
-                  ? parts[parts.length - 2].trim()
-                  : parts[0].trim();
-              })
-              .filter(Boolean)
-          ),
+        // Use the city column directly for cleaner city filtering
+        const uniqueCities = [
+          ...new Set(cityData?.map((r) => r.city).filter(Boolean)),
         ] as string[];
 
         setOptions({
           cuisines: uniqueCuisines.sort(),
-          locations: uniqueLocations.sort(),
+          locations: uniqueCities.sort(),
           tags: [
             "Takeout",
             "Delivery",
