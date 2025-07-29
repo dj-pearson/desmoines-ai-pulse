@@ -547,11 +547,15 @@ export default function RestaurantDetails() {
                       <Card className="h-full hover:shadow-lg transition-all duration-300 group-hover:scale-105 border border-gray-200 overflow-hidden">
                         {/* Restaurant Image */}
                         {related.image_url && (
-                          <div className="relative h-32 overflow-hidden">
+                          <div className="relative h-32 overflow-hidden bg-gradient-to-r from-gray-200 to-gray-300">
                             <img 
                               src={related.image_url} 
                               alt={related.name}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                              className="w-full h-full object-cover group-hover:scale-110 transition-all duration-300 opacity-0"
+                              onLoad={(e) => {
+                                // Fade in the image once loaded
+                                e.currentTarget.style.opacity = '1';
+                              }}
                               onError={(e) => {
                                 // Hide image container if image fails to load
                                 e.currentTarget.parentElement.style.display = 'none';
