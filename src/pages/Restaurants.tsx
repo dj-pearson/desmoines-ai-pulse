@@ -18,9 +18,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapPin, Star, DollarSign, ChefHat } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { MapPin, Star, DollarSign, ChefHat, Search, Filter } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 const createSlug = (name: string): string => {
   return name
@@ -41,9 +44,33 @@ export default function Restaurants() {
     openNow: false,
     tags: [],
   });
+  const [showFilters, setShowFilters] = useState(false);
+  const { toast } = useToast();
 
   const { restaurants, isLoading, error, totalCount } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
+
+  const handleSearchChange = (value: string) => {
+    setFilters(prev => ({ ...prev, search: value }));
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      search: "",
+      cuisine: [],
+      priceRange: [],
+      rating: [0, 5],
+      location: [],
+      sortBy: "popularity",
+      featuredOnly: false,
+      openNow: false,
+      tags: [],
+    });
+    toast({
+      title: "Filters Cleared",
+      description: "All filters have been reset",
+    });
+  };
 
   // Enhanced SEO data for restaurants page
   const restaurantsKeywords = [
@@ -114,6 +141,29 @@ export default function Restaurants() {
               Find the best restaurants, local favorites, and new dining
               experiences in the capital city
             </p>
+
+            {/* Search Bar */}
+            <div className="max-w-2xl mx-auto">
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex-1">
+                  <Input
+                    type="text"
+                    placeholder="Search restaurants..."
+                    value={filters.search}
+                    onChange={(e) => handleSearchChange(e.target.value)}
+                    className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white"
+                  />
+                </div>
+                <Button
+                  onClick={() => setShowFilters(!showFilters)}
+                  variant="secondary"
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filters
+                </Button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -124,15 +174,27 @@ export default function Restaurants() {
             <RestaurantOpenings />
 
             {/* Advanced Filters */}
-            <RestaurantFilters
-              filters={filters}
-              onFiltersChange={setFilters}
-              availableCuisines={filterOptions.cuisines}
-              availableLocations={filterOptions.locations}
-              availableTags={filterOptions.tags}
-              totalResults={totalCount}
-              isLoading={isLoading}
-            />
+            {showFilters && (
+              <div className="bg-white rounded-2xl shadow-lg p-6 border">
+                <RestaurantFilters
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  availableCuisines={filterOptions.cuisines}
+                  availableLocations={filterOptions.locations}
+                  availableTags={filterOptions.tags}
+                  totalResults={totalCount}
+                  isLoading={isLoading}
+                />
+                <div className="flex justify-between mt-6">
+                  <Button variant="outline" onClick={handleClearFilters}>
+                    Clear Filters
+                  </Button>
+                  <div className="text-sm text-gray-500">
+                    {totalCount || 0} restaurants found
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* All Restaurants Section */}
             <div className="space-y-4 md:space-y-6">
@@ -190,19 +252,7 @@ export default function Restaurants() {
                     filters.priceRange.length > 0 ||
                     filters.location.length > 0) && (
                     <button
-                      onClick={() =>
-                        setFilters({
-                          search: "",
-                          cuisine: [],
-                          priceRange: [],
-                          rating: [0, 5],
-                          location: [],
-                          sortBy: "popularity",
-                          featuredOnly: false,
-                          openNow: false,
-                          tags: [],
-                        })
-                      }
+                      onClick={handleClearFilters}
                       className="text-primary hover:underline"
                     >
                       Clear all filters

@@ -33,7 +33,7 @@ const createSlug = (name: string): string => {
 
 export default function Playgrounds() {
   const { toast } = useToast();
-  
+
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAgeRange, setSelectedAgeRange] = useState("all");
@@ -47,9 +47,7 @@ export default function Playgrounds() {
   // Get unique age ranges and locations for filter options
   const ageRanges = useMemo(() => {
     const uniqueRanges = new Set(
-      allPlaygrounds
-        .map((playground) => playground.age_range)
-        .filter(Boolean)
+      allPlaygrounds.map((playground) => playground.age_range).filter(Boolean)
     );
     return Array.from(uniqueRanges).sort();
   }, [allPlaygrounds]);
@@ -85,14 +83,19 @@ export default function Playgrounds() {
       }
 
       // Age range filter
-      if (selectedAgeRange !== "all" && playground.age_range !== selectedAgeRange) {
+      if (
+        selectedAgeRange !== "all" &&
+        playground.age_range !== selectedAgeRange
+      ) {
         return false;
       }
 
       // Location filter
       if (location !== "any-location") {
         const playgroundLocation = playground.location || "";
-        if (!playgroundLocation.toLowerCase().includes(location.toLowerCase())) {
+        if (
+          !playgroundLocation.toLowerCase().includes(location.toLowerCase())
+        ) {
           return false;
         }
       }
@@ -126,28 +129,28 @@ export default function Playgrounds() {
 
   const seoDescription = `Discover ${searchQuery ? `"${searchQuery}" ` : ""}${
     selectedAgeRange && selectedAgeRange !== "all"
-      ? `playgrounds for ages ${selectedAgeRange} ` 
+      ? `playgrounds for ages ${selectedAgeRange} `
       : ""
   }in Des Moines, Iowa. Find the perfect playground for your family with accessible equipment, fun activities, and safe play areas.`;
 
   const playgroundKeywords = [
     "Des Moines playgrounds",
-    "Iowa playgrounds", 
+    "Iowa playgrounds",
     "children recreation",
     "family activities Des Moines",
     "parks",
     "playground equipment",
     "kids activities",
     "family fun",
-    ...(selectedAgeRange && selectedAgeRange !== "all" 
-      ? [`ages ${selectedAgeRange}`] 
+    ...(selectedAgeRange && selectedAgeRange !== "all"
+      ? [`ages ${selectedAgeRange}`]
       : []),
     ...(searchQuery ? [searchQuery] : []),
   ];
 
   const playgroundsSchema = {
     "@context": "https://schema.org",
-    "@type": "ItemList", 
+    "@type": "ItemList",
     name: "Des Moines Playgrounds",
     description: seoDescription,
     numberOfItems: filteredPlaygrounds?.length || 0,
@@ -164,10 +167,10 @@ export default function Playgrounds() {
             "@type": "PostalAddress",
             addressLocality: "Des Moines",
             addressRegion: "Iowa",
-            addressCountry: "US"
-          }
-        }
-      })) || []
+            addressCountry: "US",
+          },
+        },
+      })) || [],
   };
 
   return (
@@ -179,8 +182,11 @@ export default function Playgrounds() {
         <meta property="og:title" content={seoTitle} />
         <meta property="og:description" content={seoDescription} />
         <meta property="og:type" content="website" />
-        <meta property="og:image" content="https://desmoinesinsider.com/og-image.jpg" />
-        
+        <meta
+          property="og:image"
+          content="https://desmoinesinsider.com/og-image.jpg"
+        />
+
         {/* JSON-LD Structured Data */}
         <script type="application/ld+json">
           {JSON.stringify(playgroundsSchema)}
@@ -343,8 +349,10 @@ export default function Playgrounds() {
         ) : filteredPlaygrounds.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground">
-              {searchQuery || selectedAgeRange !== "all" || location !== "any-location" 
-                ? "No playgrounds match your current filters." 
+              {searchQuery ||
+              selectedAgeRange !== "all" ||
+              location !== "any-location"
+                ? "No playgrounds match your current filters."
                 : "No playgrounds found."}
             </p>
           </div>
