@@ -11,6 +11,7 @@ export function useFeaturedEvents() {
         .from('events')
         .select('*')
         .eq('is_featured', true)
+        .gte('date', new Date().toISOString().split('T')[0]) // Only today and future events
         .order('date', { ascending: true })
         .limit(6);
       
@@ -26,14 +27,15 @@ export function useEvents(filters?: { category?: string; location?: string; date
     queryFn: async () => {
       let query = supabase.from('events').select('*');
       
+      // Always filter to only show today and future events
+      const today = new Date().toISOString().split('T')[0];
+      query = query.gte('date', filters?.date || today);
+      
       if (filters?.category) {
         query = query.ilike('category', `%${filters.category}%`);
       }
       if (filters?.location) {
         query = query.ilike('location', `%${filters.location}%`);
-      }
-      if (filters?.date) {
-        query = query.gte('date', filters.date);
       }
       
       const { data, error } = await query.order('date', { ascending: true });
