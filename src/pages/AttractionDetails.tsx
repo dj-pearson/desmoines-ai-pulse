@@ -7,21 +7,21 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { 
-  MapPin, 
-  Star, 
-  ExternalLink, 
-  Share2, 
+import {
+  MapPin,
+  Star,
+  ExternalLink,
+  Share2,
   ArrowLeft,
-  Camera
+  Camera,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const createSlug = (name: string): string => {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 };
 
 export default function AttractionDetails() {
@@ -29,17 +29,23 @@ export default function AttractionDetails() {
   const { toast } = useToast();
 
   // Fetch attraction by matching slug
-  const { data: attraction, isLoading, error } = useQuery({
+  const {
+    data: attraction,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["attraction", slug],
     queryFn: async () => {
       const { data: attractions, error } = await supabase
         .from("attractions")
         .select("*");
-      
+
       if (error) throw error;
-      
+
       // Find attraction by matching slug
-      const foundAttraction = attractions?.find(a => createSlug(a.name) === slug);
+      const foundAttraction = attractions?.find(
+        (a) => createSlug(a.name) === slug
+      );
       return foundAttraction || null;
     },
   });
@@ -49,14 +55,14 @@ export default function AttractionDetails() {
     queryKey: ["related-attractions", attraction?.type],
     queryFn: async () => {
       if (!attraction?.type) return [];
-      
+
       const { data, error } = await supabase
         .from("attractions")
         .select("*")
         .eq("type", attraction.type)
         .neq("id", attraction.id)
         .limit(3);
-      
+
       if (error) throw error;
       return data || [];
     },
@@ -116,51 +122,58 @@ export default function AttractionDetails() {
 
   // Generate comprehensive SEO data
   const seoTitle = `${attraction.name} - ${attraction.type} in Des Moines`;
-  const seoDescription = attraction.description || `Discover ${attraction.name}, a ${attraction.type} in Des Moines, Iowa. Learn about this popular attraction and plan your visit.`;
-  
+  const seoDescription =
+    attraction.description ||
+    `Discover ${attraction.name}, a ${attraction.type} in Des Moines, Iowa. Learn about this popular attraction and plan your visit.`;
+
   const seoKeywords = [
     attraction.name,
     attraction.type,
-    'attraction',
-    'Des Moines attractions',
-    'Iowa attractions',
-    attraction.location || '',
-    'things to do',
-    'tourist attraction',
-    'visit Des Moines'
+    "attraction",
+    "Des Moines attractions",
+    "Iowa attractions",
+    attraction.location || "",
+    "things to do",
+    "tourist attraction",
+    "visit Des Moines",
   ].filter(Boolean);
 
   const attractionSchema = {
     "@context": "https://schema.org",
     "@type": "TouristAttraction",
-    "name": attraction.name,
-    "description": attraction.description,
-    "image": attraction.image_url,
-    "address": {
+    name: attraction.name,
+    description: attraction.description,
+    image: attraction.image_url,
+    address: {
       "@type": "PostalAddress",
-      "addressLocality": "Des Moines",
-      "addressRegion": "Iowa",
-      "addressCountry": "US"
+      addressLocality: "Des Moines",
+      addressRegion: "Iowa",
+      addressCountry: "US",
     },
-    "geo": {
+    geo: {
       "@type": "GeoCoordinates",
-      "latitude": "41.5868",
-      "longitude": "-93.6250"
+      latitude: "41.5868",
+      longitude: "-93.6250",
     },
-    "url": attraction.website,
-    "aggregateRating": attraction.rating ? {
-      "@type": "AggregateRating",
-      "ratingValue": attraction.rating,
-      "ratingCount": "100",
-      "bestRating": "5",
-      "worstRating": "1"
-    } : undefined
+    url: attraction.website,
+    aggregateRating: attraction.rating
+      ? {
+          "@type": "AggregateRating",
+          ratingValue: attraction.rating,
+          ratingCount: "100",
+          bestRating: "5",
+          worstRating: "1",
+        }
+      : undefined,
   };
 
   const breadcrumbs = [
     { name: "Home", url: "/" },
     { name: "Attractions", url: "/attractions" },
-    { name: attraction.name, url: `/attractions/${createSlug(attraction.name)}` }
+    {
+      name: attraction.name,
+      url: `/attractions/${createSlug(attraction.name)}`,
+    },
   ];
 
   return (
@@ -176,18 +189,21 @@ export default function AttractionDetails() {
         breadcrumbs={breadcrumbs}
         location={{
           name: attraction.name,
-          address: attraction.location || "Des Moines, IA"
+          address: attraction.location || "Des Moines, IA",
         }}
         modifiedTime={attraction.updated_at}
       />
       <div className="container mx-auto px-4 py-8">
-
         {/* Breadcrumbs */}
         <nav className="mb-6">
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-primary">Home</Link>
+            <Link to="/" className="hover:text-primary">
+              Home
+            </Link>
             <span>/</span>
-            <Link to="/attractions" className="hover:text-primary">Attractions</Link>
+            <Link to="/attractions" className="hover:text-primary">
+              Attractions
+            </Link>
             <span>/</span>
             <span className="text-foreground">{attraction.name}</span>
           </div>

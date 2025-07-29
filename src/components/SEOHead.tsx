@@ -42,10 +42,10 @@ export default function SEOHead({
   const fullUrl = url ? `${baseUrl}${url}` : window.location.href;
   const defaultImage = `${baseUrl}/og-image.jpg`;
   const image = imageUrl || defaultImage;
-  
+
   // Enhanced title with branding
-  const enhancedTitle = title.includes("Des Moines Insider") 
-    ? title 
+  const enhancedTitle = title.includes("Des Moines Insider")
+    ? title
     : `${title} | Des Moines Insider`;
 
   // Generate comprehensive keywords
@@ -55,42 +55,47 @@ export default function SEOHead({
     "local guide",
     "Des Moines Insider",
     "Iowa attractions",
-    "Des Moines events"
+    "Des Moines events",
   ];
   const allKeywords = [...keywords, ...defaultKeywords].join(", ");
 
   // Generate breadcrumb structured data
-  const breadcrumbSchema = breadcrumbs ? {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": breadcrumbs.map((crumb, index) => ({
-      "@type": "ListItem",
-      "position": index + 1,
-      "name": crumb.name,
-      "item": `${baseUrl}${crumb.url}`
-    }))
-  } : null;
+  const breadcrumbSchema = breadcrumbs
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: breadcrumbs.map((crumb, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: crumb.name,
+          item: `${baseUrl}${crumb.url}`,
+        })),
+      }
+    : null;
 
   // Generate location structured data
-  const locationSchema = location ? {
-    "@context": "https://schema.org",
-    "@type": "Place",
-    "name": location.name,
-    "address": {
-      "@type": "PostalAddress",
-      "streetAddress": location.address,
-      "addressLocality": "Des Moines",
-      "addressRegion": "Iowa",
-      "addressCountry": "US"
-    },
-    ...(location.latitude && location.longitude && {
-      "geo": {
-        "@type": "GeoCoordinates",
-        "latitude": location.latitude,
-        "longitude": location.longitude
+  const locationSchema = location
+    ? {
+        "@context": "https://schema.org",
+        "@type": "Place",
+        name: location.name,
+        address: {
+          "@type": "PostalAddress",
+          streetAddress: location.address,
+          addressLocality: "Des Moines",
+          addressRegion: "Iowa",
+          addressCountry: "US",
+        },
+        ...(location.latitude &&
+          location.longitude && {
+            geo: {
+              "@type": "GeoCoordinates",
+              latitude: location.latitude,
+              longitude: location.longitude,
+            },
+          }),
       }
-    })
-  } : null;
+    : null;
 
   return (
     <Helmet>
@@ -99,11 +104,14 @@ export default function SEOHead({
       <meta name="description" content={description} />
       <meta name="keywords" content={allKeywords} />
       <meta name="author" content={author} />
-      <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
-      
+      <meta
+        name="robots"
+        content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1"
+      />
+
       {/* Canonical URL */}
       {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
-      
+
       {/* Open Graph Tags */}
       <meta property="og:title" content={enhancedTitle} />
       <meta property="og:description" content={description} />
@@ -115,15 +123,19 @@ export default function SEOHead({
       <meta property="og:image:alt" content={title} />
       <meta property="og:locale" content="en_US" />
       <meta property="og:site_name" content="Des Moines Insider" />
-      
+
       {/* Article specific tags */}
       {type === "article" && (
         <>
-          {publishedTime && <meta property="article:published_time" content={publishedTime} />}
-          {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+          {publishedTime && (
+            <meta property="article:published_time" content={publishedTime} />
+          )}
+          {modifiedTime && (
+            <meta property="article:modified_time" content={modifiedTime} />
+          )}
           <meta property="article:author" content={author} />
           <meta property="article:section" content="Local Guide" />
-          {keywords.map(keyword => (
+          {keywords.map((keyword) => (
             <meta key={keyword} property="article:tag" content={keyword} />
           ))}
         </>
@@ -151,12 +163,17 @@ export default function SEOHead({
 
       {/* Preconnect for Performance */}
       <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link
+        rel="preconnect"
+        href="https://fonts.gstatic.com"
+        crossOrigin="anonymous"
+      />
 
       {/* Alternate URLs for different languages/regions */}
-      {alternateUrls && Object.entries(alternateUrls).map(([lang, url]) => (
-        <link key={lang} rel="alternate" hrefLang={lang} href={url} />
-      ))}
+      {alternateUrls &&
+        Object.entries(alternateUrls).map(([lang, url]) => (
+          <link key={lang} rel="alternate" hrefLang={lang} href={url} />
+        ))}
 
       {/* Structured Data */}
       {breadcrumbSchema && (
@@ -164,13 +181,13 @@ export default function SEOHead({
           {JSON.stringify(breadcrumbSchema)}
         </script>
       )}
-      
+
       {locationSchema && (
         <script type="application/ld+json">
           {JSON.stringify(locationSchema)}
         </script>
       )}
-      
+
       {structuredData && (
         <script type="application/ld+json">
           {JSON.stringify(structuredData)}
