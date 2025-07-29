@@ -31,7 +31,7 @@ export default function UserDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user, isLoading: authLoading } = useAuth();
-  const { events, isLoading, refetch } = useUserSubmittedEvents();
+  const { data: events, isLoading, refetch } = useUserSubmittedEvents();
 
   useEffect(() => {
     if (!authLoading && !user) {
