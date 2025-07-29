@@ -1,5 +1,7 @@
+import { useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import AttractionFilters from "@/components/AttractionFilters";
 import { useAttractions } from "@/hooks/useAttractions";
 import {
   Card,
@@ -20,7 +22,8 @@ const createSlug = (name: string): string => {
 };
 
 export default function Attractions() {
-  const { attractions, isLoading, error } = useAttractions();
+  const [filters, setFilters] = useState({});
+  const { attractions, isLoading, error, totalCount } = useAttractions(filters);
 
   return (
     <div className="min-h-screen bg-background">
@@ -41,6 +44,14 @@ export default function Attractions() {
       </section>
 
       <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
+        {/* Filters */}
+        <div className="mb-6">
+          <AttractionFilters
+            onFiltersChange={setFilters}
+            totalCount={totalCount}
+          />
+        </div>
+
         {/* Content */}
         {isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

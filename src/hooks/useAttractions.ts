@@ -16,6 +16,8 @@ interface AttractionsState {
 interface AttractionFilters {
   search?: string;
   type?: string;
+  minRating?: number;
+  featuredOnly?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -43,8 +45,16 @@ export function useAttractions(filters: AttractionFilters = {}) {
         );
       }
 
-      if (filters.type) {
+      if (filters.type && filters.type !== "all") {
         query = query.eq("type", filters.type);
+      }
+
+      if (filters.minRating) {
+        query = query.gte("rating", filters.minRating);
+      }
+
+      if (filters.featuredOnly) {
+        query = query.eq("is_featured", true);
       }
 
       if (filters.limit) {
@@ -133,7 +143,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
 
   useEffect(() => {
     fetchAttractions();
-  }, [filters.search, filters.type, filters.limit, filters.offset]);
+  }, [filters.search, filters.type, filters.minRating, filters.featuredOnly, filters.limit, filters.offset]);
 
   return {
     ...state,
