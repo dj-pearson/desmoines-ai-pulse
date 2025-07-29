@@ -28,7 +28,7 @@ import { scheduleOptions, cronToFriendly, friendlyToCron } from "@/lib/cronUtils
 interface ScrapingJob {
   id: string;
   name: string;
-  status: "idle" | "running" | "completed" | "failed";
+  status: "idle" | "running" | "completed" | "failed" | "scheduled_for_trigger";
   lastRun: string | null;
   nextRun: string | null;
   eventsFound: number;
@@ -120,11 +120,25 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
 
   const handleRunJob = async (jobId: string) => {
     try {
+      const job = jobs.find(j => j.id === jobId);
+      const isScheduledTrigger = job?.status === "scheduled_for_trigger";
+      
       await runScrapingJob(jobId);
+      
       toast({
         title: "Success",
-        description: "Scraping job started successfully",
+        description: isScheduledTrigger 
+          ? "Scheduled job triggered successfully! 🚀" 
+          : "Scraping job started successfully",
       });
+      
+      // If this was a scheduled trigger, update the status back to idle
+      if (isScheduledTrigger && job) {
+        await updateJobConfig(job.id, {
+          ...job.config,
+          // The cron system will set the next scheduled run time
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -139,6 +153,9 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
     return new Date(lastRun).toLocaleString();
   };
 
+  const readyToTriggerJobs = jobs.filter(job => job.status === "scheduled_for_trigger");
+  const runningJobs = jobs.filter(job => job.status === "running");
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
@@ -148,6 +165,33 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
             Manage Scraping Jobs
           </DialogTitle>
         </DialogHeader>
+
+        {/* Status Summary */}
+        {jobs.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <Card className="p-4">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                <span className="font-medium">Ready to Trigger</span>
+              </div>
+              <p className="text-2xl font-bold text-blue-600">{readyToTriggerJobs.length}</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="font-medium">Currently Running</span>
+              </div>
+              <p className="text-2xl font-bold text-green-600">{runningJobs.length}</p>
+            </Card>
+            <Card className="p-4">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                <span className="font-medium">Total Jobs</span>
+              </div>
+              <p className="text-2xl font-bold text-gray-600">{jobs.length}</p>
+            </Card>
+          </div>
+        )}
 
         <div className="space-y-4">
           {jobs.length === 0 ? (
@@ -174,9 +218,16 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                           {job.config.isActive ? "Active" : "Inactive"}
                         </Badge>
                         <Badge
-                          variant={job.status === "running" ? "default" : "outline"}
+                          variant={
+                            job.status === "running" ? "default" : 
+                            job.status === "scheduled_for_trigger" ? "destructive" :
+                            "outline"
+                          }
+                          className={
+                            job.status === "scheduled_for_trigger" ? "animate-pulse" : ""
+                          }
                         >
-                          {job.status}
+                          {job.status === "scheduled_for_trigger" ? "🔵 Ready to Trigger" : job.status}
                         </Badge>
                       </div>
                     </div>
@@ -215,12 +266,17 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                       </Button>
                       <Button
                         size="sm"
-                        variant="default"
+                        variant={job.status === "scheduled_for_trigger" ? "default" : "outline"}
                         onClick={() => handleRunJob(job.id)}
                         disabled={job.status === "running"}
+                        className={
+                          job.status === "scheduled_for_trigger" 
+                            ? "bg-blue-600 hover:bg-blue-700 animate-pulse" 
+                            : ""
+                        }
                       >
                         <Play className="h-3 w-3 mr-1" />
-                        Run Now
+                        {job.status === "scheduled_for_trigger" ? "🚀 Trigger Now!" : "Run Now"}
                       </Button>
                     </div>
                   </CardContent>

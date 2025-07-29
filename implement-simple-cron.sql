@@ -1,7 +1,7 @@
--- IMPLEMENT SIMPLE CRON FUNCTION (NO HTTP DEPENDENCY) - SOLUTION 2
--- This eliminates HTTP extension errors and provides manual triggering workflow
+-- VERIFY SIMPLE CRON FUNCTION (NO HTTP DEPENDENCY)
+-- Run this to implement and test the HTTP-free cron system
 
--- First, create the HTTP-free cron function
+-- First, implement the simple cron function
 CREATE OR REPLACE FUNCTION run_scraping_jobs_simple()
 RETURNS void AS $$
 DECLARE
@@ -78,6 +78,7 @@ BEGIN
     ORDER BY created_at DESC 
     LIMIT 100
   );
+  
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

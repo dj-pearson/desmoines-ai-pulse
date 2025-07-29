@@ -1,7 +1,7 @@
--- IMPLEMENT SIMPLE CRON FUNCTION (NO HTTP DEPENDENCY) - SOLUTION 2
--- This eliminates HTTP extension errors and provides manual triggering workflow
+-- ALTERNATIVE: CRON WITHOUT HTTP DEPENDENCY
+-- This version works without HTTP extensions by just updating job status
 
--- First, create the HTTP-free cron function
+-- Create a simplified cron function that doesn't need HTTP
 CREATE OR REPLACE FUNCTION run_scraping_jobs_simple()
 RETURNS void AS $$
 DECLARE
@@ -78,6 +78,7 @@ BEGIN
     ORDER BY created_at DESC 
     LIMIT 100
   );
+  
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -88,51 +89,6 @@ SELECT cron.schedule(
   '*/30 * * * *', -- Every 30 minutes
   'SELECT run_scraping_jobs_simple();'
 );
-
--- Check current job schedules BEFORE testing
-SELECT 'CURRENT JOB STATUS (BEFORE TEST):' as check_type;
-SELECT 
-  name,
-  status,
-  last_run,
-  next_run,
-  CASE 
-    WHEN next_run <= NOW() THEN '🔴 OVERDUE (will be processed)'
-    WHEN next_run <= NOW() + INTERVAL '1 hour' THEN '🟡 DUE SOON (' || ROUND(EXTRACT(EPOCH FROM (next_run - NOW()))/60) || ' min)'
-    ELSE '🟢 SCHEDULED (' || ROUND(EXTRACT(EPOCH FROM (next_run - NOW()))/60) || ' min)'
-  END as status_info,
-  config->>'schedule' as schedule,
-  config->>'isActive' as is_active
-FROM public.scraping_jobs
-ORDER BY next_run ASC;
-
--- Set a job to be overdue for testing
-UPDATE public.scraping_jobs 
-SET next_run = NOW() - INTERVAL '1 minute'
-WHERE id = (
-  SELECT id FROM public.scraping_jobs 
-  WHERE (config->>'isActive')::boolean = true
-  ORDER BY name
-  LIMIT 1
-);
-
--- Now test the simple function
-SELECT 'TESTING SIMPLE FUNCTION:' as test;
-SELECT run_scraping_jobs_simple();
-
--- Check results after test
-SELECT 'RESULTS AFTER TEST:' as check_type;
-SELECT 
-  created_at,
-  message,
-  job_id,
-  CASE 
-    WHEN error_details IS NULL THEN '✅ Success'
-    ELSE '❌ Error: ' || error_details
-  END as result
-FROM public.cron_logs 
-WHERE created_at >= NOW() - INTERVAL '5 minutes'
-ORDER BY created_at DESC;
 
 -- Show jobs that are ready for manual triggering
 SELECT 'JOBS READY FOR MANUAL TRIGGER:' as status;
@@ -150,6 +106,6 @@ FROM public.scraping_jobs
 WHERE status = 'scheduled_for_trigger' OR next_run <= NOW()
 ORDER BY last_run DESC;
 
--- Show active cron jobs
-SELECT 'ACTIVE CRON JOBS:' as info;
-SELECT jobname, schedule, active FROM cron.job WHERE jobname LIKE '%scraping%';
+-- Test the simple function
+SELECT 'TESTING SIMPLE FUNCTION:' as test;
+SELECT run_scraping_jobs_simple();
