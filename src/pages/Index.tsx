@@ -20,6 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Database } from "@/integrations/supabase/types";
+import SEOHead from "@/components/SEOHead";
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
 import { useEventScraper } from "@/hooks/useSupabase";
@@ -104,7 +105,55 @@ export default function Index() {
     }
   };
 
+  // Enhanced SEO data for homepage
+  const homepageKeywords = [
+    'Des Moines',
+    'Iowa',
+    'events',
+    'restaurants',
+    'attractions',
+    'things to do',
+    'local guide',
+    'Des Moines events',
+    'Iowa restaurants',
+    'family activities',
+    'entertainment',
+    'tourism',
+    'visit Des Moines'
+  ];
+
+  const homepageSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Des Moines Insider",
+    "description": "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",
+    "url": "https://desmoinesinsider.com",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://desmoinesinsider.com/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Des Moines Insider",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://desmoinesinsider.com/DMI-Logo.png"
+      }
+    }
+  };
+
   return (
+    <>
+      <SEOHead
+        title="Des Moines Insider - Your AI-Powered Local Guide to Events, Restaurants & Attractions"
+        description="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. Real-time updates, personalized recommendations, and comprehensive local insights powered by AI."
+        type="website"
+        keywords={homepageKeywords}
+        structuredData={homepageSchema}
+        url="/"
+        canonicalUrl="https://desmoinesinsider.com"
+      />
     <div className="min-h-screen bg-background">
       {/* SEO and structured data for AI optimization */}
       <SEOStructure />
@@ -326,5 +375,6 @@ export default function Index() {
         </DialogContent>
       </Dialog>
     </div>
+    </>
   );
 }

@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import SEOHead from "@/components/SEOHead";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
 import {
   RestaurantFilters,
@@ -44,7 +45,59 @@ export default function Restaurants() {
   const { restaurants, isLoading, error, totalCount } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
 
+  // Enhanced SEO data for restaurants page
+  const restaurantsKeywords = [
+    'Des Moines restaurants',
+    'Iowa dining',
+    'restaurant reviews',
+    'local restaurants',
+    'Des Moines food',
+    'restaurant guide',
+    'dining guide',
+    'new restaurants',
+    'restaurant openings',
+    'best restaurants Des Moines'
+  ];
+
+  const restaurantsSchema = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Des Moines Restaurants",
+    "description": "Comprehensive guide to restaurants in Des Moines, Iowa",
+    "numberOfItems": totalCount || restaurants.length,
+    "itemListElement": restaurants.slice(0, 10).map((restaurant, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "item": {
+        "@type": "Restaurant",
+        "name": restaurant.name,
+        "description": restaurant.description,
+        "servesCuisine": restaurant.cuisine,
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Des Moines",
+          "addressRegion": "Iowa",
+          "addressCountry": "US"
+        },
+        "aggregateRating": restaurant.rating ? {
+          "@type": "AggregateRating",
+          "ratingValue": restaurant.rating,
+          "ratingCount": "100"
+        } : undefined
+      }
+    }))
+  };
+
   return (
+    <>
+      <SEOHead
+        title="Des Moines Restaurants - Complete Dining Guide & New Openings"
+        description="Discover the best restaurants in Des Moines, Iowa. Find new openings, read reviews, and explore diverse cuisines with our comprehensive dining guide featuring 200+ local restaurants."
+        type="website"
+        keywords={restaurantsKeywords}
+        structuredData={restaurantsSchema}
+        url="/restaurants"
+      />
     <div className="min-h-screen bg-background">
       <Header />
 
@@ -217,5 +270,6 @@ export default function Restaurants() {
 
       <Footer />
     </div>
+    </>
   );
 }

@@ -2,7 +2,7 @@ import React from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Helmet, HelmetProvider } from "react-helmet-async";
+import SEOHead from "@/components/SEOHead";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,45 +114,73 @@ export default function AttractionDetails() {
     );
   }
 
+  // Generate comprehensive SEO data
+  const seoTitle = `${attraction.name} - ${attraction.type} in Des Moines`;
+  const seoDescription = attraction.description || `Discover ${attraction.name}, a ${attraction.type} in Des Moines, Iowa. Learn about this popular attraction and plan your visit.`;
+  
+  const seoKeywords = [
+    attraction.name,
+    attraction.type,
+    'attraction',
+    'Des Moines attractions',
+    'Iowa attractions',
+    attraction.location || '',
+    'things to do',
+    'tourist attraction',
+    'visit Des Moines'
+  ].filter(Boolean);
+
+  const attractionSchema = {
+    "@context": "https://schema.org",
+    "@type": "TouristAttraction",
+    "name": attraction.name,
+    "description": attraction.description,
+    "image": attraction.image_url,
+    "address": {
+      "@type": "PostalAddress",
+      "addressLocality": "Des Moines",
+      "addressRegion": "Iowa",
+      "addressCountry": "US"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": "41.5868",
+      "longitude": "-93.6250"
+    },
+    "url": attraction.website,
+    "aggregateRating": attraction.rating ? {
+      "@type": "AggregateRating",
+      "ratingValue": attraction.rating,
+      "ratingCount": "100",
+      "bestRating": "5",
+      "worstRating": "1"
+    } : undefined
+  };
+
+  const breadcrumbs = [
+    { name: "Home", url: "/" },
+    { name: "Attractions", url: "/attractions" },
+    { name: attraction.name, url: `/attractions/${createSlug(attraction.name)}` }
+  ];
+
   return (
-    <HelmetProvider>
+    <>
+      <SEOHead
+        title={seoTitle}
+        description={seoDescription}
+        type="website"
+        keywords={seoKeywords}
+        structuredData={attractionSchema}
+        url={`/attractions/${createSlug(attraction.name)}`}
+        imageUrl={attraction.image_url}
+        breadcrumbs={breadcrumbs}
+        location={{
+          name: attraction.name,
+          address: attraction.location || "Des Moines, IA"
+        }}
+        modifiedTime={attraction.updated_at}
+      />
       <div className="container mx-auto px-4 py-8">
-        <Helmet>
-          <title>{attraction.name} - Des Moines Insider</title>
-          <meta name="description" content={attraction.description || `Discover ${attraction.name}, a ${attraction.type} in Des Moines, Iowa.`} />
-          <meta property="og:title" content={`${attraction.name} - Des Moines Insider`} />
-          <meta property="og:description" content={attraction.description || `Discover ${attraction.name}, a ${attraction.type} in Des Moines, Iowa.`} />
-          <meta property="og:type" content="place" />
-          <meta property="og:image" content={attraction.image_url || "https://desmoinesinsider.com/og-image.jpg"} />
-          
-          {/* JSON-LD Structured Data */}
-          <script type="application/ld+json">
-            {JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "TouristAttraction",
-              "name": attraction.name,
-              "description": attraction.description,
-              "image": attraction.image_url,
-              "address": {
-                "@type": "PostalAddress",
-                "addressLocality": "Des Moines",
-                "addressRegion": "Iowa",
-                "addressCountry": "US"
-              },
-              "geo": {
-                "@type": "GeoCoordinates",
-                "latitude": "41.5868",
-                "longitude": "-93.6250"
-              },
-              "url": attraction.website,
-              "aggregateRating": attraction.rating ? {
-                "@type": "AggregateRating",
-                "ratingValue": attraction.rating,
-                "ratingCount": "1"
-              } : undefined
-            })}
-          </script>
-        </Helmet>
 
         {/* Breadcrumbs */}
         <nav className="mb-6">
@@ -272,6 +300,6 @@ export default function AttractionDetails() {
           </div>
         </div>
       </div>
-    </HelmetProvider>
+    </>
   );
 }

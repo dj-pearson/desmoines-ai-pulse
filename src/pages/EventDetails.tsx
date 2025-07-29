@@ -6,9 +6,9 @@ import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import SEOHead from "@/components/SEOHead";
 import { Calendar, MapPin, ExternalLink, ArrowLeft, Sparkles, DollarSign, Share2 } from "lucide-react";
 import { format } from "date-fns";
-import { Helmet } from "react-helmet-async";
 import { toast } from "sonner";
 
 export default function EventDetails() {
@@ -64,10 +64,11 @@ export default function EventDetails() {
   if (!event) {
     return (
       <>
-        <Helmet>
-          <title>Event Not Found - Des Moines Insider</title>
-          <meta name="description" content="The event you're looking for could not be found." />
-        </Helmet>
+        <SEOHead
+          title="Event Not Found - Des Moines Insider"
+          description="The event you're looking for could not be found."
+          type="website"
+        />
         <div className="min-h-screen bg-background">
           <Header />
           <main className="container mx-auto px-4 py-8">
@@ -91,34 +92,77 @@ export default function EventDetails() {
   const eventDate = new Date(event.date);
   const isUpcoming = eventDate >= new Date();
 
+  // Generate comprehensive SEO data
+  const seoTitle = `${event.title} - Des Moines Event`;
+  const seoDescription = event.enhanced_description || event.original_description || `Join us for ${event.title} in Des Moines. ${formatEventDate(event.date)}`;
+  
+  const seoKeywords = [
+    event.title,
+    event.category,
+    'event',
+    'Des Moines events',
+    'Iowa events',
+    event.venue || '',
+    event.location || '',
+    'things to do',
+    'activities'
+  ].filter(Boolean);
+
+  const eventSchema = {
+    "@context": "https://schema.org",
+    "@type": "Event",
+    "name": event.title,
+    "description": event.enhanced_description || event.original_description,
+    "startDate": event.date,
+    "location": {
+      "@type": "Place",
+      "name": event.venue || event.location,
+      "address": {
+        "@type": "PostalAddress",
+        "streetAddress": event.location,
+        "addressLocality": "Des Moines",
+        "addressRegion": "Iowa",
+        "addressCountry": "US"
+      }
+    },
+    "image": event.image_url,
+    "url": window.location.href,
+    "eventStatus": isUpcoming ? "https://schema.org/EventScheduled" : "https://schema.org/EventPostponed",
+    "organizer": {
+      "@type": "Organization",
+      "name": "Des Moines Insider"
+    },
+    "offers": event.price ? {
+      "@type": "Offer",
+      "price": event.price,
+      "priceCurrency": "USD"
+    } : undefined
+  };
+
+  const breadcrumbs = [
+    { name: "Home", url: "/" },
+    { name: "Events", url: "/events" },
+    { name: event.title, url: `/events/${event.id}` }
+  ];
+
   return (
     <>
-      <Helmet>
-        <title>{event.title} - Des Moines Insider</title>
-        <meta name="description" content={event.enhanced_description || event.original_description || `Join us for ${event.title} in Des Moines`} />
-        <meta property="og:title" content={event.title} />
-        <meta property="og:description" content={event.enhanced_description || event.original_description || `Join us for ${event.title} in Des Moines`} />
-        <meta property="og:type" content="event" />
-        <meta property="og:url" content={window.location.href} />
-        {event.image_url && <meta property="og:image" content={event.image_url} />}
-        <script type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "Event",
-            name: event.title,
-            description: event.enhanced_description || event.original_description,
-            startDate: event.date,
-            location: {
-              "@type": "Place",
-              name: event.venue || event.location,
-              address: event.location,
-            },
-            image: event.image_url,
-            url: window.location.href,
-            eventStatus: isUpcoming ? "https://schema.org/EventScheduled" : "https://schema.org/EventPostponed",
-          })}
-        </script>
-      </Helmet>
+      <SEOHead
+        title={seoTitle}
+        description={seoDescription}
+        type="event"
+        keywords={seoKeywords}
+        structuredData={eventSchema}
+        url={`/events/${event.id}`}
+        imageUrl={event.image_url}
+        breadcrumbs={breadcrumbs}
+        location={{
+          name: event.venue || event.location || "Des Moines",
+          address: event.location || "Des Moines, IA"
+        }}
+        publishedTime={event.created_at}
+        modifiedTime={event.updated_at}
+      />
 
       <div className="min-h-screen bg-background">
         <Header />

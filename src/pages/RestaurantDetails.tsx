@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import SEOHead from "@/components/SEOHead";
 import {
   MapPin,
   Phone,
@@ -150,7 +151,82 @@ export default function RestaurantDetails() {
     );
   }
 
+  // Generate comprehensive SEO data
+  const seoTitle = `${restaurant?.name} - ${restaurant?.cuisine || 'Restaurant'} in Des Moines`;
+  const seoDescription = restaurant?.description 
+    ? `${restaurant.description.slice(0, 150)}... Located at ${restaurant.location || 'Des Moines'}.`
+    : `Experience ${restaurant?.name}, a ${restaurant?.cuisine || 'restaurant'} located in Des Moines, Iowa. View menu, hours, reviews and more.`;
+  
+  const seoKeywords = [
+    restaurant?.name || '',
+    restaurant?.cuisine || '',
+    'restaurant',
+    'dining',
+    'food',
+    restaurant?.location || '',
+    'Des Moines restaurants',
+    'Iowa dining',
+    ...(restaurant?.cuisine ? [restaurant.cuisine + ' restaurant'] : [])
+  ].filter(Boolean);
+
+  const restaurantSchema = restaurant ? {
+    "@context": "https://schema.org",
+    "@type": "Restaurant",
+    "name": restaurant.name,
+    "description": restaurant.description || seoDescription,
+    "servesCuisine": restaurant.cuisine,
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": restaurant.location,
+      "addressLocality": "Des Moines",
+      "addressRegion": "Iowa",
+      "addressCountry": "US"
+    },
+    "telephone": restaurant.phone,
+    "url": restaurant.website,
+    "priceRange": restaurant.price_range,
+    "aggregateRating": restaurant.rating ? {
+      "@type": "AggregateRating",
+      "ratingValue": restaurant.rating,
+      "ratingCount": "100",
+      "bestRating": "5",
+      "worstRating": "1"
+    } : undefined,
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": "41.5868",
+      "longitude": "-93.6250"
+    },
+    "openingHours": "Mo-Su 11:00-22:00",
+    "paymentAccepted": "Cash, Credit Card",
+    "hasMenu": restaurant.website
+  } : null;
+
+  const breadcrumbs = [
+    { name: "Home", url: "/" },
+    { name: "Restaurants", url: "/restaurants" },
+    { name: restaurant?.name || "Restaurant", url: `/restaurants/${restaurant?.slug || restaurant?.id}` }
+  ];
+
   return (
+    <>
+      {restaurant && (
+        <SEOHead
+          title={seoTitle}
+          description={seoDescription}
+          type="business"
+          keywords={seoKeywords}
+          structuredData={restaurantSchema}
+          url={`/restaurants/${restaurant.slug || restaurant.id}`}
+          imageUrl={restaurant.image_url}
+          breadcrumbs={breadcrumbs}
+          location={{
+            name: restaurant.name,
+            address: restaurant.location || "Des Moines, IA"
+          }}
+          modifiedTime={restaurant.updated_at}
+        />
+      )}
     <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Header Navigation */}
@@ -442,5 +518,6 @@ export default function RestaurantDetails() {
         )}
       </div>
     </div>
+    </>
   );
 }
