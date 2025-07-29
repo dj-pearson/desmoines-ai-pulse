@@ -30,6 +30,20 @@ import {
   CreditCard,
 } from "lucide-react";
 
+// Helper function to get proxied image URL
+const getProxiedImageUrl = (originalUrl: string | null): string | null => {
+  if (!originalUrl) return null;
+  
+  // If it's a Google Places API URL, use our proxy
+  if (originalUrl.includes('places.googleapis.com')) {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    return `${supabaseUrl}/functions/v1/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+  }
+  
+  // For other URLs, use as-is
+  return originalUrl;
+};
+
 export default function RestaurantDetails() {
   const { slug } = useParams();
 
@@ -161,6 +175,15 @@ export default function RestaurantDetails() {
     );
   }
 
+  // Debug logging for image URL
+  const proxiedImageUrl = getProxiedImageUrl(restaurant?.image_url);
+  console.log('Restaurant data:', {
+    name: restaurant?.name,
+    image_url: restaurant?.image_url,
+    proxied_url: proxiedImageUrl,
+    hasImageUrl: !!restaurant?.image_url
+  });
+
   // Generate comprehensive SEO data
   const seoTitle = `${restaurant?.name} - ${
     restaurant?.cuisine || "Restaurant"
@@ -288,25 +311,32 @@ export default function RestaurantDetails() {
           <Card className="bg-white/95 backdrop-blur-sm shadow-2xl rounded-3xl overflow-hidden border-0 mb-8">
             {/* Hero Section with Google Image */}
             <div className="relative h-80 overflow-hidden">
-              {restaurant.image_url ? (
+              {proxiedImageUrl ? (
                 <>
-                  {/* Gradient fallback while image loads */}
-                  <div className="absolute inset-0 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500"></div>
                   <img 
-                    src={restaurant.image_url} 
+                    src={proxiedImageUrl} 
                     alt={restaurant.name}
-                    className="w-full h-full object-cover transition-opacity duration-500"
-                    onLoad={(e) => {
-                      // Fade in the image once loaded
-                      e.currentTarget.style.opacity = '1';
-                    }}
+                    className="absolute inset-0 w-full h-full object-cover z-10"
+                    crossOrigin="anonymous"
+                    referrerPolicy="no-referrer"
                     onError={(e) => {
-                      // Fallback to gradient background if image fails to load
+                      // Show gradient fallback if image fails to load
                       e.currentTarget.style.display = 'none';
+                      const gradientFallback = e.currentTarget.parentElement?.querySelector('.gradient-fallback');
+                      if (gradientFallback) {
+                        gradientFallback.style.display = 'block';
+                      }
+                      console.log('Failed to load proxied image:', proxiedImageUrl);
+                      console.log('Original image URL:', restaurant.image_url);
                     }}
-                    style={{ opacity: 0 }}
+                    onLoad={(e) => {
+                      console.log('Successfully loaded proxied image:', proxiedImageUrl);
+                    }}
                   />
-                  <div className="absolute inset-0 bg-black/40"></div>
+                  {/* Gradient fallback - hidden by default when image loads */}
+                  <div className="gradient-fallback absolute inset-0 bg-gradient-to-r from-amber-600 via-orange-500 to-red-500" style={{display: 'none'}}></div>
+                  {/* Much lighter overlay to preserve image visibility */}
+                  <div className="absolute inset-0 bg-black/15 z-20"></div>
                 </>
               ) : (
                 <>
@@ -314,23 +344,29 @@ export default function RestaurantDetails() {
                   <div className="absolute inset-0 bg-black/20"></div>
                 </>
               )}
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center z-30">
                 <div className="text-center text-white">
-                  {!restaurant.image_url && (
+                  {!proxiedImageUrl && (
                     <div className="flex items-center justify-center mb-4">
                       <Utensils className="h-16 w-16 text-white/80" />
                     </div>
                   )}
-                  <h1 className="text-5xl font-bold mb-2 tracking-tight drop-shadow-lg">
+                  <h1 className="text-5xl font-bold mb-2 tracking-tight drop-shadow-xl">
                     {restaurant.name}
                   </h1>
-                  <p className="text-xl text-white/90 font-medium drop-shadow-md">
+                  <p className="text-xl text-white/90 font-medium drop-shadow-lg">
                     {restaurant.cuisine} Cuisine
                   </p>
+                  {/* Debug info for development */}
+                  {proxiedImageUrl && (
+                    <p className="text-xs text-white/60 mt-2">
+                      Image loaded via proxy
+                    </p>
+                  )}
                 </div>
               </div>
               {/* Decorative elements only when no image */}
-              {!restaurant.image_url && (
+              {!proxiedImageUrl && (
                 <>
                   <div className="absolute top-10 left-10 w-20 h-20 bg-white/10 rounded-full animate-pulse"></div>
                   <div className="absolute bottom-10 right-10 w-32 h-32 bg-white/5 rounded-full animate-pulse delay-1000"></div>
@@ -549,19 +585,15 @@ export default function RestaurantDetails() {
                         {related.image_url && (
                           <div className="relative h-32 overflow-hidden bg-gradient-to-r from-gray-200 to-gray-300">
                             <img 
-                              src={related.image_url} 
+                              src={getProxiedImageUrl(related.image_url) || related.image_url} 
                               alt={related.name}
-                              className="w-full h-full object-cover group-hover:scale-110 transition-all duration-300 opacity-0"
-                              onLoad={(e) => {
-                                // Fade in the image once loaded
-                                e.currentTarget.style.opacity = '1';
-                              }}
+                              className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                               onError={(e) => {
                                 // Hide image container if image fails to load
                                 e.currentTarget.parentElement.style.display = 'none';
                               }}
                             />
-                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors z-10"></div>
                           </div>
                         )}
                         <CardContent className="p-6">
