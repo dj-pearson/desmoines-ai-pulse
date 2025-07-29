@@ -34,6 +34,11 @@ BEGIN
           WHEN EXTRACT(HOUR FROM NOW()) < 6 THEN DATE_TRUNC('day', NOW()) + INTERVAL '6 hours'
           ELSE DATE_TRUNC('day', NOW()) + INTERVAL '1 day 6 hours'
         END
+      WHEN job_record.config->>'schedule' = '0 18 * * *' THEN 
+        CASE 
+          WHEN EXTRACT(HOUR FROM NOW()) < 18 THEN DATE_TRUNC('day', NOW()) + INTERVAL '18 hours'
+          ELSE DATE_TRUNC('day', NOW()) + INTERVAL '1 day 18 hours'
+        END
       ELSE NOW() + INTERVAL '6 hours' -- Default to 6 hours
     END;
     
@@ -70,6 +75,11 @@ BEGIN
           CASE 
             WHEN EXTRACT(HOUR FROM NOW()) < 6 THEN DATE_TRUNC('day', NOW()) + INTERVAL '1 day 6 hours'
             ELSE DATE_TRUNC('day', NOW()) + INTERVAL '1 day 6 hours'
+          END
+        WHEN job_record.config->>'schedule' = '0 18 * * *' THEN 
+          CASE 
+            WHEN EXTRACT(HOUR FROM NOW()) < 18 THEN DATE_TRUNC('day', NOW()) + INTERVAL '1 day 18 hours'
+            ELSE DATE_TRUNC('day', NOW()) + INTERVAL '1 day 18 hours'
           END
         ELSE NOW() + INTERVAL '6 hours' -- Default to 6 hours
       END;

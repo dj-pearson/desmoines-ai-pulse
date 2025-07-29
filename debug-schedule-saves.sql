@@ -52,8 +52,12 @@ UPDATE public.scraping_jobs
 SET 
   config = jsonb_set(config, '{schedule}', '"0 */4 * * *"'),
   updated_at = NOW()
-WHERE name ILIKE '%Catch%' OR name ILIKE '%Google%'
-LIMIT 1;
+WHERE id = (
+  SELECT id FROM public.scraping_jobs 
+  WHERE name ILIKE '%Catch%' OR name ILIKE '%Google%'
+  ORDER BY name
+  LIMIT 1
+);
 
 -- Show the result
 SELECT 'AFTER MANUAL UPDATE:' as result_type;
