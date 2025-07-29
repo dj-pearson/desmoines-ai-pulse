@@ -75,15 +75,17 @@ export default function GooglePlacesRestaurantTools() {
   const testGoogleAPI = async () => {
     setIsTesting(true);
     setTestResults("");
-    
+
     try {
-      const { data, error } = await supabase.functions.invoke('test-google-api');
-      
+      const { data, error } = await supabase.functions.invoke(
+        "test-google-api"
+      );
+
       if (error) throw error;
-      
+
       setTestResults(JSON.stringify(data, null, 2));
-      
-      if (data.geocoding?.status === 'OK' && data.places?.status === 'OK') {
+
+      if (data.geocoding?.status === "OK" && data.places?.status === "OK") {
         toast({
           title: "API Test Successful",
           description: "Google APIs are working correctly",
@@ -91,7 +93,9 @@ export default function GooglePlacesRestaurantTools() {
       } else {
         toast({
           title: "API Test Failed",
-          description: `Geocoding: ${data.geocoding?.status}, Places: ${data.places?.status || 'Not tested'}`,
+          description: `Geocoding: ${data.geocoding?.status}, Places: ${
+            data.places?.status || "Not tested"
+          }`,
           variant: "destructive",
         });
       }
@@ -326,11 +330,11 @@ export default function GooglePlacesRestaurantTools() {
               </ol>
             </AlertDescription>
           </Alert>
-          
+
           {/* API Test Button */}
           <div className="space-y-4">
-            <Button 
-              onClick={testGoogleAPI} 
+            <Button
+              onClick={testGoogleAPI}
               disabled={isTesting}
               variant="outline"
               className="w-full"
@@ -347,7 +351,7 @@ export default function GooglePlacesRestaurantTools() {
                 </>
               )}
             </Button>
-            
+
             {testResults && (
               <div className="space-y-2">
                 <h4 className="font-medium text-sm">API Test Results:</h4>

@@ -62,14 +62,20 @@ serve(async (req) => {
     const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
       location
     )}&key=${GOOGLE_API_KEY}`;
-    
+
     console.log("Geocoding URL:", geocodeUrl.replace(GOOGLE_API_KEY, "***"));
-    
+
     const geocodeResponse = await fetch(geocodeUrl);
-    
+
     if (!geocodeResponse.ok) {
-      console.error("Geocode response not OK:", geocodeResponse.status, geocodeResponse.statusText);
-      throw new Error(`Geocoding request failed with status: ${geocodeResponse.status}`);
+      console.error(
+        "Geocode response not OK:",
+        geocodeResponse.status,
+        geocodeResponse.statusText
+      );
+      throw new Error(
+        `Geocoding request failed with status: ${geocodeResponse.status}`
+      );
     }
 
     const geocodeData = await geocodeResponse.json();
@@ -77,8 +83,16 @@ serve(async (req) => {
     console.log("Geocode results count:", geocodeData.results?.length || 0);
 
     if (geocodeData.status !== "OK") {
-      console.error("Geocoding API error:", geocodeData.status, geocodeData.error_message);
-      throw new Error(`Geocoding API error: ${geocodeData.status} - ${geocodeData.error_message || "Unknown error"}`);
+      console.error(
+        "Geocoding API error:",
+        geocodeData.status,
+        geocodeData.error_message
+      );
+      throw new Error(
+        `Geocoding API error: ${geocodeData.status} - ${
+          geocodeData.error_message || "Unknown error"
+        }`
+      );
     }
 
     if (!geocodeData.results?.length) {
@@ -91,12 +105,18 @@ serve(async (req) => {
     // Search for restaurants using Places API
     const placesUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=restaurant&key=${GOOGLE_API_KEY}`;
     console.log("Places search URL:", placesUrl.replace(GOOGLE_API_KEY, "***"));
-    
+
     const placesResponse = await fetch(placesUrl);
-    
+
     if (!placesResponse.ok) {
-      console.error("Places response not OK:", placesResponse.status, placesResponse.statusText);
-      throw new Error(`Places API request failed with status: ${placesResponse.status}`);
+      console.error(
+        "Places response not OK:",
+        placesResponse.status,
+        placesResponse.statusText
+      );
+      throw new Error(
+        `Places API request failed with status: ${placesResponse.status}`
+      );
     }
 
     const placesData = await placesResponse.json();
@@ -104,8 +124,16 @@ serve(async (req) => {
     console.log("Places found:", placesData.results?.length || 0);
 
     if (placesData.status !== "OK") {
-      console.error("Places API error:", placesData.status, placesData.error_message);
-      throw new Error(`Google Places API error: ${placesData.status} - ${placesData.error_message || "Unknown error"}`);
+      console.error(
+        "Places API error:",
+        placesData.status,
+        placesData.error_message
+      );
+      throw new Error(
+        `Google Places API error: ${placesData.status} - ${
+          placesData.error_message || "Unknown error"
+        }`
+      );
     }
 
     // Filter out fast food chains and already existing restaurants
@@ -188,13 +216,14 @@ serve(async (req) => {
     console.error("Error details:", {
       message: error.message,
       stack: error.stack,
-      name: error.name
+      name: error.name,
     });
-    
+
     return new Response(
       JSON.stringify({
         error: error.message || "An unexpected error occurred",
-        details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        details:
+          process.env.NODE_ENV === "development" ? error.stack : undefined,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
