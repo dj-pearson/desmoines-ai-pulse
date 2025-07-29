@@ -125,31 +125,70 @@ serve(async (req) => {
 
         // If no Google Place ID, search for it first
         if (!placeId && restaurant.name && restaurant.location) {
-          const searchQuery = `${restaurant.name} ${restaurant.location}`
-          const searchUrl = `https://places.googleapis.com/v1/places:searchText`
+          // Try multiple search variations
+          const searchQueries = [
+            `${restaurant.name} ${restaurant.location}`,
+            `${restaurant.name} Des Moines Iowa`,
+            `${restaurant.name} West Des Moines Iowa`,
+            restaurant.name  // Just the name as a fallback
+          ]
           
-          const searchResponse = await fetch(searchUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Goog-Api-Key': googleApiKey,
-              'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress'
-            },
-            body: JSON.stringify({
-              textQuery: searchQuery,
-              maxResultCount: 1,
-              locationBias: {
-                region: 'US-IA'  // Bias towards Iowa
-              }
+          for (const searchQuery of searchQueries) {
+            console.log(`Searching for: "${searchQuery}"`)
+            const searchUrl = `https://places.googleapis.com/v1/places:searchText`
+            
+            const searchResponse = await fetch(searchUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': googleApiKey,
+                'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress'
+              },
+              body: JSON.stringify({
+                textQuery: searchQuery,
+                maxResultCount: 3,
+                locationBias: {
+                  circle: {
+                    center: {
+                      latitude: 41.5868,
+                      longitude: -93.6250
+                    },
+                    radius: 50000.0  // 50km radius around Des Moines
+                  }
+                }
+              })
             })
-          })
 
-          if (searchResponse.ok) {
-            const searchData = await searchResponse.json()
-            if (searchData.places && searchData.places.length > 0) {
-              placeId = searchData.places[0].id
-              console.log(`Found place ID for ${restaurant.name}: ${placeId}`)
+            if (searchResponse.ok) {
+              const searchData = await searchResponse.json()
+              console.log(`Search results for "${searchQuery}":`, JSON.stringify(searchData, null, 2))
+              
+              if (searchData.places && searchData.places.length > 0) {
+                // Look for the best match (prefer exact name matches)
+                let bestMatch = searchData.places[0]
+                for (const place of searchData.places) {
+                  if (place.displayName?.text?.toLowerCase().includes(restaurant.name.toLowerCase().split(' ')[0])) {
+                    bestMatch = place
+                    break
+                  }
+                }
+                
+                placeId = bestMatch.id
+                console.log(`Found place ID: ${placeId} for restaurant: ${restaurant.name}`)
+                break // Exit the search loop once we find a match
+              }
+            } else {
+              console.error(`Search failed for "${searchQuery}":`, await searchResponse.text())
             }
+            
+            // Add a small delay between searches
+            await new Promise(resolve => setTimeout(resolve, 100))
+          }
+          
+          if (placeId) {
+            console.log(`Found place ID for ${restaurant.name}: ${placeId}`)
+          } else {
+            console.log(`No place ID found for ${restaurant.name}`)
           }
         }
 
