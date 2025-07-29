@@ -410,18 +410,50 @@ export function useScraping() {
     config: Partial<ScrapingJob["config"]>
   ) => {
     try {
+      // Find the current job to get the existing config
+      const currentJob = state.jobs.find(job => job.id === jobId);
+      if (!currentJob) {
+        throw new Error(`Job with id ${jobId} not found`);
+      }
+
+      // Merge the new config with the existing config
+      const mergedConfig = { ...currentJob.config, ...config };
+
+      // Update local state immediately for UI responsiveness
       setState((prev) => ({
         ...prev,
         jobs: prev.jobs.map((job) =>
           job.id === jobId
-            ? { ...job, config: { ...job.config, ...config } }
+            ? { ...job, config: mergedConfig }
             : job
         ),
       }));
 
-      // TODO: Save to database when you have a scraping jobs table
+      console.log("💾 Saving job config to database:", { jobId, mergedConfig });
+
+      // Save to database with the merged config
+      const { error } = await supabase
+        .from('scraping_jobs')
+        .update({ 
+          config: mergedConfig,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', jobId);
+
+      if (error) {
+        console.error("❌ Database update error:", error);
+        throw error;
+      }
+
+      console.log("✅ Job config saved to database successfully");
+      
+      // Refresh jobs from database to ensure consistency
+      await fetchJobs();
+      
     } catch (error) {
-      console.error("Error updating job config:", error);
+      console.error("❌ Error updating job config:", error);
+      // Revert local state on error
+      await fetchJobs();
       throw error;
     }
   };
