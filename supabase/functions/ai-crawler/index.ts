@@ -186,12 +186,22 @@ CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
 - "Iowa Artists Sale-A-Bration" → title: "Iowa Artists Sale-A-Bration"
 - "Live Horse Racing" → title: "Live Horse Racing"
 
-📅 DATE CONVERSION:
-- "Jul 26th" → "2025-07-26 19:00:00"
-- "August 1st" → "2025-08-01 19:00:00"
+📅 DATE CONVERSION (CRITICAL TIMEZONE HANDLING):
+- All events are in Des Moines, Iowa (Central Time Zone)
+- Convert ALL times to Central Time (CDT in summer -5 UTC, CST in winter -6 UTC)
+- Current date reference: July 30, 2025
+
+EXAMPLES:
+- "Jul 30th" → "2025-07-30 19:00:00" (7:00 PM Central Time default)
+- "August 1st" → "2025-08-01 19:00:00" 
+- "7:30 PM" → "2025-MM-DD 19:30:00" (keep Central Time)
+- "8 AM" → "2025-MM-DD 08:00:00" (morning events)
 - "Through July 28" → create events until that date
-- No specific time? → default to 7:00 PM (19:00:00)
-- Past dates (before July 26, 2025) → SKIP these events
+- No specific time? → default to 7:00 PM Central (19:00:00)
+- All-day events → use 12:00 PM Central (12:00:00)
+- Past dates (before July 30, 2025) → SKIP these events
+
+⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
 🏢 VENUE EXTRACTION:
 - Look for venue names near event titles
@@ -579,16 +589,79 @@ Return empty array [] if no attractions found.`,
   return [];
 }
 
-// Filter out past events
+// Enhanced timezone conversion functions
+function convertToCentralTime(localDate: Date): Date {
+  // Determine if we're in DST
+  const isDST = isDaylightSavingTime(localDate);
+  const centralOffset = isDST ? -5 : -6; // Hours offset from UTC (CDT: -5, CST: -6)
+
+  // Create the final date by adjusting for Central timezone
+  const utcTime = new Date(
+    localDate.getTime() - centralOffset * 60 * 60 * 1000
+  );
+
+  return utcTime;
+}
+
+function isDaylightSavingTime(date: Date): boolean {
+  // DST in US typically runs from 2nd Sunday in March to 1st Sunday in November
+  const year = date.getFullYear();
+
+  // Find 2nd Sunday in March
+  const march = new Date(year, 2, 1); // March 1st
+  const firstMarchSunday = new Date(
+    march.getTime() + (7 - march.getDay()) * 24 * 60 * 60 * 1000
+  );
+  const secondMarchSunday = new Date(
+    firstMarchSunday.getTime() + 7 * 24 * 60 * 60 * 1000
+  );
+
+  // Find 1st Sunday in November
+  const november = new Date(year, 10, 1); // November 1st
+  const firstNovemberSunday = new Date(
+    november.getTime() + (7 - november.getDay()) * 24 * 60 * 60 * 1000
+  );
+
+  return date >= secondMarchSunday && date < firstNovemberSunday;
+}
+
+// Enhanced time parsing for AI-extracted events
+function parseEventDateTime(dateStr: string): Date | null {
+  if (!dateStr) return null;
+
+  try {
+    let parsedDate = new Date(dateStr);
+    
+    // If the AI provided a date in Central Time format, we need to convert to UTC for storage
+    if (!isNaN(parsedDate.getTime())) {
+      // Check if this looks like a Central Time date (from AI)
+      // If so, treat it as Central Time and convert to UTC
+      return convertToCentralTime(parsedDate);
+    }
+  } catch (error) {
+    console.log(`⚠️ Could not parse AI date: ${dateStr}`);
+  }
+  
+  return null;
+}
+
+// Filter out past events with enhanced date handling
 function filterFutureEvents(events: any[]): any[] {
-  const currentDate = new Date("2025-07-26"); // Current date
+  const currentDate = new Date("2025-07-30"); // Updated current date
 
   return events.filter((event) => {
     if (!event.date) return true; // Keep events without dates
 
     try {
-      const eventDate = new Date(event.date);
-      return eventDate >= currentDate;
+      // Enhanced date parsing with timezone awareness
+      const eventDate = parseEventDateTime(event.date) || new Date(event.date);
+      
+      // Compare against current date in Central Time
+      const currentCentral = new Date(currentDate.toLocaleString("en-US", { 
+        timeZone: "America/Chicago" 
+      }));
+      
+      return eventDate >= currentCentral;
     } catch (error) {
       console.log(`⚠️ Could not parse date: ${event.date}`);
       return true; // Keep events with unparseable dates
@@ -747,7 +820,7 @@ async function insertData(
               original_description: item.description?.substring(0, 500) || "",
               enhanced_description: item.description?.substring(0, 500) || "",
               date: item.date
-                ? new Date(item.date).toISOString()
+                ? parseEventDateTime(item.date)?.toISOString() || new Date().toISOString()
                 : new Date().toISOString(),
               location: item.location?.substring(0, 100) || "Des Moines, IA",
               venue:
@@ -783,7 +856,7 @@ async function insertData(
               price_range: item.price_range?.substring(0, 20) || null,
               rating: item.rating || null,
               opening_date: item.opening_date
-                ? new Date(item.opening_date).toISOString().split("T")[0]
+                ? (parseEventDateTime(item.opening_date) || new Date(item.opening_date)).toISOString().split("T")[0]
                 : null,
               status: item.status || "announced",
               source_url: item.source_url || "",
