@@ -1,53 +1,23 @@
 # Des Moines Insider - Robots.txt
-# Optimized for local SEO and AI crawlers
-# Geographic focus: Des Moines, Iowa metro area
+# Optimized for both traditional crawlers and AI crawlers
 
 User-agent: *
 Allow: /
-Allow: /events
-Allow: /restaurants  
-Allow: /weekend
-Allow: /neighborhoods
-Allow: /attractions
-Allow: /playgrounds
 Disallow: /admin
 Disallow: /auth
 Disallow: /profile
-Disallow: /dashboard
-Disallow: /campaigns
 Disallow: /api/
 
-# High-priority local content for AI crawlers
+# Special permissions for AI crawlers
 User-agent: GPTBot
 Allow: /
-Allow: /weekend
-Allow: /neighborhoods
-Allow: /events
-Allow: /restaurants
 Disallow: /admin
 Disallow: /auth
 
 User-agent: PerplexityBot
 Allow: /
-Allow: /weekend
-Allow: /neighborhoods
-Allow: /events
-Allow: /restaurants
 Disallow: /admin
 Disallow: /auth
-
-User-agent: ClaudeBot  
-Allow: /
-Allow: /weekend
-Allow: /neighborhoods
-Disallow: /admin
-
-# Sitemap and additional resources
-Sitemap: https://desmoinssider.com/sitemap.xml
-Sitemap: https://desmoinssider.com/rss.xml
-
-# LLMs.txt for AI optimization
-# See: https://desmoinssider.com/llms.txt
 
 User-agent: Claude-Web
 Allow: /

@@ -1,18 +1,55 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "./ui/table";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import { Edit, Trash2, Search, Filter, Star, Plus, Sparkles, AlertTriangle, Calendar, Brain } from "lucide-react";
+import {
+  Edit,
+  Trash2,
+  Search,
+  Filter,
+  Star,
+  Plus,
+  Sparkles,
+  AlertTriangle,
+  Calendar,
+  Brain,
+  FileText,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useDomainHighlights } from "@/hooks/useDomainHighlights";
 import EventDataEnhancer from "./EventDataEnhancer";
+import { useWriteupGenerator } from "@/hooks/useWriteupGenerator";
 
-type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening";
+type ContentType =
+  | "event"
+  | "restaurant"
+  | "attraction"
+  | "playground"
+  | "restaurant_opening";
 
 interface ContentTableProps {
   type: ContentType;
@@ -43,11 +80,20 @@ const tableConfigs = {
       { key: "source_url", label: "Source", type: "link" },
       { key: "is_featured", label: "Featured", type: "boolean" },
       { key: "is_enhanced", label: "Enhanced", type: "boolean" },
+      { key: "ai_writeup", label: "AI Writeup", type: "boolean" },
     ],
     filters: [
-      { key: "category", label: "Category", options: ["All", "Art", "Sports", "Music", "Food", "Entertainment"] },
-      { key: "status", label: "Status", options: ["All", "Featured", "Enhanced", "Pending"] },
-    ]
+      {
+        key: "category",
+        label: "Category",
+        options: ["All", "Art", "Sports", "Music", "Food", "Entertainment"],
+      },
+      {
+        key: "status",
+        label: "Status",
+        options: ["All", "Featured", "Enhanced", "Pending"],
+      },
+    ],
   },
   restaurant: {
     title: "Restaurants",
@@ -65,12 +111,32 @@ const tableConfigs = {
       { key: "description", label: "Description", type: "truncated" },
       { key: "rating", label: "Rating", type: "rating" },
       { key: "is_featured", label: "Featured", type: "boolean" },
+      { key: "ai_writeup", label: "AI Writeup", type: "boolean" },
     ],
     filters: [
-      { key: "cuisine", label: "Cuisine", options: ["All", "American", "Italian", "Mexican", "Asian", "Other"] },
-      { key: "price_range", label: "Price Range", options: ["All", "$", "$$", "$$$", "$$$$"] },
-      { key: "status", label: "Status", options: ["All", "open", "opening_soon", "newly_opened", "announced", "closed"] },
-    ]
+      {
+        key: "cuisine",
+        label: "Cuisine",
+        options: ["All", "American", "Italian", "Mexican", "Asian", "Other"],
+      },
+      {
+        key: "price_range",
+        label: "Price Range",
+        options: ["All", "$", "$$", "$$$", "$$$$"],
+      },
+      {
+        key: "status",
+        label: "Status",
+        options: [
+          "All",
+          "open",
+          "opening_soon",
+          "newly_opened",
+          "announced",
+          "closed",
+        ],
+      },
+    ],
   },
   attraction: {
     title: "Attractions",
@@ -85,8 +151,19 @@ const tableConfigs = {
       { key: "is_featured", label: "Featured", type: "boolean" },
     ],
     filters: [
-      { key: "type", label: "Type", options: ["All", "Museum", "Park", "Entertainment", "Historic", "Other"] },
-    ]
+      {
+        key: "type",
+        label: "Type",
+        options: [
+          "All",
+          "Museum",
+          "Park",
+          "Entertainment",
+          "Historic",
+          "Other",
+        ],
+      },
+    ],
   },
   playground: {
     title: "Playgrounds",
@@ -101,8 +178,12 @@ const tableConfigs = {
       { key: "is_featured", label: "Featured", type: "boolean" },
     ],
     filters: [
-      { key: "age_range", label: "Age Range", options: ["All", "0-2", "2-5", "5-12", "All Ages"] },
-    ]
+      {
+        key: "age_range",
+        label: "Age Range",
+        options: ["All", "0-2", "2-5", "5-12", "All Ages"],
+      },
+    ],
   },
   restaurant_opening: {
     title: "Restaurant Openings",
@@ -117,50 +198,81 @@ const tableConfigs = {
       { key: "source_url", label: "Source", type: "link" },
     ],
     filters: [
-      { key: "status", label: "Status", options: ["All", "announced", "opening_soon", "soft_opening", "open", "delayed", "cancelled"] },
-      { key: "cuisine", label: "Cuisine", options: ["All", "American", "Italian", "Mexican", "Asian", "Other"] },
-    ]
-  }
+      {
+        key: "status",
+        label: "Status",
+        options: [
+          "All",
+          "announced",
+          "opening_soon",
+          "soft_opening",
+          "open",
+          "delayed",
+          "cancelled",
+        ],
+      },
+      {
+        key: "cuisine",
+        label: "Cuisine",
+        options: ["All", "American", "Italian", "Mexican", "Asian", "Other"],
+      },
+    ],
+  },
 };
 
-export default function ContentTable({ type, items, isLoading, totalCount, searchValue = "", onEdit, onDelete, onSearch, onFilter, onCreate, onRefresh }: ContentTableProps) {
+export default function ContentTable({
+  type,
+  items,
+  isLoading,
+  totalCount,
+  searchValue = "",
+  onEdit,
+  onDelete,
+  onSearch,
+  onFilter,
+  onCreate,
+  onRefresh,
+}: ContentTableProps) {
   const [searchTerm, setSearchTerm] = useState(searchValue);
-  const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [activeFilters, setActiveFilters] = useState<Record<string, string>>(
+    {}
+  );
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const [showDataEnhancer, setShowDataEnhancer] = useState(false);
   const { isHighlightedDomain } = useDomainHighlights();
-  
+  const { generateWriteup, isGeneratingId } = useWriteupGenerator();
+
   // Sync internal search term with external search value
   useEffect(() => {
     setSearchTerm(searchValue);
   }, [searchValue]);
-  
+
   const config = tableConfigs[type];
 
   // Sort and filter items with null date handling
   const processedItems = useMemo(() => {
     let filtered = [...items];
-    
+
     // Sort items - special handling for events to sort by date
-    if (type === 'event') {
+    if (type === "event") {
       filtered.sort((a, b) => {
         // Put null dates at the end
         if (!a.date && !b.date) return 0;
         if (!a.date) return 1;
         if (!b.date) return -1;
-        
+
         // Sort by date ascending (earliest first)
         return new Date(a.date).getTime() - new Date(b.date).getTime();
       });
     }
-    
+
     return filtered;
   }, [items, type]);
 
   // Get events with missing dates for the banner
   const eventsWithoutDates = useMemo(() => {
-    if (type === 'event') {
-      return items.filter(item => !item.date);
+    if (type === "event") {
+      return items.filter((item) => !item.date);
     }
     return [];
   }, [items, type]);
@@ -179,36 +291,73 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
   const handleEnhanceContent = async (item: any) => {
     setEnhancingId(item.id);
     try {
-      const { data, error } = await supabase.functions.invoke('enhance-content', {
-        body: { 
-          contentType: type,
-          contentId: item.id,
-          currentData: item
+      const { data, error } = await supabase.functions.invoke(
+        "enhance-content",
+        {
+          body: {
+            contentType: type,
+            contentId: item.id,
+            currentData: item,
+          },
         }
-      });
+      );
 
       if (error) throw error;
 
       if (data.success) {
-        toast.success('Content enhanced successfully!');
+        toast.success("Content enhanced successfully!");
         // Trigger a refresh of the data
         onSearch(searchTerm);
       } else {
-        throw new Error(data.error || 'Enhancement failed');
+        throw new Error(data.error || "Enhancement failed");
       }
     } catch (error) {
-      console.error('Enhancement error:', error);
-      toast.error('Failed to enhance content: ' + (error as Error).message);
+      console.error("Enhancement error:", error);
+      toast.error("Failed to enhance content: " + (error as Error).message);
     } finally {
       setEnhancingId(null);
     }
   };
 
+  const handleGenerateWriteup = async (item: any) => {
+    try {
+      // Determine the URL field based on type
+      const url = type === "event" ? item.source_url : item.website;
+
+      if (!url) {
+        toast.error("No URL available for writeup generation", {
+          description: `This ${type} needs a ${
+            type === "event" ? "source URL" : "website"
+          } to generate a writeup.`,
+        });
+        return;
+      }
+
+      await generateWriteup({
+        type: type as "event" | "restaurant",
+        id: item.id,
+        url: url,
+        title: type === "event" ? item.title : item.name,
+        description: item.description || item.original_description,
+        location: item.location,
+        cuisine: type === "restaurant" ? item.cuisine : undefined,
+        category: type === "event" ? item.category : undefined,
+      });
+
+      // Refresh the data to show the new writeup
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (error) {
+      console.error("Writeup generation error:", error);
+    }
+  };
+
   const renderCellContent = (item: any, column: any) => {
     const value = item[column.key];
-    
+
     // Special highlighting for null dates
-    if (column.key === 'date' && type === 'event' && !value) {
+    if (column.key === "date" && type === "event" && !value) {
       return (
         <div className="flex items-center gap-2 text-destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -216,21 +365,21 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
         </div>
       );
     }
-    
+
     switch (column.type) {
       case "text":
         return <span className="font-medium">{value || "-"}</span>;
-      
+
       case "date":
-        return value ? new Date(value).toLocaleDateString() : (
+        return value ? (
+          new Date(value).toLocaleDateString()
+        ) : (
           <span className="text-muted-foreground">No date</span>
         );
-      
+
       case "badge":
-        return value ? (
-          <Badge variant="secondary">{value}</Badge>
-        ) : "-";
-      
+        return value ? <Badge variant="secondary">{value}</Badge> : "-";
+
       case "boolean":
         return value ? (
           <Badge variant="default" className="bg-green-100 text-green-800">
@@ -240,35 +389,41 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
         ) : (
           <Badge variant="outline">No</Badge>
         );
-      
+
       case "rating":
         return value ? (
           <div className="flex items-center">
             <Star className="h-4 w-4 text-yellow-400 mr-1" />
             {value.toFixed(1)}
           </div>
-        ) : "-";
-      
+        ) : (
+          "-"
+        );
+
       case "truncated":
         return value ? (
           <div className="max-w-[200px] truncate" title={value}>
             {value}
           </div>
-        ) : "-";
-      
+        ) : (
+          "-"
+        );
+
       case "link":
         return value ? (
-          <a 
-            href={value} 
-            target="_blank" 
+          <a
+            href={value}
+            target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 hover:text-blue-800 underline max-w-[150px] truncate block"
             title={value}
           >
-            {value.replace(/^https?:\/\//, '')}
+            {value.replace(/^https?:\/\//, "")}
           </a>
-        ) : "-";
-      
+        ) : (
+          "-"
+        );
+
       case "array":
         return value && Array.isArray(value) && value.length > 0 ? (
           <div className="flex flex-wrap gap-1 max-w-[200px]">
@@ -283,8 +438,10 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
               </Badge>
             )}
           </div>
-        ) : "-";
-      
+        ) : (
+          "-"
+        );
+
       default:
         return value || "-";
     }
@@ -306,7 +463,7 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
   return (
     <div className="space-y-4 md:space-y-6">
       {/* Missing Dates Banner for Events */}
-      {type === 'event' && eventsWithoutDates.length > 0 && (
+      {type === "event" && eventsWithoutDates.length > 0 && (
         <Alert className="border-destructive bg-destructive/10">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
@@ -316,12 +473,16 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
                   {eventsWithoutDates.length} event(s) missing dates:
                 </span>
                 <span className="ml-2 text-sm">
-                  {eventsWithoutDates.slice(0, 3).map(e => e.title).join(", ")}
-                  {eventsWithoutDates.length > 3 && ` and ${eventsWithoutDates.length - 3} more`}
+                  {eventsWithoutDates
+                    .slice(0, 3)
+                    .map((e) => e.title)
+                    .join(", ")}
+                  {eventsWithoutDates.length > 3 &&
+                    ` and ${eventsWithoutDates.length - 3} more`}
                 </span>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => {
                   // Scroll to first event without date
@@ -338,23 +499,26 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
           </AlertDescription>
         </Alert>
       )}
-      
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-mobile-title md:text-2xl font-bold">{config.title}</h2>
+          <h2 className="text-mobile-title md:text-2xl font-bold">
+            {config.title}
+          </h2>
           <p className="text-muted-foreground text-mobile-caption">
             Manage your {config.title.toLowerCase()} ({totalCount} total)
-            {type === 'event' && (
+            {type === "event" && (
               <span className="ml-2 text-destructive">
-                {eventsWithoutDates.length > 0 && `• ${eventsWithoutDates.length} missing dates`}
+                {eventsWithoutDates.length > 0 &&
+                  `• ${eventsWithoutDates.length} missing dates`}
               </span>
             )}
           </p>
         </div>
         <div className="flex gap-2">
-          {type === 'event' && (
-            <Button 
-              variant="outline" 
+          {type === "event" && (
+            <Button
+              variant="outline"
               onClick={() => setShowDataEnhancer(true)}
               className="touch-target"
             >
@@ -388,7 +552,7 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
                 />
               </div>
             </div>
-            
+
             {config.filters.map((filter) => (
               <Select
                 key={filter.key}
@@ -407,7 +571,7 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
                 </SelectContent>
               </Select>
             ))}
-            
+
             <Button variant="outline">
               <Filter className="h-4 w-4 mr-2" />
               Reset
@@ -420,7 +584,7 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>{config.title} List</span>
-            {type === 'event' && (
+            {type === "event" && (
               <Badge variant="outline" className="text-xs">
                 Sorted by date (earliest first)
               </Badge>
@@ -428,7 +592,7 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
           </CardTitle>
           <CardDescription>
             {processedItems.length} of {totalCount} items shown
-            {type === 'event' && eventsWithoutDates.length > 0 && (
+            {type === "event" && eventsWithoutDates.length > 0 && (
               <span className="ml-2 text-destructive font-medium">
                 • {eventsWithoutDates.length} need dates
               </span>
@@ -448,7 +612,10 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
             <TableBody>
               {processedItems.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={config.columns.length + 1} className="text-center py-8">
+                  <TableCell
+                    colSpan={config.columns.length + 1}
+                    className="text-center py-8"
+                  >
                     <div className="text-muted-foreground">
                       <p>No {config.title.toLowerCase()} found.</p>
                       <p className="text-sm mt-1">
@@ -459,53 +626,83 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
                 </TableRow>
               ) : (
                 processedItems.map((item) => {
-                  const isHighlighted = type === 'event' && item.source_url && isHighlightedDomain(item.source_url);
-                  const hasMissingDate = type === 'event' && !item.date;
-                  
+                  const isHighlighted =
+                    type === "event" &&
+                    item.source_url &&
+                    isHighlightedDomain(item.source_url);
+                  const hasMissingDate = type === "event" && !item.date;
+
                   return (
-                    <TableRow 
+                    <TableRow
                       key={item.id}
                       className={`
-                        ${hasMissingDate ? "bg-destructive/5 border-l-4 border-l-destructive" : ""}
-                        ${isHighlighted ? "bg-warning/10 border-l-4 border-l-warning" : ""}
-                        ${isHighlighted && hasMissingDate ? "bg-gradient-to-r from-destructive/5 to-warning/10 border-l-4 border-l-destructive border-r-4 border-r-warning" : ""}
+                        ${
+                          hasMissingDate
+                            ? "bg-destructive/5 border-l-4 border-l-destructive"
+                            : ""
+                        }
+                        ${
+                          isHighlighted
+                            ? "bg-warning/10 border-l-4 border-l-warning"
+                            : ""
+                        }
+                        ${
+                          isHighlighted && hasMissingDate
+                            ? "bg-gradient-to-r from-destructive/5 to-warning/10 border-l-4 border-l-destructive border-r-4 border-r-warning"
+                            : ""
+                        }
                       `.trim()}
                     >
-                    {config.columns.map((column) => (
-                      <TableCell key={column.key}>
-                        {renderCellContent(item, column)}
+                      {config.columns.map((column) => (
+                        <TableCell key={column.key}>
+                          {renderCellContent(item, column)}
+                        </TableCell>
+                      ))}
+                      <TableCell>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => onEdit(item)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEnhanceContent(item)}
+                            disabled={enhancingId === item.id}
+                          >
+                            <Sparkles className="h-4 w-4" />
+                          </Button>
+                          {(type === "event" || type === "restaurant") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleGenerateWriteup(item)}
+                              disabled={isGeneratingId(item.id)}
+                              title="Generate AI Writeup"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Are you sure you want to delete this ${type}?`
+                                )
+                              ) {
+                                onDelete(item.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
-                    ))}
-                     <TableCell>
-                       <div className="flex gap-2">
-                         <Button
-                           size="sm"
-                           variant="outline"
-                           onClick={() => onEdit(item)}
-                         >
-                           <Edit className="h-4 w-4" />
-                         </Button>
-                         <Button
-                           size="sm"
-                           variant="outline"
-                           onClick={() => handleEnhanceContent(item)}
-                           disabled={enhancingId === item.id}
-                         >
-                           <Sparkles className="h-4 w-4" />
-                         </Button>
-                         <Button
-                           size="sm"
-                           variant="destructive"
-                           onClick={() => {
-                             if (confirm(`Are you sure you want to delete this ${type}?`)) {
-                               onDelete(item.id);
-                             }
-                           }}
-                         >
-                           <Trash2 className="h-4 w-4" />
-                         </Button>
-                       </div>
-                     </TableCell>
                     </TableRow>
                   );
                 })
@@ -516,7 +713,7 @@ export default function ContentTable({ type, items, isLoading, totalCount, searc
       </Card>
 
       {/* Event Data Enhancer Dialog */}
-      {type === 'event' && (
+      {type === "event" && (
         <EventDataEnhancer
           open={showDataEnhancer}
           onOpenChange={setShowDataEnhancer}
