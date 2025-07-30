@@ -24,6 +24,7 @@ import AffiliateManager from "@/components/AffiliateManager";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
 import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterSimple";
 import { CronMonitor } from "@/components/CronMonitor";
+import SocialMediaManager from "@/components/SocialMediaManager";
 import {
   Shield,
   Users,
@@ -45,6 +46,7 @@ import {
   DollarSign,
   Menu,
   X,
+  Share2,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -620,6 +622,21 @@ export default function Admin() {
                     <DollarSign className="h-4 w-4" />
                     {!sidebarCollapsed && <span>Affiliate Links</span>}
                   </button>
+
+                  <button
+                    onClick={() => setActiveTab("social-media")}
+                    className={`w-full flex items-center ${
+                      sidebarCollapsed ? "justify-center" : "gap-3"
+                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === "social-media"
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                    title={sidebarCollapsed ? "Social Media" : ""}
+                  >
+                    <Share2 className="h-4 w-4" />
+                    {!sidebarCollapsed && <span>Social Media</span>}
+                  </button>
                 </>
               )}
 
@@ -1041,6 +1058,10 @@ export default function Admin() {
 
             {canManageContent() && activeTab === "affiliate-manager" && (
               <AffiliateManager />
+            )}
+
+            {canManageContent() && activeTab === "social-media" && (
+              <SocialMediaManager />
             )}
 
             {canManageUsers() && activeTab === "users" && <UserRoleManager />}

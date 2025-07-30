@@ -1690,6 +1690,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      run_social_media_automation: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       update_content_rating_aggregate: {
         Args: {
           p_content_type: Database["public"]["Enums"]["content_type"]
