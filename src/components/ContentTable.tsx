@@ -39,6 +39,9 @@ import {
   FileText,
   ChevronDown,
   ChevronRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -113,6 +116,18 @@ const tableConfigs = {
         label: "Status",
         options: ["All", "Featured", "Enhanced", "Pending"],
       },
+    ],
+    sortOptions: [
+      { key: "date", label: "Event Date" },
+      { key: "title", label: "Title (A-Z)" },
+      { key: "venue", label: "Venue" },
+      { key: "location", label: "Location" },
+      { key: "category", label: "Category" },
+      { key: "price", label: "Price" },
+      { key: "created_at", label: "Date Added" },
+      { key: "is_featured", label: "Featured First" },
+      { key: "is_enhanced", label: "Enhanced First" },
+      { key: "ai_writeup", label: "Has AI Writeup" },
     ],
   },
   restaurant: {
@@ -261,6 +276,8 @@ export default function ContentTable({
   const [showDataEnhancer, setShowDataEnhancer] = useState(false);
   const [compactView, setCompactView] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<string>("date");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const { isHighlightedDomain } = useDomainHighlights();
   const { generateWriteup, isGeneratingId } = useWriteupGenerator();
 
@@ -298,25 +315,105 @@ export default function ContentTable({
     return [];
   };
 
-  // Sort and filter items with null date handling
+  // Comprehensive sorting function
+  const sortItems = (
+    items: any[],
+    field: string,
+    direction: "asc" | "desc"
+  ) => {
+    return [...items].sort((a, b) => {
+      let aValue = a[field];
+      let bValue = b[field];
+
+      // Handle null/undefined values
+      if (aValue === null || aValue === undefined) {
+        return direction === "asc" ? 1 : -1;
+      }
+      if (bValue === null || bValue === undefined) {
+        return direction === "asc" ? -1 : 1;
+      }
+
+      // Special handling for different data types
+      switch (field) {
+        case "date":
+        case "created_at":
+        case "updated_at":
+          aValue = new Date(aValue).getTime();
+          bValue = new Date(bValue).getTime();
+          break;
+
+        case "is_featured":
+        case "is_enhanced":
+        case "ai_writeup":
+          // Convert to boolean for sorting
+          aValue = Boolean(aValue);
+          bValue = Boolean(bValue);
+          // For boolean fields, show true values first
+          if (aValue === bValue) return 0;
+          return direction === "asc" ? (aValue ? -1 : 1) : aValue ? 1 : -1;
+
+        case "price": {
+          // Extract numeric value from price strings
+          const priceA =
+            parseFloat(String(aValue).replace(/[^0-9.]/g, "")) || 0;
+          const priceB =
+            parseFloat(String(bValue).replace(/[^0-9.]/g, "")) || 0;
+          aValue = priceA;
+          bValue = priceB;
+          break;
+        }
+
+        case "title":
+        case "venue":
+        case "location":
+        case "category":
+          // String comparison (case insensitive)
+          aValue = String(aValue).toLowerCase();
+          bValue = String(bValue).toLowerCase();
+          break;
+      }
+
+      // Compare values
+      if (aValue < bValue) {
+        return direction === "asc" ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return direction === "asc" ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  // Handle sort change
+  const handleSortChange = (field: string) => {
+    if (sortField === field) {
+      // Toggle direction if same field
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      // Set new field with default direction
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Sort and filter items with comprehensive sorting
   const processedItems = useMemo(() => {
     let filtered = [...items];
 
-    // Sort items - special handling for events to sort by date
+    // Apply sorting
     if (type === "event") {
+      filtered = sortItems(filtered, sortField, sortDirection);
+    } else {
+      // Default sorting for other types
       filtered.sort((a, b) => {
-        // Put null dates at the end
-        if (!a.date && !b.date) return 0;
-        if (!a.date) return 1;
-        if (!b.date) return -1;
-
-        // Sort by date ascending (earliest first)
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
+        const aTitle = String(a.name || a.title || "").toLowerCase();
+        const bTitle = String(b.name || b.title || "").toLowerCase();
+        return aTitle.localeCompare(bTitle);
       });
     }
 
     return filtered;
-  }, [items, type]);
+  }, [items, type, sortField, sortDirection]);
 
   // Get events with missing dates for the banner
   const eventsWithoutDates = useMemo(() => {
@@ -612,6 +709,50 @@ export default function ContentTable({
               </div>
             </div>
 
+            {/* Sort Controls */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                Sort by:
+              </label>
+              <Select value={sortField} onValueChange={setSortField}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center border border-gray-300 rounded-md">
+                <button
+                  onClick={() => setSortDirection("asc")}
+                  className={`p-2 rounded-l-md ${
+                    sortDirection === "asc"
+                      ? "bg-blue-500 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                  title="Sort Ascending"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => setSortDirection("desc")}
+                  className={`p-2 rounded-r-md ${
+                    sortDirection === "desc"
+                      ? "bg-blue-500 text-white"
+                      : "text-gray-600 hover:bg-gray-100"
+                  }`}
+                  title="Sort Descending"
+                >
+                  <ArrowDown className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
             {config.filters.map((filter) => (
               <Select
                 key={filter.key}
@@ -631,9 +772,17 @@ export default function ContentTable({
               </Select>
             ))}
 
-            <Button variant="outline">
+            <Button
+              variant="outline"
+              onClick={() => {
+                handleFilterChange("", "All");
+                setSortField("date");
+                setSortDirection("asc");
+                handleSearch("");
+              }}
+            >
               <Filter className="h-4 w-4 mr-2" />
-              Reset
+              Reset All
             </Button>
           </div>
         </CardContent>
@@ -643,11 +792,44 @@ export default function ContentTable({
         <CardHeader>
           <CardTitle className="flex items-center justify-between">
             <span>{config.title} List</span>
-            {type === "event" && (
-              <Badge variant="outline" className="text-xs">
-                Sorted by date (earliest first)
-              </Badge>
-            )}
+            <div className="flex items-center gap-4">
+              {type === "event" && (
+                <Badge variant="outline" className="text-xs">
+                  Sorted by{" "}
+                  {sortOptions
+                    .find((opt) => opt.value === sortField)
+                    ?.label.toLowerCase()}{" "}
+                  ({sortDirection === "asc" ? "ascending" : "descending"})
+                </Badge>
+              )}
+
+              {/* View Toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">View:</span>
+                <div className="flex items-center border border-gray-300 rounded-md">
+                  <button
+                    onClick={() => setIsCompactView(false)}
+                    className={`px-3 py-1 text-sm rounded-l-md ${
+                      !isCompactView
+                        ? "bg-blue-500 text-white"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    Full
+                  </button>
+                  <button
+                    onClick={() => setIsCompactView(true)}
+                    className={`px-3 py-1 text-sm rounded-r-md ${
+                      isCompactView
+                        ? "bg-blue-500 text-white"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    Compact
+                  </button>
+                </div>
+              </div>
+            </div>
           </CardTitle>
           <CardDescription>
             {processedItems.length} of {totalCount} items shown
