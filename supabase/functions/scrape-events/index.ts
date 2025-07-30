@@ -317,31 +317,46 @@ async function scrapeJobWithFirecrawl(
   supabase: any
 ): Promise<{ success: boolean; eventsFound: number; errors: string[] }> {
   try {
-    console.log(`🚀 Starting Firecrawl scrape for job: ${job.name} - ${job.config.url}`);
+    console.log(
+      `🚀 Starting Firecrawl scrape for job: ${job.name} - ${job.config.url}`
+    );
 
     // Call the firecrawl-scraper function
-    const { data, error } = await supabase.functions.invoke('firecrawl-scraper', {
-      body: {
-        url: job.config.url,
-        category: job.config.category || 'General',
-        maxPages: job.config.maxPages || 3
+    const { data, error } = await supabase.functions.invoke(
+      "firecrawl-scraper",
+      {
+        body: {
+          url: job.config.url,
+          category: job.config.category || "General",
+          maxPages: job.config.maxPages || 3,
+        },
       }
-    });
+    );
 
     if (error) {
       console.error(`❌ Firecrawl error for ${job.name}:`, error);
-      return { success: false, eventsFound: 0, errors: [error.message || 'Firecrawl error'] };
+      return {
+        success: false,
+        eventsFound: 0,
+        errors: [error.message || "Firecrawl error"],
+      };
     }
 
     if (data?.success) {
-      console.log(`✅ Firecrawl completed for ${job.name}: ${data.inserted} new, ${data.updated} updated`);
-      return { 
-        success: true, 
-        eventsFound: data.inserted + data.updated, 
-        errors: data.errors > 0 ? [`${data.errors} processing errors`] : [] 
+      console.log(
+        `✅ Firecrawl completed for ${job.name}: ${data.inserted} new, ${data.updated} updated`
+      );
+      return {
+        success: true,
+        eventsFound: data.inserted + data.updated,
+        errors: data.errors > 0 ? [`${data.errors} processing errors`] : [],
       };
     } else {
-      return { success: false, eventsFound: 0, errors: [data?.error || 'Unknown error'] };
+      return {
+        success: false,
+        eventsFound: 0,
+        errors: [data?.error || "Unknown error"],
+      };
     }
   } catch (error) {
     console.error(`❌ Error scraping job ${job.name}:`, error);
@@ -368,13 +383,21 @@ async function extractMultipleEventsWithAI(
 
     const prompt = `Extract all individual events from this HTML content from ${job.config.url}.
 
+IMPORTANT TIMEZONE INSTRUCTIONS:
+- All events are in Des Moines, Iowa (Central Time Zone)
+- Convert all times to Central Time (CDT in summer, CST in winter)
+- If no specific time is mentioned, assume 7:00 PM Central Time for evening events
+- For all-day events, use 12:00 PM Central Time
+- Include both date AND time in your response when possible
+
 HTML CONTENT:
 ${relevantHtml}
 
 Please analyze this HTML and extract ALL individual events you can find. For each event, provide:
 - title: The event name/title
 - description: Brief description or details
-- date: Any date/time information (if found)
+- date: Date in YYYY-MM-DD format (Central Time)
+- time: Time in format like "7:00 PM" (Central Time) - default to "7:00 PM" if not specified
 - location: Venue or location
 - price: Ticket price or cost (if mentioned)
 - category: Type of event (sports, music, entertainment, etc.)
@@ -384,12 +407,18 @@ Format your response as a JSON array of events:
   {
     "title": "Event Title",
     "description": "Event description",
-    "date": "date string if found, null if not",
+    "date": "2025-07-30",
+    "time": "7:00 PM",
     "location": "venue/location", 
     "price": "price if found, 'See website' if not",
     "category": "event category"
   }
 ]
+
+TIMEZONE CONVERSION EXAMPLES:
+- "July 30, 2025 at 8 PM" → date: "2025-07-30", time: "8:00 PM"
+- "Wed, Jul 30" → date: "2025-07-30", time: "7:00 PM" (default)
+- "7/30/25 7:30pm" → date: "2025-07-30", time: "7:30 PM"
 
 Only include actual events, not navigation items, headers, or generic text. If no events are found, return an empty array [].`;
 
@@ -436,19 +465,32 @@ Only include actual events, not navigation items, headers, or generic text. If n
             for (const event of extractedEvents) {
               if (!event.title || event.title.trim().length === 0) continue;
 
-              // Parse date or use default
+              // Enhanced date/time parsing with timezone awareness
               let eventDate: Date;
               if (event.date && event.date !== "null") {
+                // Parse the date
                 eventDate = new Date(event.date);
                 if (isNaN(eventDate.getTime())) {
                   // If date parsing fails, use a future date
                   eventDate = new Date();
                   eventDate.setDate(eventDate.getDate() + 7);
                 }
+
+                // Add time if provided, otherwise default to 7:00 PM
+                if (event.time && event.time !== "null") {
+                  eventDate = addTimeToDateEnhanced(eventDate, event.time);
+                } else {
+                  eventDate.setHours(19, 0, 0, 0); // 7:00 PM default
+                }
+
+                // Convert to proper Central Time timezone
+                eventDate = convertToCentralTimeEnhanced(eventDate);
               } else {
-                // Default to one week from now
+                // Default to one week from now at 7:00 PM CDT
                 eventDate = new Date();
                 eventDate.setDate(eventDate.getDate() + 7);
+                eventDate.setHours(19, 0, 0, 0); // 7:00 PM
+                eventDate = convertToCentralTimeEnhanced(eventDate);
               }
 
               const scrapedEvent: ScrapedEvent = {
@@ -467,6 +509,14 @@ Only include actual events, not navigation items, headers, or generic text. If n
                 source_url: job.config.url,
                 is_featured: Math.random() > 0.8, // 20% chance of being featured
               };
+
+              console.log(
+                `🕐 AI Event: ${
+                  scrapedEvent.title
+                } scheduled for ${scrapedEvent.date.toLocaleString("en-US", {
+                  timeZone: "America/Chicago",
+                })} CDT`
+              );
 
               scrapedEvents.push(scrapedEvent);
             }
@@ -884,33 +934,57 @@ function extractGenericEvent(
 
 // Enhanced date extraction and validation
 function extractValidDate(html: string, dateSelector: string): Date | null {
-  console.log(`🔍 Attempting to extract date with selector: "${dateSelector}"`);
+  console.log(
+    `� Attempting to extract date/time with timezone awareness: "${dateSelector}"`
+  );
 
+  // Step 1: Extract date text
   let dateText = querySelectorText(html, dateSelector);
+  let timeText = "";
 
-  // If primary selector fails, try common date patterns in the HTML
+  // Step 2: Also look for time information nearby or in the same element
+  const timePatterns = [
+    /(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))/gi,
+    /(\d{1,2}\s*(?:AM|PM|am|pm))/gi,
+    /(?:at|@)\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))/gi,
+    /doors?\s*(?:at|open|@)?\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))/gi,
+    /show\s*(?:at|starts|@)?\s*(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))/gi,
+    /(\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm))/gi,
+  ];
+
+  // Try to find time in the HTML around the date area
+  const htmlSection = dateText
+    ? html.substring(
+        Math.max(0, html.indexOf(dateText) - 500),
+        html.indexOf(dateText) + 500
+      )
+    : html;
+
+  for (const pattern of timePatterns) {
+    const timeMatch = htmlSection.match(pattern);
+    if (timeMatch) {
+      timeText = timeMatch[1] || timeMatch[0];
+      console.log(`🕐 Found time text: "${timeText}"`);
+      break;
+    }
+  }
+
+  // Step 3: If no date text found, try fallback patterns
   if (!dateText) {
     console.log(`🔍 Primary selector failed, trying fallback patterns...`);
 
-    // Try to find any date-like text in the HTML - with more flexible patterns
     const datePatterns = [
       /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/gi,
       /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}\b/gi,
-      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\b/gi, // Month Day without year
-      /\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b/gi, // Short month without year
-      /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b/gi, // Day of week + date
+      /\b(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),?\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\b/gi,
       /\b\d{1,2}\/\d{1,2}\/\d{4}\b/g,
       /\b\d{4}-\d{2}-\d{2}\b/g,
-      /\b\d{1,2}-\d{1,2}-\d{4}\b/g,
-      /\b\d{1,2}\/\d{1,2}\b/g, // MM/DD without year
     ];
 
     for (const pattern of datePatterns) {
       const matches = html.match(pattern);
       if (matches && matches.length > 0) {
-        // Take the first reasonable looking date that might be in the future
         for (const match of matches.slice(0, 3)) {
-          // Check first 3 matches
           const testDate = new Date(match);
           if (
             !isNaN(testDate.getTime()) &&
@@ -931,19 +1005,46 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
     return null;
   }
 
-  console.log(`🔍 Raw date text: "${dateText}"`);
+  console.log(`🔍 Raw date text: "${dateText}", time text: "${timeText}"`);
 
-  // Try multiple date parsing approaches
+  // Step 4: Parse the date with enhanced logic
+  let parsedDate = parseFlexibleDateEnhanced(dateText);
+  if (!parsedDate) {
+    console.log(`⚠️ Could not parse date: "${dateText}"`);
+    return null;
+  }
+
+  // Step 5: Add time information if found
+  if (timeText) {
+    parsedDate = addTimeToDateEnhanced(parsedDate, timeText);
+  } else {
+    // Default to 7:00 PM CDT if no time specified (common for evening events)
+    parsedDate.setHours(19, 0, 0, 0); // 7:00 PM
+    console.log(`🕐 No time found, defaulting to 7:00 PM`);
+  }
+
+  // Step 6: Convert to CDT/CST timezone-aware format
+  const finalDate = convertToCentralTimeEnhanced(parsedDate);
+
+  console.log(
+    `✅ Final date: ${finalDate.toISOString()} (displays as ${finalDate.toLocaleString(
+      "en-US",
+      { timeZone: "America/Chicago" }
+    )})`
+  );
+
+  return finalDate;
+}
+
+// Enhanced helper functions for timezone-aware date processing
+function parseFlexibleDateEnhanced(dateText: string): Date | null {
   const cleanDateText = dateText.trim();
 
-  // Try parsing the date
+  // Try parsing the date directly first
   let parsedDate = new Date(cleanDateText);
 
-  // If invalid, try common date formats
+  // If invalid, try specific patterns
   if (isNaN(parsedDate.getTime())) {
-    console.log(`🔍 Initial parsing failed, trying specific patterns...`);
-
-    // Try extracting date patterns like "Jan 15, 2025" or "2025-01-15"
     const datePatterns = [
       /(\w{3,9}\s+\d{1,2},?\s+\d{4})/i, // "January 15, 2025"
       /(\d{4}-\d{2}-\d{2})/, // "2025-01-15"
@@ -955,9 +1056,6 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
       const match = cleanDateText.match(pattern);
       if (match) {
         parsedDate = new Date(match[1]);
-        console.log(
-          `🔍 Trying pattern "${pattern}" with "${match[1]}" -> ${parsedDate}`
-        );
         if (!isNaN(parsedDate.getTime())) {
           break;
         }
@@ -965,54 +1063,114 @@ function extractValidDate(html: string, dateSelector: string): Date | null {
     }
   }
 
-  // Validate the date is reasonable - be more flexible with date ranges
+  // Validate and fix year if needed
   if (!isNaN(parsedDate.getTime())) {
     const now = new Date();
-    const sixMonthsAgo = new Date(now.getTime() - 6 * 30 * 24 * 60 * 60 * 1000); // 6 months ago
+    const sixMonthsAgo = new Date(now.getTime() - 6 * 30 * 24 * 60 * 60 * 1000);
     const threeYearsFromNow = new Date(
-      now.getTime() + 3 * 365 * 24 * 60 * 60 * 1000 // 3 years from now
+      now.getTime() + 3 * 365 * 24 * 60 * 60 * 1000
     );
 
-    console.log(
-      `🔍 Date validation: ${parsedDate.toDateString()}, range: ${sixMonthsAgo.toDateString()} to ${threeYearsFromNow.toDateString()}`
-    );
+    // If year is too old, try current or next year
+    if (parsedDate.getFullYear() < 2020) {
+      const currentYearDate = new Date(parsedDate);
+      currentYearDate.setFullYear(now.getFullYear());
 
-    if (parsedDate >= sixMonthsAgo && parsedDate <= threeYearsFromNow) {
-      console.log(`✅ Valid date found: ${parsedDate.toDateString()}`);
-      return parsedDate;
-    } else {
-      // Try to fix year inference for dates that might be missing current year
-      if (parsedDate.getFullYear() < 2020) {
-        console.log(
-          `🔧 Attempting year correction for: ${parsedDate.toDateString()}`
-        );
-        // Try current year
-        const currentYearDate = new Date(parsedDate);
-        currentYearDate.setFullYear(now.getFullYear());
-
-        // If that's in the past, try next year
-        if (currentYearDate < now) {
-          currentYearDate.setFullYear(now.getFullYear() + 1);
-        }
-
-        if (
-          currentYearDate >= sixMonthsAgo &&
-          currentYearDate <= threeYearsFromNow
-        ) {
-          console.log(
-            `✅ Corrected date to: ${currentYearDate.toDateString()}`
-          );
-          return currentYearDate;
-        }
+      // If that's in the past, try next year
+      if (currentYearDate < now) {
+        currentYearDate.setFullYear(now.getFullYear() + 1);
       }
 
-      console.log(`⚠️ Date out of valid range: ${parsedDate.toDateString()}`);
+      if (
+        currentYearDate >= sixMonthsAgo &&
+        currentYearDate <= threeYearsFromNow
+      ) {
+        return currentYearDate;
+      }
     }
-  } else {
-    console.log(`⚠️ Could not parse date: "${cleanDateText}"`);
+
+    if (parsedDate >= sixMonthsAgo && parsedDate <= threeYearsFromNow) {
+      return parsedDate;
+    }
   }
 
   return null;
+}
+
+function addTimeToDateEnhanced(date: Date, timeStr: string): Date {
+  const timeMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/);
+
+  if (!timeMatch) {
+    return date; // Return original date if time parsing fails
+  }
+
+  let hours = parseInt(timeMatch[1]);
+  const minutes = parseInt(timeMatch[2] || "0");
+  const ampm = timeMatch[3]?.toUpperCase();
+
+  // Convert to 24-hour format
+  if (ampm === "PM" && hours < 12) {
+    hours += 12;
+  } else if (ampm === "AM" && hours === 12) {
+    hours = 0;
+  }
+
+  const combined = new Date(date);
+  combined.setHours(hours, minutes, 0, 0);
+
+  console.log(
+    `🕐 Combined date/time: ${combined.toLocaleString("en-US", {
+      timeZone: "America/Chicago",
+    })}`
+  );
+
+  return combined;
+}
+
+function convertToCentralTimeEnhanced(localDate: Date): Date {
+  // Create a date in Central timezone
+  const centralTime = new Date(
+    localDate.toLocaleString("en-US", { timeZone: "America/Chicago" })
+  );
+
+  // Calculate the difference between local time and central time
+  const localTime = new Date(
+    localDate.toLocaleString("en-US", { timeZone: "UTC" })
+  );
+
+  // Get the timezone offset for America/Chicago
+  // CDT is UTC-5, CST is UTC-6
+  const isDST = isDaylightSavingTime(localDate);
+  const centralOffset = isDST ? -5 : -6; // Hours offset from UTC
+
+  // Create the final date by adjusting for Central timezone
+  const utcTime = new Date(
+    localDate.getTime() - centralOffset * 60 * 60 * 1000
+  );
+
+  return utcTime;
+}
+
+function isDaylightSavingTime(date: Date): boolean {
+  // DST in US typically runs from 2nd Sunday in March to 1st Sunday in November
+  const year = date.getFullYear();
+
+  // Find 2nd Sunday in March
+  const march = new Date(year, 2, 1); // March 1st
+  const firstMarchSunday = new Date(
+    march.getTime() + (7 - march.getDay()) * 24 * 60 * 60 * 1000
+  );
+  const secondMarchSunday = new Date(
+    firstMarchSunday.getTime() + 7 * 24 * 60 * 60 * 1000
+  );
+
+  // Find 1st Sunday in November
+  const november = new Date(year, 10, 1); // November 1st
+  const firstNovemberSunday = new Date(
+    november.getTime() + (7 - november.getDay()) * 24 * 60 * 60 * 1000
+  );
+
+  return date >= secondMarchSunday && date < firstNovemberSunday;
 }
 
 async function scrapeWebsite(
@@ -1760,7 +1918,7 @@ serve(async (req) => {
 
     // Handle main scraping endpoint (existing functionality)
     console.log("Starting event scraping process...");
-    
+
     // Parse request body to check for specific jobId
     let requestBody: any = {};
     try {
@@ -1775,7 +1933,9 @@ serve(async (req) => {
     }
 
     const { jobId } = requestBody;
-    console.log(`Specific jobId requested: ${jobId || 'none (will process all jobs)'}`);
+    console.log(
+      `Specific jobId requested: ${jobId || "none (will process all jobs)"}`
+    );
 
     // Check for authorization header or specific trigger
     const authHeader = req.headers.get("authorization");
@@ -1858,12 +2018,12 @@ serve(async (req) => {
 
     // Fetch active scraping jobs from database
     console.log("Fetching scraping jobs from database...");
-    
+
     let jobsQuery = supabase
       .from("scraping_jobs")
       .select("*")
       .eq("status", "idle");
-    
+
     // If specific jobId is requested, filter for that job only
     if (jobId) {
       console.log(`Filtering for specific job: ${jobId}`);
@@ -1872,7 +2032,7 @@ serve(async (req) => {
       console.log("No specific jobId, will fetch all active jobs");
       jobsQuery = jobsQuery.limit(10); // Limit only when processing all jobs
     }
-    
+
     const { data: scrapingJobs, error: jobsError } = await jobsQuery;
 
     if (jobsError) {
@@ -1881,7 +2041,7 @@ serve(async (req) => {
     }
 
     if (!scrapingJobs || scrapingJobs.length === 0) {
-      const message = jobId 
+      const message = jobId
         ? `No scraping job found with ID: ${jobId}`
         : "No active scraping jobs found";
       console.log(message);
@@ -1956,16 +2116,16 @@ serve(async (req) => {
 
       // Use Firecrawl for scraping
       const scrapeResult = await scrapeJobWithFirecrawl(job, supabase);
-      
+
       totalEventsFound += scrapeResult.eventsFound;
       totalErrors += scrapeResult.errors.length;
-      
+
       jobResults.push({
         jobName: job.name,
         url: job.config.url,
         eventsFound: scrapeResult.eventsFound,
         success: scrapeResult.success,
-        errors: scrapeResult.errors
+        errors: scrapeResult.errors,
       });
 
       // Update job status
@@ -1977,7 +2137,9 @@ serve(async (req) => {
         })
         .eq("id", job.id);
 
-      console.log(`✅ Completed ${job.name}: ${scrapeResult.eventsFound} events found`);
+      console.log(
+        `✅ Completed ${job.name}: ${scrapeResult.eventsFound} events found`
+      );
     }
 
     console.log(

@@ -1,11 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import puppeteer, { Browser } from "puppeteer";
-import { zonedTimeToUtc } from "date-fns-tz";
+import { fromZonedTime } from "date-fns-tz";
 
-// Supabase client setup
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Supabase client setup - using same credentials as convert-timezones.ts
+const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 interface EventDateTimeInfo {
   id: string;
@@ -277,7 +279,7 @@ class EventDateTimeCrawler {
               info.extractedDate,
               info.extractedTime
             );
-            const utcDateTime = zonedTimeToUtc(
+            const utcDateTime = fromZonedTime(
               combinedDateTime,
               "America/Chicago"
             );
@@ -367,7 +369,5 @@ async function main() {
 // Export for use as module
 export { EventDateTimeCrawler };
 
-// Run if called directly
-if (require.main === module) {
-  main().catch(console.error);
-}
+// Run the main function
+main().catch(console.error);
