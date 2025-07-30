@@ -367,57 +367,53 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
         "get_next_optimal_posting_time"
       );
 
-      // Save both posts
-      const posts = [
-        {
-          content_type: contentType,
-          content_id: selectedContent.id,
-          subject_type: subjectType,
-          platform_type: "twitter_threads",
-          post_content: shortContent,
-          post_title: selectedContent.title || selectedContent.name,
-          content_url: contentUrl,
-          webhook_urls: webhookUrls,
-          ai_prompt_used: shortPrompt,
-          scheduled_for: nextPostTime,
-          metadata: {
-            content_data: selectedContent,
-            generation_timestamp: new Date().toISOString(),
+      // Create a single combined post entry for the database
+      const combinedPost = {
+        content_type: contentType,
+        content_id: selectedContent.id,
+        subject_type: subjectType,
+        platform_type: "combined", // New type to indicate it contains both formats
+        post_content: JSON.stringify({
+          twitter_threads: shortContent,
+          facebook_linkedin: longContent,
+        }),
+        post_title: selectedContent.title || selectedContent.name,
+        content_url: contentUrl,
+        webhook_urls: webhookUrls,
+        ai_prompt_used: `Short: ${shortPrompt}\n\nLong: ${longPrompt}`,
+        scheduled_for: nextPostTime,
+        metadata: {
+          content_data: selectedContent,
+          generation_timestamp: new Date().toISOString(),
+          post_formats: {
+            twitter_threads: {
+              content: shortContent,
+              prompt: shortPrompt,
+            },
+            facebook_linkedin: {
+              content: longContent,
+              prompt: longPrompt,
+            },
           },
         },
-        {
-          content_type: contentType,
-          content_id: selectedContent.id,
-          subject_type: subjectType,
-          platform_type: "facebook_linkedin",
-          post_content: longContent,
-          post_title: selectedContent.title || selectedContent.name,
-          content_url: contentUrl,
-          webhook_urls: webhookUrls,
-          ai_prompt_used: longPrompt,
-          scheduled_for: nextPostTime,
-          metadata: {
-            content_data: selectedContent,
-            generation_timestamp: new Date().toISOString(),
-          },
-        },
-      ];
+      };
 
-      const { data: savedPosts, error } = await supabase
+      const { data: savedPost, error } = await supabase
         .from("social_media_posts")
-        .insert(posts)
-        .select();
+        .insert([combinedPost])
+        .select()
+        .single();
 
       if (error) {
         throw error;
       }
 
-      console.log("Generated and saved social media posts:", savedPosts);
+      console.log("Generated and saved combined social media post:", savedPost);
 
       return new Response(
         JSON.stringify({
           success: true,
-          posts: savedPosts,
+          post: savedPost,
           selectedContent,
           nextPostTime,
         }),
@@ -445,12 +441,32 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
       const webhookPromises = (post.webhook_urls as string[]).map(
         async (webhookUrl) => {
           try {
-            const response = await fetch(webhookUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
+            // Parse the post content if it's a combined format
+            let webhookPayload;
+            
+            if (post.platform_type === "combined") {
+              // New combined format - send both versions
+              const contentFormats = JSON.parse(post.post_content as string);
+              webhookPayload = {
+                content_formats: {
+                  twitter_threads: {
+                    content: contentFormats.twitter_threads,
+                    platforms: ["twitter", "threads"]
+                  },
+                  facebook_linkedin: {
+                    content: contentFormats.facebook_linkedin,
+                    platforms: ["facebook", "linkedin"]
+                  }
+                },
+                title: post.post_title,
+                url: post.content_url,
+                subject_type: post.subject_type,
+                content_type: post.content_type,
+                metadata: post.metadata,
+              };
+            } else {
+              // Legacy format - single content
+              webhookPayload = {
                 platform: post.platform_type,
                 content: post.post_content,
                 title: post.post_title,
@@ -458,7 +474,15 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
                 subject_type: post.subject_type,
                 content_type: post.content_type,
                 metadata: post.metadata,
-              }),
+              };
+            }
+
+            const response = await fetch(webhookUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(webhookPayload),
             });
 
             return {

@@ -11,7 +11,7 @@ export interface SocialMediaPost {
     | "restaurant_of_the_day"
     | "weekly_highlight"
     | "special_announcement";
-  platform_type: "twitter_threads" | "facebook_linkedin";
+  platform_type: "twitter_threads" | "facebook_linkedin" | "combined";
   post_content: string;
   post_title?: string;
   content_url?: string;
@@ -312,14 +312,18 @@ export function useSocialMediaManager() {
 
   const testWebhook = async (webhookUrl: string, platform: string) => {
     try {
-      // Create realistic test data that matches what real posts will look like
+      // Create realistic test data using the new combined format
       const testData = {
-        platform:
-          platform === "twitter" ? "twitter_threads" : "facebook_linkedin",
-        content:
-          platform === "twitter"
-            ? "🎉 Event of the Day: Des Moines Food Truck Festival! Join us downtown for amazing local cuisine, live music & family fun. Don't miss out! #DesMoines #FoodTruck #LocalEats 🍔🎵"
-            : "🌟 Event of the Day: Des Moines Food Truck Festival 🌟\n\nJoin us this weekend in downtown Des Moines for an incredible celebration of local cuisine! Experience the best food trucks our city has to offer, enjoy live music from local artists, and bring the whole family for a day of fun.\n\nWhen: This Saturday, 11 AM - 8 PM\nWhere: Western Gateway Park\nFeaturing: 25+ local food trucks, live music, kids activities\n\nDon't miss this amazing opportunity to support local businesses and enjoy great food! See you there! 🍔🎵🎉\n\n#DesMoines #FoodTruck #LocalEats #CommunityEvent",
+        content_formats: {
+          twitter_threads: {
+            content: "🎉 Event of the Day: Des Moines Food Truck Festival! Join us downtown for amazing local cuisine, live music & family fun. Don't miss out! #DesMoines #FoodTruck #LocalEats 🍔🎵",
+            platforms: ["twitter", "threads"]
+          },
+          facebook_linkedin: {
+            content: "🌟 Event of the Day: Des Moines Food Truck Festival 🌟\n\nJoin us this weekend in downtown Des Moines for an incredible celebration of local cuisine! Experience the best food trucks our city has to offer, enjoy live music from local artists, and bring the whole family for a day of fun.\n\nWhen: This Saturday, 11 AM - 8 PM\nWhere: Western Gateway Park\nFeaturing: 25+ local food trucks, live music, kids activities\n\nDon't miss this amazing opportunity to support local businesses and enjoy great food! See you there! 🍔🎵🎉\n\n#DesMoines #FoodTruck #LocalEats #CommunityEvent",
+            platforms: ["facebook", "linkedin"]
+          }
+        },
         title: "Des Moines Food Truck Festival",
         url: "https://desmoinesinsider.com/events/des-moines-food-truck-festival",
         subject_type: "event_of_the_day",
