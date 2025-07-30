@@ -543,7 +543,9 @@ const SocialMediaManager = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => testWebhook(webhook.webhook_url, webhook.platform)}
+                            onClick={() =>
+                              testWebhook(webhook.webhook_url, webhook.platform)
+                            }
                           >
                             Test
                           </Button>

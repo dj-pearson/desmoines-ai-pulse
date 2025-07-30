@@ -40,7 +40,8 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const { action, contentType, subjectType } = await req.json();
+    const requestBody = await req.json();
+    const { action, contentType, subjectType, postId } = requestBody;
 
     console.log(
       "Social Media Manager - Action:",
@@ -411,7 +412,9 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
         }
       );
     } else if (action === "publish") {
-      const { postId } = await req.json();
+      if (!postId) {
+        throw new Error("Post ID is required for publish action");
+      }
 
       // Get the post
       const { data: post, error: postError } = await supabase
