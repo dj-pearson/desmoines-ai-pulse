@@ -16,6 +16,29 @@ const createSlug = (name: string): string => {
     .replace(/(^-|-$)/g, '');
 };
 
+const createEventSlug = (title: string, date?: string): string => {
+  const titleSlug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  
+  if (!date) {
+    return titleSlug;
+  }
+
+  try {
+    const eventDate = new Date(date);
+    const year = eventDate.getFullYear();
+    const month = String(eventDate.getMonth() + 1).padStart(2, '0');
+    const day = String(eventDate.getDate()).padStart(2, '0');
+    
+    return `${titleSlug}-${year}-${month}-${day}`;
+  } catch (error) {
+    console.error('Error creating event slug:', error);
+    return titleSlug;
+  }
+};
+
 interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
@@ -112,7 +135,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
               View Details
             </Button>
             
-            <Link to={`/events/${createSlug(event.title)}`}>
+            <Link to={`/events/${createEventSlug(event.title, typeof event.date === 'string' ? event.date : event.date?.toISOString())}`}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Full Page

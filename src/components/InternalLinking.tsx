@@ -25,6 +25,29 @@ export function InternalLinking({
   category,
   cuisine,
 }: InternalLinkingProps) {
+  const createEventSlug = (title: string, date?: string): string => {
+    const titleSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+    
+    if (!date) {
+      return titleSlug;
+    }
+
+    try {
+      const eventDate = new Date(date);
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
+      const day = String(eventDate.getDate()).padStart(2, '0');
+      
+      return `${titleSlug}-${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('Error creating event slug:', error);
+      return titleSlug;
+    }
+  };
+
   const { data: relatedEvents } = useQuery({
     queryKey: ["related-events", category, currentId],
     queryFn: async () => {
@@ -116,7 +139,7 @@ export function InternalLinking({
             {relatedEvents.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${event.id}`}
+                to={`/events/${createEventSlug(event.title, String(event.date))}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -208,7 +231,7 @@ export function InternalLinking({
             {featuredContent.events.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${event.id}`}
+                to={`/events/${createEventSlug(event.title, String(event.date))}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">

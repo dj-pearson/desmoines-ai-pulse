@@ -40,10 +40,19 @@ serve(async (req) => {
       .replace(/^-+|-+$/g, "");
   };
 
+  const createEventSlug = (title: string, date: string): string => {
+    const titleSlug = createSlug(title);
+    const eventDate = new Date(date);
+    const year = eventDate.getFullYear();
+    const month = String(eventDate.getMonth() + 1).padStart(2, '0');
+    const day = String(eventDate.getDate()).padStart(2, '0');
+    return `${titleSlug}-${year}-${month}-${day}`;
+  };
+
   const generateContentUrl = (contentType: string, content: any): string => {
     const baseUrl = "https://desmoinesinsider.com";
     if (contentType === "event") {
-      const slug = createSlug(content.title);
+      const slug = createEventSlug(content.title, content.date);
       return `${baseUrl}/events/${slug}`;
     } else if (contentType === "restaurant") {
       const slug = content.slug || createSlug(content.name);

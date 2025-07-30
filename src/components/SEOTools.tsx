@@ -111,6 +111,29 @@ export default function SEOTools() {
       .replace(/(^-|-$)/g, "");
   };
 
+  const createEventSlug = (title: string, date?: string): string => {
+    const titleSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+    
+    if (!date) {
+      return titleSlug;
+    }
+
+    try {
+      const eventDate = new Date(date);
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
+      const day = String(eventDate.getDate()).padStart(2, '0');
+      
+      return `${titleSlug}-${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('Error creating event slug:', error);
+      return titleSlug;
+    }
+  };
+
   const generateSitemap = () => {
     const baseUrl = "https://desmoinesinsider.com";
     const currentDate = new Date().toISOString().split("T")[0];
@@ -147,8 +170,8 @@ export default function SEOTools() {
       const eventDate = event.date
         ? new Date(event.date).toISOString().split("T")[0]
         : currentDate;
-      // Events don't have slug field yet, use generated slug
-      const slug = createSlug(event.title);
+      // Use date-based slug for events
+      const slug = createEventSlug(event.title, event.date);
       sitemap += `
   <url>
     <loc>${baseUrl}/events/${slug}</loc>
@@ -428,7 +451,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       const eventDate = event.date
         ? new Date(event.date).toISOString()
         : currentDate;
-      const slug = createSlug(event.title);
+      const slug = createEventSlug(event.title, event.date);
       rss += `
     <item>
       <title>${event.title}</title>

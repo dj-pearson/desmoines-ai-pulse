@@ -53,12 +53,12 @@ export class SitemapGenerator {
     try {
       const { data: events, error: eventsError } = await supabase
         .from("events")
-        .select("id, title, updated_at, created_at")
+        .select("id, title, date, updated_at, created_at")
         .order("created_at", { ascending: false });
 
       if (!eventsError && events) {
         events.forEach((event) => {
-          const slug = this.createSlug(event.title);
+          const slug = this.createEventSlug(event.title, event.date);
           const lastmod =
             event.updated_at || event.created_at || this.currentDate;
           urls.push({
@@ -109,6 +109,15 @@ export class SitemapGenerator {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "");
+  }
+
+  private createEventSlug(title: string, date: string): string {
+    const titleSlug = this.createSlug(title);
+    const eventDate = new Date(date);
+    const year = eventDate.getFullYear();
+    const month = String(eventDate.getMonth() + 1).padStart(2, '0');
+    const day = String(eventDate.getDate()).padStart(2, '0');
+    return `${titleSlug}-${year}-${month}-${day}`;
   }
 
   private generateXML(urls: SitemapUrl[]): string {

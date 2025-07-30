@@ -20,10 +20,37 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 
 export default function EventDetails() {
-  const { id } = useParams<{ id: string }>();
+  const { slug } = useParams<{ slug: string }>();
   const { events, isLoading } = useEvents();
 
-  const event = events.find((e) => e.id === id);
+  const createEventSlug = (title: string, date?: string): string => {
+    const titleSlug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+    
+    if (!date) {
+      return titleSlug;
+    }
+
+    try {
+      const eventDate = new Date(date);
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
+      const day = String(eventDate.getDate()).padStart(2, '0');
+      
+      return `${titleSlug}-${year}-${month}-${day}`;
+    } catch (error) {
+      console.error('Error creating event slug:', error);
+      return titleSlug;
+    }
+  };
+
+  const event = events.find((e) => {
+    const dateString = String(e.date);
+    const eventSlug = createEventSlug(e.title, dateString);
+    return eventSlug === slug;
+  });
 
   const formatEventDate = (date: string | Date) => {
     try {
@@ -162,7 +189,7 @@ export default function EventDetails() {
   const breadcrumbs = [
     { name: "Home", url: "/" },
     { name: "Events", url: "/events" },
-    { name: event.title, url: `/events/${event.id}` },
+    { name: event.title, url: `/events/${createEventSlug(event.title, String(event.date))}` },
   ];
 
   return (
@@ -173,7 +200,7 @@ export default function EventDetails() {
         type="event"
         keywords={seoKeywords}
         structuredData={eventSchema}
-        url={`/events/${event.id}`}
+        url={`/events/${createEventSlug(event.title, String(event.date))}`}
         imageUrl={event.image_url}
         breadcrumbs={breadcrumbs}
         location={{
