@@ -579,6 +579,7 @@ function extractCatchDesMoinesEvent(
   price: string;
   category: string;
   date: Date | null;
+  source_url: string;
 } {
   console.log(`🔍 Catch Des Moines HTML preview: ${html.substring(0, 500)}...`);
 
@@ -650,6 +651,24 @@ function extractCatchDesMoinesEvent(
 
   console.log(`🔍 Catch Des Moines found date: ${date}`);
 
+  // Extract external event URL from "Visit Website" button
+  let externalUrl = "";
+  const visitWebsiteRegex =
+    /<a[^>]*class=["']action-item["'][^>]*href=["']([^"']+)["'][^>]*>\s*Visit Website\s*<\/a>/i;
+  const match = html.match(visitWebsiteRegex);
+  if (match && match[1]) {
+    externalUrl = match[1];
+    // If relative URL, prepend domain
+    if (externalUrl.startsWith("/")) {
+      try {
+        const urlObj = new URL(job.config.url);
+        externalUrl = urlObj.origin + externalUrl;
+      } catch {}
+    }
+  } else {
+    externalUrl = job.config.url;
+  }
+
   return {
     title: title || "Community Event",
     description:
@@ -659,6 +678,7 @@ function extractCatchDesMoinesEvent(
     price,
     category,
     date,
+    source_url: externalUrl,
   };
 }
 
