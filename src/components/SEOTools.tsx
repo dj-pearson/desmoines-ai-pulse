@@ -129,7 +129,7 @@ export default function SEOTools() {
       } else {
         eventDate = new Date(date);
       }
-      
+
       const year = eventDate.getFullYear();
       const month = String(eventDate.getMonth() + 1).padStart(2, "0");
       const day = String(eventDate.getDate()).padStart(2, "0");

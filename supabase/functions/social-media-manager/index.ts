@@ -172,14 +172,15 @@ serve(async (req) => {
 
         if (events && events.length > 0) {
           // Additional check to ensure we only post about future events
-          const futureEvents = events.filter(event => {
+          const futureEvents = events.filter((event) => {
             const eventDate = new Date(event.date);
             const now = new Date();
             return eventDate > now;
           });
-          
+
           if (futureEvents.length > 0) {
-            selectedContent = futureEvents[Math.floor(Math.random() * futureEvents.length)];
+            selectedContent =
+              futureEvents[Math.floor(Math.random() * futureEvents.length)];
             contentUrl = generateContentUrl("event", selectedContent);
           } else {
             console.log("No future events available for posting");
@@ -232,14 +233,15 @@ serve(async (req) => {
 
           if (allEvents && allEvents.length > 0) {
             // Additional check to ensure we only post about future events
-            const futureEvents = allEvents.filter(event => {
+            const futureEvents = allEvents.filter((event) => {
               const eventDate = new Date(event.date);
               const now = new Date();
               return eventDate > now;
             });
-            
+
             if (futureEvents.length > 0) {
-              selectedContent = futureEvents[Math.floor(Math.random() * futureEvents.length)];
+              selectedContent =
+                futureEvents[Math.floor(Math.random() * futureEvents.length)];
               contentUrl = generateContentUrl("event", selectedContent);
             } else {
               console.log("No future events available for posting (fallback)");

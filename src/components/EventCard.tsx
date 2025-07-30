@@ -46,7 +46,7 @@ const createEventSlug = (title: string, date?: string | Date): string => {
     } else {
       eventDate = new Date(date);
     }
-    
+
     const year = eventDate.getFullYear();
     const month = String(eventDate.getMonth() + 1).padStart(2, "0");
     const day = String(eventDate.getDate()).padStart(2, "0");
@@ -154,9 +154,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
               View Details
             </Button>
 
-            <Link
-              to={`/events/${createEventSlug(event.title, event.date)}`}
-            >
+            <Link to={`/events/${createEventSlug(event.title, event.date)}`}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Full Page

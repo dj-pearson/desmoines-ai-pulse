@@ -53,7 +53,7 @@ export default function EventsPage() {
       } else {
         eventDate = new Date(date);
       }
-      
+
       const year = eventDate.getFullYear();
       const month = String(eventDate.getMonth() + 1).padStart(2, "0");
       const day = String(eventDate.getDate()).padStart(2, "0");
@@ -381,10 +381,7 @@ export default function EventsPage() {
             {events?.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(
-                  event.title,
-                  event.date
-                )}`}
+                to={`/events/${createEventSlug(event.title, event.date)}`}
               >
                 <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   {event.image_url && (

@@ -43,7 +43,7 @@ export function InternalLinking({
       } else {
         eventDate = new Date(date);
       }
-      
+
       const year = eventDate.getFullYear();
       const month = String(eventDate.getMonth() + 1).padStart(2, "0");
       const day = String(eventDate.getDate()).padStart(2, "0");
@@ -152,10 +152,7 @@ export function InternalLinking({
             {relatedEvents.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(
-                  event.title,
-                  event.date
-                )}`}
+                to={`/events/${createEventSlug(event.title, event.date)}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -247,10 +244,7 @@ export function InternalLinking({
             {featuredContent.events.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(
-                  event.title,
-                  event.date
-                )}`}
+                to={`/events/${createEventSlug(event.title, event.date)}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
