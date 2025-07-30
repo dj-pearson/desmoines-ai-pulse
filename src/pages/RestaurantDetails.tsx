@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import SEOHead from "@/components/SEOHead";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import AIWriteup from "@/components/AIWriteup";
 import {
   MapPin,
   Phone,
@@ -568,6 +569,18 @@ export default function RestaurantDetails() {
                       {restaurant.description}
                     </p>
                   </div>
+                </>
+              )}
+
+              {/* AI Writeup Section */}
+              {restaurant.ai_writeup && (
+                <>
+                  <Separator className="my-8" />
+                  <AIWriteup
+                    writeup={restaurant.ai_writeup}
+                    generatedAt={restaurant.writeup_generated_at}
+                    prompt={restaurant.writeup_prompt_used}
+                  />
                 </>
               )}
 

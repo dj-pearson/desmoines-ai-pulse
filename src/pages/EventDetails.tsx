@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SEOHead from "@/components/SEOHead";
+import AIWriteup from "@/components/AIWriteup";
 import {
   createEventSlugWithCentralTime,
   formatEventDate,
@@ -308,6 +309,16 @@ export default function EventDetails() {
                   )}
                 </CardContent>
               </Card>
+
+              {/* AI Writeup Section */}
+              {event.ai_writeup && (
+                <AIWriteup
+                  writeup={event.ai_writeup}
+                  generatedAt={event.writeup_generated_at}
+                  prompt={event.writeup_prompt_used}
+                  className="mt-8"
+                />
+              )}
 
               {/* Rating System */}
               <RatingSystem
