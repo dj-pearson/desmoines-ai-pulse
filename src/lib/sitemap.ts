@@ -115,8 +115,8 @@ export class SitemapGenerator {
     const titleSlug = this.createSlug(title);
     const eventDate = new Date(date);
     const year = eventDate.getFullYear();
-    const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-    const day = String(eventDate.getDate()).padStart(2, '0');
+    const month = String(eventDate.getMonth() + 1).padStart(2, "0");
+    const day = String(eventDate.getDate()).padStart(2, "0");
     return `${titleSlug}-${year}-${month}-${day}`;
   }
 

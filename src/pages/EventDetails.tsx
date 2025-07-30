@@ -23,32 +23,38 @@ export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
   const { events, isLoading } = useEvents();
 
-  const createEventSlug = (title: string, date?: string): string => {
+  const createEventSlug = (title: string, date?: string | Date): string => {
     const titleSlug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
-    
+
     if (!date) {
       return titleSlug;
     }
 
     try {
-      const eventDate = new Date(date);
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-      const day = String(eventDate.getDate()).padStart(2, '0');
+      // Handle both string and Date inputs consistently
+      let eventDate: Date;
+      if (date instanceof Date) {
+        eventDate = date;
+      } else {
+        eventDate = new Date(date);
+      }
       
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
+      const day = String(eventDate.getDate()).padStart(2, "0");
+
       return `${titleSlug}-${year}-${month}-${day}`;
     } catch (error) {
-      console.error('Error creating event slug:', error);
+      console.error("Error creating event slug:", error);
       return titleSlug;
     }
   };
 
   const event = events.find((e) => {
-    const dateString = String(e.date);
-    const eventSlug = createEventSlug(e.title, dateString);
+    const eventSlug = createEventSlug(e.title, e.date);
     return eventSlug === slug;
   });
 
@@ -189,7 +195,10 @@ export default function EventDetails() {
   const breadcrumbs = [
     { name: "Home", url: "/" },
     { name: "Events", url: "/events" },
-    { name: event.title, url: `/events/${createEventSlug(event.title, String(event.date))}` },
+    {
+      name: event.title,
+      url: `/events/${createEventSlug(event.title, event.date)}`,
+    },
   ];
 
   return (
@@ -200,7 +209,7 @@ export default function EventDetails() {
         type="event"
         keywords={seoKeywords}
         structuredData={eventSchema}
-        url={`/events/${createEventSlug(event.title, String(event.date))}`}
+        url={`/events/${createEventSlug(event.title, event.date)}`}
         imageUrl={event.image_url}
         breadcrumbs={breadcrumbs}
         location={{

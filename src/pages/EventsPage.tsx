@@ -35,25 +35,32 @@ export default function EventsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
 
-  const createEventSlug = (title: string, date?: string): string => {
+  const createEventSlug = (title: string, date?: string | Date): string => {
     const titleSlug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
-    
+
     if (!date) {
       return titleSlug;
     }
 
     try {
-      const eventDate = new Date(date);
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-      const day = String(eventDate.getDate()).padStart(2, '0');
+      // Handle both string and Date inputs consistently
+      let eventDate: Date;
+      if (date instanceof Date) {
+        eventDate = date;
+      } else {
+        eventDate = new Date(date);
+      }
       
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
+      const day = String(eventDate.getDate()).padStart(2, "0");
+
       return `${titleSlug}-${year}-${month}-${day}`;
     } catch (error) {
-      console.error('Error creating event slug:', error);
+      console.error("Error creating event slug:", error);
       return titleSlug;
     }
   };
@@ -372,7 +379,13 @@ export default function EventsPage() {
           {/* Events Grid */}
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {events?.map((event) => (
-              <Link key={event.id} to={`/events/${createEventSlug(event.title, String(event.date))}`}>
+              <Link
+                key={event.id}
+                to={`/events/${createEventSlug(
+                  event.title,
+                  event.date
+                )}`}
+              >
                 <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   {event.image_url && (
                     <div className="aspect-video overflow-hidden rounded-t-lg">

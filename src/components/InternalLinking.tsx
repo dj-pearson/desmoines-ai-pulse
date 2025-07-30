@@ -25,25 +25,32 @@ export function InternalLinking({
   category,
   cuisine,
 }: InternalLinkingProps) {
-  const createEventSlug = (title: string, date?: string): string => {
+  const createEventSlug = (title: string, date?: string | Date): string => {
     const titleSlug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
-    
+
     if (!date) {
       return titleSlug;
     }
 
     try {
-      const eventDate = new Date(date);
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-      const day = String(eventDate.getDate()).padStart(2, '0');
+      // Handle both string and Date inputs consistently
+      let eventDate: Date;
+      if (date instanceof Date) {
+        eventDate = date;
+      } else {
+        eventDate = new Date(date);
+      }
       
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
+      const day = String(eventDate.getDate()).padStart(2, "0");
+
       return `${titleSlug}-${year}-${month}-${day}`;
     } catch (error) {
-      console.error('Error creating event slug:', error);
+      console.error("Error creating event slug:", error);
       return titleSlug;
     }
   };
@@ -88,8 +95,11 @@ export function InternalLinking({
     queryKey: ["featured-content", new Date().toDateString()], // Force cache refresh daily
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
-      console.log('InternalLinking: Fetching featured content for date >=', today);
-      
+      console.log(
+        "InternalLinking: Fetching featured content for date >=",
+        today
+      );
+
       const [eventsResult, restaurantsResult] = await Promise.all([
         supabase
           .from("events")
@@ -105,7 +115,10 @@ export function InternalLinking({
           .limit(2),
       ]);
 
-      console.log('InternalLinking: Featured events found:', eventsResult.data?.length);
+      console.log(
+        "InternalLinking: Featured events found:",
+        eventsResult.data?.length
+      );
       return {
         events: eventsResult.data || [],
         restaurants: restaurantsResult.data || [],
@@ -139,7 +152,10 @@ export function InternalLinking({
             {relatedEvents.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(event.title, String(event.date))}`}
+                to={`/events/${createEventSlug(
+                  event.title,
+                  event.date
+                )}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -231,7 +247,10 @@ export function InternalLinking({
             {featuredContent.events.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(event.title, String(event.date))}`}
+                to={`/events/${createEventSlug(
+                  event.title,
+                  event.date
+                )}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">

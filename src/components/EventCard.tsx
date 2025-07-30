@@ -1,40 +1,59 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import EventFeedback from "@/components/EventFeedback";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { Event } from "@/lib/types";
-import { Calendar, MapPin, DollarSign, ExternalLink, Sparkles } from "lucide-react";
+import {
+  Calendar,
+  MapPin,
+  DollarSign,
+  ExternalLink,
+  Sparkles,
+} from "lucide-react";
 import { format } from "date-fns";
 import { Link } from "react-router-dom";
 
 const createSlug = (name: string): string => {
   return name
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '');
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
 };
 
-const createEventSlug = (title: string, date?: string): string => {
+const createEventSlug = (title: string, date?: string | Date): string => {
   const titleSlug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-  
+
   if (!date) {
     return titleSlug;
   }
 
   try {
-    const eventDate = new Date(date);
-    const year = eventDate.getFullYear();
-    const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-    const day = String(eventDate.getDate()).padStart(2, '0');
+    // Handle both string and Date inputs consistently
+    let eventDate: Date;
+    if (date instanceof Date) {
+      eventDate = date;
+    } else {
+      eventDate = new Date(date);
+    }
     
+    const year = eventDate.getFullYear();
+    const month = String(eventDate.getMonth() + 1).padStart(2, "0");
+    const day = String(eventDate.getDate()).padStart(2, "0");
+
     return `${titleSlug}-${year}-${month}-${day}`;
   } catch (error) {
-    console.error('Error creating event slug:', error);
+    console.error("Error creating event slug:", error);
     return titleSlug;
   }
 };
@@ -51,7 +70,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
   const handleViewDetails = () => {
     // Track interaction
     if (isAuthenticated) {
-      trackInteraction(event.id, 'view');
+      trackInteraction(event.id, "view");
     }
     onViewDetails(event);
   };
@@ -86,7 +105,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
           }}
         />
       )}
-      
+
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between mb-2">
           <Badge className={getCategoryColor(event.category)}>
@@ -112,7 +131,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
             <Calendar className="h-4 w-4 mr-2" />
             <span>{formatEventDate(event.date)}</span>
           </div>
-          
+
           <div className="flex items-center">
             <MapPin className="h-4 w-4 mr-2" />
             <span>{event.venue || event.location}</span>
@@ -128,21 +147,23 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
 
         <div className="flex items-center justify-between pt-2">
           <div className="flex gap-2">
-            <Button 
+            <Button
               onClick={handleViewDetails}
               className="bg-primary hover:bg-blue-700 text-white"
             >
               View Details
             </Button>
-            
-            <Link to={`/events/${createEventSlug(event.title, typeof event.date === 'string' ? event.date : event.date?.toISOString())}`}>
+
+            <Link
+              to={`/events/${createEventSlug(event.title, event.date)}`}
+            >
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Full Page
               </Button>
             </Link>
           </div>
-          
+
           {isAuthenticated && (
             <EventFeedback eventId={event.id} className="ml-2" />
           )}

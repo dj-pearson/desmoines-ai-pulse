@@ -44,8 +44,8 @@ serve(async (req) => {
     const titleSlug = createSlug(title);
     const eventDate = new Date(date);
     const year = eventDate.getFullYear();
-    const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-    const day = String(eventDate.getDate()).padStart(2, '0');
+    const month = String(eventDate.getMonth() + 1).padStart(2, "0");
+    const day = String(eventDate.getDate()).padStart(2, "0");
     return `${titleSlug}-${year}-${month}-${day}`;
   };
 
@@ -171,8 +171,19 @@ serve(async (req) => {
         }
 
         if (events && events.length > 0) {
-          selectedContent = events[Math.floor(Math.random() * events.length)];
-          contentUrl = generateContentUrl("event", selectedContent);
+          // Additional check to ensure we only post about future events
+          const futureEvents = events.filter(event => {
+            const eventDate = new Date(event.date);
+            const now = new Date();
+            return eventDate > now;
+          });
+          
+          if (futureEvents.length > 0) {
+            selectedContent = futureEvents[Math.floor(Math.random() * futureEvents.length)];
+            contentUrl = generateContentUrl("event", selectedContent);
+          } else {
+            console.log("No future events available for posting");
+          }
         }
       } else if (contentType === "restaurant") {
         // Get restaurants or restaurant openings not recently featured
@@ -220,9 +231,19 @@ serve(async (req) => {
             .limit(5);
 
           if (allEvents && allEvents.length > 0) {
-            selectedContent =
-              allEvents[Math.floor(Math.random() * allEvents.length)];
-            contentUrl = generateContentUrl("event", selectedContent);
+            // Additional check to ensure we only post about future events
+            const futureEvents = allEvents.filter(event => {
+              const eventDate = new Date(event.date);
+              const now = new Date();
+              return eventDate > now;
+            });
+            
+            if (futureEvents.length > 0) {
+              selectedContent = futureEvents[Math.floor(Math.random() * futureEvents.length)];
+              contentUrl = generateContentUrl("event", selectedContent);
+            } else {
+              console.log("No future events available for posting (fallback)");
+            }
           }
         } else if (contentType === "restaurant") {
           const { data: allRestaurants } = await supabase

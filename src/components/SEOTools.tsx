@@ -111,25 +111,32 @@ export default function SEOTools() {
       .replace(/(^-|-$)/g, "");
   };
 
-  const createEventSlug = (title: string, date?: string): string => {
+  const createEventSlug = (title: string, date?: string | Date): string => {
     const titleSlug = title
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "");
-    
+
     if (!date) {
       return titleSlug;
     }
 
     try {
-      const eventDate = new Date(date);
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, '0');
-      const day = String(eventDate.getDate()).padStart(2, '0');
+      // Handle both string and Date inputs consistently
+      let eventDate: Date;
+      if (date instanceof Date) {
+        eventDate = date;
+      } else {
+        eventDate = new Date(date);
+      }
       
+      const year = eventDate.getFullYear();
+      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
+      const day = String(eventDate.getDate()).padStart(2, "0");
+
       return `${titleSlug}-${year}-${month}-${day}`;
     } catch (error) {
-      console.error('Error creating event slug:', error);
+      console.error("Error creating event slug:", error);
       return titleSlug;
     }
   };
