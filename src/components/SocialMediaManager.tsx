@@ -65,6 +65,7 @@ const SocialMediaManager = () => {
     addWebhook,
     updateWebhook,
     deleteWebhook,
+    testWebhook,
     deletePost,
   } = useSocialMediaManager();
 
@@ -539,6 +540,13 @@ const SocialMediaManager = () => {
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => testWebhook(webhook.webhook_url, webhook.platform)}
+                          >
+                            Test
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
