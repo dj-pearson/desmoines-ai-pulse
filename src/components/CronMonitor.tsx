@@ -5,14 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { 
-  Clock, 
-  AlertCircle, 
-  CheckCircle, 
-  RefreshCw, 
+import {
+  Clock,
+  AlertCircle,
+  CheckCircle,
+  RefreshCw,
   Activity,
   Calendar,
-  Zap
+  Zap,
 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -42,36 +42,48 @@ export function CronMonitor() {
   const { toast } = useToast();
 
   // Fetch cron logs
-  const { data: cronLogs, isLoading: logsLoading, refetch: refetchLogs } = useQuery({
-    queryKey: ['cron-logs'],
+  const {
+    data: cronLogs,
+    isLoading: logsLoading,
+    refetch: refetchLogs,
+  } = useQuery({
+    queryKey: ["cron-logs"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('cron_logs')
-        .select(`
+        .from("cron_logs")
+        .select(
+          `
           *,
           scraping_jobs(name)
-        `)
-        .order('created_at', { ascending: false })
+        `
+        )
+        .order("created_at", { ascending: false })
         .limit(50);
-      
+
       if (error) throw error;
-      
-      return data?.map(log => ({
-        ...log,
-        job_name: log.scraping_jobs?.name
-      })) || [];
+
+      return (
+        data?.map((log) => ({
+          ...log,
+          job_name: log.scraping_jobs?.name,
+        })) || []
+      );
     },
   });
 
   // Fetch scraping jobs status
-  const { data: scrapingJobs, isLoading: jobsLoading, refetch: refetchJobs } = useQuery({
-    queryKey: ['scraping-jobs-status'],
+  const {
+    data: scrapingJobs,
+    isLoading: jobsLoading,
+    refetch: refetchJobs,
+  } = useQuery({
+    queryKey: ["scraping-jobs-status"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('scraping_jobs')
-        .select('*')
-        .order('next_run', { ascending: true });
-      
+        .from("scraping_jobs")
+        .select("*")
+        .order("next_run", { ascending: true });
+
       if (error) throw error;
       return data || [];
     },
@@ -80,23 +92,22 @@ export function CronMonitor() {
   // Manual trigger for cron function
   const triggerCronManually = async () => {
     try {
-      const { data, error } = await supabase.rpc('run_scraping_jobs');
-      
+      const { data, error } = await supabase.rpc("run_scraping_jobs");
+
       if (error) throw error;
-      
+
       toast({
         title: "Cron Job Triggered",
         description: "Manual cron job execution started",
       });
-      
+
       // Refetch data after trigger
       setTimeout(() => {
         refetchLogs();
         refetchJobs();
       }, 2000);
-      
     } catch (error) {
-      console.error('Error triggering cron:', error);
+      console.error("Error triggering cron:", error);
       toast({
         title: "Error",
         description: "Failed to trigger cron job manually",
@@ -108,11 +119,11 @@ export function CronMonitor() {
   const getStatusBadge = (status: string) => {
     const variants = {
       idle: "secondary",
-      running: "default", 
-      completed: "success",
-      failed: "destructive"
+      running: "default",
+      completed: "outline",
+      failed: "destructive",
     } as const;
-    
+
     return (
       <Badge variant={variants[status as keyof typeof variants] || "secondary"}>
         {status}
@@ -122,15 +133,19 @@ export function CronMonitor() {
 
   const getScheduleDisplay = (schedule?: string) => {
     const scheduleMap = {
-      '0 */6 * * *': 'Every 6 hours',
-      '0 */3 * * *': 'Every 3 hours', 
-      '0 */8 * * *': 'Every 8 hours',
-      '0 */12 * * *': 'Every 12 hours',
-      '0 6 * * *': 'Daily at 6 AM',
-      '*/30 * * * *': 'Every 30 minutes'
+      "0 */6 * * *": "Every 6 hours",
+      "0 */3 * * *": "Every 3 hours",
+      "0 */8 * * *": "Every 8 hours",
+      "0 */12 * * *": "Every 12 hours",
+      "0 6 * * *": "Daily at 6 AM",
+      "*/30 * * * *": "Every 30 minutes",
     };
-    
-    return scheduleMap[schedule as keyof typeof scheduleMap] || schedule || 'No schedule';
+
+    return (
+      scheduleMap[schedule as keyof typeof scheduleMap] ||
+      schedule ||
+      "No schedule"
+    );
   };
 
   return (
@@ -146,7 +161,10 @@ export function CronMonitor() {
             Monitor automated scraping job execution and scheduling
           </p>
         </div>
-        <Button onClick={triggerCronManually} className="flex items-center gap-2">
+        <Button
+          onClick={triggerCronManually}
+          className="flex items-center gap-2"
+        >
           <Zap className="h-4 w-4" />
           Trigger Jobs Manually
         </Button>
@@ -165,45 +183,59 @@ export function CronMonitor() {
             <div className="text-center py-4">Loading jobs...</div>
           ) : (
             <div className="space-y-4">
-              {scrapingJobs?.map((job: ScrapingJob) => (
-                <div key={job.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h4 className="font-semibold">{job.name}</h4>
-                      {getStatusBadge(job.status)}
-                      {job.config.isActive ? (
-                        <Badge variant="success">Active</Badge>
-                      ) : (
-                        <Badge variant="secondary">Inactive</Badge>
-                      )}
-                    </div>
-                    
-                    <div className="mt-2 text-sm text-muted-foreground grid grid-cols-2 gap-4">
-                      <div>
-                        <strong>Schedule:</strong> {getScheduleDisplay(job.config.schedule)}
+              {scrapingJobs?.map((job) => {
+                const jobConfig =
+                  job.config && typeof job.config === "object"
+                    ? (job.config as { isActive?: boolean; schedule?: string })
+                    : {};
+                return (
+                  <div
+                    key={job.id}
+                    className="flex items-center justify-between p-4 border rounded-lg"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <h4 className="font-semibold">{job.name}</h4>
+                        {getStatusBadge(job.status)}
+                        {jobConfig.isActive ? (
+                          <Badge variant="outline">Active</Badge>
+                        ) : (
+                          <Badge variant="secondary">Inactive</Badge>
+                        )}
                       </div>
-                      <div>
-                        <strong>Events Found:</strong> {job.events_found || 0}
-                      </div>
-                      <div>
-                        <strong>Last Run:</strong> {
-                          job.last_run 
-                            ? format(new Date(job.last_run), 'MMM dd, yyyy HH:mm')
-                            : 'Never'
-                        }
-                      </div>
-                      <div>
-                        <strong>Next Run:</strong> {
-                          job.next_run 
-                            ? format(new Date(job.next_run), 'MMM dd, yyyy HH:mm')
-                            : 'Not scheduled'
-                        }
+
+                      <div className="mt-2 text-sm text-muted-foreground grid grid-cols-2 gap-4">
+                        <div>
+                          <strong>Schedule:</strong>{" "}
+                          {getScheduleDisplay(jobConfig.schedule)}
+                        </div>
+                        <div>
+                          <strong>Events Found:</strong> {job.events_found || 0}
+                        </div>
+                        <div>
+                          <strong>Last Run:</strong>{" "}
+                          {job.last_run
+                            ? format(
+                                new Date(job.last_run),
+                                "MMM dd, yyyy HH:mm"
+                              )
+                            : "Never"}
+                        </div>
+                        <div>
+                          <strong>Next Run:</strong>{" "}
+                          {job.next_run
+                            ? format(
+                                new Date(job.next_run),
+                                "MMM dd, yyyy HH:mm"
+                              )
+                            : "Not scheduled"}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
-              
+                );
+              })}
+
               {!scrapingJobs?.length && (
                 <div className="text-center py-8 text-muted-foreground">
                   No scraping jobs found
@@ -220,9 +252,9 @@ export function CronMonitor() {
           <CardTitle className="flex items-center gap-2">
             <Clock className="h-5 w-5" />
             Cron Execution Logs
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => refetchLogs()}
               className="ml-auto"
             >
@@ -236,10 +268,12 @@ export function CronMonitor() {
           ) : (
             <div className="space-y-3">
               {cronLogs?.map((log: CronLog) => (
-                <div 
-                  key={log.id} 
+                <div
+                  key={log.id}
                   className={`p-3 rounded-lg border ${
-                    log.error_details ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'
+                    log.error_details
+                      ? "border-red-200 bg-red-50"
+                      : "border-green-200 bg-green-50"
                   }`}
                 >
                   <div className="flex items-start gap-3">
@@ -248,21 +282,21 @@ export function CronMonitor() {
                     ) : (
                       <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
                     )}
-                    
+
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{log.message}</span>
                         <span className="text-sm text-muted-foreground">
-                          {format(new Date(log.created_at), 'MMM dd, HH:mm:ss')}
+                          {format(new Date(log.created_at), "MMM dd, HH:mm:ss")}
                         </span>
                       </div>
-                      
+
                       {log.job_name && (
                         <div className="text-sm text-muted-foreground mt-1">
                           Job: {log.job_name}
                         </div>
                       )}
-                      
+
                       {log.error_details && (
                         <div className="text-sm text-red-600 mt-2 font-mono bg-red-100 p-2 rounded">
                           {log.error_details}
@@ -272,7 +306,7 @@ export function CronMonitor() {
                   </div>
                 </div>
               ))}
-              
+
               {!cronLogs?.length && (
                 <div className="text-center py-8 text-muted-foreground">
                   No cron logs found

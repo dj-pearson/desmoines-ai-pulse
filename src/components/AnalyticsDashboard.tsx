@@ -1,16 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, PieChart, Pie, Cell
-} from 'recharts';
-import { 
-  Users, Eye, Search, TrendingUp, Clock, MousePointer,
-  Smartphone, Monitor, Tablet, Calendar
-} from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+import {
+  Users,
+  Eye,
+  Search,
+  TrendingUp,
+  Clock,
+  MousePointer,
+  Smartphone,
+  Monitor,
+  Tablet,
+  Calendar,
+} from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AnalyticsData {
   totalSessions: number;
@@ -26,37 +44,41 @@ interface AnalyticsData {
 }
 
 export default function AnalyticsDashboard() {
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(
+    null
+  );
   const [isLoading, setIsLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('7d'); // 1d, 7d, 30d
+  const [dateRange, setDateRange] = useState("7d"); // 1d, 7d, 30d
 
   // Fetch analytics data
   useEffect(() => {
     const fetchAnalytics = async () => {
       setIsLoading(true);
       try {
-        const days = dateRange === '1d' ? 1 : dateRange === '7d' ? 7 : 30;
+        const days = dateRange === "1d" ? 1 : dateRange === "7d" ? 7 : 30;
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
 
         // Get session analytics
         const { data: sessionData } = await supabase
-          .from('user_analytics')
-          .select('session_id, user_id, event_type, device_type, created_at')
-          .gte('created_at', startDate.toISOString());
+          .from("user_analytics")
+          .select("session_id, user_id, event_type, device_type, created_at")
+          .gte("created_at", startDate.toISOString());
 
         // Get search analytics
         const { data: searchData } = await supabase
-          .from('search_analytics')
-          .select('query, category, created_at')
-          .gte('created_at', startDate.toISOString());
+          .from("search_analytics")
+          .select("query, category, created_at")
+          .gte("created_at", startDate.toISOString());
 
         // Process the data
-        const processedData = processAnalyticsData(sessionData || [], searchData || []);
+        const processedData = processAnalyticsData(
+          sessionData || [],
+          searchData || []
+        );
         setAnalyticsData(processedData);
-
       } catch (error) {
-        console.error('Error fetching analytics:', error);
+        console.error("Error fetching analytics:", error);
       } finally {
         setIsLoading(false);
       }
@@ -66,26 +88,46 @@ export default function AnalyticsDashboard() {
   }, [dateRange]);
 
   // Process raw analytics data
-  const processAnalyticsData = (sessionData: any[], searchData: any[]): AnalyticsData => {
+  const processAnalyticsData = (
+    sessionData: Array<{
+      session_id: string;
+      user_id: string;
+      event_type: string;
+      created_at: string;
+      device_type?: string;
+    }>,
+    searchData: Array<{
+      query: string;
+      category?: string;
+      created_at: string;
+    }>
+  ): AnalyticsData => {
     // Calculate sessions and users
-    const uniqueSessions = new Set(sessionData.map(d => d.session_id));
-    const uniqueUsers = new Set(sessionData.filter(d => d.user_id).map(d => d.user_id));
-    
+    const uniqueSessions = new Set(sessionData.map((d) => d.session_id));
+    const uniqueUsers = new Set(
+      sessionData.filter((d) => d.user_id).map((d) => d.user_id)
+    );
+
     // Calculate page views
-    const pageViews = sessionData.filter(d => d.event_type === 'view');
-    
+    const pageViews = sessionData.filter((d) => d.event_type === "view");
+
     // Device breakdown
     const deviceCounts = sessionData.reduce((acc, d) => {
       acc[d.device_type] = (acc[d.device_type] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const totalDeviceEvents = Object.values(deviceCounts).reduce((sum, count) => sum + count, 0);
-    const deviceBreakdown = Object.entries(deviceCounts).map(([device, count]) => ({
-      device,
-      count,
-      percentage: Math.round((count / totalDeviceEvents) * 100)
-    }));
+    const totalDeviceEvents = Object.values(deviceCounts).reduce(
+      (sum, count) => sum + (count as number),
+      0
+    );
+    const deviceBreakdown = Object.entries(deviceCounts).map(
+      ([device, count]) => ({
+        device,
+        count: count as number,
+        percentage: Math.round(((count as number) / totalDeviceEvents) * 100),
+      })
+    );
 
     // Top searches
     const searchCounts = searchData.reduce((acc, d) => {
@@ -96,39 +138,41 @@ export default function AnalyticsDashboard() {
     }, {} as Record<string, number>);
 
     const topSearches = Object.entries(searchCounts)
-      .sort(([, a], [, b]) => b - a)
+      .sort(([, a], [, b]) => (b as number) - (a as number))
       .slice(0, 10)
-      .map(([query, count]) => ({ query, count }));
+      .map(([query, count]) => ({ query, count: count as number }));
 
-    // Content popularity (from view events)
+    // Content popularity (from view events - using event_type as proxy)
     const contentViews = sessionData
-      .filter(d => d.event_type === 'view')
+      .filter((d) => d.event_type === "view")
       .reduce((acc, d) => {
-        acc[d.content_type] = (acc[d.content_type] || 0) + 1;
+        acc[d.event_type] = (acc[d.event_type] || 0) + 1;
         return acc;
       }, {} as Record<string, number>);
 
-    const contentPopularity = Object.entries(contentViews).map(([content_type, views]) => ({
-      content_type,
-      views
-    }));
+    const contentPopularity = Object.entries(contentViews).map(
+      ([content_type, views]) => ({
+        content_type,
+        views: views as number,
+      })
+    );
 
     // Hourly activity
     const hourlyData = Array.from({ length: 24 }, (_, hour) => {
-      const hourSessions = sessionData.filter(d => {
+      const hourSessions = sessionData.filter((d) => {
         const eventHour = new Date(d.created_at).getHours();
         return eventHour === hour;
       });
-      
-      const hourSearches = searchData.filter(d => {
+
+      const hourSearches = searchData.filter((d) => {
         const searchHour = new Date(d.created_at).getHours();
         return searchHour === hour;
       });
 
       return {
         hour,
-        sessions: new Set(hourSessions.map(d => d.session_id)).size,
-        searches: hourSearches.length
+        sessions: new Set(hourSessions.map((d) => d.session_id)).size,
+        searches: hourSearches.length,
       };
     });
 
@@ -142,7 +186,7 @@ export default function AnalyticsDashboard() {
       deviceBreakdown,
       topSearches,
       contentPopularity,
-      hourlyActivity
+      hourlyActivity: hourlyData,
     };
   };
 
@@ -173,7 +217,7 @@ export default function AnalyticsDashboard() {
     );
   }
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+  const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"];
 
   return (
     <div className="space-y-6">
@@ -181,17 +225,21 @@ export default function AnalyticsDashboard() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Analytics Dashboard</h2>
         <div className="flex gap-2">
-          {['1d', '7d', '30d'].map((period) => (
+          {["1d", "7d", "30d"].map((period) => (
             <button
               key={period}
               onClick={() => setDateRange(period)}
               className={`px-3 py-1 rounded text-sm ${
-                dateRange === period 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'bg-secondary hover:bg-secondary/80'
+                dateRange === period
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-secondary hover:bg-secondary/80"
               }`}
             >
-              {period === '1d' ? 'Today' : period === '7d' ? '7 Days' : '30 Days'}
+              {period === "1d"
+                ? "Today"
+                : period === "7d"
+                ? "7 Days"
+                : "30 Days"}
             </button>
           ))}
         </div>
@@ -201,11 +249,15 @@ export default function AnalyticsDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Sessions
+            </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.totalSessions.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {analyticsData.totalSessions.toLocaleString()}
+            </div>
           </CardContent>
         </Card>
 
@@ -215,7 +267,9 @@ export default function AnalyticsDashboard() {
             <Eye className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.totalUsers.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {analyticsData.totalUsers.toLocaleString()}
+            </div>
           </CardContent>
         </Card>
 
@@ -225,7 +279,9 @@ export default function AnalyticsDashboard() {
             <MousePointer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.totalPageViews.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {analyticsData.totalPageViews.toLocaleString()}
+            </div>
           </CardContent>
         </Card>
 
@@ -235,7 +291,9 @@ export default function AnalyticsDashboard() {
             <Search className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{analyticsData.totalSearches.toLocaleString()}</div>
+            <div className="text-2xl font-bold">
+              {analyticsData.totalSearches.toLocaleString()}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -260,8 +318,18 @@ export default function AnalyticsDashboard() {
                   <XAxis dataKey="hour" />
                   <YAxis />
                   <Tooltip />
-                  <Line type="monotone" dataKey="sessions" stroke="#8884d8" name="Sessions" />
-                  <Line type="monotone" dataKey="searches" stroke="#82ca9d" name="Searches" />
+                  <Line
+                    type="monotone"
+                    dataKey="sessions"
+                    stroke="#8884d8"
+                    name="Sessions"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="searches"
+                    stroke="#82ca9d"
+                    name="Searches"
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -282,13 +350,18 @@ export default function AnalyticsDashboard() {
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={({ device, percentage }) => `${device} ${percentage}%`}
+                      label={({ device, percentage }) =>
+                        `${device} ${percentage}%`
+                      }
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="count"
                     >
                       {analyticsData.deviceBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={COLORS[index % COLORS.length]}
+                        />
                       ))}
                     </Pie>
                     <Tooltip />
@@ -303,16 +376,27 @@ export default function AnalyticsDashboard() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {analyticsData.deviceBreakdown.map((device, index) => (
-                  <div key={device.device} className="flex items-center justify-between">
+                  <div
+                    key={device.device}
+                    className="flex items-center justify-between"
+                  >
                     <div className="flex items-center gap-2">
-                      {device.device === 'mobile' && <Smartphone className="h-4 w-4" />}
-                      {device.device === 'desktop' && <Monitor className="h-4 w-4" />}
-                      {device.device === 'tablet' && <Tablet className="h-4 w-4" />}
+                      {device.device === "mobile" && (
+                        <Smartphone className="h-4 w-4" />
+                      )}
+                      {device.device === "desktop" && (
+                        <Monitor className="h-4 w-4" />
+                      )}
+                      {device.device === "tablet" && (
+                        <Tablet className="h-4 w-4" />
+                      )}
                       <span className="capitalize">{device.device}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary">{device.count}</Badge>
-                      <span className="text-sm text-muted-foreground">{device.percentage}%</span>
+                      <span className="text-sm text-muted-foreground">
+                        {device.percentage}%
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -348,7 +432,10 @@ export default function AnalyticsDashboard() {
             <CardContent>
               <div className="space-y-2">
                 {analyticsData.topSearches.map((search, index) => (
-                  <div key={search.query} className="flex items-center justify-between p-2 rounded hover:bg-muted">
+                  <div
+                    key={search.query}
+                    className="flex items-center justify-between p-2 rounded hover:bg-muted"
+                  >
                     <div className="flex items-center gap-3">
                       <Badge variant="outline">{index + 1}</Badge>
                       <span>{search.query}</span>

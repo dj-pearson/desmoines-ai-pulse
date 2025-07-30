@@ -6,8 +6,20 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Edit3,
@@ -23,12 +35,16 @@ import {
 } from "lucide-react";
 import { useScraping } from "@/hooks/useScraping";
 import { useToast } from "@/components/ui/use-toast";
-import { scheduleOptions, cronToFriendly, friendlyToCron } from "@/lib/cronUtils";
+import {
+  scheduleOptions,
+  cronToFriendly,
+  friendlyToCron,
+} from "@/lib/cronUtils";
 
 interface ScrapingJob {
   id: string;
   name: string;
-  status: "idle" | "running" | "completed" | "failed" | "scheduled_for_trigger";
+  status: "idle" | "running" | "completed" | "failed";
   lastRun: string | null;
   nextRun: string | null;
   eventsFound: number;
@@ -65,10 +81,12 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
 
   const handleEditJob = (job: ScrapingJob) => {
     setEditingJob(job);
-    
+
     // Find the schedule type from the cron expression
-    const scheduleType = scheduleOptions.find(opt => opt.cron === job.config.schedule)?.value || 'custom';
-    
+    const scheduleType =
+      scheduleOptions.find((opt) => opt.cron === job.config.schedule)?.value ||
+      "custom";
+
     setFormData({
       name: job.name,
       url: job.config.url || "",
@@ -91,9 +109,10 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
 
     try {
       // Convert friendly schedule type to cron expression
-      const cronExpression = formData.scheduleType === 'custom' 
-        ? formData.schedule || "" 
-        : friendlyToCron(formData.scheduleType || "never");
+      const cronExpression =
+        formData.scheduleType === "custom"
+          ? formData.schedule || ""
+          : friendlyToCron(formData.scheduleType || "never");
 
       await updateJobConfig(editingJob.id, {
         url: formData.url,
@@ -120,25 +139,14 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
 
   const handleRunJob = async (jobId: string) => {
     try {
-      const job = jobs.find(j => j.id === jobId);
-      const isScheduledTrigger = job?.status === "scheduled_for_trigger";
-      
+      const job = jobs.find((j) => j.id === jobId);
+
       await runScrapingJob(jobId);
-      
+
       toast({
         title: "Success",
-        description: isScheduledTrigger 
-          ? "Scheduled job triggered successfully! 🚀" 
-          : "Scraping job started successfully",
+        description: "Scraping job started successfully",
       });
-      
-      // If this was a scheduled trigger, update the status back to idle
-      if (isScheduledTrigger && job) {
-        await updateJobConfig(job.id, {
-          ...job.config,
-          // The cron system will set the next scheduled run time
-        });
-      }
     } catch (error) {
       toast({
         title: "Error",
@@ -153,8 +161,10 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
     return new Date(lastRun).toLocaleString();
   };
 
-  const readyToTriggerJobs = jobs.filter(job => job.status === "scheduled_for_trigger");
-  const runningJobs = jobs.filter(job => job.status === "running");
+  const readyToTriggerJobs = jobs.filter(
+    (job) => (job.status as string) === "idle"
+  );
+  const runningJobs = jobs.filter((job) => job.status === "running");
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -174,14 +184,18 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                 <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                 <span className="font-medium">Ready to Trigger</span>
               </div>
-              <p className="text-2xl font-bold text-blue-600">{readyToTriggerJobs.length}</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {readyToTriggerJobs.length}
+              </p>
             </Card>
             <Card className="p-4">
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                 <span className="font-medium">Currently Running</span>
               </div>
-              <p className="text-2xl font-bold text-green-600">{runningJobs.length}</p>
+              <p className="text-2xl font-bold text-green-600">
+                {runningJobs.length}
+              </p>
             </Card>
             <Card className="p-4">
               <div className="flex items-center gap-2">
@@ -198,7 +212,8 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                No scraping jobs found. Create your first scraper to get started.
+                No scraping jobs found. Create your first scraper to get
+                started.
               </AlertDescription>
             </Alert>
           ) : (
@@ -213,21 +228,29 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                       </CardTitle>
                       <div className="flex items-center gap-2">
                         <Badge
-                          variant={job.config.isActive ? "default" : "secondary"}
+                          variant={
+                            job.config.isActive ? "default" : "secondary"
+                          }
                         >
                           {job.config.isActive ? "Active" : "Inactive"}
                         </Badge>
                         <Badge
                           variant={
-                            job.status === "running" ? "default" : 
-                            job.status === "scheduled_for_trigger" ? "destructive" :
-                            "outline"
+                            job.status === "running"
+                              ? "default"
+                              : (job.status as string) === "running"
+                              ? "destructive"
+                              : "outline"
                           }
                           className={
-                            job.status === "scheduled_for_trigger" ? "animate-pulse" : ""
+                            (job.status as string) === "running"
+                              ? "animate-pulse"
+                              : ""
                           }
                         >
-                          {job.status === "scheduled_for_trigger" ? "🔵 Ready to Trigger" : job.status}
+                          {(job.status as string) === "running"
+                            ? "🔵 Running"
+                            : job.status}
                         </Badge>
                       </div>
                     </div>
@@ -250,7 +273,9 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                         <p>{formatLastRun(job.lastRun)}</p>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-600">Events Found:</p>
+                        <p className="font-medium text-gray-600">
+                          Events Found:
+                        </p>
                         <p>{job.eventsFound || 0}</p>
                       </div>
                     </div>
@@ -266,17 +291,23 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                       </Button>
                       <Button
                         size="sm"
-                        variant={job.status === "scheduled_for_trigger" ? "default" : "outline"}
+                        variant={
+                          (job.status as string) === "idle"
+                            ? "default"
+                            : "outline"
+                        }
                         onClick={() => handleRunJob(job.id)}
                         disabled={job.status === "running"}
                         className={
-                          job.status === "scheduled_for_trigger" 
-                            ? "bg-blue-600 hover:bg-blue-700 animate-pulse" 
+                          (job.status as string) === "idle"
+                            ? "bg-blue-600 hover:bg-blue-700 animate-pulse"
                             : ""
                         }
                       >
                         <Play className="h-3 w-3 mr-1" />
-                        {job.status === "scheduled_for_trigger" ? "🚀 Trigger Now!" : "Run Now"}
+                        {(job.status as string) === "idle"
+                          ? "🚀 Run Now!"
+                          : "Run Now"}
                       </Button>
                     </div>
                   </CardContent>
@@ -333,13 +364,16 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
 
                 <div>
                   <Label htmlFor="job-schedule">Schedule</Label>
-                  <Select 
-                    value={formData.scheduleType || "never"} 
+                  <Select
+                    value={formData.scheduleType || "never"}
                     onValueChange={(value) => {
-                      setFormData({ 
-                        ...formData, 
+                      setFormData({
+                        ...formData,
                         scheduleType: value,
-                        schedule: value === 'custom' ? formData.schedule : friendlyToCron(value)
+                        schedule:
+                          value === "custom"
+                            ? formData.schedule
+                            : friendlyToCron(value),
                       });
                     }}
                   >
@@ -351,20 +385,24 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                         <SelectItem key={option.value} value={option.value}>
                           <div className="flex flex-col">
                             <span>{option.label}</span>
-                            <span className="text-xs text-muted-foreground">{option.description}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {option.description}
+                            </span>
                           </div>
                         </SelectItem>
                       ))}
                       <SelectItem value="custom">
                         <div className="flex flex-col">
                           <span>Custom</span>
-                          <span className="text-xs text-muted-foreground">Enter custom cron expression</span>
+                          <span className="text-xs text-muted-foreground">
+                            Enter custom cron expression
+                          </span>
                         </div>
                       </SelectItem>
                     </SelectContent>
                   </Select>
-                  
-                  {formData.scheduleType === 'custom' && (
+
+                  {formData.scheduleType === "custom" && (
                     <div className="mt-2">
                       <Input
                         id="job-schedule-custom"
@@ -379,28 +417,27 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                       </p>
                     </div>
                   )}
-                  
-                  {formData.scheduleType && formData.scheduleType !== 'custom' && formData.scheduleType !== 'never' && (
-                    <p className="text-xs text-green-600 mt-1">
-                      Cron expression: {friendlyToCron(formData.scheduleType)}
-                    </p>
-                  )}
+
+                  {formData.scheduleType &&
+                    formData.scheduleType !== "custom" &&
+                    formData.scheduleType !== "never" && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Cron expression: {friendlyToCron(formData.scheduleType)}
+                      </p>
+                    )}
                 </div>
 
                 <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    <strong>Note:</strong> Advanced selector configuration is coming soon. 
-                    For now, you can update basic job settings.
+                    <strong>Note:</strong> Advanced selector configuration is
+                    coming soon. For now, you can update basic job settings.
                   </AlertDescription>
                 </Alert>
               </div>
 
               <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setEditingJob(null)}
-                >
+                <Button variant="outline" onClick={() => setEditingJob(null)}>
                   <X className="h-4 w-4 mr-2" />
                   Cancel
                 </Button>
