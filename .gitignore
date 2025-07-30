@@ -28,3 +28,12 @@ supabase/.temp/postgres-version
 supabase/.temp/project-ref
 supabase/.temp/rest-version
 supabase/.branches/_current_branch
+event-datetime-updates-2025-07-30T14-19-23.sql
+event-datetime-updates-2025-07-30T14-23-11.sql
+event-datetime-updates-2025-07-30T14-24-32.sql
+event-datetime-updates-2025-07-30T14-25-16.sql
+event-datetime-updates-2025-07-30T14-35-10.sql
+event-datetime-updates-2025-07-30T14-58-27.sql
+event-datetime-updates-2025-07-30T15-41-42.sql
+supabase/check_harbour.sql
+supabase/check_urls.sql

@@ -1,8 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import puppeteer, { Browser } from "puppeteer";
 import { fromZonedTime } from "date-fns-tz";
+import * as fs from "fs";
 
-// Supabase client setup - using same credentials as convert-timezones.ts
+// Supabase client setup
 const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE";
@@ -19,8 +20,19 @@ interface EventDateTimeInfo {
   error?: string;
 }
 
-class EventDateTimeCrawler {
+interface UpdateRecord {
+  eventId: string;
+  title: string;
+  sourceUrl: string;
+  currentDate: string;
+  newDate: string;
+  confidence: string;
+  extractedTime?: string;
+}
+
+class EventDateTimeCrawlerSQL {
   private browser: Browser | null = null;
+  private updates: UpdateRecord[] = [];
 
   async initialize() {
     this.browser = await puppeteer.launch({
@@ -28,12 +40,10 @@ class EventDateTimeCrawler {
       args: [
         "--no-sandbox", 
         "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-extensions",
-        "--disable-plugins",
-        "--disable-images"
+        "--disable-blink-features=AutomationControlled",
+        "--disable-web-security",
+        "--disable-features=VizDisplayCompositor"
       ],
-      protocolTimeout: 60000, // Increase protocol timeout
     });
   }
 
@@ -43,9 +53,6 @@ class EventDateTimeCrawler {
     }
   }
 
-  /**
-   * Extract date and time information from various event platforms
-   */
   async extractDateTimeFromUrl(
     url: string,
     eventTitle: string
@@ -57,18 +64,13 @@ class EventDateTimeCrawler {
     const page = await this.browser.newPage();
 
     try {
-      // Set user agent to avoid blocking
       await page.setUserAgent(
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       );
 
-      // Navigate to the page
       await page.goto(url, { waitUntil: "networkidle2", timeout: 60000 });
-
-      // Wait a bit for dynamic content to load
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
-      // Extract date and time information using multiple strategies
       const dateTimeInfo = await page.evaluate(() => {
         interface ExtractedInfo {
           dates: string[];
@@ -110,7 +112,6 @@ class EventDateTimeCrawler {
         // Strategy 2: Look for common date/time patterns in text
         const textContent = document.body.textContent || "";
 
-        // Common date patterns
         const datePatterns = [
           /(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}/gi,
           /\d{1,2}\/\d{1,2}\/\d{4}/g,
@@ -118,13 +119,10 @@ class EventDateTimeCrawler {
           /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+\d{4}/gi,
         ];
 
-        // Common time patterns
         const timePatterns = [
           /\d{1,2}:\d{2}\s*(?:AM|PM|am|pm)/gi,
           /\d{1,2}\s*(?:AM|PM|am|pm)/gi,
           /(?:Doors|Show|Event|Starts?|Begins?)\s*(?:at|@)?\s*\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)/gi,
-          /\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)\s*(?:-|to|until)\s*\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)/gi,
-          /(?:from|start|begins?)\s+\d{1,2}(?::\d{2})?\s*(?:AM|PM|am|pm)/gi,
         ];
 
         datePatterns.forEach((pattern) => {
@@ -141,34 +139,9 @@ class EventDateTimeCrawler {
           }
         });
 
-        // Strategy 3: Look for common selectors used by event platforms
-        const commonSelectors = [
-          ".event-date",
-          ".event-time",
-          ".date",
-          ".time",
-          '[class*="date"]',
-          '[class*="time"]',
-          ".datetime",
-          ".event-datetime",
-          "time[datetime]",
-          "[datetime]",
-        ];
-
-        commonSelectors.forEach((selector) => {
-          const elements = document.querySelectorAll(selector);
-          elements.forEach((el) => {
-            const text = el.textContent?.trim();
-            const datetime = el.getAttribute("datetime");
-            if (text) results.text.push(text);
-            if (datetime) results.text.push(datetime);
-          });
-        });
-
         return results;
       });
 
-      // Process the extracted information
       return this.processExtractedInfo(url, eventTitle, dateTimeInfo);
     } catch (error) {
       console.error(`Error crawling ${url}:`, error);
@@ -201,7 +174,6 @@ class EventDateTimeCrawler {
       confidence: "low",
     };
 
-    // Get current date for validation
     const now = new Date();
     const oneYearFromNow = new Date();
     oneYearFromNow.setFullYear(now.getFullYear() + 1);
@@ -212,14 +184,12 @@ class EventDateTimeCrawler {
       if (schema.startDate) {
         try {
           const extractedDate = new Date(schema.startDate);
-          // Validate that the date is in the future and within one year
           if (extractedDate > now && extractedDate <= oneYearFromNow) {
             result.extractedDate = extractedDate;
             result.confidence = "high";
             
-            // If the structured data includes time (not just date), mark as having time info
             if (schema.startDate.includes('T') && (schema.startDate.includes('-') || schema.startDate.includes('+'))) {
-              result.extractedTime = "structured_data"; // Mark that time is included in the date
+              result.extractedTime = "structured_data";
             }
             
             return result;
@@ -237,11 +207,10 @@ class EventDateTimeCrawler {
       for (const dateStr of extracted.dates) {
         try {
           const date = new Date(dateStr);
-          // Validate that the date is in the future and within one year
           if (!isNaN(date.getTime()) && date > now && date <= oneYearFromNow) {
             result.extractedDate = date;
             result.confidence = "medium";
-            break; // Use the first valid future date
+            break;
           } else if (!isNaN(date.getTime())) {
             console.log(`🗓️ Rejected date (${date.toISOString()}) - not in valid future range`);
           }
@@ -261,49 +230,67 @@ class EventDateTimeCrawler {
     return result;
   }
 
-  /**
-   * Update events in the database with correct CDT times
-   */
-  async updateEventsWithCorrectTimes(dryRun: boolean = true, eventId?: string, limit?: number): Promise<void> {
-    console.log(
-      `Starting event date/time correction ${dryRun ? "(DRY RUN)" : ""}`
-    );
+  async generateUpdateScript(eventId?: string, limit?: number, filterType?: 'platform' | 'safe' | 'all'): Promise<void> {
+    console.log("🚀 Event DateTime Crawler - SQL Generator");
+    console.log("═".repeat(50));
 
     let query = supabase
       .from("events")
       .select("id, title, date, source_url")
       .not("source_url", "is", null);
 
-    // If specific event ID provided, filter to just that event
     if (eventId) {
       query = query.eq("id", eventId);
-      console.log(`Filtering to specific event ID: ${eventId}`);
+      console.log(`🎯 Target Event ID: ${eventId}`);
     } else {
+      // Apply filtering based on URL patterns
+      if (filterType === 'platform') {
+        console.log(`🏢 Filter: Specific Platforms Only (Eventbrite, First Fleet, DMPA)`);
+        query = query.or(
+          "source_url.ilike.%eventbrite.com/e/%," +
+          "source_url.ilike.%firstfleetconcerts.com/events/detail/%," +
+          "source_url.ilike.%desmoinesperformingarts.org/whats-on/events/%," +
+          "source_url.ilike.%ticketmaster.com%"
+        );
+      } else if (filterType === 'safe') {
+        console.log(`🛡️ Filter: Safe URLs Only (excluding generic calendar pages)`);
+        query = query
+          .not("source_url", "ilike", "%/events?%")
+          .not("source_url", "ilike", "%/events/?%")
+          .not("source_url", "ilike", "%catchdesmoines.com/events/?skip=%")
+          .not("source_url", "ilike", "%catchdesmoines.com/events/?utm_source=%");
+      } else if (filterType === 'all') {
+        console.log(`🌍 Filter: ALL Events (including problematic URLs)`);
+      } else {
+        console.log(`📊 Filter: Default (all events)`);
+      }
+      
       query = query.order("date", { ascending: true });
       if (limit) {
         query = query.limit(limit);
-        console.log(`Limiting to ${limit} events`);
+        console.log(`📊 Limit: ${limit} events`);
       }
     }
 
     const { data: events, error } = await query;
 
     if (error) {
-      console.error("Error fetching events:", error);
+      console.error("❌ Error fetching events:", error);
       return;
     }
 
     if (!events || events.length === 0) {
-      console.log(eventId ? `No event found with ID: ${eventId}` : "No events with source URLs found");
+      console.log(eventId ? `❌ No event found with ID: ${eventId}` : "❌ No events with source URLs found");
       return;
     }
 
-    console.log(`Found ${events.length} event(s) to process`);
+    console.log(`📋 Processing ${events.length} event(s)...`);
+    console.log("─".repeat(50));
 
-    for (const event of events) {
-      console.log(`\nProcessing: ${event.title}`);
-      console.log(`Current date: ${event.date}`);
-      console.log(`Source URL: ${event.source_url}`);
+    for (const [index, event] of events.entries()) {
+      console.log(`\n[${index + 1}/${events.length}] ${event.title}`);
+      console.log(`📅 Current: ${event.date}`);
+      console.log(`🔗 URL: ${event.source_url}`);
 
       try {
         const info = await this.extractDateTimeFromUrl(
@@ -312,90 +299,71 @@ class EventDateTimeCrawler {
         );
 
         if (info.extractedDate) {
-          console.log(`Extracted date: ${info.extractedDate.toISOString()}`);
-          console.log(`Confidence: ${info.confidence}`);
+          console.log(`✅ Extracted: ${info.extractedDate.toISOString()}`);
+          console.log(`🎯 Confidence: ${info.confidence}`);
 
-          if (info.extractedTime) {
-            console.log(`Extracted time: ${info.extractedTime}`);
-
-            // If time is from structured data, the date already includes time info
-            let finalDateTime: Date;
-            if (info.extractedTime === "structured_data") {
-              console.log("✅ Using complete datetime from structured data");
-              finalDateTime = info.extractedDate;
-            } else {
-              // Combine date and time and convert to UTC for storage
-              const combinedDateTime = this.combineDateTime(
-                info.extractedDate,
-                info.extractedTime
-              );
-              finalDateTime = fromZonedTime(
-                combinedDateTime,
-                "America/Chicago"
-              );
-            }
-
-            if (!dryRun) {
-              const { data: updateData, error: updateError } = await supabase
-                .from("events")
-                .update({
-                  date: finalDateTime.toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", event.id)
-                .select(); // Return the updated record to verify
-
-              if (updateError) {
-                console.error(`❌ Error updating event ${event.id}:`, updateError);
-              } else if (updateData && updateData.length > 0) {
-                console.log(
-                  `✅ Successfully updated event: ${finalDateTime.toISOString()}`
-                );
-                console.log(`📝 Database record updated at: ${updateData[0].updated_at}`);
-              } else {
-                console.log(`⚠️ Update command succeeded but no rows were affected`);
-              }
-            } else {
-              console.log(`🔍 Would update to: ${finalDateTime.toISOString()}`);
-            }
+          let finalDateTime: Date;
+          if (info.extractedTime === "structured_data") {
+            console.log("📊 Using complete datetime from structured data");
+            finalDateTime = info.extractedDate;
+          } else if (info.extractedTime) {
+            console.log(`⏰ Time: ${info.extractedTime}`);
+            const combinedDateTime = this.combineDateTime(
+              info.extractedDate,
+              info.extractedTime
+            );
+            finalDateTime = fromZonedTime(combinedDateTime, "America/Chicago");
           } else {
-            console.log("⚠️ No time information found, keeping existing time");
+            console.log("⚠️  No time info, using date only");
+            finalDateTime = info.extractedDate;
+          }
+
+          // Check if it's actually different from current
+          const currentDate = new Date(event.date);
+          const timeDiff = Math.abs(finalDateTime.getTime() - currentDate.getTime());
+          
+          if (timeDiff > 60000) { // More than 1 minute difference
+            this.updates.push({
+              eventId: event.id,
+              title: event.title,
+              sourceUrl: event.source_url,
+              currentDate: event.date,
+              newDate: finalDateTime.toISOString(),
+              confidence: info.confidence,
+              extractedTime: info.extractedTime
+            });
+            console.log("✅ Added to update list");
+          } else {
+            console.log("ℹ️  No significant change needed");
           }
         } else {
-          console.log("❌ Could not extract date information");
+          console.log("❌ Could not extract valid date information");
           if (info.error) {
-            console.log(`Error: ${info.error}`);
+            console.log(`   Error: ${info.error}`);
           }
         }
 
-        // Rate limiting - wait between requests
+        // Rate limiting
         await new Promise((resolve) => setTimeout(resolve, 3000));
       } catch (error) {
-        console.error(`Error processing event ${event.id}:`, error);
-        
-        // Skip problematic URLs and continue
-        if (error instanceof Error && error.message.includes('timeout')) {
-          console.log('⏰ Skipping due to timeout, continuing with next event...');
-        }
+        console.error(`❌ Error processing event:`, error);
       }
     }
 
-    console.log("\n✅ Event processing complete");
+    await this.generateSQLFile();
   }
 
   private combineDateTime(date: Date, timeStr: string): Date {
-    // Parse time string (e.g., "7:30 PM", "8 PM", "19:30")
     const timeMatch = timeStr.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/);
 
     if (!timeMatch) {
-      return date; // Return original date if time parsing fails
+      return date;
     }
 
     let hours = parseInt(timeMatch[1]);
     const minutes = parseInt(timeMatch[2] || "0");
     const ampm = timeMatch[3]?.toUpperCase();
 
-    // Convert to 24-hour format
     if (ampm === "PM" && hours < 12) {
       hours += 12;
     } else if (ampm === "AM" && hours === 12) {
@@ -404,43 +372,124 @@ class EventDateTimeCrawler {
 
     const combined = new Date(date);
     combined.setHours(hours, minutes, 0, 0);
-
     return combined;
+  }
+
+  private async generateSQLFile(): Promise<void> {
+    console.log("\n" + "═".repeat(50));
+    console.log("📝 GENERATING SQL UPDATE SCRIPT");
+    console.log("═".repeat(50));
+
+    if (this.updates.length === 0) {
+      console.log("ℹ️  No updates needed - all events have correct dates/times");
+      return;
+    }
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `event-datetime-updates-${timestamp}.sql`;
+    
+    let sqlContent = `-- Event DateTime Updates Generated on ${new Date().toISOString()}\n`;
+    sqlContent += `-- Total updates: ${this.updates.length}\n\n`;
+    
+    sqlContent += `-- Preview of changes:\n`;
+    this.updates.forEach((update, index) => {
+      sqlContent += `-- ${index + 1}. ${update.title}\n`;
+      sqlContent += `--    Current: ${update.currentDate}\n`;
+      sqlContent += `--    New:     ${update.newDate}\n`;
+      sqlContent += `--    Confidence: ${update.confidence}\n`;
+      sqlContent += `--    Source: ${update.sourceUrl}\n\n`;
+    });
+
+    sqlContent += `\n-- SQL UPDATE STATEMENTS:\n`;
+    sqlContent += `-- Execute these one at a time and verify the results\n\n`;
+
+    this.updates.forEach((update, index) => {
+      sqlContent += `-- Update ${index + 1}: ${update.title}\n`;
+      sqlContent += `UPDATE events \nSET \n`;
+      sqlContent += `  date = '${update.newDate}',\n`;
+      sqlContent += `  updated_at = NOW()\n`;
+      sqlContent += `WHERE id = '${update.eventId}';\n`;
+      sqlContent += `-- Verify: SELECT title, date, updated_at FROM events WHERE id = '${update.eventId}';\n\n`;
+    });
+
+    // Verification queries
+    sqlContent += `\n-- VERIFICATION QUERIES:\n`;
+    sqlContent += `-- Run these to verify all updates were applied correctly\n\n`;
+    
+    sqlContent += `-- Check all updated events:\n`;
+    sqlContent += `SELECT title, date, updated_at \nFROM events \nWHERE id IN (\n`;
+    this.updates.forEach((update, index) => {
+      sqlContent += `  '${update.eventId}'${index < this.updates.length - 1 ? ',' : ''}\n`;
+    });
+    sqlContent += `);\n\n`;
+
+    sqlContent += `-- Count total changes:\n`;
+    sqlContent += `SELECT COUNT(*) as updated_events \nFROM events \nWHERE updated_at > NOW() - INTERVAL '1 hour';\n`;
+
+    try {
+      await fs.promises.writeFile(filename, sqlContent, 'utf8');
+      
+      console.log(`✅ SQL script generated: ${filename}`);
+      console.log(`📊 Updates to process: ${this.updates.length}`);
+      console.log("\n📋 Summary of updates:");
+      
+      this.updates.forEach((update, index) => {
+        console.log(`${index + 1}. ${update.title}`);
+        console.log(`   Current: ${update.currentDate}`);
+        console.log(`   New:     ${update.newDate}`);
+        console.log(`   Confidence: ${update.confidence}`);
+        console.log("");
+      });
+
+      console.log("🔧 Instructions:");
+      console.log("1. Open Supabase SQL Editor");
+      console.log(`2. Load the file: ${filename}`);
+      console.log("3. Execute the UPDATE statements one by one");
+      console.log("4. Run the verification queries to confirm changes");
+      console.log("5. Check your website to see the corrected event times");
+      
+    } catch (error) {
+      console.error("❌ Error writing SQL file:", error);
+    }
   }
 }
 
 // CLI usage
 async function main() {
   const args = process.argv.slice(2);
-  const dryRun = !args.includes("--apply");
   
-  // Parse command line arguments
   const eventIdIndex = args.indexOf("--event-id");
   const eventId = eventIdIndex !== -1 && args[eventIdIndex + 1] ? args[eventIdIndex + 1] : undefined;
   
   const limitIndex = args.indexOf("--limit");
   const limit = limitIndex !== -1 && args[limitIndex + 1] ? parseInt(args[limitIndex + 1]) : undefined;
 
+  // Determine filter type
+  let filterType: 'platform' | 'safe' | 'all' | undefined;
+  if (args.includes("--platform-filter")) {
+    filterType = 'platform';
+  } else if (args.includes("--safe-urls-only")) {
+    filterType = 'safe';
+  } else if (args.includes("--all")) {
+    filterType = 'all';
+  }
+
   console.log("🚀 Event DateTime Crawler");
-  console.log(`Mode: ${dryRun ? "DRY RUN" : "LIVE UPDATE"}`);
   if (eventId) console.log(`Target Event ID: ${eventId}`);
   if (limit) console.log(`Limit: ${limit} events`);
+  if (filterType) console.log(`Filter: ${filterType}`);
   console.log("───────────────────────────────");
 
-  const crawler = new EventDateTimeCrawler();
+  const crawler = new EventDateTimeCrawlerSQL();
 
   try {
     await crawler.initialize();
-    await crawler.updateEventsWithCorrectTimes(dryRun, eventId, limit);
+    await crawler.generateUpdateScript(eventId, limit, filterType);
   } catch (error) {
-    console.error("Crawler error:", error);
+    console.error("❌ Crawler error:", error);
   } finally {
     await crawler.close();
   }
 }
 
-// Export for use as module
-export { EventDateTimeCrawler };
-
-// Run the main function
 main().catch(console.error);
