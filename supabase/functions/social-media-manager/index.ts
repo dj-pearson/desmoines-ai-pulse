@@ -30,6 +30,28 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Helper function to create URL-friendly slugs
+  const createSlug = (title: string): string => {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  };
+
+  const generateContentUrl = (contentType: string, content: any): string => {
+    const baseUrl = "https://desmoinesinsider.com";
+    if (contentType === "event") {
+      const slug = createSlug(content.title);
+      return `${baseUrl}/events/${slug}`;
+    } else if (contentType === "restaurant") {
+      const slug = content.slug || createSlug(content.name);
+      return `${baseUrl}/restaurants/${slug}`;
+    }
+    return baseUrl;
+  };
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -141,9 +163,7 @@ serve(async (req) => {
 
         if (events && events.length > 0) {
           selectedContent = events[Math.floor(Math.random() * events.length)];
-          contentUrl = `${Deno.env.get("SUPABASE_URL")}/events/${
-            selectedContent.id
-          }`;
+          contentUrl = generateContentUrl("event", selectedContent);
         }
       } else if (contentType === "restaurant") {
         // Get restaurants or restaurant openings not recently featured
@@ -172,9 +192,7 @@ serve(async (req) => {
         if (restaurants && restaurants.length > 0) {
           selectedContent =
             restaurants[Math.floor(Math.random() * restaurants.length)];
-          contentUrl = `${Deno.env.get("SUPABASE_URL")}/restaurants/${
-            selectedContent.slug || selectedContent.id
-          }`;
+          contentUrl = generateContentUrl("restaurant", selectedContent);
         }
       }
 
@@ -195,9 +213,7 @@ serve(async (req) => {
           if (allEvents && allEvents.length > 0) {
             selectedContent =
               allEvents[Math.floor(Math.random() * allEvents.length)];
-            contentUrl = `${Deno.env.get("SUPABASE_URL")}/events/${
-              selectedContent.id
-            }`;
+            contentUrl = generateContentUrl("event", selectedContent);
           }
         } else if (contentType === "restaurant") {
           const { data: allRestaurants } = await supabase
@@ -209,9 +225,7 @@ serve(async (req) => {
           if (allRestaurants && allRestaurants.length > 0) {
             selectedContent =
               allRestaurants[Math.floor(Math.random() * allRestaurants.length)];
-            contentUrl = `${Deno.env.get("SUPABASE_URL")}/restaurants/${
-              selectedContent.slug || selectedContent.id
-            }`;
+            contentUrl = generateContentUrl("restaurant", selectedContent);
           }
         }
       }
