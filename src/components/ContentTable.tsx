@@ -37,6 +37,8 @@ import {
   Calendar,
   Brain,
   FileText,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -69,6 +71,24 @@ const tableConfigs = {
   event: {
     title: "Events",
     searchPlaceholder: "Search events...",
+    // Primary columns shown on all screen sizes
+    primaryColumns: [
+      { key: "title", label: "Title", type: "text" },
+      { key: "date", label: "Date", type: "date" },
+      { key: "category", label: "Category", type: "badge" },
+      { key: "is_featured", label: "Featured", type: "boolean" },
+    ],
+    // Secondary columns shown on larger screens
+    secondaryColumns: [
+      { key: "venue", label: "Venue", type: "text" },
+      { key: "location", label: "Location", type: "text" },
+      { key: "price", label: "Price", type: "text" },
+      { key: "original_description", label: "Description", type: "truncated" },
+      { key: "source_url", label: "Source", type: "link" },
+      { key: "is_enhanced", label: "Enhanced", type: "boolean" },
+      { key: "ai_writeup", label: "AI Writeup", type: "boolean" },
+    ],
+    // All columns for backward compatibility
     columns: [
       { key: "title", label: "Title", type: "text" },
       { key: "venue", label: "Venue", type: "text" },
@@ -239,6 +259,8 @@ export default function ContentTable({
   );
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const [showDataEnhancer, setShowDataEnhancer] = useState(false);
+  const [compactView, setCompactView] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const { isHighlightedDomain } = useDomainHighlights();
   const { generateWriteup, isGeneratingId } = useWriteupGenerator();
 
@@ -248,6 +270,33 @@ export default function ContentTable({
   }, [searchValue]);
 
   const config = tableConfigs[type];
+
+  // Helper function to toggle row expansion
+  const toggleRowExpansion = (itemId: string) => {
+    const newExpandedRows = new Set(expandedRows);
+    if (newExpandedRows.has(itemId)) {
+      newExpandedRows.delete(itemId);
+    } else {
+      newExpandedRows.add(itemId);
+    }
+    setExpandedRows(newExpandedRows);
+  };
+
+  // Get columns to display based on view mode
+  const getDisplayColumns = () => {
+    if (compactView && type === "event" && config.primaryColumns) {
+      return config.primaryColumns;
+    }
+    return config.columns;
+  };
+
+  // Get additional details for expanded rows
+  const getAdditionalColumns = () => {
+    if (compactView && type === "event" && config.secondaryColumns) {
+      return config.secondaryColumns;
+    }
+    return [];
+  };
 
   // Sort and filter items with null date handling
   const processedItems = useMemo(() => {
@@ -517,14 +566,24 @@ export default function ContentTable({
         </div>
         <div className="flex gap-2">
           {type === "event" && (
-            <Button
-              variant="outline"
-              onClick={() => setShowDataEnhancer(true)}
-              className="touch-target"
-            >
-              <Brain className="h-4 w-4 mr-2" />
-              AI Enhance
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                onClick={() => setCompactView(!compactView)}
+                className="touch-target"
+                size="sm"
+              >
+                {compactView ? "Full View" : "Compact"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowDataEnhancer(true)}
+                className="touch-target"
+              >
+                <Brain className="h-4 w-4 mr-2" />
+                AI Enhance
+              </Button>
+            </>
           )}
           {onCreate && (
             <Button onClick={onCreate} className="touch-target">
@@ -600,115 +659,171 @@ export default function ContentTable({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                {config.columns.map((column) => (
-                  <TableHead key={column.key}>{column.label}</TableHead>
-                ))}
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {processedItems.length === 0 ? (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell
-                    colSpan={config.columns.length + 1}
-                    className="text-center py-8"
-                  >
-                    <div className="text-muted-foreground">
-                      <p>No {config.title.toLowerCase()} found.</p>
-                      <p className="text-sm mt-1">
-                        Try adjusting your search or filters.
-                      </p>
-                    </div>
-                  </TableCell>
+                  {compactView && type === "event" && (
+                    <TableHead className="w-8"></TableHead>
+                  )}
+                  {getDisplayColumns().map((column) => (
+                    <TableHead key={column.key}>{column.label}</TableHead>
+                  ))}
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ) : (
-                processedItems.map((item) => {
-                  const isHighlighted =
-                    type === "event" &&
-                    item.source_url &&
-                    isHighlightedDomain(item.source_url);
-                  const hasMissingDate = type === "event" && !item.date;
-
-                  return (
-                    <TableRow
-                      key={item.id}
-                      className={`
-                        ${
-                          hasMissingDate
-                            ? "bg-destructive/5 border-l-4 border-l-destructive"
-                            : ""
-                        }
-                        ${
-                          isHighlighted
-                            ? "bg-warning/10 border-l-4 border-l-warning"
-                            : ""
-                        }
-                        ${
-                          isHighlighted && hasMissingDate
-                            ? "bg-gradient-to-r from-destructive/5 to-warning/10 border-l-4 border-l-destructive border-r-4 border-r-warning"
-                            : ""
-                        }
-                      `.trim()}
+              </TableHeader>
+              <TableBody>
+                {processedItems.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={config.columns.length + 1}
+                      className="text-center py-8"
                     >
-                      {config.columns.map((column) => (
-                        <TableCell key={column.key}>
-                          {renderCellContent(item, column)}
-                        </TableCell>
-                      ))}
-                      <TableCell>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => onEdit(item)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEnhanceContent(item)}
-                            disabled={enhancingId === item.id}
-                          >
-                            <Sparkles className="h-4 w-4" />
-                          </Button>
-                          {(type === "event" || type === "restaurant") && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleGenerateWriteup(item)}
-                              disabled={isGeneratingId(item.id)}
-                              title="Generate AI Writeup"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
+                      <div className="text-muted-foreground">
+                        <p>No {config.title.toLowerCase()} found.</p>
+                        <p className="text-sm mt-1">
+                          Try adjusting your search or filters.
+                        </p>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  processedItems.map((item) => {
+                    const isHighlighted =
+                      type === "event" &&
+                      item.source_url &&
+                      isHighlightedDomain(item.source_url);
+                    const hasMissingDate = type === "event" && !item.date;
+                    const isExpanded = expandedRows.has(item.id);
+                    const hasAdditionalDetails =
+                      compactView &&
+                      type === "event" &&
+                      getAdditionalColumns().length > 0;
+
+                    return (
+                      <React.Fragment key={item.id}>
+                        <TableRow
+                          className={`
+                          ${
+                            hasMissingDate
+                              ? "bg-destructive/5 border-l-4 border-l-destructive"
+                              : ""
+                          }
+                          ${
+                            isHighlighted
+                              ? "bg-warning/10 border-l-4 border-l-warning"
+                              : ""
+                          }
+                          ${
+                            isHighlighted && hasMissingDate
+                              ? "bg-gradient-to-r from-destructive/5 to-warning/10 border-l-4 border-l-destructive border-r-4 border-r-warning"
+                              : ""
+                          }
+                        `.trim()}
+                        >
+                          {/* Expand/Collapse button for compact view */}
+                          {hasAdditionalDetails && (
+                            <TableCell className="w-8">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => toggleRowExpansion(item.id)}
+                                className="h-6 w-6 p-0"
+                              >
+                                {isExpanded ? (
+                                  <ChevronDown className="h-3 w-3" />
+                                ) : (
+                                  <ChevronRight className="h-3 w-3" />
+                                )}
+                              </Button>
+                            </TableCell>
                           )}
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Are you sure you want to delete this ${type}?`
-                                )
-                              ) {
-                                onDelete(item.id);
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
+
+                          {/* Main columns */}
+                          {getDisplayColumns().map((column) => (
+                            <TableCell key={column.key}>
+                              {renderCellContent(item, column)}
+                            </TableCell>
+                          ))}
+
+                          {/* Actions */}
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => onEdit(item)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleEnhanceContent(item)}
+                                disabled={enhancingId === item.id}
+                              >
+                                <Sparkles className="h-4 w-4" />
+                              </Button>
+                              {(type === "event" || type === "restaurant") && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleGenerateWriteup(item)}
+                                  disabled={isGeneratingId(item.id)}
+                                  title="Generate AI Writeup"
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => {
+                                  if (
+                                    confirm(
+                                      `Are you sure you want to delete this ${type}?`
+                                    )
+                                  ) {
+                                    onDelete(item.id);
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+
+                        {/* Expanded row with additional details */}
+                        {hasAdditionalDetails && isExpanded && (
+                          <TableRow>
+                            <TableCell></TableCell>
+                            <TableCell
+                              colSpan={getDisplayColumns().length + 1}
+                              className="bg-muted/20 p-4"
+                            >
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {getAdditionalColumns().map((column) => (
+                                  <div key={column.key} className="space-y-1">
+                                    <span className="text-sm font-medium text-muted-foreground">
+                                      {column.label}:
+                                    </span>
+                                    <div className="text-sm">
+                                      {renderCellContent(item, column)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
