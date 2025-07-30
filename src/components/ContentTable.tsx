@@ -172,6 +172,16 @@ const tableConfigs = {
         ],
       },
     ],
+    sortOptions: [
+      { key: "name", label: "Name (A-Z)" },
+      { key: "cuisine", label: "Cuisine" },
+      { key: "location", label: "Location" },
+      { key: "price_range", label: "Price Range" },
+      { key: "opening_date", label: "Opening Date" },
+      { key: "rating", label: "Rating" },
+      { key: "is_featured", label: "Featured First" },
+      { key: "ai_writeup", label: "Has AI Writeup" },
+    ],
   },
   attraction: {
     title: "Attractions",
@@ -199,6 +209,13 @@ const tableConfigs = {
         ],
       },
     ],
+    sortOptions: [
+      { key: "name", label: "Name (A-Z)" },
+      { key: "type", label: "Type" },
+      { key: "location", label: "Location" },
+      { key: "rating", label: "Rating" },
+      { key: "is_featured", label: "Featured First" },
+    ],
   },
   playground: {
     title: "Playgrounds",
@@ -218,6 +235,13 @@ const tableConfigs = {
         label: "Age Range",
         options: ["All", "0-2", "2-5", "5-12", "All Ages"],
       },
+    ],
+    sortOptions: [
+      { key: "name", label: "Name (A-Z)" },
+      { key: "location", label: "Location" },
+      { key: "age_range", label: "Age Range" },
+      { key: "rating", label: "Rating" },
+      { key: "is_featured", label: "Featured First" },
     ],
   },
   restaurant_opening: {
@@ -251,6 +275,13 @@ const tableConfigs = {
         label: "Cuisine",
         options: ["All", "American", "Italian", "Mexican", "Asian", "Other"],
       },
+    ],
+    sortOptions: [
+      { key: "name", label: "Name (A-Z)" },
+      { key: "cuisine", label: "Cuisine" },
+      { key: "location", label: "Location" },
+      { key: "opening_date", label: "Opening Date" },
+      { key: "status", label: "Status" },
     ],
   },
 };
@@ -301,7 +332,7 @@ export default function ContentTable({
 
   // Get columns to display based on view mode
   const getDisplayColumns = () => {
-    if (compactView && type === "event" && config.primaryColumns) {
+    if (compactView && type === "event" && "primaryColumns" in config) {
       return config.primaryColumns;
     }
     return config.columns;
@@ -309,7 +340,7 @@ export default function ContentTable({
 
   // Get additional details for expanded rows
   const getAdditionalColumns = () => {
-    if (compactView && type === "event" && config.secondaryColumns) {
+    if (compactView && type === "event" && "secondaryColumns" in config) {
       return config.secondaryColumns;
     }
     return [];
@@ -719,11 +750,13 @@ export default function ContentTable({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {sortOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
+                  {("sortOptions" in config ? config.sortOptions : []).map(
+                    (option) => (
+                      <SelectItem key={option.key} value={option.key}>
+                        {option.label}
+                      </SelectItem>
+                    )
+                  )}
                 </SelectContent>
               </Select>
 
@@ -793,11 +826,11 @@ export default function ContentTable({
           <CardTitle className="flex items-center justify-between">
             <span>{config.title} List</span>
             <div className="flex items-center gap-4">
-              {type === "event" && (
+              {type === "event" && "sortOptions" in config && (
                 <Badge variant="outline" className="text-xs">
                   Sorted by{" "}
-                  {sortOptions
-                    .find((opt) => opt.value === sortField)
+                  {config.sortOptions
+                    .find((opt) => opt.key === sortField)
                     ?.label.toLowerCase()}{" "}
                   ({sortDirection === "asc" ? "ascending" : "descending"})
                 </Badge>
@@ -808,9 +841,9 @@ export default function ContentTable({
                 <span className="text-sm font-medium text-gray-700">View:</span>
                 <div className="flex items-center border border-gray-300 rounded-md">
                   <button
-                    onClick={() => setIsCompactView(false)}
+                    onClick={() => setCompactView(false)}
                     className={`px-3 py-1 text-sm rounded-l-md ${
-                      !isCompactView
+                      !compactView
                         ? "bg-blue-500 text-white"
                         : "text-gray-600 hover:bg-gray-100"
                     }`}
@@ -818,9 +851,9 @@ export default function ContentTable({
                     Full
                   </button>
                   <button
-                    onClick={() => setIsCompactView(true)}
+                    onClick={() => setCompactView(true)}
                     className={`px-3 py-1 text-sm rounded-r-md ${
-                      isCompactView
+                      compactView
                         ? "bg-blue-500 text-white"
                         : "text-gray-600 hover:bg-gray-100"
                     }`}
