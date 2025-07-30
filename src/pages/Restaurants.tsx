@@ -20,7 +20,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MapPin, Star, DollarSign, ChefHat, Search, Filter } from "lucide-react";
+import {
+  MapPin,
+  Star,
+  DollarSign,
+  ChefHat,
+  Search,
+  Filter,
+} from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -51,7 +58,7 @@ export default function Restaurants() {
   const filterOptions = useRestaurantFilterOptions();
 
   const handleSearchChange = (value: string) => {
-    setFilters(prev => ({ ...prev, search: value }));
+    setFilters((prev) => ({ ...prev, search: value }));
   };
 
   const handleClearFilters = () => {
