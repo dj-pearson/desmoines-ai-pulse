@@ -313,9 +313,9 @@ export function useSocialMediaManager() {
   const repostPost = async (postId: string) => {
     try {
       setIsLoading(true);
-      
+
       // Find the original post
-      const originalPost = posts.find(post => post.id === postId);
+      const originalPost = posts.find((post) => post.id === postId);
       if (!originalPost) {
         throw new Error("Original post not found");
       }
@@ -327,7 +327,9 @@ export function useSocialMediaManager() {
         subject_type: originalPost.subject_type,
         platform_type: originalPost.platform_type,
         post_content: originalPost.post_content,
-        post_title: originalPost.post_title ? `[REPOST] ${originalPost.post_title}` : undefined,
+        post_title: originalPost.post_title
+          ? `[REPOST] ${originalPost.post_title}`
+          : undefined,
         content_url: originalPost.content_url,
         webhook_urls: originalPost.webhook_urls,
         status: "draft" as const,
@@ -349,7 +351,8 @@ export function useSocialMediaManager() {
 
       toast({
         title: "Success",
-        description: "Post has been reposted as a draft. You can review and publish it.",
+        description:
+          "Post has been reposted as a draft. You can review and publish it.",
       });
 
       // Refresh the posts list to show the new repost
@@ -358,7 +361,8 @@ export function useSocialMediaManager() {
       return data;
     } catch (error) {
       console.error("Error reposting:", error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to repost";
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to repost";
       toast({
         title: "Error",
         description: errorMessage,
