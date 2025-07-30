@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Sparkles, Calendar, Bot } from "lucide-react";
+import { Sparkles, Calendar } from "lucide-react";
 
 interface AIWriteupProps {
   writeup: string;
@@ -35,15 +34,8 @@ export default function AIWriteup({
             <div className="p-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg">
               <Sparkles className="h-5 w-5 text-white" />
             </div>
-            AI-Enhanced Overview
+            Enhanced Overview
           </CardTitle>
-          <Badge
-            variant="secondary"
-            className="bg-blue-100 text-blue-700 border-blue-200"
-          >
-            <Bot className="h-3 w-3 mr-1" />
-            AI Generated
-          </Badge>
         </div>
         {generatedAt && (
           <div className="flex items-center gap-1 text-sm text-gray-500">
@@ -64,15 +56,6 @@ export default function AIWriteup({
           >
             {writeup}
           </div>
-        </div>
-
-        {/* Subtle AI attribution */}
-        <div className="mt-6 pt-4 border-t border-blue-100">
-          <p className="text-xs text-gray-500 flex items-center gap-2">
-            <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
-            This overview was generated using advanced AI to provide enhanced
-            insights about this listing.
-          </p>
         </div>
       </CardContent>
     </Card>
