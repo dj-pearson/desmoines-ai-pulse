@@ -396,12 +396,6 @@ export default function Admin() {
           // queryKey: ["restaurant_openings"], // Removed
         });
       } else if (contentType === "attraction") {
-        // ...existing code...
-      }
-      // Restore scroll position after save and re-render
-      setTimeout(() => {
-        window.scrollTo({ top: savedScrollY, behavior: "auto" });
-      }, 0);
         console.log("Refetching attractions...");
         await attractions.refetch();
         await queryClient.invalidateQueries({ queryKey: ["attractions"] });
@@ -409,17 +403,15 @@ export default function Admin() {
         console.log("Refetching playgrounds...");
         await playgrounds.refetch();
         await queryClient.invalidateQueries({ queryKey: ["playgrounds"] });
-        // } else if (contentType === "restaurant_opening") { // Removed
-        console.log("Refetching restaurant openings...");
-        await restaurantOpenings.refetch();
-        await queryClient.invalidateQueries({
-          // queryKey: ["restaurant_openings"], // Removed
-        });
       }
-
       console.log("All refetches completed successfully");
     } catch (error) {
-      console.error("Error during refetch:", error);
+      console.error("Error during save:", error);
+    } finally {
+      // Restore scroll position after save and re-render
+      setTimeout(() => {
+        window.scrollTo({ top: savedScrollY, behavior: "auto" });
+      }, 0);
     }
   };
 
