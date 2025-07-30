@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SEOHead from "@/components/SEOHead";
+import { createEventSlugWithCentralTime, formatEventDate } from "@/lib/timezone";
 import {
   Calendar,
   MapPin,
@@ -16,57 +17,16 @@ import {
   DollarSign,
   Share2,
 } from "lucide-react";
-import { format } from "date-fns";
 import { toast } from "sonner";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
   const { events, isLoading } = useEvents();
 
-  const createEventSlug = (title: string, date?: string | Date): string => {
-    const titleSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
-    if (!date) {
-      return titleSlug;
-    }
-
-    try {
-      // Handle both string and Date inputs consistently
-      let eventDate: Date;
-      if (date instanceof Date) {
-        eventDate = date;
-      } else {
-        eventDate = new Date(date);
-      }
-
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
-      const day = String(eventDate.getDate()).padStart(2, "0");
-
-      return `${titleSlug}-${year}-${month}-${day}`;
-    } catch (error) {
-      console.error("Error creating event slug:", error);
-      return titleSlug;
-    }
-  };
-
   const event = events.find((e) => {
-    const eventSlug = createEventSlug(e.title, e.date);
+    const eventSlug = createEventSlugWithCentralTime(e.title, e.date);
     return eventSlug === slug;
-  });
-
-  const formatEventDate = (date: string | Date) => {
-    try {
-      return format(new Date(date), "EEEE, MMMM d, yyyy 'at' h:mm a");
-    } catch {
-      return "Date and time to be announced";
-    }
-  };
-
-  const handleShare = async () => {
+  });  const handleShare = async () => {
     if (navigator.share && event) {
       try {
         await navigator.share({
@@ -197,7 +157,7 @@ export default function EventDetails() {
     { name: "Events", url: "/events" },
     {
       name: event.title,
-      url: `/events/${createEventSlug(event.title, event.date)}`,
+      url: `/events/${createEventSlugWithCentralTime(event.title, event.date)}`,
     },
   ];
 
@@ -209,7 +169,7 @@ export default function EventDetails() {
         type="event"
         keywords={seoKeywords}
         structuredData={eventSchema}
-        url={`/events/${createEventSlug(event.title, event.date)}`}
+        url={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
         imageUrl={event.image_url}
         breadcrumbs={breadcrumbs}
         location={{

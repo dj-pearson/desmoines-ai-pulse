@@ -11,6 +11,7 @@ import EventFeedback from "@/components/EventFeedback";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { Event } from "@/lib/types";
+import { createEventSlugWithCentralTime, formatEventDateShort } from "@/lib/timezone";
 import {
   Calendar,
   MapPin,
@@ -18,7 +19,6 @@ import {
   ExternalLink,
   Sparkles,
 } from "lucide-react";
-import { format } from "date-fns";
 import { Link } from "react-router-dom";
 
 const createSlug = (name: string): string => {
@@ -28,42 +28,10 @@ const createSlug = (name: string): string => {
     .replace(/(^-|-$)/g, "");
 };
 
-const createEventSlug = (title: string, date?: string | Date): string => {
-  const titleSlug = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-
-  if (!date) {
-    return titleSlug;
-  }
-
-  try {
-    // Handle both string and Date inputs consistently
-    let eventDate: Date;
-    if (date instanceof Date) {
-      eventDate = date;
-    } else {
-      eventDate = new Date(date);
-    }
-
-    const year = eventDate.getFullYear();
-    const month = String(eventDate.getMonth() + 1).padStart(2, "0");
-    const day = String(eventDate.getDate()).padStart(2, "0");
-
-    return `${titleSlug}-${year}-${month}-${day}`;
-  } catch (error) {
-    console.error("Error creating event slug:", error);
-    return titleSlug;
-  }
-};
-
 interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
-}
-
-export default function EventCard({ event, onViewDetails }: EventCardProps) {
+}export default function EventCard({ event, onViewDetails }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
 
@@ -73,14 +41,6 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
       trackInteraction(event.id, "view");
     }
     onViewDetails(event);
-  };
-
-  const formatEventDate = (date: string | Date) => {
-    try {
-      return format(new Date(date), "MMM d, yyyy 'at' h:mm a");
-    } catch {
-      return "Date TBA";
-    }
   };
 
   const getCategoryColor = (category: string) => {
@@ -129,7 +89,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
         <div className="space-y-2 text-sm text-neutral-600">
           <div className="flex items-center">
             <Calendar className="h-4 w-4 mr-2" />
-            <span>{formatEventDate(event.date)}</span>
+            <span>{formatEventDateShort(event.date)}</span>
           </div>
 
           <div className="flex items-center">
@@ -154,7 +114,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
               View Details
             </Button>
 
-            <Link to={`/events/${createEventSlug(event.title, event.date)}`}>
+            <Link to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}>
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Full Page

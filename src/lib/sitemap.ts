@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { createEventSlugWithCentralTime } from "./timezone";
 
 interface SitemapUrl {
   loc: string;
@@ -58,7 +59,7 @@ export class SitemapGenerator {
 
       if (!eventsError && events) {
         events.forEach((event) => {
-          const slug = this.createEventSlug(event.title, event.date);
+          const slug = createEventSlugWithCentralTime(event.title, event.date);
           const lastmod =
             event.updated_at || event.created_at || this.currentDate;
           urls.push({
@@ -109,15 +110,6 @@ export class SitemapGenerator {
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-+|-+$/g, "");
-  }
-
-  private createEventSlug(title: string, date: string): string {
-    const titleSlug = this.createSlug(title);
-    const eventDate = new Date(date);
-    const year = eventDate.getFullYear();
-    const month = String(eventDate.getMonth() + 1).padStart(2, "0");
-    const day = String(eventDate.getDate()).padStart(2, "0");
-    return `${titleSlug}-${year}-${month}-${day}`;
   }
 
   private generateXML(urls: SitemapUrl[]): string {

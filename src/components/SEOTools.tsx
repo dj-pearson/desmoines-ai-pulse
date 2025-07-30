@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -111,36 +112,6 @@ export default function SEOTools() {
       .replace(/(^-|-$)/g, "");
   };
 
-  const createEventSlug = (title: string, date?: string | Date): string => {
-    const titleSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
-    if (!date) {
-      return titleSlug;
-    }
-
-    try {
-      // Handle both string and Date inputs consistently
-      let eventDate: Date;
-      if (date instanceof Date) {
-        eventDate = date;
-      } else {
-        eventDate = new Date(date);
-      }
-
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
-      const day = String(eventDate.getDate()).padStart(2, "0");
-
-      return `${titleSlug}-${year}-${month}-${day}`;
-    } catch (error) {
-      console.error("Error creating event slug:", error);
-      return titleSlug;
-    }
-  };
-
   const generateSitemap = () => {
     const baseUrl = "https://desmoinesinsider.com";
     const currentDate = new Date().toISOString().split("T")[0];
@@ -178,7 +149,7 @@ export default function SEOTools() {
         ? new Date(event.date).toISOString().split("T")[0]
         : currentDate;
       // Use date-based slug for events
-      const slug = createEventSlug(event.title, event.date);
+      const slug = createEventSlugWithCentralTime(event.title, event.date);
       sitemap += `
   <url>
     <loc>${baseUrl}/events/${slug}</loc>
@@ -458,7 +429,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       const eventDate = event.date
         ? new Date(event.date).toISOString()
         : currentDate;
-      const slug = createEventSlug(event.title, event.date);
+      const slug = createEventSlugWithCentralTime(event.title, event.date);
       rss += `
     <item>
       <title>${event.title}</title>

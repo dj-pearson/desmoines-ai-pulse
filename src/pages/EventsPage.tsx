@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
 import { Calendar, MapPin, Tag, Search, Filter } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +19,7 @@ import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useToast } from "@/hooks/use-toast";
+import { createEventSlugWithCentralTime, formatInCentralTime } from "@/lib/timezone";
 
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,39 +33,7 @@ export default function EventsPage() {
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(false);
-  const { toast } = useToast();
-
-  const createEventSlug = (title: string, date?: string | Date): string => {
-    const titleSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
-    if (!date) {
-      return titleSlug;
-    }
-
-    try {
-      // Handle both string and Date inputs consistently
-      let eventDate: Date;
-      if (date instanceof Date) {
-        eventDate = date;
-      } else {
-        eventDate = new Date(date);
-      }
-
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
-      const day = String(eventDate.getDate()).padStart(2, "0");
-
-      return `${titleSlug}-${year}-${month}-${day}`;
-    } catch (error) {
-      console.error("Error creating event slug:", error);
-      return titleSlug;
-    }
-  };
-
-  const { data: events, isLoading } = useQuery({
+  const { toast } = useToast();  const { data: events, isLoading } = useQuery({
     queryKey: [
       "events",
       searchQuery,
@@ -381,7 +349,7 @@ export default function EventsPage() {
             {events?.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(event.title, event.date)}`}
+                to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
               >
                 <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   {event.image_url && (
@@ -411,8 +379,8 @@ export default function EventsPage() {
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4" />
                           <span>
-                            {format(
-                              new Date(event.date),
+                            {formatInCentralTime(
+                              event.date,
                               "MMM d, yyyy 'at' h:mm a"
                             )}
                           </span>

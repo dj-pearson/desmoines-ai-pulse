@@ -42,10 +42,15 @@ serve(async (req) => {
 
   const createEventSlug = (title: string, date: string): string => {
     const titleSlug = createSlug(title);
+    
+    // Parse the date and convert to Central Time for consistent slug generation
     const eventDate = new Date(date);
-    const year = eventDate.getFullYear();
-    const month = String(eventDate.getMonth() + 1).padStart(2, "0");
-    const day = String(eventDate.getDate()).padStart(2, "0");
+    // Create date in Central Time (America/Chicago)
+    const centralDate = new Date(eventDate.toLocaleString("en-US", {timeZone: "America/Chicago"}));
+    
+    const year = centralDate.getFullYear();
+    const month = String(centralDate.getMonth() + 1).padStart(2, "0");
+    const day = String(centralDate.getDate()).padStart(2, "0");
     return `${titleSlug}-${year}-${month}-${day}`;
   };
 
@@ -171,11 +176,14 @@ serve(async (req) => {
         }
 
         if (events && events.length > 0) {
-          // Additional check to ensure we only post about future events
+          // Additional check to ensure we only post about future events (Central Time)
           const futureEvents = events.filter((event) => {
             const eventDate = new Date(event.date);
-            const now = new Date();
-            return eventDate > now;
+            // Get current time in Central Time
+            const nowCentral = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Chicago"}));
+            // Convert event date to Central Time for comparison
+            const eventCentral = new Date(eventDate.toLocaleString("en-US", {timeZone: "America/Chicago"}));
+            return eventCentral > nowCentral;
           });
 
           if (futureEvents.length > 0) {
@@ -232,11 +240,14 @@ serve(async (req) => {
             .limit(5);
 
           if (allEvents && allEvents.length > 0) {
-            // Additional check to ensure we only post about future events
+            // Additional check to ensure we only post about future events (Central Time)
             const futureEvents = allEvents.filter((event) => {
               const eventDate = new Date(event.date);
-              const now = new Date();
-              return eventDate > now;
+              // Get current time in Central Time
+              const nowCentral = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Chicago"}));
+              // Convert event date to Central Time for comparison
+              const eventCentral = new Date(eventDate.toLocaleString("en-US", {timeZone: "America/Chicago"}));
+              return eventCentral > nowCentral;
             });
 
             if (futureEvents.length > 0) {

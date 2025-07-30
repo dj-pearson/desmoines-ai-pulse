@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import {
   Calendar,
   MapPin,
@@ -24,38 +25,7 @@ export function InternalLinking({
   currentId,
   category,
   cuisine,
-}: InternalLinkingProps) {
-  const createEventSlug = (title: string, date?: string | Date): string => {
-    const titleSlug = title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)/g, "");
-
-    if (!date) {
-      return titleSlug;
-    }
-
-    try {
-      // Handle both string and Date inputs consistently
-      let eventDate: Date;
-      if (date instanceof Date) {
-        eventDate = date;
-      } else {
-        eventDate = new Date(date);
-      }
-
-      const year = eventDate.getFullYear();
-      const month = String(eventDate.getMonth() + 1).padStart(2, "0");
-      const day = String(eventDate.getDate()).padStart(2, "0");
-
-      return `${titleSlug}-${year}-${month}-${day}`;
-    } catch (error) {
-      console.error("Error creating event slug:", error);
-      return titleSlug;
-    }
-  };
-
-  const { data: relatedEvents } = useQuery({
+}: InternalLinkingProps) {  const { data: relatedEvents } = useQuery({
     queryKey: ["related-events", category, currentId],
     queryFn: async () => {
       if (!category || currentType !== "event") return [];
@@ -152,7 +122,7 @@ export function InternalLinking({
             {relatedEvents.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(event.title, event.date)}`}
+                to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -244,7 +214,7 @@ export function InternalLinking({
             {featuredContent.events.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlug(event.title, event.date)}`}
+                to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
