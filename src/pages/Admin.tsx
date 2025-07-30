@@ -343,7 +343,7 @@ export default function Admin() {
       > = {
         event: "events",
         restaurant: "restaurants",
-        restaurant_opening: "restaurants",
+        // restaurant_opening: "restaurants", // Removed
         attraction: "attractions",
         playground: "playgrounds",
       };
@@ -366,8 +366,8 @@ export default function Admin() {
       else if (contentType === "restaurant") restaurants.refetch();
       else if (contentType === "attraction") attractions.refetch();
       else if (contentType === "playground") playgrounds.refetch();
-      else if (contentType === "restaurant_opening")
-        restaurantOpenings.refetch();
+      // else if (contentType === "restaurant_opening") // Removed
+      restaurantOpenings.refetch();
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete: " + (error as Error).message);
@@ -392,7 +392,7 @@ export default function Admin() {
         console.log("Refetching restaurant openings...");
         await restaurantOpenings.refetch();
         await queryClient.invalidateQueries({
-          queryKey: ["restaurant_openings"],
+          // queryKey: ["restaurant_openings"], // Removed
         });
       } else if (contentType === "attraction") {
         console.log("Refetching attractions...");
@@ -402,11 +402,11 @@ export default function Admin() {
         console.log("Refetching playgrounds...");
         await playgrounds.refetch();
         await queryClient.invalidateQueries({ queryKey: ["playgrounds"] });
-      } else if (contentType === "restaurant_opening") {
+        // } else if (contentType === "restaurant_opening") { // Removed
         console.log("Refetching restaurant openings...");
         await restaurantOpenings.refetch();
         await queryClient.invalidateQueries({
-          queryKey: ["restaurant_openings"],
+          // queryKey: ["restaurant_openings"], // Removed
         });
       }
 
@@ -989,7 +989,7 @@ export default function Admin() {
 
             {canManageContent() && activeTab === "restaurant-openings" && (
               <ContentTable
-                type="restaurant_opening"
+                // type="restaurant_opening" // Removed
                 items={restaurants.restaurants.filter((r) => {
                   const matchesSearch =
                     !searchTerms.restaurantOpenings ||
@@ -1042,7 +1042,7 @@ export default function Admin() {
                   }).length
                 }
                 searchValue={inputValues.restaurantOpenings}
-                onEdit={(item) => handleEdit("restaurant", item)} // Use "restaurant" type instead of "restaurant_opening"
+                // onEdit for restaurant_opening removed
                 onDelete={(id) => handleDelete("restaurant", id)}
                 onSearch={handleRestaurantOpeningsSearch}
                 onFilter={(filter) =>
