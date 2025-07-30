@@ -25,7 +25,8 @@ export function InternalLinking({
   currentId,
   category,
   cuisine,
-}: InternalLinkingProps) {  const { data: relatedEvents } = useQuery({
+}: InternalLinkingProps) {
+  const { data: relatedEvents } = useQuery({
     queryKey: ["related-events", category, currentId],
     queryFn: async () => {
       if (!category || currentType !== "event") return [];
@@ -122,7 +123,10 @@ export function InternalLinking({
             {relatedEvents.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
+                to={`/events/${createEventSlugWithCentralTime(
+                  event.title,
+                  event.date
+                )}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">
@@ -214,7 +218,10 @@ export function InternalLinking({
             {featuredContent.events.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
+                to={`/events/${createEventSlugWithCentralTime(
+                  event.title,
+                  event.date
+                )}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
                 <div className="flex items-start justify-between gap-2">

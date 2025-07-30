@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SEOHead from "@/components/SEOHead";
-import { createEventSlugWithCentralTime, formatEventDate } from "@/lib/timezone";
+import {
+  createEventSlugWithCentralTime,
+  formatEventDate,
+} from "@/lib/timezone";
 import {
   Calendar,
   MapPin,
@@ -26,7 +29,8 @@ export default function EventDetails() {
   const event = events.find((e) => {
     const eventSlug = createEventSlugWithCentralTime(e.title, e.date);
     return eventSlug === slug;
-  });  const handleShare = async () => {
+  });
+  const handleShare = async () => {
     if (navigator.share && event) {
       try {
         await navigator.share({
@@ -169,7 +173,10 @@ export default function EventDetails() {
         type="event"
         keywords={seoKeywords}
         structuredData={eventSchema}
-        url={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
+        url={`/events/${createEventSlugWithCentralTime(
+          event.title,
+          event.date
+        )}`}
         imageUrl={event.image_url}
         breadcrumbs={breadcrumbs}
         location={{

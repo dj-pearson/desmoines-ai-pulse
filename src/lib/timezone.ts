@@ -1,14 +1,14 @@
-import { format, parseISO } from 'date-fns';
-import { toZonedTime, fromZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { format, parseISO } from "date-fns";
+import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 
 // Des Moines, Iowa timezone (Central Time)
-export const CENTRAL_TIMEZONE = 'America/Chicago';
+export const CENTRAL_TIMEZONE = "America/Chicago";
 
 /**
  * Convert a date string or Date object to Central Time (Des Moines timezone)
  */
 export function toCentralTime(date: string | Date): Date {
-  const dateObj = typeof date === 'string' ? parseISO(date) : date;
+  const dateObj = typeof date === "string" ? parseISO(date) : date;
   return toZonedTime(dateObj, CENTRAL_TIMEZONE);
 }
 
@@ -23,10 +23,10 @@ export function centralTimeToUtc(date: Date): Date {
  * Format a date in Central Time with the specified format
  */
 export function formatInCentralTime(
-  date: string | Date, 
+  date: string | Date,
   formatStr: string = "MMM d, yyyy 'at' h:mm a"
 ): string {
-  const dateObj = typeof date === 'string' ? parseISO(date) : date;
+  const dateObj = typeof date === "string" ? parseISO(date) : date;
   return formatInTimeZone(dateObj, CENTRAL_TIMEZONE, formatStr);
 }
 
@@ -41,7 +41,10 @@ export function nowInCentralTime(): Date {
  * Create an event slug with Central Time date handling
  * This ensures consistent slug generation regardless of user's local timezone
  */
-export function createEventSlugWithCentralTime(title: string, date?: string | Date): string {
+export function createEventSlugWithCentralTime(
+  title: string,
+  date?: string | Date
+): string {
   const titleSlug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -60,7 +63,7 @@ export function createEventSlugWithCentralTime(title: string, date?: string | Da
 
     return `${titleSlug}-${year}-${month}-${day}`;
   } catch (error) {
-    console.error('Error creating event slug with Central Time:', error);
+    console.error("Error creating event slug with Central Time:", error);
     return titleSlug;
   }
 }
@@ -74,7 +77,7 @@ export function isEventInFuture(eventDate: string | Date): boolean {
     const nowCentralTime = nowInCentralTime();
     return eventCentralTime > nowCentralTime;
   } catch (error) {
-    console.error('Error checking if event is in future:', error);
+    console.error("Error checking if event is in future:", error);
     return false;
   }
 }

@@ -19,7 +19,10 @@ import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useToast } from "@/hooks/use-toast";
-import { createEventSlugWithCentralTime, formatInCentralTime } from "@/lib/timezone";
+import {
+  createEventSlugWithCentralTime,
+  formatInCentralTime,
+} from "@/lib/timezone";
 
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,7 +36,8 @@ export default function EventsPage() {
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(false);
-  const { toast } = useToast();  const { data: events, isLoading } = useQuery({
+  const { toast } = useToast();
+  const { data: events, isLoading } = useQuery({
     queryKey: [
       "events",
       searchQuery,
@@ -349,7 +353,10 @@ export default function EventsPage() {
             {events?.map((event) => (
               <Link
                 key={event.id}
-                to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
+                to={`/events/${createEventSlugWithCentralTime(
+                  event.title,
+                  event.date
+                )}`}
               >
                 <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                   {event.image_url && (

@@ -42,12 +42,14 @@ serve(async (req) => {
 
   const createEventSlug = (title: string, date: string): string => {
     const titleSlug = createSlug(title);
-    
+
     // Parse the date and convert to Central Time for consistent slug generation
     const eventDate = new Date(date);
     // Create date in Central Time (America/Chicago)
-    const centralDate = new Date(eventDate.toLocaleString("en-US", {timeZone: "America/Chicago"}));
-    
+    const centralDate = new Date(
+      eventDate.toLocaleString("en-US", { timeZone: "America/Chicago" })
+    );
+
     const year = centralDate.getFullYear();
     const month = String(centralDate.getMonth() + 1).padStart(2, "0");
     const day = String(centralDate.getDate()).padStart(2, "0");
@@ -180,9 +182,15 @@ serve(async (req) => {
           const futureEvents = events.filter((event) => {
             const eventDate = new Date(event.date);
             // Get current time in Central Time
-            const nowCentral = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Chicago"}));
+            const nowCentral = new Date(
+              new Date().toLocaleString("en-US", {
+                timeZone: "America/Chicago",
+              })
+            );
             // Convert event date to Central Time for comparison
-            const eventCentral = new Date(eventDate.toLocaleString("en-US", {timeZone: "America/Chicago"}));
+            const eventCentral = new Date(
+              eventDate.toLocaleString("en-US", { timeZone: "America/Chicago" })
+            );
             return eventCentral > nowCentral;
           });
 
@@ -244,9 +252,17 @@ serve(async (req) => {
             const futureEvents = allEvents.filter((event) => {
               const eventDate = new Date(event.date);
               // Get current time in Central Time
-              const nowCentral = new Date(new Date().toLocaleString("en-US", {timeZone: "America/Chicago"}));
+              const nowCentral = new Date(
+                new Date().toLocaleString("en-US", {
+                  timeZone: "America/Chicago",
+                })
+              );
               // Convert event date to Central Time for comparison
-              const eventCentral = new Date(eventDate.toLocaleString("en-US", {timeZone: "America/Chicago"}));
+              const eventCentral = new Date(
+                eventDate.toLocaleString("en-US", {
+                  timeZone: "America/Chicago",
+                })
+              );
               return eventCentral > nowCentral;
             });
 

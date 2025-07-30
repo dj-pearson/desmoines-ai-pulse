@@ -11,7 +11,10 @@ import EventFeedback from "@/components/EventFeedback";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { Event } from "@/lib/types";
-import { createEventSlugWithCentralTime, formatEventDateShort } from "@/lib/timezone";
+import {
+  createEventSlugWithCentralTime,
+  formatEventDateShort,
+} from "@/lib/timezone";
 import {
   Calendar,
   MapPin,
@@ -31,7 +34,8 @@ const createSlug = (name: string): string => {
 interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
-}export default function EventCard({ event, onViewDetails }: EventCardProps) {
+}
+export default function EventCard({ event, onViewDetails }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
 
@@ -114,7 +118,12 @@ interface EventCardProps {
               View Details
             </Button>
 
-            <Link to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}>
+            <Link
+              to={`/events/${createEventSlugWithCentralTime(
+                event.title,
+                event.date
+              )}`}
+            >
               <Button variant="outline" size="sm">
                 <ExternalLink className="h-4 w-4 mr-1" />
                 Full Page
