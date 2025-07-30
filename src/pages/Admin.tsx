@@ -375,7 +375,8 @@ export default function Admin() {
   };
 
   const handleSave = async () => {
-    // Refresh the appropriate data after save
+    // Preserve scroll position before save
+    const savedScrollY = window.scrollY;
     const { contentType } = editDialog;
     console.log("handleSave called for contentType:", contentType);
 
@@ -395,6 +396,12 @@ export default function Admin() {
           // queryKey: ["restaurant_openings"], // Removed
         });
       } else if (contentType === "attraction") {
+        // ...existing code...
+      }
+      // Restore scroll position after save and re-render
+      setTimeout(() => {
+        window.scrollTo({ top: savedScrollY, behavior: "auto" });
+      }, 0);
         console.log("Refetching attractions...");
         await attractions.refetch();
         await queryClient.invalidateQueries({ queryKey: ["attractions"] });
