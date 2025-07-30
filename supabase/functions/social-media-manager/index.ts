@@ -31,6 +31,12 @@ serve(async (req) => {
   }
 
   // Helper function to create URL-friendly slugs
+    // UUID validation helper
+  const isValidUUID = (uuid: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(uuid);
+  };
+
   const createSlug = (title: string): string => {
     return title
       .toLowerCase()
@@ -136,50 +142,85 @@ serve(async (req) => {
     }
 
     if (action === "generate") {
-      // Get recent posts to avoid repetition
+      // Get recent posts to avoid repetition - check both short term (7 days) and longer term (90 days)
       const { data: recentPosts } = await supabase
         .from("social_media_posts")
-        .select("content_id, content_type, subject_type")
+        .select("content_id, content_type, subject_type, created_at")
         .gte(
           "created_at",
-          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-        ) // Last 30 days
+          new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+        ) // Last 90 days for broader diversity
         .order("created_at", { ascending: false })
-        .limit(20);
+        .limit(50); // Increased limit to track more recent posts
 
-      const recentContentIds = recentPosts?.map((p) => p.content_id) || [];
+      const recentContentIds = recentPosts?.map((p) => p.content_id).filter(id => id && isValidUUID(id)) || [];
+      
+      // Get content posted in last 7 days for stricter filtering
+      const recentWeekPosts = recentPosts?.filter(post => 
+        new Date(post.created_at) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      ) || [];
+      const recentWeekContentIds = recentWeekPosts.map(p => p.content_id).filter(id => id && isValidUUID(id));
+      
+      // Count how many times each content item has been posted (only valid UUIDs)
+      const contentPostCounts = recentPosts?.reduce((acc, post) => {
+        if (post.content_id && isValidUUID(post.content_id)) {
+          acc[post.content_id] = (acc[post.content_id] || 0) + 1;
+        }
+        return acc;
+      }, {} as Record<string, number>) || {};
+
+      // Additional safety check: prevent excessive repetition of same content
+      const checkExcessiveRepetition = (contentId: string): boolean => {
+        const recentPostsForContent = recentPosts?.filter(post => 
+          post.content_id === contentId && 
+          new Date(post.created_at) > new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) // Last 2 weeks
+        ) || [];
+        
+        return recentPostsForContent.length >= 3; // Block if posted 3+ times in 2 weeks
+      };
 
       // Choose content to feature
-      let selectedContent: any = null;
+      let selectedContent: Record<string, unknown> | null = null;
       let contentUrl = "";
 
       if (contentType === "event") {
-        // Get upcoming events not recently featured
-        let eventsQuery = supabase
+        // Get upcoming events with enhanced diversity selection
+        const eventsQuery = supabase
           .from("events")
           .select("*")
           .gte("date", new Date().toISOString())
           .order("date", { ascending: true })
-          .limit(10);
+          .limit(50); // Increased from 10 to 50 for better diversity
 
-        // Only filter by recent content if there are any
-        if (recentContentIds.length > 0) {
-          eventsQuery = eventsQuery.not(
-            "id",
-            "in",
-            `(${recentContentIds.map((id) => `'${id}'`).join(",")})`
-          );
-        }
-
-        const { data: events, error: eventsError } = await eventsQuery;
+        const { data: allEvents, error: eventsError } = await eventsQuery;
 
         if (eventsError) {
           console.error("Error fetching events:", eventsError);
         }
 
-        if (events && events.length > 0) {
+        if (allEvents && allEvents.length > 0) {
+          // Filter out events posted in the last week (stricter filtering)
+          let availableEvents = allEvents.filter(event => 
+            !recentWeekContentIds.includes(event.id) && !checkExcessiveRepetition(event.id)
+          );
+          
+          // If no events available after strict filtering, use broader filtering
+          if (availableEvents.length === 0) {
+            availableEvents = allEvents.filter(event => 
+              (!recentContentIds.includes(event.id) || (contentPostCounts[event.id] || 0) < 2) && 
+              !checkExcessiveRepetition(event.id) // Always block excessive repetition
+            );
+          }
+          
+          // If still no events, use all events but prioritize least posted (still block excessive repetition)
+          if (availableEvents.length === 0) {
+            availableEvents = allEvents
+              .filter(event => !checkExcessiveRepetition(event.id))
+              .sort((a, b) => (contentPostCounts[a.id] || 0) - (contentPostCounts[b.id] || 0));
+          }
+
           // Additional check to ensure we only post about future events (Central Time)
-          const futureEvents = events.filter((event) => {
+          const futureEvents = availableEvents.filter((event) => {
             const eventDate = new Date(event.date);
             // Get current time in Central Time
             const nowCentral = new Date(
@@ -195,41 +236,97 @@ serve(async (req) => {
           });
 
           if (futureEvents.length > 0) {
-            selectedContent =
-              futureEvents[Math.floor(Math.random() * futureEvents.length)];
-            contentUrl = generateContentUrl("event", selectedContent);
+            // Weighted random selection - prefer events that haven't been posted recently
+            const weights = futureEvents.map(event => {
+              const postCount = contentPostCounts[event.id] || 0;
+              const daysSinceLastPost = recentPosts?.find(p => p.content_id === event.id) 
+                ? Math.floor((Date.now() - new Date(recentPosts.find(p => p.content_id === event.id)?.created_at || 0).getTime()) / (24 * 60 * 60 * 1000))
+                : 90;
+              
+              // Higher weight for less posted content and older posts
+              return Math.max(1, (90 - postCount * 10) + daysSinceLastPost);
+            });
+            
+            const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+            let randomValue = Math.random() * totalWeight;
+            
+            for (let i = 0; i < futureEvents.length; i++) {
+              randomValue -= weights[i];
+              if (randomValue <= 0) {
+                selectedContent = futureEvents[i];
+                break;
+              }
+            }
+            
+            if (selectedContent) {
+              contentUrl = generateContentUrl("event", selectedContent);
+              console.log(`Selected event: ${selectedContent.title} (ID: ${selectedContent.id}, Post count: ${contentPostCounts[selectedContent.id] || 0})`);
+            }
           } else {
             console.log("No future events available for posting");
           }
         }
       } else if (contentType === "restaurant") {
-        // Get restaurants or restaurant openings not recently featured
-        let restaurantsQuery = supabase
+        // Get restaurants with enhanced diversity selection
+        const restaurantsQuery = supabase
           .from("restaurants")
           .select("*")
           .order("created_at", { ascending: false })
-          .limit(10);
+          .limit(50); // Increased for better diversity
 
-        // Only filter by recent content if there are any
-        if (recentContentIds.length > 0) {
-          restaurantsQuery = restaurantsQuery.not(
-            "id",
-            "in",
-            `(${recentContentIds.map((id) => `'${id}'`).join(",")})`
-          );
-        }
-
-        const { data: restaurants, error: restaurantsError } =
-          await restaurantsQuery;
+        const { data: allRestaurants, error: restaurantsError } = await restaurantsQuery;
 
         if (restaurantsError) {
           console.error("Error fetching restaurants:", restaurantsError);
         }
 
-        if (restaurants && restaurants.length > 0) {
-          selectedContent =
-            restaurants[Math.floor(Math.random() * restaurants.length)];
-          contentUrl = generateContentUrl("restaurant", selectedContent);
+        if (allRestaurants && allRestaurants.length > 0) {
+          // Filter out restaurants posted in the last week (stricter filtering)
+          let availableRestaurants = allRestaurants.filter(restaurant => 
+            !recentWeekContentIds.includes(restaurant.id) && !checkExcessiveRepetition(restaurant.id)
+          );
+          
+          // If no restaurants available after strict filtering, use broader filtering
+          if (availableRestaurants.length === 0) {
+            availableRestaurants = allRestaurants.filter(restaurant => 
+              (!recentContentIds.includes(restaurant.id) || (contentPostCounts[restaurant.id] || 0) < 2) && 
+              !checkExcessiveRepetition(restaurant.id) // Always block excessive repetition
+            );
+          }
+          
+          // If still no restaurants, use all restaurants but prioritize least posted (still block excessive repetition)
+          if (availableRestaurants.length === 0) {
+            availableRestaurants = allRestaurants
+              .filter(restaurant => !checkExcessiveRepetition(restaurant.id))
+              .sort((a, b) => (contentPostCounts[a.id] || 0) - (contentPostCounts[b.id] || 0));
+          }
+
+          // Weighted random selection for restaurants too
+          const weights = availableRestaurants.map(restaurant => {
+            const postCount = contentPostCounts[restaurant.id] || 0;
+            const daysSinceLastPost = recentPosts?.find(p => p.content_id === restaurant.id) 
+              ? Math.floor((Date.now() - new Date(recentPosts.find(p => p.content_id === restaurant.id)?.created_at || 0).getTime()) / (24 * 60 * 60 * 1000))
+              : 90;
+            
+            // Higher weight for less posted content and older posts
+            return Math.max(1, (90 - postCount * 10) + daysSinceLastPost);
+          });
+          
+          const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+          let randomValue = Math.random() * totalWeight;
+          
+          for (let i = 0; i < availableRestaurants.length; i++) {
+            randomValue -= weights[i];
+            if (randomValue <= 0) {
+              selectedContent = availableRestaurants[i];
+              break;
+            }
+          }
+          
+          if (selectedContent) {
+            contentUrl = generateContentUrl("restaurant", selectedContent);
+            console.log(`Selected restaurant: ${selectedContent.name} (ID: ${selectedContent.id}, Post count: ${contentPostCounts[selectedContent.id] || 0})`);
+          }
         }
       }
 
