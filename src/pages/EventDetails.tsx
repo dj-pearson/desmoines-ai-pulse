@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SEOHead from "@/components/SEOHead";
 import AIWriteup from "@/components/AIWriteup";
+import EventsDebug from "@/components/EventsDebug";
 import {
   createEventSlugWithCentralTime,
   formatEventDate,
@@ -319,6 +320,9 @@ export default function EventDetails() {
                   className="mt-8"
                 />
               )}
+
+              {/* Debug info - temporary */}
+              <EventsDebug />
 
               {/* Rating System */}
               <RatingSystem
