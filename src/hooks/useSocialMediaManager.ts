@@ -1,20 +1,24 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 export interface SocialMediaPost {
   id: string;
-  content_type: 'event' | 'restaurant' | 'general';
+  content_type: "event" | "restaurant" | "general";
   content_id?: string;
-  subject_type: 'event_of_the_day' | 'restaurant_of_the_day' | 'weekly_highlight' | 'special_announcement';
-  platform_type: 'twitter_threads' | 'facebook_linkedin';
+  subject_type:
+    | "event_of_the_day"
+    | "restaurant_of_the_day"
+    | "weekly_highlight"
+    | "special_announcement";
+  platform_type: "twitter_threads" | "facebook_linkedin";
   post_content: string;
   post_title?: string;
   content_url?: string;
   webhook_urls: string[];
   posted_at?: string;
   scheduled_for?: string;
-  status: 'draft' | 'scheduled' | 'posted' | 'failed';
+  status: "draft" | "scheduled" | "posted" | "failed";
   ai_prompt_used: string;
   metadata: any;
   created_at: string;
@@ -45,15 +49,15 @@ export function useSocialMediaManager() {
     try {
       setIsLoading(true);
       const { data, error } = await supabase
-        .from('social_media_posts')
-        .select('*')
-        .order('created_at', { ascending: false })
+        .from("social_media_posts")
+        .select("*")
+        .order("created_at", { ascending: false })
         .limit(50);
 
       if (error) throw error;
       setPosts(data || []);
     } catch (error) {
-      console.error('Error fetching posts:', error);
+      console.error("Error fetching posts:", error);
       toast({
         title: "Error",
         description: "Failed to fetch social media posts",
@@ -67,14 +71,14 @@ export function useSocialMediaManager() {
   const fetchWebhooks = async () => {
     try {
       const { data, error } = await supabase
-        .from('social_media_webhooks')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from("social_media_webhooks")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setWebhooks(data || []);
     } catch (error) {
-      console.error('Error fetching webhooks:', error);
+      console.error("Error fetching webhooks:", error);
       toast({
         title: "Error",
         description: "Failed to fetch webhooks",
@@ -83,16 +87,22 @@ export function useSocialMediaManager() {
     }
   };
 
-  const generatePost = async (contentType: 'event' | 'restaurant', subjectType: string) => {
+  const generatePost = async (
+    contentType: "event" | "restaurant",
+    subjectType: string
+  ) => {
     try {
       setIsGenerating(true);
-      const { data, error } = await supabase.functions.invoke('social-media-manager', {
-        body: {
-          action: 'generate',
-          contentType,
-          subjectType
+      const { data, error } = await supabase.functions.invoke(
+        "social-media-manager",
+        {
+          body: {
+            action: "generate",
+            contentType,
+            subjectType,
+          },
         }
-      });
+      );
 
       if (error) throw error;
 
@@ -104,10 +114,14 @@ export function useSocialMediaManager() {
       await fetchPosts();
       return data;
     } catch (error) {
-      console.error('Error generating post:', error);
+      console.error("Error generating post:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to generate social media post";
       toast({
-        title: "Error",
-        description: "Failed to generate social media post",
+        title: "Social Media Manager Error",
+        description: errorMessage,
         variant: "destructive",
       });
       throw error;
@@ -116,14 +130,48 @@ export function useSocialMediaManager() {
     }
   };
 
+  const debugContent = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "social-media-manager",
+        {
+          body: {
+            action: "debug",
+          },
+        }
+      );
+
+      if (error) throw error;
+
+      console.log("Debug info:", data);
+      toast({
+        title: "Debug Info",
+        description: `Found ${data.debug.totalEvents} events and ${data.debug.totalRestaurants} restaurants`,
+      });
+
+      return data;
+    } catch (error) {
+      console.error("Error debugging content:", error);
+      toast({
+        title: "Debug Error",
+        description: "Failed to fetch debug information",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
   const publishPost = async (postId: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke('social-media-manager', {
-        body: {
-          action: 'publish',
-          postId
+      const { data, error } = await supabase.functions.invoke(
+        "social-media-manager",
+        {
+          body: {
+            action: "publish",
+            postId,
+          },
         }
-      });
+      );
 
       if (error) throw error;
 
@@ -135,7 +183,7 @@ export function useSocialMediaManager() {
       await fetchPosts();
       return data;
     } catch (error) {
-      console.error('Error publishing post:', error);
+      console.error("Error publishing post:", error);
       toast({
         title: "Error",
         description: "Failed to publish post",
@@ -145,10 +193,15 @@ export function useSocialMediaManager() {
     }
   };
 
-  const addWebhook = async (webhook: Omit<SocialMediaWebhook, 'id' | 'created_at' | 'updated_at' | 'created_by'>) => {
+  const addWebhook = async (
+    webhook: Omit<
+      SocialMediaWebhook,
+      "id" | "created_at" | "updated_at" | "created_by"
+    >
+  ) => {
     try {
       const { data, error } = await supabase
-        .from('social_media_webhooks')
+        .from("social_media_webhooks")
         .insert(webhook)
         .select()
         .single();
@@ -163,7 +216,7 @@ export function useSocialMediaManager() {
       await fetchWebhooks();
       return data;
     } catch (error) {
-      console.error('Error adding webhook:', error);
+      console.error("Error adding webhook:", error);
       toast({
         title: "Error",
         description: "Failed to add webhook",
@@ -173,12 +226,15 @@ export function useSocialMediaManager() {
     }
   };
 
-  const updateWebhook = async (id: string, updates: Partial<SocialMediaWebhook>) => {
+  const updateWebhook = async (
+    id: string,
+    updates: Partial<SocialMediaWebhook>
+  ) => {
     try {
       const { data, error } = await supabase
-        .from('social_media_webhooks')
+        .from("social_media_webhooks")
         .update(updates)
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -192,7 +248,7 @@ export function useSocialMediaManager() {
       await fetchWebhooks();
       return data;
     } catch (error) {
-      console.error('Error updating webhook:', error);
+      console.error("Error updating webhook:", error);
       toast({
         title: "Error",
         description: "Failed to update webhook",
@@ -205,9 +261,9 @@ export function useSocialMediaManager() {
   const deleteWebhook = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('social_media_webhooks')
+        .from("social_media_webhooks")
         .delete()
-        .eq('id', id);
+        .eq("id", id);
 
       if (error) throw error;
 
@@ -218,7 +274,7 @@ export function useSocialMediaManager() {
 
       await fetchWebhooks();
     } catch (error) {
-      console.error('Error deleting webhook:', error);
+      console.error("Error deleting webhook:", error);
       toast({
         title: "Error",
         description: "Failed to delete webhook",
@@ -231,9 +287,9 @@ export function useSocialMediaManager() {
   const deletePost = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('social_media_posts')
+        .from("social_media_posts")
         .delete()
-        .eq('id', id);
+        .eq("id", id);
 
       if (error) throw error;
 
@@ -244,7 +300,7 @@ export function useSocialMediaManager() {
 
       await fetchPosts();
     } catch (error) {
-      console.error('Error deleting post:', error);
+      console.error("Error deleting post:", error);
       toast({
         title: "Error",
         description: "Failed to delete post",
@@ -265,6 +321,7 @@ export function useSocialMediaManager() {
     isLoading,
     isGenerating,
     generatePost,
+    debugContent,
     publishPost,
     addWebhook,
     updateWebhook,
@@ -273,6 +330,6 @@ export function useSocialMediaManager() {
     refetch: () => {
       fetchPosts();
       fetchWebhooks();
-    }
+    },
   };
 }
