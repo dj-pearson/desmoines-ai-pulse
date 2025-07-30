@@ -316,13 +316,15 @@ export function useSocialMediaManager() {
       const testData = {
         content_formats: {
           twitter_threads: {
-            content: "🎉 Event of the Day: Des Moines Food Truck Festival! Join us downtown for amazing local cuisine, live music & family fun. Don't miss out! #DesMoines #FoodTruck #LocalEats 🍔🎵",
-            platforms: ["twitter", "threads"]
+            content:
+              "🎉 Event of the Day: Des Moines Food Truck Festival! Join us downtown for amazing local cuisine, live music & family fun. Don't miss out! #DesMoines #FoodTruck #LocalEats 🍔🎵",
+            platforms: ["twitter", "threads"],
           },
           facebook_linkedin: {
-            content: "🌟 Event of the Day: Des Moines Food Truck Festival 🌟\n\nJoin us this weekend in downtown Des Moines for an incredible celebration of local cuisine! Experience the best food trucks our city has to offer, enjoy live music from local artists, and bring the whole family for a day of fun.\n\nWhen: This Saturday, 11 AM - 8 PM\nWhere: Western Gateway Park\nFeaturing: 25+ local food trucks, live music, kids activities\n\nDon't miss this amazing opportunity to support local businesses and enjoy great food! See you there! 🍔🎵🎉\n\n#DesMoines #FoodTruck #LocalEats #CommunityEvent",
-            platforms: ["facebook", "linkedin"]
-          }
+            content:
+              "🌟 Event of the Day: Des Moines Food Truck Festival 🌟\n\nJoin us this weekend in downtown Des Moines for an incredible celebration of local cuisine! Experience the best food trucks our city has to offer, enjoy live music from local artists, and bring the whole family for a day of fun.\n\nWhen: This Saturday, 11 AM - 8 PM\nWhere: Western Gateway Park\nFeaturing: 25+ local food trucks, live music, kids activities\n\nDon't miss this amazing opportunity to support local businesses and enjoy great food! See you there! 🍔🎵🎉\n\n#DesMoines #FoodTruck #LocalEats #CommunityEvent",
+            platforms: ["facebook", "linkedin"],
+          },
         },
         title: "Des Moines Food Truck Festival",
         url: "https://desmoinesinsider.com/events/des-moines-food-truck-festival",

@@ -443,7 +443,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
           try {
             // Parse the post content if it's a combined format
             let webhookPayload;
-            
+
             if (post.platform_type === "combined") {
               // New combined format - send both versions
               const contentFormats = JSON.parse(post.post_content as string);
@@ -451,12 +451,12 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
                 content_formats: {
                   twitter_threads: {
                     content: contentFormats.twitter_threads,
-                    platforms: ["twitter", "threads"]
+                    platforms: ["twitter", "threads"],
                   },
                   facebook_linkedin: {
                     content: contentFormats.facebook_linkedin,
-                    platforms: ["facebook", "linkedin"]
-                  }
+                    platforms: ["facebook", "linkedin"],
+                  },
                 },
                 title: post.post_title,
                 url: post.content_url,
