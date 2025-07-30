@@ -49,6 +49,7 @@ import {
   Calendar,
   Bot,
   ExternalLink,
+  Repeat,
 } from "lucide-react";
 import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
@@ -67,6 +68,7 @@ const SocialMediaManager = () => {
     deleteWebhook,
     testWebhook,
     deletePost,
+    repostPost,
   } = useSocialMediaManager();
 
   const [isAddingWebhook, setIsAddingWebhook] = useState(false);
@@ -94,6 +96,14 @@ const SocialMediaManager = () => {
       await publishPost(postId);
     } catch (error) {
       console.error("Failed to publish post:", error);
+    }
+  };
+
+  const handleRepostPost = async (postId: string) => {
+    try {
+      await repostPost(postId);
+    } catch (error) {
+      console.error("Failed to repost:", error);
     }
   };
 
@@ -213,6 +223,17 @@ const SocialMediaManager = () => {
                             >
                               <Send className="h-4 w-4 mr-1" />
                               Publish
+                            </Button>
+                          )}
+                          {post.status === "posted" && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleRepostPost(post.id)}
+                              className="ml-2"
+                            >
+                              <Repeat className="h-4 w-4 mr-1" />
+                              Repost
                             </Button>
                           )}
                           <AlertDialog>

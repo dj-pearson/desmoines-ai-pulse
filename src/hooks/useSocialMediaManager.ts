@@ -310,6 +310,66 @@ export function useSocialMediaManager() {
     }
   };
 
+  const repostPost = async (postId: string) => {
+    try {
+      setIsLoading(true);
+      
+      // Find the original post
+      const originalPost = posts.find(post => post.id === postId);
+      if (!originalPost) {
+        throw new Error("Original post not found");
+      }
+
+      // Create a new post based on the original with updated timestamp
+      const repostData = {
+        content_type: originalPost.content_type,
+        content_id: originalPost.content_id,
+        subject_type: originalPost.subject_type,
+        platform_type: originalPost.platform_type,
+        post_content: originalPost.post_content,
+        post_title: originalPost.post_title ? `[REPOST] ${originalPost.post_title}` : undefined,
+        content_url: originalPost.content_url,
+        webhook_urls: originalPost.webhook_urls,
+        status: "draft" as const,
+        ai_prompt_used: `REPOST: ${originalPost.ai_prompt_used}`,
+        metadata: {
+          ...originalPost.metadata,
+          original_post_id: postId,
+          repost_timestamp: new Date().toISOString(),
+        },
+      };
+
+      const { data, error } = await supabase
+        .from("social_media_posts")
+        .insert(repostData)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Post has been reposted as a draft. You can review and publish it.",
+      });
+
+      // Refresh the posts list to show the new repost
+      await fetchPosts();
+
+      return data;
+    } catch (error) {
+      console.error("Error reposting:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to repost";
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const testWebhook = async (webhookUrl: string, platform: string) => {
     try {
       // Create realistic test data using the new combined format
@@ -408,6 +468,7 @@ export function useSocialMediaManager() {
     deleteWebhook,
     testWebhook,
     deletePost,
+    repostPost,
     refetch: () => {
       fetchPosts();
       fetchWebhooks();
