@@ -346,7 +346,7 @@ class EventDateTimeCrawler {
                   date: finalDateTime.toISOString(), // Keep for now, will remove later
                   event_start_local: eventStartLocal,
                   event_timezone: eventTimezone,
-                  event_start_utc: finalDateTime.toISOString(),
+                  event_start_utc: finalDateTime,
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", event.id)
