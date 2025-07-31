@@ -10,7 +10,7 @@ export interface Event {
   venue?: string;
   category: string;
   price?: string;
-  imageUrl?: string;
+  image_url?: string;
   sourceUrl?: string;
   isEnhanced?: boolean;
   isFeatured?: boolean;
@@ -42,7 +42,7 @@ export interface Restaurant {
   description?: string;
   phone?: string;
   website?: string;
-  imageUrl?: string;
+  image_url?: string;
   isFeatured?: boolean;
   openingDate?: string;
   openingTimeframe?: string;
@@ -60,7 +60,7 @@ export interface Attraction {
   description?: string;
   rating?: number;
   website?: string;
-  imageUrl?: string;
+  image_url?: string;
   isFeatured?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -74,7 +74,7 @@ export interface Playground {
   ageRange?: string;
   amenities?: string[];
   rating?: number;
-  imageUrl?: string;
+  image_url?: string;
   isFeatured?: boolean;
   createdAt?: string;
   updatedAt?: string;

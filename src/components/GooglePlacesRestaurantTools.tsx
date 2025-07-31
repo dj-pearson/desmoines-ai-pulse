@@ -270,46 +270,6 @@ export default function GooglePlacesRestaurantTools() {
 
   return (
     <div className="space-y-6">
-      {/* Setup Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-5 w-5" />
-            Google Places Integration Setup
-          </CardTitle>
-          <CardDescription>
-            Required setup steps for Google Places API integration
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <Info className="h-4 w-4" />
-            <AlertDescription className="space-y-2">
-              <p>
-                <strong>Setup Required:</strong>
-              </p>
-              <ol className="list-decimal list-inside space-y-1 mt-2">
-                <li>
-                  Deploy Edge Functions:{" "}
-                  <code>supabase functions deploy search-new-restaurants</code>
-                </li>
-                <li>
-                  Deploy Edge Functions:{" "}
-                  <code>supabase functions deploy check-restaurant-status</code>
-                </li>
-                <li>
-                  Run migration: <code>supabase db push</code> to add Google
-                  Places fields
-                </li>
-                <li>
-                  Verify GOOGLE_SEARCH_API secret is set in Supabase dashboard
-                </li>
-              </ol>
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-
       {/* Search for New Restaurants */}
       <Card>
         <CardHeader>
