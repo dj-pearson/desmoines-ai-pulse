@@ -10,6 +10,7 @@ serve(async (req) => {
   const tables = ["restaurants", "events", "attractions", "playgrounds"];
   let results: Record<string, any> = {};
 
+  const googleApiKey = Deno.env.get("GOOGLE_PLACES_API")!;
   for (const tableName of tables) {
     const { data, error } = await supabase
       .from(tableName)
@@ -26,11 +27,24 @@ serve(async (req) => {
     }
     let updated = 0;
     for (const record of data) {
-      const { error: updateError } = await supabase
-        .from(tableName)
-        .update({ location: record.location })
-        .eq("id", record.id);
-      if (!updateError) updated++;
+      if (!record.location) continue;
+      // Geocode location using Google Geocoding API
+      const geoRes = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
+          record.location
+        )}&key=${googleApiKey}`
+      );
+      const geoData = await geoRes.json();
+      const result = geoData.results && geoData.results[0];
+      if (result && result.geometry && result.geometry.location) {
+        const lat = result.geometry.location.lat;
+        const lng = result.geometry.location.lng;
+        const { error: updateError } = await supabase
+          .from(tableName)
+          .update({ latitude: lat, longitude: lng })
+          .eq("id", record.id);
+        if (!updateError) updated++;
+      }
     }
     results[tableName] = { updated };
   }
