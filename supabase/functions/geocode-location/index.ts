@@ -3,14 +3,24 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 const NOMINATIM_API = "https://nominatim.openstreetmap.org/search";
 const APP_USER_AGENT = "DesMoinesInsider/1.0 (https://desmoinesinsider.com; mailto:admin@desmoinesinsider.com)";
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
     const { location } = await req.json();
 
     if (!location) {
       return new Response(
         JSON.stringify({ error: "Location is required" }),
-        { status: 400, headers: { "Content-Type": "application/json" } },
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       )
     }
 
@@ -33,18 +43,18 @@ serve(async (req) => {
       const { lat, lon } = data[0];
       return new Response(
         JSON.stringify({ latitude: parseFloat(lat), longitude: parseFloat(lon) }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       )
     } else {
       return new Response(
         JSON.stringify({ error: "No coordinates found for the location" }),
-        { status: 404, headers: { "Content-Type": "application/json" } },
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       )
     }
   } catch (error) {
     return new Response(
       JSON.stringify({ error: error.message }),
-      { status: 500, headers: { "Content-Type": "application/json" } },
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     )
   }
 })
