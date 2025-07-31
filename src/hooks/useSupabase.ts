@@ -62,6 +62,7 @@ export function useRestaurantOpenings() {
         .from('restaurants')
         .select('*')
         .neq('status', 'open')
+        .in('status', ['opening_soon', 'announced'])
         .or('opening_date.not.is.null,opening_timeframe.not.is.null')
         .order('opening_date', { ascending: true, nullsFirst: false });
       
