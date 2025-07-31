@@ -10,7 +10,7 @@ serve(async (req) => {
   const tables = ["restaurants", "events", "attractions", "playgrounds"];
   let results: Record<string, any> = {};
 
-  const googleApiKey = Deno.env.get("GOOGLE_PLACES_API")!;
+  const googleApiKey = Deno.env.get("GOOGLE_MAPS_KEY")!;
   for (const tableName of tables) {
     const { data, error } = await supabase
       .from(tableName)
@@ -26,15 +26,21 @@ serve(async (req) => {
       continue;
     }
     let updated = 0;
+    let debug = [];
     for (const record of data) {
-      if (!record.location) continue;
+      if (!record.location) {
+        debug.push({ id: record.id, reason: "No location string" });
+        continue;
+      }
       // Geocode location using Google Geocoding API
+      debug.push({ id: record.id, location: record.location });
       const geoRes = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
           record.location
         )}&key=${googleApiKey}`
       );
       const geoData = await geoRes.json();
+      debug[debug.length - 1].geocode = geoData;
       const result = geoData.results && geoData.results[0];
       if (result && result.geometry && result.geometry.location) {
         const lat = result.geometry.location.lat;
@@ -43,10 +49,13 @@ serve(async (req) => {
           .from(tableName)
           .update({ latitude: lat, longitude: lng })
           .eq("id", record.id);
+        debug[debug.length - 1].updateError = updateError || null;
         if (!updateError) updated++;
+      } else {
+        debug[debug.length - 1].reason = "No geocode result";
       }
     }
-    results[tableName] = { updated };
+    results[tableName] = { updated, debug };
   }
 
   return new Response(JSON.stringify({ status: "complete", results }), {
