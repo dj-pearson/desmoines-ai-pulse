@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Calendar, MapPin, Tag, Search, Filter } from "lucide-react";
+import { Calendar, MapPin, Tag, Search, Filter, List, Map } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import {
   createEventSlugWithCentralTime,
   formatInCentralTime,
 } from "@/lib/timezone";
+import EventsMap from "@/components/EventsMap";
 
 export default function EventsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -37,6 +38,7 @@ export default function EventsPage() {
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState('list');
   const { toast } = useToast();
 
   // Debounce search query to prevent excessive API calls
@@ -238,14 +240,34 @@ export default function EventsPage() {
                     className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
                   />
                 </div>
-                <Button
-                  onClick={() => setShowFilters(!showFilters)}
-                  variant="secondary"
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => setShowFilters(!showFilters)}
+                    variant="secondary"
+                    className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filters
+                  </Button>
+                  <div className="flex items-center rounded-md bg-white/20 p-0.5">
+                    <Button
+                      onClick={() => setViewMode('list')}
+                      variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className={viewMode === 'list' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
+                    >
+                      <List className="h-5 w-5" />
+                    </Button>
+                    <Button
+                      onClick={() => setViewMode('map')}
+                      variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className={viewMode === 'map' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
+                    >
+                      <Map className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -360,78 +382,95 @@ export default function EventsPage() {
             </div>
           </div>
 
-          {/* Events Grid */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {events?.map((event) => (
-              <Link
-                key={event.id}
-                to={`/events/${createEventSlugWithCentralTime(
-                  event.title,
-                  event.date
-                )}`}
-              >
-                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                  {event.image_url && (
-                    <div className="aspect-video overflow-hidden rounded-t-lg">
-                      <img
-                        src={event.image_url}
-                        alt={event.title}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
-                  <CardContent className="p-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Badge variant="outline">{event.category}</Badge>
-                        {event.is_featured && (
-                          <Badge className="bg-[#DC143C]">Featured</Badge>
+          {/* Results Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">
+              {searchQuery
+                ? `Search results for "${searchQuery}"`
+                : selectedCategory && selectedCategory !== "all"
+                ? `${selectedCategory} Events`
+                : "Upcoming Events"}
+            </h2>
+            <div className="text-sm text-gray-500 min-w-[120px] text-right">
+              {isLoading ? "Loading..." : `${events?.length || 0} events`}
+            </div>
+          </div>
+
+          {viewMode === 'map' ? (
+            <EventsMap events={events || []} />
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {events?.map((event) => (
+                <Link
+                  key={event.id}
+                  to={`/events/${createEventSlugWithCentralTime(
+                    event.title,
+                    event.date
+                  )}`}
+                >
+                  <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                    {event.image_url && (
+                      <div className="aspect-video overflow-hidden rounded-t-lg">
+                        <img
+                          src={event.image_url}
+                          alt={event.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    <CardContent className="p-6">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline">{event.category}</Badge>
+                          {event.is_featured && (
+                            <Badge className="bg-[#DC143C]">Featured</Badge>
+                          )}
+                        </div>
+
+                        <h3 className="font-semibold text-lg line-clamp-2">
+                          {event.title}
+                        </h3>
+
+                        <div className="space-y-2 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="h-4 w-4" />
+                            <span>
+                              {formatInCentralTime(
+                                event.date,
+                                "MMM d, yyyy 'at' h:mm a"
+                              )}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span className="line-clamp-1">
+                              {event.venue || event.location}
+                            </span>
+                          </div>
+                        </div>
+
+                        {(event.enhanced_description ||
+                          event.original_description) && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {event.enhanced_description ||
+                              event.original_description}
+                          </p>
+                        )}
+
+                        {event.price && (
+                          <div className="text-sm font-medium text-green-600">
+                            {event.price}
+                          </div>
                         )}
                       </div>
-
-                      <h3 className="font-semibold text-lg line-clamp-2">
-                        {event.title}
-                      </h3>
-
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-4 w-4" />
-                          <span>
-                            {formatInCentralTime(
-                              event.date,
-                              "MMM d, yyyy 'at' h:mm a"
-                            )}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span className="line-clamp-1">
-                            {event.venue || event.location}
-                          </span>
-                        </div>
-                      </div>
-
-                      {(event.enhanced_description ||
-                        event.original_description) && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {event.enhanced_description ||
-                            event.original_description}
-                        </p>
-                      )}
-
-                      {event.price && (
-                        <div className="text-sm font-medium text-green-600">
-                          {event.price}
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
 
           {/* No Results State */}
           {(!events || events.length === 0) && (

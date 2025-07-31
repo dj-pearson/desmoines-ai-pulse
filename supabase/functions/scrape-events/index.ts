@@ -546,6 +546,7 @@ function extractEventData(
   price: string;
   category: string;
   date: Date | null;
+  source_url: string;
 } {
   const url = job.config.url.toLowerCase();
 
@@ -735,6 +736,7 @@ function extractIowaWolvesEvent(
   price: string;
   category: string;
   date: Date | null;
+  source_url: string;
 } {
   let title = querySelectorText(html, "h1, h2, .game-title, .matchup");
 
@@ -762,6 +764,7 @@ function extractIowaWolvesEvent(
         price: "",
         category: "",
         date: null,
+        source_url: job.config.url,
       };
     }
   }
@@ -773,6 +776,7 @@ function extractIowaWolvesEvent(
     price: querySelectorText(html, ".price, .ticket-price") || "$15-$25",
     category: "Sports",
     date,
+    source_url: job.config.url,
   };
 }
 
@@ -1339,7 +1343,7 @@ async function scrapeWebsite(
       venue: eventData.location.substring(0, 100),
       category: eventData.category.substring(0, 50),
       price: eventData.price.substring(0, 50),
-      source_url: job.config.url,
+      source_url: eventData.source_url || job.config.url,
       is_featured: Math.random() > 0.7,
     };
 

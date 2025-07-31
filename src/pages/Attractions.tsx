@@ -20,8 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MapPin, Star, Filter } from "lucide-react";
+import { MapPin, Star, Filter, List, Map } from "lucide-react";
 import { Link } from "react-router-dom";
+import AttractionsMap from "@/components/AttractionsMap";
 
 const createSlug = (name: string): string => {
   return name
@@ -39,6 +40,7 @@ export default function Attractions() {
   const [minRating, setMinRating] = useState("any-rating");
   const [showFilters, setShowFilters] = useState(false);
   const [featuredOnly, setFeaturedOnly] = useState("all");
+  const [viewMode, setViewMode] = useState('list');
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error } = useAttractions({});
@@ -126,14 +128,34 @@ export default function Attractions() {
                   className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white"
                 />
               </div>
-              <Button
-                onClick={() => setShowFilters(!showFilters)}
-                variant="secondary"
-                className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filters
-              </Button>
+              <div className="flex items-center gap-3">
+                <Button
+                  onClick={() => setShowFilters(!showFilters)}
+                  variant="secondary"
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filters
+                </Button>
+                <div className="flex items-center rounded-md bg-white/20 p-0.5">
+                  <Button
+                    onClick={() => setViewMode('list')}
+                    variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className={viewMode === 'list' ? 'bg-white/30 text-white' : 'text-white/70 hover:bg-white/30 hover:text-white'}
+                  >
+                    <List className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    onClick={() => setViewMode('map')}
+                    variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+                    size="icon"
+                    className={viewMode === 'map' ? 'bg-white/30 text-white' : 'text-white/70 hover:bg-white/30 hover:text-white'}
+                  >
+                    <Map className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -222,8 +244,9 @@ export default function Attractions() {
           </h2>
         </div>
 
-        {/* Content */}
-        {isLoading ? (
+        {viewMode === 'map' ? (
+          <AttractionsMap attractions={filteredAttractions} />
+        ) : isLoading ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[...Array(6)].map((_, i) => (
               <Card key={i} className="animate-pulse">

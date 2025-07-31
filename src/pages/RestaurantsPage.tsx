@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -10,6 +11,8 @@ import {
   Search,
   Filter,
   Utensils,
+  List, 
+  Map
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +29,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { useToast } from "@/hooks/use-toast";
+import RestaurantsMap from "@/components/RestaurantsMap";
 
 export default function RestaurantsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -33,6 +37,7 @@ export default function RestaurantsPage() {
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState('list');
   const { toast } = useToast();
 
   const { data: restaurants, isLoading } = useQuery({
@@ -213,14 +218,34 @@ export default function RestaurantsPage() {
                     className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white"
                   />
                 </div>
-                <Button
-                  onClick={() => setShowFilters(!showFilters)}
-                  variant="secondary"
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    onClick={() => setShowFilters(!showFilters)}
+                    variant="secondary"
+                    className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filters
+                  </Button>
+                  <div className="flex items-center rounded-md bg-white/20 p-0.5">
+                    <Button
+                      onClick={() => setViewMode('list')}
+                      variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className={viewMode === 'list' ? 'bg-white/30 text-white' : 'text-white/70 hover:bg-white/30 hover:text-white'}
+                    >
+                      <List className="h-5 w-5" />
+                    </Button>
+                    <Button
+                      onClick={() => setViewMode('map')}
+                      variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+                      size="icon"
+                      className={viewMode === 'map' ? 'bg-white/30 text-white' : 'text-white/70 hover:bg-white/30 hover:text-white'}
+                    >
+                      <Map className="h-5 w-5" />
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -288,9 +313,9 @@ export default function RestaurantsPage() {
                     <SelectContent>
                       <SelectItem value="any-price">Any price</SelectItem>
                       <SelectItem value="$">$ - Budget Friendly</SelectItem>
-                      <SelectItem value="$$">$$ - Moderate</SelectItem>
-                      <SelectItem value="$$$">$$$ - Upscale</SelectItem>
-                      <SelectItem value="$$$$">$$$$ - Fine Dining</SelectItem>
+                      <SelectItem value="$">$ - Moderate</SelectItem>
+                      <SelectItem value="$$">$$ - Upscale</SelectItem>
+                      <SelectItem value="$$">$$ - Fine Dining</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -321,83 +346,100 @@ export default function RestaurantsPage() {
             </div>
           </div>
 
-          {/* Restaurants Grid */}
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {restaurants?.map((restaurant) => (
-              <Link
-                key={restaurant.id}
-                to={`/restaurants/${restaurant.slug || restaurant.id}`}
-              >
-                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                  {restaurant.image_url && (
-                    <div className="aspect-video overflow-hidden rounded-t-lg">
-                      <img
-                        src={restaurant.image_url}
-                        alt={restaurant.name}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                    </div>
-                  )}
-                  <CardContent className="p-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Badge
-                          variant="outline"
-                          className="bg-[#2D1B69]/10 text-[#2D1B69]"
-                        >
-                          <Utensils className="h-3 w-3 mr-1" />
-                          {restaurant.cuisine}
-                        </Badge>
-                        {restaurant.is_featured && (
-                          <Badge className="bg-[#DC143C]">Featured</Badge>
-                        )}
-                      </div>
-
-                      <h3 className="font-semibold text-lg line-clamp-2">
-                        {restaurant.name}
-                      </h3>
-
-                      <div className="space-y-2 text-sm text-muted-foreground">
-                        {restaurant.rating && (
-                          <div className="flex items-center gap-2">
-                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                            <span>{restaurant.rating}/5</span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span className="line-clamp-1">
-                            {restaurant.location}
-                          </span>
-                        </div>
-
-                        {restaurant.phone && (
-                          <div className="flex items-center gap-2">
-                            <Phone className="h-4 w-4" />
-                            <span>{restaurant.phone}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {restaurant.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {restaurant.description}
-                        </p>
-                      )}
-
-                      {restaurant.price_range && (
-                        <div className="text-sm font-medium text-[#2D1B69]">
-                          {restaurant.price_range}
-                        </div>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+          {/* Results Header */}
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold">
+              {searchQuery
+                ? `Search results for "${searchQuery}"`
+                : selectedCuisine && selectedCuisine !== "all"
+                ? `${selectedCuisine} Restaurants`
+                : "Top Restaurants"}
+            </h2>
+            <div className="text-sm text-gray-500">
+              {restaurants?.length || 0} restaurants
+            </div>
           </div>
+
+          {viewMode === 'map' ? (
+            <RestaurantsMap restaurants={restaurants || []} />
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {restaurants?.map((restaurant) => (
+                <Link
+                  key={restaurant.id}
+                  to={`/restaurants/${restaurant.slug || restaurant.id}`}
+                >
+                  <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                    {restaurant.image_url && (
+                      <div className="aspect-video overflow-hidden rounded-t-lg">
+                        <img
+                          src={restaurant.image_url}
+                          alt={restaurant.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </div>
+                    )}
+                    <CardContent className="p-6">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Badge
+                            variant="outline"
+                            className="bg-[#2D1B69]/10 text-[#2D1B69]"
+                          >
+                            <Utensils className="h-3 w-3 mr-1" />
+                            {restaurant.cuisine}
+                          </Badge>
+                          {restaurant.is_featured && (
+                            <Badge className="bg-[#DC143C]">Featured</Badge>
+                          )}
+                        </div>
+
+                        <h3 className="font-semibold text-lg line-clamp-2">
+                          {restaurant.name}
+                        </h3>
+
+                        <div className="space-y-2 text-sm text-muted-foreground">
+                          {restaurant.rating && (
+                            <div className="flex items-center gap-2">
+                              <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                              <span>{restaurant.rating}/5</span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span className="line-clamp-1">
+                              {restaurant.location}
+                            </span>
+                          </div>
+
+                          {restaurant.phone && (
+                            <div className="flex items-center gap-2">
+                              <Phone className="h-4 w-4" />
+                              <span>{restaurant.phone}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {restaurant.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {restaurant.description}
+                          </p>
+                        )}
+
+                        {restaurant.price_range && (
+                          <div className="text-sm font-medium text-[#2D1B69]">
+                            {restaurant.price_range}
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          )}
 
           {/* No Results State */}
           {(!restaurants || restaurants.length === 0) && (
