@@ -55,7 +55,25 @@ export function useSocialMediaManager() {
         .limit(50);
 
       if (error) throw error;
-      setPosts(data || []);
+      setPosts((data || []).map(post => ({
+        ...post,
+        content_type: post.content_type as 'event' | 'restaurant' | 'general',
+        subject_type: post.subject_type as 'event_of_the_day' | 'restaurant_of_the_day' | 'weekly_highlight' | 'special_announcement',
+        ai_prompt_used: post.ai_prompt_used || '',
+        content_id: post.content_id || '',
+        content_url: post.content_url || '',
+        created_at: post.created_at || '',
+        created_by: post.created_by || '',
+        metadata: post.metadata || {},
+        platform_type: post.platform_type as 'twitter_threads' | 'facebook_linkedin' | 'combined' || 'combined',
+        post_content: post.post_content || '',
+        post_title: post.post_title || '',
+        posted_at: post.posted_at || '',
+        scheduled_for: post.scheduled_for || '',
+        status: (post.status as 'draft' | 'scheduled' | 'posted' | 'failed') || 'draft',
+        updated_at: post.updated_at || '',
+        webhook_urls: Array.isArray(post.webhook_urls) ? post.webhook_urls.map(String) : []
+      })));
     } catch (error) {
       console.error("Error fetching posts:", error);
       toast({

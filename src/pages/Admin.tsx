@@ -25,6 +25,7 @@ import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTool
 import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterSimple";
 import { CronMonitor } from "@/components/CronMonitor";
 import SocialMediaManager from "@/components/SocialMediaManager";
+import CoordinateManager from "@/components/CoordinateManager";
 import {
   Shield,
   Users,
@@ -622,20 +623,35 @@ export default function Admin() {
                     {!sidebarCollapsed && <span>Affiliate Links</span>}
                   </button>
 
-                  <button
-                    onClick={() => setActiveTab("social-media")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "social-media"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Social Media" : ""}
-                  >
-                    <Share2 className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Social Media</span>}
-                  </button>
+                   <button
+                     onClick={() => setActiveTab("social-media")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "social-media"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Social Media" : ""}
+                   >
+                     <Share2 className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Social Media</span>}
+                   </button>
+
+                   <button
+                     onClick={() => setActiveTab("coordinates")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "coordinates"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Coordinates" : ""}
+                   >
+                     <Settings className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Coordinates</span>}
+                   </button>
                 </>
               )}
 
@@ -988,7 +1004,7 @@ export default function Admin() {
 
             {canManageContent() && activeTab === "restaurant-openings" && (
               <ContentTable
-                // type="restaurant_opening" // Removed
+                type="restaurant"
                 items={restaurants.restaurants.filter((r) => {
                   const matchesSearch =
                     !searchTerms.restaurantOpenings ||
@@ -1041,7 +1057,7 @@ export default function Admin() {
                   }).length
                 }
                 searchValue={inputValues.restaurantOpenings}
-                // onEdit for restaurant_opening removed
+                onEdit={(item) => handleEdit("restaurant", item)}
                 onDelete={(id) => handleDelete("restaurant", id)}
                 onSearch={handleRestaurantOpeningsSearch}
                 onFilter={(filter) =>
@@ -1061,6 +1077,10 @@ export default function Admin() {
 
             {canManageContent() && activeTab === "social-media" && (
               <SocialMediaManager />
+            )}
+
+            {canManageContent() && activeTab === "coordinates" && (
+              <CoordinateManager />
             )}
 
             {canManageUsers() && activeTab === "users" && <UserRoleManager />}

@@ -166,7 +166,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     activity: any[]
   ): Promise<SimpleRecommendation[]> => {
     const recommendations: SimpleRecommendation[] = [];
-    const seenContentIds = new Set();
+    const seenContentIds = new Set<string>();
 
     // Add trending content with preference boost
     for (const item of trending.slice(0, limit * 2)) {
