@@ -5,8 +5,8 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS city text;
 UPDATE events
 SET city = 
   CASE
+    WHEN venue ILIKE '%Des Moines Water Works Park%' OR venue ILIKE '%Des Moines Biergarten%' OR venue ILIKE '%Lauridsen Amphitheater%' OR venue ILIKE '%Killinger Family Stage%' THEN 'Des Moines'
     WHEN location IS NOT NULL AND position(',' IN location) > 0
-    THEN trim(split_part(location, ',', 2))
+    THEN TRIM(SPLIT_PART(location, ',', ARRAY_LENGTH(STRING_TO_ARRAY(location, ','), 1) - 2))
     ELSE NULL
-  END
-WHERE city IS NULL OR city ~ 'IA|[0-9]{5}';
+  END;

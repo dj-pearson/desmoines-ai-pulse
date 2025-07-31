@@ -7,7 +7,7 @@ const googleApiKey = Deno.env.get('GOOGLE_PLACES_API')!
 
 const supabase = createClient(supabaseUrl, supabaseKey)
 
-async function getStandardizedAddress(venue: string): Promise<string | null> {
+async function getCoordinates(venue: string): Promise<{ lat: number; lng: number } | null> {
   const query = `${venue}, Des Moines, Iowa`
   const url = 'https://places.googleapis.com/v1/places:searchText'
   const res = await fetch(url, {
@@ -15,18 +15,24 @@ async function getStandardizedAddress(venue: string): Promise<string | null> {
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': googleApiKey,
-      'X-Goog-FieldMask': 'places.formattedAddress',
+      'X-Goog-FieldMask': 'places.location',
     },
     body: JSON.stringify({ textQuery: query }),
   })
   type GooglePlacesResponse = {
     places?: Array<{
-      formattedAddress?: string
+      location?: {
+        latitude: number
+        longitude: number
+      }
     }>
   }
   const data = (await res.json()) as GooglePlacesResponse
-  if (data.places && data.places.length > 0) {
-    return data.places[0].formattedAddress || null
+  if (data.places && data.places.length > 0 && data.places[0].location) {
+    return {
+      lat: data.places[0].location.latitude,
+      lng: data.places[0].location.longitude,
+    }
   }
   return null
 }
@@ -35,7 +41,7 @@ serve(async (req) => {
   try {
     const { data: events, error } = await supabase
       .from('events')
-      .select('id, venue, location')
+      .select('id, venue, location, latitude, longitude')
 
     if (error) throw error
     if (!events || events.length === 0) {
@@ -47,20 +53,20 @@ serve(async (req) => {
 
     for (const event of events) {
       if (event.venue) {
-        const address = await getStandardizedAddress(event.venue)
-        if (address) {
+        const coordinates = await getCoordinates(event.venue)
+        if (coordinates) {
           await supabase
             .from('events')
-            .update({ location: address })
+            .update({ latitude: coordinates.lat, longitude: coordinates.lng })
             .eq('id', event.id)
-          console.log(`Updated event ${event.id} with address: ${address}`)
+          console.log(`Updated event ${event.id} with coordinates: ${coordinates.lat}, ${coordinates.lng}`)
         } else {
-          console.log(`No address found for venue: ${event.venue}`)
+          console.log(`No coordinates found for venue: ${event.venue}`)
         }
       }
     }
 
-    return new Response(JSON.stringify({ message: 'Events updated successfully.' }), {
+    return new Response(JSON.stringify({ message: 'Coordinates updated successfully.' }), {
       headers: { 'Content-Type': 'application/json' },
       status: 200,
     })

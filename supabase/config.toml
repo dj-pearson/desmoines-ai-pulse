@@ -10,3 +10,6 @@ verify_jwt = false
 
 [functions.bulk-event-updater]
 verify_jwt = false
+
+[functions.backfill-all-coordinates-force]
+verify_jwt = false
