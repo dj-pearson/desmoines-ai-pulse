@@ -7,3 +7,6 @@ verify_jwt = false
 verify_jwt = false
 [functions.geocode-location]
 verify_jwt = false
+
+[functions.bulk-event-updater]
+verify_jwt = false
