@@ -38,7 +38,7 @@ export default function EventsPage() {
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState('list');
+  const [viewMode, setViewMode] = useState("list");
   const { toast } = useToast();
 
   // Debounce search query to prevent excessive API calls
@@ -251,18 +251,26 @@ export default function EventsPage() {
                   </Button>
                   <div className="flex items-center rounded-md bg-white/20 p-0.5">
                     <Button
-                      onClick={() => setViewMode('list')}
-                      variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+                      onClick={() => setViewMode("list")}
+                      variant={viewMode === "list" ? "secondary" : "ghost"}
                       size="icon"
-                      className={viewMode === 'list' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
+                      className={
+                        viewMode === "list"
+                          ? "bg-white/30 text-white h-11"
+                          : "text-white/70 hover:bg-white/30 hover:text-white h-11"
+                      }
                     >
                       <List className="h-5 w-5" />
                     </Button>
                     <Button
-                      onClick={() => setViewMode('map')}
-                      variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+                      onClick={() => setViewMode("map")}
+                      variant={viewMode === "map" ? "secondary" : "ghost"}
                       size="icon"
-                      className={viewMode === 'map' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
+                      className={
+                        viewMode === "map"
+                          ? "bg-white/30 text-white h-11"
+                          : "text-white/70 hover:bg-white/30 hover:text-white h-11"
+                      }
                     >
                       <Map className="h-5 w-5" />
                     </Button>
@@ -368,7 +376,7 @@ export default function EventsPage() {
             </div>
           )}
 
-          {/* Results Header */}
+          {/* Results Header (single instance) */}
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold">
               {searchQuery
@@ -396,7 +404,7 @@ export default function EventsPage() {
             </div>
           </div>
 
-          {viewMode === 'map' ? (
+          {viewMode === "map" ? (
             <EventsMap events={events || []} />
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
