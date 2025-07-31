@@ -1,6 +1,8 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { fromZonedTime, utcToZonedTime, format } from "https://esm.sh/date-fns-tz@2.0.0?deps=date-fns@2.30.0";
+import { format as dateFnsFormat } from "https://esm.sh/date-fns@2.30.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,7 +24,6 @@ interface CrawlRequest {
 interface EventData {
   title: string;
   description: string;
-  date: string;
   location: string;
   venue: string;
   category: string;
@@ -212,7 +213,7 @@ EXAMPLES:
 For EVERY event you find, extract:
 - title: Exact event name from content
 - description: Any details about the event
-- date: YYYY-MM-DD HH:MM:SS (future dates only)
+- date: YYYY-MM-DD HH:MM:SS (future dates only, in Central Time)
 - location: City/state (default: "Des Moines, IA")
 - venue: Specific venue name
 - category: Music/Sports/Arts/Community/Entertainment/Festival
@@ -589,84 +590,56 @@ Return empty array [] if no attractions found.`,
   return [];
 }
 
-// Enhanced timezone conversion functions
-function convertToCentralTime(localDate: Date): Date {
-  // Determine if we're in DST
-  const isDST = isDaylightSavingTime(localDate);
-  const centralOffset = isDST ? -5 : -6; // Hours offset from UTC (CDT: -5, CST: -6)
-
-  // Create the final date by adjusting for Central timezone
-  const utcTime = new Date(
-    localDate.getTime() - centralOffset * 60 * 60 * 1000
-  );
-
-  return utcTime;
-}
-
-function isDaylightSavingTime(date: Date): boolean {
-  // DST in US typically runs from 2nd Sunday in March to 1st Sunday in November
-  const year = date.getFullYear();
-
-  // Find 2nd Sunday in March
-  const march = new Date(year, 2, 1); // March 1st
-  const firstMarchSunday = new Date(
-    march.getTime() + (7 - march.getDay()) * 24 * 60 * 60 * 1000
-  );
-  const secondMarchSunday = new Date(
-    firstMarchSunday.getTime() + 7 * 24 * 60 * 60 * 1000
-  );
-
-  // Find 1st Sunday in November
-  const november = new Date(year, 10, 1); // November 1st
-  const firstNovemberSunday = new Date(
-    november.getTime() + (7 - november.getDay()) * 24 * 60 * 60 * 1000
-  );
-
-  return date >= secondMarchSunday && date < firstNovemberSunday;
-}
-
-// Enhanced time parsing for AI-extracted events
-function parseEventDateTime(dateStr: string): Date | null {
-  if (!dateStr) return null;
-
-  try {
-    let parsedDate = new Date(dateStr);
-    
-    // If the AI provided a date in Central Time format, we need to convert to UTC for storage
-    if (!isNaN(parsedDate.getTime())) {
-      // Check if this looks like a Central Time date (from AI)
-      // If so, treat it as Central Time and convert to UTC
-      return convertToCentralTime(parsedDate);
-    }
-  } catch (error) {
-    console.log(`⚠️ Could not parse AI date: ${dateStr}`);
-  }
-  
-  return null;
-}
-
-// Filter out past events with enhanced date handling
-function filterFutureEvents(events: any[]): any[] {
-  const currentDate = new Date("2025-07-30"); // Updated current date
-
-  return events.filter((event) => {
-    if (!event.date) return true; // Keep events without dates
-
-    try {
-      // Enhanced date parsing with timezone awareness
-      const eventDate = parseEventDateTime(event.date) || new Date(event.date);
-      
-      // Compare against current date in Central Time
-      const currentCentral = new Date(currentDate.toLocaleString("en-US", { 
-        timeZone: "America/Chicago" 
-      }));
-      
-      return eventDate >= currentCentral;
-    } catch (error) {
-      console.log(`⚠️ Could not parse date: ${event.date}`);
-      return true; // Keep events with unparseable dates
-    }
-  });
+interface ParsedDateTime { 
+  event_start_local: string; 
+  event_timezone: string; 
+  event_start_utc: Date; 
+} 
+ 
+// Enhanced time parsing for AI-extracted events 
+function parseEventDateTime(dateStr: string): ParsedDateTime | null { 
+  if (!dateStr) return null; 
+ 
+  const eventTimeZone = "America/Chicago"; // Default to Central Time 
+ 
+  try { 
+    // Attempt to parse the date string directly. 
+    // date-fns-tz's fromZonedTime can handle various formats. 
+    const parsedDate = fromZonedTime(dateStr, eventTimeZone); 
+ 
+    if (!isNaN(parsedDate.getTime())) { 
+      return { 
+        event_start_local: dateFnsFormat(parsedDate, "yyyy-MM-dd HH:mm:ss"), 
+        event_timezone: eventTimeZone, 
+        event_start_utc: parsedDate, 
+      }; 
+    } 
+  } catch (error) { 
+    console.log(`⚠️ Could not parse AI date: ${dateStr}`, error); 
+  } 
+ 
+  return null; 
+} 
+ 
+// Filter out past events with enhanced date handling 
+function filterFutureEvents(events: any[]): any[] { 
+  const nowInCentral = utcToZonedTime(new Date(), "America/Chicago"); 
+ 
+  return events.filter((event) => { 
+    if (!event.date) return true; // Keep events without dates 
+ 
+    try { 
+      const parsed = parseEventDateTime(event.date); 
+      if (parsed && parsed.event_start_utc) { 
+        // Compare the UTC timestamp of the event with the current UTC time 
+        return parsed.event_start_utc.getTime() >= nowInCentral.getTime(); 
+      } 
+      return true; // Keep if parsing fails 
+    } catch (error) { 
+      console.log(`⚠️ Could not parse date for filtering: ${event.date}`, error); 
+      return true; // Keep events with unparseable dates 
+    } 
+  }); 
 }
 
 // Generate fingerprint for duplicate detection
@@ -814,14 +787,16 @@ async function insertData(
 
         switch (category) {
           case "events":
+            const parsedEventDateTime = item.date ? parseEventDateTime(item.date) : null;
             return {
               ...baseItem,
               title: item.title?.substring(0, 200) || "Untitled Event",
               original_description: item.description?.substring(0, 500) || "",
               enhanced_description: item.description?.substring(0, 500) || "",
-              date: item.date
-                ? parseEventDateTime(item.date)?.toISOString() || new Date().toISOString()
-                : new Date().toISOString(),
+              date: parsedEventDateTime?.event_start_utc?.toISOString() || new Date().toISOString(), // Keep for now, will remove later
+              event_start_local: parsedEventDateTime?.event_start_local || null,
+              event_timezone: parsedEventDateTime?.event_timezone || null,
+              event_start_utc: parsedEventDateTime?.event_start_utc || null,
               location: item.location?.substring(0, 100) || "Des Moines, IA",
               venue:
                 item.venue?.substring(0, 100) ||
