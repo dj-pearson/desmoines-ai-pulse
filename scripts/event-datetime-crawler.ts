@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import puppeteer, { Browser } from "puppeteer";
-import { fromZonedTime } from "date-fns-tz";
+import { fromZonedTime, utcToZonedTime, format } from "date-fns-tz";
 
 // Supabase client setup - using same credentials as convert-timezones.ts
 const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
@@ -320,18 +320,22 @@ class EventDateTimeCrawler {
 
             // If time is from structured data, the date already includes time info
             let finalDateTime: Date;
+            let eventStartLocal: string;
+            let eventTimezone: string = "America/Chicago"; // Default to CDT
+
             if (info.extractedTime === "structured_data") {
               console.log("✅ Using complete datetime from structured data");
               finalDateTime = info.extractedDate;
+              eventStartLocal = format(utcToZonedTime(finalDateTime, eventTimezone), "yyyy-MM-dd HH:mm:ss");
             } else {
-              // Combine date and time and convert to UTC for storage
               const combinedDateTime = this.combineDateTime(
                 info.extractedDate,
                 info.extractedTime
               );
+              eventStartLocal = format(combinedDateTime, "yyyy-MM-dd HH:mm:ss");
               finalDateTime = fromZonedTime(
                 combinedDateTime,
-                "America/Chicago"
+                eventTimezone
               );
             }
 
@@ -339,7 +343,10 @@ class EventDateTimeCrawler {
               const { data: updateData, error: updateError } = await supabase
                 .from("events")
                 .update({
-                  date: finalDateTime.toISOString(),
+                  date: finalDateTime.toISOString(), // Keep for now, will remove later
+                  event_start_local: eventStartLocal,
+                  event_timezone: eventTimezone,
+                  event_start_utc: finalDateTime.toISOString(),
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", event.id)
@@ -349,14 +356,14 @@ class EventDateTimeCrawler {
                 console.error(`❌ Error updating event ${event.id}:`, updateError);
               } else if (updateData && updateData.length > 0) {
                 console.log(
-                  `✅ Successfully updated event: ${finalDateTime.toISOString()}`
+                  `✅ Successfully updated event: ${eventStartLocal} (${eventTimezone}) -> ${finalDateTime.toISOString()} (UTC)`
                 );
                 console.log(`📝 Database record updated at: ${updateData[0].updated_at}`);
               } else {
                 console.log(`⚠️ Update command succeeded but no rows were affected`);
               }
             } else {
-              console.log(`🔍 Would update to: ${finalDateTime.toISOString()}`);
+              console.log(`🔍 Would update to: ${eventStartLocal} (${eventTimezone}) -> ${finalDateTime.toISOString()} (UTC)`);
             }
           } else {
             console.log("⚠️ No time information found, keeping existing time");
