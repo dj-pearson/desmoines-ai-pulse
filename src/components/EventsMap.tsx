@@ -1,4 +1,3 @@
-
 import { MapContainer, TileLayer, Marker, Popup, Tooltip } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
@@ -10,7 +9,9 @@ import { createEventSlugWithCentralTime } from "@/lib/timezone";
 function getPinColor(date: string) {
   const today = new Date();
   const eventDate = new Date(date);
-  const diffDays = Math.floor((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const diffDays = Math.floor(
+    (eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+  );
   if (diffDays === 0) return "red"; // today
   if (diffDays > 0 && diffDays <= 7) return "orange"; // this week
   if (diffDays > 7) return "blue"; // future
@@ -69,7 +70,12 @@ const EventsMap = ({ events }: EventsMapProps) => {
               <span style={{ fontWeight: "bold", color }}>{dateLabel}</span>
             </Tooltip>
             <Popup>
-              <Link to={`/events/${createEventSlugWithCentralTime(event.title, event.date)}`}>
+              <Link
+                to={`/events/${createEventSlugWithCentralTime(
+                  event.title,
+                  event.date
+                )}`}
+              >
                 {event.title}
               </Link>
             </Popup>
