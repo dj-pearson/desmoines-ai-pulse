@@ -61,9 +61,8 @@ export function useRestaurantOpenings() {
       const { data, error } = await supabase
         .from('restaurants')
         .select('*')
-        .neq('status', 'open')
+        .not('status', 'in', ['open', 'closed'])
         .in('status', ['opening_soon', 'announced'])
-        .or('opening_date.not.is.null,opening_timeframe.not.is.null')
         .order('opening_date', { ascending: true, nullsFirst: false });
       
       if (error) throw error;
