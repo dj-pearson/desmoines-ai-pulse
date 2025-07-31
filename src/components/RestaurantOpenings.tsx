@@ -7,6 +7,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ExternalLink, Calendar, MapPin } from "lucide-react";
+import { Link } from "react-router-dom";
+// Helper to create slug from restaurant name
+const createSlug = (name: string): string => {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+};
 import { useRestaurantOpenings } from "@/hooks/useSupabase";
 
 const statusConfig = {
@@ -81,83 +89,90 @@ export function RestaurantOpenings() {
 
       {/* Mobile-Optimized Restaurant Grid */}
       <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-        {restaurants.slice(0, 6).map((restaurant) => (
-          <Card
-            key={restaurant.id}
-            className="smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target"
-          >
-            <CardHeader className="space-y-3 mobile-padding">
-              <div className="flex items-start justify-between gap-3">
-                <CardTitle className="text-mobile-body md:text-lg leading-tight flex-1 min-w-0">
-                  {restaurant.name}
-                </CardTitle>
-                <Badge
-                  variant="secondary"
-                  className={`${
-                    getStatusConfig(restaurant.status).color
-                  } text-white text-xs flex-shrink-0`}
-                >
-                  {getStatusConfig(restaurant.status).label}
-                </Badge>
-              </div>
-
-              {/* Mobile-Optimized Meta Information */}
-              <div className="flex flex-col gap-2 text-mobile-caption text-muted-foreground">
-                {restaurant.location && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{restaurant.location}</span>
+        {restaurants.slice(0, 6).map((restaurant) => {
+          const slug = createSlug(restaurant.name);
+          return (
+            <Link
+              to={`/restaurants/${slug}`}
+              key={restaurant.id}
+              className="block"
+            >
+              <Card className="smooth-transition hover:shadow-lg hover:scale-[1.02] touch-target">
+                <CardHeader className="space-y-3 mobile-padding">
+                  <div className="flex items-start justify-between gap-3">
+                    <CardTitle className="text-mobile-body md:text-lg leading-tight flex-1 min-w-0">
+                      {restaurant.name}
+                    </CardTitle>
+                    <Badge
+                      variant="secondary"
+                      className={`${
+                        getStatusConfig(restaurant.status).color
+                      } text-white text-xs flex-shrink-0`}
+                    >
+                      {getStatusConfig(restaurant.status).label}
+                    </Badge>
                   </div>
-                )}
 
-                {restaurant.cuisine && (
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full">
-                      {restaurant.cuisine}
+                  {/* Mobile-Optimized Meta Information */}
+                  <div className="flex flex-col gap-2 text-mobile-caption text-muted-foreground">
+                    {restaurant.location && (
+                      <div className="flex items-center gap-2">
+                        <MapPin className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">{restaurant.location}</span>
+                      </div>
+                    )}
+
+                    {restaurant.cuisine && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-xs bg-secondary text-secondary-foreground px-2 py-1 rounded-full">
+                          {restaurant.cuisine}
+                        </span>
+                      </div>
+                    )}
+
+                    {(restaurant.openingDate ||
+                      restaurant.openingTimeframe) && (
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <span>
+                          {restaurant.openingDate
+                            ? new Date(
+                                restaurant.openingDate
+                              ).toLocaleDateString()
+                            : restaurant.openingTimeframe}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3 md:space-y-4 mobile-padding pt-0">
+                  {restaurant.description && (
+                    <CardDescription className="text-mobile-caption leading-relaxed line-clamp-3">
+                      {restaurant.description}
+                    </CardDescription>
+                  )}
+                  {/* Mobile-Optimized Footer */}
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t border-border/50">
+                    <span className="text-xs text-muted-foreground">
+                      Added{" "}
+                      {new Date(restaurant.createdAt).toLocaleDateString()}
                     </span>
+                    {restaurant.sourceUrl && (
+                      <a
+                        href={restaurant.sourceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-[#DC143C] hover:text-[#8B0000] smooth-transition touch-target self-start"
+                      >
+                        Read More <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
                   </div>
-                )}
-
-                {(restaurant.openingDate || restaurant.openingTimeframe) && (
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4 flex-shrink-0" />
-                    <span>
-                      {restaurant.openingDate
-                        ? new Date(restaurant.openingDate).toLocaleDateString()
-                        : restaurant.openingTimeframe}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-3 md:space-y-4 mobile-padding pt-0">
-              {restaurant.description && (
-                <CardDescription className="text-mobile-caption leading-relaxed line-clamp-3">
-                  {restaurant.description}
-                </CardDescription>
-              )}
-
-              {/* Mobile-Optimized Footer */}
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-2 border-t border-border/50">
-                <span className="text-xs text-muted-foreground">
-                  Added {new Date(restaurant.createdAt).toLocaleDateString()}
-                </span>
-
-                {restaurant.sourceUrl && (
-                  <a
-                    href={restaurant.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-xs text-[#DC143C] hover:text-[#8B0000] smooth-transition touch-target self-start"
-                  >
-                    Read More <ExternalLink className="h-3 w-3" />
-                  </a>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
