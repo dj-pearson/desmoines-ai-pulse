@@ -3,7 +3,7 @@ import fetch from 'node-fetch';
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API_KEY!;
+const GOOGLE_API_KEY = process.env.GOOGLE_PLACES_API!;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 

@@ -37,3 +37,8 @@ event-datetime-updates-2025-07-30T14-58-27.sql
 event-datetime-updates-2025-07-30T15-41-42.sql
 supabase/check_harbour.sql
 supabase/check_urls.sql
+.env
+.env.tmp
+get_secret.js
+temp_run_script.bat
+temp_run_script.sh
