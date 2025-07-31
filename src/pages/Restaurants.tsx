@@ -138,7 +138,7 @@ export default function Restaurants() {
         <Header />
 
         {/* Hero Section with DMI Brand Colors */}
-        <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden">
+        <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]">
           <div className="absolute inset-0 bg-black/20"></div>
           <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
@@ -158,13 +158,13 @@ export default function Restaurants() {
                     placeholder="Search restaurants..."
                     value={filters.search}
                     onChange={(e) => handleSearchChange(e.target.value)}
-                    className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white"
+                    className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
                   />
                 </div>
                 <Button
                   onClick={() => setShowFilters(!showFilters)}
                   variant="secondary"
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
                 >
                   <Filter className="h-4 w-4 mr-2" />
                   Filters
@@ -274,17 +274,14 @@ export default function Restaurants() {
                       to={`/restaurants/${restaurant.slug || restaurant.id}`}
                       className="block hover:scale-105 transition-transform duration-200"
                     >
-                      <Card className="h-full hover:shadow-lg transition-shadow">
+                      <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                         <CardHeader className="pb-4">
                           <div className="flex items-start justify-between gap-2">
                             <CardTitle className="text-lg leading-tight line-clamp-2">
                               {restaurant.name}
                             </CardTitle>
                             {restaurant.is_featured && (
-                              <Badge
-                                variant="secondary"
-                                className="shrink-0 bg-[#DC143C] text-white hover:bg-[#DC143C]/90"
-                              >
+                              <Badge className="shrink-0 bg-[#DC143C] text-white hover:bg-[#DC143C]/90">
                                 Featured
                               </Badge>
                             )}
@@ -305,12 +302,12 @@ export default function Restaurants() {
                               </div>
                             )}
                             {restaurant.price_range && (
-                              <div className="flex items-center gap-1">
-                                <DollarSign className="h-4 w-4" />
-                                <span className="text-[#2D1B69] font-medium">
-                                  {restaurant.price_range}
-                                </span>
-                              </div>
+                               <div className="flex items-center gap-1">
+                                 <DollarSign className="h-4 w-4" />
+                                 <span className="font-medium text-green-600">
+                                   {restaurant.price_range}
+                                 </span>
+                               </div>
                             )}
                           </div>
                         </CardHeader>
