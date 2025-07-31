@@ -62,7 +62,6 @@ export function useRestaurantOpenings() {
         .from('restaurants')
         .select('*')
         .not('status', 'in', ['open', 'closed'])
-        .in('status', ['opening_soon', 'announced'])
         .order('opening_date', { ascending: true, nullsFirst: false });
       
       if (error) throw error;
