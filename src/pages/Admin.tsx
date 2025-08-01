@@ -286,7 +286,7 @@ export default function Admin() {
         phone: "",
         website: "",
         rating: null,
-        imageUrl: "",
+        image_url: "",
         status: "open",
         openingDate: null,
         openingTimeframe: "",
@@ -312,7 +312,7 @@ export default function Admin() {
         location: "",
         type: "",
         website: "",
-        imageUrl: "",
+        image_url: "",
         rating: null,
         isFeatured: false,
       };
@@ -323,7 +323,7 @@ export default function Admin() {
         location: "",
         ageRange: "",
         amenities: [],
-        imageUrl: "",
+        image_url: "",
         rating: null,
         isFeatured: false,
       };

@@ -37,7 +37,7 @@ const searchableFields: FieldConfig[] = [
   { key: "category", label: "Category", searchable: true },
   { key: "originalDescription", label: "Description", searchable: true },
   { key: "sourceUrl", label: "Source URL", searchable: true },
-  { key: "imageUrl", label: "Image URL", searchable: true },
+  { key: "image_url", label: "Image URL", searchable: true },
 ];
 
 interface SearchProgress {

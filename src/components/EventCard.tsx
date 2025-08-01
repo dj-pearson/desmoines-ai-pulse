@@ -58,9 +58,9 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      {event.imageUrl && (
+      {event.image_url && (
         <img
-          src={event.imageUrl}
+          src={event.image_url}
           alt={event.title}
           className="w-full h-48 object-cover"
           onError={(e) => {
