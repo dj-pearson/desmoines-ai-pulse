@@ -26,6 +26,7 @@ import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterS
 import { CronMonitor } from "@/components/CronMonitor";
 import SocialMediaManager from "@/components/SocialMediaManager";
 import CoordinateManager from "@/components/CoordinateManager";
+import WeekendGuideManager from "@/components/WeekendGuideManager";
 import {
   Shield,
   Users,
@@ -48,6 +49,7 @@ import {
   Menu,
   X,
   Share2,
+  CalendarDays,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -721,6 +723,21 @@ export default function Admin() {
                     <Globe className="h-4 w-4" />
                     {!sidebarCollapsed && <span>SEO Tools</span>}
                   </button>
+
+                  <button
+                    onClick={() => setActiveTab("weekend-guide")}
+                    className={`w-full flex items-center ${
+                      sidebarCollapsed ? "justify-center" : "gap-3"
+                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === "weekend-guide"
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                    title={sidebarCollapsed ? "Weekend Guide" : ""}
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    {!sidebarCollapsed && <span>Weekend Guide</span>}
+                  </button>
                 </>
               )}
             </div>
@@ -1118,6 +1135,8 @@ export default function Admin() {
             )}
 
             {canManageContent() && activeTab === "seo" && <SEOTools />}
+
+            {canManageContent() && activeTab === "weekend-guide" && <WeekendGuideManager />}
           </div>
         </div>
       </div>

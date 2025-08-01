@@ -2,6 +2,7 @@ import { Calendar, MapPin, Users, Sparkles, TrendingUp, Heart } from "lucide-rea
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 interface LocalContentSectionProps {
   className?: string;
@@ -16,7 +17,8 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
       icon: Calendar,
       color: "text-blue-600",
       badge: "Updated Daily",
-      keywords: "weekend events Des Moines, things to do this weekend Des Moines Iowa"
+      keywords: "weekend events Des Moines, things to do this weekend Des Moines Iowa",
+      link: "/weekend"
     },
     {
       title: "New Des Moines Restaurant Openings",
@@ -24,7 +26,8 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
       icon: Heart,
       color: "text-red-600", 
       badge: "Fresh Finds",
-      keywords: "new restaurants Des Moines, Des Moines food openings, dining Des Moines Iowa"
+      keywords: "new restaurants Des Moines, Des Moines food openings, dining Des Moines Iowa",
+      link: "/restaurants"
     },
     {
       title: "Family Activities Des Moines",
@@ -32,7 +35,8 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
       icon: Users,
       color: "text-green-600",
       badge: "Family Guide",
-      keywords: "family activities Des Moines, kid friendly events Des Moines, children activities Iowa"
+      keywords: "family activities Des Moines, kid friendly events Des Moines, children activities Iowa",
+      link: "/playgrounds"
     },
     {
       title: "Des Moines Neighborhoods Guide",
@@ -40,7 +44,8 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
       icon: MapPin,
       color: "text-purple-600",
       badge: "Local Insider",
-      keywords: "Des Moines neighborhoods, East Village events, West Des Moines dining, Ankeny activities"
+      keywords: "Des Moines neighborhoods, East Village events, West Des Moines dining, Ankeny activities",
+      link: "/neighborhoods"
     }
   ];
 
@@ -96,8 +101,10 @@ export default function LocalContentSection({ className }: LocalContentSectionPr
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm text-gray-600 mb-4">{guide.description}</p>
-                  <Button size="sm" variant="outline" className="w-full">
-                    Explore Guide
+                  <Button asChild size="sm" variant="outline" className="w-full">
+                    <Link to={guide.link}>
+                      Explore Guide
+                    </Link>
                   </Button>
                 </CardContent>
               </Card>
