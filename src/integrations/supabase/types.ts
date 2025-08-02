@@ -192,6 +192,33 @@ export type Database = {
         }
         Relationships: []
       }
+      content_helpful_votes: {
+        Row: {
+          content_id: string
+          content_type: string
+          created_at: string
+          id: string
+          is_helpful: boolean
+          user_id: string
+        }
+        Insert: {
+          content_id: string
+          content_type: string
+          created_at?: string
+          id?: string
+          is_helpful: boolean
+          user_id: string
+        }
+        Update: {
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          id?: string
+          is_helpful?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       content_metrics: {
         Row: {
           content_id: string
@@ -374,6 +401,211 @@ export type Database = {
         }
         Relationships: []
       }
+      event_attendance: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_attendance_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_photos: {
+        Row: {
+          caption: string | null
+          created_at: string
+          event_id: string
+          helpful_votes: number | null
+          id: string
+          is_approved: boolean | null
+          photo_url: string
+          user_id: string
+        }
+        Insert: {
+          caption?: string | null
+          created_at?: string
+          event_id: string
+          helpful_votes?: number | null
+          id?: string
+          is_approved?: boolean | null
+          photo_url: string
+          user_id: string
+        }
+        Update: {
+          caption?: string | null
+          created_at?: string
+          event_id?: string
+          helpful_votes?: number | null
+          id?: string
+          is_approved?: boolean | null
+          photo_url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_photos_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_reviews: {
+        Row: {
+          attended: boolean | null
+          created_at: string
+          event_id: string
+          helpful_votes: number | null
+          id: string
+          rating: number | null
+          review_text: string
+          user_id: string
+        }
+        Insert: {
+          attended?: boolean | null
+          created_at?: string
+          event_id: string
+          helpful_votes?: number | null
+          id?: string
+          rating?: number | null
+          review_text: string
+          user_id: string
+        }
+        Update: {
+          attended?: boolean | null
+          created_at?: string
+          event_id?: string
+          helpful_votes?: number | null
+          id?: string
+          rating?: number | null
+          review_text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_reviews_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_social_metrics: {
+        Row: {
+          created_at: string
+          date: string
+          event_id: string
+          going_count: number | null
+          id: string
+          interested_count: number | null
+          social_buzz_score: number | null
+          total_saves: number | null
+          total_shares: number | null
+          total_views: number | null
+          trending_score: number | null
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          event_id: string
+          going_count?: number | null
+          id?: string
+          interested_count?: number | null
+          social_buzz_score?: number | null
+          total_saves?: number | null
+          total_shares?: number | null
+          total_views?: number | null
+          trending_score?: number | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          event_id?: string
+          going_count?: number | null
+          id?: string
+          interested_count?: number | null
+          social_buzz_score?: number | null
+          total_saves?: number | null
+          total_shares?: number | null
+          total_views?: number | null
+          trending_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_social_metrics_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_tips: {
+        Row: {
+          created_at: string
+          event_id: string
+          helpful_votes: number | null
+          id: string
+          tip_category: string | null
+          tip_text: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          helpful_votes?: number | null
+          id?: string
+          tip_category?: string | null
+          tip_text: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          helpful_votes?: number | null
+          id?: string
+          tip_category?: string | null
+          tip_text?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_tips_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           ai_writeup: string | null
@@ -454,6 +686,115 @@ export type Database = {
           writeup_prompt_used?: string | null
         }
         Relationships: []
+      }
+      friend_group_members: {
+        Row: {
+          group_id: string
+          id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          group_id: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          group_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "friend_group_members_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "friend_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      friend_groups: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          is_public: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      group_planning_sessions: {
+        Row: {
+          active_users: Json | null
+          created_at: string
+          expires_at: string | null
+          group_id: string
+          id: string
+          notes: string | null
+          selected_events: Json | null
+          session_name: string
+          updated_at: string
+          voting_data: Json | null
+        }
+        Insert: {
+          active_users?: Json | null
+          created_at?: string
+          expires_at?: string | null
+          group_id: string
+          id?: string
+          notes?: string | null
+          selected_events?: Json | null
+          session_name: string
+          updated_at?: string
+          voting_data?: Json | null
+        }
+        Update: {
+          active_users?: Json | null
+          created_at?: string
+          expires_at?: string | null
+          group_id?: string
+          id?: string
+          notes?: string | null
+          selected_events?: Json | null
+          session_name?: string
+          updated_at?: string
+          voting_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_planning_sessions_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "friend_groups"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       personalized_recommendations: {
         Row: {
@@ -1279,6 +1620,33 @@ export type Database = {
           },
         ]
       }
+      user_friends: {
+        Row: {
+          accepted_at: string | null
+          created_at: string
+          friend_id: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string
+          friend_id: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string
+          friend_id?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_interactions_enhanced: {
         Row: {
           click_position: string | null
@@ -1426,6 +1794,36 @@ export type Database = {
           total_pages_viewed?: number | null
           user_agent?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_locations: {
+        Row: {
+          id: string
+          is_public: boolean | null
+          latitude: number | null
+          location_name: string | null
+          longitude: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          is_public?: boolean | null
+          latitude?: number | null
+          location_name?: string | null
+          longitude?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          is_public?: boolean | null
+          latitude?: number | null
+          location_name?: string | null
+          longitude?: number | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1729,6 +2127,16 @@ export type Database = {
         }
         Returns: number
       }
+      calculate_social_buzz_score: {
+        Args: {
+          views_count: number
+          shares_count: number
+          saves_count: number
+          going_count: number
+          interested_count: number
+        }
+        Returns: number
+      }
       calculate_trending_scores: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -1748,6 +2156,19 @@ export type Database = {
           image_url: string
           link_url: string
           cta_text: string
+        }[]
+      }
+      get_friends_near_event: {
+        Args: {
+          p_user_id: string
+          p_event_latitude: number
+          p_event_longitude: number
+          p_radius_km?: number
+        }
+        Returns: {
+          friend_id: string
+          friend_name: string
+          distance_km: number
         }[]
       }
       get_next_optimal_posting_time: {
