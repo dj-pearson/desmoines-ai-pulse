@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SocialEventCard } from "@/components/SocialEventCard";
 import {
   Select,
   SelectContent,
@@ -409,73 +410,14 @@ export default function EventsPage() {
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {events?.map((event) => (
-                <Link
-                  key={event.id}
-                  to={`/events/${createEventSlugWithCentralTime(
-                    event.title,
-                    event.date
-                  )}`}
-                >
-                  <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                    {event.image_url && (
-                      <div className="aspect-video overflow-hidden rounded-t-lg">
-                        <img
-                          src={event.image_url}
-                          alt={event.title}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      </div>
-                    )}
-                    <CardContent className="p-6">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <Badge variant="outline">{event.category}</Badge>
-                          {event.is_featured && (
-                            <Badge className="bg-[#DC143C]">Featured</Badge>
-                          )}
-                        </div>
-
-                        <h3 className="font-semibold text-lg line-clamp-2">
-                          {event.title}
-                        </h3>
-
-                        <div className="space-y-2 text-sm text-muted-foreground">
-                          <div className="flex items-center gap-2">
-                            <Calendar className="h-4 w-4" />
-                            <span>
-                              {formatInCentralTime(
-                                event.date,
-                                "MMM d, yyyy 'at' h:mm a"
-                              )}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            <span className="line-clamp-1">
-                              {event.venue || event.location}
-                            </span>
-                          </div>
-                        </div>
-
-                        {(event.enhanced_description ||
-                          event.original_description) && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {event.enhanced_description ||
-                              event.original_description}
-                          </p>
-                        )}
-
-                        {event.price && (
-                          <div className="text-sm font-medium text-green-600">
-                            {event.price}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                <SocialEventCard 
+                  key={event.id} 
+                  event={event} 
+                  onViewDetails={() => {
+                    // Navigate to event details
+                    window.location.href = `/events/${createEventSlugWithCentralTime(event.title, event.date)}`;
+                  }}
+                />
               ))}
             </div>
           )}

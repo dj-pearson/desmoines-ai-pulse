@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import PreferencesManager from "@/components/PreferencesManager";
-import { User, Mail, Phone, MapPin, Settings, Save, Edit } from "lucide-react";
+import { User, Mail, Phone, MapPin, Settings, Save, Edit, Users } from "lucide-react";
+import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 
 export default function Profile() {
   const { profile, updateProfile, isLoading } = useProfile();
+  const { friends, friendGroups } = useSocialFeatures();
   const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -163,6 +165,45 @@ export default function Profile() {
                 )}
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Separator />
+
+        {/* Social Stats */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Social Activity
+            </CardTitle>
+            <CardDescription>
+              Your social connections and activity
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold text-primary">
+                  {friends?.length || 0}
+                </div>
+                <p className="text-sm text-muted-foreground">Friends</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold text-primary">
+                  {friendGroups?.length || 0}
+                </div>
+                <p className="text-sm text-muted-foreground">Groups</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold text-primary">0</div>
+                <p className="text-sm text-muted-foreground">Events Attended</p>
+              </div>
+              <div className="text-center p-4 bg-muted/50 rounded-lg">
+                <div className="text-2xl font-bold text-primary">0</div>
+                <p className="text-sm text-muted-foreground">Reviews Written</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
