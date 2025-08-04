@@ -62,6 +62,113 @@ export type Database = {
         }
         Relationships: []
       }
+      calendar_events: {
+        Row: {
+          attendees: Json | null
+          calendar_id: string
+          created_at: string
+          description: string | null
+          end_time: string
+          external_event_id: string
+          id: string
+          is_all_day: boolean | null
+          location: string | null
+          start_time: string
+          status: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attendees?: Json | null
+          calendar_id: string
+          created_at?: string
+          description?: string | null
+          end_time: string
+          external_event_id: string
+          id?: string
+          is_all_day?: boolean | null
+          location?: string | null
+          start_time: string
+          status?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attendees?: Json | null
+          calendar_id?: string
+          created_at?: string
+          description?: string | null
+          end_time?: string
+          external_event_id?: string
+          id?: string
+          is_all_day?: boolean | null
+          location?: string | null
+          start_time?: string
+          status?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_events_calendar_id_fkey"
+            columns: ["calendar_id"]
+            isOneToOne: false
+            referencedRelation: "user_calendars"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calendar_preferences: {
+        Row: {
+          auto_suggest_events: boolean | null
+          buffer_time_minutes: number | null
+          created_at: string
+          id: string
+          location_radius_km: number | null
+          max_daily_events: number | null
+          notification_preferences: Json | null
+          preferred_event_duration: number | null
+          updated_at: string
+          user_id: string
+          work_days: number[] | null
+          work_hours_end: string | null
+          work_hours_start: string | null
+        }
+        Insert: {
+          auto_suggest_events?: boolean | null
+          buffer_time_minutes?: number | null
+          created_at?: string
+          id?: string
+          location_radius_km?: number | null
+          max_daily_events?: number | null
+          notification_preferences?: Json | null
+          preferred_event_duration?: number | null
+          updated_at?: string
+          user_id: string
+          work_days?: number[] | null
+          work_hours_end?: string | null
+          work_hours_start?: string | null
+        }
+        Update: {
+          auto_suggest_events?: boolean | null
+          buffer_time_minutes?: number | null
+          created_at?: string
+          id?: string
+          location_radius_km?: number | null
+          max_daily_events?: number | null
+          notification_preferences?: Json | null
+          preferred_event_duration?: number | null
+          updated_at?: string
+          user_id?: string
+          work_days?: number[] | null
+          work_hours_end?: string | null
+          work_hours_start?: string | null
+        }
+        Relationships: []
+      }
       campaign_creatives: {
         Row: {
           campaign_id: string
@@ -1229,6 +1336,56 @@ export type Database = {
         }
         Relationships: []
       }
+      smart_event_suggestions: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          event_id: string
+          id: string
+          is_accepted: boolean | null
+          is_dismissed: boolean | null
+          optimal_time: string | null
+          reason: string
+          suggested_at: string
+          travel_time_minutes: number | null
+          user_id: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          event_id: string
+          id?: string
+          is_accepted?: boolean | null
+          is_dismissed?: boolean | null
+          optimal_time?: string | null
+          reason: string
+          suggested_at?: string
+          travel_time_minutes?: number | null
+          user_id: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          event_id?: string
+          id?: string
+          is_accepted?: boolean | null
+          is_dismissed?: boolean | null
+          optimal_time?: string | null
+          reason?: string
+          suggested_at?: string
+          travel_time_minutes?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "smart_event_suggestions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       social_media_posts: {
         Row: {
           ai_prompt_used: string | null
@@ -1550,6 +1707,51 @@ export type Database = {
           session_id?: string
           user_agent?: string | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      user_calendars: {
+        Row: {
+          access_token_encrypted: string | null
+          calendar_id: string
+          calendar_name: string
+          color: string | null
+          created_at: string
+          id: string
+          is_primary: boolean | null
+          provider: string
+          refresh_token_encrypted: string | null
+          sync_enabled: boolean | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token_encrypted?: string | null
+          calendar_id: string
+          calendar_name: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          provider: string
+          refresh_token_encrypted?: string | null
+          sync_enabled?: boolean | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token_encrypted?: string | null
+          calendar_id?: string
+          calendar_name?: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          is_primary?: boolean | null
+          provider?: string
+          refresh_token_encrypted?: string | null
+          sync_enabled?: boolean | null
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -2141,9 +2343,20 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      check_calendar_conflicts: {
+        Args: { p_user_id: string; p_start_time: string; p_end_time: string }
+        Returns: {
+          conflict_count: number
+          conflicting_events: Json
+        }[]
+      }
       generate_restaurant_slug: {
         Args: { restaurant_name: string }
         Returns: string
+      }
+      generate_smart_suggestions: {
+        Args: { p_user_id: string }
+        Returns: undefined
       }
       get_active_ads: {
         Args: {
