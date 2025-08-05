@@ -5,6 +5,12 @@ import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import App from './App.tsx';
 import './index.css';
+import { registerServiceWorker, addResourceHints, trackWebVitals } from "./lib/performance";
+
+// Initialize performance optimizations
+addResourceHints();
+registerServiceWorker();
+trackWebVitals();
 
 const queryClient = new QueryClient();
 
