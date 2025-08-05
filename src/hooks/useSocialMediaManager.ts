@@ -264,9 +264,15 @@ export function useSocialMediaManager() {
 
   useEffect(() => {
     console.log('useSocialMediaManager effect running, user:', user, 'isAdmin:', isAdmin);
+    console.log('User object:', JSON.stringify(user, null, 2));
+    console.log('IsAdmin check result:', isAdmin);
+    
     if (user && isAdmin) {
+      console.log('Auth conditions met, fetching data...');
       fetchPosts();
       fetchWebhooks();
+    } else {
+      console.log('Auth conditions not met. User:', !!user, 'IsAdmin:', isAdmin);
     }
   }, [user, isAdmin]);
 
