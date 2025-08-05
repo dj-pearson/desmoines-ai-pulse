@@ -181,7 +181,7 @@ export function useAnalytics() {
     await trackEvent({
       eventType: 'view',
       contentType: 'page',
-      contentId: window.location.pathname,
+      contentId: `page-${sessionId}-${Date.now()}`, // Generate proper UUID-like ID for pages
     });
   }, [sessionId, userId]);
 
