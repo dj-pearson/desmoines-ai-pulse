@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { useAccessibility } from "@/hooks/useAccessibility";
 import { Link, useLocation } from "react-router-dom";
 import {
   User,
@@ -39,11 +40,32 @@ import { cn } from "@/lib/utils";
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const { profile } = useProfile();
+  const { announceToScreenReader, useFocusRestore } = useAccessibility();
+  const { saveFocus, restoreFocus } = useFocusRestore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
 
+  // Announce route changes to screen readers
+  useEffect(() => {
+    const pageTitle = document.title;
+    if (pageTitle) {
+      announceToScreenReader(`Navigated to ${pageTitle}`, 'polite');
+    }
+  }, [location.pathname, announceToScreenReader]);
+
   const handleLogout = async () => {
+    announceToScreenReader('Signing out...', 'polite');
     await logout();
+    announceToScreenReader('Successfully signed out', 'polite');
+  };
+
+  const handleMobileMenuToggle = (isOpen: boolean) => {
+    if (isOpen) {
+      saveFocus();
+    } else {
+      restoreFocus();
+    }
+    setIsMobileMenuOpen(isOpen);
   };
 
   const getInitials = () => {
@@ -110,28 +132,35 @@ export default function Header() {
           {/* Mobile Menu + User Actions */}
           <div className="flex items-center gap-2">
             {/* Mobile Menu */}
-            <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
+            <Sheet open={isMobileMenuOpen} onOpenChange={handleMobileMenuToggle}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="lg:hidden touch-target"
-                  aria-label="Open navigation menu"
+                  aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                  aria-expanded={isMobileMenuOpen}
+                  aria-controls="mobile-navigation"
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] sm:w-[350px] flex flex-col max-h-screen">
+              <SheetContent 
+                side="right" 
+                className="w-[300px] sm:w-[350px] flex flex-col max-h-screen"
+                id="mobile-navigation"
+                aria-label="Mobile navigation menu"
+              >
                 <SheetHeader className="flex-shrink-0">
-                  <SheetTitle>Navigation</SheetTitle>
+                  <SheetTitle>Navigation Menu</SheetTitle>
                 </SheetHeader>
-                <div className="flex-1 overflow-y-auto py-6">
-                  <div className="space-y-2" role="navigation" aria-label="Mobile navigation">
+                <div className="flex-1 overflow-y-auto py-6" role="none">
+                  <nav className="space-y-2" role="navigation" aria-label="Mobile navigation">
                     {navigationLinks.map((link) => (
                       <Link
                         key={link.href}
                         to={link.href}
-                        onClick={() => setIsMobileMenuOpen(false)}
+                        onClick={() => handleMobileMenuToggle(false)}
                         className={cn(
                           "flex items-center gap-3 p-4 rounded-lg smooth-transition touch-target",
                           isActivePath(link.href)
@@ -146,7 +175,7 @@ export default function Header() {
                         </span>
                       </Link>
                     ))}
-                  </div>
+                  </nav>
                   
                   {/* Mobile Theme Toggle */}
                   <div className="border-t border-border pt-4 mt-6">
@@ -157,10 +186,10 @@ export default function Header() {
                   </div>
                   {/* Mobile Submit Event and Advertise Buttons */}
                   <div className="border-t border-border pt-4 mt-6 space-y-3">
-                    <div onClick={() => setIsMobileMenuOpen(false)} className="w-full">
+                    <div onClick={() => handleMobileMenuToggle(false)} className="w-full">
                       <SubmitEventButton />
                     </div>
-                    <div onClick={() => setIsMobileMenuOpen(false)} className="w-full">
+                    <div onClick={() => handleMobileMenuToggle(false)} className="w-full">
                       <AdvertiseButton />
                     </div>
                   </div>
@@ -189,20 +218,22 @@ export default function Header() {
                       <div className="space-y-2">
                         <Link
                           to="/profile"
-                          onClick={() => setIsMobileMenuOpen(false)}
+                          onClick={() => handleMobileMenuToggle(false)}
                           className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
+                          aria-label="Go to profile page"
                         >
-                          <User className="h-5 w-5 text-primary flex-shrink-0" />
+                          <User className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
                           <span className="text-base">Profile</span>
                         </Link>
 
                         {isAdmin && (
                           <Link
                             to="/admin"
-                            onClick={() => setIsMobileMenuOpen(false)}
+                            onClick={() => handleMobileMenuToggle(false)}
                             className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
+                            aria-label="Go to admin dashboard"
                           >
-                            <Shield className="h-5 w-5 text-primary flex-shrink-0" />
+                            <Shield className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
                             <span className="text-base">Admin</span>
                           </Link>
                         )}
@@ -210,11 +241,12 @@ export default function Header() {
                         <button
                           onClick={() => {
                             handleLogout();
-                            setIsMobileMenuOpen(false);
+                            handleMobileMenuToggle(false);
                           }}
                           className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target w-full text-left"
+                          aria-label="Sign out of your account"
                         >
-                          <LogOut className="h-5 w-5 text-destructive flex-shrink-0" />
+                          <LogOut className="h-5 w-5 text-destructive flex-shrink-0" aria-hidden="true" />
                           <span className="text-base">Sign out</span>
                         </button>
                       </div>
@@ -223,8 +255,9 @@ export default function Header() {
                     <div className="border-t border-border pt-4 mt-6">
                       <Link
                         to="/auth"
-                        onClick={() => setIsMobileMenuOpen(false)}
+                        onClick={() => handleMobileMenuToggle(false)}
                         className="block w-full"
+                        aria-label="Sign in to your account"
                       >
                         <Button className="w-full h-12 text-base touch-target">Sign In</Button>
                       </Link>
@@ -242,13 +275,13 @@ export default function Header() {
               {isAuthenticated ? (
                 <>
                   {isAdmin && (
-                    <Link to="/admin">
+                    <Link to="/admin" aria-label="Go to admin dashboard">
                       <Button
                         variant="outline"
                         size="sm"
                         className="touch-target"
                       >
-                        <Shield className="h-4 w-4 mr-2" />
+                        <Shield className="h-4 w-4 mr-2" aria-hidden="true" />
                         Admin
                       </Button>
                     </Link>
@@ -259,6 +292,9 @@ export default function Header() {
                       <Button
                         variant="ghost"
                         className="relative touch-target rounded-full"
+                        aria-label={`Account menu for ${profile?.first_name || 'User'}`}
+                        aria-expanded="false"
+                        aria-haspopup="menu"
                       >
                         <Avatar className="h-8 w-8">
                           <AvatarFallback className="bg-primary text-primary-foreground text-sm">
@@ -272,6 +308,8 @@ export default function Header() {
                       align="end"
                       forceMount
                       sideOffset={8}
+                      role="menu"
+                      aria-label="Account menu"
                     >
                       <div className="flex items-center justify-start gap-2 p-2">
                         <div className="flex flex-col space-y-1 leading-none">
@@ -286,22 +324,22 @@ export default function Header() {
                         </div>
                       </div>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <Link to="/profile" className="flex items-center">
-                          <User className="mr-2 h-4 w-4" />
+                      <DropdownMenuItem asChild role="none">
+                        <Link to="/profile" className="flex items-center" role="menuitem" aria-label="Go to profile page">
+                          <User className="mr-2 h-4 w-4" aria-hidden="true" />
                           Profile
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={handleLogout}>
-                        <LogOut className="mr-2 h-4 w-4" />
+                      <DropdownMenuItem onClick={handleLogout} role="menuitem" aria-label="Sign out of your account">
+                        <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                         Sign out
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </>
               ) : (
-                <Link to="/auth">
+                <Link to="/auth" aria-label="Sign in to your account">
                   <Button className="touch-target">Sign In</Button>
                 </Link>
               )}
