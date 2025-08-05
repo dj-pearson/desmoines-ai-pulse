@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
+import { useUserRole } from './useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
@@ -28,12 +29,18 @@ interface Webhook {
 
 export function useSocialMediaManager() {
   const { user } = useAuth();
+  const { userRole, hasRole } = useUserRole();
   const [posts, setPosts] = useState<SocialMediaPost[]>([]);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   const fetchPosts = async () => {
+    if (!hasRole('admin')) {
+      console.log('User does not have admin role, skipping fetch');
+      return;
+    }
+    
     setLoading(true);
     try {
       console.log('Fetching social media posts...');
@@ -58,6 +65,11 @@ export function useSocialMediaManager() {
   };
 
   const fetchWebhooks = async () => {
+    if (!hasRole('admin')) {
+      console.log('User does not have admin role, skipping webhook fetch');
+      return;
+    }
+    
     try {
       console.log('Fetching social media webhooks...');
       const { data, error } = await supabase
@@ -253,10 +265,12 @@ export function useSocialMediaManager() {
   };
 
   useEffect(() => {
-    console.log('useSocialMediaManager effect running, user:', user);
-    fetchPosts();
-    fetchWebhooks();
-  }, [user]);
+    console.log('useSocialMediaManager effect running, user:', user, 'userRole:', userRole);
+    if (user && hasRole('admin')) {
+      fetchPosts();
+      fetchWebhooks();
+    }
+  }, [user, userRole, hasRole]);
 
   return {
     posts,
