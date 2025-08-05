@@ -23,7 +23,7 @@ import EventReviewSystem from "@/components/EventReviewSystem";
 import AffiliateManager from "@/components/AffiliateManager";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
 import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterSimple";
-import { CronMonitor } from "@/components/CronMonitor";
+import CronMonitorSimple from "@/components/CronMonitorSimple";
 import SocialMediaManager from "@/components/SocialMediaManager";
 import CoordinateManager from "@/components/CoordinateManager";
 import WeekendGuideManager from "@/components/WeekendGuideManager";
@@ -925,7 +925,7 @@ export default function Admin() {
             {canManageContent() && activeTab === "scraping" && (
               <div className="space-y-6">
                 {/* Cron Monitor */}
-                <CronMonitor />
+                <CronMonitorSimple />
 
                 {/* Original Scraping Management */}
                 <Card>

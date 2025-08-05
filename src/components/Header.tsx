@@ -108,99 +108,99 @@ export default function Header() {
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] sm:w-[350px]">
-                <SheetHeader>
+              <SheetContent side="right" className="w-[300px] sm:w-[350px] flex flex-col max-h-screen">
+                <SheetHeader className="flex-shrink-0">
                   <SheetTitle>Navigation</SheetTitle>
                 </SheetHeader>
-                <div className="flex flex-col space-y-4 mt-6">
-                  {navigationLinks.map((link) => (
-                    <Link
-                      key={link.href}
-                      to={link.href}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
-                    >
-                      <link.icon className="h-5 w-5 text-[#DC143C]" />
-                      <span className="text-mobile-body font-medium">
-                        {link.label}
-                      </span>
-                    </Link>
-                  ))}
+                <div className="flex-1 overflow-y-auto py-6">
+                  <div className="space-y-2">
+                    {navigationLinks.map((link) => (
+                      <Link
+                        key={link.href}
+                        to={link.href}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                        className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
+                      >
+                        <link.icon className="h-5 w-5 text-primary flex-shrink-0" />
+                        <span className="text-base font-medium">
+                          {link.label}
+                        </span>
+                      </Link>
+                    ))}
+                  </div>
 
                   {/* Mobile Submit Event and Advertise Buttons */}
-                  <div className="border-t pt-4 mt-4 space-y-2">
-                    <div onClick={() => setIsMobileMenuOpen(false)}>
+                  <div className="border-t border-border pt-4 mt-6 space-y-3">
+                    <div onClick={() => setIsMobileMenuOpen(false)} className="w-full">
                       <SubmitEventButton />
                     </div>
-                    <div onClick={() => setIsMobileMenuOpen(false)}>
+                    <div onClick={() => setIsMobileMenuOpen(false)} className="w-full">
                       <AdvertiseButton />
                     </div>
                   </div>
 
                   {/* Mobile User Actions */}
                   {isAuthenticated ? (
-                    <>
-                      <div className="border-t pt-4 mt-6">
-                        <div className="flex items-center gap-3 p-3 mb-4">
-                          <Avatar className="h-10 w-10">
-                            <AvatarFallback className="bg-primary text-primary-foreground">
-                              {getInitials()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex flex-col">
-                            {profile && (
-                              <p className="font-medium text-sm">
-                                {profile.first_name} {profile.last_name}
-                              </p>
-                            )}
-                            <p className="text-xs text-muted-foreground truncate">
-                              {profile?.email}
+                    <div className="border-t border-border pt-4 mt-6">
+                      <div className="flex items-center gap-3 p-4 mb-4 bg-muted/50 rounded-lg">
+                        <Avatar className="h-12 w-12">
+                          <AvatarFallback className="bg-primary text-primary-foreground">
+                            {getInitials()}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          {profile && (
+                            <p className="font-semibold text-base truncate">
+                              {profile.first_name} {profile.last_name}
                             </p>
-                          </div>
-                        </div>
-
-                        <div className="space-y-2">
-                          <Link
-                            to="/profile"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
-                          >
-                            <User className="h-5 w-5" />
-                            <span className="text-mobile-body">Profile</span>
-                          </Link>
-
-                          {isAdmin && (
-                            <Link
-                              to="/admin"
-                              onClick={() => setIsMobileMenuOpen(false)}
-                              className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
-                            >
-                              <Shield className="h-5 w-5" />
-                              <span className="text-mobile-body">Admin</span>
-                            </Link>
                           )}
-
-                          <button
-                            onClick={() => {
-                              handleLogout();
-                              setIsMobileMenuOpen(false);
-                            }}
-                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target w-full text-left"
-                          >
-                            <LogOut className="h-5 w-5" />
-                            <span className="text-mobile-body">Sign out</span>
-                          </button>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {profile?.email}
+                          </p>
                         </div>
                       </div>
-                    </>
+
+                      <div className="space-y-2">
+                        <Link
+                          to="/profile"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
+                        >
+                          <User className="h-5 w-5 text-primary flex-shrink-0" />
+                          <span className="text-base">Profile</span>
+                        </Link>
+
+                        {isAdmin && (
+                          <Link
+                            to="/admin"
+                            onClick={() => setIsMobileMenuOpen(false)}
+                            className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
+                          >
+                            <Shield className="h-5 w-5 text-primary flex-shrink-0" />
+                            <span className="text-base">Admin</span>
+                          </Link>
+                        )}
+
+                        <button
+                          onClick={() => {
+                            handleLogout();
+                            setIsMobileMenuOpen(false);
+                          }}
+                          className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target w-full text-left"
+                        >
+                          <LogOut className="h-5 w-5 text-destructive flex-shrink-0" />
+                          <span className="text-base">Sign out</span>
+                        </button>
+                      </div>
+                    </div>
                   ) : (
-                    <div className="border-t pt-4 mt-6">
+                    <div className="border-t border-border pt-4 mt-6">
                       <Link
                         to="/auth"
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="block"
+                        className="block w-full"
                       >
-                        <Button className="w-full touch-target">Sign In</Button>
+                        <Button className="w-full h-12 text-base touch-target">Sign In</Button>
                       </Link>
                     </div>
                   )}
@@ -241,9 +241,10 @@ export default function Header() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent
-                      className="w-56"
+                      className="w-56 bg-background border border-border shadow-lg z-50"
                       align="end"
                       forceMount
+                      sideOffset={8}
                     >
                       <div className="flex items-center justify-start gap-2 p-2">
                         <div className="flex flex-col space-y-1 leading-none">
