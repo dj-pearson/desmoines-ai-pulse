@@ -1,0 +1,13 @@
+# Ensure consistent line endings for all text files
+* text=auto
+
+# Force LF for source code files (optional, uncomment if you want)
+# *.js text eol=lf
+# *.ts text eol=lf
+# *.tsx text eol=lf
+# *.css text eol=lf
+# *.md text eol=lf
+
+# Force CRLF for Windows batch files
+*.bat text eol=crlf
+*.cmd text eol=crlf

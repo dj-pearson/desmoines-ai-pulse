@@ -1,1 +1,18 @@
 project_id = "wtkhfqpmcegzcbngroui"
+
+[functions.scrape-events]
+verify_jwt = false
+
+[functions.personalized-recommendations]
+verify_jwt = false
+[functions.geocode-location]
+verify_jwt = false
+
+[functions.bulk-event-updater]
+verify_jwt = false
+
+[functions.backfill-all-coordinates-force]
+verify_jwt = false
+
+[functions.populate-playgrounds]
+verify_jwt = false
