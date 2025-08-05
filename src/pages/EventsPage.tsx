@@ -398,20 +398,6 @@ export default function EventsPage() {
             </div>
           </div>
 
-          {/* Results Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">
-              {searchQuery
-                ? `Search results for "${searchQuery}"`
-                : selectedCategory && selectedCategory !== "all"
-                ? `${selectedCategory} Events`
-                : "Upcoming Events"}
-            </h2>
-            <div className="text-sm text-gray-500 min-w-[120px] text-right">
-              {isLoading ? "Loading..." : `${events?.length || 0} events`}
-            </div>
-          </div>
-
           {viewMode === "map" ? (
             <EventsMap events={events || []} />
           ) : (
