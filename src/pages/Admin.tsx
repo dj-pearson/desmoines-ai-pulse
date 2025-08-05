@@ -27,6 +27,9 @@ import { CronMonitor } from "@/components/CronMonitor";
 import SocialMediaManager from "@/components/SocialMediaManager";
 import CoordinateManager from "@/components/CoordinateManager";
 import WeekendGuideManager from "@/components/WeekendGuideManager";
+import AdminSecurityManager from "@/components/AdminSecurityManager";
+import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
+import AdminSystemControls from "@/components/AdminSystemControls";
 import {
   Shield,
   Users,
@@ -50,6 +53,9 @@ import {
   X,
   Share2,
   CalendarDays,
+  ShieldCheck,
+  BarChart3,
+  Server,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -654,6 +660,63 @@ export default function Admin() {
                      <Settings className="h-4 w-4" />
                      {!sidebarCollapsed && <span>Coordinates</span>}
                    </button>
+                 </>
+               )}
+
+               {canManageUsers() && (
+                 <>
+                   {!sidebarCollapsed && (
+                     <div className="pt-4 pb-2">
+                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                         Enterprise Security
+                       </h3>
+                     </div>
+                   )}
+
+                   <button
+                     onClick={() => setActiveTab("security")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "security"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Security Manager" : ""}
+                   >
+                     <ShieldCheck className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Security Manager</span>}
+                   </button>
+
+                   <button
+                     onClick={() => setActiveTab("analytics")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "analytics"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Advanced Analytics" : ""}
+                   >
+                     <BarChart3 className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Advanced Analytics</span>}
+                   </button>
+
+                   <button
+                     onClick={() => setActiveTab("system")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "system"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "System Controls" : ""}
+                   >
+                     <Server className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>System Controls</span>}
+                   </button>
                 </>
               )}
 
@@ -1101,6 +1164,12 @@ export default function Admin() {
             )}
 
             {canManageUsers() && activeTab === "users" && <UserRoleManager />}
+
+            {canManageUsers() && activeTab === "security" && <AdminSecurityManager />}
+            
+            {canManageUsers() && activeTab === "analytics" && <AdminAnalyticsDashboard />}
+            
+            {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 
             {canManageContent() && activeTab === "settings" && (
               <Card>
