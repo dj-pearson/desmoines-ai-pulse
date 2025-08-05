@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import {
   User,
   LogOut,
@@ -33,11 +33,13 @@ import {
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
+import { cn } from "@/lib/utils";
 
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const { profile } = useProfile();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const location = useLocation();
 
   const handleLogout = async () => {
     await logout();
@@ -48,6 +50,10 @@ export default function Header() {
       return `${profile.first_name[0]}${profile.last_name[0]}`.toUpperCase();
     }
     return "U";
+  };
+
+  const isActivePath = (path: string) => {
+    return location.pathname === path || location.pathname.startsWith(path + "/");
   };
 
   const navigationLinks = [
@@ -81,12 +87,18 @@ export default function Header() {
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center space-x-6">
+          <nav className="hidden lg:flex items-center space-x-6" role="navigation" aria-label="Main navigation">
             {navigationLinks.map((link) => (
               <Link
                 key={link.href}
                 to={link.href}
-                className="flex items-center gap-2 text-muted-foreground hover:text-[#DC143C] smooth-transition touch-target"
+                className={cn(
+                  "flex items-center gap-2 smooth-transition touch-target relative",
+                  isActivePath(link.href)
+                    ? "text-primary font-medium after:absolute after:bottom-[-8px] after:left-0 after:right-0 after:h-0.5 after:bg-primary"
+                    : "text-muted-foreground hover:text-primary"
+                )}
+                aria-current={isActivePath(link.href) ? "page" : undefined}
               >
                 <link.icon className="h-4 w-4" />
                 {link.label}
@@ -113,15 +125,21 @@ export default function Header() {
                   <SheetTitle>Navigation</SheetTitle>
                 </SheetHeader>
                 <div className="flex-1 overflow-y-auto py-6">
-                  <div className="space-y-2">
+                  <div className="space-y-2" role="navigation" aria-label="Mobile navigation">
                     {navigationLinks.map((link) => (
                       <Link
                         key={link.href}
                         to={link.href}
                         onClick={() => setIsMobileMenuOpen(false)}
-                        className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
+                        className={cn(
+                          "flex items-center gap-3 p-4 rounded-lg smooth-transition touch-target",
+                          isActivePath(link.href)
+                            ? "bg-primary/10 text-primary border border-primary/20"
+                            : "hover:bg-muted"
+                        )}
+                        aria-current={isActivePath(link.href) ? "page" : undefined}
                       >
-                        <link.icon className="h-5 w-5 text-primary flex-shrink-0" />
+                        <link.icon className="h-5 w-5 flex-shrink-0" />
                         <span className="text-base font-medium">
                           {link.label}
                         </span>
