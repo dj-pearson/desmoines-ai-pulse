@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import EventFeedback from "@/components/EventFeedback";
+import ShareDialog from "@/components/ShareDialog";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { Event } from "@/lib/types";
@@ -129,6 +130,12 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
                 Full Page
               </Button>
             </Link>
+
+            <ShareDialog
+              title={event.title}
+              description={event.enhancedDescription || event.originalDescription || `Join us for ${event.title}`}
+              url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
+            />
           </div>
 
           {isAuthenticated && (

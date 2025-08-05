@@ -3,6 +3,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import ShareDialog from "@/components/ShareDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,9 +20,7 @@ import {
   ArrowLeft,
   Sparkles,
   DollarSign,
-  Share2,
 } from "lucide-react";
-import { toast } from "sonner";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -31,25 +30,6 @@ export default function EventDetails() {
     const eventSlug = createEventSlugWithCentralTime(e.title, e.date);
     return eventSlug === slug;
   });
-  const handleShare = async () => {
-    if (navigator.share && event) {
-      try {
-        await navigator.share({
-          title: event.title,
-          text:
-            event.enhanced_description ||
-            event.original_description ||
-            `Join us for ${event.title}`,
-          url: window.location.href,
-        });
-      } catch (error) {
-        console.log("Error sharing:", error);
-      }
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied to clipboard!");
-    }
-  };
 
   if (isLoading) {
     return (
@@ -233,9 +213,11 @@ export default function EventDetails() {
                       </div>
                       <h1 className="text-3xl font-bold">{event.title}</h1>
                     </div>
-                    <Button variant="outline" size="sm" onClick={handleShare}>
-                      <Share2 className="h-4 w-4" />
-                    </Button>
+                    <ShareDialog
+                      title={event.title}
+                      description={event.enhanced_description || event.original_description || `Join us for ${event.title}`}
+                      url={window.location.href}
+                    />
                   </div>
                 </CardHeader>
 
@@ -388,14 +370,12 @@ export default function EventDetails() {
                     </Button>
                   )}
 
-                  <Button
-                    variant="outline"
-                    onClick={handleShare}
+                  <ShareDialog
+                    title={event.title}
+                    description={event.enhanced_description || event.original_description || `Join us for ${event.title}`}
+                    url={window.location.href}
                     className="w-full"
-                  >
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share Event
-                  </Button>
+                  />
 
                   <Button variant="outline" asChild className="w-full">
                     <Link to="/">
