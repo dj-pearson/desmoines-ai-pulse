@@ -66,8 +66,9 @@ serve(async (req) => {
 
             // Check if this is a 404 error (no coordinates found) - treat as skipped, not error
             if (geocodeResponse.error) {
-              const errorMessage = geocodeResponse.error.message || '';
-              if (errorMessage.includes('404') || errorMessage.includes('No coordinates found')) {
+              // Check if the error context indicates a 404 status
+              const errorContext = geocodeResponse.error.context;
+              if (errorContext && errorContext.status === 404) {
                 console.log(`No coordinates available for ${record.location} in ${tableName}`);
                 skipped++;
                 return;
