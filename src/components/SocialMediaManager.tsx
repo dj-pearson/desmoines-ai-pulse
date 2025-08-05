@@ -85,7 +85,7 @@ const SocialMediaManager = () => {
     subjectType: string
   ) => {
     try {
-      await generatePost(contentType, subjectType);
+      await generatePost({ contentType, subjectType });
     } catch (error) {
       console.error("Failed to generate post:", error);
     }
@@ -101,7 +101,7 @@ const SocialMediaManager = () => {
 
   const handleRepostPost = async (postId: string) => {
     try {
-      await repostPost(postId);
+      await repostPost(postId, "repost");
     } catch (error) {
       console.error("Failed to repost:", error);
     }
@@ -109,7 +109,7 @@ const SocialMediaManager = () => {
 
   const handleAddWebhook = async () => {
     try {
-      await addWebhook(newWebhook);
+      await addWebhook(newWebhook.webhook_url);
       setNewWebhook({
         name: "",
         platform: "",
@@ -565,7 +565,7 @@ const SocialMediaManager = () => {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              testWebhook(webhook.webhook_url, webhook.platform)
+                              testWebhook(webhook.id)
                             }
                           >
                             Test
@@ -574,9 +574,7 @@ const SocialMediaManager = () => {
                             variant="outline"
                             size="sm"
                             onClick={() =>
-                              updateWebhook(webhook.id, {
-                                is_active: !webhook.is_active,
-                              })
+                              updateWebhook(webhook.id, webhook.webhook_url)
                             }
                           >
                             {webhook.is_active ? "Disable" : "Enable"}
