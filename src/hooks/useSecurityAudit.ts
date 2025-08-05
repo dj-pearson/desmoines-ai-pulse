@@ -33,15 +33,24 @@ export function useSecurityAudit() {
   const { isAuthenticated, isAdmin } = useAuth();
 
   /**
-   * Log security event
+   * Log security event using RPC call
    */
   const logSecurityEvent = async (event: Omit<SecurityEvent, 'id' | 'timestamp'>) => {
     try {
       if (!isAuthenticated) return;
 
-      const { error } = await supabase.from('security_audit_logs').insert({
-        ...event,
-        timestamp: new Date().toISOString(),
+      // Use a more generic approach to insert data
+      const { error } = await supabase.rpc('log_security_event', {
+        p_event_type: event.event_type,
+        p_identifier: event.identifier,
+        p_endpoint: event.endpoint || null,
+        p_details: event.details || {},
+        p_severity: event.severity,
+        p_user_id: event.user_id || null,
+        p_action: event.action || null,
+        p_resource: event.resource || null,
+        p_ip_address: event.ip_address || null,
+        p_user_agent: event.user_agent || null,
       });
 
       if (error) {
@@ -82,7 +91,7 @@ export function useSecurityAudit() {
   };
 
   /**
-   * Fetch security events with filters
+   * Fetch security events using RPC call
    */
   const fetchSecurityEvents = async (filters: AuditFilters = {}) => {
     try {
@@ -94,34 +103,14 @@ export function useSecurityAudit() {
       setLoading(true);
       setError(null);
 
-      let query = supabase
-        .from('security_audit_logs')
-        .select('*')
-        .order('timestamp', { ascending: false });
-
-      if (filters.eventType) {
-        query = query.eq('event_type', filters.eventType);
-      }
-
-      if (filters.severity) {
-        query = query.eq('severity', filters.severity);
-      }
-
-      if (filters.startDate) {
-        query = query.gte('timestamp', filters.startDate);
-      }
-
-      if (filters.endDate) {
-        query = query.lte('timestamp', filters.endDate);
-      }
-
-      if (filters.userId) {
-        query = query.eq('user_id', filters.userId);
-      }
-
-      query = query.limit(filters.limit || 100);
-
-      const { data, error: fetchError } = await query;
+      const { data, error: fetchError } = await supabase.rpc('get_security_events', {
+        p_event_type: filters.eventType || null,
+        p_severity: filters.severity || null,
+        p_start_date: filters.startDate || null,
+        p_end_date: filters.endDate || null,
+        p_user_id: filters.userId || null,
+        p_limit: filters.limit || 100,
+      });
 
       if (fetchError) {
         setError(fetchError.message);
@@ -137,87 +126,27 @@ export function useSecurityAudit() {
   };
 
   /**
-   * Get security statistics
+   * Get security statistics using RPC call
    */
   const getSecurityStats = async (timeRange: '24h' | '7d' | '30d' = '24h') => {
     try {
       if (!isAdmin) return null;
 
-      const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 168 : 720;
-      const startTime = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
-
-      const { data, error } = await supabase
-        .from('security_audit_logs')
-        .select('event_type, severity')
-        .gte('timestamp', startTime);
+      const { data, error } = await supabase.rpc('get_security_stats', {
+        p_time_range: timeRange,
+      });
 
       if (error) {
         console.error('Failed to fetch security stats:', error);
         return null;
       }
 
-      const stats = {
-        total: data.length,
-        byType: {} as Record<string, number>,
-        bySeverity: {} as Record<string, number>,
-        rateLimit: 0,
-        authFailures: 0,
-        validationErrors: 0,
-        suspiciousActivity: 0,
-      };
-
-      data.forEach(event => {
-        stats.byType[event.event_type] = (stats.byType[event.event_type] || 0) + 1;
-        stats.bySeverity[event.severity] = (stats.bySeverity[event.severity] || 0) + 1;
-
-        switch (event.event_type) {
-          case 'rate_limit':
-            stats.rateLimit++;
-            break;
-          case 'auth_failure':
-            stats.authFailures++;
-            break;
-          case 'validation_error':
-            stats.validationErrors++;
-            break;
-          case 'suspicious_activity':
-            stats.suspiciousActivity++;
-            break;
-        }
-      });
-
-      return stats;
+      return data;
     } catch (err) {
       console.error('Error fetching security stats:', err);
       return null;
     }
   };
-
-  /**
-   * Monitor real-time security events
-   */
-  useEffect(() => {
-    if (!isAdmin) return;
-
-    const subscription = supabase
-      .channel('security_events')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'security_audit_logs',
-        },
-        (payload) => {
-          setEvents(prev => [payload.new as SecurityEvent, ...prev.slice(0, 99)]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [isAdmin]);
 
   return {
     events,

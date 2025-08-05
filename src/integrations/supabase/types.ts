@@ -571,6 +571,54 @@ export type Database = {
           },
         ]
       }
+      csp_violation_logs: {
+        Row: {
+          blocked_uri: string
+          disposition: string | null
+          document_uri: string
+          effective_directive: string | null
+          id: string
+          ip_address: string | null
+          original_policy: string | null
+          referrer: string | null
+          status_code: number | null
+          timestamp: string
+          user_agent: string | null
+          violated_directive: string
+          violation_type: Database["public"]["Enums"]["csp_violation_type"]
+        }
+        Insert: {
+          blocked_uri: string
+          disposition?: string | null
+          document_uri: string
+          effective_directive?: string | null
+          id?: string
+          ip_address?: string | null
+          original_policy?: string | null
+          referrer?: string | null
+          status_code?: number | null
+          timestamp?: string
+          user_agent?: string | null
+          violated_directive: string
+          violation_type: Database["public"]["Enums"]["csp_violation_type"]
+        }
+        Update: {
+          blocked_uri?: string
+          disposition?: string | null
+          document_uri?: string
+          effective_directive?: string | null
+          id?: string
+          ip_address?: string | null
+          original_policy?: string | null
+          referrer?: string | null
+          status_code?: number | null
+          timestamp?: string
+          user_agent?: string | null
+          violated_directive?: string
+          violation_type?: Database["public"]["Enums"]["csp_violation_type"]
+        }
+        Relationships: []
+      }
       domain_highlights: {
         Row: {
           created_at: string
@@ -1419,6 +1467,54 @@ export type Database = {
           query?: string
           results_count?: number | null
           session_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      security_audit_logs: {
+        Row: {
+          action: string | null
+          created_at: string
+          details: Json | null
+          endpoint: string | null
+          event_type: string
+          id: string
+          identifier: string
+          ip_address: string | null
+          resource: string | null
+          severity: string
+          timestamp: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action?: string | null
+          created_at?: string
+          details?: Json | null
+          endpoint?: string | null
+          event_type: string
+          id?: string
+          identifier: string
+          ip_address?: string | null
+          resource?: string | null
+          severity: string
+          timestamp?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string | null
+          created_at?: string
+          details?: Json | null
+          endpoint?: string | null
+          event_type?: string
+          id?: string
+          identifier?: string
+          ip_address?: string | null
+          resource?: string | null
+          severity?: string
+          timestamp?: string
+          user_agent?: string | null
           user_id?: string | null
         }
         Relationships: []
@@ -2585,6 +2681,10 @@ export type Database = {
           conflicting_events: Json
         }[]
       }
+      cleanup_security_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       generate_restaurant_slug: {
         Args: { restaurant_name: string }
         Returns: string
@@ -2687,6 +2787,17 @@ export type Database = {
         | "completed"
         | "cancelled"
       content_type: "event" | "attraction" | "restaurant" | "playground"
+      csp_violation_type:
+        | "script_src"
+        | "style_src"
+        | "img_src"
+        | "connect_src"
+        | "font_src"
+        | "object_src"
+        | "media_src"
+        | "frame_src"
+        | "base_uri"
+        | "form_action"
       placement_type: "top_banner" | "featured_spot" | "below_fold"
       rating_value: "1" | "2" | "3" | "4" | "5"
       reputation_level:
@@ -2834,6 +2945,18 @@ export const Constants = {
         "cancelled",
       ],
       content_type: ["event", "attraction", "restaurant", "playground"],
+      csp_violation_type: [
+        "script_src",
+        "style_src",
+        "img_src",
+        "connect_src",
+        "font_src",
+        "object_src",
+        "media_src",
+        "frame_src",
+        "base_uri",
+        "form_action",
+      ],
       placement_type: ["top_banner", "featured_spot", "below_fold"],
       rating_value: ["1", "2", "3", "4", "5"],
       reputation_level: [
