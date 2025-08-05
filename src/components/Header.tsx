@@ -97,7 +97,7 @@ export default function Header() {
     <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50 safe-area-top">
       <div className="container mx-auto mobile-padding">
         <div className="flex justify-between items-center touch-target">
-          {/* Logo - Mobile Optimized */}
+          {/* Logo - Mobile Optimized with Dark Mode Glow */}
           <Link
             to="/"
             className="flex items-center smooth-transition hover:opacity-80"
@@ -105,7 +105,7 @@ export default function Header() {
             <img
               src="/DMI-Logo-Header.png"
               alt="Des Moines Insider"
-              className="h-8 md:h-10 w-auto"
+              className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_10px_rgba(59,130,246,0.5)] dark:filter dark:brightness-110"
             />
           </Link>
 
