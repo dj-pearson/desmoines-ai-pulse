@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { GroupEventPlanner } from "@/components/GroupEventPlanner";
+import { GroupEventPlanner } from "@/components/GroupEventPlannerSimple";
 import {
   Users,
   UserPlus,
