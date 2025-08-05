@@ -4,6 +4,7 @@ import { useRestaurantOpenings } from "@/hooks/useSupabase";
 import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardSkeleton } from "@/components/ui/loading-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -421,28 +422,17 @@ export default function AllInclusiveDashboard({
 
   if (isLoading) {
     return (
-      <section className="py-16">
+      <section className="py-8 md:py-16 bg-muted/30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-foreground mb-4">
+          <div className="text-center mb-8 md:mb-12">
+            <h2 className="text-mobile-title md:text-3xl font-bold text-foreground mb-3 md:mb-4">
               What's Happening in Des Moines
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardHeader>
-                    <div className="h-4 bg-muted rounded w-3/4"></div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2">
-                      <div className="h-3 bg-muted rounded"></div>
-                      <div className="h-3 bg-muted rounded w-2/3"></div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+            <p className="text-mobile-body md:text-lg text-muted-foreground">
+              Events, new restaurants, attractions, and family activities all in one place
+            </p>
           </div>
+          <DashboardSkeleton />
         </div>
       </section>
     );

@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import {
   Select,
@@ -183,15 +184,21 @@ export default function EventsPage() {
         />
         <div className="min-h-screen bg-background">
           <Header />
-          <div className="container mx-auto px-4 py-8">
-            <div className="animate-pulse space-y-4">
-              <div className="h-8 bg-muted rounded w-1/3"></div>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {[...Array(6)].map((_, i) => (
-                  <div key={i} className="h-48 bg-muted rounded"></div>
-                ))}
+          
+          {/* Hero Section Skeleton */}
+          <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]">
+            <div className="absolute inset-0 bg-black/20"></div>
+            <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
+              <div className="animate-pulse space-y-4">
+                <div className="h-12 md:h-16 bg-white/20 rounded w-3/4 mx-auto"></div>
+                <div className="h-6 md:h-8 bg-white/20 rounded w-1/2 mx-auto"></div>
+                <div className="h-12 bg-white/20 rounded w-full max-w-2xl mx-auto mt-8"></div>
               </div>
             </div>
+          </section>
+
+          <div className="container mx-auto px-4 py-8">
+            <CardsGridSkeleton count={9} className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" />
           </div>
           <Footer />
         </div>

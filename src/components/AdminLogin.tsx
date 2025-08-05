@@ -6,11 +6,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, Shield, LogIn, Info } from "lucide-react";
+import { LoadingButton } from "@/components/ui/loading-button";
+import { Shield, LogIn, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
 interface AdminLoginProps {
@@ -94,19 +94,15 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  <LogIn className="mr-2 h-4 w-4" />
-                  Sign In
-                </>
-              )}
-            </Button>
+            <LoadingButton 
+              type="submit" 
+              className="w-full" 
+              loading={isLoading}
+              loadingText="Signing in..."
+            >
+              <LogIn className="mr-2 h-4 w-4" />
+              Sign In
+            </LoadingButton>
           </form>
 
           <div className="mt-6 p-4 bg-blue-50 rounded-lg">

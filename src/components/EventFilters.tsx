@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import EventCard from "./EventCard";
-import { Skeleton } from "@/components/ui/skeleton";
+import { CardsGridSkeleton, SearchResultsSkeleton } from "@/components/ui/loading-skeleton";
 import { Event } from "@/lib/types";
 import { Calendar, Filter } from "lucide-react";
 import { useEvents } from "@/hooks/useSupabase";
