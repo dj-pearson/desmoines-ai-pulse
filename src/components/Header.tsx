@@ -56,7 +56,6 @@ export default function Header() {
     { href: "/attractions", label: "Attractions", icon: Camera },
     { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
     ...(isAuthenticated ? [
-      { href: "/social", label: "Social", icon: Users },
       { href: "/calendar", label: "Smart Calendar", icon: Calendar },
       { href: "/gamification", label: "Level Up", icon: Trophy }
     ] : []),
@@ -157,26 +156,35 @@ export default function Header() {
                           </div>
                         </div>
 
-                        <div className="space-y-2">
-                          <Link
-                            to="/profile"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                            className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
-                          >
-                            <User className="h-5 w-5" />
-                            <span className="text-mobile-body">Profile</span>
-                          </Link>
+                         <div className="space-y-2">
+                           <Link
+                             to="/social"
+                             onClick={() => setIsMobileMenuOpen(false)}
+                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
+                           >
+                             <Users className="h-5 w-5" />
+                             <span className="text-mobile-body">Social</span>
+                           </Link>
 
-                          {isAdmin && (
-                            <Link
-                              to="/admin"
-                              onClick={() => setIsMobileMenuOpen(false)}
-                              className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
-                            >
-                              <Shield className="h-5 w-5" />
-                              <span className="text-mobile-body">Admin</span>
-                            </Link>
-                          )}
+                           <Link
+                             to="/profile"
+                             onClick={() => setIsMobileMenuOpen(false)}
+                             className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
+                           >
+                             <User className="h-5 w-5" />
+                             <span className="text-mobile-body">Profile</span>
+                           </Link>
+
+                           {isAdmin && (
+                             <Link
+                               to="/admin"
+                               onClick={() => setIsMobileMenuOpen(false)}
+                               className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted smooth-transition touch-target"
+                             >
+                               <Shield className="h-5 w-5" />
+                               <span className="text-mobile-body">Admin</span>
+                             </Link>
+                           )}
 
                           <button
                             onClick={() => {
@@ -255,14 +263,20 @@ export default function Header() {
                           </p>
                         </div>
                       </div>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem asChild>
-                        <Link to="/profile" className="flex items-center">
-                          <User className="mr-2 h-4 w-4" />
-                          Profile
-                        </Link>
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
+                       <DropdownMenuSeparator />
+                       <DropdownMenuItem asChild>
+                         <Link to="/social" className="flex items-center">
+                           <Users className="mr-2 h-4 w-4" />
+                           Social
+                         </Link>
+                       </DropdownMenuItem>
+                       <DropdownMenuItem asChild>
+                         <Link to="/profile" className="flex items-center">
+                           <User className="mr-2 h-4 w-4" />
+                           Profile
+                         </Link>
+                       </DropdownMenuItem>
+                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={handleLogout}>
                         <LogOut className="mr-2 h-4 w-4" />
                         Sign out
