@@ -53,10 +53,10 @@ export const throttle = <T extends (...args: any[]) => any>(
 // Web Vitals tracking
 export const trackWebVitals = () => {
   if (typeof window !== 'undefined' && 'performance' in window) {
-    // Track Core Web Vitals using dynamic import
-    import('web-vitals').then(({ onCLS, onFID, onFCP, onLCP, onTTFB }) => {
+    // Track Core Web Vitals using dynamic import with modern API
+    import('web-vitals').then(({ onCLS, onINP, onFCP, onLCP, onTTFB }) => {
       onCLS(console.log);
-      onFID(console.log);
+      onINP(console.log); // replaces FID in web-vitals v3+
       onFCP(console.log);
       onLCP(console.log);
       onTTFB(console.log);
