@@ -44,7 +44,7 @@ import {
 interface ScrapingJob {
   id: string;
   name: string;
-  status: "idle" | "running" | "completed" | "failed";
+  status: "idle" | "running" | "completed" | "failed" | "scheduled_for_trigger";
   lastRun: string | null;
   nextRun: string | null;
   eventsFound: number;

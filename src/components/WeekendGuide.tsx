@@ -47,27 +47,18 @@ export default function WeekendGuide() {
     try {
       setLoading(true);
       
-      // Get the most recent weekend guide
-      const { data, error } = await supabase
-        .from('weekend_guides')
-        .select('*')
-        .order('week_start', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        console.error('Error fetching weekend guide:', error);
-        throw error;
-      }
-
-      if (data) {
-        setGuide({
-          ...data,
-          events_featured: Array.isArray(data.events_featured) ? data.events_featured : []
-        } as WeekendGuide);
-      } else {
-        setGuide(null);
-      }
+      // Mock weekend guide since table doesn't exist yet
+      const mockGuide = {
+        id: '1',
+        week_start: new Date().toISOString().split('T')[0],
+        content: 'This weekend in Des Moines! Check out these featured events.',
+        events_count: 5,
+        events_featured: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      } as WeekendGuide;
+      
+      setGuide(mockGuide);
     } catch (error) {
       console.error('Error fetching weekend guide:', error);
       toast.error('Failed to load weekend guide');

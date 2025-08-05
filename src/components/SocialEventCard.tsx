@@ -98,7 +98,7 @@ export function SocialEventCard({
           event.longitude, 
           25 // 25km radius
         );
-        setFriendsNearby(nearby);
+        setFriendsNearby(Array.isArray(nearby) ? nearby : []);
       }
     } catch (error) {
       console.error('Failed to load social data:', error);
