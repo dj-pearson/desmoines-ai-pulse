@@ -55,11 +55,13 @@ export default function Header() {
     { href: "/restaurants", label: "Restaurants", icon: MapPin },
     { href: "/attractions", label: "Attractions", icon: Camera },
     { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
-    ...(isAuthenticated ? [
-      { href: "/social", label: "Social", icon: Users },
-      { href: "/calendar", label: "Smart Calendar", icon: Calendar },
-      { href: "/gamification", label: "Level Up", icon: Trophy }
-    ] : []),
+    ...(isAuthenticated
+      ? [
+          { href: "/social", label: "Social", icon: Users },
+          { href: "/calendar", label: "Smart Calendar", icon: Calendar },
+          { href: "/gamification", label: "Level Up", icon: Trophy },
+        ]
+      : []),
   ];
 
   return (
