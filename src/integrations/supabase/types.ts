@@ -62,6 +62,45 @@ export type Database = {
         }
         Relationships: []
       }
+      badges: {
+        Row: {
+          badge_type: string
+          created_at: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          points_value: number
+          rarity: string
+          requirements: Json
+        }
+        Insert: {
+          badge_type: string
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          points_value?: number
+          rarity?: string
+          requirements: Json
+        }
+        Update: {
+          badge_type?: string
+          created_at?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          points_value?: number
+          rarity?: string
+          requirements?: Json
+        }
+        Relationships: []
+      }
       calendar_events: {
         Row: {
           attendees: Json | null
@@ -296,6 +335,54 @@ export type Database = {
           total_cost?: number | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      community_challenges: {
+        Row: {
+          challenge_type: string
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          end_date: string
+          id: string
+          is_active: boolean | null
+          max_participants: number | null
+          requirements: Json
+          reward_badges: string[] | null
+          reward_points: number | null
+          start_date: string
+          title: string
+        }
+        Insert: {
+          challenge_type: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date: string
+          id?: string
+          is_active?: boolean | null
+          max_participants?: number | null
+          requirements: Json
+          reward_badges?: string[] | null
+          reward_points?: number | null
+          start_date: string
+          title: string
+        }
+        Update: {
+          challenge_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          end_date?: string
+          id?: string
+          is_active?: boolean | null
+          max_participants?: number | null
+          requirements?: Json
+          reward_badges?: string[] | null
+          reward_points?: number | null
+          start_date?: string
+          title?: string
         }
         Relationships: []
       }
@@ -1659,6 +1746,39 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activities: {
+        Row: {
+          activity_type: string
+          content_id: string | null
+          content_type: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          points_earned: number
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          content_id?: string | null
+          content_type?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          points_earned?: number
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          content_id?: string | null
+          content_type?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          points_earned?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_analytics: {
         Row: {
           content_id: string
@@ -1710,6 +1830,38 @@ export type Database = {
         }
         Relationships: []
       }
+      user_badges: {
+        Row: {
+          badge_id: string
+          earned_at: string | null
+          id: string
+          progress: Json | null
+          user_id: string
+        }
+        Insert: {
+          badge_id: string
+          earned_at?: string | null
+          id?: string
+          progress?: Json | null
+          user_id: string
+        }
+        Update: {
+          badge_id?: string
+          earned_at?: string | null
+          id?: string
+          progress?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_badges_badge_id_fkey"
+            columns: ["badge_id"]
+            isOneToOne: false
+            referencedRelation: "badges"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_calendars: {
         Row: {
           access_token_encrypted: string | null
@@ -1754,6 +1906,50 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_challenge_participation: {
+        Row: {
+          challenge_id: string
+          completed_at: string | null
+          id: string
+          joined_at: string | null
+          points_earned: number | null
+          progress: Json | null
+          rank: number | null
+          submission_data: Json | null
+          user_id: string
+        }
+        Insert: {
+          challenge_id: string
+          completed_at?: string | null
+          id?: string
+          joined_at?: string | null
+          points_earned?: number | null
+          progress?: Json | null
+          rank?: number | null
+          submission_data?: Json | null
+          user_id: string
+        }
+        Update: {
+          challenge_id?: string
+          completed_at?: string | null
+          id?: string
+          joined_at?: string | null
+          points_earned?: number | null
+          progress?: Json | null
+          rank?: number | null
+          submission_data?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_challenge_participation_challenge_id_fkey"
+            columns: ["challenge_id"]
+            isOneToOne: false
+            referencedRelation: "community_challenges"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_event_feedback: {
         Row: {
@@ -2131,30 +2327,54 @@ export type Database = {
       user_reputation: {
         Row: {
           created_at: string
+          current_level: number | null
+          current_level_progress: number | null
+          experience_points: number | null
           helpful_votes: number
           id: string
+          last_activity_date: string | null
           level: Database["public"]["Enums"]["reputation_level"]
+          next_level_xp: number | null
           points: number
+          rank_position: number | null
+          streak_days: number | null
+          total_badges: number | null
           total_ratings: number
           updated_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
+          current_level?: number | null
+          current_level_progress?: number | null
+          experience_points?: number | null
           helpful_votes?: number
           id?: string
+          last_activity_date?: string | null
           level?: Database["public"]["Enums"]["reputation_level"]
+          next_level_xp?: number | null
           points?: number
+          rank_position?: number | null
+          streak_days?: number | null
+          total_badges?: number | null
           total_ratings?: number
           updated_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
+          current_level?: number | null
+          current_level_progress?: number | null
+          experience_points?: number | null
           helpful_votes?: number
           id?: string
+          last_activity_date?: string | null
           level?: Database["public"]["Enums"]["reputation_level"]
+          next_level_xp?: number | null
           points?: number
+          rank_position?: number | null
+          streak_days?: number | null
+          total_badges?: number | null
           total_ratings?: number
           updated_at?: string
           user_id?: string
@@ -2316,6 +2536,21 @@ export type Database = {
       }
     }
     Functions: {
+      award_user_xp: {
+        Args: {
+          p_user_id: string
+          p_activity_type: string
+          p_points: number
+          p_content_type?: string
+          p_content_id?: string
+          p_metadata?: Json
+        }
+        Returns: undefined
+      }
+      calculate_level_xp: {
+        Args: { level: number }
+        Returns: number
+      }
       calculate_reputation_level: {
         Args: { points: number }
         Returns: Database["public"]["Enums"]["reputation_level"]
@@ -2384,6 +2619,10 @@ export type Database = {
           distance_km: number
         }[]
       }
+      get_level_from_xp: {
+        Args: { xp: number }
+        Returns: number
+      }
       get_next_optimal_posting_time: {
         Args: { base_time?: string }
         Returns: string
@@ -2421,6 +2660,10 @@ export type Database = {
       }
       update_trending_scores: {
         Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      update_user_gamification: {
+        Args: { p_user_id: string }
         Returns: undefined
       }
       update_user_reputation: {
