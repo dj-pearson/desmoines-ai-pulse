@@ -29,6 +29,7 @@ import {
   Camera,
   Gamepad2,
   Users,
+  Trophy,
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
@@ -56,7 +57,8 @@ export default function Header() {
     { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
     ...(isAuthenticated ? [
       { href: "/social", label: "Social", icon: Users },
-      { href: "/calendar", label: "Smart Calendar", icon: Calendar }
+      { href: "/calendar", label: "Smart Calendar", icon: Calendar },
+      { href: "/gamification", label: "Level Up", icon: Trophy }
     ] : []),
   ];
 
