@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { GroupEventPlanner } from "@/components/GroupEventPlanner";
-import { GroupInviteManager } from "@/components/GroupInviteManager";
 import {
   Users,
   UserPlus,
@@ -27,12 +25,11 @@ import {
 import { useToast } from "@/hooks/use-toast";
 
 export default function Social() {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const [searchEmail, setSearchEmail] = useState("");
   const [groupName, setGroupName] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
-  const [manageGroupId, setManageGroupId] = useState<string | null>(null);
 
   const {
     friends,
@@ -164,74 +161,6 @@ export default function Social() {
           </TabsContent>
 
           <TabsContent value="groups" className="space-y-6">
-            {/* Create Group */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Plus className="h-5 w-5" />
-                  Create New Group
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Group name (e.g., Girls Night Out, Family Adventures)"
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    className="flex-1"
-                  />
-                  <Button 
-                    onClick={async () => {
-                      if (!groupName.trim()) return;
-                      try {
-                        const { data, error } = await supabase
-                          .from('friend_groups')
-                          .insert({
-                            name: groupName,
-                            description: `Planning group for ${groupName}`,
-                            created_by: user?.id,
-                            is_public: false
-                          })
-                          .select()
-                          .single();
-
-                        if (error) throw error;
-
-                        // Add creator as admin member
-                        await supabase
-                          .from('friend_group_members')
-                          .insert({
-                            group_id: data.id,
-                            user_id: user?.id,
-                            role: 'admin'
-                          });
-
-                        setGroupName("");
-                        toast({
-                          title: "Group Created!",
-                          description: `${groupName} has been created. Invite friends to start planning!`,
-                        });
-                        
-                        // Refresh groups list
-                        window.location.reload();
-                      } catch (error) {
-                        toast({
-                          title: "Failed to Create Group",
-                          description: "Could not create group. Please try again.",
-                          variant: "destructive",
-                        });
-                      }
-                    }}
-                  >
-                    Create Group
-                  </Button>
-                </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Create a planning group to collaborate on events and restaurants with friends
-                </p>
-              </CardContent>
-            </Card>
-
             {/* Your Groups */}
             <Card>
               <CardHeader>
@@ -243,54 +172,27 @@ export default function Social() {
                     {friendGroups.map((group) => (
                       <div 
                         key={group.id} 
-                        className="p-4 border rounded-lg hover:bg-muted transition-colors"
+                        className="p-4 border rounded-lg cursor-pointer hover:bg-muted"
+                        onClick={() => setSelectedGroupId(group.id)}
                       >
                         <div className="flex items-center justify-between">
-                          <div className="flex-1">
+                          <div>
                             <h3 className="font-medium">{group.name}</h3>
                             <p className="text-sm text-muted-foreground">
                               {group.description}
                             </p>
-                            <div className="flex items-center gap-2 mt-2">
-                              <Badge variant="outline" className="text-xs">
-                                {group.member_count || 1} member{(group.member_count || 1) !== 1 ? 's' : ''}
-                              </Badge>
-                              <Badge variant={group.is_public ? "default" : "secondary"} className="text-xs">
-                                {group.is_public ? "Public" : "Private"}
-                              </Badge>
-                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setManageGroupId(group.id)}
-                            >
-                              <Users className="h-4 w-4 mr-1" />
-                              Manage
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => setSelectedGroupId(group.id)}
-                            >
-                              <Calendar className="h-4 w-4 mr-1" />
-                              Plan Events
-                            </Button>
-                          </div>
+                          <Badge variant={group.is_public ? "default" : "secondary"}>
+                            {group.is_public ? "Public" : "Private"}
+                          </Badge>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8">
-                    <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p className="text-muted-foreground mb-4">
-                      No groups yet. Create your first group to start planning events with friends!
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      Groups are perfect for planning family outings, girls nights, date nights, or any collaborative event planning.
-                    </p>
-                  </div>
+                  <p className="text-muted-foreground text-center py-8">
+                    No groups yet. Join a group to start planning events with friends!
+                  </p>
                 )}
               </CardContent>
             </Card>
@@ -300,8 +202,8 @@ export default function Social() {
               <GroupEventPlanner 
                 group={{ 
                   id: selectedGroupId, 
-                  name: friendGroups?.find(g => g.id === selectedGroupId)?.name || "Selected Group", 
-                  member_count: friendGroups?.find(g => g.id === selectedGroupId)?.member_count || 1
+                  name: "Selected Group", 
+                  member_count: 1 
                 }} 
                 onClose={() => setSelectedGroupId(null)}
               />
@@ -340,15 +242,6 @@ export default function Social() {
             </Card>
           </TabsContent>
         </Tabs>
-
-        {/* Group Management Dialog */}
-        {manageGroupId && (
-          <GroupInviteManager
-            groupId={manageGroupId}
-            groupName={friendGroups?.find(g => g.id === manageGroupId)?.name || "Group"}
-            onClose={() => setManageGroupId(null)}
-          />
-        )}
       </div>
       
       <Footer />
