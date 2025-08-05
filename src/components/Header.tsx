@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
+import { ThemeToggle } from "./ThemeToggle";
 import { cn } from "@/lib/utils";
 
 export default function Header() {
@@ -146,7 +147,14 @@ export default function Header() {
                       </Link>
                     ))}
                   </div>
-
+                  
+                  {/* Mobile Theme Toggle */}
+                  <div className="border-t border-border pt-4 mt-6">
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                      <span className="text-base font-medium">Theme</span>
+                      <ThemeToggle />
+                    </div>
+                  </div>
                   {/* Mobile Submit Event and Advertise Buttons */}
                   <div className="border-t border-border pt-4 mt-6 space-y-3">
                     <div onClick={() => setIsMobileMenuOpen(false)} className="w-full">
@@ -227,7 +235,8 @@ export default function Header() {
             </Sheet>
 
             {/* Desktop User Actions */}
-            <div className="hidden lg:flex items-center gap-3">
+            <div className="hidden lg:flex items-center gap-2">
+              <ThemeToggle />
               <SubmitEventButton />
               <AdvertiseButton />
               {isAuthenticated ? (
