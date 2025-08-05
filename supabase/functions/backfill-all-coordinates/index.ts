@@ -64,10 +64,18 @@ serve(async (req) => {
               body: { location: record.location }
             });
 
+            // Check if this is a 404 error (no coordinates found) - treat as skipped, not error
             if (geocodeResponse.error) {
-              console.error(`Geocoding error for ${record.location}:`, geocodeResponse.error);
-              errors++;
-              return;
+              const errorMessage = geocodeResponse.error.message || '';
+              if (errorMessage.includes('404') || errorMessage.includes('No coordinates found')) {
+                console.log(`No coordinates available for ${record.location} in ${tableName}`);
+                skipped++;
+                return;
+              } else {
+                console.error(`Geocoding error for ${record.location}:`, geocodeResponse.error);
+                errors++;
+                return;
+              }
             }
 
             const { latitude, longitude } = geocodeResponse.data;
@@ -94,8 +102,15 @@ serve(async (req) => {
               skipped++;
             }
           } catch (err) {
-            console.error(`Processing error for ${record.id}:`, err);
-            errors++;
+            // Handle 404 errors gracefully
+            const errorMessage = err.message || '';
+            if (errorMessage.includes('404') || errorMessage.includes('No coordinates found')) {
+              console.log(`No coordinates available for ${record.location} in ${tableName}`);
+              skipped++;
+            } else {
+              console.error(`Processing error for ${record.id}:`, err);
+              errors++;
+            }
           }
         }));
 
