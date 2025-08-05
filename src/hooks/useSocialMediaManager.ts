@@ -34,17 +34,20 @@ export function useSocialMediaManager() {
   const [generating, setGenerating] = useState(false);
 
   const fetchPosts = async () => {
-    if (!user) return;
-    
     setLoading(true);
     try {
+      console.log('Fetching social media posts...');
       const { data, error } = await supabase
         .from('social_media_posts')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching posts:', error);
+        throw error;
+      }
+      console.log('Fetched posts:', data);
       setPosts(data || []);
     } catch (error) {
       console.error('Failed to fetch posts:', error);
@@ -55,15 +58,18 @@ export function useSocialMediaManager() {
   };
 
   const fetchWebhooks = async () => {
-    if (!user) return;
-    
     try {
+      console.log('Fetching social media webhooks...');
       const { data, error } = await supabase
         .from('social_media_webhooks')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching webhooks:', error);
+        throw error;
+      }
+      console.log('Fetched webhooks:', data);
       setWebhooks(data || []);
     } catch (error) {
       console.error('Failed to fetch webhooks:', error);
@@ -74,6 +80,7 @@ export function useSocialMediaManager() {
   const generatePost = async (data: { contentType: string; subjectType: string }) => {
     setGenerating(true);
     try {
+      console.log('Generating post:', data);
       const { data: result, error } = await supabase.functions.invoke('social-media-manager', {
         body: {
           action: 'generate',
@@ -82,8 +89,12 @@ export function useSocialMediaManager() {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error generating post:', error);
+        throw error;
+      }
       
+      console.log('Post generated:', result);
       toast.success('Post generated successfully!');
       await fetchPosts(); // Refresh posts
       return { success: true, post: result };
@@ -242,10 +253,9 @@ export function useSocialMediaManager() {
   };
 
   useEffect(() => {
-    if (user) {
-      fetchPosts();
-      fetchWebhooks();
-    }
+    console.log('useSocialMediaManager effect running, user:', user);
+    fetchPosts();
+    fetchWebhooks();
   }, [user]);
 
   return {
