@@ -14,6 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_action_logs: {
+        Row: {
+          action_description: string
+          action_type: string
+          admin_user_id: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          new_values: Json | null
+          old_values: Json | null
+          target_id: string | null
+          target_resource: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action_description: string
+          action_type: string
+          admin_user_id: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          target_id?: string | null
+          target_resource?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action_description?: string
+          action_type?: string
+          admin_user_id?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_values?: Json | null
+          old_values?: Json | null
+          target_id?: string | null
+          target_resource?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       attractions: {
         Row: {
           created_at: string | null
@@ -926,6 +968,36 @@ export type Database = {
           venue?: string | null
           writeup_generated_at?: string | null
           writeup_prompt_used?: string | null
+        }
+        Relationships: []
+      }
+      failed_auth_attempts: {
+        Row: {
+          attempt_type: string
+          created_at: string
+          email: string | null
+          error_message: string | null
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          attempt_type?: string
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          attempt_type?: string
+          created_at?: string
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
         }
         Relationships: []
       }
@@ -2698,12 +2770,20 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      check_auth_rate_limit: {
+        Args: { p_email: string; p_ip_address: string }
+        Returns: Json
+      }
       check_calendar_conflicts: {
         Args: { p_user_id: string; p_start_time: string; p_end_time: string }
         Returns: {
           conflict_count: number
           conflicting_events: Json
         }[]
+      }
+      cleanup_old_security_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       cleanup_security_logs: {
         Args: Record<PropertyKey, never>
@@ -2766,6 +2846,18 @@ export type Database = {
       get_user_role_simple: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      log_admin_action: {
+        Args: {
+          p_admin_user_id: string
+          p_action_type: string
+          p_action_description: string
+          p_target_resource?: string
+          p_target_id?: string
+          p_old_values?: Json
+          p_new_values?: Json
+        }
+        Returns: string
       }
       optimize_database_performance: {
         Args: Record<PropertyKey, never>

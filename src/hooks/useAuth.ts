@@ -115,6 +115,19 @@ export function useAuth() {
 
       if (error) {
         console.error("Login error:", error);
+        
+        // Log failed authentication attempt
+        try {
+          await supabase.from('failed_auth_attempts').insert({
+            email: email,
+            attempt_type: 'login',
+            error_message: error.message,
+            user_agent: navigator.userAgent || 'Unknown'
+          });
+        } catch (logError) {
+          console.error("Failed to log authentication attempt:", logError);
+        }
+        
         return false;
       }
 
@@ -140,6 +153,19 @@ export function useAuth() {
 
       if (error) {
         console.error("Signup error:", error);
+        
+        // Log failed signup attempt
+        try {
+          await supabase.from('failed_auth_attempts').insert({
+            email: email,
+            attempt_type: 'signup',
+            error_message: error.message,
+            user_agent: navigator.userAgent || 'Unknown'
+          });
+        } catch (logError) {
+          console.error("Failed to log signup attempt:", logError);
+        }
+        
         return false;
       }
 
