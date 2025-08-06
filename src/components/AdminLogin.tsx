@@ -114,11 +114,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
                 </p>
                 <p className="text-sm text-blue-700">
                   Only authorized administrators can access this dashboard.
-                  Contact your system administrator if you need admin access.
-                </p>
-                <p className="text-xs text-blue-600 mt-2">
-                  Admin users: admin@desmoines.ai, admin@desmoinesinsider.com,
-                  pearson.performance@gmail.com, djpearson@pm.me
+                  Admin access is managed through the user roles system.
+                  Contact your system administrator if you need admin privileges.
                 </p>
               </div>
             </div>
