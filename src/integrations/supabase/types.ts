@@ -1665,6 +1665,30 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          created_at: string
+          id: string
+          setting_type: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          setting_type: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          setting_type?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
       trending_scores: {
         Row: {
           computed_at: string
@@ -2706,6 +2730,10 @@ export type Database = {
           cta_text: string
         }[]
       }
+      get_database_metrics: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       get_friends_near_event: {
         Args: {
           p_user_id: string
@@ -2738,6 +2766,10 @@ export type Database = {
       get_user_role_simple: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      optimize_database_performance: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       run_scraping_jobs: {
         Args: Record<PropertyKey, never>

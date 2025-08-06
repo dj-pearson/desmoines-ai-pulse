@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useSystemMonitoring } from "@/hooks/useSystemMonitoring";
 import {
   Settings,
   Server,
@@ -62,36 +62,19 @@ interface SystemSettings {
 
 export default function AdminSystemControls() {
   const { toast } = useToast();
-  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
-    server: 'healthy',
-    database: 'healthy',
-    storage: 'healthy',
-    network: 'healthy',
-    uptime: '15d 7h 23m',
-    lastBackup: '2 hours ago',
-    activeConnections: 127,
-    systemLoad: 34,
-    memoryUsage: 68,
-    diskUsage: 42,
-  });
-
-  const [settings, setSettings] = useState<SystemSettings>({
-    cachingEnabled: true,
-    compressionEnabled: true,
-    cdnEnabled: true,
-    autoBackup: true,
-    backupFrequency: 'daily',
-    maxFileSize: 10,
-    sessionTimeout: 30,
-    debugMode: false,
-    apiRateLimit: 1000,
-    emailNotifications: true,
-    smsNotifications: false,
-    webhookUrl: '',
-    maintenanceMessage: 'The site is temporarily down for maintenance. Please check back soon.',
-  });
-
-  const [isLoading, setIsLoading] = useState(false);
+  const {
+    systemStatus,
+    settings,
+    isLoading,
+    setSettings,
+    loadSystemStatus,
+    loadSystemSettings,
+    saveSystemSettings,
+    clearCache,
+    runBackup,
+    optimizeDatabase,
+    restartService,
+  } = useSystemMonitoring();
 
   useEffect(() => {
     loadSystemStatus();
@@ -100,131 +83,85 @@ export default function AdminSystemControls() {
     // Set up real-time status updates
     const interval = setInterval(loadSystemStatus, 30000); // Update every 30 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [loadSystemStatus, loadSystemSettings]);
 
-  const loadSystemStatus = async () => {
-    try {
-      // In real implementation, fetch from system monitoring APIs
-      // Mock random status updates for demonstration
-      setSystemStatus(prev => ({
-        ...prev,
-        activeConnections: Math.floor(Math.random() * 50) + 100,
-        systemLoad: Math.floor(Math.random() * 30) + 20,
-        memoryUsage: Math.floor(Math.random() * 20) + 60,
-      }));
-    } catch (error) {
-      console.error("Failed to load system status:", error);
-    }
-  };
-
-  const loadSystemSettings = async () => {
-    try {
-      const savedSettings = localStorage.getItem('adminSystemSettings');
-      if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
-      }
-    } catch (error) {
-      console.error("Failed to load system settings:", error);
-    }
-  };
-
-  const saveSystemSettings = async () => {
-    setIsLoading(true);
-    try {
-      localStorage.setItem('adminSystemSettings', JSON.stringify(settings));
+  const handleSaveSettings = async () => {
+    const result = await saveSystemSettings();
+    if (result.success) {
       toast({
         title: "Settings Saved",
         description: "System settings have been updated successfully.",
       });
-    } catch (error) {
+    } else {
       toast({
         title: "Error",
         description: "Failed to save system settings.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const restartService = async (service: string) => {
-    setIsLoading(true);
-    try {
-      // Mock service restart
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      toast({
-        title: "Service Restarted",
-        description: `${service} has been restarted successfully.`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: `Failed to restart ${service}.`,
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const clearCache = async () => {
-    setIsLoading(true);
-    try {
-      // Mock cache clearing
-      await new Promise(resolve => setTimeout(resolve, 1000));
+  const handleClearCache = async () => {
+    const result = await clearCache();
+    if (result.success) {
       toast({
         title: "Cache Cleared",
         description: "All cached data has been cleared successfully.",
       });
-    } catch (error) {
+    } else {
       toast({
         title: "Error",
         description: "Failed to clear cache.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const runBackup = async () => {
-    setIsLoading(true);
-    try {
-      // Mock backup process
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      setSystemStatus(prev => ({ ...prev, lastBackup: 'Just now' }));
+  const handleRunBackup = async () => {
+    const result = await runBackup();
+    if (result.success) {
       toast({
         title: "Backup Complete",
         description: "System backup has been completed successfully.",
       });
-    } catch (error) {
+    } else {
       toast({
         title: "Error",
         description: "Failed to run backup.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const optimizeDatabase = async () => {
-    setIsLoading(true);
-    try {
-      // Mock database optimization
-      await new Promise(resolve => setTimeout(resolve, 5000));
+  const handleOptimizeDatabase = async () => {
+    const result = await optimizeDatabase();
+    if (result.success) {
       toast({
         title: "Database Optimized",
         description: "Database optimization completed successfully.",
       });
-    } catch (error) {
+    } else {
       toast({
         title: "Error",
         description: "Failed to optimize database.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
+    }
+  };
+
+  const handleRestartService = async (service: string) => {
+    const result = await restartService(service);
+    if (result.success) {
+      toast({
+        title: "Service Restarted",
+        description: `${service} has been restarted successfully.`,
+      });
+    } else {
+      toast({
+        title: "Error",
+        description: `Failed to restart ${service}.`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -265,7 +202,7 @@ export default function AdminSystemControls() {
             Monitor and control system performance and settings
           </p>
         </div>
-        <Button onClick={saveSystemSettings} disabled={isLoading}>
+        <Button onClick={handleSaveSettings} disabled={isLoading}>
           <Settings className="h-4 w-4 mr-2" />
           Save Settings
         </Button>
@@ -503,7 +440,7 @@ export default function AdminSystemControls() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button
-                  onClick={clearCache}
+                  onClick={handleClearCache}
                   disabled={isLoading}
                   className="w-full justify-start"
                   variant="outline"
@@ -513,7 +450,7 @@ export default function AdminSystemControls() {
                 </Button>
 
                 <Button
-                  onClick={() => restartService('Web Server')}
+                  onClick={() => handleRestartService('Web Server')}
                   disabled={isLoading}
                   className="w-full justify-start"
                   variant="outline"
@@ -523,7 +460,7 @@ export default function AdminSystemControls() {
                 </Button>
 
                 <Button
-                  onClick={optimizeDatabase}
+                  onClick={handleOptimizeDatabase}
                   disabled={isLoading}
                   className="w-full justify-start"
                   variant="outline"
@@ -533,7 +470,7 @@ export default function AdminSystemControls() {
                 </Button>
 
                 <Button
-                  onClick={() => restartService('CDN')}
+                  onClick={() => handleRestartService('CDN')}
                   disabled={isLoading}
                   className="w-full justify-start"
                   variant="outline"
@@ -624,7 +561,7 @@ export default function AdminSystemControls() {
                 </div>
 
                 <Button
-                  onClick={runBackup}
+                  onClick={handleRunBackup}
                   disabled={isLoading}
                   className="w-full"
                 >

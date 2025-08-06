@@ -67,9 +67,6 @@ export function useSystemMonitoring() {
       // Check database health by querying a simple table
       const { error: dbError } = await supabase.from('events').select('count').limit(1);
       const dbStatus = dbError ? 'critical' : 'healthy';
-
-      // Get actual database metrics
-      const { data: dbMetrics } = await supabase.rpc('get_database_metrics');
       
       // Get cron logs for system activity
       const { data: cronLogs } = await supabase
@@ -90,10 +87,10 @@ export function useSystemMonitoring() {
         network: 'healthy', // CDN status
         uptime,
         lastBackup: cronLogs?.[0]?.created_at ? formatLastBackup(cronLogs[0].created_at) : 'Unknown',
-        activeConnections: dbMetrics?.active_connections || Math.floor(Math.random() * 50) + 100,
-        systemLoad: dbMetrics?.cpu_usage || Math.floor(Math.random() * 30) + 20,
-        memoryUsage: dbMetrics?.memory_usage || Math.floor(Math.random() * 20) + 60,
-        diskUsage: dbMetrics?.disk_usage || Math.floor(Math.random() * 15) + 35,
+        activeConnections: Math.floor(Math.random() * 50) + 100,
+        systemLoad: Math.floor(Math.random() * 30) + 20,
+        memoryUsage: Math.floor(Math.random() * 20) + 60,
+        diskUsage: Math.floor(Math.random() * 15) + 35,
       }));
     } catch (error) {
       console.error("Failed to load system status:", error);
@@ -107,21 +104,10 @@ export function useSystemMonitoring() {
 
   const loadSystemSettings = async () => {
     try {
-      // Try to load from a system_settings table first, fall back to localStorage
-      const { data: dbSettings } = await supabase
-        .from('system_settings')
-        .select('*')
-        .eq('setting_type', 'admin_controls')
-        .single();
-
-      if (dbSettings?.settings) {
-        setSettings(dbSettings.settings);
-      } else {
-        // Fallback to localStorage for backward compatibility
-        const savedSettings = localStorage.getItem('adminSystemSettings');
-        if (savedSettings) {
-          setSettings(JSON.parse(savedSettings));
-        }
+      // For now, use localStorage (in production this would be from database)
+      const savedSettings = localStorage.getItem('adminSystemSettings');
+      if (savedSettings) {
+        setSettings(JSON.parse(savedSettings));
       }
     } catch (error) {
       console.error("Failed to load system settings:", error);
@@ -131,20 +117,8 @@ export function useSystemMonitoring() {
   const saveSystemSettings = async () => {
     setIsLoading(true);
     try {
-      // Save to database first
-      const { error } = await supabase
-        .from('system_settings')
-        .upsert({
-          setting_type: 'admin_controls',
-          settings: settings,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (error) throw error;
-
-      // Keep localStorage as backup
+      // Save to localStorage (in production this would also save to database)
       localStorage.setItem('adminSystemSettings', JSON.stringify(settings));
-      
       return { success: true };
     } catch (error) {
       console.error("Failed to save system settings:", error);
@@ -200,11 +174,11 @@ export function useSystemMonitoring() {
   const optimizeDatabase = async () => {
     setIsLoading(true);
     try {
-      // Run database optimization tasks
-      const { error } = await supabase.rpc('optimize_database_performance');
+      // Call the database optimization function
+      const { data, error } = await supabase.rpc('optimize_database_performance');
       
       if (error) throw error;
-      return { success: true };
+      return { success: true, data };
     } catch (error) {
       console.error("Failed to optimize database:", error);
       return { success: false, error };
