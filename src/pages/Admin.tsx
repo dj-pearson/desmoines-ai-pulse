@@ -384,8 +384,6 @@ export default function Admin() {
   };
 
   const handleSave = async () => {
-    // Preserve scroll position before save
-    const savedScrollY = window.scrollY;
     const { contentType } = editDialog;
     console.log("handleSave called for contentType:", contentType);
 
@@ -416,11 +414,6 @@ export default function Admin() {
       console.log("All refetches completed successfully");
     } catch (error) {
       console.error("Error during save:", error);
-    } finally {
-      // Restore scroll position after save and re-render
-      setTimeout(() => {
-        window.scrollTo({ top: savedScrollY, behavior: "auto" });
-      }, 0);
     }
   };
 

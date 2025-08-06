@@ -23,6 +23,7 @@ import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { CalendarIcon, X, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
+import { useScrollPreservation } from "@/hooks/useScrollPreservation";
 
 interface EventEditorProps {
   event: any;
@@ -35,6 +36,7 @@ export default function EventEditor({
   onSave,
   onClose,
 }: EventEditorProps) {
+  const { preserveScrollPosition } = useScrollPreservation();
   const [formData, setFormData] = useState({
     title: event.title || "",
     original_description: event.original_description || "",
@@ -74,13 +76,16 @@ export default function EventEditor({
     }));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const updatedEvent = {
       ...event,
       ...formData,
       date: formData.date.toISOString(),
     };
-    onSave(updatedEvent);
+    
+    await preserveScrollPosition(async () => {
+      onSave(updatedEvent);
+    });
   };
 
   const isProblemEvent = () => {
