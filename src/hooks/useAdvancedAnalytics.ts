@@ -73,13 +73,27 @@ export function useAdvancedAnalytics() {
       if (!analyticsData) return;
 
       try {
-        // Mock tracking since the table doesn't exist
-        console.log("Enhanced interaction tracked:", {
-          sessionId: sessionId.current,
-          userId: userId,
-          ...interaction,
-          timestamp: new Date().toISOString(),
-        });
+        // Track interaction to user_analytics table
+        const { error } = await supabase
+          .from('user_analytics')
+          .insert({
+            session_id: sessionId.current,
+            user_id: userId,
+            event_type: interaction.interactionType,
+            content_type: interaction.contentType,
+            content_id: interaction.value || null,
+            page_url: window.location.href,
+            metadata: {
+              elementType: interaction.elementType,
+              pageContext: interaction.pageContext,
+              duration: interaction.duration,
+              timestamp: new Date().toISOString(),
+            },
+          });
+
+        if (error) {
+          console.error('Error tracking interaction:', error);
+        }
       } catch (error) {
         console.error("Error tracking interaction:", error);
       }
@@ -175,48 +189,100 @@ export function useAdvancedAnalytics() {
       contentId: string,
       additionalData: any = {}
     ) => {
-      // Mock enhanced interaction tracking since table doesn't exist
-      console.log("Enhanced interaction would be tracked:", {
-        sessionId: sessionId.current,
-        userId: userId,
-        interactionType: "click",
-        elementType,
-        contentType,
-        contentId,
-        pageContext: currentPage.current,
-        additionalData,
-        timestamp: new Date().toISOString(),
-      });
+      try {
+        // Track enhanced interaction to user_analytics table
+        const { error } = await supabase
+          .from('user_analytics')
+          .insert({
+            session_id: sessionId.current,
+            user_id: userId,
+            event_type: 'click',
+            content_type: contentType,
+            content_id: contentId,
+            page_url: window.location.href,
+            metadata: {
+              elementType,
+              pageContext: currentPage.current,
+              additionalData,
+              timestamp: new Date().toISOString(),
+            },
+          });
 
-      // Mock user preference profile update since table doesn't exist
-      console.log("User preference would be updated:", {
-        userId: userId,
-        contentType,
-        interactionType: "click",
-        timestamp: new Date().toISOString(),
-      });
+        if (error) {
+          console.error('Error tracking click:', error);
+        }
 
-      // Mock AI insights since table doesn't exist
-      const contextualData = getContextualData();
-      const aiInsights = null;
+        // Update content metrics for this content
+        await supabase
+          .from('content_metrics')
+          .insert({
+            content_type: contentType,
+            content_id: contentId,
+            metric_type: 'click',
+            metric_value: 1,
+          });
 
-      if (userId && !aiInsights) {
-        console.log("AI insights would be generated for user:", userId);
+      } catch (error) {
+        console.error('Error tracking enhanced click:', error);
       }
     },
     [userId, getContextualData]
   );
 
-  // Get analytics summary
+  // Get analytics summary from database
   const getAnalyticsSummary = useCallback(async () => {
     try {
-      // Mock analytics summary since table doesn't exist
+      // Get total interactions from user_analytics
+      const { data: interactions, error: interactionsError } = await supabase
+        .from('user_analytics')
+        .select('*');
+
+      if (interactionsError) throw interactionsError;
+
+      // Get unique users count
+      const { data: uniqueUsers, error: usersError } = await supabase
+        .from('user_analytics')
+        .select('user_id')
+        .not('user_id', 'is', null);
+
+      if (usersError) throw usersError;
+
+      // Get search queries from search_analytics
+      const { data: searches, error: searchError } = await supabase
+        .from('search_analytics')
+        .select('query')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (searchError) throw searchError;
+
+      // Get top pages from user_analytics
+      const { data: pageViews, error: pagesError } = await supabase
+        .from('user_analytics')
+        .select('page_url')
+        .eq('event_type', 'page_view')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (pagesError) throw pagesError;
+
+      // Process page views to get counts
+      const topPages = pageViews?.reduce((acc: any, item) => {
+        const url = new URL(item.page_url || '', window.location.origin);
+        const path = url.pathname;
+        acc[path] = (acc[path] || 0) + 1;
+        return acc;
+      }, {});
+
       return {
-        totalInteractions: 0,
-        uniqueUsers: 0,
-        topPages: [],
+        totalInteractions: interactions?.length || 0,
+        uniqueUsers: new Set(uniqueUsers?.map(u => u.user_id)).size || 0,
+        topPages: Object.entries(topPages || {})
+          .map(([page, count]) => ({ page, count }))
+          .sort((a: any, b: any) => b.count - a.count)
+          .slice(0, 5),
         deviceBreakdown: {},
-        searchQueries: [],
+        searchQueries: searches?.map(s => s.query) || [],
       };
     } catch (error) {
       console.error("Error fetching analytics summary:", error);

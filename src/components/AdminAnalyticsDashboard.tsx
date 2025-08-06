@@ -73,53 +73,127 @@ export default function AdminAnalyticsDashboard() {
   const loadAnalyticsData = async () => {
     setIsLoading(true);
     try {
-      // Mock analytics data - in real implementation, fetch from analytics tables
-      const mockData: AnalyticsData = {
-        pageViews: [
-          { name: "Mon", value: 1240 },
-          { name: "Tue", value: 1890 },
-          { name: "Wed", value: 2190 },
-          { name: "Thu", value: 1750 },
-          { name: "Fri", value: 2450 },
-          { name: "Sat", value: 3200 },
-          { name: "Sun", value: 2800 },
-        ],
-        userSessions: [
-          { date: "2024-01-01", sessions: 156, users: 124 },
-          { date: "2024-01-02", sessions: 189, users: 145 },
-          { date: "2024-01-03", sessions: 234, users: 178 },
-          { date: "2024-01-04", sessions: 198, users: 156 },
-          { date: "2024-01-05", sessions: 267, users: 201 },
-          { date: "2024-01-06", sessions: 345, users: 267 },
-          { date: "2024-01-07", sessions: 312, users: 234 },
-        ],
-        contentPerformance: [
-          { type: "Events", views: 15420, engagement: 78 },
-          { type: "Restaurants", views: 12890, engagement: 85 },
-          { type: "Attractions", views: 8750, engagement: 62 },
-          { type: "Playgrounds", views: 6230, engagement: 71 },
-        ],
+      // Calculate date range based on selected time range
+      const now = new Date();
+      const daysBack = selectedTimeRange === "7d" ? 7 : selectedTimeRange === "30d" ? 30 : 90;
+      const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+
+      // Get page views from user_analytics
+      const { data: pageViewsData, error: pageViewsError } = await supabase
+        .from('user_analytics')
+        .select('created_at, page_url')
+        .eq('event_type', 'page_view')
+        .gte('created_at', startDate.toISOString());
+
+      if (pageViewsError) throw pageViewsError;
+
+      // Get user sessions data
+      const { data: sessionsData, error: sessionsError } = await supabase
+        .from('user_analytics')
+        .select('created_at, session_id, user_id')
+        .gte('created_at', startDate.toISOString());
+
+      if (sessionsError) throw sessionsError;
+
+      // Get content performance from content_metrics
+      const { data: contentData, error: contentError } = await supabase
+        .from('content_metrics')
+        .select('content_type, metric_type, metric_value')
+        .gte('created_at', startDate.toISOString());
+
+      if (contentError) throw contentError;
+
+      // Process page views by day
+      const pageViewsByDay = (pageViewsData || []).reduce((acc: any, item) => {
+        const day = new Date(item.created_at).toLocaleDateString('en', { weekday: 'short' });
+        acc[day] = (acc[day] || 0) + 1;
+        return acc;
+      }, {});
+
+      const pageViews = Object.entries(pageViewsByDay).map(([name, value]) => ({ name, value: Number(value) }));
+
+      // Process user sessions by date
+      const sessionsByDate = (sessionsData || []).reduce((acc: any, item) => {
+        const date = new Date(item.created_at).toISOString().split('T')[0];
+        if (!acc[date]) {
+          acc[date] = { sessions: new Set(), users: new Set() };
+        }
+        acc[date].sessions.add(item.session_id);
+        if (item.user_id) acc[date].users.add(item.user_id);
+        return acc;
+      }, {});
+
+      const userSessions = Object.entries(sessionsByDate).map(([date, data]: [string, any]) => ({
+        date,
+        sessions: data.sessions.size,
+        users: data.users.size,
+      }));
+
+      // Process content performance
+      const contentPerformance = (contentData || []).reduce((acc: any, item) => {
+        const type = item.content_type.charAt(0).toUpperCase() + item.content_type.slice(1);
+        if (!acc[type]) {
+          acc[type] = { views: 0, engagement: 0 };
+        }
+        if (item.metric_type === 'view') {
+          acc[type].views += item.metric_value || 1;
+        } else if (item.metric_type === 'click') {
+          acc[type].engagement += item.metric_value || 1;
+        }
+        return acc;
+      }, {});
+
+      const contentPerformanceArray = Object.entries(contentPerformance).map(([type, data]: [string, any]) => ({
+        type,
+        views: data.views,
+        engagement: Math.min(100, (data.engagement / Math.max(1, data.views)) * 100), // Convert to percentage
+      }));
+
+      // Calculate top pages
+      const topPages = (pageViewsData || []).reduce((acc: any, item) => {
+        const url = new URL(item.page_url || '', window.location.origin);
+        const path = url.pathname;
+        acc[path] = (acc[path] || 0) + 1;
+        return acc;
+      }, {});
+
+      const topPagesArray = Object.entries(topPages)
+        .map(([page, views]: [string, any]) => ({
+          page,
+          views,
+          avgTime: "2m 30s", // Would need session duration tracking for real data
+        }))
+        .sort((a, b) => b.views - a.views)
+        .slice(0, 5);
+
+      // Real-time metrics (last 24 hours)
+      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const recent24hData = (pageViewsData || []).filter(item => 
+        new Date(item.created_at) >= last24h
+      );
+
+      const realTimeMetrics = {
+        activeUsers: new Set(sessionsData?.filter(s => 
+          new Date(s.created_at) >= new Date(now.getTime() - 60 * 60 * 1000)
+        )?.map(s => s.session_id)).size || 0,
+        pageViews24h: recent24hData.length,
+        bounceRate: 42.5, // Would need session tracking for real calculation
+        avgSessionDuration: "3m 28s", // Would need session duration tracking
+      };
+
+      setAnalyticsData({
+        pageViews: pageViews.length ? pageViews : [{ name: "No data", value: 0 }],
+        userSessions: userSessions.length ? userSessions : [],
+        contentPerformance: contentPerformanceArray.length ? contentPerformanceArray : [],
         deviceBreakdown: [
           { name: "Mobile", value: 68, color: "#0088FE" },
           { name: "Desktop", value: 24, color: "#00C49F" },
           { name: "Tablet", value: 8, color: "#FFBB28" },
-        ],
-        topPages: [
-          { page: "/events", views: 8420, avgTime: "3m 24s" },
-          { page: "/restaurants", views: 6890, avgTime: "2m 56s" },
-          { page: "/", views: 5670, avgTime: "1m 45s" },
-          { page: "/attractions", views: 4320, avgTime: "2m 12s" },
-          { page: "/playgrounds", views: 3450, avgTime: "1m 58s" },
-        ],
-        realTimeMetrics: {
-          activeUsers: 47,
-          pageViews24h: 15420,
-          bounceRate: 42.5,
-          avgSessionDuration: "3m 28s",
-        },
-      };
+        ], // Would need device tracking for real data
+        topPages: topPagesArray.length ? topPagesArray : [],
+        realTimeMetrics,
+      });
 
-      setAnalyticsData(mockData);
     } catch (error) {
       console.error("Failed to load analytics data:", error);
       toast({
