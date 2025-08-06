@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from './useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface SecurityEvent {
   id: string;
@@ -32,17 +33,30 @@ export function useSecurityAudit() {
   const { isAuthenticated, isAdmin } = useAuth();
 
   /**
-   * Log security event (simplified approach)
+   * Log security event to database
    */
   const logSecurityEvent = async (event: Omit<SecurityEvent, 'id' | 'timestamp'>) => {
     try {
       if (!isAuthenticated) return;
 
-      // For now, just log to console until the database types are properly updated
-      console.log('Security Event:', {
-        ...event,
-        timestamp: new Date().toISOString(),
-      });
+      const { error } = await supabase
+        .from('security_audit_logs')
+        .insert({
+          event_type: event.event_type,
+          identifier: event.identifier,
+          endpoint: event.endpoint,
+          details: event.details,
+          severity: event.severity,
+          user_id: event.user_id,
+          action: event.action,
+          resource: event.resource,
+          ip_address: event.ip_address,
+          user_agent: event.user_agent,
+        });
+
+      if (error) {
+        console.error('Error logging security event:', error);
+      }
     } catch (err) {
       console.error('Error logging security event:', err);
     }
@@ -74,7 +88,7 @@ export function useSecurityAudit() {
   };
 
   /**
-   * Fetch security events (mock data for now)
+   * Fetch security events from database
    */
   const fetchSecurityEvents = async (filters: AuditFilters = {}) => {
     try {
@@ -86,29 +100,53 @@ export function useSecurityAudit() {
       setLoading(true);
       setError(null);
 
-      // Mock data for demonstration
-      const mockEvents: SecurityEvent[] = [
-        {
-          id: '1',
-          event_type: 'rate_limit',
-          identifier: '192.168.1.1',
-          endpoint: '/api/auth',
-          details: { attempts: 5, windowMs: 900000 },
-          severity: 'high',
-          timestamp: new Date().toISOString(),
-        },
-        {
-          id: '2',
-          event_type: 'auth_failure',
-          identifier: 'user@example.com',
-          endpoint: '/auth/login',
-          details: { reason: 'invalid_credentials' },
-          severity: 'medium',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ];
+      let query = supabase
+        .from('security_audit_logs')
+        .select('*')
+        .order('timestamp', { ascending: false })
+        .limit(filters.limit || 50);
 
-      setEvents(mockEvents);
+      // Apply filters
+      if (filters.eventType) {
+        query = query.eq('event_type', filters.eventType);
+      }
+      if (filters.severity) {
+        query = query.eq('severity', filters.severity);
+      }
+      if (filters.userId) {
+        query = query.eq('user_id', filters.userId);
+      }
+      if (filters.startDate) {
+        query = query.gte('timestamp', filters.startDate);
+      }
+      if (filters.endDate) {
+        query = query.lte('timestamp', filters.endDate);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      // Transform database records to SecurityEvent format
+      const events: SecurityEvent[] = (data || []).map(record => ({
+        id: record.id,
+        event_type: record.event_type as SecurityEvent['event_type'],
+        identifier: record.identifier,
+        endpoint: record.endpoint || undefined,
+        details: record.details,
+        severity: record.severity as SecurityEvent['severity'],
+        timestamp: record.timestamp,
+        user_id: record.user_id || undefined,
+        action: record.action || undefined,
+        resource: record.resource || undefined,
+        ip_address: record.ip_address || undefined,
+        user_agent: record.user_agent || undefined,
+      }));
+
+      setEvents(events);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch security events');
     } finally {
@@ -117,30 +155,67 @@ export function useSecurityAudit() {
   };
 
   /**
-   * Get security statistics (mock data for now)
+   * Get security statistics from database
    */
   const getSecurityStats = async (timeRange: '24h' | '7d' | '30d' = '24h') => {
     try {
       if (!isAdmin) return null;
 
-      // Mock statistics
+      // Calculate date range
+      const now = new Date();
+      const hours = timeRange === '24h' ? 24 : timeRange === '7d' ? 168 : 720;
+      const startDate = new Date(now.getTime() - hours * 60 * 60 * 1000);
+
+      // Get total count and group by event type
+      const { data: typeData, error: typeError } = await supabase
+        .from('security_audit_logs')
+        .select('event_type')
+        .gte('timestamp', startDate.toISOString());
+
+      if (typeError) {
+        console.error('Error fetching type stats:', typeError);
+        return null;
+      }
+
+      // Get severity distribution
+      const { data: severityData, error: severityError } = await supabase
+        .from('security_audit_logs')
+        .select('severity')
+        .gte('timestamp', startDate.toISOString());
+
+      if (severityError) {
+        console.error('Error fetching severity stats:', severityError);
+        return null;
+      }
+
+      // Process the data
+      const byType = (typeData || []).reduce((acc: any, item) => {
+        acc[item.event_type] = (acc[item.event_type] || 0) + 1;
+        return acc;
+      }, {});
+
+      const bySeverity = (severityData || []).reduce((acc: any, item) => {
+        acc[item.severity] = (acc[item.severity] || 0) + 1;
+        return acc;
+      }, {});
+
       return {
-        total: 15,
-        rateLimit: 5,
-        authFailures: 3,
-        validationErrors: 2,
-        suspiciousActivity: 1,
+        total: (typeData || []).length,
+        rateLimit: byType.rate_limit || 0,
+        authFailures: byType.auth_failure || 0,
+        validationErrors: byType.validation_error || 0,
+        suspiciousActivity: byType.suspicious_activity || 0,
         byType: {
-          rate_limit: 5,
-          auth_failure: 3,
-          validation_error: 2,
-          suspicious_activity: 1,
-          admin_action: 4,
+          rate_limit: byType.rate_limit || 0,
+          auth_failure: byType.auth_failure || 0,
+          validation_error: byType.validation_error || 0,
+          suspicious_activity: byType.suspicious_activity || 0,
+          admin_action: byType.admin_action || 0,
         },
         bySeverity: {
-          high: 6,
-          medium: 7,
-          low: 2,
+          high: bySeverity.high || 0,
+          medium: bySeverity.medium || 0,
+          low: bySeverity.low || 0,
         },
       };
     } catch (err) {
