@@ -1,17 +1,9 @@
-import { createClient } from "@supabase/supabase-js";
 import puppeteer, { Browser } from "puppeteer";
 import { fromZonedTime, toZonedTime, format } from "date-fns-tz";
 
-// Supabase client setup - use environment variables from Supabase secrets
-const SUPABASE_URL = process.env.SUPABASE_URL || "https://wtkhfqpmcegzcbngroui.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Import from the existing Supabase integration
+import { supabase } from "../src/integrations/supabase/client";
 
-if (!SUPABASE_SERVICE_ROLE_KEY) {
-  console.error("❌ SUPABASE_SERVICE_ROLE_KEY environment variable is required");
-  process.exit(1);
-}
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 interface EventDateTimeInfo {
   id: string;
