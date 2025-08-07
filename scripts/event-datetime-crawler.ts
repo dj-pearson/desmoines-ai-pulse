@@ -269,10 +269,15 @@ class EventDateTimeCrawler {
       `Starting event date/time correction ${dryRun ? "(DRY RUN)" : ""}`
     );
 
+    // Set cutoff date to 8/6/2025 (anything after 8/5)
+    const cutoffDate = new Date('2025-08-06T00:00:00Z');
+    console.log(`Filtering events after: ${cutoffDate.toISOString()}`);
+
     let query = supabase
       .from("events")
       .select("id, title, date, source_url, event_start_local, event_timezone, event_start_utc")
-      .not("source_url", "is", null);
+      .not("source_url", "is", null)
+      .gte("date", cutoffDate.toISOString());
 
     // If specific event ID provided, filter to just that event
     if (eventId) {
