@@ -69,7 +69,7 @@ class EventDateTimeCrawler {
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
       // Extract date and time information using multiple strategies
-      const dateTimeInfo = await page.evaluate(() => {
+      const dateTimeInfo = await page.evaluate((eventTitle) => {
         interface ExtractedInfo {
           dates: string[];
           times: string[];
@@ -96,6 +96,13 @@ class EventDateTimeCrawler {
           try {
             const data = JSON.parse(script.textContent || "");
             if (data["@type"] === "Event" || data.startDate) {
+              // Debug: Log structured data found
+              console.log(`🔍 STRUCTURED DATA for "${eventTitle}":`, {
+                type: data["@type"],
+                name: data.name,
+                startDate: data.startDate,
+                endDate: data.endDate
+              });
               results.schemas.push({
                 startDate: data.startDate,
                 endDate: data.endDate,
@@ -166,7 +173,7 @@ class EventDateTimeCrawler {
         });
 
         return results;
-      });
+      }, eventTitle);
 
       // Process the extracted information
       return this.processExtractedInfo(url, eventTitle, dateTimeInfo);
@@ -320,6 +327,10 @@ class EventDateTimeCrawler {
         if (info.extractedDate) {
           console.log(`Extracted date: ${info.extractedDate.toISOString()}`);
           console.log(`Confidence: ${info.confidence}`);
+          
+          // Debug: Show what we extracted vs what's expected
+          console.log(`🔍 DEBUG: Raw extracted date: ${info.extractedDate}`);
+          console.log(`🔍 DEBUG: Event title suggests date should be around: ${event.date}`);
 
           if (info.extractedTime) {
             console.log(`Extracted time: ${info.extractedTime}`);
