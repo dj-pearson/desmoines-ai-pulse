@@ -302,8 +302,8 @@ export function useSmartRecommendations() {
       }
 
       // Freshness boost for recently added events
-      if (rec.event.createdAt) {
-        const daysSinceCreated = (Date.now() - new Date(rec.event.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (rec.event.created_at) {
+        const daysSinceCreated = (Date.now() - new Date(rec.event.created_at).getTime()) / (1000 * 60 * 60 * 24);
         if (daysSinceCreated < 7) {
           contextBoost += 0.15;
           newReasoning.push('Recently added');
@@ -311,7 +311,7 @@ export function useSmartRecommendations() {
       }
 
       // Featured content boost
-      if (rec.event.isFeatured) {
+      if (rec.event.is_featured) {
         contextBoost += 0.1;
         newReasoning.push('Featured event');
       }
@@ -353,7 +353,7 @@ export function useSmartRecommendations() {
     }
 
     // Featured boost
-    if (event.isFeatured) score += 0.2;
+    if (event.is_featured) score += 0.2;
 
     // Recent events boost
     if (event.date) {
@@ -380,7 +380,7 @@ export function useSmartRecommendations() {
       }
     }
 
-    if (event.isFeatured) reasons.push('Featured event');
+    if (event.is_featured) reasons.push('Featured event');
 
     if (event.date) {
       const daysUntilEvent = Math.ceil((new Date(event.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));

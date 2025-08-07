@@ -303,15 +303,15 @@ export default function Admin() {
     } else if (contentType === "event") {
       emptyItem = {
         title: "",
-        originalDescription: "",
+        original_description: "",
         date: new Date(),
         location: "",
         venue: "",
         category: "General",
         price: "",
-        sourceUrl: "",
-        isFeatured: false,
-        isEnhanced: false,
+        source_url: "",
+        is_featured: false,
+        is_enhanced: false,
       };
     } else if (contentType === "attraction") {
       emptyItem = {

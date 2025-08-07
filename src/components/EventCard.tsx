@@ -76,7 +76,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
           <Badge className={getCategoryColor(event.category)}>
             {event.category}
           </Badge>
-          {event.isEnhanced && (
+          {event.is_enhanced && (
             <Badge variant="secondary" className="text-xs">
               <Sparkles className="h-3 w-3 mr-1" />
               Enhanced
@@ -88,7 +88,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
 
       <CardContent className="space-y-3">
         <CardDescription className="line-clamp-3">
-          {event.enhancedDescription || event.originalDescription}
+          {event.enhanced_description || event.original_description}
         </CardDescription>
 
         <div className="space-y-2 text-sm text-neutral-600">
@@ -133,7 +133,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
 
             <ShareDialog
               title={event.title}
-              description={event.enhancedDescription || event.originalDescription || `Join us for ${event.title}`}
+              description={event.enhanced_description || event.original_description || `Join us for ${event.title}`}
               url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`}
             />
           </div>

@@ -3,19 +3,30 @@
 export interface Event {
   id: string;
   title: string;
-  originalDescription?: string;
-  enhancedDescription?: string;
+  original_description?: string;
+  enhanced_description?: string;
   date: string | Date;
   location: string;
   venue?: string;
   category: string;
   price?: string;
   image_url?: string;
-  sourceUrl?: string;
-  isEnhanced?: boolean;
-  isFeatured?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
+  source_url?: string;
+  is_enhanced?: boolean;
+  is_featured?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  // New timezone fields
+  event_start_utc?: string;
+  event_start_local?: string;
+  event_timezone?: string;
+  // Additional fields from database
+  latitude?: number | null;
+  longitude?: number | null;
+  city?: string | null;
+  ai_writeup?: string | null;
+  writeup_generated_at?: string | null;
+  writeup_prompt_used?: string | null;
 }
 
 export interface RestaurantOpening {

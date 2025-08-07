@@ -35,8 +35,8 @@ const searchableFields: FieldConfig[] = [
   { key: "location", label: "Location", searchable: true },
   { key: "price", label: "Price", searchable: true },
   { key: "category", label: "Category", searchable: true },
-  { key: "originalDescription", label: "Description", searchable: true },
-  { key: "sourceUrl", label: "Source URL", searchable: true },
+  { key: "original_description", label: "Description", searchable: true },
+  { key: "source_url", label: "Source URL", searchable: true },
   { key: "image_url", label: "Image URL", searchable: true },
 ];
 
@@ -72,13 +72,13 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     // Handle both camelCase (sourceUrl) and snake_case (source_url) field names
     console.log('First 20 sourceUrls:');
     events.slice(0, 20).forEach((event, index) => {
-      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      const sourceUrl = event.source_url;
       console.log(`${index + 1}. sourceUrl: "${sourceUrl}" (${typeof sourceUrl})`);
     });
     
     // Look for any URLs containing 'catch' or 'desmoines'
     const catchEvents = events.filter(event => {
-      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      const sourceUrl = event.source_url;
       return sourceUrl && (
         sourceUrl.toLowerCase().includes('catch') ||
         sourceUrl.toLowerCase().includes('desmoines')
@@ -86,12 +86,12 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     });
     console.log(`Found ${catchEvents.length} events with 'catch' or 'desmoines' in sourceUrl:`);
     catchEvents.forEach((event, index) => {
-      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      const sourceUrl = event.source_url;
       console.log(`${index + 1}. "${sourceUrl}"`);
     });
     
     events.forEach((event, index) => {
-      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      const sourceUrl = event.source_url;
       if (sourceUrl) {
         try {
           const url = new URL(sourceUrl);
@@ -124,7 +124,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     }
 
     return events.filter(event => {
-      const sourceUrl = event.sourceUrl || (event as any).source_url;
+      const sourceUrl = event.source_url;
       if (!sourceUrl) return false;
       
       // Check if the source URL contains the target domain
@@ -142,7 +142,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     const counts: Record<string, number> = {};
     domains.forEach(domain => {
       const matchingEvents = events.filter(event => {
-        const sourceUrl = event.sourceUrl || (event as any).source_url;
+        const sourceUrl = event.source_url;
         if (!sourceUrl) return false;
         
         // More flexible domain matching
@@ -165,7 +165,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
       if (domain.includes('catchdesmoines')) {
         console.log(`Domain ${domain} has ${counts[domain]} events`);
         if (matchingEvents.length > 0) {
-          console.log('Sample URLs:', matchingEvents.slice(0, 3).map(e => e.sourceUrl || (e as any).source_url));
+          console.log('Sample URLs:', matchingEvents.slice(0, 3).map(e => e.source_url));
         }
       }
     });
@@ -608,9 +608,9 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                             {event.venue && <span>{event.venue} • </span>}
                             {event.date && <span>{new Date(event.date).toLocaleDateString()}</span>}
                           </div>
-                          {mode === "bulk" && (event.sourceUrl || (event as any).source_url) && (
+                          {mode === "bulk" && event.source_url && (
                             <div className="text-xs text-blue-600 truncate mt-1">
-                              {event.sourceUrl || (event as any).source_url}
+                              {event.source_url}
                             </div>
                           )}
                         </div>

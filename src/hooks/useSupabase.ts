@@ -142,19 +142,19 @@ function transformEvent(event: any): Event {
   return {
     id: event.id,
     title: event.title,
-    originalDescription: event.original_description,
-    enhancedDescription: event.enhanced_description,
+    original_description: event.original_description,
+    enhanced_description: event.enhanced_description,
     date: event.date,
     location: event.location,
     venue: event.venue,
     category: event.category,
     price: event.price,
     image_url: event.image_url,
-    sourceUrl: event.source_url,
-    isEnhanced: event.is_enhanced,
-    isFeatured: event.is_featured,
-    createdAt: event.created_at,
-    updatedAt: event.updated_at,
+    source_url: event.source_url,
+    is_enhanced: event.is_enhanced,
+    is_featured: event.is_featured,
+    created_at: event.created_at,
+    updated_at: event.updated_at,
   };
 }
 

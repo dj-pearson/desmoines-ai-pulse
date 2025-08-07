@@ -150,7 +150,7 @@ async function networkFirstWithCache(request, cacheName) {
   try {
     const networkResponse = await fetch(request);
     
-    if (networkResponse.ok) {
+    if (networkResponse.ok && networkResponse.status !== 206) {
       const cache = await caches.open(cacheName);
       // Cache API responses with TTL (5 minutes)
       const clonedResponse = networkResponse.clone();

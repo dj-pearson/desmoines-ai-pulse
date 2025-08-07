@@ -44,7 +44,7 @@ export function nowInCentralTime(): Date {
  */
 export function createEventSlugWithCentralTime(
   title: string,
-  event?: { date?: string | Date; event_start_utc?: string; event_start_local?: string; event_timezone?: string }
+  event?: any
 ): string {
   const titleSlug = title
     .toLowerCase()
@@ -100,7 +100,7 @@ export function isEventInFuture(eventDate: string | Date): boolean {
  * Format an event date for display to users (always in Central Time)
  * Prefers new timezone fields over legacy date field
  */
-export function formatEventDate(event: { date?: string | Date; event_start_utc?: string; event_start_local?: string; event_timezone?: string }): string {
+export function formatEventDate(event: any): string {
   try {
     // Use new timezone-aware fields if available
     if (event.event_start_utc) {
@@ -122,7 +122,7 @@ export function formatEventDate(event: { date?: string | Date; event_start_utc?:
  * Format an event date for card display (shorter format)
  * Prefers new timezone fields over legacy date field
  */
-export function formatEventDateShort(event: { date?: string | Date; event_start_utc?: string; event_start_local?: string; event_timezone?: string }): string {
+export function formatEventDateShort(event: any): string {
   try {
     // Use new timezone-aware fields if available
     if (event.event_start_utc) {
