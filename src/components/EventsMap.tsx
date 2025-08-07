@@ -73,7 +73,7 @@ const EventsMap = ({ events }: EventsMapProps) => {
               <Link
                 to={`/events/${createEventSlugWithCentralTime(
                   event.title,
-                  event.date
+                  event
                 )}`}
               >
                 {event.title}

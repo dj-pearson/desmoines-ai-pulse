@@ -27,7 +27,7 @@ export default function EventDetails() {
   const { events, isLoading } = useEvents();
 
   const event = events.find((e) => {
-    const eventSlug = createEventSlugWithCentralTime(e.title, e.date);
+    const eventSlug = createEventSlugWithCentralTime(e.title, e);
     return eventSlug === slug;
   });
 
@@ -88,7 +88,7 @@ export default function EventDetails() {
   const seoDescription =
     event.enhanced_description ||
     event.original_description ||
-    `Join us for ${event.title} in Des Moines. ${formatEventDate(event.date)}`;
+    `Join us for ${event.title} in Des Moines. ${formatEventDate(event)}`;
 
   const seoKeywords = [
     event.title,
@@ -142,7 +142,7 @@ export default function EventDetails() {
     { name: "Events", url: "/events" },
     {
       name: event.title,
-      url: `/events/${createEventSlugWithCentralTime(event.title, event.date)}`,
+      url: `/events/${createEventSlugWithCentralTime(event.title, event)}`,
     },
   ];
 
@@ -156,7 +156,7 @@ export default function EventDetails() {
         structuredData={eventSchema}
         url={`/events/${createEventSlugWithCentralTime(
           event.title,
-          event.date
+          event
         )}`}
         imageUrl={event.image_url}
         breadcrumbs={breadcrumbs}
@@ -240,7 +240,7 @@ export default function EventDetails() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="flex items-center text-muted-foreground">
                       <Calendar className="h-5 w-5 mr-2 flex-shrink-0" />
-                      <span>{formatEventDate(event.date)}</span>
+                      <span>{formatEventDate(event)}</span>
                     </div>
 
                     <div className="flex items-center text-muted-foreground">
@@ -326,7 +326,7 @@ export default function EventDetails() {
                   <div>
                     <span className="font-medium">Date</span>
                     <p className="text-muted-foreground">
-                      {formatEventDate(event.date)}
+                      {formatEventDate(event)}
                     </p>
                   </div>
 

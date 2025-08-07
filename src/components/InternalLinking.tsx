@@ -125,7 +125,7 @@ export function InternalLinking({
                 key={event.id}
                 to={`/events/${createEventSlugWithCentralTime(
                   event.title,
-                  event.date
+                  event
                 )}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >
@@ -220,7 +220,7 @@ export function InternalLinking({
                 key={event.id}
                 to={`/events/${createEventSlugWithCentralTime(
                   event.title,
-                  event.date
+                  event
                 )}`}
                 className="block p-3 rounded-lg border hover:bg-muted/50 transition-colors"
               >

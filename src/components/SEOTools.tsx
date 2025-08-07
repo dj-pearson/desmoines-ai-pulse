@@ -149,7 +149,7 @@ export default function SEOTools() {
         ? new Date(event.date).toISOString().split("T")[0]
         : currentDate;
       // Use date-based slug for events
-      const slug = createEventSlugWithCentralTime(event.title, event.date);
+      const slug = createEventSlugWithCentralTime(event.title, event);
       sitemap += `
   <url>
     <loc>${baseUrl}/events/${slug}</loc>
@@ -429,7 +429,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       const eventDate = event.date
         ? new Date(event.date).toISOString()
         : currentDate;
-      const slug = createEventSlugWithCentralTime(event.title, event.date);
+      const slug = createEventSlugWithCentralTime(event.title, event);
       rss += `
     <item>
       <title>${event.title}</title>

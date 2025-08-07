@@ -499,6 +499,9 @@ Only include actual events, not navigation items, headers, or generic text. If n
                   event.description || `Event from ${job.name}`
                 ).substring(0, 500),
                 date: eventDate,
+                event_start_local: eventDate ? eventDate.toISOString().replace('Z', '') : null,
+                event_timezone: "America/Chicago",
+                event_start_utc: eventDate,
                 location: (event.location || "Des Moines, IA").substring(
                   0,
                   100

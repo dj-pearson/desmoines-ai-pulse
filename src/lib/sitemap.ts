@@ -59,7 +59,7 @@ export class SitemapGenerator {
 
       if (!eventsError && events) {
         events.forEach((event) => {
-          const slug = createEventSlugWithCentralTime(event.title, event.date);
+          const slug = createEventSlugWithCentralTime(event.title, event);
           const lastmod =
             event.updated_at || event.created_at || this.currentDate;
           urls.push({

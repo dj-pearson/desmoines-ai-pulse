@@ -408,7 +408,7 @@ export default function EventsPage() {
                   event={event} 
                   onViewDetails={() => {
                     // Navigate to event details
-                    window.location.href = `/events/${createEventSlugWithCentralTime(event.title, event.date)}`;
+                    window.location.href = `/events/${createEventSlugWithCentralTime(event.title, event)}`;
                   }}
                 />
               ))}

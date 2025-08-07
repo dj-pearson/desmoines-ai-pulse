@@ -94,7 +94,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
         <div className="space-y-2 text-sm text-neutral-600">
           <div className="flex items-center">
             <Calendar className="h-4 w-4 mr-2" />
-            <span>{formatEventDateShort(event.date)}</span>
+            <span>{formatEventDateShort(event)}</span>
           </div>
 
           <div className="flex items-center">
@@ -122,7 +122,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
             <Link
               to={`/events/${createEventSlugWithCentralTime(
                 event.title,
-                event.date
+                event
               )}`}
             >
               <Button variant="outline" size="sm">
@@ -134,7 +134,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
             <ShareDialog
               title={event.title}
               description={event.enhancedDescription || event.originalDescription || `Join us for ${event.title}`}
-              url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event.date)}`}
+              url={`${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`}
             />
           </div>
 
