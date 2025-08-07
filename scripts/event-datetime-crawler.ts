@@ -271,7 +271,7 @@ class EventDateTimeCrawler {
 
     let query = supabase
       .from("events")
-      .select("id, title, date, source_url")
+      .select("id, title, date, source_url, event_start_local, event_timezone, event_start_utc")
       .not("source_url", "is", null);
 
     // If specific event ID provided, filter to just that event
@@ -326,13 +326,15 @@ class EventDateTimeCrawler {
             if (info.extractedTime === "structured_data") {
               console.log("✅ Using complete datetime from structured data");
               finalDateTime = info.extractedDate;
-              eventStartLocal = format(utcToZonedTime(finalDateTime, eventTimezone), "yyyy-MM-dd HH:mm:ss");
+              // Convert to Central Time for local storage
+              eventStartLocal = format(utcToZonedTime(finalDateTime, eventTimezone), "yyyy-MM-dd'T'HH:mm:ss");
             } else {
               const combinedDateTime = this.combineDateTime(
                 info.extractedDate,
                 info.extractedTime
               );
-              eventStartLocal = format(combinedDateTime, "yyyy-MM-dd HH:mm:ss");
+              // Store as Central Time timestamp
+              eventStartLocal = format(combinedDateTime, "yyyy-MM-dd'T'HH:mm:ss");
               finalDateTime = fromZonedTime(
                 combinedDateTime,
                 eventTimezone
@@ -343,10 +345,9 @@ class EventDateTimeCrawler {
               const { data: updateData, error: updateError } = await supabase
                 .from("events")
                 .update({
-                  date: finalDateTime.toISOString(), // Keep for now, will remove later
                   event_start_local: eventStartLocal,
                   event_timezone: eventTimezone,
-                  event_start_utc: finalDateTime,
+                  event_start_utc: finalDateTime.toISOString(),
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", event.id)
