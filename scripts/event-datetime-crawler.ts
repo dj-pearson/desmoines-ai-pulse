@@ -332,15 +332,15 @@ class EventDateTimeCrawler {
             if (info.extractedTime === "structured_data") {
               console.log("✅ Using complete datetime from structured data");
               finalDateTime = info.extractedDate;
-              // Convert to Central Time for local storage
-              eventStartLocal = format(toZonedTime(finalDateTime, eventTimezone), "yyyy-MM-dd'T'HH:mm:ss");
+              // Convert to Central Time for local storage (timestamp without timezone)
+              eventStartLocal = format(toZonedTime(finalDateTime, eventTimezone), "yyyy-MM-dd HH:mm:ss");
             } else {
               const combinedDateTime = this.combineDateTime(
                 info.extractedDate,
                 info.extractedTime
               );
-              // Store as Central Time timestamp
-              eventStartLocal = format(combinedDateTime, "yyyy-MM-dd'T'HH:mm:ss");
+              // Store as Central Time timestamp (timestamp without timezone)
+              eventStartLocal = format(combinedDateTime, "yyyy-MM-dd HH:mm:ss");
               finalDateTime = fromZonedTime(
                 combinedDateTime,
                 eventTimezone
