@@ -40,23 +40,37 @@ export function nowInCentralTime(): Date {
 /**
  * Create an event slug with Central Time date handling
  * This ensures consistent slug generation regardless of user's local timezone
+ * Prefers new timezone fields over legacy date field
  */
 export function createEventSlugWithCentralTime(
   title: string,
-  date?: string | Date
+  event?: { date?: string | Date; event_start_utc?: string; event_start_local?: string; event_timezone?: string }
 ): string {
   const titleSlug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
-  if (!date) {
+  if (!event) {
     return titleSlug;
   }
 
   try {
+    let dateToUse: string | Date | undefined;
+    
+    // Use new timezone-aware fields if available
+    if (event.event_start_utc) {
+      dateToUse = event.event_start_utc;
+    } else if (event.date) {
+      dateToUse = event.date;
+    }
+    
+    if (!dateToUse) {
+      return titleSlug;
+    }
+
     // Convert to Central Time first to ensure consistent date extraction
-    const centralDate = toCentralTime(date);
+    const centralDate = toCentralTime(dateToUse);
     const year = centralDate.getFullYear();
     const month = String(centralDate.getMonth() + 1).padStart(2, "0");
     const day = String(centralDate.getDate()).padStart(2, "0");
@@ -84,10 +98,21 @@ export function isEventInFuture(eventDate: string | Date): boolean {
 
 /**
  * Format an event date for display to users (always in Central Time)
+ * Prefers new timezone fields over legacy date field
  */
-export function formatEventDate(date: string | Date): string {
+export function formatEventDate(event: { date?: string | Date; event_start_utc?: string; event_start_local?: string; event_timezone?: string }): string {
   try {
-    return formatInCentralTime(date, "EEEE, MMMM d, yyyy 'at' h:mm a");
+    // Use new timezone-aware fields if available
+    if (event.event_start_utc) {
+      return formatInCentralTime(event.event_start_utc, "EEEE, MMMM d, yyyy 'at' h:mm a");
+    }
+    
+    // Fallback to legacy date field
+    if (event.date) {
+      return formatInCentralTime(event.date, "EEEE, MMMM d, yyyy 'at' h:mm a");
+    }
+    
+    return "Date and time to be announced";
   } catch {
     return "Date and time to be announced";
   }
@@ -95,10 +120,21 @@ export function formatEventDate(date: string | Date): string {
 
 /**
  * Format an event date for card display (shorter format)
+ * Prefers new timezone fields over legacy date field
  */
-export function formatEventDateShort(date: string | Date): string {
+export function formatEventDateShort(event: { date?: string | Date; event_start_utc?: string; event_start_local?: string; event_timezone?: string }): string {
   try {
-    return formatInCentralTime(date, "MMM d, yyyy 'at' h:mm a");
+    // Use new timezone-aware fields if available
+    if (event.event_start_utc) {
+      return formatInCentralTime(event.event_start_utc, "MMM d, yyyy 'at' h:mm a");
+    }
+    
+    // Fallback to legacy date field
+    if (event.date) {
+      return formatInCentralTime(event.date, "MMM d, yyyy 'at' h:mm a");
+    }
+    
+    return "Date TBA";
   } catch {
     return "Date TBA";
   }

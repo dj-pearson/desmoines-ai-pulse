@@ -115,6 +115,16 @@ export function useUserRole(user?: User | null) {
       throw new Error("Must be authenticated to assign roles");
     }
 
+    // Frontend validation: check if current user has permission to assign this role
+    if (!canAssignRole(role)) {
+      throw new Error(`Insufficient permissions to assign ${role} role`);
+    }
+
+    // Prevent self-role modification
+    if (targetUserId === user.id) {
+      throw new Error("Cannot modify your own role");
+    }
+
     try {
       const { data, error } = await supabase
         .from("user_roles")
@@ -177,6 +187,22 @@ export function useUserRole(user?: User | null) {
   const canManageContent = (): boolean => hasRole('moderator');
   const canAccessAdminDashboard = (): boolean => hasRole('moderator');
 
+  // Enhanced role assignment permission checking
+  const canAssignRole = (targetRole: UserRole): boolean => {
+    switch (targetRole) {
+      case 'root_admin':
+        return state.userRole === 'root_admin';
+      case 'admin':
+        return state.userRole === 'root_admin' || state.userRole === 'admin';
+      case 'moderator':
+        return hasRole('admin');
+      case 'user':
+        return hasRole('moderator');
+      default:
+        return false;
+    }
+  };
+
   // Force refetch function
   const refetch = useCallback(async () => {
     if (user?.id) {
@@ -197,6 +223,7 @@ export function useUserRole(user?: User | null) {
     canManageUsers,
     canManageContent,
     canAccessAdminDashboard,
+    canAssignRole,
     refetch,
   };
 }

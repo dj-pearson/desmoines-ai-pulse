@@ -5,7 +5,10 @@ export interface Event {
   title: string;
   originalDescription?: string;
   enhancedDescription?: string;
-  date: string | Date;
+  date: string | Date; // Legacy field - use event_start_utc instead when available
+  event_start_local?: string;
+  event_timezone?: string;
+  event_start_utc?: string;
   location: string;
   venue?: string;
   category: string;

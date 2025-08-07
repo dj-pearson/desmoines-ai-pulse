@@ -87,7 +87,7 @@ export function useAuth() {
       return false;
     }
 
-    // Check user role from user_roles table
+    // Check user role from user_roles table - database-driven role checking only
     try {
       const { data, error } = await supabase
         .from("user_roles")
@@ -102,18 +102,7 @@ export function useAuth() {
       console.error("Error checking admin status:", error);
     }
 
-    // Fallback to email check for backward compatibility
-    const adminEmails = [
-      "admin@desmoines.ai",
-      "admin@desmoinesinsider.com", 
-      "pearson.performance@gmail.com",
-      "djpearson@pm.me", // Root admin email
-    ];
-
-    if (user.email && adminEmails.includes(user.email)) {
-      return true;
-    }
-
+    // No fallback - all admin access must be through database roles
     return false;
   };
 
@@ -126,6 +115,19 @@ export function useAuth() {
 
       if (error) {
         console.error("Login error:", error);
+        
+        // Log failed authentication attempt
+        try {
+          await supabase.from('failed_auth_attempts').insert({
+            email: email,
+            attempt_type: 'login',
+            error_message: error.message,
+            user_agent: navigator.userAgent || 'Unknown'
+          });
+        } catch (logError) {
+          console.error("Failed to log authentication attempt:", logError);
+        }
+        
         return false;
       }
 
@@ -151,6 +153,19 @@ export function useAuth() {
 
       if (error) {
         console.error("Signup error:", error);
+        
+        // Log failed signup attempt
+        try {
+          await supabase.from('failed_auth_attempts').insert({
+            email: email,
+            attempt_type: 'signup',
+            error_message: error.message,
+            user_agent: navigator.userAgent || 'Unknown'
+          });
+        } catch (logError) {
+          console.error("Failed to log signup attempt:", logError);
+        }
+        
         return false;
       }
 
