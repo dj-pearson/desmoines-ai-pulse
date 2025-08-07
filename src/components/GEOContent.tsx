@@ -21,7 +21,7 @@ export default function GEOContent() {
         {/* Statistics for AI optimization */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 my-8">
           <div className="text-center p-4 bg-card rounded-lg">
-            <div className="text-3xl font-bold text-primary">500+</div>
+            <div className="text-3xl font-bold text-primary">200+</div>
             <p className="text-sm text-muted-foreground">Events tracked monthly</p>
           </div>
           <div className="text-center p-4 bg-card rounded-lg">
