@@ -383,43 +383,28 @@ class EventDateTimeCrawler {
 
               // Debug: Show exactly what we're trying to update
               const updatePayload = {
-                event_start_local: eventStartLocal,
-                event_timezone: eventTimezone,
-                event_start_utc: finalDateTime.toISOString(),
-                updated_at: new Date().toISOString(),
+                eventId: event.id,
+                eventStartLocal: eventStartLocal,
+                eventTimezone: eventTimezone,
+                eventStartUtc: finalDateTime.toISOString(),
               };
               console.log(`🔍 Update payload:`, updatePayload);
-              console.log(`🔍 Updating event with ID: ${event.id}`);
 
-              const { data: updateData, error: updateError } = await supabase
-                .from("events")
-                .update(updatePayload)
-                .eq("id", event.id)
-                .select(); // Return the updated record to verify
+              // Use edge function for database update (has service role privileges)
+              const { data: updateData, error: updateError } = await supabase.functions.invoke('update-event-datetime', {
+                body: updatePayload
+              });
 
               if (updateError) {
-                console.error(`❌ Error updating event ${event.id}:`, updateError);
-              } else if (updateData && updateData.length > 0) {
+                console.error(`❌ Error calling edge function:`, updateError);
+              } else if (updateData?.success) {
                 console.log(
                   `✅ Successfully updated event: ${eventStartLocal} (${eventTimezone}) -> ${finalDateTime.toISOString()} (UTC)`
                 );
-                console.log(`📝 Database record updated at: ${updateData[0].updated_at}`);
+                console.log(`📝 Database record updated`);
               } else {
-                console.log(`⚠️ Update command succeeded but no rows were affected`);
+                console.log(`⚠️ Edge function failed:`, updateData);
                 console.log(`🔍 Event ID being updated: ${event.id}`);
-                
-                // Debug: Try to find the event again to see if it still exists
-                const { data: checkEvent, error: checkError } = await supabase
-                  .from("events")
-                  .select("id, title, event_start_local, event_timezone, event_start_utc")
-                  .eq("id", event.id)
-                  .single();
-                
-                if (checkError) {
-                  console.log(`🔍 Cannot find event after update attempt:`, checkError.message);
-                } else if (checkEvent) {
-                  console.log(`🔍 Event still exists with current values:`, checkEvent);
-                }
               }
             } else {
               console.log(`🔍 Would update to: ${eventStartLocal} (${eventTimezone}) -> ${finalDateTime.toISOString()} (UTC)`);
