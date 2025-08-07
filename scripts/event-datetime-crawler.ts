@@ -344,9 +344,9 @@ class EventDateTimeCrawler {
               console.log("✅ Using complete datetime from structured data");
               // The extracted date is already in the correct timezone, so use it directly
               finalDateTime = info.extractedDate;
-              // Convert to Central Time for local storage (timestamp without timezone)
+              // Convert to Central Time for local storage (timestamp without timezone) - use T format to match database
               const centralTime = toZonedTime(finalDateTime, eventTimezone);
-              eventStartLocal = format(centralTime, "yyyy-MM-dd HH:mm:ss");
+              eventStartLocal = format(centralTime, "yyyy-MM-dd'T'HH:mm:ss");
               console.log(`🔍 Central Time: ${centralTime.toISOString()}`);
               console.log(`🔍 Local storage format: ${eventStartLocal}`);
             } else {
@@ -354,8 +354,8 @@ class EventDateTimeCrawler {
                 info.extractedDate,
                 info.extractedTime
               );
-              // Store as Central Time timestamp (timestamp without timezone)
-              eventStartLocal = format(combinedDateTime, "yyyy-MM-dd HH:mm:ss");
+              // Store as Central Time timestamp (timestamp without timezone) - use T format to match database
+              eventStartLocal = format(combinedDateTime, "yyyy-MM-dd'T'HH:mm:ss");
               finalDateTime = fromZonedTime(
                 combinedDateTime,
                 eventTimezone
