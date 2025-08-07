@@ -1,8 +1,16 @@
+import { createClient } from "@supabase/supabase-js";
 import puppeteer, { Browser } from "puppeteer";
 import { fromZonedTime, toZonedTime, format } from "date-fns-tz";
 
-// Import from the existing Supabase integration
-import { supabase } from "../src/integrations/supabase/client";
+// Supabase client setup for Node.js environment
+const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: false, // Disable session persistence for Node.js
+  },
+});
 
 
 interface EventDateTimeInfo {
