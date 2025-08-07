@@ -30,18 +30,49 @@ export const suppressSESWarnings = () => {
   }
 };
 
+// Handle GitHub Pages SPA routing
+export const handleGitHubPagesRouting = () => {
+  if (typeof window !== 'undefined') {
+    // Check if we're on GitHub Pages and handle SPA routing
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirect = urlParams.get('/');
+    
+    if (redirect !== null) {
+      // Remove the redirect parameter and update the URL
+      const newUrl = redirect.replace(/~and~/g, '&');
+      window.history.replaceState(null, '', newUrl);
+    }
+  }
+};
+
 // Initialize error suppression on load
 export const initializeErrorSuppression = () => {
   suppressSESWarnings();
+  handleGitHubPagesRouting();
   
-  // Handle Google Analytics loading failures gracefully
+  // Handle script loading failures gracefully
   window.addEventListener('error', (event) => {
-    if (event.target && 
-        (event.target as HTMLElement).tagName === 'SCRIPT' && 
-        (event.target as HTMLScriptElement).src.includes('googletagmanager.com')) {
+    if (event.target && (event.target as HTMLElement).tagName === 'SCRIPT') {
+      const script = event.target as HTMLScriptElement;
+      
       // Suppress Google Analytics loading errors
+      if (script.src.includes('googletagmanager.com') || script.src.includes('google-analytics.com')) {
+        event.preventDefault();
+        console.warn('Google Analytics failed to load - continuing without analytics');
+        return;
+      }
+      
+      // Handle generic script loading errors
+      if (script.src) {
+        event.preventDefault();
+        console.warn(`Script failed to load: ${script.src} - continuing without this resource`);
+      }
+    }
+    
+    // Suppress SES syntax errors that don't affect functionality
+    if (event.message && event.message.includes('SES_UNCAUGHT_EXCEPTION')) {
       event.preventDefault();
-      console.warn('Google Analytics failed to load - continuing without analytics');
+      return;
     }
   });
 };

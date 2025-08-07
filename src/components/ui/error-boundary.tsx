@@ -25,7 +25,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('Error Boundary caught an error:', error, errorInfo);
+    // Don't log SES-related errors as they're from browser extensions
+    if (!error.message.includes('SES') && !error.message.includes('lockdown')) {
+      console.error('Error Boundary caught an error:', error, errorInfo);
+    }
   }
 
   resetError = () => {
