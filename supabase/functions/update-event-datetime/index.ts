@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
       const { data, error } = await supabase
         .from('events')
         .update({
+          date: eventStartUtc, // Also update the legacy date field
           event_start_local: eventStartLocal,
           event_timezone: eventTimezone,
           event_start_utc: eventStartUtc,
