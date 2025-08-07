@@ -723,38 +723,41 @@ export default function AllInclusiveDashboard({
           onValueChange={handleTabChange}
           className="w-full"
         >
-          <TabsList className="grid w-full grid-cols-5 mb-6 md:mb-8 h-auto">
-            <TabsTrigger
-              value="all"
-              className="text-xs md:text-sm py-2 px-1 md:px-3"
-            >
-              All ({allItems.length})
-            </TabsTrigger>
-            <TabsTrigger
-              value="event"
-              className="text-xs md:text-sm py-2 px-1 md:px-3"
-            >
-              Events ({events.length})
-            </TabsTrigger>
-            <TabsTrigger
-              value="restaurant"
-              className="text-xs md:text-sm py-2 px-1 md:px-3"
-            >
-              Restaurants ({restaurantOpenings.length})
-            </TabsTrigger>
-            <TabsTrigger
-              value="attraction"
-              className="text-xs md:text-sm py-2 px-1 md:px-3"
-            >
-              Attractions ({attractions.length})
-            </TabsTrigger>
-            <TabsTrigger
-              value="playground"
-              className="text-xs md:text-sm py-2 px-1 md:px-3"
-            >
-              Playgrounds ({playgrounds.length})
-            </TabsTrigger>
-          </TabsList>
+          {/* Mobile-optimized scrollable tabs */}
+          <div className="w-full overflow-x-auto mb-6 md:mb-8">
+            <TabsList className="inline-flex w-max min-w-full justify-start h-auto p-1 md:grid md:grid-cols-5 md:w-full">
+              <TabsTrigger
+                value="all"
+                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+              >
+                All ({allItems.length})
+              </TabsTrigger>
+              <TabsTrigger
+                value="event"
+                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+              >
+                Events ({events.length})
+              </TabsTrigger>
+              <TabsTrigger
+                value="restaurant"
+                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+              >
+                Restaurants ({restaurantOpenings.length})
+              </TabsTrigger>
+              <TabsTrigger
+                value="attraction"
+                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+              >
+                Attractions ({attractions.length})
+              </TabsTrigger>
+              <TabsTrigger
+                value="playground"
+                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+              >
+                Playgrounds ({playgrounds.length})
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="all">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
