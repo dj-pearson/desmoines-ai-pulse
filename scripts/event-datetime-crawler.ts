@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import puppeteer, { Browser } from "puppeteer";
-import { fromZonedTime, utcToZonedTime, format } from "date-fns-tz";
+import { fromZonedTime, toZonedTime, format } from "date-fns-tz";
 
 // Supabase client setup - using same credentials as convert-timezones.ts
 const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
@@ -327,7 +327,7 @@ class EventDateTimeCrawler {
               console.log("✅ Using complete datetime from structured data");
               finalDateTime = info.extractedDate;
               // Convert to Central Time for local storage
-              eventStartLocal = format(utcToZonedTime(finalDateTime, eventTimezone), "yyyy-MM-dd'T'HH:mm:ss");
+              eventStartLocal = format(toZonedTime(finalDateTime, eventTimezone), "yyyy-MM-dd'T'HH:mm:ss");
             } else {
               const combinedDateTime = this.combineDateTime(
                 info.extractedDate,
