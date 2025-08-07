@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import App from './App.tsx';
 import './index.css';
 import { registerServiceWorker, addResourceHints, trackWebVitals } from "./lib/performance";
-import { suppressSESWarnings, handleGitHubPagesRouting } from "./lib/errorSuppression";
+import { suppressSESWarnings, handleGitHubPagesRouting, initializeRuntimeErrorHandling } from "./lib/errorSuppression";
 
 // Initialize error suppression and performance optimizations
 suppressSESWarnings();
@@ -23,7 +23,6 @@ const queryClient = new QueryClient();
 const root = createRoot(document.getElementById("root")!);
 
 // Initialize runtime error handling now that React is set up
-import { initializeRuntimeErrorHandling } from "./lib/errorSuppression";
 initializeRuntimeErrorHandling();
 
 root.render(
