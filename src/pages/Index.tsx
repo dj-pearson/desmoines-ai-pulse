@@ -13,17 +13,11 @@ import LocalContentSection from "@/components/LocalContentSection";
 import TrendingContent from "@/components/TrendingContent";
 import { RatingSystem } from "@/components/RatingSystem";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Database } from "@/integrations/supabase/types";
 import SEOHead from "@/components/SEOHead";
-
 type Event = Database["public"]["Tables"]["events"]["Row"];
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
@@ -31,7 +25,6 @@ import { format } from "date-fns";
 import SEOStructure from "@/components/SEOStructure";
 import GEOContent from "@/components/GEOContent";
 import { AdBanner } from "@/components/AdBanner";
-
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
@@ -48,82 +41,67 @@ export default function Index() {
     location?: string;
     priceRange?: string;
   }>({});
-  const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
-
+  const {
+    toast
+  } = useToast();
+  const {
+    isAuthenticated
+  } = useAuth();
   const scrapeMutation = useEventScraper();
-
-  const handleSearch = (
-    filters: {
-      query: string;
-      category: string;
-      subcategory?: string;
-      dateFilter?: {
-        start?: Date;
-        end?: Date;
-        mode: "single" | "range" | "preset";
-        preset?: string;
-      } | null;
-      location?: string;
-      priceRange?: string;
-    },
-    shouldScroll: boolean = false
-  ) => {
+  const handleSearch = (filters: {
+    query: string;
+    category: string;
+    subcategory?: string;
+    dateFilter?: {
+      start?: Date;
+      end?: Date;
+      mode: "single" | "range" | "preset";
+      preset?: string;
+    } | null;
+    location?: string;
+    priceRange?: string;
+  }, shouldScroll: boolean = false) => {
     // Store all search filters for the dashboard
     setSearchFilters(filters);
 
     // Only scroll to events section when explicitly requested (not during typing)
     if (shouldScroll) {
-      document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
+      document.getElementById("events")?.scrollIntoView({
+        behavior: "smooth"
+      });
     }
 
     // Show feedback to user
-    const filterCount = Object.values(filters).filter(
-      (f) =>
-        f &&
-        f !== "All" &&
-        f !== "any-date" &&
-        f !== "any-location" &&
-        f !== "any-price" &&
-        f !== ""
-    ).length;
+    const filterCount = Object.values(filters).filter(f => f && f !== "All" && f !== "any-date" && f !== "any-location" && f !== "any-price" && f !== "").length;
     toast({
       title: "Filters Applied",
-      description:
-        filterCount > 0
-          ? `${filterCount} filter(s) active`
-          : "Showing all results",
+      description: filterCount > 0 ? `${filterCount} filter(s) active` : "Showing all results"
     });
   };
-
   const handleViewEventDetails = (event: Event) => {
     setSelectedEvent(event);
     setShowEventDetails(true);
   };
-
   const handleViewAllEvents = () => {
     setShowAllEvents(true);
   };
-
   const handleScrapeEvents = () => {
     scrapeMutation.mutate(undefined, {
       onSuccess: () => {
         toast({
           title: "Events Updated!",
-          description: "Latest events have been scraped and enhanced with AI.",
+          description: "Latest events have been scraped and enhanced with AI."
         });
       },
       onError: (error: Error) => {
         toast({
           title: "Scraping Failed",
-          description:
-            error.message || "Failed to scrape events. Please try again.",
-          variant: "destructive",
+          description: error.message || "Failed to scrape events. Please try again.",
+          variant: "destructive"
         });
-      },
+      }
     });
   };
-
   const formatEventDate = (date: string | Date) => {
     try {
       return format(new Date(date), "EEEE, MMMM d, yyyy 'at' h:mm a");
@@ -133,55 +111,29 @@ export default function Index() {
   };
 
   // Enhanced SEO data for homepage
-  const homepageKeywords = [
-    "Des Moines",
-    "Iowa",
-    "events",
-    "restaurants",
-    "attractions",
-    "things to do",
-    "local guide",
-    "Des Moines events",
-    "Iowa restaurants",
-    "family activities",
-    "entertainment",
-    "tourism",
-    "visit Des Moines",
-  ];
-
+  const homepageKeywords = ["Des Moines", "Iowa", "events", "restaurants", "attractions", "things to do", "local guide", "Des Moines events", "Iowa restaurants", "family activities", "entertainment", "tourism", "visit Des Moines"];
   const homepageSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "Des Moines Insider",
-    description:
-      "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",
+    description: "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",
     url: "https://desmoinesinsider.com",
     potentialAction: {
       "@type": "SearchAction",
       target: "https://desmoinesinsider.com/search?q={search_term_string}",
-      "query-input": "required name=search_term_string",
+      "query-input": "required name=search_term_string"
     },
     publisher: {
       "@type": "Organization",
       name: "Des Moines Insider",
       logo: {
         "@type": "ImageObject",
-        url: "https://desmoinesinsider.com/DMI-Logo.png",
-      },
-    },
+        url: "https://desmoinesinsider.com/DMI-Logo.png"
+      }
+    }
   };
-
-  return (
-    <>
-      <SEOHead
-        title="Des Moines Insider - Your AI-Powered Local Guide to Events, Restaurants & Attractions"
-        description="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. Real-time updates, personalized recommendations, and comprehensive local insights powered by AI."
-        type="website"
-        keywords={homepageKeywords}
-        structuredData={homepageSchema}
-        url="/"
-        canonicalUrl="https://desmoinesinsider.com"
-      />
+  return <>
+      <SEOHead title="Des Moines Insider - Your AI-Powered Local Guide to Events, Restaurants & Attractions" description="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. Real-time updates, personalized recommendations, and comprehensive local insights powered by AI." type="website" keywords={homepageKeywords} structuredData={homepageSchema} url="/" canonicalUrl="https://desmoinesinsider.com" />
       <div className="min-h-screen bg-background">
         {/* SEO and structured data for AI optimization */}
         <SEOStructure />
@@ -225,9 +177,7 @@ export default function Index() {
                   <div className="text-xl md:text-3xl font-bold text-primary">
                     50+
                   </div>
-                  <p className="text-mobile-caption text-muted-foreground">
-                    Attractions
-                  </p>
+                  <p className="text-mobile-caption text-muted-foreground">200+</p>
                 </div>
                 <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
                   <div className="text-xl md:text-3xl font-bold text-primary">
@@ -250,22 +200,13 @@ export default function Index() {
 
           {/* Mobile-Optimized All-Inclusive Dashboard */}
           <div id="events" className="mobile-padding">
-            <AllInclusiveDashboard
-              onViewEventDetails={handleViewEventDetails}
-              filters={searchFilters}
-            />
+            <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} filters={searchFilters} />
           </div>
 
-          {!showAllEvents && (
-            <>
-              {isAuthenticated ? (
-                <div className="mobile-padding">
-                  <PersonalizedDashboard
-                    onViewEventDetails={handleViewEventDetails}
-                  />
-                </div>
-              ) : (
-                <>
+          {!showAllEvents && <>
+              {isAuthenticated ? <div className="mobile-padding">
+                  <PersonalizedDashboard onViewEventDetails={handleViewEventDetails} />
+                </div> : <>
                   {/* Mobile-First Smart Event Navigation for General Users */}
                   <section className="py-6 md:py-8 mobile-padding">
                     <div className="container mx-auto">
@@ -278,23 +219,15 @@ export default function Index() {
                           filtering and recommendations
                         </p>
                       </div>
-                      <SmartEventNavigation
-                        onViewEventDetails={handleViewEventDetails}
-                      />
+                      <SmartEventNavigation onViewEventDetails={handleViewEventDetails} />
                     </div>
                   </section>
-                </>
-              )}
+                </>}
 
               {/* Trending Content Section with Personalization */}
               <section className="py-6 md:py-8 mobile-padding">
                 <div className="container mx-auto">
-                  <TrendingContent 
-                    timeWindow="24h" 
-                    limit={6}
-                    showPersonalized={true}
-                    className="mb-8"
-                  />
+                  <TrendingContent timeWindow="24h" limit={6} showPersonalized={true} className="mb-8" />
                 </div>
               </section>
 
@@ -306,25 +239,15 @@ export default function Index() {
               <div className="mobile-padding">
                 <AdBanner placement="below_fold" className="my-8" />
               </div>
-            </>
-          )}
+            </>}
 
-          {showAllEvents && (
-            <div className="py-6 md:py-8 mobile-padding">
+          {showAllEvents && <div className="py-6 md:py-8 mobile-padding">
               <div className="container mx-auto mb-6 md:mb-8">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowAllEvents(false)}
-                    className="touch-target"
-                  >
+                  <Button variant="outline" onClick={() => setShowAllEvents(false)} className="touch-target">
                     ← Back to Smart Discovery
                   </Button>
-                  <Button
-                    onClick={handleScrapeEvents}
-                    disabled={scrapeMutation.isPending}
-                    className="bg-accent hover:bg-accent/90 text-white touch-target"
-                  >
+                  <Button onClick={handleScrapeEvents} disabled={scrapeMutation.isPending} className="bg-accent hover:bg-accent/90 text-white touch-target">
                     <Sparkles className="h-4 w-4 mr-2" />
                     {scrapeMutation.isPending ? "Updating..." : "Update Events"}
                   </Button>
@@ -333,8 +256,7 @@ export default function Index() {
               <div className="container mx-auto">
                 <EventFilters onViewEventDetails={handleViewEventDetails} />
               </div>
-            </div>
-          )}
+            </div>}
 
           {/* GEO-optimized content section */}
           <section className="py-16 bg-muted/30">
@@ -355,8 +277,7 @@ export default function Index() {
         {/* Mobile-Optimized Event Details Dialog */}
         <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
           <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto m-2">
-            {selectedEvent && (
-              <>
+            {selectedEvent && <>
                 <DialogHeader className="text-left space-y-2">
                   <DialogTitle className="text-mobile-title md:text-2xl font-bold pr-8">
                     {selectedEvent.title}
@@ -364,17 +285,10 @@ export default function Index() {
                 </DialogHeader>
 
                 <div className="space-y-4 md:space-y-6">
-                  {selectedEvent.image_url && (
-                    <img
-                      src={selectedEvent.image_url}
-                      alt={selectedEvent.title}
-                      className="w-full h-48 md:h-64 object-cover rounded-lg"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = "none";
-                      }}
-                    />
-                  )}
+                  {selectedEvent.image_url && <img src={selectedEvent.image_url} alt={selectedEvent.title} className="w-full h-48 md:h-64 object-cover rounded-lg" onError={e => {
+                const target = e.target as HTMLImageElement;
+                target.style.display = "none";
+              }} />}
 
                   <div className="mobile-grid sm:grid-cols-2 gap-3 md:gap-4">
                     <div className="flex items-center text-muted-foreground p-3 bg-muted/50 rounded-lg">
@@ -392,74 +306,54 @@ export default function Index() {
                     </div>
                   </div>
 
-                  {selectedEvent.venue && (
-                    <div className="p-3 bg-muted/30 rounded-lg">
+                  {selectedEvent.venue && <div className="p-3 bg-muted/30 rounded-lg">
                       <h4 className="font-semibold mb-2 text-mobile-body">
                         Venue
                       </h4>
                       <p className="text-muted-foreground text-mobile-caption">
                         {selectedEvent.venue}
                       </p>
-                    </div>
-                  )}
+                    </div>}
 
-                  {selectedEvent.price && (
-                    <div className="p-3 bg-muted/30 rounded-lg">
+                  {selectedEvent.price && <div className="p-3 bg-muted/30 rounded-lg">
                       <h4 className="font-semibold mb-2 text-mobile-body">
                         Price
                       </h4>
                       <p className="text-muted-foreground text-mobile-caption">
                         {selectedEvent.price}
                       </p>
-                    </div>
-                  )}
+                    </div>}
 
                   <div className="p-3 bg-muted/30 rounded-lg">
                     <h4 className="font-semibold mb-2 text-mobile-body">
                       Description
                     </h4>
                     <p className="text-muted-foreground leading-relaxed text-mobile-caption">
-                      {selectedEvent.enhanced_description ||
-                        selectedEvent.original_description}
+                      {selectedEvent.enhanced_description || selectedEvent.original_description}
                     </p>
-                    {selectedEvent.is_enhanced && (
-                      <p className="text-sm text-primary mt-2 flex items-center">
+                    {selectedEvent.is_enhanced && <p className="text-sm text-primary mt-2 flex items-center">
                         <Sparkles className="h-4 w-4 mr-1" />
                         Enhanced with AI
-                      </p>
-                    )}
+                      </p>}
                   </div>
 
                   {/* Rating System */}
                   <div className="border-t pt-4">
-                    <RatingSystem
-                      contentType="event"
-                      contentId={selectedEvent.id}
-                      compact={true}
-                    />
+                    <RatingSystem contentType="event" contentId={selectedEvent.id} compact={true} />
                   </div>
 
-                  {selectedEvent.source_url && (
-                    <div className="pt-4 border-t">
+                  {selectedEvent.source_url && <div className="pt-4 border-t">
                       <Button asChild className="w-full touch-target">
-                        <a
-                          href={selectedEvent.source_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center"
-                        >
+                        <a href={selectedEvent.source_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center">
                           <ExternalLink className="h-4 w-4 mr-2" />
                           View Original Event
                         </a>
                       </Button>
-                    </div>
-                  )}
+                    </div>}
                 </div>
-              </>
-            )}
+              </>}
           </DialogContent>
         </Dialog>
       </div>
-    </>
-  );
+    </>;
 }
