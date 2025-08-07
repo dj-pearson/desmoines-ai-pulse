@@ -84,13 +84,6 @@ export default function Header() {
     { href: "/restaurants", label: "Restaurants", icon: MapPin },
     { href: "/attractions", label: "Attractions", icon: Camera },
     { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
-    ...(isAuthenticated
-      ? [
-          { href: "/social", label: "Social", icon: Users },
-          { href: "/calendar", label: "Smart Calendar", icon: Calendar },
-          { href: "/gamification", label: "Level Up", icon: Trophy },
-        ]
-      : []),
   ];
 
   return (
@@ -328,6 +321,24 @@ export default function Header() {
                         <Link to="/profile" className="flex items-center" role="menuitem" aria-label="Go to profile page">
                           <User className="mr-2 h-4 w-4" aria-hidden="true" />
                           Profile
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild role="none">
+                        <Link to="/gamification" className="flex items-center" role="menuitem" aria-label="Go to level up page">
+                          <Trophy className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Level Up
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild role="none">
+                        <Link to="/social" className="flex items-center" role="menuitem" aria-label="Go to social page">
+                          <Users className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Social
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild role="none">
+                        <Link to="/calendar" className="flex items-center" role="menuitem" aria-label="Go to smart calendar page">
+                          <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Smart Calendar
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
