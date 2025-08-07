@@ -377,14 +377,19 @@ class EventDateTimeCrawler {
 
               console.log(`📋 Found existing event: ${existingEvent.title} (ID: ${existingEvent.id})`);
 
+              // Debug: Show exactly what we're trying to update
+              const updatePayload = {
+                event_start_local: eventStartLocal,
+                event_timezone: eventTimezone,
+                event_start_utc: finalDateTime.toISOString(),
+                updated_at: new Date().toISOString(),
+              };
+              console.log(`🔍 Update payload:`, updatePayload);
+              console.log(`🔍 Updating event with ID: ${event.id}`);
+
               const { data: updateData, error: updateError } = await supabase
                 .from("events")
-                .update({
-                  event_start_local: eventStartLocal,
-                  event_timezone: eventTimezone,
-                  event_start_utc: finalDateTime.toISOString(),
-                  updated_at: new Date().toISOString(),
-                })
+                .update(updatePayload)
                 .eq("id", event.id)
                 .select(); // Return the updated record to verify
 
@@ -398,6 +403,19 @@ class EventDateTimeCrawler {
               } else {
                 console.log(`⚠️ Update command succeeded but no rows were affected`);
                 console.log(`🔍 Event ID being updated: ${event.id}`);
+                
+                // Debug: Try to find the event again to see if it still exists
+                const { data: checkEvent, error: checkError } = await supabase
+                  .from("events")
+                  .select("id, title, event_start_local, event_timezone, event_start_utc")
+                  .eq("id", event.id)
+                  .single();
+                
+                if (checkError) {
+                  console.log(`🔍 Cannot find event after update attempt:`, checkError.message);
+                } else if (checkEvent) {
+                  console.log(`🔍 Event still exists with current values:`, checkEvent);
+                }
               }
             } else {
               console.log(`🔍 Would update to: ${eventStartLocal} (${eventTimezone}) -> ${finalDateTime.toISOString()} (UTC)`);
