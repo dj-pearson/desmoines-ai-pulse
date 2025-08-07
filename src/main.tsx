@@ -6,17 +6,27 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import App from './App.tsx';
 import './index.css';
 import { registerServiceWorker, addResourceHints, trackWebVitals } from "./lib/performance";
-import { initializeErrorSuppression } from "./lib/errorSuppression";
+import { suppressSESWarnings, handleGitHubPagesRouting } from "./lib/errorSuppression";
 
-// Initialize performance optimizations and error suppression
-initializeErrorSuppression();
+// Initialize error suppression and performance optimizations
+suppressSESWarnings();
 addResourceHints();
 registerServiceWorker();
 trackWebVitals();
 
+// Handle GitHub Pages routing after DOM is ready but before React renders
+handleGitHubPagesRouting();
+
 const queryClient = new QueryClient();
 
-createRoot(document.getElementById("root")!).render(
+// Add runtime error handling after React root is created
+const root = createRoot(document.getElementById("root")!);
+
+// Initialize runtime error handling now that React is set up
+import { initializeRuntimeErrorHandling } from "./lib/errorSuppression";
+initializeRuntimeErrorHandling();
+
+root.render(
   <StrictMode>
     <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
       <HelmetProvider>
