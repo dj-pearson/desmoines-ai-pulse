@@ -6,8 +6,10 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import App from './App.tsx';
 import './index.css';
 import { registerServiceWorker, addResourceHints, trackWebVitals } from "./lib/performance";
+import { initializeErrorSuppression } from "./lib/errorSuppression";
 
-// Initialize performance optimizations
+// Initialize performance optimizations and error suppression
+initializeErrorSuppression();
 addResourceHints();
 registerServiceWorker();
 trackWebVitals();

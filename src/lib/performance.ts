@@ -50,19 +50,23 @@ export const throttle = <T extends (...args: any[]) => any>(
   };
 };
 
-// Web Vitals tracking
+// Web Vitals tracking - suppress console output to reduce noise
 export const trackWebVitals = () => {
   if (typeof window !== 'undefined' && 'performance' in window) {
     // Track Core Web Vitals using dynamic import with modern API
     import('web-vitals').then(({ onCLS, onINP, onFCP, onLCP, onTTFB }) => {
-      onCLS(console.log);
-      onINP(console.log); // replaces FID in web-vitals v3+
-      onFCP(console.log);
-      onLCP(console.log);
-      onTTFB(console.log);
+      // Only log in development mode to reduce console noise
+      const logMetric = process.env.NODE_ENV === 'development' ? console.log : () => {};
+      onCLS(logMetric);
+      onINP(logMetric); // replaces FID in web-vitals v3+
+      onFCP(logMetric);
+      onLCP(logMetric);
+      onTTFB(logMetric);
     }).catch(() => {
-      // Fallback for when web-vitals is not available
-      console.log('Web Vitals tracking not available');
+      // Silent fallback to avoid console noise
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Web Vitals tracking not available');
+      }
     });
   }
 };
