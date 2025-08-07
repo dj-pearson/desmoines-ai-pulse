@@ -201,8 +201,9 @@ class EventDateTimeCrawler {
       confidence: "low",
     };
 
-    // Get current date for validation
+    // Get current date for validation - set to start of day to include events today
     const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const oneYearFromNow = new Date();
     oneYearFromNow.setFullYear(now.getFullYear() + 1);
 
@@ -213,7 +214,7 @@ class EventDateTimeCrawler {
         try {
           const extractedDate = new Date(schema.startDate);
           // Validate that the date is in the future and within one year
-          if (extractedDate > now && extractedDate <= oneYearFromNow) {
+          if (extractedDate >= todayStart && extractedDate <= oneYearFromNow) {
             result.extractedDate = extractedDate;
             result.confidence = "high";
             
@@ -238,7 +239,7 @@ class EventDateTimeCrawler {
         try {
           const date = new Date(dateStr);
           // Validate that the date is in the future and within one year
-          if (!isNaN(date.getTime()) && date > now && date <= oneYearFromNow) {
+          if (!isNaN(date.getTime()) && date >= todayStart && date <= oneYearFromNow) {
             result.extractedDate = date;
             result.confidence = "medium";
             break; // Use the first valid future date
@@ -347,6 +348,20 @@ class EventDateTimeCrawler {
             }
 
             if (!dryRun) {
+              // Debug: Check if event exists before updating
+              const { data: existingEvent, error: existError } = await supabase
+                .from("events")
+                .select("id, title, updated_at")
+                .eq("id", event.id)
+                .single();
+
+              if (existError || !existingEvent) {
+                console.log(`❌ Event ${event.id} not found in database:`, existError?.message);
+                continue;
+              }
+
+              console.log(`📋 Found existing event: ${existingEvent.title} (ID: ${existingEvent.id})`);
+
               const { data: updateData, error: updateError } = await supabase
                 .from("events")
                 .update({
@@ -367,6 +382,7 @@ class EventDateTimeCrawler {
                 console.log(`📝 Database record updated at: ${updateData[0].updated_at}`);
               } else {
                 console.log(`⚠️ Update command succeeded but no rows were affected`);
+                console.log(`🔍 Event ID being updated: ${event.id}`);
               }
             } else {
               console.log(`🔍 Would update to: ${eventStartLocal} (${eventTimezone}) -> ${finalDateTime.toISOString()} (UTC)`);
