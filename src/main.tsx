@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
-import { ErrorBoundary } from "@/components/ui/error-boundary";
+
 import App from './App.tsx';
 import './index.css';
 
@@ -50,15 +50,13 @@ function initializeApp() {
     
     root.render(
       <StrictMode>
-        <ErrorBoundary>
-          <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
-            <HelmetProvider>
-              <QueryClientProvider client={queryClient}>
-                <App />
-              </QueryClientProvider>
-            </HelmetProvider>
-          </ThemeProvider>
-        </ErrorBoundary>
+        <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
+          <HelmetProvider>
+            <QueryClientProvider client={queryClient}>
+              <App />
+            </QueryClientProvider>
+          </HelmetProvider>
+        </ThemeProvider>
       </StrictMode>
     );
   } catch (error) {

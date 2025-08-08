@@ -1,6 +1,7 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense } from "react";
 
@@ -40,37 +41,39 @@ const PageLoader = () => (
 
 const App = () => (
   <BrowserRouter>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/dashboard" element={<UserDashboard />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/restaurants" element={<Restaurants />} />
-          <Route path="/attractions" element={<Attractions />} />
-          <Route path="/playgrounds" element={<Playgrounds />} />
-          <Route path="/events" element={<EventsPage />} />
-          <Route path="/events/:slug" element={<EventDetails />} />
-          <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
-          <Route path="/attractions/:slug" element={<AttractionDetails />} />
-          <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
-          <Route path="/advertise" element={<Advertise />} />
-          <Route path="/campaigns" element={<CampaignDashboard />} />
-          <Route path="/weekend" element={<WeekendPage />} />
-          <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
-          <Route path="/neighborhoods/:neighborhood" element={<NeighborhoodPage />} />
-          <Route path="/social" element={<Social />} />
-          <Route path="/calendar" element={<SmartCalendarIntegration />} />
-          <Route path="/gamification" element={<Gamification />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </Suspense>
-    </TooltipProvider>
+    <ErrorBoundary>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/dashboard" element={<UserDashboard />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/restaurants" element={<Restaurants />} />
+            <Route path="/attractions" element={<Attractions />} />
+            <Route path="/playgrounds" element={<Playgrounds />} />
+            <Route path="/events" element={<EventsPage />} />
+            <Route path="/events/:slug" element={<EventDetails />} />
+            <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
+            <Route path="/attractions/:slug" element={<AttractionDetails />} />
+            <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
+            <Route path="/advertise" element={<Advertise />} />
+            <Route path="/campaigns" element={<CampaignDashboard />} />
+            <Route path="/weekend" element={<WeekendPage />} />
+            <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
+            <Route path="/neighborhoods/:neighborhood" element={<NeighborhoodPage />} />
+            <Route path="/social" element={<Social />} />
+            <Route path="/calendar" element={<SmartCalendarIntegration />} />
+            <Route path="/gamification" element={<Gamification />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </TooltipProvider>
+    </ErrorBoundary>
   </BrowserRouter>
 );
 
