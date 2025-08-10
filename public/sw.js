@@ -107,7 +107,7 @@ async function cacheFirst(request, cacheName) {
     }
     
     const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
+    if (networkResponse.ok && networkResponse.status !== 206 && !request.headers.has('range')) {
       cache.put(request, networkResponse.clone());
     }
     return networkResponse;
@@ -128,7 +128,7 @@ async function cacheFirstWithFallback(request, cacheName) {
     }
     
     const networkResponse = await fetch(request);
-    if (networkResponse.ok) {
+    if (networkResponse.ok && networkResponse.status !== 206 && !request.headers.has('range')) {
       // Only cache successful responses and limit cache size
       const cacheSize = await getCacheSize(cache);
       if (cacheSize < 50) { // Limit to 50 images
@@ -163,7 +163,7 @@ async function networkFirstWithCache(request, cacheName) {
         headers: headers,
       });
       
-      cache.put(request, responseWithHeaders);
+      try { cache.put(request, responseWithHeaders); } catch (err) { console.warn('SW cache put failed, skipping:', err); }
     }
     
     return networkResponse;
@@ -205,8 +205,12 @@ async function staleWhileRevalidate(request, cacheName) {
   
   // Always try to fetch from network in background
   const fetchPromise = fetch(request).then((networkResponse) => {
-    if (networkResponse.ok) {
-      cache.put(request, networkResponse.clone());
+    if (networkResponse.ok && networkResponse.status !== 206 && !request.headers.has('range')) {
+      try {
+        cache.put(request, networkResponse.clone());
+      } catch (err) {
+        console.warn('SW cache put failed, skipping:', err);
+      }
     }
     return networkResponse;
   });

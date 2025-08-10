@@ -110,7 +110,7 @@ export default function SEOHead({
       />
 
       {/* Canonical URL */}
-      {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+      <link rel="canonical" href={canonicalUrl || fullUrl} />
 
       {/* Open Graph Tags */}
       <meta property="og:title" content={enhancedTitle} />
@@ -160,6 +160,7 @@ export default function SEOHead({
       <meta name="viewport" content="width=device-width, initial-scale=1.0" />
       <meta name="format-detection" content="telephone=yes" />
       <meta name="format-detection" content="address=yes" />
+      <meta name="mobile-web-app-capable" content="yes" />
 
       {/* Preconnect for Performance */}
       <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -193,6 +194,36 @@ export default function SEOHead({
           {JSON.stringify(structuredData)}
         </script>
       )}
+
+      {/* Default Organization Structured Data */}
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          "@id": `${baseUrl}/#organization`,
+          "name": "Des Moines Insider",
+          "url": baseUrl,
+          "logo": {
+            "@type": "ImageObject",
+            "url": `${baseUrl}/DMI-Logo.png`
+          }
+        })}
+      </script>
+
+      {/* Default WebSite Structured Data with SearchAction */}
+      <script type="application/ld+json">
+        {JSON.stringify({
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "url": baseUrl,
+          "name": "Des Moines Insider",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": `${baseUrl}/?q={search_term_string}`,
+            "query-input": "required name=search_term_string"
+          }
+        })}
+      </script>
 
       {/* Additional Meta for Search Engines */}
       <meta name="theme-color" content="#1e40af" />
