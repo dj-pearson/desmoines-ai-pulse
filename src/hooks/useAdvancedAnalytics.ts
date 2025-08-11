@@ -22,6 +22,9 @@ export function useAdvancedAnalytics() {
   const sessionId = useRef(crypto.randomUUID());
   const currentPage = useRef("");
   const userId = user?.id;
+  // Queue for batching edge metrics
+  const metricsQueue = useRef<any[]>([]);
+  const flushTimer = useRef<NodeJS.Timeout | null>(null);
 
   // Initialize analytics
   useEffect(() => {
@@ -60,6 +63,37 @@ export function useAdvancedAnalytics() {
       },
     };
   }, []);
+
+  // Flush batched metrics to Edge Function
+  const flushMetricsQueue = useCallback(async () => {
+    if (metricsQueue.current.length === 0) return;
+    try {
+      const events = [...metricsQueue.current];
+      metricsQueue.current = [];
+
+      const isUuid = (v: any) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
+      const allowedTypes = new Set(['view','search','click','share','bookmark','hover','scroll','filter']);
+      const allowedContent = new Set(['event','restaurant','attraction','playground','page','search_result']);
+
+      const metricEvents = events.filter(e => allowedTypes.has(e.metric_type) && allowedContent.has(e.content_type) && isUuid(e.content_id));
+      if (metricEvents.length > 0) {
+        await supabase.functions.invoke('log-content-metrics', {
+          body: { events: metricEvents },
+        });
+      }
+    } catch (e) {
+      console.warn('Batch metrics logging failed (edge function):', e);
+    }
+  }, []);
+
+  // Setup periodic flush for metrics
+  useEffect(() => {
+    flushTimer.current = setInterval(flushMetricsQueue, 10000);
+    return () => {
+      if (flushTimer.current) clearInterval(flushTimer.current);
+      flushMetricsQueue();
+    };
+  }, [flushMetricsQueue]);
 
   // Track user interactions
   const trackInteraction = useCallback(
@@ -213,21 +247,13 @@ export function useAdvancedAnalytics() {
           console.error('Error tracking click:', error);
         }
 
-        // Server-side metrics logging via Edge Function (bypasses RLS safely)
-        try {
-          await supabase.functions.invoke('log-content-metrics', {
-            body: {
-              events: [{
-                content_type: contentType,
-                content_id: contentId,
-                metric_type: 'click',
-                metric_value: 1,
-              }],
-            },
-          });
-        } catch (e) {
-          console.warn('Metrics logging failed (edge function):', e);
-        }
+        // Queue metric for batching (Edge Function)
+        metricsQueue.current.push({
+          content_type: contentType,
+          content_id: contentId,
+          metric_type: 'click',
+          metric_value: 1,
+        });
 
       } catch (error) {
         console.error('Error tracking enhanced click:', error);

@@ -98,6 +98,9 @@ export default function Header() {
             <img
               src="/DMI-Logo-Header.png"
               alt="Des Moines Insider"
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
             />
           </Link>

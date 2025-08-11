@@ -115,21 +115,6 @@ export function useAnalytics() {
         page_url: window.location.href
       });
 
-      // Server-side metrics logging via Edge Function (bypasses RLS safely)
-      try {
-        await supabase.functions.invoke('log-content-metrics', {
-          body: {
-            events: [{
-              content_type: event.contentType,
-              content_id: event.contentId,
-              metric_type: event.eventType,
-              metric_value: 1,
-            }],
-          },
-        });
-      } catch (e) {
-        console.warn('Metrics logging failed (edge function):', e);
-      }
 
       console.log('Analytics event tracked:', event);
     } catch (error) {
@@ -168,6 +153,30 @@ export function useAnalytics() {
           await supabase.from('user_analytics').insert(event);
         }
         console.log(`Flushed ${fallbackEvents.length} analytics events to fallback table`);
+      }
+
+      // Batch content metrics to Edge Function (reduces overhead)
+      try {
+        const isUuid = (v: any) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
+        const allowedTypes = new Set(['view','search','click','share','bookmark','hover','scroll','filter']);
+        const allowedContent = new Set(['event','restaurant','attraction','playground','page','search_result']);
+
+        const metricEvents = eventsToFlush
+          .map(e => ({
+            content_type: e.content_type,
+            content_id: e.content_id,
+            metric_type: e.interaction_type,
+            metric_value: 1,
+          }))
+          .filter(e => allowedTypes.has(e.metric_type) && allowedContent.has(e.content_type) && isUuid(e.content_id));
+
+        if (metricEvents.length > 0) {
+          await supabase.functions.invoke('log-content-metrics', {
+            body: { events: metricEvents },
+          });
+        }
+      } catch (e) {
+        console.warn('Batch metrics logging failed (edge function):', e);
       }
     } catch (error) {
       console.error('Error flushing analytics queue:', error);
