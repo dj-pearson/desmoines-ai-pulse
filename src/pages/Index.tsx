@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { Database } from "@/integrations/supabase/types";
 import SEOHead from "@/components/SEOHead";
+import OptimizedImage from "@/components/OptimizedImage";
 type Event = Database["public"]["Tables"]["events"]["Row"];
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
@@ -285,10 +286,15 @@ export default function Index() {
                 </DialogHeader>
 
                 <div className="space-y-4 md:space-y-6">
-                  {selectedEvent.image_url && <img src={selectedEvent.image_url} alt={selectedEvent.title} className="w-full h-48 md:h-64 object-cover rounded-lg" onError={e => {
-                const target = e.target as HTMLImageElement;
-                target.style.display = "none";
-              }} />}
+                  {selectedEvent.image_url && (
+                    <OptimizedImage
+                      src={selectedEvent.image_url}
+                      alt={selectedEvent.title}
+                      className="w-full h-48 md:h-64 object-cover rounded-lg"
+                      loading="lazy"
+                    />
+                  )}
+
 
                   <div className="mobile-grid sm:grid-cols-2 gap-3 md:gap-4">
                     <div className="flex items-center text-muted-foreground p-3 bg-muted/50 rounded-lg">

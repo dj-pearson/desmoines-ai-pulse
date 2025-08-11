@@ -213,16 +213,20 @@ export function useAdvancedAnalytics() {
           console.error('Error tracking click:', error);
         }
 
-        // Update content metrics for this content (disabled client-side due to RLS)
-        if (ENABLE_DIRECT_CONTENT_METRICS) {
-          await supabase
-            .from('content_metrics')
-            .insert({
-              content_type: contentType,
-              content_id: contentId,
-              metric_type: 'click',
-              metric_value: 1,
-            });
+        // Server-side metrics logging via Edge Function (bypasses RLS safely)
+        try {
+          await supabase.functions.invoke('log-content-metrics', {
+            body: {
+              events: [{
+                content_type: contentType,
+                content_id: contentId,
+                metric_type: 'click',
+                metric_value: 1,
+              }],
+            },
+          });
+        } catch (e) {
+          console.warn('Metrics logging failed (edge function):', e);
         }
 
       } catch (error) {

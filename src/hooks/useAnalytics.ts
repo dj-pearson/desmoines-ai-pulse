@@ -115,17 +115,20 @@ export function useAnalytics() {
         page_url: window.location.href
       });
 
-      // Track content metrics (aggregated) - disabled client-side due to RLS
-      if (ENABLE_DIRECT_CONTENT_METRICS) {
-        await supabase.from('content_metrics').upsert({
-          content_type: event.contentType,
-          content_id: event.contentId,
-          metric_type: event.eventType,
-          metric_value: 1
-        }, {
-          onConflict: 'content_type,content_id,metric_type,date,hour',
-          ignoreDuplicates: false
+      // Server-side metrics logging via Edge Function (bypasses RLS safely)
+      try {
+        await supabase.functions.invoke('log-content-metrics', {
+          body: {
+            events: [{
+              content_type: event.contentType,
+              content_id: event.contentId,
+              metric_type: event.eventType,
+              metric_value: 1,
+            }],
+          },
         });
+      } catch (e) {
+        console.warn('Metrics logging failed (edge function):', e);
       }
 
       console.log('Analytics event tracked:', event);
