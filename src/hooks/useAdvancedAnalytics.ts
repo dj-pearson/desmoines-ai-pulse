@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+const ENABLE_DIRECT_CONTENT_METRICS = false;
 
 interface AnalyticsData {
   sessionId: string;
@@ -212,15 +213,17 @@ export function useAdvancedAnalytics() {
           console.error('Error tracking click:', error);
         }
 
-        // Update content metrics for this content
-        await supabase
-          .from('content_metrics')
-          .insert({
-            content_type: contentType,
-            content_id: contentId,
-            metric_type: 'click',
-            metric_value: 1,
-          });
+        // Update content metrics for this content (disabled client-side due to RLS)
+        if (ENABLE_DIRECT_CONTENT_METRICS) {
+          await supabase
+            .from('content_metrics')
+            .insert({
+              content_type: contentType,
+              content_id: contentId,
+              metric_type: 'click',
+              metric_value: 1,
+            });
+        }
 
       } catch (error) {
         console.error('Error tracking enhanced click:', error);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+const ENABLE_DIRECT_CONTENT_METRICS = false;
 
 interface AnalyticsData {
   sessionId: string;
@@ -114,16 +115,18 @@ export function useAnalytics() {
         page_url: window.location.href
       });
 
-      // Track content metrics (aggregated)
-      await supabase.from('content_metrics').upsert({
-        content_type: event.contentType,
-        content_id: event.contentId,
-        metric_type: event.eventType,
-        metric_value: 1
-      }, {
-        onConflict: 'content_type,content_id,metric_type,date,hour',
-        ignoreDuplicates: false
-      });
+      // Track content metrics (aggregated) - disabled client-side due to RLS
+      if (ENABLE_DIRECT_CONTENT_METRICS) {
+        await supabase.from('content_metrics').upsert({
+          content_type: event.contentType,
+          content_id: event.contentId,
+          metric_type: event.eventType,
+          metric_value: 1
+        }, {
+          onConflict: 'content_type,content_id,metric_type,date,hour',
+          ignoreDuplicates: false
+        });
+      }
 
       console.log('Analytics event tracked:', event);
     } catch (error) {
