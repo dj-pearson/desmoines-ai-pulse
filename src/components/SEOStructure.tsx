@@ -6,14 +6,16 @@ interface SEOStructureProps {
   keywords?: string;
   articleType?: "event" | "restaurant" | "attraction" | "playground";
   structuredData?: object;
+  canonicalUrl?: string;
 }
 
 export default function SEOStructure({
-  title = "Des Moines Insider - Your Complete Guide to Des Moines Events, Restaurants & Attractions",
-  description = "Discover the best events, restaurants, attractions, and playgrounds in Des Moines, Iowa. AI-powered recommendations, real-time updates, and comprehensive local insights.",
+  title = "Des Moines Insider: Events, Restaurants & Attractions",
+  description = "Discover the best events, restaurants, attractions, and playgrounds in Des Moines, Iowa. AI-powered recommendations and real-time updates.",
   keywords = "Des Moines events, Iowa restaurants, Des Moines attractions, family activities, local guide, restaurant openings",
   articleType,
-  structuredData
+  structuredData,
+  canonicalUrl
 }: SEOStructureProps) {
   
   const defaultStructuredData = {
@@ -21,7 +23,7 @@ export default function SEOStructure({
     "@type": "LocalBusiness",
     "name": "Des Moines Insider",
     "description": description,
-    "url": "https://desmoinssider.com",
+    "url": "https://desmoinesinsider.com",
     "telephone": "+1-515-000-0000",
     "address": {
       "@type": "PostalAddress",
@@ -81,7 +83,7 @@ export default function SEOStructure({
       </script>
       
       {/* Canonical URL */}
-      <link rel="canonical" href="https://desmoinssider.com" />
+      <link rel="canonical" href={canonicalUrl || (typeof window !== 'undefined' ? window.location.href : 'https://desmoinesinsider.com')} />
     </Helmet>
   );
 }
