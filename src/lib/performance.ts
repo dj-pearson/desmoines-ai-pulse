@@ -108,7 +108,7 @@ export const loadResourceAsync = (src: string, type: 'script' | 'style'): Promis
 // Service Worker registration
 export const registerServiceWorker = async () => {
   // Only enable the service worker in production builds
-  const isProd = process.env.NODE_ENV === 'production';
+  const isProd = import.meta.env.PROD;
 
   if (!('serviceWorker' in navigator)) return;
 

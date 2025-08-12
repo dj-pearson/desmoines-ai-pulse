@@ -238,6 +238,25 @@
 
   <body>
     <div id="root"></div>
+    <script type="module">
+      if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => (k.startsWith('dmi-') || k.includes('workbox') || k.includes('vite')) ? caches.delete(k) : Promise.resolve()));
+          }
+          // Ensure no SW controls the page
+          if (navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+          }
+          console.log('[DEV] Service workers unregistered before app boot');
+        } catch (e) {
+          console.warn('[DEV] SW pre-unregister failed', e);
+        }
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
