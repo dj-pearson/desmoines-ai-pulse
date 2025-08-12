@@ -107,28 +107,48 @@ export const loadResourceAsync = (src: string, type: 'script' | 'style'): Promis
 
 // Service Worker registration
 export const registerServiceWorker = async () => {
-  if ('serviceWorker' in navigator) {
+  // Only enable the service worker in production builds
+  const isProd = process.env.NODE_ENV === 'production';
+
+  if (!('serviceWorker' in navigator)) return;
+
+  if (!isProd) {
+    // In development: aggressively unregister any existing SW and clear our caches
     try {
-      const registration = await navigator.serviceWorker.register('/sw.js');
-      console.log('Service Worker registered:', registration);
-      
-      // Handle updates
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // New content available, notify user
-              console.log('New content available, please refresh.');
-            }
-          });
-        }
-      });
-      
-      return registration;
-    } catch (error) {
-      console.error('Service Worker registration failed:', error);
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(
+          keys
+            .filter((k) => k.startsWith('dmi-') || k.includes('workbox') || k.includes('vite'))
+            .map((k) => caches.delete(k))
+        );
+      }
+      console.log('Service Worker disabled in development and caches cleared');
+    } catch (err) {
+      console.warn('SW unregister in dev failed:', err);
     }
+    return;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.register('/sw.js');
+    console.log('Service Worker registered:', registration);
+    // Handle updates
+    registration.addEventListener('updatefound', () => {
+      const newWorker = registration.installing;
+      if (newWorker) {
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            console.log('New content available, please refresh.');
+          }
+        });
+      }
+    });
+    return registration;
+  } catch (error) {
+    console.error('Service Worker registration failed:', error);
   }
 };
 
