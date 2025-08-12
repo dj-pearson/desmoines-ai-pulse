@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => ({
       "@tanstack/react-query",
       "@supabase/supabase-js",
     ],
-    dedupe: ["react", "react-dom", "react-helmet-async", "react-router-dom"],
+    dedupe: ["react", "react-dom", "react-helmet-async", "react-router-dom", "@tanstack/react-query"],
   },
   plugins: [
     react({
@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
   ].filter(Boolean),
   resolve: {
-    dedupe: ["react", "react-dom", "react-router-dom", "react-helmet-async"],
+    dedupe: ["react", "react-dom", "react-router-dom", "react-helmet-async", "@tanstack/react-query"],
     alias: {
       "@": path.resolve(__dirname, "./src"),
       "@shared/schema": path.resolve(__dirname, "./src/lib/types"),
