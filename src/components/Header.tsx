@@ -36,7 +36,7 @@ import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
 import { ThemeToggle } from "./ThemeToggle";
 import { cn } from "@/lib/utils";
-
+import { prefetchRoute } from "@/lib/prefetch";
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const { profile } = useProfile();
@@ -99,7 +99,7 @@ export default function Header() {
               src="/DMI-Logo-Header.png"
               alt="Des Moines Insider"
               loading="eager"
-              fetchPriority="high"
+              {...({ fetchpriority: 'high' } as any)}
               decoding="async"
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
             />
@@ -117,6 +117,8 @@ export default function Header() {
                     ? "text-primary font-medium after:absolute after:bottom-[-8px] after:left-0 after:right-0 after:h-0.5 after:bg-primary"
                     : "text-muted-foreground hover:text-primary"
                 )}
+                onMouseEnter={() => prefetchRoute(link.href)}
+                onFocus={() => prefetchRoute(link.href)}
                 aria-current={isActivePath(link.href) ? "page" : undefined}
               >
                 <link.icon className="h-4 w-4" />
@@ -163,6 +165,8 @@ export default function Header() {
                             ? "bg-primary/10 text-primary border border-primary/20"
                             : "hover:bg-muted"
                         )}
+                        onMouseEnter={() => prefetchRoute(link.href)}
+                        onFocus={() => prefetchRoute(link.href)}
                         aria-current={isActivePath(link.href) ? "page" : undefined}
                       >
                         <link.icon className="h-5 w-5 flex-shrink-0" />
