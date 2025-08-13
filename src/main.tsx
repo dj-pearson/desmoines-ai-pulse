@@ -13,6 +13,8 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       refetchOnWindowFocus: false,
+      staleTime: 60 * 1000,
+      gcTime: 5 * 60 * 1000,
     },
   },
 });
@@ -31,6 +33,20 @@ function initializeApp() {
       addResourceHints();
       registerServiceWorker();
       trackWebVitals();
+
+      // Idle prefetch common routes for instant navigation
+      const idle = (cb: () => void) =>
+        ('requestIdleCallback' in window
+          ? (window as any).requestIdleCallback(cb, { timeout: 1500 })
+          : setTimeout(cb, 200));
+
+      idle(() => {
+        import('./lib/prefetch')
+          .then(({ prefetchRoute }) => {
+            ['/events', '/restaurants', '/attractions', '/playgrounds'].forEach(prefetchRoute);
+          })
+          .catch(() => {});
+      });
     });
 
     // Initialize error suppression

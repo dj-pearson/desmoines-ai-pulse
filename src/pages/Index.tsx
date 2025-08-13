@@ -226,13 +226,13 @@ export default function Index() {
                 </>}
 
               {/* Trending Content Section with Personalization */}
-              <section className="py-6 md:py-8 mobile-padding">
+              <section className="py-6 md:py-8 mobile-padding cv-auto">
                 <div className="container mx-auto">
                   <TrendingContent timeWindow="24h" limit={6} showPersonalized={true} className="mb-8" />
                 </div>
               </section>
 
-              <div className="mobile-padding">
+              <div className="mobile-padding cv-auto">
                 <MostSearched />
               </div>
 
@@ -260,12 +260,12 @@ export default function Index() {
             </div>}
 
           {/* GEO-optimized content section */}
-          <section className="py-16 bg-muted/30">
+          <section className="py-16 bg-muted/30 cv-auto">
             <GEOContent />
           </section>
 
           {/* Local Content Section for Des Moines SEO */}
-          <section className="py-16">
+          <section className="py-16 cv-auto">
             <div className="container mx-auto px-4">
               <LocalContentSection />
             </div>

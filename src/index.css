@@ -66,6 +66,12 @@ All colors MUST be HSL. Touch targets minimum 44px.
   .safe-area-bottom {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
+
+  /* Content-visibility for below-the-fold sections */
+  .cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: 1px 1000px;
+  }
 }
 
 @layer base {
