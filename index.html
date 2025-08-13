@@ -239,32 +239,30 @@
   <body>
     <div id="root"></div>
     <script>
-      // Aggressively clear ALL service workers and caches to prevent 404s
+      // Emergency cache and module clear
       (async function() {
         try {
-          // Unregister ALL service workers regardless of environment
-          if ('serviceWorker' in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(registrations.map(reg => reg.unregister()));
-            console.log('Unregistered', registrations.length, 'service workers');
-          }
-          
-          // Clear ALL caches
+          // Clear ALL caches including browser cache
           if ('caches' in window) {
             const cacheNames = await caches.keys();
             await Promise.all(cacheNames.map(name => caches.delete(name)));
-            console.log('Cleared', cacheNames.length, 'caches');
           }
           
-          // Force module reload if we're in a preview environment
-          if (location.hostname.includes('lovableproject.com') || location.hostname === 'localhost') {
-            // Add a timestamp to bust any cached modules
-            const timestamp = Date.now();
-            window.__VITE_CACHE_BUST__ = timestamp;
-            console.log('Cache bust timestamp:', timestamp);
+          // Unregister ALL service workers
+          if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(reg => reg.unregister()));
           }
+          
+          // Force browser to reload with no cache
+          if (window.location.search.indexOf('nocache') === -1) {
+            window.location.href = window.location.href + '?nocache=' + Date.now();
+            return;
+          }
+          
+          console.log('Cache cleared, loading fresh modules');
         } catch (e) {
-          console.warn('Cache/SW clear failed:', e);
+          console.warn('Cache clear failed:', e);
         }
       })();
     </script>

@@ -9,6 +9,11 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    force: true, // Force refresh dependencies
+    clearScreen: false,
+    fs: {
+      strict: false
+    }
   },
   build: {
     outDir: "dist",
