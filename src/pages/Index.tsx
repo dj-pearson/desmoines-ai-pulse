@@ -1,16 +1,14 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import Header from "@/components/Header";
 import SearchSection from "@/components/SearchSection";
 import FeaturedEvents from "@/components/FeaturedEvents";
 import PersonalizedDashboard from "@/components/PersonalizedDashboard";
-import MostSearched from "@/components/MostSearched";
+
 import EventFilters from "@/components/EventFilters";
 import SmartEventNavigation from "@/components/SmartEventNavigation";
 import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
 import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
-import LocalContentSection from "@/components/LocalContentSection";
-import TrendingContent from "@/components/TrendingContent";
 import { RatingSystem } from "@/components/RatingSystem";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,8 +22,16 @@ import { useEventScraper } from "@/hooks/useSupabase";
 import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import SEOStructure from "@/components/SEOStructure";
-import GEOContent from "@/components/GEOContent";
+
 import { AdBanner } from "@/components/AdBanner";
+import LazySection from "@/components/LazySection";
+import { Skeleton } from "@/components/ui/skeleton";
+
+const TrendingContentLazy = lazy(() => import("@/components/TrendingContent"));
+const MostSearchedLazy = lazy(() => import("@/components/MostSearched"));
+const GEOContentLazy = lazy(() => import("@/components/GEOContent"));
+const LocalContentSectionLazy = lazy(() => import("@/components/LocalContentSection"));
+
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
@@ -228,12 +234,20 @@ export default function Index() {
               {/* Trending Content Section with Personalization */}
               <section className="py-6 md:py-8 mobile-padding cv-auto">
                 <div className="container mx-auto">
-                  <TrendingContent timeWindow="24h" limit={6} showPersonalized={true} className="mb-8" />
+                  <LazySection minHeight={320}>
+                    <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+                      <TrendingContentLazy timeWindow="24h" limit={6} showPersonalized={true} className="mb-8" />
+                    </Suspense>
+                  </LazySection>
                 </div>
               </section>
 
               <div className="mobile-padding cv-auto">
-                <MostSearched />
+                <LazySection minHeight={240}>
+                  <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+                    <MostSearchedLazy />
+                  </Suspense>
+                </LazySection>
               </div>
 
               {/* Below the Fold Ad Placement */}
@@ -261,13 +275,21 @@ export default function Index() {
 
           {/* GEO-optimized content section */}
           <section className="py-16 bg-muted/30 cv-auto">
-            <GEOContent />
+            <LazySection minHeight={400}>
+              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                <GEOContentLazy />
+              </Suspense>
+            </LazySection>
           </section>
 
           {/* Local Content Section for Des Moines SEO */}
           <section className="py-16 cv-auto">
             <div className="container mx-auto px-4">
-              <LocalContentSection />
+              <LazySection minHeight={400}>
+                <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+                  <LocalContentSectionLazy />
+                </Suspense>
+              </LazySection>
             </div>
           </section>
 

@@ -11,6 +11,7 @@ interface OptimizedImageProps {
   sizes?: string;
   quality?: number;
   placeholder?: string;
+  fetchpriority?: "auto" | "high" | "low" | string;
   onLoad?: () => void;
   onError?: () => void;
 }
@@ -25,6 +26,7 @@ export default function OptimizedImage({
   sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
   quality = 80,
   placeholder = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PC9zdmc+",
+  fetchpriority,
   onLoad,
   onError,
 }: OptimizedImageProps) {
@@ -114,6 +116,7 @@ export default function OptimizedImage({
             "w-full h-full object-cover"
           )}
           decoding="async"
+          fetchpriority={fetchpriority}
         />
       ) : (
         <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">
