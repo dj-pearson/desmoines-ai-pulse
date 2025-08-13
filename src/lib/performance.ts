@@ -105,29 +105,34 @@ export const loadResourceAsync = (src: string, type: 'script' | 'style'): Promis
   });
 };
 
-// Service Worker registration
+// Service Worker registration - DISABLED IN DEVELOPMENT
 export const registerServiceWorker = async () => {
-  // Only enable the service worker in production builds
-  const isProd = import.meta.env.PROD;
+  // Force disable service worker in development
+  const isProd = import.meta.env.PROD && import.meta.env.MODE === 'production';
 
   if (!('serviceWorker' in navigator)) return;
 
+  // ALWAYS unregister and clear caches if not production
   if (!isProd) {
-    // In development: aggressively unregister any existing SW and clear our caches
     try {
+      // Unregister ALL service workers
       const regs = await navigator.serviceWorker.getRegistrations();
       await Promise.all(regs.map((r) => r.unregister()));
+      
+      // Clear ALL caches that might interfere
       if ('caches' in window) {
         const keys = await caches.keys();
-        await Promise.all(
-          keys
-            .filter((k) => k.startsWith('dmi-') || k.includes('workbox') || k.includes('vite'))
-            .map((k) => caches.delete(k))
-        );
+        await Promise.all(keys.map((k) => caches.delete(k)));
       }
-      console.log('Service Worker disabled in development and caches cleared');
+      
+      // Clear any existing registration state
+      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+      }
+      
+      console.log('All service workers and caches cleared for development');
     } catch (err) {
-      console.warn('SW unregister in dev failed:', err);
+      console.warn('Failed to clear service workers/caches:', err);
     }
     return;
   }

@@ -30,8 +30,9 @@ function initializeApp() {
   try {
     // Initialize basic performance features first
     import('./lib/performance').then(({ registerServiceWorker, addResourceHints, trackWebVitals }) => {
-      addResourceHints();
+      // Ensure service worker is properly cleared in development
       registerServiceWorker();
+      addResourceHints();
       trackWebVitals();
 
       // Idle prefetch common routes for instant navigation

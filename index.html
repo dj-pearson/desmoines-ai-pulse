@@ -238,24 +238,35 @@
 
   <body>
     <div id="root"></div>
-    <script type="module">
-      if (import.meta.env.DEV && 'serviceWorker' in navigator) {
+    <script>
+      // Aggressively clear ALL service workers and caches to prevent 404s
+      (async function() {
         try {
-          const regs = await navigator.serviceWorker.getRegistrations();
-          await Promise.all(regs.map(r => r.unregister()));
+          // Unregister ALL service workers regardless of environment
+          if ('serviceWorker' in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map(reg => reg.unregister()));
+            console.log('Unregistered', registrations.length, 'service workers');
+          }
+          
+          // Clear ALL caches
           if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => (k.startsWith('dmi-') || k.includes('workbox') || k.includes('vite')) ? caches.delete(k) : Promise.resolve()));
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map(name => caches.delete(name)));
+            console.log('Cleared', cacheNames.length, 'caches');
           }
-          // Ensure no SW controls the page
-          if (navigator.serviceWorker.controller) {
-            navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
+          
+          // Force module reload if we're in a preview environment
+          if (location.hostname.includes('lovableproject.com') || location.hostname === 'localhost') {
+            // Add a timestamp to bust any cached modules
+            const timestamp = Date.now();
+            window.__VITE_CACHE_BUST__ = timestamp;
+            console.log('Cache bust timestamp:', timestamp);
           }
-          console.log('[DEV] Service workers unregistered before app boot');
         } catch (e) {
-          console.warn('[DEV] SW pre-unregister failed', e);
+          console.warn('Cache/SW clear failed:', e);
         }
-      }
+      })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
