@@ -239,30 +239,32 @@
   <body>
     <div id="root"></div>
     <script>
-      // Emergency cache and module clear
-      (async function() {
-        try {
-          // Clear ALL caches including browser cache
-          if ('caches' in window) {
-            const cacheNames = await caches.keys();
-            await Promise.all(cacheNames.map(name => caches.delete(name)));
-          }
-          
-          // Unregister ALL service workers
-          if ('serviceWorker' in navigator) {
-            const registrations = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(registrations.map(reg => reg.unregister()));
-          }
-          
-          // Force browser to reload with no cache
-          if (window.location.search.indexOf('nocache') === -1) {
-            window.location.href = window.location.href + '?nocache=' + Date.now();
-            return;
-          }
-          
-          console.log('Cache cleared, loading fresh modules');
-        } catch (e) {
-          console.warn('Cache clear failed:', e);
+      // Force complete cache invalidation
+      (function() {
+        // Clear all possible caches
+        if ('caches' in window) {
+          caches.keys().then(names => {
+            names.forEach(name => caches.delete(name));
+          });
+        }
+        
+        // Clear service workers
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(regs => {
+            regs.forEach(reg => reg.unregister());
+          });
+        }
+        
+        // Force browser hard refresh if assets are failing
+        if (window.performance && window.performance.getEntriesByType) {
+          setTimeout(() => {
+            const resources = window.performance.getEntriesByType('resource');
+            const failed = resources.filter(r => r.transferSize === 0 && r.name.includes('/assets/'));
+            if (failed.length > 5) {
+              console.log('Multiple asset 404s detected, forcing hard refresh');
+              window.location.reload(true);
+            }
+          }, 3000);
         }
       })();
     </script>
