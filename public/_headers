@@ -21,7 +21,7 @@
   Cross-Origin-Opener-Policy: same-origin-allow-popups
   
   # Permissions Policy
-  Permissions-Policy: geolocation=(self), microphone=(), camera=(), payment=(self https://js.stripe.com), usb=(), magnetometer=(), accelerometer=(), gyroscope=()
+  Permissions-Policy: geolocation=(self), microphone=(), camera=(), payment=(self "https://js.stripe.com"), usb=(), magnetometer=(), accelerometer=(), gyroscope=()
 
 # Service Worker - No cache for updates
 /sw.js

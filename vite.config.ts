@@ -30,6 +30,10 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         format: "es",
+        // Ensure proper asset naming for cache busting
+        entryFileNames: "assets/[name]-[hash].js",
+        chunkFileNames: "assets/[name]-[hash].js", 
+        assetFileNames: "assets/[name]-[hash].[ext]",
         manualChunks: {
           // Vendor chunks for better caching
           vendor: ["react", "react-dom"],
