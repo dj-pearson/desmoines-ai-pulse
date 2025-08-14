@@ -1,4 +1,3 @@
-
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -11,10 +10,7 @@ export default defineConfig(({ command }) => ({
     host: "::",
     port: 8080,
   },
-  plugins: [
-    react(),
-    command === 'serve' && componentTagger(),
-  ].filter(Boolean),
+  plugins: [react(), command === "serve" && componentTagger()].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -22,14 +18,14 @@ export default defineConfig(({ command }) => ({
   },
   build: {
     sourcemap: false,
-    outDir: 'dist',
-    assetsDir: 'assets',
+    outDir: "dist",
+    assetsDir: "assets",
     rollupOptions: {
       output: {
         manualChunks: undefined, // Disable manual chunking to avoid 404s
-        assetFileNames: 'assets/[name]-[hash][extname]',
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js'
+        assetFileNames: "assets/[name]-[hash][extname]",
+        chunkFileNames: "assets/[name]-[hash].js",
+        entryFileNames: "assets/[name]-[hash].js",
       },
     },
   },
