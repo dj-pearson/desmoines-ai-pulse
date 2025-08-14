@@ -1,3 +1,4 @@
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
@@ -9,7 +10,7 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    force: true, // Force refresh dependencies
+    force: true,
     clearScreen: false,
     fs: {
       strict: false
@@ -30,12 +31,10 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         format: "es",
-        // Ensure proper asset naming for cache busting
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js", 
         assetFileNames: "assets/[name]-[hash].[ext]",
         manualChunks: {
-          // Vendor chunks for better caching
           vendor: ["react", "react-dom"],
           router: ["react-router-dom"],
           ui: ["@radix-ui/react-dialog", "@radix-ui/react-dropdown-menu", "@radix-ui/react-select"],

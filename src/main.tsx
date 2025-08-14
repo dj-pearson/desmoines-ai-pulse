@@ -1,3 +1,4 @@
+
 import { StrictMode } from "react";
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -30,24 +31,9 @@ function initializeApp() {
   try {
     // Initialize basic performance features first
     import('./lib/performance').then(({ registerServiceWorker, addResourceHints, trackWebVitals }) => {
-      // Ensure service worker is properly cleared in development
       registerServiceWorker();
       addResourceHints();
       trackWebVitals();
-
-      // Idle prefetch common routes for instant navigation
-      const idle = (cb: () => void) =>
-        ('requestIdleCallback' in window
-          ? (window as any).requestIdleCallback(cb, { timeout: 1500 })
-          : setTimeout(cb, 200));
-
-      idle(() => {
-        import('./lib/prefetch')
-          .then(({ prefetchRoute }) => {
-            ['/events', '/restaurants', '/attractions', '/playgrounds'].forEach(prefetchRoute);
-          })
-          .catch(() => {});
-      });
     });
 
     // Initialize error suppression

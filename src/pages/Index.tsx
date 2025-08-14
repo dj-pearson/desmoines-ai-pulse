@@ -1,387 +1,368 @@
-import { useState, lazy, Suspense } from "react";
+
+import { useState, useEffect } from "react";
+import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
-import SearchSection from "@/components/SearchSection";
-import FeaturedEvents from "@/components/FeaturedEvents";
-import PersonalizedDashboard from "@/components/PersonalizedDashboard";
-
-import EventFilters from "@/components/EventFilters";
-import SmartEventNavigation from "@/components/SmartEventNavigation";
-import Newsletter from "@/components/Newsletter";
 import Footer from "@/components/Footer";
-import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
-import { RatingSystem } from "@/components/RatingSystem";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { Database } from "@/integrations/supabase/types";
-import SEOHead from "@/components/SEOHead";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Calendar, MapPin, Camera, Gamepad2, ChevronRight, ChevronLeft, DollarSign, Heart, User, Shield, Tag, Sparkles, TrendingUp, Twitter, Share2, SquarePen } from "lucide-react";
+import { Link } from "react-router-dom";
+import { useEvents } from "@/hooks/useEvents";
+import { useRestaurants } from "@/hooks/useRestaurants";
+import { useAttractions } from "@/hooks/useAttractions";
+import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import OptimizedImage from "@/components/OptimizedImage";
-type Event = Database["public"]["Tables"]["events"]["Row"];
-import { useEventScraper } from "@/hooks/useSupabase";
-import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
-import { format } from "date-fns";
-import SEOStructure from "@/components/SEOStructure";
-
-import { AdBanner } from "@/components/AdBanner";
-import LazySection from "@/components/LazySection";
-import { Skeleton } from "@/components/ui/skeleton";
-
-const TrendingContentLazy = lazy(() => import("@/components/TrendingContent"));
-const MostSearchedLazy = lazy(() => import("@/components/MostSearched"));
-const GEOContentLazy = lazy(() => import("@/components/GEOContent"));
-const LocalContentSectionLazy = lazy(() => import("@/components/LocalContentSection"));
+import InteractiveDateSelector from "@/components/InteractiveDateSelector";
+import RatingSystem from "@/components/RatingSystem";
+import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import SEOHead from "@/components/SEOHead";
 
 export default function Index() {
-  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
-  const [showEventDetails, setShowEventDetails] = useState(false);
-  const [showAllEvents, setShowAllEvents] = useState(false);
-  const [searchFilters, setSearchFilters] = useState<{
-    query?: string;
-    category?: string;
-    dateFilter?: {
-      start?: Date;
-      end?: Date;
-      mode: "single" | "range" | "preset";
-      preset?: string;
-    } | null;
-    location?: string;
-    priceRange?: string;
-  }>({});
-  const {
-    toast
-  } = useToast();
-  const {
-    isAuthenticated
-  } = useAuth();
-  const scrapeMutation = useEventScraper();
-  const handleSearch = (filters: {
-    query: string;
-    category: string;
-    subcategory?: string;
-    dateFilter?: {
-      start?: Date;
-      end?: Date;
-      mode: "single" | "range" | "preset";
-      preset?: string;
-    } | null;
-    location?: string;
-    priceRange?: string;
-  }, shouldScroll: boolean = false) => {
-    // Store all search filters for the dashboard
-    setSearchFilters(filters);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCity, setSelectedCity] = useState("all");
+  const [dateFilter, setDateFilter] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState("events");
 
-    // Only scroll to events section when explicitly requested (not during typing)
-    if (shouldScroll) {
-      document.getElementById("events")?.scrollIntoView({
-        behavior: "smooth"
-      });
-    }
+  const { data: events = [], isLoading: eventsLoading } = useEvents();
+  const { data: restaurants = [], isLoading: restaurantsLoading } = useRestaurants();
+  const { data: attractions = [], isLoading: attractionsLoading } = useAttractions();
+  const { data: playgrounds = [], isLoading: playgroundsLoading } = usePlaygrounds();
 
-    // Show feedback to user
-    const filterCount = Object.values(filters).filter(f => f && f !== "All" && f !== "any-date" && f !== "any-location" && f !== "any-price" && f !== "").length;
-    toast({
-      title: "Filters Applied",
-      description: filterCount > 0 ? `${filterCount} filter(s) active` : "Showing all results"
-    });
-  };
-  const handleViewEventDetails = (event: Event) => {
-    setSelectedEvent(event);
-    setShowEventDetails(true);
-  };
-  const handleViewAllEvents = () => {
-    setShowAllEvents(true);
-  };
-  const handleScrapeEvents = () => {
-    scrapeMutation.mutate(undefined, {
-      onSuccess: () => {
-        toast({
-          title: "Events Updated!",
-          description: "Latest events have been scraped and enhanced with AI."
-        });
-      },
-      onError: (error: Error) => {
-        toast({
-          title: "Scraping Failed",
-          description: error.message || "Failed to scrape events. Please try again.",
-          variant: "destructive"
-        });
-      }
-    });
-  };
-  const formatEventDate = (date: string | Date) => {
-    try {
-      return format(new Date(date), "EEEE, MMMM d, yyyy 'at' h:mm a");
-    } catch {
-      return "Date and time to be announced";
-    }
+  // Filter logic for each content type
+  const filterContent = (items: any[], type: string) => {
+    return items.filter(item => {
+      const matchesSearch = item.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           item.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCity = selectedCity === "all" || 
+                         item.city?.toLowerCase() === selectedCity.toLowerCase();
+      
+      return matchesSearch && matchesCity;
+    }).slice(0, 6); // Show only first 6 items
   };
 
-  // Enhanced SEO data for homepage
-  const homepageKeywords = ["Des Moines", "Iowa", "events", "restaurants", "attractions", "things to do", "local guide", "Des Moines events", "Iowa restaurants", "family activities", "entertainment", "tourism", "visit Des Moines"];
-  const homepageSchema = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    name: "Des Moines Insider",
-    description: "Your AI-powered guide to the best events, restaurants, attractions, and family activities in Des Moines, Iowa",
-    url: "https://desmoinesinsider.com",
-    potentialAction: {
-      "@type": "SearchAction",
-      target: "https://desmoinesinsider.com/search?q={search_term_string}",
-      "query-input": "required name=search_term_string"
-    },
-    publisher: {
-      "@type": "Organization",
-      name: "Des Moines Insider",
-      logo: {
-        "@type": "ImageObject",
-        url: "https://desmoinesinsider.com/DMI-Logo.png"
-      }
-    }
-  };
-  return <>
-      <SEOHead title="Des Moines Insider - Your AI-Powered Local Guide to Events, Restaurants & Attractions" description="Discover the best events, restaurants, attractions, and family activities in Des Moines, Iowa. Real-time updates, personalized recommendations, and comprehensive local insights powered by AI." type="website" keywords={homepageKeywords} structuredData={homepageSchema} url="/" canonicalUrl="https://desmoinesinsider.com" />
+  const filteredEvents = filterContent(events, 'events');
+  const filteredRestaurants = filterContent(restaurants, 'restaurants');
+  const filteredAttractions = filterContent(attractions, 'attractions');
+  const filteredPlaygrounds = filterContent(playgrounds, 'playgrounds');
+
+  const cities = ["all", "Des Moines", "West Des Moines", "Ankeny", "Urbandale", "Johnston"];
+
+  return (
+    <>
+      <SEOHead 
+        title="Des Moines Insider - Your AI-Powered Guide to Des Moines"
+        description="Discover the best events, restaurants, attractions, and playgrounds in Des Moines with AI-enhanced recommendations and local insights."
+        keywords="Des Moines events, restaurants, attractions, playgrounds, Iowa, local guide"
+        canonicalUrl="https://desmoinesinsider.com"
+        ogImage="https://desmoinesinsider.com/DMI-Logo2.png"
+        structuredData={{
+          "@context": "https://schema.org",
+          "@type": "WebSite",
+          "name": "Des Moines Insider",
+          "description": "Your AI-powered guide to discovering the best events, dining, and attractions in Des Moines",
+          "url": "https://desmoinesinsider.com"
+        }}
+      />
+      
       <div className="min-h-screen bg-background">
-        {/* SEO and structured data for AI optimization */}
-        <SEOStructure />
-
-        {/* Main content wrapper with semantic HTML for AI parsing */}
-        <main role="main" itemScope itemType="https://schema.org/WebPage">
-          <Header />
-
-          {/* Mobile-First Hero section with structured data */}
-          <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 mobile-padding py-6 md:py-16 safe-area-top">
-            <div className="container mx-auto text-center">
-              <h1 className="text-mobile-hero md:text-4xl lg:text-6xl font-bold text-foreground mb-3 md:mb-6 leading-relaxed mobile-safe-text">
-                Discover Des Moines Like Never Before
+        <Header />
+        
+        {/* Hero Section */}
+        <section className="relative bg-gradient-to-br from-primary/90 via-primary to-primary/80 text-white py-20 overflow-hidden">
+          <div className="absolute inset-0 bg-[url('/DMI-Logo2.png')] bg-center bg-no-repeat bg-contain opacity-5"></div>
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+            <div className="text-center max-w-4xl mx-auto">
+              <h1 className="text-4xl md:text-6xl font-bold mb-6 leading-tight">
+                Discover Des Moines
+                <span className="block text-3xl md:text-5xl text-primary-foreground/90 font-light">
+                  with AI-Powered Insights
+                </span>
               </h1>
-              <p className="text-mobile-body md:text-xl text-muted-foreground mb-6 md:mb-8 max-w-3xl mx-auto px-2 mobile-safe-text">
-                Your AI-powered guide to the best events, restaurants,
-                attractions, and family activities in Des Moines, Iowa.
-                Real-time updates, personalized recommendations, and
-                comprehensive local insights.
+              <p className="text-xl md:text-2xl mb-8 text-primary-foreground/90 leading-relaxed">
+                Your intelligent guide to the best events, dining, attractions, and family fun in the capital city
               </p>
-
-              {/* Mobile-Optimized Stats Grid */}
-              <div className="mobile-grid sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mt-6 md:mt-12">
-                <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
-                  <div className="text-xl md:text-3xl font-bold text-primary">
-                    500+
-                  </div>
-                  <p className="text-mobile-caption text-muted-foreground">
-                    Events Monthly
-                  </p>
-                </div>
-                <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
-                  <div className="text-xl md:text-3xl font-bold text-primary">
-                    200+
-                  </div>
-                  <p className="text-mobile-caption text-muted-foreground">
-                    Restaurants
-                  </p>
-                </div>
-                <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
-                  <div className="text-xl md:text-3xl font-bold text-primary">
-                    50+
-                  </div>
-                  <p className="text-mobile-caption text-muted-foreground">200+</p>
-                </div>
-                <div className="bg-background/50 backdrop-blur rounded-lg p-3 md:p-4 space-y-1 md:space-y-2">
-                  <div className="text-xl md:text-3xl font-bold text-primary">
-                    100+
-                  </div>
-                  <p className="text-mobile-caption text-muted-foreground">
-                    Playgrounds
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* Top Banner Ad Placement */}
-          <div className="mobile-padding">
-            <AdBanner placement="top_banner" className="mb-6" />
-          </div>
-
-          <SearchSection onSearch={handleSearch} />
-
-          {/* Mobile-Optimized All-Inclusive Dashboard */}
-          <div id="events" className="mobile-padding">
-            <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} filters={searchFilters} />
-          </div>
-
-          {!showAllEvents && <>
-              {isAuthenticated ? <div className="mobile-padding">
-                  <PersonalizedDashboard onViewEventDetails={handleViewEventDetails} />
-                </div> : <>
-                  {/* Mobile-First Smart Event Navigation for General Users */}
-                  <section className="py-6 md:py-8 mobile-padding">
-                    <div className="container mx-auto">
-                      <div className="text-center mb-6 md:mb-8">
-                        <h2 className="text-mobile-title md:text-3xl font-bold text-foreground mb-3 md:mb-4">
-                          Discover Amazing Events
-                        </h2>
-                        <p className="text-mobile-body md:text-lg text-muted-foreground max-w-2xl mx-auto">
-                          Find exactly what you're looking for with smart
-                          filtering and recommendations
-                        </p>
-                      </div>
-                      <SmartEventNavigation onViewEventDetails={handleViewEventDetails} />
-                    </div>
-                  </section>
-                </>}
-
-              {/* Trending Content Section with Personalization */}
-              <section className="py-6 md:py-8 mobile-padding cv-auto">
-                <div className="container mx-auto">
-                  <LazySection minHeight={320}>
-                    <Suspense fallback={<Skeleton className="h-48 w-full" />}>
-                      <TrendingContentLazy timeWindow="24h" limit={6} showPersonalized={true} className="mb-8" />
-                    </Suspense>
-                  </LazySection>
-                </div>
-              </section>
-
-              <div className="mobile-padding cv-auto">
-                <LazySection minHeight={240}>
-                  <Suspense fallback={<Skeleton className="h-40 w-full" />}>
-                    <MostSearchedLazy />
-                  </Suspense>
-                </LazySection>
-              </div>
-
-              {/* Below the Fold Ad Placement */}
-              <div className="mobile-padding">
-                <AdBanner placement="below_fold" className="my-8" />
-              </div>
-            </>}
-
-          {showAllEvents && <div className="py-6 md:py-8 mobile-padding">
-              <div className="container mx-auto mb-6 md:mb-8">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <Button variant="outline" onClick={() => setShowAllEvents(false)} className="touch-target">
-                    ← Back to Smart Discovery
-                  </Button>
-                  <Button onClick={handleScrapeEvents} disabled={scrapeMutation.isPending} className="bg-accent hover:bg-accent/90 text-white touch-target">
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    {scrapeMutation.isPending ? "Updating..." : "Update Events"}
-                  </Button>
-                </div>
-              </div>
-              <div className="container mx-auto">
-                <EventFilters onViewEventDetails={handleViewEventDetails} />
-              </div>
-            </div>}
-
-          {/* GEO-optimized content section */}
-          <section className="py-16 bg-muted/30 cv-auto">
-            <LazySection minHeight={400}>
-              <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                <GEOContentLazy />
-              </Suspense>
-            </LazySection>
-          </section>
-
-          {/* Local Content Section for Des Moines SEO */}
-          <section className="py-16 cv-auto">
-            <div className="container mx-auto px-4">
-              <LazySection minHeight={400}>
-                <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-                  <LocalContentSectionLazy />
-                </Suspense>
-              </LazySection>
-            </div>
-          </section>
-
-          <Newsletter />
-          <Footer />
-        </main>
-
-        {/* Mobile-Optimized Event Details Dialog */}
-        <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
-          <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto m-2">
-            {selectedEvent && <>
-                <DialogHeader className="text-left space-y-2">
-                  <DialogTitle className="text-mobile-title md:text-2xl font-bold pr-8">
-                    {selectedEvent.title}
-                  </DialogTitle>
-                </DialogHeader>
-
-                <div className="space-y-4 md:space-y-6">
-                  {selectedEvent.image_url && (
-                    <OptimizedImage
-                      src={selectedEvent.image_url}
-                      alt={selectedEvent.title}
-                      className="w-full h-48 md:h-64 object-cover rounded-lg"
-                      loading="lazy"
+              
+              {/* Search Section */}
+              <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-2xl max-w-3xl mx-auto">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="Search events, restaurants, attractions..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="h-12 text-lg border-0 bg-white/50 backdrop-blur focus:bg-white transition-all"
                     />
-                  )}
-
-
-                  <div className="mobile-grid sm:grid-cols-2 gap-3 md:gap-4">
-                    <div className="flex items-center text-muted-foreground p-3 bg-muted/50 rounded-lg">
-                      <Calendar className="h-5 w-5 mr-2 flex-shrink-0" />
-                      <span className="text-mobile-caption md:text-sm">
-                        {formatEventDate(selectedEvent.date)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center text-muted-foreground p-3 bg-muted/50 rounded-lg">
-                      <MapPin className="h-5 w-5 mr-2 flex-shrink-0" />
-                      <span className="text-mobile-caption md:text-sm truncate">
-                        {selectedEvent.location}
-                      </span>
-                    </div>
                   </div>
-
-                  {selectedEvent.venue && <div className="p-3 bg-muted/30 rounded-lg">
-                      <h4 className="font-semibold mb-2 text-mobile-body">
-                        Venue
-                      </h4>
-                      <p className="text-muted-foreground text-mobile-caption">
-                        {selectedEvent.venue}
-                      </p>
-                    </div>}
-
-                  {selectedEvent.price && <div className="p-3 bg-muted/30 rounded-lg">
-                      <h4 className="font-semibold mb-2 text-mobile-body">
-                        Price
-                      </h4>
-                      <p className="text-muted-foreground text-mobile-caption">
-                        {selectedEvent.price}
-                      </p>
-                    </div>}
-
-                  <div className="p-3 bg-muted/30 rounded-lg">
-                    <h4 className="font-semibold mb-2 text-mobile-body">
-                      Description
-                    </h4>
-                    <p className="text-muted-foreground leading-relaxed text-mobile-caption">
-                      {selectedEvent.enhanced_description || selectedEvent.original_description}
-                    </p>
-                    {selectedEvent.is_enhanced && <p className="text-sm text-primary mt-2 flex items-center">
-                        <Sparkles className="h-4 w-4 mr-1" />
-                        Enhanced with AI
-                      </p>}
-                  </div>
-
-                  {/* Rating System */}
-                  <div className="border-t pt-4">
-                    <RatingSystem contentType="event" contentId={selectedEvent.id} compact={true} />
-                  </div>
-
-                  {selectedEvent.source_url && <div className="pt-4 border-t">
-                      <Button asChild className="w-full touch-target">
-                        <a href={selectedEvent.source_url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center">
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          View Original Event
-                        </a>
-                      </Button>
-                    </div>}
+                  <Select value={selectedCity} onValueChange={setSelectedCity}>
+                    <SelectTrigger className="w-full md:w-48 h-12 bg-white/50 backdrop-blur border-0">
+                      <SelectValue placeholder="Select city" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cities.map((city) => (
+                        <SelectItem key={city} value={city}>
+                          {city === "all" ? "All Cities" : city}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <InteractiveDateSelector 
+                    onDateChange={setDateFilter}
+                    className="w-full md:w-auto"
+                  />
                 </div>
-              </>}
-          </DialogContent>
-        </Dialog>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Content Tabs */}
+        <section className="py-16">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-4 mb-8 h-14">
+                <TabsTrigger value="events" className="flex items-center gap-2 text-sm md:text-base">
+                  <Calendar className="h-4 w-4" />
+                  <span className="hidden sm:inline">Events</span>
+                </TabsTrigger>
+                <TabsTrigger value="restaurants" className="flex items-center gap-2 text-sm md:text-base">
+                  <MapPin className="h-4 w-4" />
+                  <span className="hidden sm:inline">Dining</span>
+                </TabsTrigger>
+                <TabsTrigger value="attractions" className="flex items-center gap-2 text-sm md:text-base">
+                  <Camera className="h-4 w-4" />
+                  <span className="hidden sm:inline">Attractions</span>
+                </TabsTrigger>
+                <TabsTrigger value="playgrounds" className="flex items-center gap-2 text-sm md:text-base">
+                  <Gamepad2 className="h-4 w-4" />
+                  <span className="hidden sm:inline">Family</span>
+                </TabsTrigger>
+              </TabsList>
+
+              {/* Events Tab */}
+              <TabsContent value="events" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-3xl font-bold">Upcoming Events</h2>
+                  <Link to="/events">
+                    <Button variant="outline" className="flex items-center gap-2">
+                      View All <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+                
+                {eventsLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <LoadingSkeleton key={i} className="h-64" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredEvents.map((event) => (
+                      <Card key={event.id} className="group hover:shadow-lg transition-all duration-300 overflow-hidden">
+                        <div className="relative h-48 overflow-hidden">
+                          <OptimizedImage
+                            src={event.image_url || "/placeholder.svg"}
+                            alt={event.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            fetchpriority="high"
+                            decoding="async"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <Badge variant="secondary" className="bg-white/90 text-black">
+                              {event.category}
+                            </Badge>
+                          </div>
+                        </div>
+                        <CardContent className="p-4">
+                          <h3 className="font-semibold text-lg mb-2 line-clamp-2">{event.title}</h3>
+                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">{event.description}</p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center text-sm text-muted-foreground">
+                              <MapPin className="h-4 w-4 mr-1" />
+                              {event.city}
+                            </div>
+                            <Link to={`/events/${event.slug}`}>
+                              <Button size="sm">Learn More</Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Restaurants Tab */}
+              <TabsContent value="restaurants" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-3xl font-bold">Featured Restaurants</h2>
+                  <Link to="/restaurants">
+                    <Button variant="outline" className="flex items-center gap-2">
+                      View All <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+                
+                {restaurantsLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <LoadingSkeleton key={i} className="h-64" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredRestaurants.map((restaurant) => (
+                      <Card key={restaurant.id} className="group hover:shadow-lg transition-all duration-300 overflow-hidden">
+                        <div className="relative h-48 overflow-hidden">
+                          <OptimizedImage
+                            src={restaurant.image_url || "/placeholder.svg"}
+                            alt={restaurant.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <Badge variant="secondary" className="bg-white/90 text-black">
+                              {restaurant.cuisine_type}
+                            </Badge>
+                          </div>
+                        </div>
+                        <CardContent className="p-4">
+                          <h3 className="font-semibold text-lg mb-2">{restaurant.name}</h3>
+                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">{restaurant.description}</p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <RatingSystem 
+                                rating={restaurant.rating || 0} 
+                                readonly 
+                                size="sm"
+                              />
+                              <span className="text-sm text-muted-foreground">
+                                ({restaurant.rating || 0})
+                              </span>
+                            </div>
+                            <Link to={`/restaurants/${restaurant.slug}`}>
+                              <Button size="sm">View Details</Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Attractions Tab */}
+              <TabsContent value="attractions" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-3xl font-bold">Top Attractions</h2>
+                  <Link to="/attractions">
+                    <Button variant="outline" className="flex items-center gap-2">
+                      View All <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+                
+                {attractionsLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <LoadingSkeleton key={i} className="h-64" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredAttractions.map((attraction) => (
+                      <Card key={attraction.id} className="group hover:shadow-lg transition-all duration-300 overflow-hidden">
+                        <div className="relative h-48 overflow-hidden">
+                          <OptimizedImage
+                            src={attraction.image_url || "/placeholder.svg"}
+                            alt={attraction.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute top-2 right-2">
+                            <Badge variant="secondary" className="bg-white/90 text-black">
+                              {attraction.category}
+                            </Badge>
+                          </div>
+                        </div>
+                        <CardContent className="p-4">
+                          <h3 className="font-semibold text-lg mb-2">{attraction.name}</h3>
+                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">{attraction.description}</p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center text-sm text-muted-foreground">
+                              <MapPin className="h-4 w-4 mr-1" />
+                              {attraction.city}
+                            </div>
+                            <Link to={`/attractions/${attraction.slug}`}>
+                              <Button size="sm">Explore</Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* Playgrounds Tab */}
+              <TabsContent value="playgrounds" className="space-y-6">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-3xl font-bold">Family Fun</h2>
+                  <Link to="/playgrounds">
+                    <Button variant="outline" className="flex items-center gap-2">
+                      View All <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </Link>
+                </div>
+                
+                {playgroundsLoading ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                      <LoadingSkeleton key={i} className="h-64" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {filteredPlaygrounds.map((playground) => (
+                      <Card key={playground.id} className="group hover:shadow-lg transition-all duration-300 overflow-hidden">
+                        <div className="relative h-48 overflow-hidden">
+                          <OptimizedImage
+                            src={playground.image_url || "/placeholder.svg"}
+                            alt={playground.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        </div>
+                        <CardContent className="p-4">
+                          <h3 className="font-semibold text-lg mb-2">{playground.name}</h3>
+                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">{playground.description}</p>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center text-sm text-muted-foreground">
+                              <MapPin className="h-4 w-4 mr-1" />
+                              {playground.city}
+                            </div>
+                            <Link to={`/playgrounds/${playground.slug}`}>
+                              <Button size="sm">Visit</Button>
+                            </Link>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </section>
+
+        <Footer />
       </div>
-    </>;
+    </>
+  );
 }
