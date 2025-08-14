@@ -17,8 +17,8 @@ import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import OptimizedImage from "@/components/OptimizedImage";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
-import RatingSystem from "@/components/RatingSystem";
-import { LoadingSkeleton } from "@/components/ui/loading-skeleton";
+import { RatingSystem } from "@/components/RatingSystem";
+import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,10 +30,10 @@ export default function Index() {
   const [dateFilter, setDateFilter] = useState<any>(null);
   const [activeTab, setActiveTab] = useState("events");
 
-  const { data: events = [], isLoading: eventsLoading } = useEvents();
-  const { data: restaurants = [], isLoading: restaurantsLoading } = useRestaurants();
-  const { data: attractions = [], isLoading: attractionsLoading } = useAttractions();
-  const { data: playgrounds = [], isLoading: playgroundsLoading } = usePlaygrounds();
+  const { events = [], isLoading: eventsLoading } = useEvents();
+  const { restaurants = [], isLoading: restaurantsLoading } = useRestaurants();
+  const { attractions = [], isLoading: attractionsLoading } = useAttractions();
+  const { playgrounds = [], isLoading: playgroundsLoading } = usePlaygrounds();
 
   // Filter logic for each content type
   const filterContent = (items: any[], type: string) => {
@@ -61,9 +61,9 @@ export default function Index() {
       <SEOHead 
         title="Des Moines Insider - Your AI-Powered Guide to Des Moines"
         description="Discover the best events, restaurants, attractions, and playgrounds in Des Moines with AI-enhanced recommendations and local insights."
-        keywords="Des Moines events, restaurants, attractions, playgrounds, Iowa, local guide"
+        keywords={["Des Moines events", "restaurants", "attractions", "playgrounds", "Iowa", "local guide"]}
         canonicalUrl="https://desmoinesinsider.com"
-        ogImage="https://desmoinesinsider.com/DMI-Logo2.png"
+        
         structuredData={{
           "@context": "https://schema.org",
           "@type": "WebSite",
@@ -159,11 +159,7 @@ export default function Index() {
                 </div>
                 
                 {eventsLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <LoadingSkeleton key={i} className="h-64" />
-                    ))}
-                  </div>
+                  <CardsGridSkeleton count={6} />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredEvents.map((event) => (
@@ -174,7 +170,6 @@ export default function Index() {
                             alt={event.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             fetchpriority="high"
-                            decoding="async"
                           />
                           <div className="absolute top-2 right-2">
                             <Badge variant="secondary" className="bg-white/90 text-black">
@@ -213,11 +208,7 @@ export default function Index() {
                 </div>
                 
                 {restaurantsLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <LoadingSkeleton key={i} className="h-64" />
-                    ))}
-                  </div>
+                  <CardsGridSkeleton count={6} />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredRestaurants.map((restaurant) => (
@@ -239,11 +230,15 @@ export default function Index() {
                           <p className="text-muted-foreground text-sm mb-3 line-clamp-2">{restaurant.description}</p>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <RatingSystem 
-                                rating={restaurant.rating || 0} 
-                                readonly 
-                                size="sm"
-                              />
+                              <div className="flex items-center">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <span key={star} className={`text-sm ${
+                                    star <= (restaurant.rating || 0) ? 'text-yellow-400' : 'text-gray-300'
+                                  }`}>
+                                    ★
+                                  </span>
+                                ))}
+                              </div>
                               <span className="text-sm text-muted-foreground">
                                 ({restaurant.rating || 0})
                               </span>
@@ -271,11 +266,7 @@ export default function Index() {
                 </div>
                 
                 {attractionsLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <LoadingSkeleton key={i} className="h-64" />
-                    ))}
-                  </div>
+                  <CardsGridSkeleton count={6} />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredAttractions.map((attraction) => (
@@ -323,11 +314,7 @@ export default function Index() {
                 </div>
                 
                 {playgroundsLoading ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <LoadingSkeleton key={i} className="h-64" />
-                    ))}
-                  </div>
+                  <CardsGridSkeleton count={6} />
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredPlaygrounds.map((playground) => (
