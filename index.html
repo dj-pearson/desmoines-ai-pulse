@@ -248,23 +248,11 @@
           });
         }
         
-        // Clear service workers
-        if ('serviceWorker' in navigator) {
+        // Clear service workers on development only
+        if ('serviceWorker' in navigator && window.location.hostname === 'localhost') {
           navigator.serviceWorker.getRegistrations().then(regs => {
             regs.forEach(reg => reg.unregister());
           });
-        }
-        
-        // Force browser hard refresh if assets are failing
-        if (window.performance && window.performance.getEntriesByType) {
-          setTimeout(() => {
-            const resources = window.performance.getEntriesByType('resource');
-            const failed = resources.filter(r => r.transferSize === 0 && r.name.includes('/assets/'));
-            if (failed.length > 5) {
-              console.log('Multiple asset 404s detected, forcing hard refresh');
-              window.location.reload(true);
-            }
-          }, 3000);
         }
       })();
     </script>
