@@ -1,87 +1,99 @@
 import { useState } from "react";
+import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useEventScraper } from "@/hooks/useSupabase";
+import { Event } from "@/lib/types";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Calendar,
-  MapPin,
-  Camera,
-  Gamepad2,
-  ChevronRight,
-  Sparkles,
-} from "lucide-react";
-import { Link } from "react-router-dom";
-import { useEvents } from "@/hooks/useEvents";
-import { useRestaurants } from "@/hooks/useRestaurants";
-import { useAttractions } from "@/hooks/useAttractions";
-import { usePlaygrounds } from "@/hooks/usePlaygrounds";
-import OptimizedImage from "@/components/OptimizedImage";
-import InteractiveDateSelector from "@/components/InteractiveDateSelector";
-import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
 import SEOHead from "@/components/SEOHead";
+import SEOStructure from "@/components/SEOStructure";
+import SearchSection from "@/components/SearchSection";
+import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
+import PersonalizedDashboard from "@/components/PersonalizedDashboard";
+import SmartEventNavigation from "@/components/SmartEventNavigation";
+import MostSearched from "@/components/MostSearched";
+import EventFilters from "@/components/EventFilters";
+import GEOContent from "@/components/GEOContent";
+import Newsletter from "@/components/Newsletter";
 
 export default function Index() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCity, setSelectedCity] = useState("all");
-  const [dateFilter, setDateFilter] = useState<Date | null>(null);
-  const [activeTab, setActiveTab] = useState("events");
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [showEventDetails, setShowEventDetails] = useState(false);
+  const [showAllEvents, setShowAllEvents] = useState(false);
+  const { toast } = useToast();
+  const { isAuthenticated } = useAuth();
 
-  const { events = [], isLoading: eventsLoading } = useEvents();
-  const { restaurants = [], isLoading: restaurantsLoading } = useRestaurants();
-  const { attractions = [], isLoading: attractionsLoading } = useAttractions();
-  const { playgrounds = [], isLoading: playgroundsLoading } = usePlaygrounds();
+  const scrapeMutation = useEventScraper();
 
-  // Simple filtering without complex type checking for now
-  const filteredEvents = (events || []).slice(0, 6);
-  const filteredRestaurants = (restaurants || []).slice(0, 6);
-  const filteredAttractions = (attractions || []).slice(0, 6);
-  const filteredPlaygrounds = (playgrounds || []).slice(0, 6);
+  const handleSearch = (filters: {
+    query: string;
+    category: string;
+    date?: string;
+    location?: string;
+    priceRange?: string;
+  }) => {
+    // Scroll to events section and apply filters
+    document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
 
-  const cities = [
-    "all",
-    "Des Moines",
-    "West Des Moines",
-    "Ankeny",
-    "Urbandale",
-    "Johnston",
-  ];
+    // TODO: Implement actual filtering logic with the enhanced filters
+    toast({
+      title: "Smart Search Applied",
+      description: `Found events matching your criteria`,
+    });
+  };
+
+  const handleViewEventDetails = (event: Event) => {
+    setSelectedEvent(event);
+    setShowEventDetails(true);
+  };
+
+  const handleViewAllEvents = () => {
+    setShowAllEvents(true);
+  };
+
+  const handleScrapeEvents = () => {
+    scrapeMutation.mutate(undefined, {
+      onSuccess: () => {
+        toast({
+          title: "Events Updated!",
+          description: "Latest events have been scraped and enhanced with AI.",
+        });
+      },
+      onError: (error: Error) => {
+        toast({
+          title: "Scraping Failed",
+          description:
+            error.message || "Failed to scrape events. Please try again.",
+          variant: "destructive",
+        });
+      },
+    });
+  };
+
+  const formatEventDate = (date: string | Date) => {
+    try {
+      return format(new Date(date), "EEEE, MMMM d, yyyy 'at' h:mm a");
+    } catch {
+      return "Date and time to be announced";
+    }
+  };
 
   return (
-    <>
-      <SEOHead
-        title="Des Moines Insider - Your AI-Powered Guide to Des Moines"
-        description="Discover the best events, restaurants, attractions, and playgrounds in Des Moines with AI-enhanced recommendations and local insights."
-        keywords={[
-          "Des Moines events",
-          "restaurants",
-          "attractions",
-          "playgrounds",
-          "Iowa",
-          "local guide",
-        ]}
-        canonicalUrl="https://desmoinesinsider.com"
-        structuredData={{
-          "@context": "https://schema.org",
-          "@type": "WebSite",
-          name: "Des Moines Insider",
-          description:
-            "Your AI-powered guide to discovering the best events, dining, and attractions in Des Moines",
-          url: "https://desmoinesinsider.com",
-        }}
-      />
+    <div className="min-h-screen bg-background">
+      {/* SEO and structured data for AI optimization */}
+      <SEOStructure />
 
-      <div className="min-h-screen bg-background">
+      {/* Main content wrapper with semantic HTML for AI parsing */}
+      <main role="main" itemScope itemType="https://schema.org/WebPage">
         <Header />
 
         {/* Hero section with structured data */}
@@ -117,337 +129,161 @@ export default function Index() {
           </div>
         </section>
 
-        {/* Search Section */}
-        <section className="py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="bg-white/95 backdrop-blur rounded-2xl p-6 shadow-2xl max-w-3xl mx-auto">
-              <div className="flex flex-col md:flex-row gap-4">
-                <div className="flex-1">
-                  <Input
-                    placeholder="Search events, restaurants, attractions..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="h-12 text-lg border-0 bg-white/50 backdrop-blur focus:bg-white transition-all"
-                  />
-                </div>
-                <Select value={selectedCity} onValueChange={setSelectedCity}>
-                  <SelectTrigger className="w-full md:w-48 h-12 bg-white/50 backdrop-blur border-0">
-                    <SelectValue placeholder="Select city" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cities.map((city) => (
-                      <SelectItem key={city} value={city}>
-                        {city === "all" ? "All Cities" : city}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <InteractiveDateSelector
-                  onDateChange={(dates) => setDateFilter(dates.start || null)}
-                  className="w-full md:w-auto"
-                />
+        <SearchSection onSearch={handleSearch} />
+
+        {/* All-Inclusive Dashboard */}
+        <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} />
+
+        {!showAllEvents && (
+          <>
+            {isAuthenticated ? (
+              <PersonalizedDashboard
+                onViewEventDetails={handleViewEventDetails}
+              />
+            ) : (
+              <>
+                {/* Smart Event Navigation for General Users */}
+                <section className="py-8">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center mb-8">
+                      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+                        Discover Amazing Events
+                      </h2>
+                      <p className="text-lg text-gray-600 dark:text-gray-300">
+                        Find exactly what you're looking for with smart
+                        filtering and recommendations
+                      </p>
+                    </div>
+                    <SmartEventNavigation
+                      onViewEventDetails={handleViewEventDetails}
+                    />
+                  </div>
+                </section>
+              </>
+            )}
+            <MostSearched />
+          </>
+        )}
+
+        {showAllEvents && (
+          <div className="py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
+              <div className="flex items-center justify-between">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAllEvents(false)}
+                >
+                  ← Back to Smart Discovery
+                </Button>
+                <Button
+                  onClick={handleScrapeEvents}
+                  disabled={scrapeMutation.isPending}
+                  className="bg-accent hover:bg-green-700 text-white"
+                >
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  {scrapeMutation.isPending ? "Updating..." : "Update Events"}
+                </Button>
               </div>
             </div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <EventFilters onViewEventDetails={handleViewEventDetails} />
+            </div>
           </div>
+        )}
+
+        {/* GEO-optimized content section */}
+        <section className="py-16 bg-muted/30">
+          <GEOContent />
         </section>
 
-        {/* Content Tabs */}
-        <section className="py-16">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="w-full"
-            >
-              <TabsList className="grid w-full grid-cols-4 mb-8 h-14">
-                <TabsTrigger
-                  value="events"
-                  className="flex items-center gap-2 text-sm md:text-base"
-                >
-                  <Calendar className="h-4 w-4" />
-                  <span className="hidden sm:inline">Events</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="restaurants"
-                  className="flex items-center gap-2 text-sm md:text-base"
-                >
-                  <MapPin className="h-4 w-4" />
-                  <span className="hidden sm:inline">Dining</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="attractions"
-                  className="flex items-center gap-2 text-sm md:text-base"
-                >
-                  <Camera className="h-4 w-4" />
-                  <span className="hidden sm:inline">Attractions</span>
-                </TabsTrigger>
-                <TabsTrigger
-                  value="playgrounds"
-                  className="flex items-center gap-2 text-sm md:text-base"
-                >
-                  <Gamepad2 className="h-4 w-4" />
-                  <span className="hidden sm:inline">Family</span>
-                </TabsTrigger>
-              </TabsList>
-
-              {/* Events Tab */}
-              <TabsContent value="events" className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-3xl font-bold">Upcoming Events</h2>
-                  <Link to="/events">
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      View All <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-
-                {eventsLoading ? (
-                  <CardsGridSkeleton count={6} />
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredEvents.map((event) => (
-                      <Card
-                        key={event.id}
-                        className="group hover:shadow-lg transition-all duration-300 overflow-hidden"
-                      >
-                        <div className="relative h-48 overflow-hidden">
-                          <OptimizedImage
-                            src={event.image_url || "/placeholder.svg"}
-                            alt={event.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            fetchpriority="high"
-                          />
-                          <div className="absolute top-2 right-2">
-                            <Badge
-                              variant="secondary"
-                              className="bg-white/90 text-black"
-                            >
-                              {event.category}
-                            </Badge>
-                          </div>
-                        </div>
-                        <CardContent className="p-4">
-                          <h3 className="font-semibold text-lg mb-2 line-clamp-2">
-                            {event.title}
-                          </h3>
-                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
-                            {event.enhanced_description ||
-                              event.original_description}
-                          </p>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <MapPin className="h-4 w-4 mr-1" />
-                              {event.city}
-                            </div>
-                            <Link to={`/events/${event.id}`}>
-                              <Button size="sm">Learn More</Button>
-                            </Link>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Restaurants Tab */}
-              <TabsContent value="restaurants" className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-3xl font-bold">Featured Restaurants</h2>
-                  <Link to="/restaurants">
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      View All <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-
-                {restaurantsLoading ? (
-                  <CardsGridSkeleton count={6} />
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredRestaurants.map((restaurant) => (
-                      <Card
-                        key={restaurant.id}
-                        className="group hover:shadow-lg transition-all duration-300 overflow-hidden"
-                      >
-                        <div className="relative h-48 overflow-hidden">
-                          <OptimizedImage
-                            src={restaurant.image_url || "/placeholder.svg"}
-                            alt={restaurant.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute top-2 right-2">
-                            <Badge
-                              variant="secondary"
-                              className="bg-white/90 text-black"
-                            >
-                              {restaurant.cuisine}
-                            </Badge>
-                          </div>
-                        </div>
-                        <CardContent className="p-4">
-                          <h3 className="font-semibold text-lg mb-2">
-                            {restaurant.name}
-                          </h3>
-                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
-                            {restaurant.description}
-                          </p>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center">
-                                {[1, 2, 3, 4, 5].map((star) => (
-                                  <span
-                                    key={star}
-                                    className={`text-sm ${
-                                      star <= (restaurant.rating || 0)
-                                        ? "text-yellow-400"
-                                        : "text-gray-300"
-                                    }`}
-                                  >
-                                    ★
-                                  </span>
-                                ))}
-                              </div>
-                              <span className="text-sm text-muted-foreground">
-                                ({restaurant.rating || 0})
-                              </span>
-                            </div>
-                            <Link to={`/restaurants/${restaurant.id}`}>
-                              <Button size="sm">View Details</Button>
-                            </Link>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Attractions Tab */}
-              <TabsContent value="attractions" className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-3xl font-bold">Top Attractions</h2>
-                  <Link to="/attractions">
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      View All <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-
-                {attractionsLoading ? (
-                  <CardsGridSkeleton count={6} />
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredAttractions.map((attraction) => (
-                      <Card
-                        key={attraction.id}
-                        className="group hover:shadow-lg transition-all duration-300 overflow-hidden"
-                      >
-                        <div className="relative h-48 overflow-hidden">
-                          <OptimizedImage
-                            src={attraction.image_url || "/placeholder.svg"}
-                            alt={attraction.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute top-2 right-2">
-                            <Badge
-                              variant="secondary"
-                              className="bg-white/90 text-black"
-                            >
-                              {attraction.type}
-                            </Badge>
-                          </div>
-                        </div>
-                        <CardContent className="p-4">
-                          <h3 className="font-semibold text-lg mb-2">
-                            {attraction.name}
-                          </h3>
-                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
-                            {attraction.description}
-                          </p>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <MapPin className="h-4 w-4 mr-1" />
-                              {attraction.location}
-                            </div>
-                            <Link to={`/attractions/${attraction.id}`}>
-                              <Button size="sm">Explore</Button>
-                            </Link>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-
-              {/* Playgrounds Tab */}
-              <TabsContent value="playgrounds" className="space-y-6">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-3xl font-bold">Family Fun</h2>
-                  <Link to="/playgrounds">
-                    <Button
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      View All <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </Link>
-                </div>
-
-                {playgroundsLoading ? (
-                  <CardsGridSkeleton count={6} />
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredPlaygrounds.map((playground) => (
-                      <Card
-                        key={playground.id}
-                        className="group hover:shadow-lg transition-all duration-300 overflow-hidden"
-                      >
-                        <div className="relative h-48 overflow-hidden">
-                          <OptimizedImage
-                            src={playground.image_url || "/placeholder.svg"}
-                            alt={playground.name}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        </div>
-                        <CardContent className="p-4">
-                          <h3 className="font-semibold text-lg mb-2">
-                            {playground.name}
-                          </h3>
-                          <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
-                            {playground.description}
-                          </p>
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center text-sm text-muted-foreground">
-                              <MapPin className="h-4 w-4 mr-1" />
-                              {playground.location}
-                            </div>
-                            <Link to={`/playgrounds/${playground.id}`}>
-                              <Button size="sm">Visit</Button>
-                            </Link>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </TabsContent>
-            </Tabs>
-          </div>
-        </section>
-
+        <Newsletter />
         <Footer />
-      </div>
-    </>
+      </main>
+
+      {/* Event Details Dialog */}
+      <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
+        <DialogContent className="max-w-2xl">
+          {selectedEvent && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-bold">
+                  {selectedEvent.title}
+                </DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                {selectedEvent.image_url && (
+                  <img
+                    src={selectedEvent.image_url}
+                    alt={selectedEvent.title}
+                    className="w-full h-64 object-cover rounded-lg"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = "none";
+                    }}
+                  />
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center text-neutral-600">
+                    <Calendar className="h-5 w-5 mr-2" />
+                    <span>{formatEventDate(selectedEvent.date)}</span>
+                  </div>
+
+                  <div className="flex items-center text-neutral-600">
+                    <MapPin className="h-5 w-5 mr-2" />
+                    <span>{selectedEvent.location}</span>
+                  </div>
+                </div>
+
+                {selectedEvent.venue && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Venue</h4>
+                    <p className="text-neutral-600">{selectedEvent.venue}</p>
+                  </div>
+                )}
+
+                {selectedEvent.price && (
+                  <div>
+                    <h4 className="font-semibold mb-2">Price</h4>
+                    <p className="text-neutral-600">{selectedEvent.price}</p>
+                  </div>
+                )}
+
+                <div>
+                  <h4 className="font-semibold mb-2">Description</h4>
+                  <p className="text-neutral-600 leading-relaxed">
+                    {selectedEvent.enhanced_description ||
+                      selectedEvent.original_description}
+                  </p>
+                  {selectedEvent.is_enhanced && (
+                    <p className="text-sm text-accent mt-2 flex items-center">
+                      <Sparkles className="h-4 w-4 mr-1" />
+                      Enhanced with AI
+                    </p>
+                  )}
+                </div>
+
+                {selectedEvent.source_url && (
+                  <div className="pt-4 border-t">
+                    <Button asChild className="w-full">
+                      <a
+                        href={selectedEvent.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-center"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        View Original Event
+                      </a>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
