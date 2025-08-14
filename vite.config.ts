@@ -4,6 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 
 // https://vitejs.dev/config/
+// Force rebuild: 2025-08-13
 export default defineConfig(({ command }) => ({
   base: "/", // Use absolute paths for Cloudflare Pages
   server: {
