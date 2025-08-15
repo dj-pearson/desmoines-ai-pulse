@@ -50,6 +50,10 @@ import {
   Bot,
   ExternalLink,
   Repeat,
+  Clock,
+  Settings,
+  Play,
+  Pause,
 } from "lucide-react";
 import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
@@ -70,6 +74,13 @@ const SocialMediaManager = () => {
     deletePost,
     repostPost,
   } = useSocialMediaManager();
+
+  const [automationSettings, setAutomationSettings] = useState({
+    enabled: true,
+    eventTime: "09:00",
+    restaurantTime: "18:00",
+    timezone: "America/Chicago",
+  });
 
   const [isAddingWebhook, setIsAddingWebhook] = useState(false);
   const [newWebhook, setNewWebhook] = useState({
@@ -166,6 +177,7 @@ const SocialMediaManager = () => {
         <TabsList>
           <TabsTrigger value="posts">Posts</TabsTrigger>
           <TabsTrigger value="generate">Generate</TabsTrigger>
+          <TabsTrigger value="automation">Automation</TabsTrigger>
           <TabsTrigger value="webhooks">Webhooks</TabsTrigger>
         </TabsList>
 
@@ -434,6 +446,148 @@ const SocialMediaManager = () => {
                 <Bot className="h-4 w-4 mr-2" />
                 Check Available Content
               </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="automation" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Clock className="h-5 w-5 mr-2" />
+                Daily Automation Schedule
+              </CardTitle>
+              <CardDescription>
+                Configure when social media posts are automatically generated and published
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center space-x-3">
+                  {automationSettings.enabled ? (
+                    <Play className="h-5 w-5 text-green-500" />
+                  ) : (
+                    <Pause className="h-5 w-5 text-red-500" />
+                  )}
+                  <div>
+                    <h3 className="font-semibold">
+                      Automation {automationSettings.enabled ? "Enabled" : "Disabled"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {automationSettings.enabled 
+                        ? "Posts will be automatically generated daily"
+                        : "Automation is currently paused"
+                      }
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={automationSettings.enabled}
+                  onCheckedChange={(checked) =>
+                    setAutomationSettings({ ...automationSettings, enabled: checked })
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-3">
+                  <Label htmlFor="event-time">Event Posts (Morning)</Label>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="event-time"
+                      type="time"
+                      value={automationSettings.eventTime}
+                      onChange={(e) =>
+                        setAutomationSettings({
+                          ...automationSettings,
+                          eventTime: e.target.value,
+                        })
+                      }
+                      disabled={!automationSettings.enabled}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Current setting: Events posted at {automationSettings.eventTime} Central Time
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  <Label htmlFor="restaurant-time">Restaurant Posts (Evening)</Label>
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="restaurant-time"
+                      type="time"
+                      value={automationSettings.restaurantTime}
+                      onChange={(e) =>
+                        setAutomationSettings({
+                          ...automationSettings,
+                          restaurantTime: e.target.value,
+                        })
+                      }
+                      disabled={!automationSettings.enabled}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Current setting: Restaurants posted at {automationSettings.restaurantTime} Central Time
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-muted p-4 rounded-lg">
+                <h4 className="font-semibold mb-2 flex items-center">
+                  <Bot className="h-4 w-4 mr-2" />
+                  How Daily Automation Works
+                </h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  <li>• <strong>Event Posts:</strong> Generated every morning featuring upcoming events</li>
+                  <li>• <strong>Restaurant Posts:</strong> Generated every evening highlighting local restaurants</li>
+                  <li>• <strong>Smart Selection:</strong> AI chooses content that hasn't been featured recently</li>
+                  <li>• <strong>Webhook Distribution:</strong> Posts are automatically sent to configured webhooks</li>
+                  <li>• <strong>Duplicate Prevention:</strong> Won't post if content was already posted within 20 hours</li>
+                </ul>
+              </div>
+
+              <Card className="border-blue-200 bg-blue-50/50">
+                <CardContent className="pt-4">
+                  <div className="flex items-start space-x-3">
+                    <Settings className="h-5 w-5 text-blue-600 mt-0.5" />
+                    <div>
+                      <h4 className="font-semibold text-blue-900">Current CRON Status</h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        The automation system runs every 30 minutes and checks for the configured posting times.
+                        Posts are generated using your existing webhook configuration and AI settings.
+                      </p>
+                      <div className="mt-3 text-xs text-blue-600">
+                        <div>Next Event Check: Today at {automationSettings.eventTime}</div>
+                        <div>Next Restaurant Check: Today at {automationSettings.restaurantTime}</div>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleGeneratePost("event", "event_of_the_day")}
+                  disabled={isGenerating}
+                >
+                  <Bot className="h-4 w-4 mr-2" />
+                  Test Event Post
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleGeneratePost("restaurant", "restaurant_of_the_day")}
+                  disabled={isGenerating}
+                >
+                  <Bot className="h-4 w-4 mr-2" />
+                  Test Restaurant Post
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
