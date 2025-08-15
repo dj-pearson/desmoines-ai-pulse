@@ -2003,6 +2003,8 @@ serve(async (req) => {
     const isValidTrigger =
       authHeader?.includes("Bearer") || // Supabase auth
       triggerSource === "admin-dashboard" || // Our frontend
+      triggerSource === "cron" || // Old cron system
+      triggerSource === "cron-auto" || // New auto cron system
       origin?.includes("desmoinesinsider.com") ||
       origin?.includes("localhost") ||
       referer?.includes("desmoinesinsider.com") ||

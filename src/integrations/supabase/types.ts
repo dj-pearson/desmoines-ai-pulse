@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.12 (cd3cf9e)"
@@ -2730,12 +2730,12 @@ export type Database = {
     Functions: {
       award_user_xp: {
         Args: {
-          p_user_id: string
           p_activity_type: string
-          p_points: number
-          p_content_type?: string
           p_content_id?: string
+          p_content_type?: string
           p_metadata?: Json
+          p_points: number
+          p_user_id: string
         }
         Returns: undefined
       }
@@ -2749,20 +2749,20 @@ export type Database = {
       }
       calculate_restaurant_popularity_score: {
         Args: {
-          restaurant_rating: number
-          is_featured: boolean
           days_since_created: number
+          is_featured: boolean
+          restaurant_rating: number
           review_count?: number
         }
         Returns: number
       }
       calculate_social_buzz_score: {
         Args: {
-          views_count: number
-          shares_count: number
-          saves_count: number
           going_count: number
           interested_count: number
+          saves_count: number
+          shares_count: number
+          views_count: number
         }
         Returns: number
       }
@@ -2775,7 +2775,7 @@ export type Database = {
         Returns: Json
       }
       check_calendar_conflicts: {
-        Args: { p_user_id: string; p_start_time: string; p_end_time: string }
+        Args: { p_end_time: string; p_start_time: string; p_user_id: string }
         Returns: {
           conflict_count: number
           conflicting_events: Json
@@ -2802,12 +2802,12 @@ export type Database = {
           p_placement_type: Database["public"]["Enums"]["placement_type"]
         }
         Returns: {
-          id: string
-          title: string
+          cta_text: string
           description: string
+          id: string
           image_url: string
           link_url: string
-          cta_text: string
+          title: string
         }[]
       }
       get_database_metrics: {
@@ -2816,15 +2816,15 @@ export type Database = {
       }
       get_friends_near_event: {
         Args: {
-          p_user_id: string
           p_event_latitude: number
           p_event_longitude: number
           p_radius_km?: number
+          p_user_id: string
         }
         Returns: {
+          distance_km: number
           friend_id: string
           friend_name: string
-          distance_km: number
         }[]
       }
       get_level_from_xp: {
@@ -2849,13 +2849,13 @@ export type Database = {
       }
       log_admin_action: {
         Args: {
-          p_admin_user_id: string
-          p_action_type: string
           p_action_description: string
-          p_target_resource?: string
-          p_target_id?: string
-          p_old_values?: Json
+          p_action_type: string
+          p_admin_user_id: string
           p_new_values?: Json
+          p_old_values?: Json
+          p_target_id?: string
+          p_target_resource?: string
         }
         Returns: string
       }
@@ -2875,10 +2875,14 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      trigger_due_scraping_jobs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       update_content_rating_aggregate: {
         Args: {
-          p_content_type: Database["public"]["Enums"]["content_type"]
           p_content_id: string
+          p_content_type: Database["public"]["Enums"]["content_type"]
         }
         Returns: undefined
       }
@@ -2896,8 +2900,8 @@ export type Database = {
       }
       user_has_role_or_higher: {
         Args: {
-          user_uuid: string
           required_role: Database["public"]["Enums"]["user_role"]
+          user_uuid: string
         }
         Returns: boolean
       }
