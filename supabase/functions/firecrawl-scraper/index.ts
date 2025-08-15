@@ -135,7 +135,14 @@ Please analyze this content and extract ALL events, concerts, shows, festivals, 
 - price: Ticket price or "Free" if no cost mentioned
 - source_url: Extract the specific event URL or venue website URL if available, otherwise use the page URL
 
-IMPORTANT: Look for individual event URLs, "Visit Website" links, venue websites, or specific event pages in the content. Use these specific URLs instead of the general page URL when possible.
+SPECIAL INSTRUCTIONS FOR CATCHDESMOINES.COM:
+🎯 PRIORITY URL EXTRACTION: Look specifically for "Visit Website" links or buttons that lead to external venue/event websites. These are usually found in:
+- HTML like: <a href="https://external-venue.com" class="action-item">Visit Website</a>
+- Links with text containing "Visit Website", "Official Website", "Venue Website"
+- External URLs that are NOT catchdesmoines.com URLs
+- Venue-specific website links (paintingwithatwist.com, etc.)
+
+If you find a "Visit Website" or venue-specific URL, use that as the source_url instead of the catchdesmoines.com page URL.
 
 Format as JSON array ONLY - no other text:
 [
@@ -147,7 +154,7 @@ Format as JSON array ONLY - no other text:
     "description": "Event description",
     "category": "Concert",
     "price": "$25",
-    "source_url": "https://specific-event-or-venue-url.com"
+    "source_url": "https://specific-venue-website.com"
   }
 ]
 
