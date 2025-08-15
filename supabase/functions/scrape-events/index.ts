@@ -657,20 +657,45 @@ function extractCatchDesMoinesEvent(
 
   // Extract external event URL from "Visit Website" button
   let externalUrl = "";
-  const visitWebsiteRegex =
-    /<a[^>]*class=["']action-item["'][^>]*href=["']([^"']+)["'][^>]*>\s*Visit Website\s*<\/a>/i;
-  const match = html.match(visitWebsiteRegex);
-  if (match && match[1]) {
-    externalUrl = match[1];
-    // If relative URL, prepend domain
-    if (externalUrl.startsWith("/")) {
-      try {
-        const urlObj = new URL(job.config.url);
-        externalUrl = urlObj.origin + externalUrl;
-      } catch {}
+  
+  // Enhanced regex to match the specific HTML structure with action-item class and Visit Website text
+  const visitWebsitePatterns = [
+    // Pattern 1: Exact match for the provided structure
+    /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>.*?Visit Website.*?<\/a>/is,
+    // Pattern 2: Reverse order (class before href)
+    /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>.*?Visit Website.*?<\/a>/is,
+    // Pattern 3: More flexible matching
+    /<a[^>]*class=["']action-item["'][^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit Website[\s\S]*?<\/a>/i,
+    // Pattern 4: Original pattern as fallback
+    /<a[^>]*class=["']action-item["'][^>]*href=["']([^"']+)["'][^>]*>\s*Visit Website\s*<\/a>/i
+  ];
+  
+  console.log(`🔍 Looking for Visit Website button in HTML...`);
+  
+  for (const pattern of visitWebsitePatterns) {
+    const match = html.match(pattern);
+    if (match && match[1]) {
+      externalUrl = match[1];
+      console.log(`✅ Found Visit Website URL: ${externalUrl}`);
+      break;
     }
-  } else {
+  }
+  
+  // If relative URL, prepend domain
+  if (externalUrl && externalUrl.startsWith("/")) {
+    try {
+      const urlObj = new URL(job.config.url);
+      externalUrl = urlObj.origin + externalUrl;
+      console.log(`🔗 Converted relative URL to absolute: ${externalUrl}`);
+    } catch (e) {
+      console.log(`⚠️ Error converting relative URL: ${e}`);
+    }
+  }
+  
+  // Fallback to original catchdesmoines URL if no external URL found
+  if (!externalUrl) {
     externalUrl = job.config.url;
+    console.log(`📌 Using fallback URL: ${externalUrl}`);
   }
 
   return {
