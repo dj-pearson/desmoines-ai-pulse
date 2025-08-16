@@ -10,6 +10,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { GroupEventPlanner } from "@/components/GroupEventPlannerSimple";
+import { CommunityForums } from "@/components/CommunityForums";
+import { EnhancedGroupPlanner } from "@/components/EnhancedGroupPlanner";
 import {
   Users,
   UserPlus,
@@ -87,11 +89,12 @@ export default function Social() {
         </div>
 
         <Tabs defaultValue="friends" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="friends">Friends</TabsTrigger>
             <TabsTrigger value="groups">Groups</TabsTrigger>
+            <TabsTrigger value="forums">Forums</TabsTrigger>
             <TabsTrigger value="trending">Trending</TabsTrigger>
-            <TabsTrigger value="nearby">Friends Nearby</TabsTrigger>
+            <TabsTrigger value="nearby">Nearby</TabsTrigger>
           </TabsList>
 
           <TabsContent value="friends" className="space-y-6">
@@ -200,17 +203,18 @@ export default function Social() {
               </CardContent>
             </Card>
 
-            {/* Group Event Planner */}
+            {/* Enhanced Group Event Planner */}
             {selectedGroupId && (
-              <GroupEventPlanner
-                group={{
-                  id: selectedGroupId,
-                  name: "Selected Group",
-                  member_count: 1,
-                }}
+              <EnhancedGroupPlanner
+                groupId={selectedGroupId}
+                groupName="Selected Group"
                 onClose={() => setSelectedGroupId(null)}
               />
             )}
+          </TabsContent>
+
+          <TabsContent value="forums" className="space-y-6">
+            <CommunityForums />
           </TabsContent>
 
           <TabsContent value="trending" className="space-y-6">
