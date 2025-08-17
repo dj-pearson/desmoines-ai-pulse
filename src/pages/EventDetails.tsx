@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SEOHead from "@/components/SEOHead";
 import AIWriteup from "@/components/AIWriteup";
+import { EventPhotoUpload } from "@/components/EventPhotoUpload";
+import { EventCheckIn } from "@/components/EventCheckIn";
 import {
   createEventSlugWithCentralTime,
   formatEventDate,
@@ -301,6 +303,17 @@ export default function EventDetails() {
                   className="mt-8"
                 />
               )}
+
+              {/* Community Features */}
+              <EventCheckIn 
+                eventId={event.id} 
+                eventTitle={event.title} 
+              />
+              
+              <EventPhotoUpload 
+                eventId={event.id} 
+                eventTitle={event.title} 
+              />
 
               {/* Rating System */}
               <RatingSystem
