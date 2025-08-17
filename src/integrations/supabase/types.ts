@@ -56,6 +56,42 @@ export type Database = {
         }
         Relationships: []
       }
+      advertising_packages: {
+        Row: {
+          ad_placements: string[] | null
+          created_at: string
+          features: Json | null
+          id: string
+          is_active: boolean | null
+          max_ads_per_month: number | null
+          package_description: string | null
+          package_name: string
+          price_monthly: number
+        }
+        Insert: {
+          ad_placements?: string[] | null
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_ads_per_month?: number | null
+          package_description?: string | null
+          package_name: string
+          price_monthly: number
+        }
+        Update: {
+          ad_placements?: string[] | null
+          created_at?: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_ads_per_month?: number | null
+          package_description?: string | null
+          package_name?: string
+          price_monthly?: number
+        }
+        Relationships: []
+      }
       attractions: {
         Row: {
           created_at: string | null
@@ -140,6 +176,146 @@ export type Database = {
           points_value?: number
           rarity?: string
           requirements?: Json
+        }
+        Relationships: []
+      }
+      business_analytics: {
+        Row: {
+          ad_clicks: number | null
+          ad_impressions: number | null
+          business_id: string
+          created_at: string
+          date: string
+          direction_requests: number | null
+          id: string
+          phone_clicks: number | null
+          profile_views: number | null
+          social_media_clicks: number | null
+          website_clicks: number | null
+        }
+        Insert: {
+          ad_clicks?: number | null
+          ad_impressions?: number | null
+          business_id: string
+          created_at?: string
+          date?: string
+          direction_requests?: number | null
+          id?: string
+          phone_clicks?: number | null
+          profile_views?: number | null
+          social_media_clicks?: number | null
+          website_clicks?: number | null
+        }
+        Update: {
+          ad_clicks?: number | null
+          ad_impressions?: number | null
+          business_id?: string
+          created_at?: string
+          date?: string
+          direction_requests?: number | null
+          id?: string
+          phone_clicks?: number | null
+          profile_views?: number | null
+          social_media_clicks?: number | null
+          website_clicks?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_analytics_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "business_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_profiles: {
+        Row: {
+          address: string | null
+          amenities: string[] | null
+          business_hours: Json | null
+          business_name: string
+          business_type: string
+          city: string | null
+          contract_end_date: string | null
+          contract_start_date: string | null
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          email: string | null
+          id: string
+          is_featured: boolean | null
+          latitude: number | null
+          logo_url: string | null
+          longitude: number | null
+          monthly_fee: number | null
+          partnership_tier: string | null
+          phone: string | null
+          social_media_links: Json | null
+          state: string | null
+          updated_at: string
+          user_id: string
+          verification_status: string | null
+          website: string | null
+          zip_code: string | null
+        }
+        Insert: {
+          address?: string | null
+          amenities?: string[] | null
+          business_hours?: Json | null
+          business_name: string
+          business_type?: string
+          city?: string | null
+          contract_end_date?: string | null
+          contract_start_date?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          is_featured?: boolean | null
+          latitude?: number | null
+          logo_url?: string | null
+          longitude?: number | null
+          monthly_fee?: number | null
+          partnership_tier?: string | null
+          phone?: string | null
+          social_media_links?: Json | null
+          state?: string | null
+          updated_at?: string
+          user_id: string
+          verification_status?: string | null
+          website?: string | null
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string | null
+          amenities?: string[] | null
+          business_hours?: Json | null
+          business_name?: string
+          business_type?: string
+          city?: string | null
+          contract_end_date?: string | null
+          contract_start_date?: string | null
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          email?: string | null
+          id?: string
+          is_featured?: boolean | null
+          latitude?: number | null
+          logo_url?: string | null
+          longitude?: number | null
+          monthly_fee?: number | null
+          partnership_tier?: string | null
+          phone?: string | null
+          social_media_links?: Json | null
+          state?: string | null
+          updated_at?: string
+          user_id?: string
+          verification_status?: string | null
+          website?: string | null
+          zip_code?: string | null
         }
         Relationships: []
       }
@@ -1231,6 +1407,90 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      partnership_applications: {
+        Row: {
+          admin_notes: string | null
+          business_name: string
+          business_type: string
+          contact_email: string
+          contact_phone: string | null
+          created_at: string
+          description: string | null
+          desired_tier: string | null
+          id: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string | null
+          updated_at: string
+          user_id: string
+          website: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          business_name: string
+          business_type: string
+          contact_email: string
+          contact_phone?: string | null
+          created_at?: string
+          description?: string | null
+          desired_tier?: string | null
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id: string
+          website?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          business_name?: string
+          business_type?: string
+          contact_email?: string
+          contact_phone?: string | null
+          created_at?: string
+          description?: string | null
+          desired_tier?: string | null
+          id?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      partnership_benefits: {
+        Row: {
+          benefit_description: string | null
+          benefit_name: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          sort_order: number | null
+          tier: string
+        }
+        Insert: {
+          benefit_description?: string | null
+          benefit_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          sort_order?: number | null
+          tier: string
+        }
+        Update: {
+          benefit_description?: string | null
+          benefit_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          sort_order?: number | null
+          tier?: string
+        }
+        Relationships: []
       }
       personalized_recommendations: {
         Row: {
