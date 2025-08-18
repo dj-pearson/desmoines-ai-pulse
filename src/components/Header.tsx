@@ -31,6 +31,7 @@ import {
   Gamepad2,
   Users,
   Trophy,
+  Building2,
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
@@ -346,6 +347,12 @@ export default function Header() {
                         <Link to="/calendar" className="flex items-center" role="menuitem" aria-label="Go to smart calendar page">
                           <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
                           Smart Calendar
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild role="none">
+                        <Link to="/business-partnership" className="flex items-center" role="menuitem" aria-label="Go to business partnership page">
+                          <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Business Portal
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />

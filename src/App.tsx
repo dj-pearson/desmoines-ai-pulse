@@ -28,6 +28,7 @@ const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
 const Social = lazy(() => import("./pages/Social"));
 const SmartCalendarIntegration = lazy(() => import("./components/SmartCalendarIntegration"));
 const Gamification = lazy(() => import("./pages/Gamification"));
+const BusinessPartnership = lazy(() => import("./pages/BusinessPartnership"));
 
 // Mobile-optimized loading component
 const PageLoader = () => (
@@ -68,6 +69,7 @@ const App = () => (
             <Route path="/social" element={<Social />} />
             <Route path="/calendar" element={<SmartCalendarIntegration />} />
             <Route path="/gamification" element={<Gamification />} />
+            <Route path="/business-partnership" element={<BusinessPartnership />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
