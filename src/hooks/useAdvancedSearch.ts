@@ -90,11 +90,33 @@ export function useAdvancedSearch() {
     }
   }, []);
 
-  // Load saved searches - simplified for now
+  // Load saved searches
   const loadSavedSearches = useCallback(async () => {
     if (!user) return;
-    // TODO: Implement after database types are updated
-    setSavedSearches([]);
+    
+    try {
+      const { data, error } = await supabase
+        .from('saved_searches')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      
+      const formattedSearches: SavedSearch[] = data?.map(search => ({
+        id: search.id,
+        name: search.name,
+        filters: search.filters as unknown as AdvancedSearchFilters,
+        createdAt: new Date(search.created_at),
+        lastUsed: search.last_used ? new Date(search.last_used) : undefined,
+        useCount: search.use_count || 0
+      })) || [];
+      
+      setSavedSearches(formattedSearches);
+    } catch (error) {
+      console.error('Error loading saved searches:', error);
+      setSavedSearches([]);
+    }
   }, [user]);
 
   useEffect(() => {
@@ -369,18 +391,81 @@ export function useAdvancedSearch() {
       toast.error('Please sign in to save searches');
       return;
     }
-    // TODO: Implement after database types are updated
-    toast.success('Search functionality will be available after database updates');
+    
+    try {
+      const { data, error } = await supabase
+        .from('saved_searches')
+        .insert({
+          user_id: user.id,
+          name,
+          filters: searchFilters as any,
+          use_count: 1
+        })
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      const newSearch: SavedSearch = {
+        id: data.id,
+        name: data.name,
+        filters: data.filters as unknown as AdvancedSearchFilters,
+        createdAt: new Date(data.created_at),
+        useCount: 1
+      };
+      
+      setSavedSearches(prev => [newSearch, ...prev]);
+      toast.success('Search saved successfully');
+    } catch (error) {
+      console.error('Error saving search:', error);
+      toast.error('Failed to save search');
+    }
   };
 
   const loadSearch = async (search: SavedSearch) => {
-    setFilters(search.filters);
-    await performSearch(search.filters);
+    try {
+      // Update use count and last used
+      await supabase
+        .from('saved_searches')
+        .update({
+          use_count: search.useCount + 1,
+          last_used: new Date().toISOString()
+        })
+        .eq('id', search.id);
+      
+      // Update local state
+      setSavedSearches(prev => 
+        prev.map(s => 
+          s.id === search.id 
+            ? { ...s, useCount: s.useCount + 1, lastUsed: new Date() }
+            : s
+        )
+      );
+      
+      setFilters(search.filters);
+      await performSearch(search.filters);
+    } catch (error) {
+      console.error('Error loading search:', error);
+      setFilters(search.filters);
+      await performSearch(search.filters);
+    }
   };
 
   const deleteSearch = async (searchId: string) => {
-    // TODO: Implement after database types are updated
-    toast.success('Delete functionality will be available after database updates');
+    try {
+      const { error } = await supabase
+        .from('saved_searches')
+        .delete()
+        .eq('id', searchId);
+      
+      if (error) throw error;
+      
+      setSavedSearches(prev => prev.filter(s => s.id !== searchId));
+      toast.success('Search deleted successfully');
+    } catch (error) {
+      console.error('Error deleting search:', error);
+      toast.error('Failed to delete search');
+    }
   };
 
   const resetFilters = () => {
