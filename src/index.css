@@ -22,9 +22,98 @@ All colors MUST be HSL. Touch targets minimum 44px.
     @apply mx-4 my-3;
   }
   
-  /* Performance-optimized animations */
+  /* Performance-optimized animations and micro-interactions */
   .smooth-transition {
     @apply transition-all duration-200 ease-out;
+  }
+  
+  /* Micro-interaction utilities */
+  .interactive-scale {
+    @apply transition-transform duration-200 ease-out hover:scale-105 active:scale-95;
+  }
+  
+  .interactive-lift {
+    @apply transition-all duration-200 ease-out hover:shadow-lg hover:-translate-y-1;
+  }
+  
+  .interactive-glow {
+    @apply transition-all duration-300 ease-out hover:shadow-primary/20 hover:shadow-lg;
+  }
+  
+  .interactive-shimmer {
+    @apply relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent;
+  }
+  
+  .interactive-pulse {
+    @apply transition-all duration-200 ease-out hover:animate-pulse;
+  }
+  
+  .interactive-bounce {
+    @apply transition-all duration-200 ease-out hover:animate-gentle-bounce;
+  }
+  
+  .interactive-fade {
+    @apply transition-opacity duration-200 ease-out hover:opacity-80;
+  }
+  
+  .interactive-blur {
+    @apply transition-all duration-200 ease-out hover:backdrop-blur-sm;
+  }
+  
+  .interactive-rotate {
+    @apply transition-transform duration-200 ease-out hover:rotate-1;
+  }
+  
+  .interactive-slide {
+    @apply transition-transform duration-200 ease-out hover:translate-x-1;
+  }
+  
+  /* Button micro-interactions */
+  .btn-ripple {
+    @apply relative overflow-hidden;
+  }
+  
+  .btn-ripple::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.3;
+    transform: translate(-50%, -50%);
+    transition: width 0.3s, height 0.3s;
+  }
+  
+  .btn-ripple:active::before {
+    width: 300px;
+    height: 300px;
+  }
+  
+  /* Card micro-interactions */
+  .card-interactive {
+    @apply transition-all duration-300 ease-out hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-2;
+  }
+  
+  .card-tilt {
+    @apply transition-transform duration-200 ease-out hover:rotate-1 hover:scale-105;
+  }
+  
+  /* Input micro-interactions */
+  .input-focus {
+    @apply transition-all duration-200 ease-out focus:ring-2 focus:ring-primary/20 focus:border-primary focus:scale-105;
+  }
+  
+  /* Loading states */
+  .loading-shimmer {
+    @apply bg-gradient-to-r from-muted via-muted/50 to-muted bg-[length:200%_100%] animate-shimmer;
+  }
+  
+  /* Staggered animations */
+  .stagger-children > * {
+    animation-delay: calc(var(--stagger-delay, 100ms) * var(--index, 0));
   }
   
   /* Mobile-first text sizes with improved spacing */

@@ -1,4 +1,4 @@
-import { Button } from "./ui/button";
+import { InteractiveButton } from "./ui/interactive-button";
 import { Plus } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -20,14 +20,15 @@ export default function SubmitEventButton() {
   };
 
   return (
-    <Button
+    <InteractiveButton
       onClick={handleSubmitEvent}
-      className="bg-primary hover:bg-primary/90 text-primary-foreground"
+      variant="default"
       size="sm"
+      interaction="glow"
     >
       <Plus className="h-4 w-4 mr-2" />
       <span className="hidden sm:inline">Submit Event</span>
       <span className="sm:hidden">Submit</span>
-    </Button>
+    </InteractiveButton>
   );
 }
