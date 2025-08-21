@@ -35,80 +35,112 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<string | null> 
 
     const html = await response.text();
     
-    // Strategy 1: Look for "VISIT WEBSITE" button (case insensitive, more flexible)
-    const visitWebsitePatterns = [
-      /VISIT\s+WEBSITE[^<]*<\/a>/gi,
-      /<a[^>]*>[\s\S]*?VISIT\s+WEBSITE[\s\S]*?<\/a>/gi,
-      /<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?VISIT[\s\S]*?WEBSITE[\s\S]*?<\/a>/gi,
-      /href=["']([^"']+)["'][^>]*>[^<]*VISIT[^<]*WEBSITE[^<]*<\/a>/gi
+    // List of domains/patterns to exclude (internal systems, social media, etc.)
+    const excludePatterns = [
+      'catchdesmoines.com',
+      'extranet.simpleviewcrm.com',
+      'simpleviewcrm.com',
+      'facebook.com',
+      'twitter.com',
+      'instagram.com',
+      'youtube.com',
+      'tiktok.com',
+      'linkedin.com',
+      'google.com',
+      'maps.google.com',
+      'goo.gl',
+      'bit.ly',
+      'eventbrite.com',
+      'ticketmaster.com',
+      'mailto:',
+      'tel:',
+      'javascript:',
+      '#'
     ];
-    
-    for (const pattern of visitWebsitePatterns) {
-      const matches = html.match(pattern);
-      if (matches) {
-        for (const match of matches) {
-          const hrefMatch = match.match(/href=["']([^"']+)["']/i);
-          if (hrefMatch && hrefMatch[1] && 
-              !hrefMatch[1].includes('catchdesmoines.com') && 
-              hrefMatch[1].startsWith('http')) {
-            console.log('Found via VISIT WEBSITE pattern:', hrefMatch[1]);
-            return hrefMatch[1];
-          }
+
+    const isValidUrl = (url: string): boolean => {
+      if (!url || !url.startsWith('http')) return false;
+      return !excludePatterns.some(pattern => url.toLowerCase().includes(pattern.toLowerCase()));
+    };
+
+    // Strategy 1: Look specifically for "VISIT WEBSITE" button (most reliable)
+    const visitWebsiteRegex = /<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*VISIT\s+WEBSITE[^<]*<\/a>/gi;
+    let match;
+    while ((match = visitWebsiteRegex.exec(html)) !== null) {
+      const url = match[1];
+      if (isValidUrl(url)) {
+        console.log('Found via VISIT WEBSITE button:', url);
+        return url;
+      }
+    }
+
+    // Strategy 2: Look for "Visit Website" in any case variation
+    const visitPatterns = [
+      /href=["']([^"']+)["'][^>]*>[^<]*visit[^<]*website[^<]*<\/a>/gi,
+      /href=["']([^"']+)["'][^>]*>[^<]*website[^<]*<\/a>/gi,
+      /href=["']([^"']+)["'][^>]*>[^<]*official[^<]*site[^<]*<\/a>/gi
+    ];
+
+    for (const pattern of visitPatterns) {
+      pattern.lastIndex = 0; // Reset regex
+      while ((match = pattern.exec(html)) !== null) {
+        const url = match[1];
+        if (isValidUrl(url)) {
+          console.log('Found via visit/website pattern:', url);
+          return url;
         }
       }
     }
 
-    // Strategy 2: Look for any link with visit/website text, but exclude social media
-    const websiteKeywords = ['visit', 'website', 'more info', 'learn more', 'details', 'official'];
-    const socialDomains = ['facebook.com', 'twitter.com', 'instagram.com', 'youtube.com', 'tiktok.com', 'linkedin.com'];
+    // Strategy 3: Look for common website-indicating text in links
+    const websiteKeywords = ['learn more', 'more info', 'details', 'official', 'homepage', 'main site'];
+    const linkPattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
     
-    const allLinks = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?<\/a>/gi);
-    
-    if (allLinks) {
-      for (const link of allLinks) {
-        const hrefMatch = link.match(/href=["']([^"']+)["']/i);
-        if (hrefMatch && hrefMatch[1]) {
-          const url = hrefMatch[1];
-          const linkText = link.replace(/<[^>]*>/g, '').toLowerCase().trim();
-          
-          // Skip if it's catchdesmoines.com, not http, or social media
-          if (!url.startsWith('http') || 
-              url.includes('catchdesmoines.com') ||
-              socialDomains.some(domain => url.includes(domain))) {
-            continue;
-          }
-          
-          // Check for website-related keywords in link text
-          if (websiteKeywords.some(keyword => linkText.includes(keyword))) {
-            console.log('Found via website keyword match:', url, 'with text:', linkText);
-            return url;
-          }
-        }
+    while ((match = linkPattern.exec(html)) !== null) {
+      const url = match[1];
+      const linkText = match[2].toLowerCase().trim();
+      
+      if (isValidUrl(url) && websiteKeywords.some(keyword => linkText.includes(keyword))) {
+        console.log('Found via keyword match:', url, 'with text:', linkText);
+        return url;
       }
     }
 
-    // Strategy 3: Look for organization/venue websites (exclude social media and generic sites)
-    const excludeDomains = [
-      'facebook.com', 'twitter.com', 'instagram.com', 'youtube.com', 'tiktok.com', 
-      'linkedin.com', 'google.com', 'maps.google.com', 'goo.gl', 'bit.ly', 
-      'catchdesmoines.com', 'eventbrite.com', 'ticketmaster.com'
+    // Strategy 4: Look for organization domains (exclude common service providers)
+    const commonServices = [
+      '.simpleview', '.extranet', '.cms', '.admin', 
+      'facebook.', 'twitter.', 'instagram.', 'youtube.',
+      'eventbrite.', 'ticketmaster.', 'paypal.', 'stripe.'
     ];
     
-    if (allLinks) {
-      for (const link of allLinks) {
-        const hrefMatch = link.match(/href=["']([^"']+)["']/i);
-        if (hrefMatch && hrefMatch[1]) {
-          const url = hrefMatch[1];
-          
-          if (url.startsWith('http') && 
-              !excludeDomains.some(domain => url.includes(domain)) &&
-              !url.startsWith('mailto:') && 
-              !url.startsWith('tel:')) {
-            console.log('Found potential organization website:', url);
-            return url;
-          }
-        }
+    const allLinkPattern = /<a[^>]*href=["']([^"']+)["']/gi;
+    const potentialUrls: string[] = [];
+    
+    while ((match = allLinkPattern.exec(html)) !== null) {
+      const url = match[1];
+      if (url.startsWith('http') && 
+          !url.includes('catchdesmoines.com') &&
+          !commonServices.some(service => url.includes(service))) {
+        potentialUrls.push(url);
       }
+    }
+
+    // Prefer .org, .com domains that look like organizations
+    const organizationUrls = potentialUrls.filter(url => {
+      try {
+        const domain = new URL(url).hostname;
+        return (domain.endsWith('.org') || domain.endsWith('.com')) && 
+               !domain.includes('google') && 
+               !domain.includes('facebook') &&
+               !domain.includes('maps');
+      } catch {
+        return false;
+      }
+    });
+
+    if (organizationUrls.length > 0) {
+      console.log('Found potential organization website:', organizationUrls[0]);
+      return organizationUrls[0];
     }
 
     console.log('No suitable external URL found for:', eventUrl);
