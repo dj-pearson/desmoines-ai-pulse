@@ -27,8 +27,9 @@ async function searchGoogleForEvent(eventTitle: string, location: string, apiKey
     for (const searchQuery of searchQueries) {
       console.log(`Trying search query: ${searchQuery}`);
       
-      // Use Google Custom Search - try without CSE first (general web search)
-      const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&q=${encodeURIComponent(searchQuery)}&num=5`;
+      // Use Google Custom Search with CSE ID for general web search
+      const cseId = "017576662512468239146:omuauf_lfve"; // General web search CSE
+      const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cseId}&q=${encodeURIComponent(searchQuery)}&num=5`;
       
       const response = await fetch(searchUrl);
       
@@ -139,11 +140,12 @@ serve(async (req) => {
     }
 
     if (req.method === 'POST') {
-      // Try both API keys
+      // Try both API keys - prioritize the custom search API
+      const googleCustomSearchKey = Deno.env.get('GOOGLE_CUSTOM_SEARCH_API');
       const googleSearchKey = Deno.env.get('GOOGLE_SEARCH_API');
       const googleMapsKey = Deno.env.get('GOOGLE_MAPS_KEY');
       
-      const apiKey = googleSearchKey || googleMapsKey;
+      const apiKey = googleCustomSearchKey || googleSearchKey || googleMapsKey;
       
       if (!apiKey) {
         return new Response(
