@@ -1,0 +1,253 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { ExternalLink, AlertTriangle, CheckCircle2, XCircle, Loader2, Link } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+
+interface ExtractionResult {
+  success: boolean;
+  processed: number;
+  errors: Array<{ eventId: string; error: string }>;
+  updated: Array<{ eventId: string; oldUrl: string; newUrl: string }>;
+  message?: string;
+}
+
+export default function CatchDesmoinUrlExtractor() {
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [result, setResult] = useState<ExtractionResult | null>(null);
+  const [progress, setProgress] = useState(0);
+
+  const handleExtractUrls = async () => {
+    setIsExtracting(true);
+    setResult(null);
+    setProgress(0);
+
+    try {
+      // Get auth token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error("Authentication required");
+        return;
+      }
+
+      // Show progress animation
+      const progressInterval = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 90) return 90;
+          return prev + 5;
+        });
+      }, 1000);
+
+      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/extract-catchdesmoines-urls`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      clearInterval(progressInterval);
+      setProgress(100);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const data: ExtractionResult = await response.json();
+      setResult(data);
+
+      if (data.success) {
+        toast.success(`Successfully processed ${data.processed} events! Updated ${data.updated.length} URLs.`);
+      } else {
+        toast.error("URL extraction completed with errors");
+      }
+
+    } catch (error) {
+      console.error('URL extraction error:', error);
+      toast.error(`Failed to extract URLs: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      setResult({
+        success: false,
+        processed: 0,
+        errors: [{ eventId: 'system', error: error instanceof Error ? error.message : 'Unknown error' }],
+        updated: []
+      });
+    } finally {
+      setIsExtracting(false);
+      if (progress < 100) setProgress(100);
+    }
+  };
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Link className="h-5 w-5" />
+          CatchDesMoines URL Extractor
+        </CardTitle>
+        <CardDescription>
+          Extract real event URLs from CatchDesMoines event pages and update the database.
+          This tool will scan events with catchdesmoines.com source URLs and replace them with the actual event organizer URLs.
+        </CardDescription>
+      </CardHeader>
+      
+      <CardContent className="space-y-4">
+        {/* Action Button */}
+        <div className="flex items-center gap-3">
+          <Button 
+            onClick={handleExtractUrls}
+            disabled={isExtracting}
+            className="flex items-center gap-2"
+          >
+            {isExtracting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Extracting URLs...
+              </>
+            ) : (
+              <>
+                <ExternalLink className="h-4 w-4" />
+                Extract URLs
+              </>
+            )}
+          </Button>
+          
+          {isExtracting && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Processing...
+            </Badge>
+          )}
+        </div>
+
+        {/* Progress Bar */}
+        {isExtracting && (
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Processing events...</span>
+              <span>{progress}%</span>
+            </div>
+            <Progress value={progress} className="w-full" />
+          </div>
+        )}
+
+        {/* Results */}
+        {result && (
+          <div className="space-y-4">
+            {/* Summary */}
+            <Alert className={result.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+              <div className="flex items-center gap-2">
+                {result.success ? (
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-600" />
+                )}
+                <AlertDescription className={result.success ? "text-green-800" : "text-red-800"}>
+                  <div className="space-y-1">
+                    <div className="font-medium">
+                      {result.success ? "URL Extraction Complete!" : "URL Extraction Failed"}
+                    </div>
+                    <div className="text-sm">
+                      Processed: {result.processed} events • 
+                      Updated: {result.updated.length} • 
+                      Errors: {result.errors.length}
+                    </div>
+                    {result.message && <div className="text-sm italic">{result.message}</div>}
+                  </div>
+                </AlertDescription>
+              </div>
+            </Alert>
+
+            {/* Updated URLs */}
+            {result.updated.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm text-green-700">Successfully Updated URLs</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {result.updated.map((update, index) => (
+                      <div key={index} className="p-3 bg-green-50 rounded-lg border border-green-200">
+                        <div className="text-xs text-green-600 font-medium mb-1">
+                          Event ID: {update.eventId}
+                        </div>
+                        <div className="text-sm space-y-1">
+                          <div className="text-gray-600">
+                            <span className="font-medium">From:</span> 
+                            <a 
+                              href={update.oldUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="ml-1 text-blue-600 hover:underline break-all"
+                            >
+                              {new URL(update.oldUrl).hostname}
+                            </a>
+                          </div>
+                          <div className="text-green-700">
+                            <span className="font-medium">To:</span> 
+                            <a 
+                              href={update.newUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="ml-1 text-blue-600 hover:underline break-all"
+                            >
+                              {new URL(update.newUrl).hostname}
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Errors */}
+            {result.errors.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm text-red-700">Errors & Warnings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2 max-h-60 overflow-y-auto">
+                    {result.errors.map((error, index) => (
+                      <div key={index} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                        <div className="text-xs text-red-600 font-medium mb-1">
+                          Event ID: {error.eventId}
+                        </div>
+                        <div className="text-sm text-red-700">
+                          {error.error}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Info */}
+        <Alert>
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <div className="font-medium">How it works:</div>
+              <ul className="text-sm space-y-1 ml-4 list-disc">
+                <li>Scans events with catchdesmoines.com source URLs</li>
+                <li>Visits each CatchDesMoines event page</li>
+                <li>Looks for "Visit Website" links and external URLs</li>
+                <li>Updates the database with the extracted organizer URLs</li>
+                <li>Processes up to 50 events per run with rate limiting</li>
+              </ul>
+            </div>
+          </AlertDescription>
+        </Alert>
+      </CardContent>
+    </Card>
+  );
+}
