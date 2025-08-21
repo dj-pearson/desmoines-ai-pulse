@@ -154,11 +154,13 @@ serve(async (req) => {
         );
       }
 
-      // Get events with broken URLs
+      // Get events with broken URLs - only future events
       const { data: brokenEvents, error: fetchError } = await supabaseClient
         .from('events')
-        .select('id, title, source_url, location')
+        .select('id, title, source_url, location, date')
         .or(`source_url.ilike.%extranet.simpleviewcrm.com%,source_url.ilike.%x.com/share%,source_url.ilike.%youtube.com/@catchdesmoines%,source_url.ilike.%facebook.com/sharer%,source_url.ilike.%twitter.com/intent%`)
+        .gte('date', new Date().toISOString()) // Only future events
+        .order('date', { ascending: true })
         .limit(20);
 
       if (fetchError) {
