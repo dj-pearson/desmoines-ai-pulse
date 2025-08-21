@@ -16,7 +16,7 @@ interface ScrapingJobRow {
 interface ScrapingJob {
   id: string;
   name: string;
-  status: "idle" | "running" | "completed" | "failed";
+  status: "idle" | "running" | "completed" | "failed" | "scheduled_for_trigger";
   lastRun: string | null;
   nextRun: string | null;
   eventsFound: number;
@@ -269,9 +269,10 @@ export function useScraping() {
           name: typedRow.name,
           status: typedRow.status as
             | "idle"
-            | "running"
+            | "running" 
             | "completed"
-            | "failed",
+            | "failed"
+            | "scheduled_for_trigger",
           lastRun: typedRow.last_run,
           nextRun: typedRow.next_run,
           eventsFound: typedRow.events_found || 0,

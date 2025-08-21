@@ -162,7 +162,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
   };
 
   const readyToTriggerJobs = jobs.filter(
-    (job) => (job.status as string) === "idle"
+    (job) => job.status === "scheduled_for_trigger" || job.status === "idle"
   );
   const runningJobs = jobs.filter((job) => job.status === "running");
 
@@ -238,18 +238,26 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                           variant={
                             job.status === "running"
                               ? "default"
-                              : (job.status as string) === "running"
-                              ? "destructive"
+                              : job.status === "scheduled_for_trigger"
+                              ? "secondary"
                               : "outline"
                           }
                           className={
-                            (job.status as string) === "running"
+                            job.status === "running"
                               ? "animate-pulse"
+                              : job.status === "scheduled_for_trigger"
+                              ? "bg-blue-100 text-blue-700 border-blue-200"
                               : ""
                           }
                         >
-                          {(job.status as string) === "running"
+                          {job.status === "running"
                             ? "🔵 Running"
+                            : job.status === "scheduled_for_trigger"
+                            ? "⚡ Ready to Run"
+                            : job.status === "completed"
+                            ? "✅ Completed"
+                            : job.status === "failed"
+                            ? "❌ Failed"
                             : job.status}
                         </Badge>
                       </div>
@@ -276,7 +284,21 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                         <p className="font-medium text-gray-600">
                           Events Found:
                         </p>
-                        <p>{job.eventsFound || 0}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold">
+                            {job.eventsFound || 0}
+                          </p>
+                          {job.status === "scheduled_for_trigger" && (
+                            <Badge variant="outline" className="text-xs">
+                              Ready to run
+                            </Badge>
+                          )}
+                          {(job.eventsFound || 0) > 0 && (
+                            <span className="text-green-600 text-xs">
+                              ✓ Active
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -292,21 +314,27 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                       <Button
                         size="sm"
                         variant={
-                          (job.status as string) === "idle"
+                          job.status === "scheduled_for_trigger"
                             ? "default"
+                            : job.status === "idle"
+                            ? "secondary"
                             : "outline"
                         }
                         onClick={() => handleRunJob(job.id)}
                         disabled={job.status === "running"}
                         className={
-                          (job.status as string) === "idle"
-                            ? "bg-blue-600 hover:bg-blue-700 animate-pulse"
+                          job.status === "scheduled_for_trigger"
+                            ? "bg-blue-600 hover:bg-blue-700 animate-pulse shadow-lg"
+                            : job.status === "idle"
+                            ? "bg-gray-100 hover:bg-gray-200"
                             : ""
                         }
                       >
                         <Play className="h-3 w-3 mr-1" />
-                        {(job.status as string) === "idle"
+                        {job.status === "scheduled_for_trigger"
                           ? "🚀 Run Now!"
+                          : job.status === "running"
+                          ? "Running..."
                           : "Run Now"}
                       </Button>
                     </div>
