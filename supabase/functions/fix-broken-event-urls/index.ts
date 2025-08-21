@@ -14,50 +14,79 @@ interface SearchResult {
 
 async function searchGoogleForEvent(eventTitle: string, location: string, apiKey: string): Promise<string | null> {
   try {
-    const searchQuery = `"${eventTitle}" ${location} site:(-catchdesmoines.com -facebook.com -twitter.com -x.com -youtube.com -instagram.com)`;
+    // Try multiple search strategies
+    const searchQueries = [
+      `"${eventTitle}" Des Moines Iowa tickets`,
+      `"${eventTitle}" ${location} event`,
+      `${eventTitle.replace(/[^\w\s]/g, '')} Des Moines`,
+      `${eventTitle} Iowa event tickets`
+    ];
     
-    const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=017576662512468239146:omuauf_lfve&q=${encodeURIComponent(searchQuery)}&num=3`;
+    console.log(`Searching for event: ${eventTitle} in ${location}`);
     
-    const response = await fetch(searchUrl);
-    if (!response.ok) {
-      throw new Error(`Google Search API error: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.items && data.items.length > 0) {
-      // Look for the most relevant result
-      for (const item of data.items) {
-        const link = item.link;
-        
-        // Skip social media and unwanted domains
-        if (link.includes('facebook.com') || 
-            link.includes('twitter.com') || 
-            link.includes('x.com') ||
-            link.includes('youtube.com') ||
-            link.includes('instagram.com') ||
-            link.includes('catchdesmoines.com') ||
-            link.includes('extranet.simpleviewcrm.com')) {
-          continue;
-        }
-        
-        // Prefer official venue websites or event pages
-        if (link.includes('eventbrite.com') || 
-            link.includes('tickets.') ||
-            link.includes('events.') ||
-            item.title.toLowerCase().includes('ticket') ||
-            item.title.toLowerCase().includes('event')) {
+    for (const searchQuery of searchQueries) {
+      console.log(`Trying search query: ${searchQuery}`);
+      
+      // Use Google Custom Search - try without CSE first (general web search)
+      const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&q=${encodeURIComponent(searchQuery)}&num=5`;
+      
+      const response = await fetch(searchUrl);
+      
+      if (!response.ok) {
+        console.error(`API error for query "${searchQuery}": ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`Error details: ${errorText}`);
+        continue; // Try next query
+      }
+      
+      const data = await response.json();
+      console.log(`Search results for "${searchQuery}": ${data.items?.length || 0} items`);
+      
+      if (data.items && data.items.length > 0) {
+        // Look for the most relevant result
+        for (const item of data.items) {
+          const link = item.link;
+          console.log(`Evaluating result: ${link}`);
+          
+          // Skip social media and unwanted domains
+          if (link.includes('facebook.com') || 
+              link.includes('twitter.com') || 
+              link.includes('x.com') ||
+              link.includes('youtube.com') ||
+              link.includes('instagram.com') ||
+              link.includes('catchdesmoines.com') ||
+              link.includes('extranet.simpleviewcrm.com') ||
+              link.includes('simpleviewcrm.com') ||
+              link.includes('google.com')) {
+            console.log(`Skipping unwanted domain: ${link}`);
+            continue;
+          }
+          
+          // Prefer official venue websites or event pages
+          if (link.includes('eventbrite.com') || 
+              link.includes('tickets.') ||
+              link.includes('events.') ||
+              link.includes('ticketmaster.com') ||
+              link.includes('.org') ||
+              item.title.toLowerCase().includes('ticket') ||
+              item.title.toLowerCase().includes('event')) {
+            console.log(`Found priority result: ${link}`);
+            return link;
+          }
+          
+          // Return first valid external link
+          console.log(`Found valid result: ${link}`);
           return link;
         }
-        
-        // Return first valid external link
-        return link;
+      } else {
+        console.log(`No results found for query: ${searchQuery}`);
       }
     }
     
+    console.log(`No suitable URL found for event: ${eventTitle}`);
     return null;
   } catch (error) {
-    console.error('Error searching for event:', error);
+    console.error('Error searching for event:', eventTitle, error);
     return null;
   }
 }
