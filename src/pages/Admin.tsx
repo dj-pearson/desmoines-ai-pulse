@@ -31,6 +31,7 @@ import AdminSecurityManager from "@/components/AdminSecurityManager";
 import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
+import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import {
   Shield,
   Users,
@@ -1000,6 +1001,7 @@ export default function Admin() {
             {canManageContent() && activeTab === "events" && (
               <div className="space-y-6">
                 <CatchDesmoinUrlExtractor />
+                <FixBrokenEventUrls />
                 <DomainHighlightManager />
                 <ContentTable
                   type="event"
