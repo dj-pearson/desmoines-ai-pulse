@@ -3278,6 +3278,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      purge_old_events: {
+        Args: { retention_months?: number }
+        Returns: Json
+      }
       run_scraping_jobs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
