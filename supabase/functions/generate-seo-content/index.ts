@@ -35,19 +35,19 @@ serve(async (req) => {
     console.log('Claude API key found, length:', claudeApiKey.length);
     console.log(`Starting SEO content generation for ${contentType}`);
 
-    // Get items that need SEO content
+    // Get items that need SEO content with locking to prevent duplicates
     let query;
     if (contentType === 'event') {
       query = supabaseClient
         .from('events')
         .select('id, title, venue, location, date, category, ai_writeup')
-        .is('seo_title', null)
+        .or('seo_title.is.null,seo_title.eq.""')
         .limit(batchSize);
     } else {
       query = supabaseClient
         .from('restaurants')
         .select('id, name, description, cuisine, location, price_range, ai_writeup, opening_date, status')
-        .is('seo_title', null)
+        .or('seo_title.is.null,seo_title.eq.""')
         .limit(batchSize);
     }
 
@@ -72,6 +72,23 @@ serve(async (req) => {
 
     for (const item of items) {
       try {
+        // Immediately mark item as processing to prevent duplicates
+        const lockData = {
+          seo_title: 'PROCESSING...',
+          seo_description: 'Processing SEO content...'
+        };
+        
+        const { error: lockError } = await supabaseClient
+          .from(contentType === 'event' ? 'events' : 'restaurants')
+          .update(lockData)
+          .eq('id', item.id)
+          .or('seo_title.is.null,seo_title.eq.""');
+        
+        if (lockError) {
+          console.log(`Item ${item.id} already being processed, skipping`);
+          continue;
+        }
+
         const prompt = contentType === 'event' 
           ? createEventSEOPrompt(item)
           : createRestaurantSEOPrompt(item);
@@ -107,7 +124,7 @@ serve(async (req) => {
         // Parse the structured response
         const seoData = parseClaudeResponse(generatedContent);
 
-        // Update the database
+        // Update the database with final content
         const updateData = {
           seo_title: seoData.title,
           seo_description: seoData.description,
@@ -132,6 +149,17 @@ serve(async (req) => {
 
       } catch (error) {
         console.error(`Error processing ${contentType} ${item.id}:`, error);
+        
+        // Reset the lock if processing failed
+        const resetData = {
+          seo_title: null,
+          seo_description: null
+        };
+        await supabaseClient
+          .from(contentType === 'event' ? 'events' : 'restaurants')
+          .update(resetData)
+          .eq('id', item.id);
+          
         errors.push(`${item.id}: ${error.message}`);
       }
     }
