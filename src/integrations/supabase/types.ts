@@ -2006,6 +2006,36 @@ export type Database = {
         }
         Relationships: []
       }
+      security_audit_tracking: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          issue_type: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id?: string
+          issue_type: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          issue_type?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       smart_event_suggestions: {
         Row: {
           confidence_score: number | null
