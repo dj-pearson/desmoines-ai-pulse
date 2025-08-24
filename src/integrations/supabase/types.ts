@@ -1199,6 +1199,9 @@ export type Database = {
           event_start_local: string | null
           event_start_utc: string | null
           event_timezone: string | null
+          geo_faq: Json | null
+          geo_key_facts: string[] | null
+          geo_summary: string | null
           id: string
           image_url: string | null
           is_enhanced: boolean | null
@@ -1208,6 +1211,10 @@ export type Database = {
           longitude: number | null
           original_description: string | null
           price: string | null
+          seo_description: string | null
+          seo_h1: string | null
+          seo_keywords: string[] | null
+          seo_title: string | null
           source_url: string | null
           title: string
           updated_at: string | null
@@ -1225,6 +1232,9 @@ export type Database = {
           event_start_local?: string | null
           event_start_utc?: string | null
           event_timezone?: string | null
+          geo_faq?: Json | null
+          geo_key_facts?: string[] | null
+          geo_summary?: string | null
           id?: string
           image_url?: string | null
           is_enhanced?: boolean | null
@@ -1234,6 +1244,10 @@ export type Database = {
           longitude?: number | null
           original_description?: string | null
           price?: string | null
+          seo_description?: string | null
+          seo_h1?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
           source_url?: string | null
           title: string
           updated_at?: string | null
@@ -1251,6 +1265,9 @@ export type Database = {
           event_start_local?: string | null
           event_start_utc?: string | null
           event_timezone?: string | null
+          geo_faq?: Json | null
+          geo_key_facts?: string[] | null
+          geo_summary?: string | null
           id?: string
           image_url?: string | null
           is_enhanced?: boolean | null
@@ -1260,6 +1277,10 @@ export type Database = {
           longitude?: number | null
           original_description?: string | null
           price?: string | null
+          seo_description?: string | null
+          seo_h1?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
           source_url?: string | null
           title?: string
           updated_at?: string | null
@@ -1762,6 +1783,9 @@ export type Database = {
           cuisine: string | null
           description: string | null
           enhanced: string | null
+          geo_faq: Json | null
+          geo_key_facts: string[] | null
+          geo_summary: string | null
           google_place_id: string | null
           id: string
           image_url: string | null
@@ -1777,6 +1801,10 @@ export type Database = {
           popularity_score: number | null
           price_range: string | null
           rating: number | null
+          seo_description: string | null
+          seo_h1: string | null
+          seo_keywords: string[] | null
+          seo_title: string | null
           slug: string | null
           source_url: string | null
           status: string | null
@@ -1792,6 +1820,9 @@ export type Database = {
           cuisine?: string | null
           description?: string | null
           enhanced?: string | null
+          geo_faq?: Json | null
+          geo_key_facts?: string[] | null
+          geo_summary?: string | null
           google_place_id?: string | null
           id?: string
           image_url?: string | null
@@ -1807,6 +1838,10 @@ export type Database = {
           popularity_score?: number | null
           price_range?: string | null
           rating?: number | null
+          seo_description?: string | null
+          seo_h1?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
           slug?: string | null
           source_url?: string | null
           status?: string | null
@@ -1822,6 +1857,9 @@ export type Database = {
           cuisine?: string | null
           description?: string | null
           enhanced?: string | null
+          geo_faq?: Json | null
+          geo_key_facts?: string[] | null
+          geo_summary?: string | null
           google_place_id?: string | null
           id?: string
           image_url?: string | null
@@ -1837,6 +1875,10 @@ export type Database = {
           popularity_score?: number | null
           price_range?: string | null
           rating?: number | null
+          seo_description?: string | null
+          seo_h1?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
           slug?: string | null
           source_url?: string | null
           status?: string | null
@@ -2006,8 +2048,6 @@ export type Database = {
         }
         Relationships: []
       }
-<<<<<<< HEAD
-=======
       security_audit_tracking: {
         Row: {
           created_at: string | null
@@ -2038,7 +2078,6 @@ export type Database = {
         }
         Relationships: []
       }
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
       smart_event_suggestions: {
         Row: {
           confidence_score: number | null
@@ -3311,13 +3350,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
-<<<<<<< HEAD
-=======
       purge_old_events: {
         Args: { retention_months?: number }
         Returns: Json
       }
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
       run_scraping_jobs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
