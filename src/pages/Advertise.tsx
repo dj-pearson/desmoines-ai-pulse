@@ -23,8 +23,6 @@ const PLACEMENT_OPTIONS = [
     dailyCost: 10,
     icon: Star,
     features: ["Maximum visibility", "Mobile & desktop", "All pages"],
-<<<<<<< HEAD
-=======
     assetRequirements: {
       desktop: "728x90px or 970x250px",
       mobile: "320x50px or 300x100px",
@@ -38,17 +36,10 @@ const PLACEMENT_OPTIONS = [
       "Strong call-to-action button",
       "Brand logo prominently displayed"
     ]
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
   },
   {
     type: "featured_spot" as const,
     name: "Featured Spot",
-<<<<<<< HEAD
-    description: "Highlighted placement in search results",
-    dailyCost: 5,
-    icon: Eye,
-    features: ["1st or 2nd position", "Event listings", "High engagement"],
-=======
     description: "Highlighted placement in search results and event listings",
     dailyCost: 5,
     icon: Eye,
@@ -66,17 +57,10 @@ const PLACEMENT_OPTIONS = [
       "High contrast for mobile readability",
       "Include location or Des Moines reference"
     ]
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
   },
   {
     type: "below_fold" as const,
     name: "Below the Fold",
-<<<<<<< HEAD
-    description: "Cost-effective placement in content areas",
-    dailyCost: 5,
-    icon: Target,
-    features: ["Content integration", "Targeted audience", "Great value"],
-=======
     description: "Cost-effective placement integrated within content areas",
     dailyCost: 5,
     icon: Target,
@@ -94,7 +78,6 @@ const PLACEMENT_OPTIONS = [
       "Focus on value proposition",
       "Local Des Moines imagery encouraged"
     ]
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
   },
 ];
 
@@ -356,45 +339,42 @@ export default function Advertise() {
                                 {feature}
                               </span>
                             ))}
-                          </div>
-<<<<<<< HEAD
-=======
-                          
-                          {/* Asset Requirements */}
-                          <div className="bg-muted/50 p-3 rounded-md mb-3 text-xs space-y-1">
-                            <h4 className="font-semibold text-sm mb-2">Asset Requirements:</h4>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <span className="font-medium">Desktop:</span> {option.assetRequirements.desktop}
-                              </div>
-                              <div>
-                                <span className="font-medium">Mobile:</span> {option.assetRequirements.mobile}
-                              </div>
-                            </div>
-                            <div>
-                              <span className="font-medium">Formats:</span> {option.assetRequirements.formats.join(", ")}
-                            </div>
-                            <div>
-                              <span className="font-medium">Max Size:</span> {option.assetRequirements.maxFileSize}
-                            </div>
-                            <div>
-                              <span className="font-medium">Animation:</span> {option.assetRequirements.animationType}
-                            </div>
-                          </div>
+                           </div>
+                           
+                           {/* Asset Requirements */}
+                           <div className="bg-muted/50 p-3 rounded-md mb-3 text-xs space-y-1">
+                             <h4 className="font-semibold text-sm mb-2">Asset Requirements:</h4>
+                             <div className="grid grid-cols-2 gap-2">
+                               <div>
+                                 <span className="font-medium">Desktop:</span> {option.assetRequirements.desktop}
+                               </div>
+                               <div>
+                                 <span className="font-medium">Mobile:</span> {option.assetRequirements.mobile}
+                               </div>
+                             </div>
+                             <div>
+                               <span className="font-medium">Formats:</span> {option.assetRequirements.formats.join(", ")}
+                             </div>
+                             <div>
+                               <span className="font-medium">Max Size:</span> {option.assetRequirements.maxFileSize}
+                             </div>
+                             <div>
+                               <span className="font-medium">Animation:</span> {option.assetRequirements.animationType}
+                             </div>
+                           </div>
 
-                          {/* Design Specifications */}
-                          <div className="space-y-1">
-                            <h4 className="font-semibold text-xs">Design Guidelines:</h4>
-                            <ul className="text-xs text-muted-foreground space-y-0.5">
-                              {option.specifications.map((spec, index) => (
-                                <li key={index} className="flex items-start">
-                                  <span className="text-primary mr-1">•</span>
-                                  {spec}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
+                           {/* Design Specifications */}
+                           <div className="space-y-1">
+                             <h4 className="font-semibold text-xs">Design Guidelines:</h4>
+                             <ul className="text-xs text-muted-foreground space-y-0.5">
+                               {option.specifications.map((spec, index) => (
+                                 <li key={index} className="flex items-start">
+                                   <span className="text-primary mr-1">•</span>
+                                   {spec}
+                                 </li>
+                               ))}
+                             </ul>
+                           </div>
                           {isSelected && (
                             <div className="flex items-center space-x-2">
                               <Label htmlFor={`days-${option.type}`} className="text-sm">
@@ -493,8 +473,6 @@ export default function Advertise() {
           </div>
         </div>
       </section>
-<<<<<<< HEAD
-=======
 
       {/* Additional Information Sections */}
       <section className="py-12 bg-muted/20">
@@ -657,7 +635,6 @@ export default function Advertise() {
           </div>
         </div>
       </section>
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
     </div>
   );
 }

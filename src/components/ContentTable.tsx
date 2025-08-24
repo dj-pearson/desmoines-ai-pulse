@@ -871,6 +871,11 @@ export default function ContentTable({
                 • {eventsWithoutDates.length} need dates
               </span>
             )}
+            {type === "restaurant" && (
+              <span className="ml-2 text-green-600 font-medium">
+                • {processedItems.filter(item => item.ai_writeup).length} AI enhanced
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -904,12 +909,13 @@ export default function ContentTable({
                   </TableRow>
                 ) : (
                   processedItems.map((item) => {
-                    const isHighlighted =
-                      type === "event" &&
-                      item.source_url &&
-                      isHighlightedDomain(item.source_url);
-                    const hasMissingDate = type === "event" && !item.date;
-                    const isExpanded = expandedRows.has(item.id);
+                     const isHighlighted =
+                       type === "event" &&
+                       item.source_url &&
+                       isHighlightedDomain(item.source_url);
+                     const hasMissingDate = type === "event" && !item.date;
+                     const hasAiWriteup = type === "restaurant" && item.ai_writeup;
+                     const isExpanded = expandedRows.has(item.id);
                     const hasAdditionalDetails =
                       compactView &&
                       type === "event" &&
@@ -929,11 +935,11 @@ export default function ContentTable({
                               ? "bg-warning/10 border-l-4 border-l-warning"
                               : ""
                           }
-                          ${
-                            isHighlighted && hasMissingDate
-                              ? "bg-gradient-to-r from-destructive/5 to-warning/10 border-l-4 border-l-destructive border-r-4 border-r-warning"
-                              : ""
-                          }
+                           ${
+                             hasAiWriteup
+                               ? "bg-green-50 border-l-4 border-l-green-500"
+                               : ""
+                           }
                         `.trim()}
                         >
                           {/* Expand/Collapse button for compact view */}
