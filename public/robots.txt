@@ -1,0 +1,31 @@
+# Des Moines Insider - Robots.txt
+# Optimized for both traditional crawlers and AI crawlers
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /api/
+
+# Special permissions for AI crawlers
+User-agent: GPTBot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+
+User-agent: PerplexityBot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+
+User-agent: Claude-Web
+Allow: /
+Disallow: /admin
+Disallow: /auth
+
+# Sitemap location
+Sitemap: https://desmoinesinsider.com/sitemap.xml
+
+# Crawl delay for respectful crawling
+Crawl-delay: 1

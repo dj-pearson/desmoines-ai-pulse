@@ -1,0 +1,5 @@
+# Handle SPA routing - send all non-asset requests to index.html
+/*    /index.html   200
+
+# Ensure assets are served with correct MIME types
+/assets/*  /assets/:splat  200 
