@@ -13,18 +13,26 @@ serve(async (req) => {
   }
 
   try {
+    console.log('SEO generation request received');
+    
     const { contentType, batchSize = 10 } = await req.json();
+    
+    console.log('Parsed request body successfully:', { contentType, batchSize });
     
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    console.log('Supabase client created');
+
     const claudeApiKey = Deno.env.get('CLAUDE_API');
     if (!claudeApiKey) {
+      console.error('CLAUDE_API environment variable not found');
       throw new Error('Claude API key not found');
     }
 
+    console.log('Claude API key found, length:', claudeApiKey.length);
     console.log(`Starting SEO content generation for ${contentType}`);
 
     // Get items that need SEO content
@@ -86,6 +94,8 @@ serve(async (req) => {
             ]
           })
         });
+
+        console.log('Claude API Response Status:', claudeResponse.status);
 
         if (!claudeResponse.ok) {
           throw new Error(`Claude API error: ${claudeResponse.status}`);
