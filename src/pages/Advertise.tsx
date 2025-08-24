@@ -23,22 +23,61 @@ const PLACEMENT_OPTIONS = [
     dailyCost: 10,
     icon: Star,
     features: ["Maximum visibility", "Mobile & desktop", "All pages"],
+    assetRequirements: {
+      desktop: "728x90px or 970x250px",
+      mobile: "320x50px or 300x100px",
+      formats: ["JPG", "PNG", "WebP"],
+      maxFileSize: "2MB",
+      animationType: "Static images only"
+    },
+    specifications: [
+      "High-resolution images (300 DPI recommended)",
+      "Clear, readable text even at small sizes",
+      "Strong call-to-action button",
+      "Brand logo prominently displayed"
+    ]
   },
   {
     type: "featured_spot" as const,
     name: "Featured Spot",
-    description: "Highlighted placement in search results",
+    description: "Highlighted placement in search results and event listings",
     dailyCost: 5,
     icon: Eye,
     features: ["1st or 2nd position", "Event listings", "High engagement"],
+    assetRequirements: {
+      desktop: "300x250px or 336x280px",
+      mobile: "300x250px (responsive)",
+      formats: ["JPG", "PNG", "WebP"],
+      maxFileSize: "1.5MB",
+      animationType: "Static or subtle animation (GIF up to 5 seconds)"
+    },
+    specifications: [
+      "Eye-catching visuals with local appeal",
+      "Clear business name and offering",
+      "High contrast for mobile readability",
+      "Include location or Des Moines reference"
+    ]
   },
   {
     type: "below_fold" as const,
     name: "Below the Fold",
-    description: "Cost-effective placement in content areas",
+    description: "Cost-effective placement integrated within content areas",
     dailyCost: 5,
     icon: Target,
     features: ["Content integration", "Targeted audience", "Great value"],
+    assetRequirements: {
+      desktop: "300x250px or 250x250px",
+      mobile: "300x250px (responsive)",
+      formats: ["JPG", "PNG", "WebP"],
+      maxFileSize: "1MB",
+      animationType: "Static images preferred"
+    },
+    specifications: [
+      "Native advertising style preferred",
+      "Blend with editorial content design",
+      "Focus on value proposition",
+      "Local Des Moines imagery encouraged"
+    ]
   },
 ];
 
@@ -301,6 +340,41 @@ export default function Advertise() {
                               </span>
                             ))}
                           </div>
+                          
+                          {/* Asset Requirements */}
+                          <div className="bg-muted/50 p-3 rounded-md mb-3 text-xs space-y-1">
+                            <h4 className="font-semibold text-sm mb-2">Asset Requirements:</h4>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <span className="font-medium">Desktop:</span> {option.assetRequirements.desktop}
+                              </div>
+                              <div>
+                                <span className="font-medium">Mobile:</span> {option.assetRequirements.mobile}
+                              </div>
+                            </div>
+                            <div>
+                              <span className="font-medium">Formats:</span> {option.assetRequirements.formats.join(", ")}
+                            </div>
+                            <div>
+                              <span className="font-medium">Max Size:</span> {option.assetRequirements.maxFileSize}
+                            </div>
+                            <div>
+                              <span className="font-medium">Animation:</span> {option.assetRequirements.animationType}
+                            </div>
+                          </div>
+
+                          {/* Design Specifications */}
+                          <div className="space-y-1">
+                            <h4 className="font-semibold text-xs">Design Guidelines:</h4>
+                            <ul className="text-xs text-muted-foreground space-y-0.5">
+                              {option.specifications.map((spec, index) => (
+                                <li key={index} className="flex items-start">
+                                  <span className="text-primary mr-1">•</span>
+                                  {spec}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                           {isSelected && (
                             <div className="flex items-center space-x-2">
                               <Label htmlFor={`days-${option.type}`} className="text-sm">
@@ -396,6 +470,168 @@ export default function Advertise() {
             </Card>
           </div>
         </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Additional Information Sections */}
+      <section className="py-12 bg-muted/20">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto space-y-8">
+            
+            {/* Asset Upload Process */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Asset Upload & Approval Process</CardTitle>
+                <CardDescription>What happens after you create your campaign</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid md:grid-cols-3 gap-4">
+                  <div className="text-center p-4">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-primary font-bold">1</span>
+                    </div>
+                    <h4 className="font-semibold mb-2">Payment & Setup</h4>
+                    <p className="text-sm text-muted-foreground">Complete payment and receive campaign dashboard access within 5 minutes.</p>
+                  </div>
+                  <div className="text-center p-4">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-primary font-bold">2</span>
+                    </div>
+                    <h4 className="font-semibold mb-2">Upload Assets</h4>
+                    <p className="text-sm text-muted-foreground">Upload your creative assets and provide ad copy, URLs, and targeting preferences.</p>
+                  </div>
+                  <div className="text-center p-4">
+                    <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-primary font-bold">3</span>
+                    </div>
+                    <h4 className="font-semibold mb-2">Review & Launch</h4>
+                    <p className="text-sm text-muted-foreground">Our team reviews (24 hours) and launches your campaign on the scheduled start date.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Technical Requirements */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Technical Requirements & Best Practices</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold mb-3">File Requirements:</h4>
+                    <ul className="text-sm space-y-2">
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        RGB color space (not CMYK)
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        72 DPI for web (300 DPI for print-quality assets)
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        No embedded fonts or special effects
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        All text must be readable at actual display size
+                      </li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-3">Content Guidelines:</h4>
+                    <ul className="text-sm space-y-2">
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        Family-friendly content only
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        Des Moines area businesses preferred
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        Clear, honest messaging (no misleading claims)
+                      </li>
+                      <li className="flex items-start">
+                        <span className="text-primary mr-2">•</span>
+                        Include valid landing page URL
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Performance Tracking */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Campaign Performance & Analytics</CardTitle>
+                <CardDescription>Track your advertising success</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-4 gap-4 text-center">
+                  <div className="p-3">
+                    <h4 className="font-semibold text-primary mb-1">Impressions</h4>
+                    <p className="text-xs text-muted-foreground">Total ad views</p>
+                  </div>
+                  <div className="p-3">
+                    <h4 className="font-semibold text-primary mb-1">Clicks</h4>
+                    <p className="text-xs text-muted-foreground">Ad interactions</p>
+                  </div>
+                  <div className="p-3">
+                    <h4 className="font-semibold text-primary mb-1">CTR</h4>
+                    <p className="text-xs text-muted-foreground">Click-through rate</p>
+                  </div>
+                  <div className="p-3">
+                    <h4 className="font-semibold text-primary mb-1">Demographics</h4>
+                    <p className="text-xs text-muted-foreground">Audience insights</p>
+                  </div>
+                </div>
+                <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+                  <p className="text-sm">
+                    <strong>Real-time Dashboard:</strong> Access detailed analytics 24/7 through your campaign dashboard. 
+                    Reports are updated every hour and include geographic data, device types, and engagement metrics.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Contact & Support */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Support & Contact</CardTitle>
+                <CardDescription>Questions about advertising with Des Moines Insider?</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h4 className="font-semibold mb-3">Campaign Support:</h4>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Response Time:</strong> Within 4 business hours</p>
+                      <p><strong>Phone:</strong> (515) 555-0123</p>
+                      <p><strong>Email:</strong> advertising@desmoinesinsider.com</p>
+                      <p><strong>Hours:</strong> Mon-Fri 8AM-6PM CST</p>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold mb-3">Custom Solutions:</h4>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p>Need a larger campaign or custom placement? Our team can create specialized advertising packages for:</p>
+                      <ul className="mt-2 space-y-1">
+                        <li>• Event sponsorships</li>
+                        <li>• Newsletter placements</li>
+                        <li>• Social media packages</li>
+                        <li>• Multi-month campaigns</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
           </div>
         </div>
       </section>
