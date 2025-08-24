@@ -1,6 +1,7 @@
 @echo off
 echo.
 echo ================================================
+<<<<<<< HEAD
 echo  Syncing Both Repositories
 echo ================================================
 echo.
@@ -25,6 +26,12 @@ if %ERRORLEVEL% NEQ 0 (
 echo ✅ Successfully pulled from upstream
 
 echo.
+=======
+echo  Pushing to Both Repositories
+echo ================================================
+echo.
+
+>>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
 echo 🔄 Pushing to origin (blank-canvas-events)...
 git push origin main
 if %ERRORLEVEL% NEQ 0 (
@@ -45,6 +52,10 @@ if %ERRORLEVEL% NEQ 0 (
 echo ✅ Successfully pushed to upstream
 
 echo.
+<<<<<<< HEAD
 echo 🎉 Successfully synced both repositories!
+=======
+echo 🎉 Successfully pushed to both repositories!
+>>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
 echo.
 pause

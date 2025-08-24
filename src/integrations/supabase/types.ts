@@ -2006,6 +2006,39 @@ export type Database = {
         }
         Relationships: []
       }
+<<<<<<< HEAD
+=======
+      security_audit_tracking: {
+        Row: {
+          created_at: string | null
+          description: string
+          id: string
+          issue_type: string
+          resolution_notes: string | null
+          resolved_at: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          description: string
+          id?: string
+          issue_type: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string
+          id?: string
+          issue_type?: string
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+>>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
       smart_event_suggestions: {
         Row: {
           confidence_score: number | null
@@ -3278,6 +3311,13 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+<<<<<<< HEAD
+=======
+      purge_old_events: {
+        Args: { retention_months?: number }
+        Returns: Json
+      }
+>>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
       run_scraping_jobs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
