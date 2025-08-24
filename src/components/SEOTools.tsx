@@ -28,6 +28,8 @@ import {
   Utensils,
   Camera,
   Play,
+  Sparkles,
+  Zap,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useEvents } from "@/hooks/useEvents";
@@ -52,12 +54,23 @@ export default function SEOTools() {
     Record<string, string>
   >({});
   const [isGenerating, setIsGenerating] = useState<Record<string, boolean>>({});
+  const [isSeoGenerating, setIsSeoGenerating] = useState<Record<string, boolean>>({
+    events: false,
+    restaurants: false,
+  });
+  const [seoResults, setSeoResults] = useState<Record<string, any>>({});
 
   // Data hooks
-  const { events } = useEvents({ limit: 1000 });
-  const { restaurants } = useRestaurants();
-  const { attractions } = useAttractions();
-  const { playgrounds } = usePlaygrounds();
+  const eventsData = useEvents({ limit: 1000 });
+  const restaurantsData = useRestaurants();
+  const attractionsData = useAttractions();
+  const playgroundsData = usePlaygrounds();
+
+  // Extract arrays for backward compatibility
+  const events = eventsData.events || [];
+  const restaurants = restaurantsData.restaurants || [];
+  const attractions = attractionsData.attractions || [];
+  const playgrounds = playgroundsData.playgrounds || [];
 
   const generators: SEOGenerator[] = [
     {
@@ -544,6 +557,43 @@ ${JSON.stringify(eventListSchema, null, 2)}
     content: generators.filter((g) => g.category === "content"),
   };
 
+  // Handle AI SEO Content Generation
+  const handleSeoGeneration = async (contentType: 'event' | 'restaurant') => {
+    setIsSeoGenerating(prev => ({ ...prev, [contentType]: true }));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-seo-content', {
+        body: { contentType, batchSize: 10 }
+      });
+
+      if (error) throw error;
+
+      setSeoResults(prev => ({ ...prev, [contentType]: data }));
+      
+      toast({
+        title: `SEO content generated for ${data.processed} ${contentType}s!`,
+        description: `Successfully processed ${data.processed} out of ${data.total} items.`
+      });
+      
+      // Refresh the data to show updated SEO fields
+      if (contentType === 'event') {
+        eventsData.refetch?.();
+      } else {
+        restaurantsData.refetch?.();
+      }
+      
+    } catch (error) {
+      console.error('SEO generation error:', error);
+      toast({
+        title: 'Failed to generate SEO content',
+        description: error instanceof Error ? error.message : 'Unknown error occurred',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsSeoGenerating(prev => ({ ...prev, [contentType]: false }));
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -822,6 +872,116 @@ ${JSON.stringify(eventListSchema, null, 2)}
                 </CardContent>
               </Card>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AI SEO Content Generation */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            AI SEO Content Generation
+          </CardTitle>
+          <CardDescription>
+            Generate comprehensive SEO and GEO optimization content for individual pages using Claude AI
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            <Alert>
+              <Zap className="h-4 w-4" />
+              <AlertDescription>
+                <strong>GEO Optimization:</strong> This feature generates SEO-optimized titles, descriptions, H1 tags, keywords, and FAQ sections specifically designed for both traditional search engines and AI search engines like Perplexity, ChatGPT, and Claude.
+              </AlertDescription>
+            </Alert>
+
+            <div className="mobile-grid sm:grid-cols-2 gap-4">
+              {/* Events SEO Generation */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Calendar className="h-5 w-5" />
+                    Event Pages SEO
+                  </CardTitle>
+                  <CardDescription>
+                    Generate SEO content for events that don't have SEO metadata yet
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="text-sm text-muted-foreground">
+                      Will generate: SEO title, meta description, H1 tag, keywords, GEO summary, key facts, and FAQ sections for individual event pages
+                    </div>
+                    <Button
+                      onClick={() => handleSeoGeneration('event')}
+                      disabled={isSeoGenerating.events}
+                      className="w-full"
+                    >
+                      {isSeoGenerating.events ? 'Generating SEO Content...' : 'Generate Event SEO'}
+                    </Button>
+                    {seoResults.event && (
+                      <div className="p-3 bg-muted rounded-lg text-sm">
+                        <div className="font-medium text-green-600 mb-1">✅ Generation Complete</div>
+                        <div>Processed: {seoResults.event.processed} events</div>
+                        <div>Total available: {seoResults.event.total}</div>
+                        {seoResults.event.errors && seoResults.event.errors.length > 0 && (
+                          <div className="text-destructive mt-2">
+                            {seoResults.event.errors.length} errors occurred
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Restaurants SEO Generation */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Utensils className="h-5 w-5" />
+                    Restaurant Pages SEO
+                  </CardTitle>
+                  <CardDescription>
+                    Generate SEO content for restaurants that don't have SEO metadata yet
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="text-sm text-muted-foreground">
+                      Will generate: SEO title, meta description, H1 tag, keywords, GEO summary, key facts, and FAQ sections for individual restaurant pages
+                    </div>
+                    <Button
+                      onClick={() => handleSeoGeneration('restaurant')}
+                      disabled={isSeoGenerating.restaurants}
+                      className="w-full"
+                    >
+                      {isSeoGenerating.restaurants ? 'Generating SEO Content...' : 'Generate Restaurant SEO'}
+                    </Button>
+                    {seoResults.restaurant && (
+                      <div className="p-3 bg-muted rounded-lg text-sm">
+                        <div className="font-medium text-green-600 mb-1">✅ Generation Complete</div>
+                        <div>Processed: {seoResults.restaurant.processed} restaurants</div>
+                        <div>Total available: {seoResults.restaurant.total}</div>
+                        {seoResults.restaurant.errors && seoResults.restaurant.errors.length > 0 && (
+                          <div className="text-destructive mt-2">
+                            {seoResults.restaurant.errors.length} errors occurred
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Alert>
+              <Globe className="h-4 w-4" />
+              <AlertDescription>
+                <strong>How it works:</strong> The AI analyzes each event or restaurant's existing data and generates comprehensive SEO metadata optimized for both Google search and AI search engines. It focuses on local SEO for Des Moines and includes structured data for better visibility.
+              </AlertDescription>
+            </Alert>
           </div>
         </CardContent>
       </Card>
