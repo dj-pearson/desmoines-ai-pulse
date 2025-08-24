@@ -1,6 +1,5 @@
 Write-Host ""
 Write-Host "================================================" -ForegroundColor Cyan
-<<<<<<< HEAD
 Write-Host " Syncing Both Repositories" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host ""
@@ -29,12 +28,6 @@ try {
 }
 
 Write-Host ""
-=======
-Write-Host " Pushing to Both Repositories" -ForegroundColor Cyan
-Write-Host "================================================" -ForegroundColor Cyan
-Write-Host ""
-
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
 Write-Host "🔄 Pushing to origin (blank-canvas-events)..." -ForegroundColor Yellow
 try {
     git push origin main
@@ -59,10 +52,6 @@ try {
 }
 
 Write-Host ""
-<<<<<<< HEAD
 Write-Host "🎉 Successfully synced both repositories!" -ForegroundColor Green
-=======
-Write-Host "🎉 Successfully pushed to both repositories!" -ForegroundColor Green
->>>>>>> 7c3253d4d613db83e6a1442829f9251a98cdab01
 Write-Host ""
 Read-Host "Press Enter to continue"
