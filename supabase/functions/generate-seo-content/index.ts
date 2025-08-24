@@ -40,7 +40,7 @@ serve(async (req) => {
     if (contentType === 'event') {
       query = supabaseClient
         .from('events')
-        .select('id, title, description, venue, location, date, category, ai_writeup')
+        .select('id, title, venue, location, date, category, ai_writeup')
         .is('seo_title', null)
         .limit(batchSize);
     } else {
@@ -179,7 +179,6 @@ function createEventSEOPrompt(event: any): string {
 
 Event Details:
 - Title: ${event.title}
-- Description: ${event.description || 'N/A'}
 - Venue: ${event.venue || 'N/A'}
 - Location: ${event.location}
 - Date: ${event.date}
