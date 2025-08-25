@@ -129,20 +129,22 @@ async function scrapeCompetitorContent(supabaseClient: any, competitorId?: strin
 
 function extractContentFromHTML(html: string, baseUrl: string): any[] {
   const content = [];
+  const processedTitles = new Set(); // Track unique titles to avoid duplicates
   
   // Basic content extraction - in production, you'd use a proper HTML parser
   const titleMatches = html.match(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi) || [];
   const linkMatches = html.match(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi) || [];
   
-  // Extract event-like content
+  // Extract event-like content from headings
   titleMatches.forEach((match, index) => {
     const titleText = match.replace(/<[^>]*>/g, '').trim();
-    if (titleText.length > 10) {
+    if (titleText.length > 10 && !processedTitles.has(titleText)) {
+      processedTitles.add(titleText);
       content.push({
         content_type: 'blog_post',
         title: titleText,
         description: `Content from ${new URL(baseUrl).hostname}`,
-        url: baseUrl,
+        url: `${baseUrl}#heading-${index}`, // Make URLs unique
         category: 'General',
         tags: ['scraped', 'competitor'],
         publish_date: new Date().toISOString().split('T')[0],
@@ -151,7 +153,38 @@ function extractContentFromHTML(html: string, baseUrl: string): any[] {
     }
   });
 
-  return content.slice(0, 20); // Limit to 20 items per scrape
+  // Extract content from links
+  linkMatches.slice(0, 10).forEach((match, index) => {
+    const linkMatch = match.match(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/i);
+    if (linkMatch) {
+      const href = linkMatch[1];
+      const linkText = linkMatch[2].replace(/<[^>]*>/g, '').trim();
+      
+      if (linkText.length > 5 && !processedTitles.has(linkText)) {
+        processedTitles.add(linkText);
+        // Make absolute URL
+        let fullUrl = href;
+        if (href.startsWith('/')) {
+          fullUrl = new URL(href, baseUrl).toString();
+        } else if (!href.startsWith('http')) {
+          fullUrl = new URL(href, baseUrl).toString();
+        }
+        
+        content.push({
+          content_type: 'link',
+          title: linkText,
+          description: `Link content from ${new URL(baseUrl).hostname}`,
+          url: fullUrl,
+          category: 'Navigation',
+          tags: ['scraped', 'competitor', 'link'],
+          publish_date: new Date().toISOString().split('T')[0],
+          content_score: Math.floor(Math.random() * 40) + 30, // Lower score for links
+        });
+      }
+    }
+  });
+
+  return content.slice(0, 15); // Limit to 15 items per scrape
 }
 
 async function analyzeCompetitorContent(supabaseClient: any, claudeApiKey: string, competitorId?: string) {
