@@ -32,6 +32,7 @@ import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
+import CompetitorAnalysis from "@/components/CompetitorAnalysis";
 import {
   Shield,
   Users,
@@ -58,6 +59,7 @@ import {
   ShieldCheck,
   BarChart3,
   Server,
+  Target,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -641,20 +643,35 @@ export default function Admin() {
                      {!sidebarCollapsed && <span>Social Media</span>}
                    </button>
 
-                   <button
-                     onClick={() => setActiveTab("coordinates")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "coordinates"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Coordinates" : ""}
-                   >
-                     <Settings className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Coordinates</span>}
-                   </button>
+                    <button
+                      onClick={() => setActiveTab("coordinates")}
+                      className={`w-full flex items-center ${
+                        sidebarCollapsed ? "justify-center" : "gap-3"
+                      } px-3 py-2 rounded-lg text-left transition-colors ${
+                        activeTab === "coordinates"
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                      title={sidebarCollapsed ? "Coordinates" : ""}
+                    >
+                      <Settings className="h-4 w-4" />
+                      {!sidebarCollapsed && <span>Coordinates</span>}
+                    </button>
+
+                    <button
+                      onClick={() => setActiveTab("competitor-analysis")}
+                      className={`w-full flex items-center ${
+                        sidebarCollapsed ? "justify-center" : "gap-3"
+                      } px-3 py-2 rounded-lg text-left transition-colors ${
+                        activeTab === "competitor-analysis"
+                          ? "bg-primary text-primary-foreground"
+                          : "hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                      title={sidebarCollapsed ? "Competitor Analysis" : ""}
+                    >
+                      <Target className="h-4 w-4" />
+                      {!sidebarCollapsed && <span>Competitor Analysis</span>}
+                    </button>
                  </>
                )}
 
@@ -1158,6 +1175,10 @@ export default function Admin() {
 
             {canManageContent() && activeTab === "coordinates" && (
               <CoordinateManager />
+            )}
+
+            {canManageContent() && activeTab === "competitor-analysis" && (
+              <CompetitorAnalysis />
             )}
 
             {canManageUsers() && activeTab === "users" && <UserRoleManager />}
