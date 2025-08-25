@@ -298,7 +298,48 @@ Format as JSON array:
   }
 ]
 
-Return empty array [] if no attractions found.`
+Return empty array [] if no attractions found.`,
+
+        competitor_analysis: `Analyze this competitor website content from ${currentUrl} and extract valuable content pieces for competitive analysis.
+
+WEBSITE CONTENT:
+${content.substring(0, 15000)}
+
+Extract ALL content pieces that could be valuable for competitive analysis, including:
+- Articles/blog posts about local attractions, events, or dining
+- Event listings and promotional content
+- Restaurant features or reviews
+- Tourism-related content
+- Community guides or recommendations
+- Marketing campaigns or promotional materials
+
+For each content piece, provide:
+- title: Content title or headline
+- description: Brief summary of the content
+- url: Specific URL if different from page URL, otherwise use page URL
+- content_type: Type of content (Article, Event Listing, Guide, Review, etc.)
+- category: Content category (Tourism, Dining, Events, Attractions, etc.)
+- publish_date: Publication date if available (YYYY-MM-DD format)
+- engagement_indicators: Any social sharing numbers, comments, or engagement metrics found
+
+Format as JSON array:
+[
+  {
+    "title": "Content Title",
+    "description": "Content description and key points",
+    "url": "${currentUrl}",
+    "content_type": "Article",
+    "category": "Tourism",
+    "publish_date": "2025-01-15",
+    "engagement_indicators": {
+      "likes": 25,
+      "shares": 5,
+      "comments": 3
+    }
+  }
+]
+
+Return empty array [] if no competitive content found.`
       };
 
       const selectedPrompt = prompts[category as keyof typeof prompts] || prompts.events;
@@ -403,7 +444,8 @@ Return empty array [] if no attractions found.`
       restaurants: 'restaurants', 
       playgrounds: 'playgrounds',
       restaurant_openings: 'restaurant_openings',
-      attractions: 'attractions'
+      attractions: 'attractions',
+      competitor_analysis: 'competitor_content'
     };
 
     const tableName = tableMapping[category as keyof typeof tableMapping] || 'events';
@@ -483,6 +525,27 @@ Return empty array [] if no attractions found.`
                 };
                 break;
                 
+              case 'competitor_analysis':
+                // Find the competitor_id based on the URL
+                const { data: competitors } = await supabase
+                  .from('competitors')
+                  .select('id')
+                  .eq('website_url', url)
+                  .single();
+                
+                transformedData = {
+                  competitor_id: competitors?.id || null,
+                  title: item.title?.substring(0, 200) || "Untitled Content",
+                  description: item.description?.substring(0, 1000) || "",
+                  url: item.url?.substring(0, 500) || url,
+                  content_type: item.content_type?.substring(0, 100) || "General",
+                  category: item.category?.substring(0, 100) || "General",
+                  content_score: Math.floor(Math.random() * 10) + 1,
+                  engagement_metrics: item.engagement_indicators || {},
+                  scraped_at: new Date().toISOString(),
+                };
+                break;
+                
               default:
                 continue; // Skip unknown categories
             }
@@ -495,6 +558,13 @@ Return empty array [] if no attractions found.`
                 .select('*')
                 .eq('title', transformedData.title)
                 .eq('venue', transformedData.venue);
+              existingItems = data || [];
+            } else if (category === 'competitor_analysis') {
+              const { data, error } = await supabase
+                .from(tableName)
+                .select('*')
+                .eq('title', transformedData.title)
+                .eq('competitor_id', transformedData.competitor_id);
               existingItems = data || [];
             } else {
               const { data, error } = await supabase
