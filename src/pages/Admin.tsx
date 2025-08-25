@@ -33,6 +33,8 @@ import AdminSystemControls from "@/components/AdminSystemControls";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import { CompetitorAnalysisDashboard } from "@/components/CompetitorAnalysisDashboard";
+import ArticlesManager from "@/components/ArticlesManager";
+import { useArticles } from "@/hooks/useArticles";
 import {
   Shield,
   Users,
@@ -91,6 +93,7 @@ export default function Admin() {
     attractions: "",
     playgrounds: "",
     restaurantOpenings: "",
+    articles: "",
   });
 
   // Separate state for input values to prevent re-renders
@@ -100,6 +103,7 @@ export default function Admin() {
     attractions: "",
     playgrounds: "",
     restaurantOpenings: "",
+    articles: "",
   });
 
   // Debounce the search term updates
@@ -142,6 +146,14 @@ export default function Admin() {
           })),
         300
       ),
+      articles: setTimeout(
+        () =>
+          setSearchTerms((prev) => ({
+            ...prev,
+            articles: inputValues.articles,
+          })),
+        300
+      ),
     };
 
     return () => {
@@ -170,6 +182,10 @@ export default function Admin() {
     setInputValues((prev) => ({ ...prev, restaurantOpenings: search }));
   }, []);
 
+  const handleArticlesSearch = useCallback((search: string) => {
+    setInputValues((prev) => ({ ...prev, articles: search }));
+  }, []);
+
   // Edit dialog state
   const [editDialog, setEditDialog] = useState<{
     open: boolean;
@@ -190,6 +206,7 @@ export default function Admin() {
     search: searchTerms.restaurantOpenings,
   });
   const scraping = useScraping();
+  const articlesData = useArticles();
 
   useEffect(() => {
     console.log("Admin useEffect:", {
@@ -581,6 +598,21 @@ export default function Admin() {
                   >
                     <Play className="h-4 w-4" />
                     {!sidebarCollapsed && <span>Playgrounds</span>}
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("articles")}
+                    className={`w-full flex items-center ${
+                      sidebarCollapsed ? "justify-center" : "gap-3"
+                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === "articles"
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                    title={sidebarCollapsed ? "Articles" : ""}
+                  >
+                    <FileText className="h-4 w-4" />
+                    {!sidebarCollapsed && <span>Articles</span>}
                   </button>
 
                   <button
@@ -1123,6 +1155,10 @@ export default function Admin() {
                 }
                 onCreate={() => handleCreate("playground")}
               />
+            )}
+
+            {canManageContent() && activeTab === "articles" && (
+              <ArticlesManager />
             )}
 
             {canManageContent() && activeTab === "restaurant-openings" && (
