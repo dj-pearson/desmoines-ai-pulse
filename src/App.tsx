@@ -20,6 +20,8 @@ const RestaurantDetails = lazy(() => import("./pages/RestaurantDetails"));
 const AttractionDetails = lazy(() => import("./pages/AttractionDetails"));
 const PlaygroundDetails = lazy(() => import("./pages/PlaygroundDetails"));
 const EventsPage = lazy(() => import("./pages/EventsPage"));
+const Articles = lazy(() => import("./pages/Articles"));
+const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
 const Advertise = lazy(() => import("./pages/Advertise"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
 const WeekendPage = lazy(() => import("./pages/WeekendPage"));
@@ -59,6 +61,8 @@ const App = () => (
             <Route path="/playgrounds" element={<Playgrounds />} />
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:slug" element={<EventDetails />} />
+            <Route path="/articles" element={<Articles />} />
+            <Route path="/articles/:slug" element={<ArticleDetails />} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />

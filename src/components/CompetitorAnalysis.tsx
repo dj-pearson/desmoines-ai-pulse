@@ -6,9 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertTriangle, Globe, Loader2, RotateCcw, Target, TrendingUp, Plus, ExternalLink, BarChart3 } from 'lucide-react';
+import { AlertTriangle, Globe, Loader2, RotateCcw, Target, TrendingUp, Plus, ExternalLink, BarChart3, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { useArticles } from '@/hooks/useArticles';
 
 interface Competitor {
   id: string;
@@ -443,10 +444,56 @@ const CompetitorAnalysis = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p>AI suggestions will appear here after running analysis</p>
-              </div>
+              {suggestions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>AI suggestions will appear here after running analysis</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {suggestions.map((suggestion) => (
+                    <Card key={suggestion.id} className="relative">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <CardTitle className="text-lg">{suggestion.suggested_title}</CardTitle>
+                            <CardDescription className="mt-2">
+                              {suggestion.suggested_description}
+                            </CardDescription>
+                          </div>
+                          <Badge variant={suggestion.status === 'pending' ? 'secondary' : 'outline'}>
+                            Priority: {suggestion.priority_score}/100
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          {suggestion.improvement_areas?.map((area) => (
+                            <Badge key={area} variant="outline" className="text-xs">
+                              {area}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <Badge>{suggestion.suggestion_type}</Badge>
+                          <Button
+                            onClick={() => generateArticleFromSuggestion(suggestion.id)}
+                            variant="default"
+                            size="sm"
+                            className="flex items-center gap-2"
+                          >
+                            <FileText className="h-4 w-4" />
+                            Generate Article
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
             </CardContent>
           </Card>
         </TabsContent>
