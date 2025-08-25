@@ -97,10 +97,10 @@ export default function ArticlesManager() {
             </CardDescription>
           </div>
           <Button asChild>
-            <Link to="/articles">
+            <a href="/admin/articles/new" target="_blank" rel="noopener noreferrer">
               <Plus className="h-4 w-4 mr-2" />
-              View Public Articles
-            </Link>
+              Create New Article
+            </a>
           </Button>
         </div>
       </CardHeader>
@@ -205,6 +205,12 @@ export default function ArticlesManager() {
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
+                        <Button asChild variant="ghost" size="sm">
+                          <a href={`/admin/articles/edit/${article.id}`} target="_blank" rel="noopener noreferrer">
+                            <Edit className="h-3 w-3" />
+                          </a>
+                        </Button>
+                        
                         <Button asChild variant="ghost" size="sm">
                           <Link to={`/articles/${article.slug}`}>
                             <Eye className="h-3 w-3" />

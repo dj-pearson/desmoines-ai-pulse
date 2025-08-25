@@ -62,6 +62,7 @@ import {
   BarChart3,
   Server,
   Target,
+  Plus,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -616,6 +617,21 @@ export default function Admin() {
                   </button>
 
                   <button
+                    onClick={() => setActiveTab("article-editor")}
+                    className={`w-full flex items-center ${
+                      sidebarCollapsed ? "justify-center" : "gap-3"
+                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === "article-editor"
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                    title={sidebarCollapsed ? "Article Editor" : ""}
+                  >
+                    <Plus className="h-4 w-4" />
+                    {!sidebarCollapsed && <span>New Article</span>}
+                  </button>
+
+                  <button
                     onClick={() => setActiveTab("restaurant-openings")}
                     className={`w-full flex items-center ${
                       sidebarCollapsed ? "justify-center" : "gap-3"
@@ -1159,6 +1175,16 @@ export default function Admin() {
 
             {canManageContent() && activeTab === "articles" && (
               <ArticlesManager />
+            )}
+
+            {canManageContent() && activeTab === "article-editor" && (
+              <div className="p-6">
+                <iframe
+                  src="/admin/articles/new"
+                  className="w-full h-[800px] border rounded-lg"
+                  title="Article Editor"
+                />
+              </div>
             )}
 
             {canManageContent() && activeTab === "restaurant-openings" && (

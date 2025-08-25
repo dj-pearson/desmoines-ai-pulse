@@ -22,6 +22,7 @@ const PlaygroundDetails = lazy(() => import("./pages/PlaygroundDetails"));
 const EventsPage = lazy(() => import("./pages/EventsPage"));
 const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
+const AdminArticleEditor = lazy(() => import("./pages/AdminArticleEditor"));
 const Advertise = lazy(() => import("./pages/Advertise"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
 const WeekendPage = lazy(() => import("./pages/WeekendPage"));
@@ -62,7 +63,9 @@ const App = () => (
             <Route path="/events" element={<EventsPage />} />
             <Route path="/events/:slug" element={<EventDetails />} />
             <Route path="/articles" element={<Articles />} />
-            <Route path="/articles/:slug" element={<ArticleDetails />} />
+          <Route path="/articles/:slug" element={<ArticleDetails />} />
+          <Route path="/admin/articles/new" element={<AdminArticleEditor />} />
+          <Route path="/admin/articles/edit/:id" element={<AdminArticleEditor />} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />

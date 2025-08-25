@@ -10,6 +10,7 @@ import { AlertTriangle, Globe, Loader2, RotateCcw, Target, TrendingUp, Plus, Ext
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useArticles } from '@/hooks/useArticles';
+import GenerateArticleButton from '@/components/GenerateArticleButton';
 
 interface ContentSuggestion {
   id: string;
@@ -65,7 +66,6 @@ const CompetitorAnalysis = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState('recent-content');
   const [isAddingCompetitor, setIsAddingCompetitor] = useState(false);
-  const { generateArticleFromSuggestion } = useArticles();
   const [newCompetitor, setNewCompetitor] = useState({
     name: '',
     website_url: '',
@@ -498,15 +498,13 @@ const CompetitorAnalysis = () => {
                         </div>
                          <div className="flex justify-between items-center">
                            <Badge>{suggestion.suggestion_type}</Badge>
-                           <Button
-                             onClick={() => generateArticleFromSuggestion(suggestion.id)}
+                           <GenerateArticleButton
+                             suggestionId={suggestion.id}
+                             suggestionTitle={suggestion.suggested_title}
+                             suggestionDescription={suggestion.suggested_description}
                              variant="default"
                              size="sm"
-                             className="flex items-center gap-2"
-                           >
-                             <FileText className="h-4 w-4" />
-                             Generate Article
-                           </Button>
+                           />
                          </div>
                        </CardContent>
                      </Card>
