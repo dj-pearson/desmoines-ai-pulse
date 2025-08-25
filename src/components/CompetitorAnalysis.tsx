@@ -118,8 +118,8 @@ const CompetitorAnalysis = () => {
         const { data, error } = await supabase.functions.invoke('firecrawl-scraper', {
           body: {
             url: competitor.website_url,
-            category: competitor.primary_focus,
-            source: 'competitor_analysis'
+            category: 'competitor_analysis',
+            maxPages: 2
           }
         });
 
