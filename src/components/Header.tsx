@@ -277,19 +277,6 @@ export default function Header() {
               <AdvertiseButton />
               {isAuthenticated ? (
                 <>
-                  {isAdmin && (
-                    <Link to="/admin" aria-label="Go to admin dashboard">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="touch-target"
-                      >
-                        <Shield className="h-4 w-4 mr-2" aria-hidden="true" />
-                        Admin
-                      </Button>
-                    </Link>
-                  )}
-
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -357,6 +344,14 @@ export default function Header() {
                           Business Portal
                         </Link>
                       </DropdownMenuItem>
+                      {isAdmin && (
+                        <DropdownMenuItem asChild role="none">
+                          <Link to="/admin" className="flex items-center" role="menuitem" aria-label="Go to admin dashboard">
+                            <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
+                            Admin
+                          </Link>
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={handleLogout} role="menuitem" aria-label="Sign out of your account">
                         <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
