@@ -604,6 +604,145 @@ export type Database = {
         }
         Relationships: []
       }
+      competitor_content: {
+        Row: {
+          category: string | null
+          competitor_id: string
+          content_score: number | null
+          content_type: string
+          description: string | null
+          engagement_metrics: Json | null
+          id: string
+          publish_date: string | null
+          scraped_at: string
+          tags: string[] | null
+          title: string
+          updated_at: string
+          url: string | null
+        }
+        Insert: {
+          category?: string | null
+          competitor_id: string
+          content_score?: number | null
+          content_type: string
+          description?: string | null
+          engagement_metrics?: Json | null
+          id?: string
+          publish_date?: string | null
+          scraped_at?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          url?: string | null
+        }
+        Update: {
+          category?: string | null
+          competitor_id?: string
+          content_score?: number | null
+          content_type?: string
+          description?: string | null
+          engagement_metrics?: Json | null
+          id?: string
+          publish_date?: string | null
+          scraped_at?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_content_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitor_reports: {
+        Row: {
+          average_content_score: number | null
+          competitive_advantages: Json | null
+          competitor_id: string
+          content_gaps_identified: number | null
+          created_at: string
+          id: string
+          recommendations: Json | null
+          report_date: string
+          suggestions_generated: number | null
+          top_performing_categories: string[] | null
+          total_content_pieces: number | null
+        }
+        Insert: {
+          average_content_score?: number | null
+          competitive_advantages?: Json | null
+          competitor_id: string
+          content_gaps_identified?: number | null
+          created_at?: string
+          id?: string
+          recommendations?: Json | null
+          report_date?: string
+          suggestions_generated?: number | null
+          top_performing_categories?: string[] | null
+          total_content_pieces?: number | null
+        }
+        Update: {
+          average_content_score?: number | null
+          competitive_advantages?: Json | null
+          competitor_id?: string
+          content_gaps_identified?: number | null
+          created_at?: string
+          id?: string
+          recommendations?: Json | null
+          report_date?: string
+          suggestions_generated?: number | null
+          top_performing_categories?: string[] | null
+          total_content_pieces?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competitor_reports_competitor_id_fkey"
+            columns: ["competitor_id"]
+            isOneToOne: false
+            referencedRelation: "competitors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competitors: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          primary_focus: string | null
+          updated_at: string
+          website_url: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          primary_focus?: string | null
+          updated_at?: string
+          website_url: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          primary_focus?: string | null
+          updated_at?: string
+          website_url?: string
+        }
+        Relationships: []
+      }
       content_helpful_votes: {
         Row: {
           content_id: string
@@ -756,6 +895,59 @@ export type Database = {
           weighted_average?: number
         }
         Relationships: []
+      }
+      content_suggestions: {
+        Row: {
+          ai_analysis: Json | null
+          competitor_content_id: string | null
+          created_at: string
+          id: string
+          improvement_areas: string[] | null
+          priority_score: number | null
+          status: string | null
+          suggested_description: string | null
+          suggested_tags: string[] | null
+          suggested_title: string
+          suggestion_type: string
+          updated_at: string
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          competitor_content_id?: string | null
+          created_at?: string
+          id?: string
+          improvement_areas?: string[] | null
+          priority_score?: number | null
+          status?: string | null
+          suggested_description?: string | null
+          suggested_tags?: string[] | null
+          suggested_title: string
+          suggestion_type: string
+          updated_at?: string
+        }
+        Update: {
+          ai_analysis?: Json | null
+          competitor_content_id?: string | null
+          created_at?: string
+          id?: string
+          improvement_areas?: string[] | null
+          priority_score?: number | null
+          status?: string | null
+          suggested_description?: string | null
+          suggested_tags?: string[] | null
+          suggested_title?: string
+          suggestion_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_suggestions_competitor_content_id_fkey"
+            columns: ["competitor_content_id"]
+            isOneToOne: false
+            referencedRelation: "competitor_content"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cron_logs: {
         Row: {
