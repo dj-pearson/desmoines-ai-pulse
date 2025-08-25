@@ -60,7 +60,6 @@ import {
   BarChart3,
   Server,
   Target,
-  Target,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
