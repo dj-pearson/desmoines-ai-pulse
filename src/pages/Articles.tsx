@@ -18,15 +18,16 @@ const Articles: React.FC = () => {
   // Get unique categories from articles
   const categories = Array.from(new Set(articles.map(article => article.category)));
 
-  // Filter articles based on search and category
+  // Filter articles based on search and category - only show published articles
   const filteredArticles = articles.filter(article => {
+    const isPublished = article.status === 'published';
     const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          article.excerpt?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          article.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesCategory = !selectedCategory || article.category === selectedCategory;
 
-    return matchesSearch && matchesCategory;
+    return isPublished && matchesSearch && matchesCategory;
   });
 
   const formatDate = (dateString: string) => {
@@ -58,22 +59,13 @@ const Articles: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-            <div>
-              <h1 className="text-4xl font-bold text-foreground mb-2">
-                Articles & Insights
-              </h1>
-              <p className="text-muted-foreground text-lg">
-                Discover comprehensive guides and insights about Des Moines
-              </p>
-            </div>
-            
-            <Link to="/admin">
-              <Button className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Write Article
-              </Button>
-            </Link>
+          <div className="mb-6">
+            <h1 className="text-4xl font-bold text-foreground mb-2">
+              Articles & Insights
+            </h1>
+            <p className="text-muted-foreground text-lg">
+              Discover comprehensive guides and insights about Des Moines
+            </p>
           </div>
 
           {/* Search and Filter */}
