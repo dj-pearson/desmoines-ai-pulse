@@ -11,6 +11,16 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useArticles } from '@/hooks/useArticles';
 
+interface ContentSuggestion {
+  id: string;
+  suggested_title: string;
+  suggested_description?: string;
+  suggestion_type: string;
+  priority_score: number;
+  status: string;
+  improvement_areas?: string[];
+}
+
 interface Competitor {
   id: string;
   name: string;
@@ -49,11 +59,13 @@ const CompetitorAnalysis = () => {
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [competitorContent, setCompetitorContent] = useState<CompetitorContent[]>([]);
   const [analysisReports, setAnalysisReports] = useState<AnalysisReport[]>([]);
+  const [suggestions, setSuggestions] = useState<ContentSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [scraping, setScraping] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [activeTab, setActiveTab] = useState('recent-content');
   const [isAddingCompetitor, setIsAddingCompetitor] = useState(false);
+  const { generateArticleFromSuggestion } = useArticles();
   const [newCompetitor, setNewCompetitor] = useState({
     name: '',
     website_url: '',
@@ -97,6 +109,16 @@ const CompetitorAnalysis = () => {
 
       if (reportsError) throw reportsError;
       setAnalysisReports(reportsData || []);
+
+      // Fetch content suggestions
+      const { data: suggestionsData, error: suggestionsError } = await supabase
+        .from('content_suggestions')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (suggestionsError) throw suggestionsError;
+      setSuggestions(suggestionsData || []);
 
     } catch (error) {
       console.error('Error fetching competitor data:', error);
@@ -474,29 +496,26 @@ const CompetitorAnalysis = () => {
                             </Badge>
                           ))}
                         </div>
-                        <div className="flex justify-between items-center">
-                          <Badge>{suggestion.suggestion_type}</Badge>
-                          <Button
-                            onClick={() => generateArticleFromSuggestion(suggestion.id)}
-                            variant="default"
-                            size="sm"
-                            className="flex items-center gap-2"
-                          >
-                            <FileText className="h-4 w-4" />
-                            Generate Article
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-            </CardContent>
-          </Card>
-        </TabsContent>
+                         <div className="flex justify-between items-center">
+                           <Badge>{suggestion.suggestion_type}</Badge>
+                           <Button
+                             onClick={() => generateArticleFromSuggestion(suggestion.id)}
+                             variant="default"
+                             size="sm"
+                             className="flex items-center gap-2"
+                           >
+                             <FileText className="h-4 w-4" />
+                             Generate Article
+                           </Button>
+                         </div>
+                       </CardContent>
+                     </Card>
+                   ))}
+                 </div>
+               )}
+             </CardContent>
+           </Card>
+         </TabsContent>
 
         <TabsContent value="analysis-reports">
           <Card>

@@ -32,6 +32,7 @@ import {
   Users,
   Trophy,
   Building2,
+  FileText,
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
@@ -85,6 +86,7 @@ export default function Header() {
     { href: "/restaurants", label: "Restaurants", icon: MapPin },
     { href: "/attractions", label: "Attractions", icon: Camera },
     { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
+    { href: "/articles", label: "Articles", icon: FileText },
   ];
 
   return (
