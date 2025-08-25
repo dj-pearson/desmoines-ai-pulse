@@ -23,9 +23,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = Deno.env.get('CLAUDE_API');
     if (!claudeApiKey) {
-      throw new Error('CLAUDE_API_KEY is required');
+      throw new Error('CLAUDE_API is required');
     }
 
     const { competitorId, analysisType }: CompetitorAnalysisRequest = await req.json();
