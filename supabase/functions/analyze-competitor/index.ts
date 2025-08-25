@@ -61,11 +61,16 @@ serve(async (req) => {
 
 async function scrapeCompetitorContent(supabaseClient: any, competitorId?: string) {
   // Get competitor info
-  const { data: competitors, error: competitorError } = await supabaseClient
+  let competitorQuery = supabaseClient
     .from('competitors')
     .select('*')
-    .eq('is_active', true)
-    .eq(competitorId ? 'id' : undefined, competitorId || undefined);
+    .eq('is_active', true);
+    
+  if (competitorId) {
+    competitorQuery = competitorQuery.eq('id', competitorId);
+  }
+  
+  const { data: competitors, error: competitorError } = await competitorQuery;
 
   if (competitorError) throw competitorError;
   if (!competitors?.length) throw new Error('No active competitors found');
@@ -244,12 +249,17 @@ Please provide analysis in the following JSON format:
 
 async function generateContentSuggestions(supabaseClient: any, claudeApiKey: string, competitorId?: string) {
   // Get competitor content and our existing content
-  const { data: competitorContent } = await supabaseClient
+  let query = supabaseClient
     .from('competitor_content')
     .select('*, competitors(name)')
-    .eq(competitorId ? 'competitor_id' : undefined, competitorId || undefined)
     .order('content_score', { ascending: false })
     .limit(10);
+    
+  if (competitorId) {
+    query = query.eq('competitor_id', competitorId);
+  }
+  
+  const { data: competitorContent } = await query;
 
   const { data: ourContent } = await supabaseClient
     .from('events')
