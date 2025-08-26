@@ -15,7 +15,7 @@ import SEOHead from '@/components/SEOHead';
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('published');
 
   // Get unique categories from articles
@@ -27,7 +27,7 @@ const Articles: React.FC = () => {
     const matchesSearch = article.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          article.excerpt?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          article.content.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = !selectedCategory || article.category === selectedCategory;
+    const matchesCategory = selectedCategory === 'all' || !selectedCategory || article.category === selectedCategory;
     
     return matchesStatus && matchesSearch && matchesCategory;
   });
@@ -102,7 +102,7 @@ const Articles: React.FC = () => {
                 <SelectValue placeholder="All Categories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all">All Categories</SelectItem>
                 {categories.map((category) => (
                   <SelectItem key={category} value={category}>
                     {category}
@@ -125,12 +125,12 @@ const Articles: React.FC = () => {
                   'No articles have been published yet.'
                 }
               </p>
-              {(searchQuery || selectedCategory) && (
+              {(searchQuery || (selectedCategory && selectedCategory !== 'all')) && (
                 <Button 
                   variant="outline" 
                   onClick={() => {
                     setSearchQuery('');
-                    setSelectedCategory('');
+                    setSelectedCategory('all');
                   }}
                 >
                   Clear Filters
