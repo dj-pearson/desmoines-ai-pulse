@@ -16,7 +16,7 @@ const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('published');
+  const [selectedStatus, setSelectedStatus] = useState('draft');
 
   // Get unique categories from articles
   const categories = Array.from(new Set(articles.map(article => article.category)));
@@ -41,7 +41,8 @@ const Articles: React.FC = () => {
   };
 
   useEffect(() => {
-    loadArticles(selectedStatus === 'all' ? undefined : selectedStatus);
+    // For public Articles page, default to published unless explicitly changed
+    loadArticles(selectedStatus === 'all' ? 'all' : selectedStatus);
   }, [selectedStatus]);
 
   if (loading) {

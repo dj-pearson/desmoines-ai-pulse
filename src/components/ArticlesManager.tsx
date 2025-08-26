@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useArticles } from "@/hooks/useArticles";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,8 +11,13 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
 export default function ArticlesManager() {
-  const { articles, loading, error, deleteArticle, publishArticle } = useArticles();
+  const { articles, loading, error, deleteArticle, publishArticle, loadArticles } = useArticles();
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Load all articles (including drafts) for admin management
+  useEffect(() => {
+    loadArticles('all'); // Load all articles regardless of status
+  }, []);
 
   const filteredArticles = articles.filter(article => 
     article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -54,12 +54,10 @@ export const useArticles = () => {
         .select('*')
         .order('updated_at', { ascending: false });
 
-      if (status) {
+      if (status && status !== 'all') {
         query = query.eq('status', status);
-      } else {
-        // Default to published articles for public view
-        query = query.eq('status', 'published');
       }
+      // If status is 'all' or undefined, load all articles without filtering
 
       const { data, error } = await query;
 
