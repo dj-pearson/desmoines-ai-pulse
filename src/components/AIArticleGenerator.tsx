@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Sparkles, 
   Brain, 
@@ -20,7 +21,11 @@ import {
   Loader2,
   CheckCircle,
   AlertCircle,
-  Lightbulb
+  Lightbulb,
+  RefreshCw,
+  Clock,
+  Users,
+  Star
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -34,6 +39,28 @@ interface GenerationSettings {
   length: 'short' | 'medium' | 'long';
   includeLocalSEO: boolean;
   customInstructions: string;
+}
+
+interface TopicSuggestion {
+  title: string;
+  description: string;
+  category: string;
+  estimated_keywords: string[];
+  content_type: string;
+  seo_potential: 'high' | 'medium' | 'low';
+  seasonal_relevance: 'high' | 'medium' | 'low' | 'none';
+  target_audience: string;
+  difficulty: 'easy' | 'medium' | 'advanced';
+  estimated_word_count: string;
+  unique_angle: string;
+}
+
+interface SuggestionsData {
+  suggestions: TopicSuggestion[];
+  content_gaps_identified: string[];
+  seasonal_opportunities: string[];
+  trending_local_topics: string[];
+  suggested_focus_areas: string[];
 }
 
 interface GenerationResult {
@@ -55,8 +82,11 @@ interface GenerationResult {
 const AIArticleGenerator: React.FC = () => {
   const navigate = useNavigate();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [newKeyword, setNewKeyword] = useState('');
   const [generationResult, setGenerationResult] = useState<GenerationResult | null>(null);
+  const [suggestions, setSuggestions] = useState<SuggestionsData | null>(null);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<TopicSuggestion | null>(null);
   
   const [settings, setSettings] = useState<GenerationSettings>({
     topic: '',
@@ -67,6 +97,11 @@ const AIArticleGenerator: React.FC = () => {
     includeLocalSEO: true,
     customInstructions: ''
   });
+
+  // Load suggestions on component mount
+  useEffect(() => {
+    loadTopicSuggestions();
+  }, []);
 
   const categories = [
     'General', 'Events', 'Restaurants', 'Attractions', 'Culture', 
@@ -147,24 +182,76 @@ const AIArticleGenerator: React.FC = () => {
     }
   };
 
-  const generateSampleTopics = () => {
-    const sampleTopics = [
-      'Best Coffee Shops in Des Moines',
-      'Des Moines Farmers Market Guide',
-      'Top Family Attractions in Des Moines',
-      'Des Moines Nightlife Scene',
-      'Historic Downtown Des Moines Walking Tour',
-      'Best Parks and Trails in Des Moines',
-      'Des Moines Food Scene Guide',
-      'Things to Do in Des Moines This Weekend'
-    ];
+  const loadTopicSuggestions = async (focusArea = '', categoryFilter = '') => {
+    try {
+      setIsLoadingSuggestions(true);
+      
+      const { data, error } = await supabase.functions.invoke('suggest-article-topics', {
+        body: {
+          category: categoryFilter,
+          focusArea: focusArea,
+          includeLocalTrends: true,
+          includeSeasonalTopics: true,
+          excludeExistingTopics: true,
+          suggestionCount: 8
+        }
+      });
+
+      if (error) {
+        console.error('Suggestions error:', error);
+        throw new Error(error.message || 'Failed to load suggestions');
+      }
+
+      if (data.success) {
+        setSuggestions(data.data);
+      } else {
+        throw new Error(data.error || 'Failed to load suggestions');
+      }
+    } catch (error) {
+      console.error('Error loading suggestions:', error);
+      toast.error('Failed to load topic suggestions', {
+        description: error instanceof Error ? error.message : 'Unknown error occurred'
+      });
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  const handleSuggestionSelect = (suggestion: TopicSuggestion) => {
+    setSelectedSuggestion(suggestion);
+    handleSettingChange('topic', suggestion.title);
+    handleSettingChange('category', suggestion.category);
+    handleSettingChange('targetKeywords', suggestion.estimated_keywords);
     
-    const randomTopic = sampleTopics[Math.floor(Math.random() * sampleTopics.length)];
-    handleSettingChange('topic', randomTopic);
+    // Set appropriate length based on suggestion
+    const lengthMap: { [key: string]: 'short' | 'medium' | 'long' } = {
+      '800-1000': 'short',
+      '1200-1500': 'medium',
+      '1800-2500': 'long'
+    };
+    handleSettingChange('length', lengthMap[suggestion.estimated_word_count] || 'medium');
+  };
+
+  const getSEOPotentialColor = (potential: string) => {
+    switch (potential) {
+      case 'high': return 'text-green-600 bg-green-100';
+      case 'medium': return 'text-yellow-600 bg-yellow-100';
+      case 'low': return 'text-gray-600 bg-gray-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getDifficultyColor = (difficulty: string) => {
+    switch (difficulty) {
+      case 'easy': return 'text-green-600 bg-green-100';
+      case 'medium': return 'text-blue-600 bg-blue-100';
+      case 'advanced': return 'text-red-600 bg-red-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
   };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -177,6 +264,173 @@ const AIArticleGenerator: React.FC = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <Tabs defaultValue="suggestions" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="suggestions" className="flex items-center gap-2">
+                <Lightbulb className="h-4 w-4" />
+                Topic Suggestions
+              </TabsTrigger>
+              <TabsTrigger value="custom" className="flex items-center gap-2">
+                <Target className="h-4 w-4" />
+                Custom Topic
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="suggestions" className="space-y-6">
+              {/* Topic Suggestions */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5 text-primary" />
+                        AI-Powered Topic Suggestions
+                      </CardTitle>
+                      <CardDescription>
+                        Smart topic ideas based on content gaps, trends, and Des Moines local opportunities
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      onClick={() => loadTopicSuggestions()}
+                      disabled={isLoadingSuggestions}
+                      className="flex items-center gap-2"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${isLoadingSuggestions ? 'animate-spin' : ''}`} />
+                      Refresh
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {isLoadingSuggestions ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        <span>Loading intelligent suggestions...</span>
+                      </div>
+                    </div>
+                  ) : suggestions ? (
+                    <div className="space-y-6">
+                      {/* Insights */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600">{suggestions.suggestions.length}</div>
+                          <div className="text-sm text-blue-700 dark:text-blue-300">Topic Ideas</div>
+                        </div>
+                        <div className="bg-green-50 dark:bg-green-950 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-green-600">{suggestions.content_gaps_identified.length}</div>
+                          <div className="text-sm text-green-700 dark:text-green-300">Content Gaps</div>
+                        </div>
+                        <div className="bg-purple-50 dark:bg-purple-950 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-purple-600">{suggestions.seasonal_opportunities.length}</div>
+                          <div className="text-sm text-purple-700 dark:text-purple-300">Seasonal Ideas</div>
+                        </div>
+                        <div className="bg-orange-50 dark:bg-orange-950 p-4 rounded-lg">
+                          <div className="text-2xl font-bold text-orange-600">{suggestions.trending_local_topics.length}</div>
+                          <div className="text-sm text-orange-700 dark:text-orange-300">Trending Topics</div>
+                        </div>
+                      </div>
+
+                      {/* Suggestions Grid */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {suggestions.suggestions.map((suggestion, index) => (
+                          <Card 
+                            key={index} 
+                            className={`cursor-pointer transition-all hover:shadow-md ${
+                              selectedSuggestion?.title === suggestion.title 
+                                ? 'ring-2 ring-primary bg-primary/5' 
+                                : 'hover:border-primary/50'
+                            }`}
+                            onClick={() => handleSuggestionSelect(suggestion)}
+                          >
+                            <CardContent className="p-4 space-y-3">
+                              <div className="space-y-2">
+                                <h4 className="font-semibold line-clamp-2">{suggestion.title}</h4>
+                                <p className="text-sm text-muted-foreground line-clamp-2">{suggestion.description}</p>
+                              </div>
+                              
+                              <div className="flex flex-wrap gap-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {suggestion.category}
+                                </Badge>
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`text-xs ${getSEOPotentialColor(suggestion.seo_potential)}`}
+                                >
+                                  <TrendingUp className="h-3 w-3 mr-1" />
+                                  {suggestion.seo_potential} SEO
+                                </Badge>
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`text-xs ${getDifficultyColor(suggestion.difficulty)}`}
+                                >
+                                  {suggestion.difficulty}
+                                </Badge>
+                              </div>
+
+                              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                <div className="flex items-center gap-1">
+                                  <Users className="h-3 w-3" />
+                                  {suggestion.target_audience}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <FileText className="h-3 w-3" />
+                                  {suggestion.estimated_word_count}
+                                </div>
+                              </div>
+
+                              {suggestion.unique_angle && (
+                                <div className="bg-muted/50 p-2 rounded text-xs">
+                                  <strong>Unique Angle:</strong> {suggestion.unique_angle}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+
+                      {/* Content Gaps & Opportunities */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <h4 className="font-semibold mb-3 flex items-center gap-2">
+                            <AlertCircle className="h-4 w-4 text-orange-500" />
+                            Content Gaps Identified
+                          </h4>
+                          <div className="space-y-2">
+                            {suggestions.content_gaps_identified.map((gap, index) => (
+                              <div key={index} className="bg-orange-50 dark:bg-orange-950 p-2 rounded text-sm">
+                                {gap}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-semibold mb-3 flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-green-500" />
+                            Seasonal Opportunities
+                          </h4>
+                          <div className="space-y-2">
+                            {suggestions.seasonal_opportunities.map((opportunity, index) => (
+                              <div key={index} className="bg-green-50 dark:bg-green-950 p-2 rounded text-sm">
+                                {opportunity}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Lightbulb className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p>Click "Refresh" to load topic suggestions</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="custom" className="space-y-6">
           {/* Generation Results */}
           {generationResult && (
             <Card className="border-green-200 bg-green-50 dark:bg-green-950 dark:border-green-800">
@@ -248,11 +502,12 @@ const AIArticleGenerator: React.FC = () => {
                       />
                       <Button 
                         variant="outline" 
-                        onClick={generateSampleTopics}
+                        onClick={() => loadTopicSuggestions()}
+                        disabled={isLoadingSuggestions}
                         className="flex items-center gap-2"
                       >
                         <Lightbulb className="h-4 w-4" />
-                        Inspire
+                        Suggest
                       </Button>
                     </div>
                   </div>
@@ -449,6 +704,8 @@ const AIArticleGenerator: React.FC = () => {
               </Card>
             </div>
           </div>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>
