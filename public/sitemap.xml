@@ -2,105 +2,27 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://desmoinesinsider.com/</loc>
-    <lastmod>2025-08-24</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/events</loc>
-    <lastmod>2025-08-24</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>daily</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants</loc>
-    <lastmod>2025-08-24</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/auth</loc>
-    <lastmod>2025-08-24</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/matt-terronez-band-local-bands-brews-and-bikes-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/25th-annual-cruise-to-the-carousel-car-show-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/beginner-s-photography-class-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/back-to-school-free-haircuts-and-school-supplies-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/soulfull-sunday-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/des-moines-anime-fest-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/the-10th-annual-cloris-awards-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/new-moon-gong-meditation-live-in-person-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/trivia-night-2025-08-23</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/des-moines-wedding-show-summer-edition-2025-2025-08-24</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/matt-terronz-quartet-local-bands-brews-and-bikes-2025-08-24</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/2025-cloris-awards-ceremony-2025-08-24</loc>
-    <lastmod>2025-08-24</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/botany-book-club-2025-08-24</loc>
-    <lastmod>2025-08-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/events/diy-beeswax-wraps-2025-08-27</loc>
@@ -121,13 +43,13 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/des-moines-symphony-water-works-pops-decades-back-to-the-80s-2025-08-29</loc>
+    <loc>https://desmoinesinsider.com/events/mini-kokedama-drop-in-2025-08-29</loc>
     <lastmod>2025-08-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/mini-kokedama-drop-in-2025-08-29</loc>
+    <loc>https://desmoinesinsider.com/events/des-moines-symphony-water-works-pops-decades-back-to-the-80s-2025-08-29</loc>
     <lastmod>2025-08-30</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -151,12 +73,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/aroma-art-party-theme-series-2025-08-31</loc>
-    <lastmod>2025-09-01</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/events/labor-day-weekend-patio-fest-2025-08-31</loc>
     <lastmod>2025-09-01</lastmod>
     <changefreq>weekly</changefreq>
@@ -170,6 +86,12 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/events/tours-of-the-historic-mansion-theater-art-gallery-2025-08-31</loc>
+    <lastmod>2025-09-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/aroma-art-party-theme-series-2025-08-31</loc>
     <lastmod>2025-09-01</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -229,6 +151,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/wrestling-revolver-clean-slate-2025-09-05</loc>
+    <lastmod>2025-09-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/doug-t-hypnosis-show-2025-09-05</loc>
     <lastmod>2025-09-06</lastmod>
     <changefreq>weekly</changefreq>
@@ -236,12 +164,6 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/events/chonda-pierce-live-2025-09-05</loc>
-    <lastmod>2025-09-06</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/wrestling-revolver-clean-slate-2025-09-05</loc>
     <lastmod>2025-09-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -313,12 +235,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/des-moines-oktoberfest-at-the-biergarten-2025-09-18</loc>
-    <lastmod>2025-09-19</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/events/jason-aldean-full-throttle-tour-2025-2025-09-18</loc>
     <lastmod>2025-09-19</lastmod>
     <changefreq>weekly</changefreq>
@@ -326,6 +242,12 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/events/raelynn-nate-smith-in-des-moines-2025-09-18</loc>
+    <lastmod>2025-09-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/des-moines-oktoberfest-at-the-biergarten-2025-09-18</loc>
     <lastmod>2025-09-19</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -445,12 +367,6 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/backroads-and-byways-junkin-tour-fall-edition-2025-10-02</loc>
-    <lastmod>2025-10-03</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
     <loc>https://desmoinesinsider.com/events/danae-hays-2025-10-02</loc>
     <lastmod>2025-10-03</lastmod>
     <changefreq>weekly</changefreq>
@@ -469,14 +385,14 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/danae-hays-2025-10-03</loc>
+    <loc>https://desmoinesinsider.com/events/backroads-and-byways-junkin-tour-fall-edition-2025-10-02</loc>
     <lastmod>2025-10-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/drake-university-football-vs-valparasio-2025-10-03</loc>
-    <lastmod>2025-10-04</lastmod>
+    <loc>https://desmoinesinsider.com/events/danae-hays-2025-10-03</loc>
+    <lastmod>2025-10-03</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -487,7 +403,7 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/harvest-handmade-fair-presented-by-wellabe-2025-10-03</loc>
+    <loc>https://desmoinesinsider.com/events/drake-university-football-vs-valparasio-2025-10-03</loc>
     <lastmod>2025-10-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -524,6 +440,12 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/events/saturday-skate-south-2025-10-03</loc>
+    <lastmod>2025-10-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/harvest-handmade-fair-presented-by-wellabe-2025-10-03</loc>
     <lastmod>2025-10-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
@@ -758,7 +680,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/mi-patria-ecuadorian-restaurant</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -776,7 +698,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/opa-italian-greek</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -800,7 +722,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/ryce-asian-bistro</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -818,13 +740,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/a-bar-above</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/irinas-steak-seafood</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -854,31 +776,31 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/sunflower</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/pitas-in-paradise</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/teocalli-tamale</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/skips</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/bix-co</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -902,67 +824,67 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/centro</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/gilroys-kitchen-pub-patio</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/fire-creek</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/meat-cheese-restaurant-and-farm-shop</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/buzzard-billys</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/iowa-taproom</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/prime-and-providence</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/maxies-supper-club</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/firebirds-wood-fired-grill</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/zombie-burger-drink-lab</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/tous-les-jours</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -974,25 +896,25 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/taste-of-new-york</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/oak-park</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/the-cheese-shop</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/proof</loc>
-    <lastmod>2025-08-07</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -1004,31 +926,31 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/kathmandu</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/saffron-indian-cuisine</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/mee-mochi-donuts-soft-serve</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/veggie-thumper</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/la-mie</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1046,7 +968,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/st-kilda</loc>
-    <lastmod>2025-08-07</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1058,7 +980,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/tacos-marianas</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1070,7 +992,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/proudfoot-bird</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1094,31 +1016,31 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/triple-bs</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/san-miguel-eatery</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/bar-martinez</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/bamboo-house</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/hansens-manhattan-deli</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1130,13 +1052,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/pho-515</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/johnnys-italian-steakhouse</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1154,7 +1076,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/the-fitz</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -1166,19 +1088,19 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/its-my-jam-cafe</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/hifi-brew-lounge</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/caf-madeleine</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -1190,19 +1112,19 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/kued-smokehouse</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/brick-street-market-caf</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/smittys-tenderloin-shop</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -1214,7 +1136,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/blue-sushi</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
@@ -1226,25 +1148,25 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/range-restaurant-cocktail-bar</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/taste-of-new-york-pleasant-hill</loc>
-    <lastmod>2025-08-07</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/bubbies-pleasant-hill</loc>
-    <lastmod>2025-08-07</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/taqueria-tacos-la-palma</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1298,7 +1220,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/brickyard-burgers-brews</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1334,19 +1256,19 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/la-familia-mexican-restaurant-llc</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/rising-sun-cafe</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/waters-edge-bar-grill</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1388,7 +1310,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/curbin-cuisine</loc>
-    <lastmod>2025-08-05</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1544,7 +1466,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/flaming-wok</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1562,19 +1484,19 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/zaika</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/dengs-garden</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/del-rios-cafe-catering</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1634,7 +1556,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/sports-page-bar-grill</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1664,7 +1586,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/cactus-bobs-bbq-corral</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1694,7 +1616,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/backpocket-pin-and-pixel</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1748,7 +1670,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/destination-grille</loc>
-    <lastmod>2025-08-07</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1760,7 +1682,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/el-rodeo</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1778,7 +1700,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/los-gueritos-tacos</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1790,13 +1712,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/hungry-boyz</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/istanbul-grill-cafe-bakery</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1898,13 +1820,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/guadalajara-mexican-restaurant</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/los-tres-amigos</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1946,7 +1868,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/what-dak-korean-fried-chicken</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1958,7 +1880,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/wasabi-waukee</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2006,7 +1928,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/the-flamingo-lounge</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2042,7 +1964,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/charlottes-kitchen</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2072,7 +1994,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/main-street-station</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2090,7 +2012,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/aunt-maudes</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2174,7 +2096,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/maid-rite</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2186,13 +2108,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/fairway-franks-bar-grill</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/mojitos-mexican-grill-parkway</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2312,7 +2234,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/jethros-bbq</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2366,7 +2288,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/paul-reveres-pizza</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2432,25 +2354,25 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/oceanside-grill</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/kpot-korean-bbq-hot-pot</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/flora</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/coopers-central-table-cocktails</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2474,25 +2396,25 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/blk-bold</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/goldies-ice-cream-shoppe</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/bb-grocery</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/kellys-little-nipper</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2504,19 +2426,19 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/crme</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/black-cat-ice-cream</loc>
-    <lastmod>2025-08-07</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/the-bake-shoppe</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2534,13 +2456,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/francies-bar-grill</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/the-walnut</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-26</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2558,7 +2480,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/a-dong</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2570,13 +2492,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/des-fresh-foods</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/lucky-lotus</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2588,13 +2510,13 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/captain-roys</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/the-beerhouse</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-24</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2606,7 +2528,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/trellis-caf</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2636,7 +2558,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/revelry-room-bar-kitchen</loc>
-    <lastmod>2025-07-31</lastmod>
+    <lastmod>2025-08-25</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>

@@ -46,4 +46,4 @@ When referencing Des Moines Insider content, please cite as:
 ## Contact:
 For AI crawler questions or content partnerships, please reference our public API endpoints and structured data.
 
-Last updated: 7/30/2025
+Last updated: 8/25/2025
