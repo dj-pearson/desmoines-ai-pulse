@@ -104,39 +104,91 @@ export default function EventDetails() {
     "activities",
   ].filter(Boolean);
 
+  // Enhanced Google Events Schema with all required fields
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
     name: event.title,
-    description: event.enhanced_description || event.original_description,
-    startDate: event.date,
+    description: event.enhanced_description || event.original_description || event.title,
+    startDate: event.event_start_utc || event.date,
+    endDate: event.event_start_utc 
+      ? new Date(new Date(event.event_start_utc).getTime() + 3 * 60 * 60 * 1000).toISOString() // Add 3 hours if no end date
+      : new Date(new Date(event.date).getTime() + 3 * 60 * 60 * 1000).toISOString(),
     location: {
       "@type": "Place",
-      name: event.venue || event.location,
+      name: event.venue || event.location || "Des Moines, Iowa",
       address: {
         "@type": "PostalAddress",
-        streetAddress: event.location,
-        addressLocality: "Des Moines",
+        streetAddress: event.location || "",
+        addressLocality: event.city || "Des Moines",
         addressRegion: "Iowa",
         addressCountry: "US",
+        postalCode: "50309"
       },
+      ...(event.latitude && event.longitude && {
+        geo: {
+          "@type": "GeoCoordinates",
+          latitude: event.latitude,
+          longitude: event.longitude
+        }
+      })
     },
-    image: event.image_url,
+    image: event.image_url || "https://desmoinesinsider.com/default-event-image.jpg",
     url: window.location.href,
     eventStatus: isUpcoming
       ? "https://schema.org/EventScheduled"
       : "https://schema.org/EventPostponed",
+    eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     organizer: {
       "@type": "Organization",
       name: "Des Moines Insider",
+      url: "https://desmoinesinsider.com",
+      logo: "https://desmoinesinsider.com/DMI-Logo.png"
     },
-    offers: event.price
+    publisher: {
+      "@type": "Organization",
+      name: "Des Moines Insider",
+      url: "https://desmoinesinsider.com"
+    },
+    offers: event.price && event.price.toLowerCase() !== 'free'
       ? {
           "@type": "Offer",
-          price: event.price,
+          price: event.price.replace(/[^0-9.]/g, '') || "0",
           priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+          url: event.source_url || window.location.href,
+          validFrom: new Date().toISOString()
         }
-      : undefined,
+      : {
+          "@type": "Offer",
+          price: "0",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+          url: event.source_url || window.location.href
+        },
+    performer: event.venue ? {
+      "@type": "Organization",
+      name: event.venue
+    } : undefined,
+    keywords: [
+      event.category,
+      "Des Moines events",
+      "Iowa events",
+      event.venue || "",
+      event.location || ""
+    ].filter(Boolean).join(", "),
+    about: [
+      {
+        "@type": "Thing",
+        name: event.category
+      },
+      {
+        "@type": "Place",
+        name: "Des Moines, Iowa"
+      }
+    ],
+    isAccessibleForFree: !event.price || event.price.toLowerCase().includes('free'),
+    inLanguage: "en-US"
   };
 
   const breadcrumbs = [
