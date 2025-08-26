@@ -736,6 +736,7 @@ export default function Admin() {
                       <Target className="h-4 w-4" />
                       {!sidebarCollapsed && <span>Competitor Analysis</span>}
                     </button>
+
                     <button
                       onClick={() => setActiveTab("coordinates")}
                       className={`w-full flex items-center ${
@@ -749,21 +750,6 @@ export default function Admin() {
                     >
                       <Settings className="h-4 w-4" />
                       {!sidebarCollapsed && <span>Coordinates</span>}
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("competitor-analysis")}
-                      className={`w-full flex items-center ${
-                        sidebarCollapsed ? "justify-center" : "gap-3"
-                      } px-3 py-2 rounded-lg text-left transition-colors ${
-                        activeTab === "competitor-analysis"
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent hover:text-accent-foreground"
-                      }`}
-                      title={sidebarCollapsed ? "Competitor Analysis" : ""}
-                    >
-                      <Target className="h-4 w-4" />
-                      {!sidebarCollapsed && <span>Competitor Analysis</span>}
                     </button>
                  </>
                )}
