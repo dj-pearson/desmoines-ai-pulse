@@ -4,8 +4,24 @@ import { useArticles } from '@/hooks/useArticles';
 import { Article } from '@/hooks/useArticles';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Calendar, Eye, ArrowLeft, Share2 } from 'lucide-react';
-import { AccessibleLoadingSpinner } from '@/components/AccessibleLoadingSpinner';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { 
+  Calendar, 
+  Eye, 
+  ArrowLeft, 
+  Share2, 
+  Clock, 
+  User, 
+  Tag, 
+  BookOpen,
+  ThumbsUp,
+  MessageCircle,
+  Bookmark
+} from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/loading-skeleton';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import ShareDialog from '@/components/ShareDialog';
 
@@ -36,165 +52,265 @@ const ArticleDetails: React.FC = () => {
     });
   };
 
+  const formatReadTime = (content: string) => {
+    const wordsPerMinute = 200;
+    const wordCount = content.split(/\s+/).length;
+    const readTime = Math.max(1, Math.ceil(wordCount / wordsPerMinute));
+    return `${readTime} min read`;
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <AccessibleLoadingSpinner />
+      <>
+        <Header />
+        <div className="min-h-screen bg-background">
+          <div className="container mx-auto px-4 py-8">
+            <div className="flex items-center justify-center min-h-[400px]">
+              <LoadingSpinner />
+            </div>
+          </div>
         </div>
-      </div>
+        <Footer />
+      </>
     );
   }
 
   if (!article) {
     return (
-      <div className="min-h-screen bg-background">
-        <div className="container mx-auto px-4 py-8">
-          <div className="text-center py-12">
-            <h1 className="text-2xl font-bold mb-4">Article Not Found</h1>
-            <p className="text-muted-foreground mb-6">
+      <>
+        <Header />
+        <div className="min-h-screen bg-background">
+          <div className="container mx-auto px-4 py-16 text-center">
+            <BookOpen className="h-16 w-16 text-muted-foreground mx-auto mb-4 opacity-50" />
+            <h1 className="text-2xl font-semibold mb-2">Article Not Found</h1>
+            <p className="text-muted-foreground mb-8">
               The article you're looking for doesn't exist or has been removed.
             </p>
-            <Link to="/articles">
-              <Button variant="outline">
+            <Button asChild>
+              <Link to="/articles">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Articles
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
-      </div>
+        <Footer />
+      </>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
       <SEOHead 
         title={article.seo_title || article.title}
-        description={article.seo_description || article.excerpt || `Read about ${article.title} on Des Moines Insider`}
-        keywords={article.seo_keywords || article.tags}
+        description={article.seo_description || article.excerpt || `Read ${article.title} on Des Moines Insider`}
+        keywords={article.seo_keywords || article.tags || []}
       />
-
-      <article className="container mx-auto px-4 py-8 max-w-4xl">
-        {/* Navigation */}
-        <div className="mb-8">
-          <Link to="/articles">
-            <Button variant="ghost" className="mb-4">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Articles
-            </Button>
-          </Link>
-        </div>
-
-        {/* Featured Image */}
-        {article.featured_image_url && (
-          <div className="aspect-video overflow-hidden rounded-lg mb-8">
-            <img
-              src={article.featured_image_url}
-              alt={article.title}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        )}
-
-        {/* Article Header */}
-        <header className="mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <Badge variant="secondary">
-              {article.category}
-            </Badge>
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Calendar className="h-4 w-4 mr-1" />
-              {formatDate(article.published_at || article.created_at)}
+      <Header />
+      
+      <div className="min-h-screen bg-background">
+        {/* Hero Section */}
+        <div className="relative">
+          {/* Featured Image */}
+          {article.featured_image_url && (
+            <div className="relative h-64 md:h-96 lg:h-[500px] overflow-hidden">
+              <img
+                src={article.featured_image_url}
+                alt={article.title}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/30" />
+              
+              {/* Back Button Overlay */}
+              <div className="absolute top-4 left-4 z-10">
+                <Button asChild variant="secondary" size="sm" className="backdrop-blur-sm">
+                  <Link to="/articles">
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to Articles
+                  </Link>
+                </Button>
+              </div>
             </div>
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Eye className="h-4 w-4 mr-1" />
-              {article.view_count} views
-            </div>
-          </div>
-
-          <h1 className="text-4xl font-bold text-foreground mb-4">
-            {article.title}
-          </h1>
-
-          {article.excerpt && (
-            <p className="text-xl text-muted-foreground leading-relaxed mb-6">
-              {article.excerpt}
-            </p>
           )}
 
-          <div className="flex items-center justify-between border-b border-border pb-6">
-            <div className="flex flex-wrap gap-2">
-              {article.tags.map((tag) => (
-                <Badge key={tag} variant="outline">
-                  {tag}
-                </Badge>
-              ))}
-            </div>
+          {/* Article Header */}
+          <div className="container mx-auto px-4">
+            <div className="max-w-4xl mx-auto">
+              <div className={`py-8 ${!article.featured_image_url ? 'pt-16' : ''}`}>
+                {!article.featured_image_url && (
+                  <Button asChild variant="ghost" size="sm" className="mb-6">
+                    <Link to="/articles">
+                      <ArrowLeft className="h-4 w-4 mr-2" />
+                      Back to Articles
+                    </Link>
+                  </Button>
+                )}
 
-            <ShareDialog 
-              title={article.title}
-              description={article.excerpt || article.title}
-              url={window.location.href}
-              trigger={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="flex items-center gap-2"
-                >
-                  <Share2 className="h-4 w-4" />
-                  Share
-                </Button>
-              }
-            />
+                {/* Article Meta */}
+                <div className="flex flex-wrap items-center gap-3 mb-6">
+                  <Badge variant="secondary" className="text-sm">
+                    {article.category}
+                  </Badge>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      {formatDate(article.published_at || article.created_at)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      {formatReadTime(article.content)}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Eye className="h-4 w-4" />
+                      {article.view_count || 0} views
+                    </span>
+                  </div>
+                </div>
+
+                {/* Title */}
+                <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-6 leading-tight">
+                  {article.title}
+                </h1>
+
+                {/* Excerpt */}
+                {article.excerpt && (
+                  <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
+                    {article.excerpt}
+                  </p>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap items-center gap-3 mb-8">
+                  <ShareDialog 
+                    title={article.title}
+                    description={article.excerpt || article.title}
+                    url={window.location.href}
+                    trigger={
+                      <Button variant="outline" size="sm" className="gap-2">
+                        <Share2 className="h-4 w-4" />
+                        Share
+                      </Button>
+                    }
+                  />
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Bookmark className="h-4 w-4" />
+                    Save
+                  </Button>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <ThumbsUp className="h-4 w-4" />
+                    Like
+                  </Button>
+                </div>
+
+                {/* Tags */}
+                {article.tags && article.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-8">
+                    {article.tags.map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-sm gap-1">
+                        <Tag className="h-3 w-3" />
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </header>
+        </div>
 
         {/* Article Content */}
-        <div 
-          className="prose prose-gray dark:prose-invert max-w-none"
-          dangerouslySetInnerHTML={{ __html: article.content }}
-        />
+        <div className="container mx-auto px-4 pb-16">
+          <div className="max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Main Content */}
+              <article className="lg:col-span-8">
+                <Card className="p-6 md:p-8">
+                  <div 
+                    className="prose prose-lg max-w-none dark:prose-invert prose-headings:font-bold prose-p:leading-relaxed prose-img:rounded-lg prose-img:shadow-md"
+                    dangerouslySetInnerHTML={{ 
+                      __html: article.content.replace(/\n/g, '<br/>') 
+                    }}
+                  />
+                </Card>
 
-        {/* Article Footer */}
-        <footer className="mt-12 pt-8 border-t border-border">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Last updated: {formatDate(article.updated_at)}
-            </div>
-            
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-muted-foreground">
-                {article.view_count} views
-              </span>
-              <ShareDialog 
-                title={article.title}
-                description={article.excerpt || article.title}
-                url={window.location.href}
-                trigger={
-                  <Button variant="outline" size="sm">
-                    <Share2 className="h-4 w-4 mr-2" />
-                    Share Article
-                  </Button>
-                }
-              />
+                {/* Article Footer */}
+                <div className="mt-8 p-6 bg-muted/30 rounded-lg border">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold mb-2">Found this helpful?</h3>
+                      <div className="flex items-center gap-3">
+                        <Button variant="outline" size="sm" className="gap-2">
+                          <ThumbsUp className="h-4 w-4" />
+                          Yes
+                        </Button>
+                        <Button variant="outline" size="sm" className="gap-2">
+                          <MessageCircle className="h-4 w-4" />
+                          Feedback
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-muted-foreground mb-2">
+                        Published {formatDate(article.published_at || article.created_at)}
+                      </p>
+                      <ShareDialog 
+                        title={article.title}
+                        description={article.excerpt || article.title}
+                        url={window.location.href}
+                        trigger={
+                          <Button variant="default" size="sm" className="gap-2">
+                            <Share2 className="h-4 w-4" />
+                            Share Article
+                          </Button>
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </article>
+
+              {/* Sidebar */}
+              <aside className="lg:col-span-4">
+                <div className="sticky top-8 space-y-6">
+                  {/* Table of Contents (placeholder) */}
+                  <Card className="p-6">
+                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                      <BookOpen className="h-4 w-4" />
+                      In This Article
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="text-muted-foreground">
+                        Table of contents will be generated based on article headings
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Related Articles */}
+                  <Card className="p-6">
+                    <h3 className="font-semibold mb-4">Related Articles</h3>
+                    <div className="text-muted-foreground text-sm">
+                      Related articles will be shown here
+                    </div>
+                  </Card>
+
+                  {/* Newsletter Signup */}
+                  <Card className="p-6 bg-primary/5 border-primary/20">
+                    <h3 className="font-semibold mb-2">Stay Updated</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Get the latest Des Moines insights delivered to your inbox
+                    </p>
+                    <Button className="w-full" size="sm">
+                      Subscribe to Newsletter
+                    </Button>
+                  </Card>
+                </div>
+              </aside>
             </div>
           </div>
-        </footer>
-
-        {/* Related Articles or Call to Action */}
-        <div className="mt-12 text-center">
-          <h3 className="text-lg font-semibold mb-4">Discover More</h3>
-          <p className="text-muted-foreground mb-6">
-            Explore more articles about Des Moines events, attractions, and local insights.
-          </p>
-          <Link to="/articles">
-            <Button variant="outline">
-              Browse All Articles
-            </Button>
-          </Link>
         </div>
-      </article>
+      </div>
+
+      <Footer />
 
       {/* Share Dialog */}
       <ShareDialog 
@@ -202,7 +318,7 @@ const ArticleDetails: React.FC = () => {
         description={article.excerpt || article.title}
         url={window.location.href}
       />
-    </div>
+    </>
   );
 };
 
