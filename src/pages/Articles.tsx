@@ -95,6 +95,8 @@ const Articles: React.FC = () => {
               <SelectContent>
                 <SelectItem value="published">Published</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="scheduled">Scheduled</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
                 <SelectItem value="all">All Status</SelectItem>
               </SelectContent>
             </Select>

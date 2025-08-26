@@ -24,7 +24,7 @@ interface ArticleData {
   seo_title: string;
   seo_description: string;
   seo_keywords: string[];
-  status: 'draft' | 'published' | 'archived';
+  status: 'draft' | 'published' | 'scheduled' | 'archived';
 }
 
 export default function ArticleEditor() {
@@ -64,7 +64,7 @@ export default function ArticleEditor() {
         seo_title: existingArticle.seo_title || "",
         seo_description: existingArticle.seo_description || "",
         seo_keywords: existingArticle.seo_keywords || [],
-        status: existingArticle.status as 'draft' | 'published' | 'archived'
+        status: existingArticle.status as 'draft' | 'published' | 'scheduled' | 'archived'
       });
       setIsNewArticle(false);
     }
@@ -392,6 +392,7 @@ export default function ArticleEditor() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
                     <SelectItem value="published">Published</SelectItem>
                     <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>

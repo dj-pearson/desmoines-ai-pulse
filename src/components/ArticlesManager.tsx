@@ -48,11 +48,18 @@ export default function ArticlesManager() {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
       draft: "secondary",
+      scheduled: "outline",
       published: "default",
-      archived: "outline"
+      archived: "destructive"
+    };
+    const colors: Record<string, string> = {
+      draft: "text-gray-600",
+      scheduled: "text-blue-600",
+      published: "text-green-600",
+      archived: "text-red-600"
     };
     return (
-      <Badge variant={variants[status] || "secondary"}>
+      <Badge variant={variants[status] || "secondary"} className={colors[status]}>
         {status.charAt(0).toUpperCase() + status.slice(1)}
       </Badge>
     );
@@ -227,8 +234,20 @@ export default function ArticlesManager() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handlePublish(article.id, article.title)}
+                            className="text-green-600 hover:text-green-700"
                           >
                             Publish
+                          </Button>
+                        )}
+                        
+                        {article.status === 'scheduled' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handlePublish(article.id, article.title)}
+                            className="text-green-600 hover:text-green-700"
+                          >
+                            Publish Now
                           </Button>
                         )}
                         
