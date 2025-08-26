@@ -34,6 +34,7 @@ import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import { CompetitorAnalysisDashboard } from "@/components/CompetitorAnalysisDashboard";
 import ArticlesManager from "@/components/ArticlesManager";
+import AIArticleGenerator from "@/components/AIArticleGenerator";
 import { useArticles } from "@/hooks/useArticles";
 import {
   Shield,
@@ -617,6 +618,21 @@ export default function Admin() {
                   </button>
 
                   <button
+                    onClick={() => setActiveTab("ai-article-generator")}
+                    className={`w-full flex items-center ${
+                      sidebarCollapsed ? "justify-center" : "gap-3"
+                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === "ai-article-generator"
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                    title={sidebarCollapsed ? "AI Article Generator" : ""}
+                  >
+                    <Bot className="h-4 w-4" />
+                    {!sidebarCollapsed && <span>AI Article Generator</span>}
+                  </button>
+
+                  <button
                     onClick={() => setActiveTab("article-editor")}
                     className={`w-full flex items-center ${
                       sidebarCollapsed ? "justify-center" : "gap-3"
@@ -1175,6 +1191,10 @@ export default function Admin() {
 
             {canManageContent() && activeTab === "articles" && (
               <ArticlesManager />
+            )}
+
+            {canManageContent() && activeTab === "ai-article-generator" && (
+              <AIArticleGenerator />
             )}
 
             {canManageContent() && activeTab === "article-editor" && (
