@@ -152,7 +152,6 @@ All colors MUST be HSL. Touch targets minimum 44px.
   .hover-scale:hover {
     transform: scale(1.02);
   }
-}
   
   .text-mobile-title {
     @apply text-lg font-semibold leading-relaxed;
