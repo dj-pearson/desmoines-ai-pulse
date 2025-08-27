@@ -119,6 +119,15 @@ All colors MUST be HSL. Touch targets minimum 44px.
   /* Mobile-first text sizes with improved spacing */
   .text-mobile-hero {
     @apply text-2xl font-bold leading-tight;
+  }
+  
+  .text-mobile-lg {
+    @apply text-lg font-semibold leading-tight;
+  }
+  
+  .text-mobile-sm {
+    @apply text-sm leading-relaxed;
+  }
   
   /* Text truncation utilities */
   .line-clamp-2 {

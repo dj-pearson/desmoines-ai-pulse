@@ -187,35 +187,35 @@ export function SocialEventCard({
         </div>
       )}
       
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+      <CardHeader className="mobile-padding pb-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-mobile-lg mb-2 line-clamp-2 group-hover:text-primary transition-colors leading-tight">
               {event.title}
             </CardTitle>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
-              <div className="flex items-center gap-1">
-                <Calendar className="w-4 h-4" />
-                {formatDate(event.date)}
+            <div className="space-y-1">
+              <div className="flex items-center gap-1 text-mobile-sm text-muted-foreground">
+                <Calendar className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{formatDate(event.date)}</span>
               </div>
               {event.venue && (
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  <span className="truncate">{event.venue}</span>
+                <div className="flex items-center gap-1 text-mobile-sm text-muted-foreground">
+                  <MapPin className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate text-xs sm:text-sm">{event.venue}</span>
                 </div>
               )}
             </div>
           </div>
           
-          <Badge variant="outline" className="ml-2">
+          <Badge variant="outline" className="flex-shrink-0 text-xs">
             {event.category}
           </Badge>
         </div>
       </CardHeader>
 
-      <CardContent className="pt-0">
+      <CardContent className="mobile-padding pt-0">
         {event.description && (
-          <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+          <p className="text-mobile-sm text-muted-foreground mb-4 line-clamp-2 leading-relaxed">
             {event.description}
           </p>
         )}
@@ -247,30 +247,30 @@ export function SocialEventCard({
             )}
 
             {/* Social Proof */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 text-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-mobile-sm">
                 {attendanceData.going > 0 && (
                   <div className="flex items-center gap-1 text-green-600">
-                    <Heart className="w-4 h-4 fill-current" />
+                    <Heart className="w-4 h-4 fill-current flex-shrink-0" />
                     <span>{attendanceData.going} going</span>
                   </div>
                 )}
                 {attendanceData.interested > 0 && (
                   <div className="flex items-center gap-1 text-blue-600">
-                    <Star className="w-4 h-4" />
+                    <Star className="w-4 h-4 flex-shrink-0" />
                     <span>{attendanceData.interested} interested</span>
                   </div>
                 )}
                 {ugcData.reviews.length > 0 && (
                   <div className="flex items-center gap-1 text-orange-600">
-                    <MessageCircle className="w-4 h-4" />
+                    <MessageCircle className="w-4 h-4 flex-shrink-0" />
                     <span>{ugcData.reviews.length} reviews</span>
                   </div>
                 )}
               </div>
               
               {socialBuzz > 5 && (
-                <div className="text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground self-start sm:self-auto">
                   Buzz: {socialBuzz}
                 </div>
               )}
@@ -291,12 +291,12 @@ export function SocialEventCard({
 
             {/* Attendance Actions */}
             {user && (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="flex flex-wrap gap-2 sm:grid sm:grid-cols-3">
                 <Button 
                   variant={userAttendance === 'going' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => handleAttendanceUpdate('going')}
-                  className="text-xs"
+                  className="touch-target text-xs flex-1 min-w-[80px]"
                 >
                   Going
                 </Button>
@@ -304,7 +304,7 @@ export function SocialEventCard({
                   variant={userAttendance === 'interested' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => handleAttendanceUpdate('interested')}
-                  className="text-xs"
+                  className="touch-target text-xs flex-1 min-w-[80px]"
                 >
                   Interested
                 </Button>
@@ -312,7 +312,7 @@ export function SocialEventCard({
                   variant={userAttendance === 'maybe' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => handleAttendanceUpdate('maybe')}
-                  className="text-xs"
+                  className="touch-target text-xs flex-1 min-w-[80px]"
                 >
                   Maybe
                 </Button>
@@ -322,12 +322,12 @@ export function SocialEventCard({
         )}
 
         {/* Action Buttons */}
-        <div className="flex items-center justify-between mt-4 pt-4 border-t">
+        <div className="flex items-center gap-2 mt-4 pt-4 border-t">
           <Button 
             onClick={() => onViewDetails(event.id)}
             variant="default"
             size="sm"
-            className="flex-1 mr-2"
+            className="touch-target flex-1 text-mobile-sm"
           >
             View Details
           </Button>
@@ -337,7 +337,8 @@ export function SocialEventCard({
               variant="outline" 
               size="sm"
               onClick={handleShare}
-              className="px-3"
+              className="touch-target px-3 flex-shrink-0"
+              aria-label="Share event"
             >
               <Share2 className="w-4 h-4" />
             </Button>
