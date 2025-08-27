@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,9 +32,13 @@ import {
   Save,
   X,
   Settings,
+  Calendar,
+  MapPin,
+  Eye,
 } from "lucide-react";
 import { useScraping } from "@/hooks/useScraping";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 import {
   scheduleOptions,
   cronToFriendly,
@@ -54,6 +58,16 @@ interface ScrapingJob {
     schedule?: string;
     isActive?: boolean;
   };
+}
+
+interface RecentEvent {
+  id: string;
+  title: string;
+  date: string;
+  venue: string;
+  category: string;
+  source_url: string;
+  created_at: string;
 }
 
 interface JobFormData {
@@ -78,6 +92,66 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
   const { toast } = useToast();
   const [editingJob, setEditingJob] = useState<ScrapingJob | null>(null);
   const [formData, setFormData] = useState<JobFormData>({});
+  const [recentEvents, setRecentEvents] = useState<Record<string, RecentEvent[]>>({});
+  const [expandedJobs, setExpandedJobs] = useState<Set<string>>(new Set());
+  const [loadingEvents, setLoadingEvents] = useState<Set<string>>(new Set());
+
+  // Fetch recent events for a specific job
+  const fetchRecentEventsForJob = async (job: ScrapingJob) => {
+    if (!job.config.url || loadingEvents.has(job.id)) return;
+
+    setLoadingEvents(prev => new Set(prev).add(job.id));
+    
+    try {
+      // Get domain from URL to match source_url
+      const urlObj = new URL(job.config.url);
+      const domain = urlObj.hostname;
+      
+      // Fetch events from the last 7 days that match this job's source domain
+      const { data, error } = await supabase
+        .from('events')
+        .select('id, title, date, venue, category, source_url, created_at')
+        .ilike('source_url', `%${domain}%`)
+        .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (error) throw error;
+
+      setRecentEvents(prev => ({
+        ...prev,
+        [job.id]: data || []
+      }));
+    } catch (error) {
+      console.error(`Error fetching recent events for ${job.name}:`, error);
+      toast({
+        title: "Error",
+        description: `Failed to load recent events for ${job.name}`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingEvents(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(job.id);
+        return newSet;
+      });
+    }
+  };
+
+  // Toggle expanded state and fetch events if needed
+  const toggleJobExpansion = (job: ScrapingJob) => {
+    const newExpandedJobs = new Set(expandedJobs);
+    if (expandedJobs.has(job.id)) {
+      newExpandedJobs.delete(job.id);
+    } else {
+      newExpandedJobs.add(job.id);
+      // Fetch recent events when expanding
+      if (!recentEvents[job.id]) {
+        fetchRecentEventsForJob(job);
+      }
+    }
+    setExpandedJobs(newExpandedJobs);
+  };
 
   const handleEditJob = (job: ScrapingJob) => {
     setEditingJob(job);
@@ -337,7 +411,87 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
                           ? "Running..."
                           : "Run Now"}
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => toggleJobExpansion(job)}
+                      >
+                        <Eye className="h-3 w-3 mr-1" />
+                        {expandedJobs.has(job.id) ? "Hide Events" : "Show Recent Events"}
+                      </Button>
                     </div>
+
+                    {/* Recent Events Section */}
+                    {expandedJobs.has(job.id) && (
+                      <div className="mt-4 pt-4 border-t border-gray-200">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Calendar className="h-4 w-4 text-blue-600" />
+                          <h4 className="font-semibold">Recent Events (Last 7 Days)</h4>
+                          {loadingEvents.has(job.id) && (
+                            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                          )}
+                        </div>
+                        
+                        {recentEvents[job.id] ? (
+                          recentEvents[job.id].length > 0 ? (
+                            <div className="space-y-2 max-h-60 overflow-y-auto">
+                              {recentEvents[job.id].map((event) => (
+                                <div
+                                  key={event.id}
+                                  className="p-3 border border-gray-200 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <h5 className="font-medium text-sm text-gray-900 truncate">
+                                        {event.title}
+                                      </h5>
+                                      <div className="flex items-center gap-4 mt-1 text-xs text-gray-600">
+                                        <div className="flex items-center gap-1">
+                                          <Calendar className="h-3 w-3" />
+                                          <span>
+                                            {new Date(event.date).toLocaleDateString()}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                          <MapPin className="h-3 w-3" />
+                                          <span className="truncate">{event.venue}</span>
+                                        </div>
+                                      </div>
+                                      <div className="mt-1">
+                                        <Badge variant="outline" className="text-xs">
+                                          {event.category}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                    <div className="text-xs text-gray-500 text-right">
+                                      <div>Added</div>
+                                      <div>
+                                        {new Date(event.created_at).toLocaleString()}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="text-center py-4 text-gray-500">
+                              <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                              <p>No events found in the last 7 days</p>
+                              <p className="text-xs">
+                                Try running the scraper to find new events
+                              </p>
+                            </div>
+                          )
+                        ) : (
+                          loadingEvents.has(job.id) ? (
+                            <div className="text-center py-4 text-gray-500">
+                              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                              <p>Loading recent events...</p>
+                            </div>
+                          ) : null
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}
