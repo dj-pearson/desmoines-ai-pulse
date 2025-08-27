@@ -292,7 +292,7 @@ export default function RestaurantDetails() {
             <Link to="/restaurants">
               <Button
                 variant="outline"
-                className="bg-white/80 backdrop-blur-sm border-amber-200 hover:bg-amber-50"
+                className="bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white shadow-lg"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Restaurants
@@ -304,14 +304,14 @@ export default function RestaurantDetails() {
                 onClick={handleShare}
                 variant="outline"
                 size="sm"
-                className="bg-white/80 backdrop-blur-sm border-amber-200"
+                className="bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white shadow-lg"
               >
                 <Share2 className="h-4 w-4" />
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                className="bg-white/80 backdrop-blur-sm border-amber-200"
+                className="bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white shadow-lg"
               >
                 <Heart className="h-4 w-4" />
               </Button>
