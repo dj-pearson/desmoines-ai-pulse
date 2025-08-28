@@ -24,6 +24,7 @@ import MostSearched from "@/components/MostSearched";
 import EventFilters from "@/components/EventFilters";
 import GEOContent from "@/components/GEOContent";
 import Newsletter from "@/components/Newsletter";
+import Hero3D from "@/components/Hero3D";
 
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
@@ -97,8 +98,9 @@ export default function Index() {
         <Header />
 
         {/* Hero section with structured data */}
-        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 py-16">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 py-16 overflow-hidden">
+          <Hero3D />
+          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
               Discover Des Moines Like Never Before
             </h1>
