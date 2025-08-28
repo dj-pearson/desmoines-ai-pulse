@@ -1,10 +1,10 @@
 import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { Text, Float, OrbitControls, useTexture, Sphere, Box } from '@react-three/drei';
-import { Mesh, Vector3 } from 'three';
+import { Float, OrbitControls } from '@react-three/drei';
+import { Mesh } from 'three';
 
 // Floating Food Item Component
-function FloatingFood({ position, icon, color }: { position: [number, number, number], icon: string, color: string }) {
+function FloatingFood({ position, color }: { position: [number, number, number], color: string }) {
   const meshRef = useRef<Mesh>(null);
   
   useFrame((state) => {
@@ -19,15 +19,6 @@ function FloatingFood({ position, icon, color }: { position: [number, number, nu
       <mesh ref={meshRef} position={position}>
         <boxGeometry args={[0.8, 0.8, 0.8]} />
         <meshStandardMaterial color={color} />
-        <Text
-          position={[0, 0, 0.5]}
-          fontSize={0.6}
-          color="white"
-          anchorX="center"
-          anchorY="middle"
-        >
-          {icon}
-        </Text>
       </mesh>
     </Float>
   );
@@ -48,25 +39,7 @@ function EventCube({ position }: { position: [number, number, number] }) {
     <Float speed={2} rotationIntensity={0.3} floatIntensity={0.8}>
       <mesh ref={meshRef} position={position}>
         <boxGeometry args={[1, 1, 0.2]} />
-        <meshStandardMaterial color="hsl(var(--primary))" />
-        <Text
-          position={[0, 0.2, 0.15]}
-          fontSize={0.2}
-          color="white"
-          anchorX="center"
-          anchorY="middle"
-        >
-          {new Date().getDate()}
-        </Text>
-        <Text
-          position={[0, -0.1, 0.15]}
-          fontSize={0.15}
-          color="white"
-          anchorX="center"
-          anchorY="middle"
-        >
-          {new Date().toLocaleDateString('en-US', { month: 'short' })}
-        </Text>
+        <meshStandardMaterial color="#3b82f6" />
       </mesh>
     </Float>
   );
@@ -74,18 +47,16 @@ function EventCube({ position }: { position: [number, number, number] }) {
 
 // Floating Particles
 function FloatingParticles() {
-  const particlesRef = useRef<Mesh>(null);
-  
   const particles = useMemo(() => {
     const temp = [];
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 30; i++) {
       temp.push({
         position: [
           (Math.random() - 0.5) * 20,
           (Math.random() - 0.5) * 10,
           (Math.random() - 0.5) * 10,
         ] as [number, number, number],
-        scale: Math.random() * 0.5 + 0.1,
+        scale: Math.random() * 0.3 + 0.1,
       });
     }
     return temp;
@@ -101,9 +72,10 @@ function FloatingParticles() {
   return (
     <>
       {particles.map((particle, i) => (
-        <Sphere key={i} position={particle.position} args={[particle.scale]}>
-          <meshStandardMaterial color="hsl(var(--accent))" transparent opacity={0.6} />
-        </Sphere>
+        <mesh key={i} position={particle.position}>
+          <sphereGeometry args={[particle.scale]} />
+          <meshStandardMaterial color="#10b981" transparent opacity={0.6} />
+        </mesh>
       ))}
     </>
   );
@@ -112,12 +84,12 @@ function FloatingParticles() {
 // Main 3D Scene
 function Scene() {
   const foodItems = [
-    { position: [-4, 2, -2] as [number, number, number], icon: "🍕", color: "hsl(var(--destructive))" },
-    { position: [4, 1, -1] as [number, number, number], icon: "🍔", color: "hsl(var(--warning))" },
-    { position: [-2, -1, 1] as [number, number, number], icon: "🥗", color: "hsl(var(--success))" },
-    { position: [3, -2, 2] as [number, number, number], icon: "🍰", color: "hsl(var(--accent))" },
-    { position: [-5, 0, 3] as [number, number, number], icon: "🍻", color: "hsl(var(--warning))" },
-    { position: [1, 3, -3] as [number, number, number], icon: "🍜", color: "hsl(var(--destructive))" },
+    { position: [-4, 2, -2] as [number, number, number], color: "#ef4444" },
+    { position: [4, 1, -1] as [number, number, number], color: "#f59e0b" },
+    { position: [-2, -1, 1] as [number, number, number], color: "#10b981" },
+    { position: [3, -2, 2] as [number, number, number], color: "#8b5cf6" },
+    { position: [-5, 0, 3] as [number, number, number], color: "#f59e0b" },
+    { position: [1, 3, -3] as [number, number, number], color: "#ef4444" },
   ];
 
   const eventCubes = [
@@ -130,13 +102,12 @@ function Scene() {
     <>
       <ambientLight intensity={0.6} />
       <pointLight position={[10, 10, 10]} intensity={1} />
-      <pointLight position={[-10, -10, -5]} intensity={0.5} color="hsl(var(--primary))" />
+      <pointLight position={[-10, -10, -5]} intensity={0.5} color="#3b82f6" />
       
       {foodItems.map((item, index) => (
         <FloatingFood
           key={`food-${index}`}
           position={item.position}
-          icon={item.icon}
           color={item.color}
         />
       ))}
