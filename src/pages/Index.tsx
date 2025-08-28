@@ -110,11 +110,11 @@ export default function Index() {
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 text-center">
               <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">500+</div>
+                <div className="text-3xl font-bold text-primary">200+</div>
                 <p className="text-sm text-muted-foreground">Events Monthly</p>
               </div>
               <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">200+</div>
+                <div className="text-3xl font-bold text-primary">300+</div>
                 <p className="text-sm text-muted-foreground">Restaurants</p>
               </div>
               <div className="space-y-2">
