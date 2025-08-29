@@ -1,111 +1,144 @@
-import React, { useRef } from 'react';
+import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Float } from '@react-three/drei';
-import { Mesh } from 'three';
+import { Mesh, CatmullRomCurve3, Vector3, TubeGeometry } from 'three';
 
-// Subtle floating geometric shape
-function FloatingShape({ position, color, size, speed }: { 
-  position: [number, number, number], 
-  color: string, 
-  size: number,
-  speed: number 
+// Interactive Event Wristband component
+function EventWristband({ 
+  position, 
+  color, 
+  speed, 
+  scale = 1 
+}: { 
+  position: [number, number, number];
+  color: string;
+  speed: number;
+  scale?: number;
 }) {
   const meshRef = useRef<Mesh>(null);
   
   useFrame((state) => {
     if (meshRef.current) {
-      meshRef.current.rotation.y = Math.sin(state.clock.elapsedTime * speed) * 0.1;
-      meshRef.current.rotation.x = Math.cos(state.clock.elapsedTime * speed * 0.7) * 0.05;
+      meshRef.current.rotation.y = state.clock.elapsedTime * speed;
+      meshRef.current.rotation.x = Math.sin(state.clock.elapsedTime * speed * 0.5) * 0.1;
+      meshRef.current.rotation.z = Math.cos(state.clock.elapsedTime * speed * 0.3) * 0.05;
     }
   });
 
+  // Create curved wristband geometry
+  const geometry = useMemo(() => {
+    const curve = new CatmullRomCurve3([
+      new Vector3(0, 0, 0),
+      new Vector3(1, 0.5, 0.5),
+      new Vector3(2, 0, 1),
+      new Vector3(3, -0.5, 0.5),
+      new Vector3(4, 0, 0),
+      new Vector3(3, 0.5, -0.5),
+      new Vector3(2, 0, -1),
+      new Vector3(1, -0.5, -0.5),
+      new Vector3(0, 0, 0)
+    ]);
+    
+    return new TubeGeometry(curve, 64, 0.1 * scale, 8, true);
+  }, [scale]);
+
   return (
-    <Float speed={speed} rotationIntensity={0.2} floatIntensity={0.3}>
-      <mesh ref={meshRef} position={position}>
-        <boxGeometry args={[size, size, size]} />
+    <Float speed={speed} rotationIntensity={0.3} floatIntensity={0.5}>
+      <mesh ref={meshRef} position={position} scale={scale}>
+        <primitive object={geometry} />
         <meshStandardMaterial 
-          color={color} 
-          transparent 
-          opacity={0.6}
-          roughness={0.3}
-          metalness={0.1}
+          color={color}
+          transparent
+          opacity={0.8}
+          roughness={0.1}
+          metalness={0.3}
+          emissive={color}
+          emissiveIntensity={0.1}
         />
       </mesh>
     </Float>
   );
 }
 
-// Subtle floating sphere for accent
-function FloatingSphere({ position, color, size }: { 
-  position: [number, number, number], 
-  color: string, 
-  size: number 
+// Floating Event Badge
+function EventBadge({ 
+  position, 
+  color, 
+  size = 0.8 
+}: { 
+  position: [number, number, number];
+  color: string;
+  size?: number;
 }) {
   const meshRef = useRef<Mesh>(null);
   
   useFrame((state) => {
     if (meshRef.current) {
       meshRef.current.rotation.y = state.clock.elapsedTime * 0.2;
+      meshRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 0.8) * 0.2;
     }
   });
 
   return (
-    <Float speed={1} rotationIntensity={0.1} floatIntensity={0.4}>
-      <mesh ref={meshRef} position={position}>
-        <sphereGeometry args={[size]} />
-        <meshStandardMaterial 
-          color={color} 
-          transparent 
-          opacity={0.4}
-          roughness={0.2}
-          metalness={0.2}
-        />
-      </mesh>
-    </Float>
+    <mesh ref={meshRef} position={position}>
+      <cylinderGeometry args={[size, size, 0.1, 32]} />
+      <meshStandardMaterial 
+        color={color}
+        transparent
+        opacity={0.7}
+        roughness={0.2}
+        metalness={0.4}
+      />
+    </mesh>
   );
 }
 
-// Main 3D Scene with subtle, professional elements
+// Main 3D Scene with event-themed elements
 function Scene() {
-  // Professional color palette that matches your brand
-  const shapes = [
-    { position: [-6, 3, -4] as [number, number, number], color: "#3b82f6", size: 1.2, speed: 0.3 }, // Blue
-    { position: [6, 2, -3] as [number, number, number], color: "#10b981", size: 1, speed: 0.4 }, // Green
-    { position: [-4, -2, -2] as [number, number, number], color: "#8b5cf6", size: 0.8, speed: 0.35 }, // Purple
-    { position: [4, -1, -5] as [number, number, number], color: "#f59e0b", size: 1.1, speed: 0.25 }, // Amber
+  const wristbands = [
+    { position: [-4, 2, -3] as [number, number, number], color: "#8b5cf6", speed: 0.3, scale: 0.8 }, // Purple
+    { position: [4, -1, -4] as [number, number, number], color: "#3b82f6", speed: 0.25, scale: 1 }, // Blue
+    { position: [-2, -2, -2] as [number, number, number], color: "#10b981", speed: 0.35, scale: 0.6 }, // Green
   ];
 
-  const spheres = [
-    { position: [-8, 1, -6] as [number, number, number], color: "#06b6d4", size: 0.6 }, // Cyan
-    { position: [8, -3, -4] as [number, number, number], color: "#ec4899", size: 0.5 }, // Pink
-    { position: [2, 4, -7] as [number, number, number], color: "#84cc16", size: 0.4 }, // Lime
+  const badges = [
+    { position: [-6, 1, -5] as [number, number, number], color: "#f59e0b", size: 0.6 }, // Amber
+    { position: [6, 2, -3] as [number, number, number], color: "#ec4899", size: 0.5 }, // Pink
+    { position: [0, 3, -6] as [number, number, number], color: "#06b6d4", size: 0.4 }, // Cyan
   ];
 
   return (
     <>
-      {/* Soft ambient lighting */}
-      <ambientLight intensity={0.4} />
-      <pointLight position={[10, 10, 10]} intensity={0.3} color="#ffffff" />
-      <pointLight position={[-10, -10, -5]} intensity={0.2} color="#3b82f6" />
+      {/* Professional lighting setup */}
+      <ambientLight intensity={0.3} />
+      <pointLight position={[10, 10, 5]} intensity={0.4} color="#ffffff" />
+      <pointLight position={[-10, -5, -5]} intensity={0.2} color="#8b5cf6" />
+      <spotLight 
+        position={[0, 10, 0]} 
+        intensity={0.3} 
+        angle={0.6} 
+        penumbra={0.1}
+        color="#3b82f6"
+      />
       
-      {/* Subtle floating shapes */}
-      {shapes.map((shape, index) => (
-        <FloatingShape
-          key={`shape-${index}`}
-          position={shape.position}
-          color={shape.color}
-          size={shape.size}
-          speed={shape.speed}
+      {/* Interactive Event Wristbands */}
+      {wristbands.map((wristband, index) => (
+        <EventWristband
+          key={`wristband-${index}`}
+          position={wristband.position}
+          color={wristband.color}
+          speed={wristband.speed}
+          scale={wristband.scale}
         />
       ))}
       
-      {/* Accent spheres */}
-      {spheres.map((sphere, index) => (
-        <FloatingSphere
-          key={`sphere-${index}`}
-          position={sphere.position}
-          color={sphere.color}
-          size={sphere.size}
+      {/* Event Badges */}
+      {badges.map((badge, index) => (
+        <EventBadge
+          key={`badge-${index}`}
+          position={badge.position}
+          color={badge.color}
+          size={badge.size}
         />
       ))}
     </>
