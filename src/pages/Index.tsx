@@ -25,11 +25,14 @@ import EventFilters from "@/components/EventFilters";
 import GEOContent from "@/components/GEOContent";
 import Newsletter from "@/components/Newsletter";
 import Hero3D from "@/components/Hero3D";
+import { EventSocialHub } from "@/components/EventSocialHub";
 
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [showSocialHub, setShowSocialHub] = useState(false);
+  const [socialEventId, setSocialEventId] = useState<string | null>(null);
   const { toast } = useToast();
   const { isAuthenticated } = useAuth();
 
@@ -59,6 +62,11 @@ export default function Index() {
 
   const handleViewAllEvents = () => {
     setShowAllEvents(true);
+  };
+
+  const handleViewSocial = (eventId: string) => {
+    setSocialEventId(eventId);
+    setShowSocialHub(true);
   };
 
   const handleScrapeEvents = () => {
@@ -136,7 +144,7 @@ export default function Index() {
         {/* All-Inclusive Dashboard */}
         <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} />
 
-        {!showAllEvents && (
+        {!showAllEvents && !showSocialHub && (
           <>
             {isAuthenticated ? (
               <PersonalizedDashboard
@@ -165,6 +173,29 @@ export default function Index() {
             )}
             <MostSearched />
           </>
+        )}
+
+        {showSocialHub && socialEventId && (
+          <div className="py-8">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="mb-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowSocialHub(false);
+                    setSocialEventId(null);
+                  }}
+                >
+                  ← Back to Events
+                </Button>
+              </div>
+              <EventSocialHub
+                eventId={socialEventId}
+                eventTitle={selectedEvent?.title || "Event"}
+                eventDate={selectedEvent?.date ? new Date(selectedEvent.date).toISOString() : ""}
+              />
+            </div>
+          </div>
         )}
 
         {showAllEvents && (
