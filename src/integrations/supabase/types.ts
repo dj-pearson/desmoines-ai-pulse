@@ -1329,6 +1329,232 @@ export type Database = {
           },
         ]
       }
+      event_attendees: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          notification_preferences: Json | null
+          status: string
+          updated_at: string
+          user_id: string
+          visibility: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          notification_preferences?: Json | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          visibility?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          notification_preferences?: Json | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          visibility?: string | null
+        }
+        Relationships: []
+      }
+      event_checkins: {
+        Row: {
+          check_in_method: string | null
+          checked_in_at: string
+          created_at: string
+          event_id: string
+          id: string
+          latitude: number | null
+          location_verified: boolean | null
+          longitude: number | null
+          user_id: string
+        }
+        Insert: {
+          check_in_method?: string | null
+          checked_in_at?: string
+          created_at?: string
+          event_id: string
+          id?: string
+          latitude?: number | null
+          location_verified?: boolean | null
+          longitude?: number | null
+          user_id: string
+        }
+        Update: {
+          check_in_method?: string | null
+          checked_in_at?: string
+          created_at?: string
+          event_id?: string
+          id?: string
+          latitude?: number | null
+          location_verified?: boolean | null
+          longitude?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      event_discussion_reactions: {
+        Row: {
+          created_at: string
+          discussion_id: string
+          id: string
+          reaction_type: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discussion_id: string
+          id?: string
+          reaction_type?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discussion_id?: string
+          id?: string
+          reaction_type?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_discussion_reactions_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "event_discussions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_discussions: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          is_live: boolean | null
+          likes_count: number | null
+          media_url: string | null
+          message: string
+          message_type: string | null
+          parent_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          is_live?: boolean | null
+          likes_count?: number | null
+          media_url?: string | null
+          message: string
+          message_type?: string | null
+          parent_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          is_live?: boolean | null
+          likes_count?: number | null
+          media_url?: string | null
+          message?: string
+          message_type?: string | null
+          parent_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_discussions_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "event_discussions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_live_feed: {
+        Row: {
+          content: string | null
+          content_type: string
+          created_at: string
+          engagement_score: number | null
+          event_id: string
+          id: string
+          is_highlighted: boolean | null
+          media_url: string | null
+          metadata: Json | null
+          user_id: string
+        }
+        Insert: {
+          content?: string | null
+          content_type: string
+          created_at?: string
+          engagement_score?: number | null
+          event_id: string
+          id?: string
+          is_highlighted?: boolean | null
+          media_url?: string | null
+          metadata?: Json | null
+          user_id: string
+        }
+        Update: {
+          content?: string | null
+          content_type?: string
+          created_at?: string
+          engagement_score?: number | null
+          event_id?: string
+          id?: string
+          is_highlighted?: boolean | null
+          media_url?: string | null
+          metadata?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      event_live_stats: {
+        Row: {
+          average_rating: number | null
+          current_attendees: number | null
+          discussion_count: number | null
+          event_id: string
+          last_activity: string | null
+          photos_count: number | null
+          total_checkins: number | null
+          trending_score: number | null
+          updated_at: string
+        }
+        Insert: {
+          average_rating?: number | null
+          current_attendees?: number | null
+          discussion_count?: number | null
+          event_id: string
+          last_activity?: string | null
+          photos_count?: number | null
+          total_checkins?: number | null
+          trending_score?: number | null
+          updated_at?: string
+        }
+        Update: {
+          average_rating?: number | null
+          current_attendees?: number | null
+          discussion_count?: number | null
+          event_id?: string
+          last_activity?: string | null
+          photos_count?: number | null
+          total_checkins?: number | null
+          trending_score?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       event_photos: {
         Row: {
           caption: string | null
