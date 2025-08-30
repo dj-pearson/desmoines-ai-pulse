@@ -80,9 +80,11 @@ export default function EventsPage() {
 
       if (dateFilter) {
         if (dateFilter.mode === 'single' && dateFilter.start) {
-          // For single date selection, show only events on that specific date
-          const exactDate = dateFilter.start.toISOString().split("T")[0];
-          query = query.eq("date", exactDate);
+          // For single date selection, filter by event_start_local date or fallback to legacy date field
+          const centralDate = dateFilter.start.toISOString().split("T")[0];
+          query = query.or(
+            `event_start_local.gte.${centralDate}T00:00:00,event_start_local.lt.${centralDate}T24:00:00,and(date.eq.${centralDate},event_start_local.is.null)`
+          );
         } else if (dateFilter.mode === 'range' && dateFilter.start) {
           // For date range, show events within the range
           const startDate = dateFilter.start.toISOString().split("T")[0];
