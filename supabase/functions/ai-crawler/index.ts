@@ -823,15 +823,22 @@ async function insertData(
         switch (category) {
           case "events":
             const parsedEventDateTime = item.date ? parseEventDateTime(item.date) : null;
+            
+            // Skip events where we can't parse the date properly
+            if (!parsedEventDateTime?.event_start_utc) {
+              console.warn(`⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`);
+              return null; // This will be filtered out
+            }
+            
             return {
               ...baseItem,
               title: item.title?.substring(0, 200) || "Untitled Event",
               original_description: item.description?.substring(0, 500) || "",
               enhanced_description: item.description?.substring(0, 500) || "",
-              date: parsedEventDateTime?.event_start_utc?.toISOString() || new Date().toISOString(), // Keep for now, will remove later
-              event_start_local: parsedEventDateTime?.event_start_local || null,
-              event_timezone: parsedEventDateTime?.event_timezone || null,
-              event_start_utc: parsedEventDateTime?.event_start_utc || null,
+              date: parsedEventDateTime.event_start_utc.toISOString(),
+              event_start_local: parsedEventDateTime.event_start_local,
+              event_timezone: parsedEventDateTime.event_timezone,
+              event_start_utc: parsedEventDateTime.event_start_utc,
               location: item.location?.substring(0, 100) || "Des Moines, IA",
               venue:
                 item.venue?.substring(0, 100) ||
@@ -896,7 +903,13 @@ async function insertData(
           default:
             return item;
         }
-      });
+      }).filter(item => item !== null); // Remove null items (events with bad dates)
+
+      // Skip empty batches
+      if (transformedBatch.length === 0) {
+        console.log(`⚠️ Skipping empty batch (all items had invalid dates)`);
+        continue;
+      }
 
       const { data, error } = await supabase
         .from(tableName)
