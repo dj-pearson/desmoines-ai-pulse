@@ -1,7 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { parseISO, fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
+import { parseISO } from "https://esm.sh/date-fns@3.6.0";
+import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 
 interface ScrapRequest {
   url: string;
