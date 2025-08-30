@@ -81,7 +81,7 @@ export function useEventSocial(eventId: string) {
         .from('event_live_stats')
         .select('*')
         .eq('event_id', eventId)
-        .single();
+        .maybeSingle();
 
       // Check user's attendance status
       if (user) {
@@ -90,7 +90,7 @@ export function useEventSocial(eventId: string) {
           .select('status')
           .eq('event_id', eventId)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         // Check if user is checked in
         const { data: checkinData } = await supabase
@@ -98,14 +98,31 @@ export function useEventSocial(eventId: string) {
           .select('id')
           .eq('event_id', eventId)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
         setUserAttendanceStatus(userAttendanceData?.status || null);
         setIsCheckedIn(!!checkinData);
       }
 
-      setAttendees(attendeesData as EventAttendee[] || []);
-      setDiscussions(discussionsData as EventDiscussion[] || []);
+      setAttendees((attendeesData || []).map(a => ({
+        id: a.id,
+        user_id: a.user_id,
+        status: a.status as 'going' | 'interested' | 'maybe',
+        visibility: a.visibility as 'public' | 'friends_only' | 'private',
+        created_at: a.created_at
+      })));
+      setDiscussions((discussionsData || []).map(d => ({
+        id: d.id,
+        event_id: d.event_id,
+        user_id: d.user_id,
+        message: d.message,
+        message_type: d.message_type as 'comment' | 'photo' | 'video' | 'tip',
+        media_url: d.media_url,
+        parent_id: d.parent_id,
+        likes_count: d.likes_count,
+        created_at: d.created_at,
+        updated_at: d.updated_at
+      })));
       setLiveStats(statsData);
     } catch (error) {
       console.error('Error fetching event social data:', error);

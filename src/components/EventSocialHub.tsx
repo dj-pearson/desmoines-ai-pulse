@@ -321,14 +321,14 @@ export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, 
                       className="min-h-[80px]"
                     />
                     <div className="flex justify-between">
-                      <EventPhotoUpload
-                        eventId={eventId}
-                        trigger={
-                          <Button variant="outline" size="sm">
-                            <Camera className="h-4 w-4 mr-2" />
-                            Add Photo
-                          </Button>
-                        }
+              <EventPhotoUpload 
+                eventId={eventId} 
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Camera className="h-4 w-4 mr-2" />
+                    Add Photo
+                  </Button>
+                }
                       />
                       <Button 
                         onClick={handleSubmitComment} 
