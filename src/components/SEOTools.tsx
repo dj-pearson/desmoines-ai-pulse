@@ -472,7 +472,23 @@ ${JSON.stringify(eventListSchema, null, 2)}
 
       switch (generatorId) {
         case "sitemap":
-          content = generateSitemap();
+          // Call the generate-sitemaps edge function
+          const { data: sitemapData, error: sitemapError } = await supabase.functions.invoke('generate-sitemaps');
+          
+          if (sitemapError) throw sitemapError;
+          
+          if (sitemapData?.success) {
+            // Show comprehensive result with multiple sitemap info
+            const result = sitemapData.generated;
+            content = sitemapData.sitemaps.main; // Show main sitemap in the UI
+            
+            toast({
+              title: "Sitemaps Generated Successfully!",
+              description: `Generated ${result.total_urls} URLs across all sitemaps (${result.main_urls} main, ${result.events_urls} events, ${result.restaurants_urls} restaurants)`,
+            });
+          } else {
+            throw new Error(sitemapData?.error || "Failed to generate sitemaps");
+          }
           break;
         case "robots":
           content = generateRobots();
@@ -494,16 +510,21 @@ ${JSON.stringify(eventListSchema, null, 2)}
       }
 
       setGeneratedContent((prev) => ({ ...prev, [generatorId]: content }));
-      toast({
-        title: "Generated Successfully",
-        description: `${
-          generators.find((g) => g.id === generatorId)?.title
-        } has been generated`,
-      });
+      
+      // Only show default success message for non-sitemap generators
+      if (generatorId !== "sitemap") {
+        toast({
+          title: "Generated Successfully",
+          description: `${
+            generators.find((g) => g.id === generatorId)?.title
+          } has been generated`,
+        });
+      }
     } catch (error) {
+      console.error(`Generation error for ${generatorId}:`, error);
       toast({
         title: "Generation Failed",
-        description: "Failed to generate content. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to generate content. Please try again.",
         variant: "destructive",
       });
     } finally {
