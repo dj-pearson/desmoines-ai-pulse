@@ -187,22 +187,52 @@ serve(async (req) => {
 
       // Generate category-specific prompts
       const prompts = {
-        events: `Extract all events from this website content from ${currentUrl}.
+        events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com and other Des Moines area event sites. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${currentUrl}.
 
+CURRENT DATE: July 30, 2025
 WEBSITE CONTENT:
-${content.substring(0, 15000)} 
+${content.substring(0, 15000)}
 
-Please analyze this content and extract ALL events, concerts, shows, festivals, or activities. For each event, provide:
-- title: Event title/name
-- date: Event date (convert to YYYY-MM-DD format if possible)
-- location: Venue or location name
-- venue: Specific venue name if different from location
-- description: Event description
-- category: Type of event (Concert, Festival, Sports, etc.)
-- price: Ticket price or "Free" if no cost mentioned
-- source_url: Extract the specific event URL or venue website URL if available, otherwise use the page URL
+CRITICAL PARSING INSTRUCTIONS:
 
-SPECIAL INSTRUCTIONS FOR CATCHDESMOINES.COM:
+🎯 WHAT TO LOOK FOR:
+- ANY text that mentions specific event names or titles
+- Venue names that host events (fairgrounds, theaters, arenas, etc.)
+- Date patterns (July 30, Jul 30th, 7/30, 2025, etc.)
+- Event categories (concerts, festivals, sports, shows, fairs, etc.)
+- HTML structures: <article class="slide">, event cards, lists, grids
+
+🔍 SPECIFIC EVENT PATTERNS:
+- Look for proper nouns that sound like event names
+- Geographic venues (Warren County, Indianola, Des Moines locations)
+- Entertainment venues (theaters, halls, stadiums)
+- Event types (fair, festival, concert, show, game, exhibition)
+- Time indicators (daily, weekly, through August, etc.)
+
+💡 EXTRACTION EXAMPLES:
+- "Warren County Fair" → title: "Warren County Fair"
+- "Anastasia the Musical" → title: "Anastasia the Musical" 
+- "National Senior Games" → title: "National Senior Games"
+- "Iowa Artists Sale-A-Bration" → title: "Iowa Artists Sale-A-Bration"
+- "Live Horse Racing" → title: "Live Horse Racing"
+
+📅 DATE CONVERSION (CRITICAL TIMEZONE HANDLING):
+- All events are in Des Moines, Iowa (Central Time Zone) 
+- Convert ALL times to Central Time (CDT in summer -5 UTC, CST in winter -6 UTC)
+- Current date reference: July 30, 2025
+
+EXAMPLES:
+- "Jul 30th" → "2025-07-30 19:00:00" (7:00 PM Central Time default)
+- "August 1st" → "2025-08-01 19:00:00" 
+- "7:30 PM" → "2025-MM-DD 19:30:00" (keep Central Time)
+- "8 AM" → "2025-MM-DD 08:00:00" (morning events)
+- "Through July 28" → create events until that date
+- No specific time? → default to 7:00 PM Central (19:00:00)
+- All-day events → use 12:00 PM Central (12:00:00)
+- Past dates (before July 30, 2025) → SKIP these events
+
+⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
+
 🎯 PRIORITY URL EXTRACTION: Look specifically for "Visit Website" links or buttons that lead to external venue/event websites. These are usually found in:
 - HTML like: <a href="https://external-venue.com" class="action-item">Visit Website</a>
 - Links with text containing "Visit Website", "Official Website", "Venue Website"
@@ -211,11 +241,34 @@ SPECIAL INSTRUCTIONS FOR CATCHDESMOINES.COM:
 
 If you find a "Visit Website" or venue-specific URL, use that as the source_url instead of the catchdesmoines.com page URL.
 
-Format as JSON array ONLY - no other text:
+🏢 VENUE EXTRACTION:
+- Look for venue names near event titles
+- Common Des Moines venues: Wells Fargo Arena, Civic Center, etc.
+- County fairgrounds, high schools, parks
+- If unclear → use "Des Moines, IA" as location
+
+For EVERY event you find, extract:
+- title: Exact event name from content
+- date: YYYY-MM-DD HH:MM:SS (future dates only, in Central Time)
+- location: City/state (default: "Des Moines, IA")
+- venue: Specific venue name
+- description: Any details about the event
+- category: Music/Sports/Arts/Community/Entertainment/Festival
+- price: If mentioned, or "See website"
+- source_url: Venue-specific URL if available, otherwise page URL
+
+CRITICAL SUCCESS FACTORS:
+✅ Extract events even with incomplete info
+✅ Use logical defaults for missing details
+✅ Convert all date formats consistently to Central Time
+✅ Include recurring events as separate entries
+✅ Scan the ENTIRE content thoroughly
+
+FORMAT AS JSON ARRAY ONLY - no other text:
 [
   {
     "title": "Event Name",
-    "date": "2025-07-30",
+    "date": "2025-MM-DD HH:MM:SS",
     "location": "Des Moines, IA", 
     "venue": "Venue Name",
     "description": "Event description",
@@ -225,7 +278,7 @@ Format as JSON array ONLY - no other text:
   }
 ]
 
-Return empty array [] if no events found. Focus on upcoming events only.`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY event mentioned in the content. Return empty array [] ONLY if literally no events are found anywhere in the content.`,
 
         restaurants: `You are an expert at extracting restaurant information from websites like Eater.com, Des Moines Register, and restaurant listing sites. Your task is to find EVERY SINGLE RESTAURANT mentioned in this content from ${currentUrl}.
 
