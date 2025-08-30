@@ -605,47 +605,40 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
   try { 
     console.log(`🕐 Parsing date string: "${dateStr}"`);
     
-    // Parse the date string as if it's in Central Time
+    // Parse the date string as Central Time and convert to UTC
     // The AI provides dates like "2025-09-13 19:00:00" which should be interpreted as Central Time
     
-    // Parse the date components manually to avoid timezone interpretation issues
-    let dateComponents: RegExpMatchArray | null;
+    let centralTimeString: string;
     
     // Match YYYY-MM-DD HH:MM:SS format
     if (dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-      dateComponents = dateStr.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+      centralTimeString = dateStr;
     } 
-    // Match YYYY-MM-DD format (default to 7 PM)
+    // Match YYYY-MM-DD format (default to 7:30 PM Central)
     else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      dateComponents = [...dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)!, '19', '00', '00'];
+      centralTimeString = `${dateStr} 19:30:00`;
     } 
-    // Fallback to Date parsing
+    // Fallback: try to parse and reformat
     else {
       const fallbackDate = new Date(dateStr);
-      dateComponents = [
-        dateStr,
-        fallbackDate.getFullYear().toString(),
-        (fallbackDate.getMonth() + 1).toString().padStart(2, '0'),
-        fallbackDate.getDate().toString().padStart(2, '0'),
-        fallbackDate.getHours().toString().padStart(2, '0'),
-        fallbackDate.getMinutes().toString().padStart(2, '0'),
-        fallbackDate.getSeconds().toString().padStart(2, '0')
-      ];
+      if (isNaN(fallbackDate.getTime())) {
+        console.log(`⚠️ Could not parse date: ${dateStr}`);
+        return null;
+      }
+      // Assume the parsed date is in Central Time
+      const year = fallbackDate.getFullYear();
+      const month = (fallbackDate.getMonth() + 1).toString().padStart(2, '0');
+      const day = fallbackDate.getDate().toString().padStart(2, '0');
+      const hours = fallbackDate.getHours().toString().padStart(2, '0');
+      const minutes = fallbackDate.getMinutes().toString().padStart(2, '0');
+      const seconds = fallbackDate.getSeconds().toString().padStart(2, '0');
+      centralTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
     
-    if (!dateComponents) {
-      console.log(`⚠️ Could not parse date format: ${dateStr}`);
-      return null;
-    }
-    
-    const [_, year, month, day, hours, minutes, seconds] = dateComponents;
-    
-    // Create the local time string in Central Time
-    const centralTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-    
-    // Parse this as a Central Time date and convert to UTC
-    const centralDate = parseISO(centralTimeString);
-    const utcDate = fromZonedTime(centralDate, eventTimeZone);
+    // Convert Central Time to UTC
+    // parseISO treats the string as naive time, then fromZonedTime converts it assuming it's in Central Time
+    const localDate = parseISO(centralTimeString);
+    const utcDate = fromZonedTime(localDate, eventTimeZone);
     
     console.log(`🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`);
  
