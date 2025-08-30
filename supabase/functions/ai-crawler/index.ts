@@ -2,7 +2,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { fromZonedTime, utcToZonedTime, format } from "https://esm.sh/date-fns-tz@2.0.0?deps=date-fns@2.30.0";
-import { format as dateFnsFormat } from "https://esm.sh/date-fns@2.30.0";
+import { format as dateFnsFormat, parseISO } from "https://esm.sh/date-fns@2.30.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -605,40 +605,53 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
   try { 
     console.log(`🕐 Parsing date string: "${dateStr}"`);
     
-    // Parse the date string properly
+    // Parse the date string as if it's in Central Time
     // The AI provides dates like "2025-09-13 19:00:00" which should be interpreted as Central Time
     
-    // Convert string to a Date object
-    let localDate: Date;
+    // Parse the date components manually to avoid timezone interpretation issues
+    let dateComponents: RegExpMatchArray | null;
     
-    if (dateStr.includes('T') || dateStr.includes('Z')) {
-      // Already in ISO format, but we need to treat it as Central Time
-      localDate = new Date(dateStr.replace('Z', ''));
-    } else {
-      // Parse as YYYY-MM-DD HH:MM:SS format
-      localDate = new Date(dateStr);
+    // Match YYYY-MM-DD HH:MM:SS format
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
+      dateComponents = dateStr.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+    } 
+    // Match YYYY-MM-DD format (default to 7 PM)
+    else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      dateComponents = [...dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)!, '19', '00', '00'];
+    } 
+    // Fallback to Date parsing
+    else {
+      const fallbackDate = new Date(dateStr);
+      dateComponents = [
+        dateStr,
+        fallbackDate.getFullYear().toString(),
+        (fallbackDate.getMonth() + 1).toString().padStart(2, '0'),
+        fallbackDate.getDate().toString().padStart(2, '0'),
+        fallbackDate.getHours().toString().padStart(2, '0'),
+        fallbackDate.getMinutes().toString().padStart(2, '0'),
+        fallbackDate.getSeconds().toString().padStart(2, '0')
+      ];
     }
     
-    // Create the proper Central Time date by constructing it piece by piece
-    // This ensures we're not affected by local timezone interpretation
-    const year = localDate.getFullYear();
-    const month = localDate.getMonth();
-    const date = localDate.getDate();
-    const hours = localDate.getHours();
-    const minutes = localDate.getMinutes();
-    const seconds = localDate.getSeconds();
+    if (!dateComponents) {
+      console.log(`⚠️ Could not parse date format: ${dateStr}`);
+      return null;
+    }
     
-    // Create a date as if it's in Central Time, then convert to UTC
-    const centralTimeDate = new Date(year, month, date, hours, minutes, seconds);
+    const [_, year, month, day, hours, minutes, seconds] = dateComponents;
     
-    // Now convert this Central Time to UTC using fromZonedTime
-    const utcDate = fromZonedTime(centralTimeDate, eventTimeZone);
+    // Create the local time string in Central Time
+    const centralTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     
-    console.log(`🕐 Parsed: ${dateStr} -> Central: ${centralTimeDate.toISOString()} -> UTC: ${utcDate.toISOString()}`);
+    // Parse this as a Central Time date and convert to UTC
+    const centralDate = parseISO(centralTimeString);
+    const utcDate = fromZonedTime(centralDate, eventTimeZone);
+    
+    console.log(`🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`);
  
     if (!isNaN(utcDate.getTime())) { 
       return { 
-        event_start_local: dateFnsFormat(centralTimeDate, "yyyy-MM-dd HH:mm:ss"), 
+        event_start_local: centralTimeString, 
         event_timezone: eventTimeZone, 
         event_start_utc: utcDate, 
       }; 
@@ -647,7 +660,7 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
     console.log(`⚠️ Could not parse AI date: ${dateStr}`, error); 
   } 
  
-  return null; 
+  return null;
 }
  
 // Filter out past events with enhanced date handling 
