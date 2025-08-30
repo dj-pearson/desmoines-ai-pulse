@@ -19,6 +19,7 @@ import {
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -195,39 +196,59 @@ export default function EventsPage() {
     ...(searchQuery ? [searchQuery] : []),
   ];
 
-  // Enhanced Events List Schema for Google Events
+  // AI-Optimized Events List Schema with Enhanced Local SEO
   const eventsSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: "Des Moines Events - Upcoming Activities & Entertainment",
-    description: seoDescription,
+    "@id": "https://desmoinesinsider.com/events#eventlist",
+    name: "Des Moines Events - Local Activities & Entertainment Guide",
+    description: `${seoDescription} Find the best events happening in Des Moines, Iowa and surrounding areas.`,
     numberOfItems: events?.length || 0,
     url: "https://desmoinesinsider.com/events",
     mainEntity: {
       "@type": "WebPage",
-      name: "Des Moines Events",
-      url: "https://desmoinesinsider.com/events"
+      "@id": "https://desmoinesinsider.com/events",
+      name: "Des Moines Events Calendar",
+      url: "https://desmoinesinsider.com/events",
+      about: {
+        "@type": "City",
+        name: "Des Moines",
+        sameAs: "https://en.wikipedia.org/wiki/Des_Moines,_Iowa"
+      }
+    },
+    provider: {
+      "@type": "LocalBusiness",
+      name: "Des Moines Insider",
+      url: "https://desmoinesinsider.com",
+      areaServed: {
+        "@type": "City",
+        name: "Des Moines",
+        addressRegion: "Iowa"
+      }
     },
     itemListElement:
-      events?.slice(0, 20).map((event, index) => ({
+      events?.slice(0, 30).map((event, index) => ({
         "@type": "ListItem",
         position: index + 1,
         item: {
           "@type": "Event",
+          "@id": `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`,
           name: event.title,
-          description: event.enhanced_description || event.original_description || event.title,
+          description: event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in Des Moines, Iowa`,
           startDate: event.event_start_utc || event.date,
           endDate: event.event_start_utc 
             ? new Date(new Date(event.event_start_utc).getTime() + 3 * 60 * 60 * 1000).toISOString()
             : new Date(new Date(event.date).getTime() + 3 * 60 * 60 * 1000).toISOString(),
           location: {
             "@type": "Place",
-            name: event.venue || event.location || "Des Moines, Iowa",
+            name: event.venue || event.location || "Des Moines Area",
             address: {
               "@type": "PostalAddress",
+              streetAddress: event.location || "",
               addressLocality: event.city || "Des Moines",
               addressRegion: "Iowa",
-              addressCountry: "US"
+              addressCountry: "US",
+              postalCode: event.city === "Des Moines" ? "50309" : undefined
             },
             ...(event.latitude && event.longitude && {
               geo: {
@@ -237,21 +258,27 @@ export default function EventsPage() {
               }
             })
           },
-          image: event.image_url || "https://desmoinesinsider.com/default-event-image.jpg",
+          image: [event.image_url || "https://desmoinesinsider.com/default-event-image.jpg"],
           url: `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`,
           eventStatus: "https://schema.org/EventScheduled",
           eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
           organizer: {
             "@type": "Organization",
+            "@id": "https://desmoinesinsider.com/#organization",
             name: "Des Moines Insider",
-            url: "https://desmoinesinsider.com"
+            url: "https://desmoinesinsider.com",
+            logo: {
+              "@type": "ImageObject",
+              url: "https://desmoinesinsider.com/DMI-Logo.png"
+            }
           },
           offers: event.price && event.price.toLowerCase() !== 'free'
             ? {
                 "@type": "Offer",
                 price: event.price.replace(/[^0-9.]/g, '') || "0",
                 priceCurrency: "USD",
-                availability: "https://schema.org/InStock"
+                availability: "https://schema.org/InStock",
+                category: event.category
               }
             : {
                 "@type": "Offer",
@@ -259,9 +286,34 @@ export default function EventsPage() {
                 priceCurrency: "USD",
                 availability: "https://schema.org/InStock"
               },
-          keywords: [event.category, "Des Moines events", "Iowa events"].join(", "),
+          keywords: [
+            event.category,
+            "Des Moines events",
+            "Iowa events",
+            "things to do Des Moines",
+            event.venue || "",
+            "Central Iowa activities"
+          ].filter(Boolean).join(", "),
+          about: [
+            {
+              "@type": "Thing",
+              name: event.category
+            },
+            {
+              "@type": "Place",
+              name: "Des Moines, Iowa"
+            }
+          ],
           inLanguage: "en-US",
-          isAccessibleForFree: !event.price || event.price.toLowerCase().includes('free')
+          isAccessibleForFree: !event.price || event.price.toLowerCase().includes('free'),
+          audience: {
+            "@type": "Audience",
+            audienceType: "local residents and visitors",
+            geographicArea: {
+              "@type": "AdministrativeArea",
+              name: "Greater Des Moines Area"
+            }
+          }
         },
       })) || [],
   };

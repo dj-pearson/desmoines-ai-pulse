@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import SEOHead from "@/components/SEOHead";
+import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
 import { EventPhotoUpload } from "@/components/EventPhotoUpload";
 import { EventCheckIn } from "@/components/EventCheckIn";
@@ -202,24 +203,10 @@ export default function EventDetails() {
 
   return (
     <>
-      <SEOHead
-        title={seoTitle}
-        description={seoDescription}
-        type="event"
-        keywords={seoKeywords}
-        structuredData={eventSchema}
-        url={`/events/${createEventSlugWithCentralTime(
-          event.title,
-          event
-        )}`}
-        imageUrl={event.image_url}
-        breadcrumbs={breadcrumbs}
-        location={{
-          name: event.venue || event.location || "Des Moines",
-          address: event.location || "Des Moines, IA",
-        }}
-        publishedTime={event.created_at}
-        modifiedTime={event.updated_at}
+      <EnhancedEventSEO 
+        event={event}
+        isUpcoming={isUpcoming}
+        viewMode="detail"
       />
 
       <div className="min-h-screen bg-background">
