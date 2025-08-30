@@ -603,15 +603,44 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
   const eventTimeZone = "America/Chicago"; // Default to Central Time 
  
   try { 
-    // Attempt to parse the date string directly. 
-    // date-fns-tz's fromZonedTime can handle various formats. 
-    const parsedDate = fromZonedTime(dateStr, eventTimeZone); 
+    console.log(`🕐 Parsing date string: "${dateStr}"`);
+    
+    // Parse the date string properly
+    // The AI provides dates like "2025-09-13 19:00:00" which should be interpreted as Central Time
+    
+    // Convert string to a Date object
+    let localDate: Date;
+    
+    if (dateStr.includes('T') || dateStr.includes('Z')) {
+      // Already in ISO format, but we need to treat it as Central Time
+      localDate = new Date(dateStr.replace('Z', ''));
+    } else {
+      // Parse as YYYY-MM-DD HH:MM:SS format
+      localDate = new Date(dateStr);
+    }
+    
+    // Create the proper Central Time date by constructing it piece by piece
+    // This ensures we're not affected by local timezone interpretation
+    const year = localDate.getFullYear();
+    const month = localDate.getMonth();
+    const date = localDate.getDate();
+    const hours = localDate.getHours();
+    const minutes = localDate.getMinutes();
+    const seconds = localDate.getSeconds();
+    
+    // Create a date as if it's in Central Time, then convert to UTC
+    const centralTimeDate = new Date(year, month, date, hours, minutes, seconds);
+    
+    // Now convert this Central Time to UTC using fromZonedTime
+    const utcDate = fromZonedTime(centralTimeDate, eventTimeZone);
+    
+    console.log(`🕐 Parsed: ${dateStr} -> Central: ${centralTimeDate.toISOString()} -> UTC: ${utcDate.toISOString()}`);
  
-    if (!isNaN(parsedDate.getTime())) { 
+    if (!isNaN(utcDate.getTime())) { 
       return { 
-        event_start_local: dateFnsFormat(parsedDate, "yyyy-MM-dd HH:mm:ss"), 
+        event_start_local: dateFnsFormat(centralTimeDate, "yyyy-MM-dd HH:mm:ss"), 
         event_timezone: eventTimeZone, 
-        event_start_utc: parsedDate, 
+        event_start_utc: utcDate, 
       }; 
     } 
   } catch (error) { 
@@ -619,7 +648,7 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
   } 
  
   return null; 
-} 
+}
  
 // Filter out past events with enhanced date handling 
 function filterFutureEvents(events: any[]): any[] { 
