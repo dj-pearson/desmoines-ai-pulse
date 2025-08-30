@@ -23,14 +23,17 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { EventPhotoUpload } from './EventPhotoUpload';
 import { EventPhotoGallery } from './EventPhotoGallery';
+import { EventFriendFinder } from './EventFriendFinder';
 
 interface EventSocialHubProps {
   eventId: string;
   eventTitle: string;
   eventDate: string;
+  eventLatitude?: number;
+  eventLongitude?: number;
 }
 
-export function EventSocialHub({ eventId, eventTitle, eventDate }: EventSocialHubProps) {
+export function EventSocialHub({ eventId, eventTitle, eventDate, eventLatitude, eventLongitude }: EventSocialHubProps) {
   const { user } = useAuth();
   const {
     attendees,
@@ -179,10 +182,13 @@ export function EventSocialHub({ eventId, eventTitle, eventDate }: EventSocialHu
 
       {/* Social Tabs */}
       <Tabs defaultValue="feed" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="feed">Live Feed</TabsTrigger>
           <TabsTrigger value="photos">
             Photos ({discussions.filter(d => d.message_type === 'photo').length})
+          </TabsTrigger>
+          <TabsTrigger value="friends">
+            Friends
           </TabsTrigger>
           <TabsTrigger value="attendees">
             Who's Going ({attendees.length})
@@ -246,6 +252,15 @@ export function EventSocialHub({ eventId, eventTitle, eventDate }: EventSocialHu
             eventId={eventId}
             discussions={discussions}
             onLikePhoto={likeDiscussion}
+          />
+        </TabsContent>
+
+        <TabsContent value="friends" className="space-y-4">
+          <EventFriendFinder
+            eventId={eventId}
+            eventTitle={eventTitle}
+            eventLatitude={eventLatitude}
+            eventLongitude={eventLongitude}
           />
         </TabsContent>
 
