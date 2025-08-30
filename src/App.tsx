@@ -45,9 +45,9 @@ const PageLoader = () => (
 );
 
 const App = () => (
-  <BrowserRouter>
-    <ErrorBoundary>
-      <TooltipProvider>
+  <TooltipProvider>
+    <BrowserRouter>
+      <ErrorBoundary>
         <Toaster />
         <Sonner />
         <Suspense fallback={<PageLoader />}>
@@ -83,9 +83,9 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
-      </TooltipProvider>
-    </ErrorBoundary>
-  </BrowserRouter>
+      </ErrorBoundary>
+    </BrowserRouter>
+  </TooltipProvider>
 );
 
 export default App;
