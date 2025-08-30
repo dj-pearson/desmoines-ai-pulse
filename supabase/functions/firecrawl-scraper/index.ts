@@ -4,6 +4,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 
+// Marker time for events without specific times (7:31:58 PM Central)
+const NO_TIME_MARKER = "19:31:58";
+
 interface ScrapRequest {
   url: string;
   category: string;
@@ -43,10 +46,10 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
     if (dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
       centralTimeString = dateStr;
     } 
-    // Match YYYY-MM-DD format (default to 7:30 PM Central)
+    // Match YYYY-MM-DD format (use marker time to indicate no specific time)
     else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      centralTimeString = `${dateStr} 19:30:00`;
-    } 
+      centralTimeString = `${dateStr} ${NO_TIME_MARKER}`;
+    }
     // Fallback: try to parse and reformat
     else {
       const fallbackDate = new Date(dateStr);

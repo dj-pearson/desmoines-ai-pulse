@@ -4,6 +4,9 @@ import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
 // Des Moines, Iowa timezone (Central Time)
 export const CENTRAL_TIMEZONE = "America/Chicago";
 
+// Marker time indicating no specific time was found (7:31:58 PM)
+export const NO_TIME_MARKER = "19:31:58";
+
 /**
  * Convert a date string or Date object to Central Time (Des Moines timezone)
  */
@@ -97,11 +100,49 @@ export function isEventInFuture(eventDate: string | Date): boolean {
 }
 
 /**
+ * Check if an event has a specific time or uses the "no time" marker
+ */
+export function hasSpecificTime(event: any): boolean {
+  try {
+    // Check event_start_local first (new timezone field)
+    if (event.event_start_local) {
+      const time = event.event_start_local.split('T')[1]?.substring(0, 8);
+      return time !== NO_TIME_MARKER;
+    }
+    
+    // Fallback to legacy date field
+    if (event.date) {
+      const time = event.date.split('T')[1]?.substring(0, 8);
+      return time !== NO_TIME_MARKER;
+    }
+    
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Format an event date for display to users (always in Central Time)
  * Prefers new timezone fields over legacy date field
  */
 export function formatEventDate(event: any): string {
   try {
+    // Check if event has a specific time
+    if (!hasSpecificTime(event)) {
+      // For events without specific times, show date only
+      if (event.event_start_utc || event.event_start_local) {
+        const dateToUse = event.event_start_local || event.event_start_utc;
+        return formatInCentralTime(dateToUse, "EEEE, MMMM d, yyyy");
+      }
+      
+      if (event.date) {
+        return formatInCentralTime(event.date, "EEEE, MMMM d, yyyy");
+      }
+      
+      return "Date to be announced";
+    }
+    
     // Use new timezone-aware fields if available
     if (event.event_start_utc) {
       return formatInCentralTime(event.event_start_utc, "EEEE, MMMM d, yyyy 'at' h:mm a");
@@ -124,6 +165,21 @@ export function formatEventDate(event: any): string {
  */
 export function formatEventDateShort(event: any): string {
   try {
+    // Check if event has a specific time
+    if (!hasSpecificTime(event)) {
+      // For events without specific times, show date only
+      if (event.event_start_utc || event.event_start_local) {
+        const dateToUse = event.event_start_local || event.event_start_utc;
+        return formatInCentralTime(dateToUse, "MMM d, yyyy");
+      }
+      
+      if (event.date) {
+        return formatInCentralTime(event.date, "MMM d, yyyy");
+      }
+      
+      return "Date TBA";
+    }
+    
     // Use new timezone-aware fields if available
     if (event.event_start_utc) {
       return formatInCentralTime(event.event_start_utc, "MMM d, yyyy 'at' h:mm a");
