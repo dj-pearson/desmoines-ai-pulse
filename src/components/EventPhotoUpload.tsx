@@ -1,197 +1,234 @@
 import React, { useState, useRef } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { useCommunityFeatures } from "@/hooks/useCommunityFeatures";
-import { Camera, Upload, Image as ImageIcon, Heart, MessageCircle } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { toast } from "sonner";
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Camera, Upload, X, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 interface EventPhotoUploadProps {
   eventId: string;
-  eventTitle: string;
+  onPhotoUploaded?: (photoUrl: string, caption?: string) => void;
+  trigger?: React.ReactNode;
 }
 
-export function EventPhotoUpload({ eventId, eventTitle }: EventPhotoUploadProps) {
+export function EventPhotoUpload({ eventId, onPhotoUploaded, trigger }: EventPhotoUploadProps) {
   const { user } = useAuth();
-  const { uploadEventPhoto, getEventPhotos, loading } = useCommunityFeatures();
-  const [isOpen, setIsOpen] = useState(false);
-  const [caption, setCaption] = useState('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [photos, setPhotos] = useState<any[]>([]);
-  const [loadingPhotos, setLoadingPhotos] = useState(false);
+  const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const [isOpen, setIsOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [caption, setCaption] = useState('');
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) { // 5MB limit
-        toast.error('File size must be less than 5MB');
-        return;
-      }
-      if (!file.type.startsWith('image/')) {
-        toast.error('Please select an image file');
-        return;
-      }
-      setSelectedFile(file);
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Invalid file type",
+        description: "Please select an image file",
+        variant: "destructive",
+      });
+      return;
     }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Please select an image smaller than 5MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setSelectedFile(file);
+    
+    // Create preview URL
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
   };
 
   const handleUpload = async () => {
     if (!selectedFile || !user) return;
 
-    const result = await uploadEventPhoto(eventId, selectedFile, caption);
-    if (result) {
-      setIsOpen(false);
+    setIsUploading(true);
+    
+    try {
+      // Upload to Supabase storage
+      const fileExt = selectedFile.name.split('.').pop();
+      const fileName = `${user.id}/${eventId}/${Date.now()}.${fileExt}`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('event-photos')
+        .upload(fileName, selectedFile);
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('event-photos')
+        .getPublicUrl(fileName);
+
+      // Add as a discussion with photo type
+      const { error: discussionError } = await supabase
+        .from('event_discussions')
+        .insert({
+          event_id: eventId,
+          user_id: user.id,
+          message: caption || 'Shared a photo',
+          message_type: 'photo',
+          media_url: publicUrl,
+        });
+
+      if (discussionError) throw discussionError;
+
+      toast({
+        title: "Photo uploaded!",
+        description: "Your photo has been shared with the event",
+      });
+
+      // Reset form
       setSelectedFile(null);
+      setPreviewUrl(null);
       setCaption('');
-      loadPhotos(); // Refresh photos
+      setIsOpen(false);
+      
+      // Callback
+      if (onPhotoUploaded) {
+        onPhotoUploaded(publicUrl, caption);
+      }
+      
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload photo. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
     }
   };
 
-  const loadPhotos = async () => {
-    setLoadingPhotos(true);
-    const eventPhotos = await getEventPhotos(eventId);
-    setPhotos(eventPhotos);
-    setLoadingPhotos(false);
+  const clearSelection = () => {
+    setSelectedFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
+    setCaption('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
-  React.useEffect(() => {
-    loadPhotos();
-  }, [eventId]);
-
-  if (!user) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-center">
-          <Camera className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-          <p className="text-muted-foreground">Sign in to upload and view event photos</p>
-        </CardContent>
-      </Card>
-    );
-  }
+  const defaultTrigger = (
+    <Button variant="outline" size="sm">
+      <Camera className="h-4 w-4 mr-2" />
+      Add Photo
+    </Button>
+  );
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <ImageIcon className="w-5 h-5" />
-            Event Photos
-          </CardTitle>
-          <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm" className="gap-2">
-                <Camera className="w-4 h-4" />
-                Add Photo
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        {trigger || defaultTrigger}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Share a Photo</DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          {/* File Upload Area */}
+          {!selectedFile ? (
+            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
+              <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground mb-4">
+                Click to select a photo from your device
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="mx-auto"
+              >
+                <Upload className="h-4 w-4 mr-2" />
+                Choose Photo
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Upload Event Photo</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium">Event: {eventTitle}</label>
-                </div>
-                
-                <div className="space-y-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full gap-2"
-                    disabled={loading}
-                  >
-                    <Upload className="w-4 h-4" />
-                    {selectedFile ? selectedFile.name : 'Choose Photo'}
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                  {selectedFile && (
-                    <p className="text-xs text-muted-foreground">
-                      File size: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Caption (optional)</label>
-                  <Textarea
-                    placeholder="Add a caption for your photo..."
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={handleUpload}
-                    disabled={!selectedFile || loading}
-                    className="flex-1"
-                  >
-                    {loading ? 'Uploading...' : 'Upload Photo'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsOpen(false)}
-                    disabled={loading}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {loadingPhotos ? (
-          <div className="text-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-            <p className="text-sm text-muted-foreground mt-2">Loading photos...</p>
-          </div>
-        ) : photos.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {photos.map((photo) => (
-              <div key={photo.id} className="relative group">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {/* Preview */}
+              <div className="relative">
                 <img
-                  src={photo.photo_url}
-                  alt={photo.caption || 'Event photo'}
-                  className="w-full aspect-square object-cover rounded-lg"
+                  src={previewUrl!}
+                  alt="Preview"
+                  className="w-full h-48 object-cover rounded-lg"
                 />
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-end p-2">
-                  <div className="text-white text-xs">
-                    {photo.caption && (
-                      <p className="mb-1">{photo.caption}</p>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <span className="flex items-center gap-1">
-                        <Heart className="w-3 h-3" />
-                        {photo.helpful_votes}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={clearSelection}
+                  className="absolute top-2 right-2"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <Camera className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <p className="text-muted-foreground">No photos yet</p>
-            <p className="text-sm text-muted-foreground">Be the first to share a photo from this event!</p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              
+              {/* Caption */}
+              <div className="space-y-2">
+                <Label htmlFor="photo-caption">Caption (optional)</Label>
+                <Textarea
+                  id="photo-caption"
+                  placeholder="What's happening at this event?"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  rows={2}
+                />
+              </div>
+              
+              {/* Upload Button */}
+              <div className="flex gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={clearSelection}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleUpload}
+                  disabled={isUploading}
+                  className="flex-1"
+                >
+                  {isUploading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4 mr-2" />
+                  )}
+                  {isUploading ? 'Uploading...' : 'Share Photo'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

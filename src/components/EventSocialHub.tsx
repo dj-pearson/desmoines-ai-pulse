@@ -21,6 +21,8 @@ import {
   Calendar,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { EventPhotoUpload } from './EventPhotoUpload';
+import { EventPhotoGallery } from './EventPhotoGallery';
 
 interface EventSocialHubProps {
   eventId: string;
@@ -177,8 +179,11 @@ export function EventSocialHub({ eventId, eventTitle, eventDate }: EventSocialHu
 
       {/* Social Tabs */}
       <Tabs defaultValue="feed" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="feed">Live Feed</TabsTrigger>
+          <TabsTrigger value="photos">
+            Photos ({discussions.filter(d => d.message_type === 'photo').length})
+          </TabsTrigger>
           <TabsTrigger value="attendees">
             Who's Going ({attendees.length})
           </TabsTrigger>
@@ -234,6 +239,14 @@ export function EventSocialHub({ eventId, eventTitle, eventDate }: EventSocialHu
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="photos" className="space-y-4">
+          <EventPhotoGallery
+            eventId={eventId}
+            discussions={discussions}
+            onLikePhoto={likeDiscussion}
+          />
         </TabsContent>
 
         <TabsContent value="attendees" className="space-y-4">
@@ -293,10 +306,15 @@ export function EventSocialHub({ eventId, eventTitle, eventDate }: EventSocialHu
                       className="min-h-[80px]"
                     />
                     <div className="flex justify-between">
-                      <Button variant="outline" size="sm">
-                        <Camera className="h-4 w-4 mr-2" />
-                        Add Photo
-                      </Button>
+                      <EventPhotoUpload
+                        eventId={eventId}
+                        trigger={
+                          <Button variant="outline" size="sm">
+                            <Camera className="h-4 w-4 mr-2" />
+                            Add Photo
+                          </Button>
+                        }
+                      />
                       <Button 
                         onClick={handleSubmitComment} 
                         disabled={!newComment.trim() || isSubmitting}

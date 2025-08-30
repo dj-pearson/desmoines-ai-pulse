@@ -364,7 +364,6 @@ export default function EventDetails() {
               
               <EventPhotoUpload 
                 eventId={event.id} 
-                eventTitle={event.title} 
               />
 
               {/* Rating System */}
