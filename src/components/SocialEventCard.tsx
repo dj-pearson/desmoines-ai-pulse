@@ -17,6 +17,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { createEventSlugWithCentralTime } from '@/lib/timezone';
 
 interface SocialEventCardProps {
   event: Event;
@@ -44,7 +45,8 @@ export function SocialEventCard({
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    onViewDetails(event);
+    // Navigate to SEO-optimized event details page
+    window.location.href = `/events/${createEventSlugWithCentralTime(event.title, event)}`;
   };
 
   const handleSocialClick = (e: React.MouseEvent) => {
