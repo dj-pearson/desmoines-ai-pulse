@@ -2665,6 +2665,36 @@ export type Database = {
           },
         ]
       }
+      social_media_automation_settings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          event_time: string
+          id: string
+          restaurant_time: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          event_time?: string
+          id?: string
+          restaurant_time?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          event_time?: string
+          id?: string
+          restaurant_time?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       social_media_posts: {
         Row: {
           ai_prompt_used: string | null
