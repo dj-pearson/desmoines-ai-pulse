@@ -19,6 +19,7 @@ import {
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useToast } from "@/hooks/use-toast";
@@ -352,17 +353,12 @@ export default function EventsPage() {
 
   return (
     <>
-      <SEOHead
+      <SEOEnhancedHead 
         title={seoTitle}
         description={seoDescription}
+        url="https://desmoinesinsider.com/events"
         type="website"
-        keywords={eventKeywords}
         structuredData={eventsSchema}
-        url="/events"
-        breadcrumbs={[
-          { name: "Home", url: "/" },
-          { name: "Events", url: "/events" },
-        ]}
       />
 
       <div className="min-h-screen bg-background">

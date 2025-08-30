@@ -16,6 +16,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import SEOStructure from "@/components/SEOStructure";
+import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
 import AllInclusiveDashboard from "@/components/AllInclusiveDashboard";
 import PersonalizedDashboard from "@/components/PersonalizedDashboard";
@@ -37,6 +38,36 @@ export default function Index() {
   const { isAuthenticated } = useAuth();
 
   const scrapeMutation = useEventScraper();
+
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "Des Moines Insider",
+    "alternateName": "DSM Insider",
+    "url": "https://desmoinesinsider.com",
+    "description": "Your complete guide to Des Moines events, restaurants, and attractions. Discover what's happening in the Des Moines metro area.",
+    "publisher": {
+      "@type": "Organization",
+      "name": "Des Moines Insider",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://desmoinesinsider.com/DMI-Logo.png"
+      }
+    },
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": "https://desmoinesinsider.com/events?search={search_term_string}"
+      },
+      "query-input": "required name=search_term_string"
+    },
+    "sameAs": [
+      "https://www.facebook.com/desmoinesinsider",
+      "https://www.twitter.com/desmoinesinsider",
+      "https://www.instagram.com/desmoinesinsider"
+    ]
+  };
 
   const handleSearch = (filters: {
     query: string;
@@ -98,6 +129,14 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEOEnhancedHead 
+        title="Des Moines Insider - Your Complete Guide to DSM Events, Restaurants & Attractions"
+        description="Discover the best events, restaurants, and attractions in Des Moines, Iowa. Find upcoming concerts, festivals, dining spots, and things to do in the Des Moines metro area."
+        url="https://desmoinesinsider.com/"
+        type="website"
+        structuredData={structuredData}
+      />
+
       {/* SEO and structured data for AI optimization */}
       <SEOStructure />
 
