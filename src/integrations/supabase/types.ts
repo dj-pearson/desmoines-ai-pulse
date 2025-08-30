@@ -3891,6 +3891,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
+      populate_event_live_stats: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       purge_old_events: {
         Args: { retention_months?: number }
         Returns: Json

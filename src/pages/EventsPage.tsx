@@ -78,13 +78,56 @@ export default function EventsPage() {
         query = query.eq("category", selectedCategory);
       }
 
-      if (dateFilter && dateFilter.start) {
-        const startDate = dateFilter.start.toISOString().split("T")[0];
-        query = query.gte("date", startDate);
-
-        if (dateFilter.end) {
-          const endDate = dateFilter.end.toISOString().split("T")[0];
-          query = query.lte("date", endDate);
+      if (dateFilter) {
+        if (dateFilter.mode === 'single' && dateFilter.start) {
+          // For single date selection, show only events on that specific date
+          const exactDate = dateFilter.start.toISOString().split("T")[0];
+          query = query.eq("date", exactDate);
+        } else if (dateFilter.mode === 'range' && dateFilter.start) {
+          // For date range, show events within the range
+          const startDate = dateFilter.start.toISOString().split("T")[0];
+          query = query.gte("date", startDate);
+          
+          if (dateFilter.end) {
+            const endDate = dateFilter.end.toISOString().split("T")[0];
+            query = query.lte("date", endDate);
+          }
+        } else if (dateFilter.mode === 'preset' && dateFilter.preset && dateFilter.preset !== 'any-date') {
+          // Handle preset date ranges
+          const today = new Date();
+          const tomorrow = new Date(today);
+          tomorrow.setDate(today.getDate() + 1);
+          
+          switch (dateFilter.preset) {
+            case 'today':
+              query = query.eq("date", today.toISOString().split("T")[0]);
+              break;
+            case 'tomorrow':
+              query = query.eq("date", tomorrow.toISOString().split("T")[0]);
+              break;
+            case 'this-week':
+              const endOfWeek = new Date(today);
+              endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
+              query = query.gte("date", today.toISOString().split("T")[0])
+                          .lte("date", endOfWeek.toISOString().split("T")[0]);
+              break;
+            case 'this-weekend':
+              const saturday = new Date(today);
+              saturday.setDate(today.getDate() + (6 - today.getDay()));
+              const sunday = new Date(saturday);
+              sunday.setDate(saturday.getDate() + 1);
+              query = query.gte("date", saturday.toISOString().split("T")[0])
+                          .lte("date", sunday.toISOString().split("T")[0]);
+              break;
+            case 'next-week':
+              const nextMonday = new Date(today);
+              nextMonday.setDate(today.getDate() + (7 - today.getDay()) + 1);
+              const nextSunday = new Date(nextMonday);
+              nextSunday.setDate(nextMonday.getDate() + 6);
+              query = query.gte("date", nextMonday.toISOString().split("T")[0])
+                          .lte("date", nextSunday.toISOString().split("T")[0]);
+              break;
+          }
         }
       }
 
