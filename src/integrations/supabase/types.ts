@@ -2665,6 +2665,36 @@ export type Database = {
           },
         ]
       }
+      social_media_automation_settings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          event_time: string
+          id: string
+          restaurant_time: string
+          timezone: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          event_time?: string
+          id?: string
+          restaurant_time?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          event_time?: string
+          id?: string
+          restaurant_time?: string
+          timezone?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       social_media_posts: {
         Row: {
           ai_prompt_used: string | null
@@ -2722,6 +2752,42 @@ export type Database = {
           subject_type?: string
           updated_at?: string | null
           webhook_urls?: Json | null
+        }
+        Relationships: []
+      }
+      social_media_schedules: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_run: string | null
+          next_run: string | null
+          schedule_type: string
+          scheduled_time: string
+          timezone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run?: string | null
+          next_run?: string | null
+          schedule_type: string
+          scheduled_time: string
+          timezone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run?: string | null
+          next_run?: string | null
+          schedule_type?: string
+          scheduled_time?: string
+          timezone?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
