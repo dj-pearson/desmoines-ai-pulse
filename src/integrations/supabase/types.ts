@@ -2755,6 +2755,42 @@ export type Database = {
         }
         Relationships: []
       }
+      social_media_schedules: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_run: string | null
+          next_run: string | null
+          schedule_type: string
+          scheduled_time: string
+          timezone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run?: string | null
+          next_run?: string | null
+          schedule_type: string
+          scheduled_time: string
+          timezone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_run?: string | null
+          next_run?: string | null
+          schedule_type?: string
+          scheduled_time?: string
+          timezone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       social_media_webhooks: {
         Row: {
           created_at: string | null

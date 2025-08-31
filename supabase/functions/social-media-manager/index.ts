@@ -86,7 +86,7 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     const requestBody = await req.json();
-    const { action, contentType, subjectType, postId } = requestBody;
+    const { action, contentType, subjectType, postId, autoPublish } = requestBody;
 
     console.log(
       "Social Media Manager - Action:",
@@ -631,6 +631,381 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
           post: savedPost,
           selectedContent,
           nextPostTime,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    } else if (action === "generate_and_publish") {
+      // First generate the post using the existing generate logic
+      const generateRequestBody = { action: "generate", contentType, subjectType };
+      
+      // We'll duplicate the generate logic here for the combined action
+      // Get recent posts to avoid repetition
+      const { data: recentPosts } = await supabase
+        .from("social_media_posts")
+        .select("content_id, content_type, subject_type, created_at")
+        .gte(
+          "created_at",
+          new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
+        )
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      const recentContentIds =
+        recentPosts
+          ?.map((p) => p.content_id)
+          .filter((id) => id && isValidUUID(id)) || [];
+
+      const recentWeekPosts =
+        recentPosts?.filter(
+          (post) =>
+            new Date(post.created_at) >
+            new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+        ) || [];
+      const recentWeekContentIds = recentWeekPosts
+        .map((p) => p.content_id)
+        .filter((id) => id && isValidUUID(id));
+
+      const contentPostCounts =
+        recentPosts?.reduce((acc, post) => {
+          if (post.content_id && isValidUUID(post.content_id)) {
+            acc[post.content_id] = (acc[post.content_id] || 0) + 1;
+          }
+          return acc;
+        }, {} as Record<string, number>) || {};
+
+      const checkExcessiveRepetition = (contentId: string): boolean => {
+        const recentPostsForContent =
+          recentPosts?.filter(
+            (post) =>
+              post.content_id === contentId &&
+              new Date(post.created_at) >
+                new Date(Date.now() - 14 * 24 * 60 * 60 * 1000)
+          ) || [];
+        return recentPostsForContent.length >= 3;
+      };
+
+      // Choose content to feature
+      let selectedContent: Record<string, unknown> | null = null;
+      let contentUrl = "";
+
+      if (contentType === "event") {
+        const { data: allEvents } = await supabase
+          .from("events")
+          .select("*")
+          .gte("date", new Date().toISOString())
+          .order("date", { ascending: true })
+          .limit(50);
+
+        if (allEvents && allEvents.length > 0) {
+          let availableEvents = allEvents.filter(
+            (event) =>
+              !recentWeekContentIds.includes(event.id) &&
+              !checkExcessiveRepetition(event.id)
+          );
+
+          if (availableEvents.length === 0) {
+            availableEvents = allEvents.filter(
+              (event) =>
+                (!recentContentIds.includes(event.id) ||
+                  (contentPostCounts[event.id] || 0) < 2) &&
+                !checkExcessiveRepetition(event.id)
+            );
+          }
+
+          if (availableEvents.length === 0) {
+            availableEvents = allEvents
+              .filter((event) => !checkExcessiveRepetition(event.id))
+              .sort(
+                (a, b) =>
+                  (contentPostCounts[a.id] || 0) -
+                  (contentPostCounts[b.id] || 0)
+              );
+          }
+
+          const futureEvents = availableEvents.filter((event) => {
+            const eventDate = new Date(event.date);
+            const nowCentral = new Date(
+              new Date().toLocaleString("en-US", {
+                timeZone: "America/Chicago",
+              })
+            );
+            const eventCentral = new Date(
+              eventDate.toLocaleString("en-US", { timeZone: "America/Chicago" })
+            );
+            return eventCentral > nowCentral;
+          });
+
+          if (futureEvents.length > 0) {
+            selectedContent = futureEvents[Math.floor(Math.random() * futureEvents.length)];
+            contentUrl = generateContentUrl("event", selectedContent);
+          }
+        }
+      } else if (contentType === "restaurant") {
+        const { data: allRestaurants } = await supabase
+          .from("restaurants")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (allRestaurants && allRestaurants.length > 0) {
+          let availableRestaurants = allRestaurants.filter(
+            (restaurant) =>
+              !recentWeekContentIds.includes(restaurant.id) &&
+              !checkExcessiveRepetition(restaurant.id)
+          );
+
+          if (availableRestaurants.length === 0) {
+            availableRestaurants = allRestaurants.filter(
+              (restaurant) =>
+                (!recentContentIds.includes(restaurant.id) ||
+                  (contentPostCounts[restaurant.id] || 0) < 2) &&
+                !checkExcessiveRepetition(restaurant.id)
+            );
+          }
+
+          if (availableRestaurants.length === 0) {
+            availableRestaurants = allRestaurants
+              .filter((restaurant) => !checkExcessiveRepetition(restaurant.id))
+              .sort(
+                (a, b) =>
+                  (contentPostCounts[a.id] || 0) -
+                  (contentPostCounts[b.id] || 0)
+              );
+          }
+
+          if (availableRestaurants.length > 0) {
+            selectedContent = availableRestaurants[Math.floor(Math.random() * availableRestaurants.length)];
+            contentUrl = generateContentUrl("restaurant", selectedContent);
+          }
+        }
+      }
+
+      if (!selectedContent) {
+        throw new Error(`No suitable ${contentType} content found for automated posting.`);
+      }
+
+      // Generate AI content
+      const shortPrompt = `Create a compelling social media post (under 200 characters) for ${subjectType.replace(
+        "_",
+        " "
+      )} featuring this ${contentType}:
+
+Title: ${selectedContent.title || selectedContent.name}
+Description: ${
+        selectedContent.description ||
+        selectedContent.enhanced_description ||
+        selectedContent.original_description ||
+        ""
+      }
+Location: ${selectedContent.location || ""}
+${contentType === "event" ? `Date: ${selectedContent.date}` : ""}
+${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
+${
+  contentType === "restaurant"
+    ? `Cuisine: ${selectedContent.cuisine || ""}`
+    : ""
+}
+
+Make it engaging, use relevant hashtags, and keep it under 200 characters for Twitter/Threads. Include a call to action.`;
+
+      const longPrompt = `Create a detailed social media post (200-500 characters) for ${subjectType.replace(
+        "_",
+        " "
+      )} featuring this ${contentType}:
+
+Title: ${selectedContent.title || selectedContent.name}
+Description: ${
+        selectedContent.description ||
+        selectedContent.enhanced_description ||
+        selectedContent.original_description ||
+        ""
+      }
+Location: ${selectedContent.location || ""}
+${contentType === "event" ? `Date: ${selectedContent.date}` : ""}
+${contentType === "event" ? `Venue: ${selectedContent.venue || ""}` : ""}
+${
+  contentType === "restaurant"
+    ? `Cuisine: ${selectedContent.cuisine || ""}`
+    : ""
+}
+
+Make it detailed and engaging for Facebook/LinkedIn. Include compelling details, storytelling elements, and a strong call to action.`;
+
+      // Generate short post
+      const shortResponse = await fetch(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": claudeApiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 300,
+            messages: [
+              {
+                role: "user",
+                content: shortPrompt,
+              },
+            ],
+          }),
+        }
+      );
+
+      const shortData = await shortResponse.json();
+      const shortContent = shortData.content[0].text;
+
+      // Generate long post
+      const longResponse = await fetch(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": claudeApiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-haiku-20240307",
+            max_tokens: 500,
+            messages: [
+              {
+                role: "user",
+                content: longPrompt,
+              },
+            ],
+          }),
+        }
+      );
+
+      const longData = await longResponse.json();
+      const longContent = longData.content[0].text;
+
+      // Get active webhooks
+      const { data: webhooks } = await supabase
+        .from("social_media_webhooks")
+        .select("*")
+        .eq("is_active", true);
+
+      const webhookUrls = webhooks?.map((w) => w.webhook_url) || [];
+
+      // Create combined post entry
+      const combinedPost = {
+        content_type: contentType,
+        content_id: selectedContent.id,
+        subject_type: subjectType,
+        platform_type: "combined",
+        post_content: JSON.stringify({
+          twitter_threads: shortContent,
+          facebook_linkedin: longContent,
+        }),
+        post_title: selectedContent.title || selectedContent.name,
+        content_url: contentUrl,
+        webhook_urls: webhookUrls,
+        ai_prompt_used: `Short: ${shortPrompt}\n\nLong: ${longPrompt}`,
+        status: autoPublish ? "posted" : "draft",
+        posted_at: autoPublish ? new Date().toISOString() : null,
+        metadata: {
+          content_data: selectedContent,
+          generation_timestamp: new Date().toISOString(),
+          automated_generation: true,
+          post_formats: {
+            twitter_threads: {
+              content: shortContent,
+              prompt: shortPrompt,
+            },
+            facebook_linkedin: {
+              content: longContent,
+              prompt: longPrompt,
+            },
+          },
+        },
+      };
+
+      const { data: savedPost, error } = await supabase
+        .from("social_media_posts")
+        .insert([combinedPost])
+        .select()
+        .single();
+
+      if (error) {
+        throw error;
+      }
+
+      // If autoPublish is enabled, send to webhooks immediately
+      let webhookResults = [];
+      if (autoPublish && webhookUrls.length > 0) {
+        const webhookPromises = webhookUrls.map(async (webhookUrl) => {
+          try {
+            const contentFormats = JSON.parse(savedPost.post_content as string);
+            const webhookPayload = {
+              content_formats: {
+                twitter_threads: {
+                  content: contentFormats.twitter_threads,
+                  platforms: ["twitter", "threads"],
+                },
+                facebook_linkedin: {
+                  content: contentFormats.facebook_linkedin,
+                  platforms: ["facebook", "linkedin"],
+                },
+              },
+              title: savedPost.post_title,
+              url: savedPost.content_url,
+              subject_type: savedPost.subject_type,
+              content_type: savedPost.content_type,
+              metadata: savedPost.metadata,
+            };
+
+            const response = await fetch(webhookUrl, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(webhookPayload),
+            });
+
+            return {
+              url: webhookUrl,
+              success: response.ok,
+              status: response.status,
+            };
+          } catch (error) {
+            return {
+              url: webhookUrl,
+              success: false,
+              error: error.message,
+            };
+          }
+        });
+
+        webhookResults = await Promise.all(webhookPromises);
+
+        // Update post with webhook results
+        await supabase
+          .from("social_media_posts")
+          .update({
+            metadata: {
+              ...savedPost.metadata,
+              webhook_results: webhookResults,
+            },
+          })
+          .eq("id", savedPost.id);
+      }
+
+      console.log(`Automated social media post ${autoPublish ? 'generated and published' : 'generated'}:`, savedPost);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          generated: true,
+          published: autoPublish,
+          post: savedPost,
+          selectedContent,
+          webhook_results: webhookResults,
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
