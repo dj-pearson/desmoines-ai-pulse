@@ -10,12 +10,13 @@ const corsHeaders = {
 interface EventForEnhancement {
   id: string;
   title: string;
-  description?: string;
+  original_description?: string;
+  enhanced_description?: string;
   location?: string;
   venue?: string;
   category?: string;
   date: string;
-  url?: string;
+  source_url?: string;
 }
 
 interface EnhancementResult {
@@ -50,7 +51,7 @@ serve(async (req) => {
     // Get events that need AI enhancement (no ai_writeup yet)
     const { data: eventsToEnhance, error: fetchError } = await supabase
       .from('events')
-      .select('id, title, description, location, venue, category, date, url')
+      .select('id, title, original_description, enhanced_description, location, venue, category, date, source_url')
       .gte('date', new Date().toISOString()) // Only future events
       .is('ai_writeup', null) // Only events without AI writeup
       .order('date', { ascending: true })
@@ -115,7 +116,8 @@ ${eventsToEnhance.map((event, index) => `
 EVENT ${index + 1}:
 ID: ${event.id}
 Title: ${event.title}
-Description: ${event.description || 'No description provided'}
+Original Description: ${event.original_description || 'No description provided'}
+Enhanced Description: ${event.enhanced_description || 'Not enhanced yet'}
 Location: ${event.location || 'Des Moines, IA'}
 Venue: ${event.venue || 'TBD'}
 Category: ${event.category || 'General'}
@@ -128,7 +130,7 @@ Date: ${new Date(event.date).toLocaleDateString('en-US', {
   hour: 'numeric',
   minute: '2-digit'
 })}
-URL: ${event.url || 'Not provided'}
+Source URL: ${event.source_url || 'Not provided'}
 `).join('\n')}
 
 INSTRUCTIONS:
