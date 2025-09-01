@@ -45,8 +45,7 @@ export function SocialEventCard({
 
   const handleCardClick = (e: React.MouseEvent) => {
     e.preventDefault();
-    // Navigate to SEO-optimized event details page
-    window.location.href = `/events/${createEventSlugWithCentralTime(event.title, event)}`;
+    onViewDetails(event);
   };
 
   const handleSocialClick = (e: React.MouseEvent) => {
@@ -227,7 +226,10 @@ export function SocialEventCard({
           <div className="flex gap-2 pt-2">
             <Button 
               className="flex-1"
-              onClick={handleCardClick}
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(event);
+              }}
             >
               View Details
             </Button>
