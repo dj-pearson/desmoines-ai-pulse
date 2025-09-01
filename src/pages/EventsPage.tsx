@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Calendar, MapPin, Tag, Search, Filter, List, Map } from "lucide-react";
@@ -30,6 +30,7 @@ import {
 import EventsMap from "@/components/EventsMap";
 
 export default function EventsPage() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -547,8 +548,8 @@ export default function EventsPage() {
                   key={event.id} 
                   event={event} 
                   onViewDetails={() => {
-                    // Navigate to event details
-                    window.location.href = `/events/${createEventSlugWithCentralTime(event.title, event)}`;
+                    // Navigate to event details using React Router
+                    navigate(`/events/${createEventSlugWithCentralTime(event.title, event)}`);
                   }}
                 />
               ))}
