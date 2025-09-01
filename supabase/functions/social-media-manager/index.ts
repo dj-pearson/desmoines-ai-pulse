@@ -528,7 +528,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
+            model: "claude-3-5-sonnet-20241022",
             max_tokens: 300,
             messages: [
               {
@@ -540,7 +540,15 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
         }
       );
 
+      if (!shortResponse.ok) {
+        const errorData = await shortResponse.json();
+        throw new Error(`Claude API error for short content: ${errorData.error?.message || shortResponse.statusText}`);
+      }
+
       const shortData = await shortResponse.json();
+      if (!shortData.content || !shortData.content[0] || !shortData.content[0].text) {
+        throw new Error("Invalid response format from Claude API for short content");
+      }
       const shortContent = shortData.content[0].text;
 
       // Generate long post
@@ -554,7 +562,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
+            model: "claude-3-5-sonnet-20241022",
             max_tokens: 500,
             messages: [
               {
@@ -566,7 +574,15 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
         }
       );
 
+      if (!longResponse.ok) {
+        const errorData = await longResponse.json();
+        throw new Error(`Claude API error for long content: ${errorData.error?.message || longResponse.statusText}`);
+      }
+
       const longData = await longResponse.json();
+      if (!longData.content || !longData.content[0] || !longData.content[0].text) {
+        throw new Error("Invalid response format from Claude API for long content");
+      }
       const longContent = longData.content[0].text;
 
       // Get active webhooks
@@ -844,7 +860,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
+            model: "claude-3-5-sonnet-20241022",
             max_tokens: 300,
             messages: [
               {
@@ -856,7 +872,15 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
         }
       );
 
+      if (!shortResponse.ok) {
+        const errorData = await shortResponse.json();
+        throw new Error(`Claude API error for short content: ${errorData.error?.message || shortResponse.statusText}`);
+      }
+
       const shortData = await shortResponse.json();
+      if (!shortData.content || !shortData.content[0] || !shortData.content[0].text) {
+        throw new Error("Invalid response format from Claude API for short content");
+      }
       const shortContent = shortData.content[0].text;
 
       // Generate long post
@@ -870,7 +894,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
             "anthropic-version": "2023-06-01",
           },
           body: JSON.stringify({
-            model: "claude-3-haiku-20240307",
+            model: "claude-3-5-sonnet-20241022",
             max_tokens: 500,
             messages: [
               {
@@ -882,7 +906,15 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
         }
       );
 
+      if (!longResponse.ok) {
+        const errorData = await longResponse.json();
+        throw new Error(`Claude API error for long content: ${errorData.error?.message || longResponse.statusText}`);
+      }
+
       const longData = await longResponse.json();
+      if (!longData.content || !longData.content[0] || !longData.content[0].text) {
+        throw new Error("Invalid response format from Claude API for long content");
+      }
       const longContent = longData.content[0].text;
 
       // Get active webhooks
