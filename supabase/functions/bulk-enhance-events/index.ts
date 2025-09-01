@@ -168,8 +168,8 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-3-5-sonnet-20241022",
-        max_tokens: 8000,
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
         temperature: 0.7,
         messages: [
           {
@@ -191,14 +191,33 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
 
     console.log('📝 Received response from Claude, parsing results...');
 
-    // Parse the JSON response from Claude
+    // Parse the JSON response from Claude with improved error handling
     let parsedResults;
     try {
-      parsedResults = JSON.parse(aiResponseText);
+      // Clean the response text to remove any potential control characters
+      const cleanedResponse = aiResponseText.replace(/[\x00-\x1F\x7F]/g, '');
+      
+      // Try to extract JSON from the response if it's wrapped in markdown or other text
+      const jsonMatch = cleanedResponse.match(/\{[\s\S]*\}/);
+      const jsonText = jsonMatch ? jsonMatch[0] : cleanedResponse;
+      
+      parsedResults = JSON.parse(jsonText);
     } catch (parseError) {
       console.error('Error parsing Claude response:', parseError);
-      console.log('Raw Claude response:', aiResponseText);
-      throw new Error('Failed to parse AI response as JSON');
+      console.log('Raw Claude response (first 1000 chars):', aiResponseText.substring(0, 1000));
+      
+      // Try to extract partial results if possible
+      try {
+        const partialMatch = aiResponseText.match(/"results"\s*:\s*\[([\s\S]*?)\]/);
+        if (partialMatch) {
+          parsedResults = { results: JSON.parse(`[${partialMatch[1]}]`) };
+          console.log('Successfully extracted partial results');
+        } else {
+          throw new Error('Failed to parse AI response as JSON and could not extract partial results');
+        }
+      } catch (secondaryError) {
+        throw new Error('Failed to parse AI response as JSON');
+      }
     }
 
     if (!parsedResults.results || !Array.isArray(parsedResults.results)) {
@@ -276,7 +295,7 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
       failureCount,
       results,
       promptUsed,
-      claudeModel: "claude-3-5-sonnet-20241022"
+      claudeModel: "claude-sonnet-4-20250514"
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200
