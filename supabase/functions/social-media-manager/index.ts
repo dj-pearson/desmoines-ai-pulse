@@ -25,49 +25,50 @@ interface SocialMediaPost {
   metadata: any;
 }
 
+// Helper functions
+const isValidUUID = (uuid: string): boolean => {
+  const uuidRegex =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+};
+
+const createSlug = (title: string): string => {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "");
+};
+
+const createEventSlug = (title: string, date: string): string => {
+  const titleSlug = createSlug(title);
+  const eventDate = new Date(date);
+  const centralDate = new Date(
+    eventDate.toLocaleString("en-US", { timeZone: "America/Chicago" })
+  );
+  const year = centralDate.getFullYear();
+  const month = String(centralDate.getMonth() + 1).padStart(2, "0");
+  const day = String(centralDate.getDate()).padStart(2, "0");
+  return `${titleSlug}-${year}-${month}-${day}`;
+};
+
+const generateContentUrl = (contentType: string, content: any): string => {
+  const baseUrl = "https://desmoinesinsider.com";
+  if (contentType === "event") {
+    const slug = createEventSlug(content.title, content.date);
+    return `${baseUrl}/events/${slug}`;
+  } else if (contentType === "restaurant") {
+    const slug = content.slug || createSlug(content.name);
+    return `${baseUrl}/restaurants/${slug}`;
+  }
+  return baseUrl;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
-
-  const isValidUUID = (uuid: string): boolean => {
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
-  };
-
-  const createSlug = (title: string): string => {
-    return title
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  };
-
-  const createEventSlug = (title: string, date: string): string => {
-    const titleSlug = createSlug(title);
-    const eventDate = new Date(date);
-    const centralDate = new Date(
-      eventDate.toLocaleString("en-US", { timeZone: "America/Chicago" })
-    );
-    const year = centralDate.getFullYear();
-    const month = String(centralDate.getMonth() + 1).padStart(2, "0");
-    const day = String(centralDate.getDate()).padStart(2, "0");
-    return `${titleSlug}-${year}-${month}-${day}`;
-  };
-
-  const generateContentUrl = (contentType: string, content: any): string => {
-    const baseUrl = "https://desmoinesinsider.com";
-    if (contentType === "event") {
-      const slug = createEventSlug(content.title, content.date);
-      return `${baseUrl}/events/${slug}`;
-    } else if (contentType === "restaurant") {
-      const slug = content.slug || createSlug(content.name);
-      return `${baseUrl}/restaurants/${slug}`;
-    }
-    return baseUrl;
-  };
 
   // Helper function to check if we should post now based on time
   const shouldPostNow = (contentType: string): boolean => {
