@@ -1,0 +1,22 @@
+# Specific SPA routes to avoid infinite loops
+/restaurants/* /index.html 200
+/events/* /index.html 200
+/playgrounds/* /index.html 200
+/attractions/* /index.html 200
+/neighborhoods/* /index.html 200
+/articles/* /index.html 200
+/weekend /index.html 200
+/social /index.html 200
+/advertise /index.html 200
+/search /index.html 200
+/auth /index.html 200
+/profile /index.html 200
+/admin/* /index.html 200
+
+# Main category pages
+/restaurants /index.html 200
+/events /index.html 200
+/playgrounds /index.html 200
+/attractions /index.html 200
+/neighborhoods /index.html 200
+/articles /index.html 200 
