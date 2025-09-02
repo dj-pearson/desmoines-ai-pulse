@@ -226,13 +226,19 @@ export default function Admin() {
       return;
     }
 
-    if (!user) {
-      console.log("Redirecting to /auth - not authenticated");
-      navigate("/auth");
-    } else if (!hasAdminAccess) {
-      console.log("Redirecting to / - no admin access");
-      navigate("/");
-    }
+    // Add a delay to prevent redirects during state updates
+    const timeoutId = setTimeout(() => {
+      if (!user) {
+        console.log("Redirecting to /auth - not authenticated");
+        navigate("/auth");
+      } else if (!hasAdminAccess && !isLoading) {
+        // Only redirect if we're certain the user doesn't have admin access
+        console.log("Redirecting to / - no admin access");
+        navigate("/");
+      }
+    }, 500); // 500ms delay to allow state to stabilize
+
+    return () => clearTimeout(timeoutId);
   }, [user, userRole, isLoading, hasAdminAccess, isRootAdmin, navigate]);
 
   if (isLoading) {

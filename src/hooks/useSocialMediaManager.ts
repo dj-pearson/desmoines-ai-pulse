@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useScrollPreservation } from './useScrollPreservation';
 
 interface SocialMediaPost {
   id: string;
@@ -28,6 +29,7 @@ interface Webhook {
 
 export function useSocialMediaManager() {
   const { user, isAdmin } = useAuth();
+  const { preserveScrollPosition } = useScrollPreservation();
   const [posts, setPosts] = useState<SocialMediaPost[]>([]);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,27 +41,29 @@ export function useSocialMediaManager() {
       return;
     }
     
-    setLoading(true);
-    try {
-      console.log('Fetching social media posts...');
-      const { data, error } = await supabase
-        .from('social_media_posts')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+    await preserveScrollPosition(async () => {
+      setLoading(true);
+      try {
+        console.log('Fetching social media posts...');
+        const { data, error } = await supabase
+          .from('social_media_posts')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(20);
 
-      if (error) {
-        console.error('Error fetching posts:', error);
-        throw error;
+        if (error) {
+          console.error('Error fetching posts:', error);
+          throw error;
+        }
+        console.log('Fetched posts:', data);
+        setPosts(data || []);
+      } catch (error) {
+        console.error('Failed to fetch posts:', error);
+        toast.error('Failed to fetch posts');
+      } finally {
+        setLoading(false);
       }
-      console.log('Fetched posts:', data);
-      setPosts(data || []);
-    } catch (error) {
-      console.error('Failed to fetch posts:', error);
-      toast.error('Failed to fetch posts');
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   const fetchWebhooks = async () => {
@@ -88,73 +92,85 @@ export function useSocialMediaManager() {
   };
 
   const generatePost = async (data: { contentType: string; subjectType: string }) => {
-    setGenerating(true);
-    try {
-      console.log('Generating post:', data);
-      const { data: result, error } = await supabase.functions.invoke('social-media-manager', {
-        body: {
-          action: 'generate',
-          contentType: data.contentType,
-          subjectType: data.subjectType
-        }
-      });
+    let result: any;
+    await preserveScrollPosition(async () => {
+      setGenerating(true);
+      try {
+        console.log('Generating post:', data);
+        const { data: responseData, error } = await supabase.functions.invoke('social-media-manager', {
+          body: {
+            action: 'generate',
+            contentType: data.contentType,
+            subjectType: data.subjectType
+          }
+        });
 
-      if (error) {
-        console.error('Error generating post:', error);
+        if (error) {
+          console.error('Error generating post:', error);
+          throw error;
+        }
+        
+        console.log('Post generated:', responseData);
+        toast.success('Post generated successfully!');
+        await fetchPosts(); // Refresh posts
+        result = { success: true, post: responseData };
+      } catch (error) {
+        console.error('Failed to generate post:', error);
+        toast.error('Failed to generate post');
         throw error;
+      } finally {
+        setGenerating(false);
       }
-      
-      console.log('Post generated:', result);
-      toast.success('Post generated successfully!');
-      await fetchPosts(); // Refresh posts
-      return { success: true, post: result };
-    } catch (error) {
-      console.error('Failed to generate post:', error);
-      toast.error('Failed to generate post');
-      throw error;
-    } finally {
-      setGenerating(false);
-    }
+    });
+    return result;
   };
 
   const publishPost = async (id: string) => {
-    try {
-      const { data, error } = await supabase.functions.invoke('social-media-manager', {
-        body: {
-          action: 'publish',
-          postId: id
-        }
-      });
+    let success = false;
+    await preserveScrollPosition(async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('social-media-manager', {
+          body: {
+            action: 'publish',
+            postId: id
+          }
+        });
 
-      if (error) throw error;
-      
-      toast.success('Post published successfully!');
-      await fetchPosts(); // Refresh posts
-      return true;
-    } catch (error) {
-      console.error('Failed to publish post:', error);
-      toast.error('Failed to publish post');
-      throw error;
-    }
+        if (error) throw error;
+        
+        toast.success('Post published successfully!');
+        await fetchPosts(); // Refresh posts
+        success = true;
+      } catch (error) {
+        console.error('Failed to publish post:', error);
+        toast.error('Failed to publish post');
+        throw error;
+      }
+    });
+    return success;
   };
 
   const deletePost = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('social_media_posts')
-        .delete()
-        .eq('id', id);
+    let success = false;
+    await preserveScrollPosition(async () => {
+      try {
+        const { error } = await supabase
+          .from('social_media_posts')
+          .delete()
+          .eq('id', id);
 
-      if (error) throw error;
-      
-      toast.success('Post deleted successfully!');
-      await fetchPosts(); // Refresh posts
-      return true;
-    } catch (error) {
-      console.error('Failed to delete post:', error);
-      toast.error('Failed to delete post');
-      throw error;
-    }
+        if (error) throw error;
+        
+        toast.success('Post deleted successfully!');
+        await fetchPosts(); // Refresh posts
+        success = true;
+      } catch (error) {
+        console.error('Failed to delete post:', error);
+        toast.error('Failed to delete post');
+        throw error;
+      }
+    });
+    return success;
   };
 
   const repostPost = async (id: string, type: string) => {
