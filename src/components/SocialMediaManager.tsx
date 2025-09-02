@@ -57,6 +57,8 @@ import {
 } from "lucide-react";
 import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const SocialMediaManager = () => {
   const {
@@ -81,6 +83,64 @@ const SocialMediaManager = () => {
     restaurantTime: "18:00",
     timezone: "America/Chicago",
   });
+
+  // Load automation settings from database on mount
+  React.useEffect(() => {
+    const loadAutomationSettings = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('social_media_automation_settings')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (error && error.code !== 'PGRST116') {
+          console.error('Failed to load automation settings:', error);
+          return;
+        }
+        
+        if (data) {
+          setAutomationSettings({
+            enabled: data.enabled,
+            eventTime: data.event_time,
+            restaurantTime: data.restaurant_time,
+            timezone: data.timezone,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to load automation settings:', error);
+      }
+    };
+    
+    loadAutomationSettings();
+  }, []);
+
+  // Save automation settings to database when changed
+  const saveAutomationSettings = async (newSettings: typeof automationSettings) => {
+    try {
+      const { error } = await supabase
+        .from('social_media_automation_settings')
+        .upsert({
+          enabled: newSettings.enabled,
+          event_time: newSettings.eventTime,
+          restaurant_time: newSettings.restaurantTime,
+          timezone: newSettings.timezone,
+          updated_at: new Date().toISOString(),
+        });
+      
+      if (error) {
+        console.error('Failed to save automation settings:', error);
+        toast.error(`Failed to save settings: ${error.message}`);
+        return;
+      }
+      
+      toast.success("Automation settings saved - Changes will take effect on the next scheduled run");
+    } catch (error) {
+      console.error('Failed to save automation settings:', error);
+      toast.error("Failed to save settings - Please try again");
+    }
+  };
 
   const [isAddingWebhook, setIsAddingWebhook] = useState(false);
   const [newWebhook, setNewWebhook] = useState({
@@ -483,9 +543,11 @@ const SocialMediaManager = () => {
                 </div>
                 <Switch
                   checked={automationSettings.enabled}
-                  onCheckedChange={(checked) =>
-                    setAutomationSettings({ ...automationSettings, enabled: checked })
-                  }
+                  onCheckedChange={async (checked) => {
+                    const newSettings = { ...automationSettings, enabled: checked };
+                    setAutomationSettings(newSettings);
+                    await saveAutomationSettings(newSettings);
+                  }}
                 />
               </div>
 
@@ -498,12 +560,14 @@ const SocialMediaManager = () => {
                       id="event-time"
                       type="time"
                       value={automationSettings.eventTime}
-                      onChange={(e) =>
-                        setAutomationSettings({
+                      onChange={async (e) => {
+                        const newSettings = {
                           ...automationSettings,
                           eventTime: e.target.value,
-                        })
-                      }
+                        };
+                        setAutomationSettings(newSettings);
+                        await saveAutomationSettings(newSettings);
+                      }}
                       disabled={!automationSettings.enabled}
                     />
                   </div>
@@ -520,12 +584,14 @@ const SocialMediaManager = () => {
                       id="restaurant-time"
                       type="time"
                       value={automationSettings.restaurantTime}
-                      onChange={(e) =>
-                        setAutomationSettings({
+                      onChange={async (e) => {
+                        const newSettings = {
                           ...automationSettings,
                           restaurantTime: e.target.value,
-                        })
-                      }
+                        };
+                        setAutomationSettings(newSettings);
+                        await saveAutomationSettings(newSettings);
+                      }}
                       disabled={!automationSettings.enabled}
                     />
                   </div>
