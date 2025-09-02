@@ -228,6 +228,13 @@ function GroundPlane() {
 
 // Main Scene
 function CityScene() {
+  const { scene } = useThree();
+  
+  // Set scene background color to match header
+  React.useEffect(() => {
+    scene.background = new Color('#020916');
+  }, [scene]);
+
   return (
     <>
       {/* Lighting Setup - matching CodePen style */}
@@ -309,7 +316,7 @@ export default function Hero3DCityscape() {
             far: 1000
           }}
           className="opacity-90"
-          style={{ background: 'linear-gradient(to bottom, #020916, #051429)' }}
+          style={{ background: '#020916' }}
           gl={{
             antialias: typeof window !== 'undefined' ? window.innerWidth > 768 : false,
             alpha: false,
