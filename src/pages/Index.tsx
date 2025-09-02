@@ -25,7 +25,7 @@ import MostSearched from "@/components/MostSearched";
 import EventFilters from "@/components/EventFilters";
 import GEOContent from "@/components/GEOContent";
 import Newsletter from "@/components/Newsletter";
-import Hero3D from "@/components/Hero3D";
+import Hero3DCityscape from "@/components/Hero3DCityscape";
 import { EventSocialHub } from "@/components/EventSocialHub";
 
 export default function Index() {
@@ -145,34 +145,34 @@ export default function Index() {
         <Header />
 
         {/* Hero section with structured data */}
-        <section className="relative bg-gradient-to-br from-primary/10 to-secondary/10 py-16 overflow-hidden">
-          <Hero3D />
+        <section className="relative min-h-screen bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69] py-16 overflow-hidden">
+          <Hero3DCityscape />
           <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
+            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 drop-shadow-lg">
               Discover Des Moines Like Never Before
             </h1>
-            <p className="text-xl text-muted-foreground mb-8 max-w-3xl mx-auto">
+            <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto drop-shadow-md">
               Your AI-powered guide to the best events, restaurants,
               attractions, and family activities in Des Moines, Iowa. Real-time
               updates, personalized recommendations, and comprehensive local
               insights.
             </p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 text-center">
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">200+</div>
-                <p className="text-sm text-muted-foreground">Events Monthly</p>
+              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                <div className="text-3xl font-bold text-[#FFD700]">200+</div>
+                <p className="text-sm text-white/80">Events Monthly</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">300+</div>
-                <p className="text-sm text-muted-foreground">Restaurants</p>
+              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                <div className="text-3xl font-bold text-[#FFD700]">300+</div>
+                <p className="text-sm text-white/80">Restaurants</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">50+</div>
-                <p className="text-sm text-muted-foreground">Attractions</p>
+              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                <div className="text-3xl font-bold text-[#FFD700]">50+</div>
+                <p className="text-sm text-white/80">Attractions</p>
               </div>
-              <div className="space-y-2">
-                <div className="text-3xl font-bold text-primary">100+</div>
-                <p className="text-sm text-muted-foreground">Playgrounds</p>
+              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
+                <div className="text-3xl font-bold text-[#FFD700]">100+</div>
+                <p className="text-sm text-white/80">Playgrounds</p>
               </div>
             </div>
           </div>
