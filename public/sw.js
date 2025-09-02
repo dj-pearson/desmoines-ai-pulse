@@ -11,7 +11,7 @@ const STATIC_ASSETS = [
   '/manifest.json',
   '/DMI-Logo.png',
   '/DMI-Icon.png',
-  '/offline.html', // Create this page
+  '/offline.html',
 ];
 
 // API endpoints to cache
@@ -30,9 +30,22 @@ self.addEventListener('install', (event) => {
     caches.open(STATIC_CACHE)
       .then((cache) => {
         console.log('Caching static assets');
-        return cache.addAll(STATIC_ASSETS);
+        // Cache assets individually to avoid complete failure
+        return Promise.allSettled(
+          STATIC_ASSETS.map(asset => 
+            cache.add(asset).catch(err => {
+              console.warn(`Failed to cache asset ${asset}:`, err);
+              return null;
+            })
+          )
+        );
       })
       .then(() => self.skipWaiting())
+      .catch(err => {
+        console.error('Service Worker install failed:', err);
+        // Still try to skip waiting even if caching fails
+        self.skipWaiting();
+      })
   );
 });
 

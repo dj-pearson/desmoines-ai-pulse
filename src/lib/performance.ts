@@ -105,15 +105,19 @@ export const loadResourceAsync = (src: string, type: 'script' | 'style'): Promis
   });
 };
 
-// Service Worker registration - DISABLED IN DEVELOPMENT
+// Service Worker registration - Production only
 export const registerServiceWorker = async () => {
-  // Force disable service worker in development
+  // Only register in production AND when served from HTTPS (or localhost)
   const isProd = import.meta.env.PROD && import.meta.env.MODE === 'production';
+  const isSecureContext = location.protocol === 'https:' || location.hostname === 'localhost';
 
-  if (!('serviceWorker' in navigator)) return;
+  if (!('serviceWorker' in navigator)) {
+    console.log('Service Worker not supported');
+    return;
+  }
 
-  // ALWAYS unregister and clear caches if not production
-  if (!isProd) {
+  // ALWAYS unregister and clear caches if not production or not secure
+  if (!isProd || !isSecureContext) {
     try {
       // Unregister ALL service workers
       const regs = await navigator.serviceWorker.getRegistrations();
@@ -125,12 +129,7 @@ export const registerServiceWorker = async () => {
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
       
-      // Clear any existing registration state
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({ type: 'SKIP_WAITING' });
-      }
-      
-      console.log('All service workers and caches cleared for development');
+      console.log('Service Workers disabled for development/insecure context');
     } catch (err) {
       console.warn('Failed to clear service workers/caches:', err);
     }
@@ -138,8 +137,18 @@ export const registerServiceWorker = async () => {
   }
 
   try {
-    const registration = await navigator.serviceWorker.register('/sw.js');
-    console.log('Service Worker registered:', registration);
+    // Check if service worker script exists before registering
+    const response = await fetch('/sw.js', { method: 'HEAD' });
+    if (!response.ok) {
+      console.warn('Service Worker script not found, skipping registration');
+      return;
+    }
+
+    const registration = await navigator.serviceWorker.register('/sw.js', {
+      scope: '/'
+    });
+    console.log('Service Worker registered successfully:', registration);
+    
     // Handle updates
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
@@ -154,6 +163,8 @@ export const registerServiceWorker = async () => {
     return registration;
   } catch (error) {
     console.error('Service Worker registration failed:', error);
+    // Don't let SW registration failures break the app
+    return null;
   }
 };
 
