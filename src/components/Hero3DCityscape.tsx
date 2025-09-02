@@ -23,7 +23,7 @@ import {
 // Loading Fallback Component
 function LoadingFallback() {
   return (
-    <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-[#2D1B69] to-[#8B0000] opacity-20 flex items-center justify-center">
+    <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-[#020916] to-[#051429] opacity-20 flex items-center justify-center">
       <div className="text-white text-lg">Loading cityscape...</div>
     </div>
   );
@@ -115,7 +115,7 @@ function Building({
       {/* Building edges/details */}
       <lineSegments>
         <edgesGeometry args={[new BoxGeometry(width, height, depth)]} />
-        <lineBasicMaterial color={hasGlow ? "#FF4444" : "#444466"} />
+        <lineBasicMaterial color={hasGlow ? "#FF4444" : "#87CEEB"} />
       </lineSegments>
     </group>
   );
@@ -218,7 +218,7 @@ function GroundPlane() {
     <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
       <planeGeometry args={[60, 60]} />
       <meshLambertMaterial 
-        color="#0a0a0a"
+        color="#020916"
         transparent 
         opacity={0.9}
       />
@@ -244,7 +244,7 @@ function CityScene() {
       />
 
       {/* Atmosphere - dark with red tint like CodePen */}
-      <fog attach="fog" args={['#000000', 10, 35]} />
+      <fog attach="fog" args={['#020916', 10, 35]} />
       
       {/* Minimal stars for atmosphere */}
       <Stars 
@@ -290,7 +290,7 @@ export default function Hero3DCityscape() {
 
   if (hasError) {
     return (
-      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-[#2D1B69] to-[#8B0000] opacity-30" />
+      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-[#020916] to-[#051429] opacity-30" />
     );
   }
 
@@ -309,7 +309,7 @@ export default function Hero3DCityscape() {
             far: 1000
           }}
           className="opacity-90"
-          style={{ background: 'linear-gradient(to bottom, #000000, #0a0a1a)' }}
+          style={{ background: 'linear-gradient(to bottom, #020916, #051429)' }}
           gl={{
             antialias: typeof window !== 'undefined' ? window.innerWidth > 768 : false,
             alpha: false,
