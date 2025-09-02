@@ -1,5 +1,6 @@
--- ENHANCED CRON FUNCTION - Automatically detects schedule changes
--- This version updates next_run times when schedules change
+
+-- ENHANCED CRON FUNCTION - Calls Social Media Manager for automated posts
+-- This version triggers social media posts at appropriate times
 
 CREATE OR REPLACE FUNCTION run_scraping_jobs_simple()
 RETURNS void AS $$
@@ -8,10 +9,33 @@ DECLARE
   next_run_time TIMESTAMPTZ;
   jobs_processed INTEGER := 0;
   schedules_updated INTEGER := 0;
+  social_media_response TEXT;
 BEGIN
   -- Log the cron job execution
   INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('Starting simplified cron job run (no HTTP dependency)', NOW());
+  VALUES ('Starting simplified cron job run with social media automation', NOW());
+  
+  -- Call social media manager for automated posting checks
+  BEGIN
+    SELECT net.http_post(
+      url := 'https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/social-media-manager',
+      headers := jsonb_build_object(
+        'Content-Type', 'application/json',
+        'Authorization', 'Bearer ' || (SELECT vault.get_secret('SUPABASE_SERVICE_ROLE_KEY'))
+      ),
+      body := jsonb_build_object(
+        'action', 'automated_check',
+        'triggerSource', 'cron'
+      )
+    ) INTO social_media_response;
+    
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('Social media automation check completed: ' || COALESCE(social_media_response, 'no response'), NOW());
+    
+  EXCEPTION WHEN OTHERS THEN
+    INSERT INTO public.cron_logs (message, error_details, created_at) 
+    VALUES ('Social media automation failed', SQLERRM, NOW());
+  END;
   
   -- First, update any jobs where the schedule has changed but next_run wasn't recalculated
   FOR job_record IN 
@@ -108,7 +132,7 @@ BEGIN
   
   -- Log summary
   INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('Cron run completed. Updated ' || schedules_updated || ' schedules, processed ' || jobs_processed || ' jobs.', NOW());
+  VALUES ('Cron run completed. Updated ' || schedules_updated || ' schedules, processed ' || jobs_processed || ' jobs, checked social media automation.', NOW());
   
   -- Clean up old cron logs (keep last 100 entries)
   DELETE FROM public.cron_logs 
