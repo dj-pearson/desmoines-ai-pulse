@@ -1,10 +1,7 @@
 import React, { useRef, useMemo, useEffect, useState, Suspense } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { 
-  OrbitControls, 
-  Stars, 
-  useTexture,
-  Plane
+  Stars
 } from '@react-three/drei';
 import { 
   Mesh, 
@@ -14,10 +11,13 @@ import {
   MeshLambertMaterial,
   Color,
   Vector3,
+  Vector2,
   DirectionalLight,
   AmbientLight,
   PointLight,
-  Fog
+  Fog,
+  EdgesGeometry,
+  LineBasicMaterial
 } from 'three';
 
 // Loading Fallback Component
@@ -29,84 +29,94 @@ function LoadingFallback() {
   );
 }
 
-// City Building Component
+// Mouse-controlled Camera Component
+function MouseControlledCamera() {
+  const { camera, size } = useThree();
+  const mousePosition = useRef(new Vector2(0, 0));
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      mousePosition.current.x = (event.clientX / size.width) * 2 - 1;
+      mousePosition.current.y = -(event.clientY / size.height) * 2 + 1;
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, [size]);
+
+  useFrame(() => {
+    // Smooth camera movement based on mouse position
+    const targetX = mousePosition.current.x * 5;
+    const targetY = mousePosition.current.y * 3 + 8;
+    const targetZ = 15 + mousePosition.current.x * 2;
+
+    camera.position.x += (targetX - camera.position.x) * 0.05;
+    camera.position.y += (targetY - camera.position.y) * 0.05;
+    camera.position.z += (targetZ - camera.position.z) * 0.05;
+    
+    camera.lookAt(0, 2, 0);
+  });
+
+  return null;
+}
+
+// City Building Component with Glow
 function Building({ 
   position, 
   height, 
   width = 1, 
   depth = 1, 
-  color = '#2D1B69',
-  windowsOn = true 
+  hasGlow = false 
 }: {
   position: [number, number, number];
   height: number;
   width?: number;
   depth?: number;
-  color?: string;
-  windowsOn?: boolean;
+  hasGlow?: boolean;
 }) {
   const meshRef = useRef<Mesh>(null);
-  const groupRef = useRef<Group>(null);
+  const glowRef = useRef<Mesh>(null);
 
-  // Subtle floating animation
+  // Pulsing glow animation
   useFrame((state) => {
-    if (groupRef.current) {
-      groupRef.current.position.y = position[1] + Math.sin(state.clock.elapsedTime * 0.5 + position[0]) * 0.05;
+    if (glowRef.current && hasGlow) {
+      const pulse = Math.sin(state.clock.elapsedTime * 2) * 0.3 + 0.7;
+      glowRef.current.scale.setScalar(pulse);
+      glowRef.current.material.opacity = pulse * 0.6;
     }
   });
 
-  // Create windows
-  const windows = useMemo(() => {
-    if (!windowsOn) return [];
-    
-    const windowArray = [];
-    const windowsPerFloor = Math.floor(width * 2);
-    const floors = Math.floor(height * 3);
-    
-    for (let floor = 0; floor < floors; floor++) {
-      for (let w = 0; w < windowsPerFloor; w++) {
-        if (Math.random() > 0.3) { // 70% chance of window being lit
-          windowArray.push({
-            x: (w - windowsPerFloor / 2) * 0.3,
-            y: (floor - floors / 2) * 0.3,
-            z: width / 2 + 0.01
-          });
-        }
-      }
-    }
-    return windowArray;
-  }, [height, width, windowsOn]);
-
   return (
-    <group ref={groupRef} position={position}>
-      {/* Main building */}
+    <group position={position}>
+      {/* Main building - dark blue */}
       <mesh ref={meshRef}>
         <boxGeometry args={[width, height, depth]} />
         <meshPhongMaterial 
-          color={color} 
-          transparent 
-          opacity={0.9}
-          shininess={30}
+          color="#1a1a2e" 
+          shininess={10}
+          specular="#2D1B69"
         />
       </mesh>
       
-      {/* Windows */}
-      {windows.map((window, index) => (
-        <mesh key={index} position={[window.x, window.y, window.z]}>
-          <boxGeometry args={[0.1, 0.15, 0.02]} />
+      {/* Glowing overlay for special buildings */}
+      {hasGlow && (
+        <mesh ref={glowRef} position={[0, 0, 0]}>
+          <boxGeometry args={[width + 0.1, height + 0.1, depth + 0.1]} />
           <meshLambertMaterial 
-            color="#FFD700" 
-            emissive="#FFD700"
-            emissiveIntensity={0.3}
+            color="#DC143C"
+            emissive="#DC143C"
+            emissiveIntensity={0.4}
+            transparent
+            opacity={0.6}
           />
         </mesh>
-      ))}
+      )}
       
-      {/* Roof detail */}
-      <mesh position={[0, height/2 + 0.1, 0]}>
-        <boxGeometry args={[width + 0.1, 0.2, depth + 0.1]} />
-        <meshPhongMaterial color="#8B0000" />
-      </mesh>
+      {/* Building edges/details */}
+      <lineSegments>
+        <edgesGeometry args={[new BoxGeometry(width, height, depth)]} />
+        <lineBasicMaterial color={hasGlow ? "#FF4444" : "#444466"} />
+      </lineSegments>
     </group>
   );
 }
@@ -115,29 +125,27 @@ function Building({
 function CityGrid() {
   const buildings = useMemo(() => {
     const buildingArray = [];
-    const gridSize = 20;
-    const spacing = 3;
+    const gridSize = 12;
+    const spacing = 2.5;
     
     for (let x = -gridSize; x <= gridSize; x += spacing) {
       for (let z = -gridSize; z <= gridSize; z += spacing) {
         // Skip center area for hero content
-        if (Math.abs(x) < 6 && Math.abs(z) < 6) continue;
+        if (Math.abs(x) < 4 && Math.abs(z) < 4) continue;
         
-        const height = Math.random() * 6 + 2;
-        const width = Math.random() * 1.5 + 0.8;
-        const depth = Math.random() * 1.5 + 0.8;
+        const height = Math.random() * 4 + 1.5;
+        const width = Math.random() * 0.8 + 0.6;
+        const depth = Math.random() * 0.8 + 0.6;
         
-        // Use brand colors
-        const colors = ['#2D1B69', '#1e3a8a', '#3730a3', '#1e40af'];
-        const color = colors[Math.floor(Math.random() * colors.length)];
+        // Random chance for glowing buildings (like the pink ones in CodePen)
+        const hasGlow = Math.random() > 0.85;
         
         buildingArray.push({
           position: [x, height/2, z] as [number, number, number],
           height,
           width,
           depth,
-          color,
-          windowsOn: Math.random() > 0.2
+          hasGlow
         });
       }
     }
@@ -153,169 +161,97 @@ function CityGrid() {
           height={building.height}
           width={building.width}
           depth={building.depth}
-          color={building.color}
-          windowsOn={building.windowsOn}
+          hasGlow={building.hasGlow}
         />
       ))}
     </>
   );
 }
 
-// Flying Elements (representing events/activities)
-function FloatingElement({ 
-  position, 
-  color = '#DC143C', 
-  speed = 1 
-}: {
-  position: [number, number, number];
-  color?: string;
-  speed?: number;
-}) {
-  const meshRef = useRef<Mesh>(null);
-
-  useFrame((state) => {
-    if (meshRef.current) {
-      meshRef.current.position.x = position[0] + Math.sin(state.clock.elapsedTime * speed) * 2;
-      meshRef.current.position.y = position[1] + Math.cos(state.clock.elapsedTime * speed * 0.7) * 1;
-      meshRef.current.position.z = position[2] + Math.sin(state.clock.elapsedTime * speed * 0.5) * 1.5;
-      meshRef.current.rotation.y = state.clock.elapsedTime * speed;
-    }
-  });
-
-  return (
-    <mesh ref={meshRef}>
-      <boxGeometry args={[0.2, 0.2, 0.2]} />
-      <meshPhongMaterial 
-        color={color} 
-        emissive={color}
-        emissiveIntensity={0.2}
-        transparent
-        opacity={0.8}
-      />
-    </mesh>
-  );
-}
-
-// Ground/Street System
-function GroundPlane() {
-  return (
-    <mesh position={[0, -0.1, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[100, 100]} />
-      <meshLambertMaterial 
-        color="#1a1a2e"
-        transparent 
-        opacity={0.8}
-      />
-    </mesh>
-  );
-}
-
-// Street Lights
-function StreetLight({ position }: { position: [number, number, number] }) {
-  const lightRef = useRef<PointLight>(null);
+// Floating Particles/Elements
+function FloatingParticles() {
+  const particlesRef = useRef<Group>(null);
   
+  const particles = useMemo(() => {
+    const particleArray = [];
+    for (let i = 0; i < 20; i++) {
+      particleArray.push({
+        position: [
+          (Math.random() - 0.5) * 30,
+          Math.random() * 15 + 5,
+          (Math.random() - 0.5) * 30
+        ] as [number, number, number],
+        speed: Math.random() * 0.5 + 0.2
+      });
+    }
+    return particleArray;
+  }, []);
+
   useFrame((state) => {
-    if (lightRef.current) {
-      lightRef.current.intensity = 0.3 + Math.sin(state.clock.elapsedTime * 2) * 0.1;
+    if (particlesRef.current) {
+      particlesRef.current.children.forEach((particle, index) => {
+        particle.position.y += Math.sin(state.clock.elapsedTime + index) * 0.01;
+        particle.rotation.y = state.clock.elapsedTime * particles[index].speed;
+      });
     }
   });
 
   return (
-    <group position={position}>
-      {/* Pole */}
-      <mesh position={[0, 2, 0]}>
-        <cylinderGeometry args={[0.05, 0.05, 4]} />
-        <meshPhongMaterial color="#444444" />
-      </mesh>
-      
-      {/* Light */}
-      <mesh position={[0, 4.2, 0]}>
-        <sphereGeometry args={[0.2]} />
-        <meshLambertMaterial 
-          color="#FFD700"
-          emissive="#FFD700"
-          emissiveIntensity={0.5}
-        />
-      </mesh>
-      
-      {/* Point Light */}
-      <pointLight
-        ref={lightRef}
-        position={[0, 4, 0]}
-        color="#FFD700"
-        intensity={0.3}
-        distance={8}
-      />
+    <group ref={particlesRef}>
+      {particles.map((particle, index) => (
+        <mesh key={index} position={particle.position}>
+          <boxGeometry args={[0.1, 0.1, 0.1]} />
+          <meshLambertMaterial 
+            color="#DC143C"
+            emissive="#DC143C"
+            emissiveIntensity={0.3}
+          />
+        </mesh>
+      ))}
     </group>
   );
 }
 
-// Camera Controller for smooth movement
-function CameraController() {
-  const { camera } = useThree();
-  
-  useFrame((state) => {
-    // Smooth camera orbit
-    const time = state.clock.elapsedTime * 0.2;
-    camera.position.x = Math.sin(time) * 15;
-    camera.position.z = Math.cos(time) * 15;
-    camera.position.y = 8 + Math.sin(time * 0.5) * 2;
-    camera.lookAt(0, 2, 0);
-  });
-
-  return null;
+// Ground Plane
+function GroundPlane() {
+  return (
+    <mesh position={[0, 0, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+      <planeGeometry args={[60, 60]} />
+      <meshLambertMaterial 
+        color="#0a0a0a"
+        transparent 
+        opacity={0.9}
+      />
+    </mesh>
+  );
 }
 
 // Main Scene
 function CityScene() {
-  // Street lights positions
-  const streetLights = useMemo(() => {
-    const lights = [];
-    for (let x = -15; x <= 15; x += 6) {
-      for (let z = -15; z <= 15; z += 6) {
-        // Skip center area and some random positions
-        if ((Math.abs(x) < 4 && Math.abs(z) < 4) || Math.random() > 0.7) continue;
-        lights.push([x, 0, z] as [number, number, number]);
-      }
-    }
-    return lights;
-  }, []);
-
-  // Floating elements
-  const floatingElements = useMemo(() => [
-    { position: [8, 6, 5] as [number, number, number], color: '#DC143C', speed: 0.8 },
-    { position: [-6, 8, -3] as [number, number, number], color: '#FF6B6B', speed: 1.2 },
-    { position: [4, 10, -8] as [number, number, number], color: '#8B0000', speed: 0.6 },
-    { position: [-8, 7, 6] as [number, number, number], color: '#DC143C', speed: 1.0 },
-    { position: [10, 9, -2] as [number, number, number], color: '#FF4444', speed: 0.9 },
-  ], []);
-
   return (
     <>
-      {/* Lighting Setup */}
-      <ambientLight intensity={0.2} color="#ffffff" />
+      {/* Lighting Setup - matching CodePen style */}
+      <ambientLight intensity={0.1} color="#ffffff" />
       <directionalLight
         position={[10, 10, 5]}
-        intensity={0.4}
+        intensity={0.3}
         color="#ffffff"
-        castShadow
-        shadow-mapSize={[2048, 2048]}
       />
       <directionalLight
         position={[-10, 8, -5]}
         intensity={0.2}
-        color="#2D1B69"
+        color="#DC143C"
       />
 
-      {/* Atmosphere */}
-      <fog attach="fog" args={['#0a0a0a', 20, 50]} />
+      {/* Atmosphere - dark with red tint like CodePen */}
+      <fog attach="fog" args={['#000000', 10, 35]} />
       
-      {/* Stars */}
+      {/* Minimal stars for atmosphere */}
       <Stars 
-        radius={300} 
-        depth={60} 
-        count={1000} 
-        factor={4} 
+        radius={200} 
+        depth={50} 
+        count={200} 
+        factor={2} 
         saturation={0}
         fade={true}
       />
@@ -326,23 +262,11 @@ function CityScene() {
       {/* City Buildings */}
       <CityGrid />
 
-      {/* Street Lights */}
-      {streetLights.map((position, index) => (
-        <StreetLight key={index} position={position} />
-      ))}
+      {/* Floating Particles */}
+      <FloatingParticles />
 
-      {/* Floating Elements */}
-      {floatingElements.map((element, index) => (
-        <FloatingElement
-          key={index}
-          position={element.position}
-          color={element.color}
-          speed={element.speed}
-        />
-      ))}
-
-      {/* Camera Animation */}
-      <CameraController />
+      {/* Mouse-controlled Camera */}
+      <MouseControlledCamera />
     </>
   );
 }
@@ -379,18 +303,19 @@ export default function Hero3DCityscape() {
       <Suspense fallback={<LoadingFallback />}>
         <Canvas
           camera={{ 
-            position: [15, 8, 15], 
-            fov: 60,
+            position: [0, 8, 15], 
+            fov: 75,
             near: 0.1,
             far: 1000
           }}
-          className="opacity-80"
+          className="opacity-90"
+          style={{ background: 'linear-gradient(to bottom, #000000, #0a0a1a)' }}
           gl={{
             antialias: typeof window !== 'undefined' ? window.innerWidth > 768 : false,
-            alpha: true,
+            alpha: false,
             powerPreference: "high-performance"
           }}
-          dpr={[1, typeof window !== 'undefined' && window.innerWidth > 1200 ? 2 : 1]}
+          dpr={[1, typeof window !== 'undefined' && window.innerWidth > 1200 ? 1.5 : 1]}
           onError={() => setHasError(true)}
         >
           <CityScene />
