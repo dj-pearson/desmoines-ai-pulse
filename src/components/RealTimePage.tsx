@@ -1,5 +1,5 @@
 import React from 'react';
-import { Helmet } from 'react-helmet';
+import SEOHead from '@/components/SEOHead';
 import RealTimeBusinessInfo, { RealTimeSearch } from '@/components/RealTimeBusinessInfo';
 import UserGeneratedContent, { QuickUpdateWidget } from '@/components/UserGeneratedContent';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,69 +12,61 @@ import { Clock, Users, MessageSquare, TrendingUp } from 'lucide-react';
  * Focuses on live business information and community insights
  */
 export default function RealTimePage() {
+  const realTimePageSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Real-Time Des Moines Business Information",
+    "description": "Live business hours, wait times, and community updates for Des Moines area",
+    "url": "https://desmoinesinsider.com/real-time",
+    "mainEntity": {
+      "@type": "ItemList",
+      "name": "Live Business Updates",
+      "itemListElement": [
+        {
+          "@type": "LocalBusiness",
+          "name": "Des Moines Area Restaurants",
+          "description": "Real-time hours and availability"
+        },
+        {
+          "@type": "TouristAttraction", 
+          "name": "Des Moines Attractions",
+          "description": "Live capacity and wait times"
+        }
+      ]
+    },
+    "about": {
+      "@type": "Place",
+      "name": "Des Moines, Iowa",
+      "geo": {
+        "@type": "GeoCoordinates",
+        "latitude": "41.5868",
+        "longitude": "-93.6250"
+      }
+    },
+    "audience": {
+      "@type": "Audience",
+      "audienceType": "Des Moines residents and locals"
+    }
+  };
+
   return (
     <>
-      <Helmet>
-        <title>What's Open Right Now in Des Moines | Live Business Information</title>
-        <meta 
-          name="description" 
-          content="Live business hours, wait times, and community updates for Des Moines restaurants, attractions, and services. Real-time information updated every 5 minutes by local residents." 
-        />
-        
-        {/* Structured Data for Real-time Content */}
-        <script type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "WebPage",
-            "name": "Real-Time Des Moines Business Information",
-            "description": "Live business hours, wait times, and community updates for Des Moines area",
-            "url": "https://desmoinesinsider.com/real-time",
-            "mainEntity": {
-              "@type": "ItemList",
-              "name": "Live Business Updates",
-              "itemListElement": [
-                {
-                  "@type": "LocalBusiness",
-                  "name": "Des Moines Area Restaurants",
-                  "description": "Real-time hours and availability"
-                },
-                {
-                  "@type": "TouristAttraction", 
-                  "name": "Des Moines Attractions",
-                  "description": "Live capacity and wait times"
-                }
-              ]
-            },
-            "about": {
-              "@type": "Place",
-              "name": "Des Moines, Iowa",
-              "geo": {
-                "@type": "GeoCoordinates",
-                "latitude": "41.5868",
-                "longitude": "-93.6250"
-              }
-            },
-            "audience": {
-              "@type": "Audience",
-              "audienceType": "Des Moines residents and locals"
-            }
-          })}
-        </script>
-
-        {/* Open Graph for Social Sharing */}
-        <meta property="og:title" content="What's Open Right Now in Des Moines | Real-Time Updates" />
-        <meta property="og:description" content="Live business information, wait times, and community updates from Des Moines residents. Never wonder if a place is open again." />
-        <meta property="og:type" content="website" />
-        <meta property="og:url" content="https://desmoinesinsider.com/real-time" />
-        
-        {/* Twitter Card */}
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="What's Open Right Now in Des Moines" />
-        <meta name="twitter:description" content="Real-time business hours and community updates from local residents" />
-
-        {/* Keywords targeting voice search and mobile queries */}
-        <meta name="keywords" content="Des Moines open now, what's open Des Moines, restaurant hours Des Moines, live business information, Des Moines wait times, open restaurants near me, Des Moines real time updates" />
-      </Helmet>
+      <SEOHead
+        title="What's Open Right Now in Des Moines | Live Business Information"
+        description="Live business hours, wait times, and community updates for Des Moines restaurants, attractions, and services. Real-time information updated every 5 minutes by local residents."
+        type="website"
+        keywords={[
+          "Des Moines open now",
+          "what's open Des Moines",
+          "restaurant hours Des Moines",
+          "live business information",
+          "Des Moines wait times",
+          "open restaurants near me",
+          "Des Moines real time updates"
+        ]}
+        structuredData={realTimePageSchema}
+        url="/real-time"
+      />
 
       <div className="container mx-auto px-4 py-8 space-y-8">
         {/* Hero Section */}
