@@ -125,7 +125,7 @@ serve(async (req) => {
       .eq("content_type", contentType)
       .gte("created_at", startOfDay.toISOString())
       .lte("created_at", endOfDay.toISOString())
-      .in("status", ["generated", "posted"]);
+      .in("status", ["draft", "posted"]);
     
     const hasGenerated = (todayPosts?.length || 0) > 0;
     console.log(`Already generated ${contentType} today: ${hasGenerated} (found ${todayPosts?.length || 0} posts)`);
@@ -227,11 +227,11 @@ serve(async (req) => {
       
       const results = [];
       
-      // Find pending posts that were generated today but not yet published
+      // Find pending posts that were drafted today but not yet published
       const { data: pendingPosts, error: pendingError } = await supabase
         .from("social_media_posts")
         .select("*")
-        .eq("status", "generated")
+        .eq("status", "draft")
         .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
         .order("created_at", { ascending: true });
       
@@ -764,7 +764,7 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     content_url: contentUrl,
     webhook_urls: webhookUrls,
     ai_prompt_used: `Short: ${shortPrompt}\n\nLong: ${longPrompt}`,
-    status: autoPublish ? "posted" : "generated",
+    status: autoPublish ? "posted" : "draft",
     posted_at: autoPublish ? new Date().toISOString() : null,
     metadata: {
       content_data: selectedContent,
