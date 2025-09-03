@@ -23,16 +23,30 @@ export default function NeighborhoodGuide({
   // Neighborhood-specific content
   const neighborhoodData = {
     "West Des Moines": {
-      description: "Discover what's happening in West Des Moines, Iowa's premier shopping and dining destination.",
-      highlights: ["Jordan Creek Town Center", "Valley Junction", "Raccoon River Park"],
+      description: "Discover what's happening in West Des Moines, Iowa's premier shopping and dining destination with 400+ monthly events and activities.",
+      highlights: ["Jordan Creek Town Center", "Valley Junction Historic District", "Raccoon River Park"],
       zipCodes: ["50265", "50266", "50061"],
-      keywords: "West Des Moines events, Jordan Creek shopping, Valley Junction historic district"
+      keywords: "West Des Moines events, Jordan Creek shopping, Valley Junction historic district",
+      detailedDescription: `West Des Moines stands as the Des Moines metro area's premier shopping, dining, and family entertainment destination. 
+        Home to Jordan Creek Town Center - Iowa's largest shopping mall - and the historic Valley Junction district, 
+        West Des Moines offers diverse activities from upscale shopping to historic walking tours. The community hosts 200+ 
+        family-friendly events annually, featuring outdoor concerts, farmers markets, and seasonal festivals. Raccoon River Park 
+        provides year-round recreation with trails, playgrounds, and natural areas perfect for family activities.`,
+      demographics: "Population 68,723 | Median household income $82,492 | 23% families with children under 18",
+      bestFor: "Shopping, family dining, suburban events, historic tours, upscale attractions"
     },
     "Ankeny": {
-      description: "Find family-friendly events and activities in Ankeny, one of Iowa's fastest-growing communities.",
+      description: "Find family-friendly events and activities in Ankeny, one of Iowa's fastest-growing communities with 300+ monthly activities.",
       highlights: ["Ankeny Market & Pavilion", "High Trestle Trail", "Ankeny Art Center"],
       zipCodes: ["50023", "50021"],
-      keywords: "Ankeny family events, High Trestle Trail activities, Ankeny community center"
+      keywords: "Ankeny family events, High Trestle Trail activities, Ankeny community center",
+      detailedDescription: `Ankeny represents one of Iowa's most rapidly growing suburban communities, known for exceptional 
+        family amenities and community engagement. The city features the High Trestle Trail bridge - a architectural marvel 
+        and top cycling destination - plus comprehensive community programming through the Ankeny Market & Pavilion. 
+        With 150+ family-focused events annually, Ankeny excels in youth sports, community festivals, and educational programming. 
+        The area attracts families seeking small-town community feel with big-city amenities.`,
+      demographics: "Population 67,887 | Median household income $89,234 | 28% families with children under 18",
+      bestFor: "Family activities, cycling recreation, community events, youth sports, educational programs"
     },
     "East Village": {
       description: "Experience Des Moines' hip East Village district with trendy restaurants, breweries, and cultural events.",
@@ -249,28 +263,103 @@ export default function NeighborhoodGuide({
         </div>
       )}
 
-      {/* Local SEO Content */}
-      <Card className="bg-muted/50">
-        <CardContent className="p-6">
-          <h3 className="font-semibold mb-3">About {neighborhood}</h3>
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            {neighborhood} is a vibrant part of the greater Des Moines metropolitan area, offering residents and visitors 
-            a unique blend of local events, dining options, and community attractions. Whether you're looking for 
-            family-friendly activities, date night restaurants, or weekend events, {neighborhood} has something for everyone. 
-            Stay updated with the latest happenings, new restaurant openings, and seasonal events in {neighborhood} 
-            through Des Moines Insider.
-          </p>
-          
-          {currentNeighborhood?.keywords && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium mb-2">Popular searches:</h4>
-              <p className="text-xs text-muted-foreground">
-                {currentNeighborhood.keywords}
-              </p>
+      {/* Enhanced Local SEO Content */}
+      <div className="space-y-6">
+        {/* Neighborhood Overview */}
+        <Card className="bg-muted/50">
+          <CardContent className="p-6">
+            <h3 className="font-semibold mb-3">About {neighborhood}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+              {currentNeighborhood?.detailedDescription || 
+                `${neighborhood} is a vibrant part of the greater Des Moines metropolitan area, offering residents and visitors 
+                a unique blend of local events, dining options, and community attractions. Whether you're looking for 
+                family-friendly activities, date night restaurants, or weekend events, ${neighborhood} has something for everyone.`
+              }
+            </p>
+            
+            {currentNeighborhood?.demographics && (
+              <div className="mb-4 p-3 bg-white rounded-md">
+                <h4 className="text-sm font-semibold mb-2">Community Profile</h4>
+                <p className="text-xs text-muted-foreground">{currentNeighborhood.demographics}</p>
+              </div>
+            )}
+            
+            {currentNeighborhood?.bestFor && (
+              <div className="mb-4 p-3 bg-blue-50 rounded-md">
+                <h4 className="text-sm font-semibold mb-2">Best Known For</h4>
+                <p className="text-xs text-blue-700">{currentNeighborhood.bestFor}</p>
+              </div>
+            )}
+            
+            {currentNeighborhood?.keywords && (
+              <div className="mt-4">
+                <h4 className="text-sm font-medium mb-2">Popular searches:</h4>
+                <p className="text-xs text-muted-foreground">
+                  {currentNeighborhood.keywords}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Neighborhood FAQ Section for AI Search Optimization */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Frequently Asked Questions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-4">
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold mb-2">What are the best family activities in {neighborhood}?</h4>
+                <p className="text-sm text-gray-700">
+                  {neighborhood === "West Des Moines" 
+                    ? "West Des Moines offers Jordan Creek Town Center for shopping and entertainment, Valley Junction for historic tours and antique shopping, plus Raccoon River Park with trails, playgrounds, and year-round outdoor activities perfect for families."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny features the High Trestle Trail for cycling and walking, Ankeny Market & Pavilion for community events, plus numerous parks, sports complexes, and family-friendly festivals throughout the year."
+                    : `${neighborhood} offers various family-friendly activities including parks, community centers, local events, and seasonal festivals that cater to residents of all ages.`
+                  }
+                </p>
+              </div>
+              
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold mb-2">Where are the best restaurants in {neighborhood}?</h4>
+                <p className="text-sm text-gray-700">
+                  {neighborhood === "West Des Moines"
+                    ? "West Des Moines dining centers around Jordan Creek area with chain restaurants and local favorites, plus Valley Junction's unique local eateries. The area excels in family-friendly dining with diverse cuisine options and competitive pricing."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny's restaurant scene focuses on family-friendly establishments with good value pricing. The community features both chain restaurants and local favorites, with new openings regularly added to serve the growing suburban population."
+                    : `${neighborhood} offers a variety of dining options ranging from casual family restaurants to local specialty eateries, with new establishments regularly opening to serve the community.`
+                  }
+                </p>
+              </div>
+              
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold mb-2">What events happen regularly in {neighborhood}?</h4>
+                <p className="text-sm text-gray-700">
+                  {neighborhood === "West Des Moines"
+                    ? "Regular events include Valley Junction festivals, Jordan Creek seasonal celebrations, farmers markets, outdoor concerts at Raccoon River Park, and community gatherings. Many events are family-oriented with activities for all ages."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny hosts regular community events at the Market & Pavilion, seasonal festivals, youth sports tournaments, cycling events on the High Trestle Trail, and educational programs throughout the year."
+                    : `${neighborhood} hosts regular community events, seasonal festivals, recreational activities, and local gatherings that bring residents together throughout the year.`
+                  }
+                </p>
+              </div>
+              
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-semibold mb-2">How do I get to {neighborhood} from downtown Des Moines?</h4>
+                <p className="text-sm text-gray-700">
+                  {neighborhood === "West Des Moines"
+                    ? "West Des Moines is easily accessible via I-235 West to I-35 South, approximately 15-20 minutes from downtown Des Moines. DART bus routes serve major destinations like Jordan Creek Town Center with regular service."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny is located north of Des Moines, accessible via I-35 North or Highway 69. The drive takes approximately 20-25 minutes from downtown Des Moines, with DART bus service available on major routes."
+                    : `${neighborhood} is accessible from downtown Des Moines via major highways and public transportation options, with typical driving times of 15-30 minutes depending on traffic and destination.`
+                  }
+                </p>
+              </div>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

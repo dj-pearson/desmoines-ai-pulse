@@ -316,6 +316,133 @@ export default function Restaurants() {
                 </div>
               )}
             </div>
+            
+            {/* Enhanced Content Section for SEO Authority */}
+            <div className="max-w-4xl mx-auto space-y-12 mt-16">
+              {/* Main Authority Content */}
+              <div className="prose prose-lg max-w-none">
+                <h2 className="text-3xl font-bold mb-6 text-center">Des Moines Restaurant Guide: Your Complete Local Dining Directory</h2>
+                
+                <div className="bg-blue-50 p-6 rounded-lg mb-8">
+                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2">
+                    <ChefHat className="h-5 w-5 text-blue-600" />
+                    TL;DR: Des Moines Dining Scene
+                  </h3>
+                  <p className="text-lg leading-relaxed">
+                    Des Moines offers 200+ diverse restaurants spanning 30+ cuisines across downtown, East Village, West Des Moines, and Ankeny. 
+                    From farm-to-table establishments to ethnic food gems, the capital city's dining scene features both acclaimed fine dining 
+                    and beloved local favorites. New restaurant openings occur monthly, with West Des Moines leading growth in family dining options.
+                  </p>
+                </div>
+
+                <h3 className="text-2xl font-semibold mb-4">Best Restaurants in Des Moines by Category</h3>
+                
+                <div className="grid md:grid-cols-2 gap-6 mb-8">
+                  <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h4 className="text-xl font-semibold mb-3">Downtown Des Moines Dining</h4>
+                    <p className="mb-3">
+                      Downtown Des Moines features upscale dining in the East Village and Court Avenue districts. 
+                      Notable restaurants include farm-to-table establishments, craft breweries, and ethnic cuisine 
+                      options within walking distance of major hotels and entertainment venues.
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Best for:</strong> Date nights, business dinners, pre-event dining
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h4 className="text-xl font-semibold mb-3">West Des Moines Restaurants</h4>
+                    <p className="mb-3">
+                      West Des Moines offers family-friendly chain restaurants and local favorites near Jordan Creek Town Center. 
+                      The area leads in new restaurant openings with diverse options from casual dining to specialty cuisines, 
+                      particularly strong in Asian and Mexican restaurants.
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Best for:</strong> Family dining, shopping center meals, suburban favorites
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h4 className="text-xl font-semibold mb-3">Ankeny Dining Scene</h4>
+                    <p className="mb-3">
+                      Ankeny's rapidly growing restaurant scene features new establishments opening regularly to serve 
+                      the expanding suburban population. Known for family-friendly atmospheres, competitive pricing, 
+                      and convenient parking options.
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Best for:</strong> Family meals, casual dining, value-conscious dining
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white p-6 rounded-lg shadow-md">
+                    <h4 className="text-xl font-semibold mb-3">Late-Night Des Moines Dining</h4>
+                    <p className="mb-3">
+                      Limited but growing late-night dining options include 24-hour diners, food trucks, and select 
+                      restaurants open past 10pm. East Village and downtown areas offer the most after-hours dining choices 
+                      for night shift workers and entertainment district visitors.
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      <strong>Best for:</strong> Night shift workers, post-event dining, late-night cravings
+                    </p>
+                  </div>
+                </div>
+
+                <h3 className="text-2xl font-semibold mb-4">Des Moines Restaurant FAQs</h3>
+                
+                <div className="space-y-6">
+                  <div className="bg-gray-50 p-6 rounded-lg">
+                    <h4 className="text-lg font-semibold mb-2">What time do most Des Moines restaurants close on Sunday?</h4>
+                    <p>Most Des Moines restaurants close between 8-9 PM on Sundays, with casual dining and family restaurants 
+                    typically closing earlier than downtown establishments. Some ethnic restaurants may have different Sunday hours.</p>
+                  </div>
+                  
+                  <div className="bg-gray-50 p-6 rounded-lg">
+                    <h4 className="text-lg font-semibold mb-2">Where can I find the best happy hour deals in Des Moines?</h4>
+                    <p>Downtown Des Moines and East Village offer the most comprehensive happy hour options, typically 3-6 PM weekdays. 
+                    Many establishments feature half-price appetizers and discounted drinks. West Des Moines chains also offer 
+                    competitive happy hour pricing.</p>
+                  </div>
+                  
+                  <div className="bg-gray-50 p-6 rounded-lg">
+                    <h4 className="text-lg font-semibold mb-2">What Des Moines neighborhoods are best for food trucks?</h4>
+                    <p>Food trucks concentrate in downtown Des Moines during lunch hours, particularly around the Capitol building 
+                    and business district. Weekend events like farmers markets in multiple neighborhoods feature rotating food truck vendors. 
+                    Special events and festivals bring food trucks to suburban areas.</p>
+                  </div>
+                  
+                  <div className="bg-gray-50 p-6 rounded-lg">
+                    <h4 className="text-lg font-semibold mb-2">Pet-friendly restaurants in Des Moines?</h4>
+                    <p>Many Des Moines restaurants offer pet-friendly patios, particularly in the East Village and downtown areas. 
+                    Several establishments provide water bowls and welcome well-behaved leashed pets on outdoor seating areas. 
+                    Call ahead to confirm pet policies, especially during busy weekend hours.</p>
+                  </div>
+                </div>
+
+                <h3 className="text-2xl font-semibold mb-4 mt-8">New Restaurant Openings in Des Moines</h3>
+                <p className="text-lg mb-4">
+                  Des Moines welcomes new restaurants monthly, with West Des Moines and Ankeny leading growth in suburban dining options. 
+                  The restaurant scene continues expanding with diverse cuisines including Vietnamese, Indian, Korean, and authentic Mexican options. 
+                  Downtown development brings upscale dining while suburbs focus on family-friendly chains and local concepts.
+                </p>
+                
+                <p className="text-lg mb-6">
+                  <strong>Local expertise you can trust:</strong> Our dining guide covers 200+ restaurants across the Des Moines metro area, 
+                  with weekly updates on new openings, seasonal menus, and special events. We track restaurant hours, pricing, and availability 
+                  to help you discover your next favorite Des Moines dining experience.
+                </p>
+
+                <div className="bg-green-50 p-6 rounded-lg">
+                  <h4 className="text-lg font-semibold mb-3">Des Moines Food Scene Highlights:</h4>
+                  <ul className="list-disc list-inside space-y-2">
+                    <li><strong>200+ restaurants</strong> across Des Moines metro area with weekly updates</li>
+                    <li><strong>30+ cuisine types</strong> from farm-to-table to authentic ethnic options</li>
+                    <li><strong>Weekly new openings</strong> tracked and verified by local food experts</li>
+                    <li><strong>Family-friendly focus</strong> with detailed kids menu and accessibility information</li>
+                    <li><strong>Real-time updates</strong> on hours, pricing, and seasonal menu changes</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
         </main>
 

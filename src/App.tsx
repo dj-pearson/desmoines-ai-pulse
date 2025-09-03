@@ -24,6 +24,10 @@ const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
 const AdminArticleEditor = lazy(() => import("./pages/AdminArticleEditor"));
 const Advertise = lazy(() => import("./pages/Advertise"));
+const WeekendPage = lazy(() => import("./pages/WeekendPage"));
+const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
+const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
+const IowaStateFairPage = lazy(() => import("./pages/IowaStateFairPage"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
 const WeekendPage = lazy(() => import("./pages/WeekendPage"));
 const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
@@ -74,6 +78,7 @@ const App = () => (
             <Route path="/weekend" element={<WeekendPage />} />
             <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
             <Route path="/neighborhoods/:neighborhood" element={<NeighborhoodPage />} />
+            <Route path="/iowa-state-fair" element={<IowaStateFairPage />} />
             <Route path="/social" element={<Social />} />
             <Route path="/calendar" element={<SmartCalendarIntegration />} />
             <Route path="/gamification" element={<Gamification />} />
