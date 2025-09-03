@@ -110,6 +110,28 @@ serve(async (req) => {
     return hasPosted;
   };
 
+  // Helper function to check if we already generated today
+  const alreadyGeneratedToday = async (supabase: any, contentType: string): Promise<boolean> => {
+    const today = new Date();
+    const centralToday = new Date(today.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+    const startOfDay = new Date(centralToday);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(centralToday);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    const { data: todayPosts } = await supabase
+      .from("social_media_posts")
+      .select("id")
+      .eq("content_type", contentType)
+      .gte("created_at", startOfDay.toISOString())
+      .lte("created_at", endOfDay.toISOString())
+      .in("status", ["generated", "posted"]);
+    
+    const hasGenerated = (todayPosts?.length || 0) > 0;
+    console.log(`Already generated ${contentType} today: ${hasGenerated} (found ${todayPosts?.length || 0} posts)`);
+    return hasGenerated;
+  };
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -134,61 +156,213 @@ serve(async (req) => {
       triggerSource
     );
 
-    // Handle automated CRON triggers
-    if (action === "automated_check" || triggerSource === "cron") {
-      console.log("Processing automated check from CRON system");
+    // Handle automated CRON triggers for generation only
+    if (action === "automated_generation_only" || (action === "automated_check" && triggerSource === "cron")) {
+      console.log("Processing automated generation from CRON system");
       
       const results = [];
       
-      // Check if we should post events (9 AM Central)
+      // Check if we should generate events (9 AM Central)
       if (shouldPostNow("event")) {
-        console.log("Time check passed for events, checking if already posted today");
-        const alreadyPostedEvent = await alreadyPostedToday(supabase, "event");
+        console.log("Time check passed for events, checking if already generated today");
+        const alreadyGeneratedEvent = await alreadyGeneratedToday(supabase, "event");
         
-        if (!alreadyPostedEvent) {
-          console.log("Generating and publishing event post");
+        if (!alreadyGeneratedEvent) {
+          console.log("Generating event post (without publishing)");
           try {
-            const eventResult = await generateAndPublishPost(supabase, claudeApiKey, "event", "event_of_the_day");
+            const eventResult = await generateAndPublishPost(supabase, claudeApiKey, "event", "event_of_the_day", false); // false = don't auto-publish
             results.push({ type: "event", success: true, result: eventResult });
           } catch (error) {
             console.error("Failed to generate event post:", error);
             results.push({ type: "event", success: false, error: error.message });
           }
         } else {
-          console.log("Event already posted today, skipping");
-          results.push({ type: "event", success: true, message: "Already posted today" });
+          console.log("Event already generated today, skipping");
+          results.push({ type: "event", success: true, message: "Already generated today" });
         }
       }
       
-      // Check if we should post restaurants (6 PM Central)
+      // Check if we should generate restaurants (6 PM Central)
       if (shouldPostNow("restaurant")) {
-        console.log("Time check passed for restaurants, checking if already posted today");
-        const alreadyPostedRestaurant = await alreadyPostedToday(supabase, "restaurant");
+        console.log("Time check passed for restaurants, checking if already generated today");
+        const alreadyGeneratedRestaurant = await alreadyGeneratedToday(supabase, "restaurant");
         
-        if (!alreadyPostedRestaurant) {
-          console.log("Generating and publishing restaurant post");
+        if (!alreadyGeneratedRestaurant) {
+          console.log("Generating restaurant post (without publishing)");
           try {
-            const restaurantResult = await generateAndPublishPost(supabase, claudeApiKey, "restaurant", "restaurant_of_the_day");
+            const restaurantResult = await generateAndPublishPost(supabase, claudeApiKey, "restaurant", "restaurant_of_the_day", false); // false = don't auto-publish
             results.push({ type: "restaurant", success: true, result: restaurantResult });
           } catch (error) {
             console.error("Failed to generate restaurant post:", error);
             results.push({ type: "restaurant", success: false, error: error.message });
           }
         } else {
-          console.log("Restaurant already posted today, skipping");
-          results.push({ type: "restaurant", success: true, message: "Already posted today" });
+          console.log("Restaurant already generated today, skipping");
+          results.push({ type: "restaurant", success: true, message: "Already generated today" });
         }
       }
       
       if (results.length === 0) {
-        console.log("No posts needed at this time");
-        results.push({ message: "No posts scheduled for current time" });
+        console.log("No posts needed for generation at this time");
+        results.push({ message: "No posts scheduled for generation at current time" });
       }
       
       return new Response(
         JSON.stringify({
           success: true,
           automated: true,
+          generation_only: true,
+          results,
+          timestamp: new Date().toISOString(),
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Handle automated webhook publishing
+    if (action === "publish_pending_posts") {
+      console.log("Processing automated webhook publishing from CRON system");
+      
+      const results = [];
+      
+      // Find pending posts that were generated today but not yet published
+      const { data: pendingPosts, error: pendingError } = await supabase
+        .from("social_media_posts")
+        .select("*")
+        .eq("status", "generated")
+        .gte("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: true });
+      
+      if (pendingError) {
+        console.error("Error fetching pending posts:", pendingError);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Failed to fetch pending posts: " + pendingError.message,
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+      
+      console.log(`Found ${pendingPosts?.length || 0} pending posts to publish`);
+      
+      if (pendingPosts && pendingPosts.length > 0) {
+        for (const post of pendingPosts) {
+          try {
+            console.log(`Publishing post ${post.id} via webhooks`);
+            
+            const webhookPromises = (post.webhook_urls as string[]).map(
+              async (webhookUrl) => {
+                try {
+                  let webhookPayload;
+      
+                  if (post.platform_type === "combined") {
+                    const contentFormats = JSON.parse(post.post_content as string);
+                    webhookPayload = {
+                      content_formats: {
+                        twitter_threads: {
+                          content: contentFormats.twitter_threads,
+                          platforms: ["twitter", "threads"],
+                        },
+                        facebook_linkedin: {
+                          content: contentFormats.facebook_linkedin,
+                          platforms: ["facebook", "linkedin"],
+                        },
+                      },
+                      title: post.post_title,
+                      url: post.content_url,
+                      subject_type: post.subject_type,
+                      content_type: post.content_type,
+                      metadata: post.metadata,
+                    };
+                  } else {
+                    webhookPayload = {
+                      platform: post.platform_type,
+                      content: post.post_content,
+                      title: post.post_title,
+                      url: post.content_url,
+                      subject_type: post.subject_type,
+                      content_type: post.content_type,
+                      metadata: post.metadata,
+                    };
+                  }
+      
+                  const response = await fetch(webhookUrl, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify(webhookPayload),
+                  });
+      
+                  return {
+                    url: webhookUrl,
+                    success: response.ok,
+                    status: response.status,
+                  };
+                } catch (error) {
+                  return {
+                    url: webhookUrl,
+                    success: false,
+                    error: error.message,
+                  };
+                }
+              }
+            );
+      
+            const webhookResults = await Promise.all(webhookPromises);
+            
+            // Update post status to published
+            const { error: updateError } = await supabase
+              .from("social_media_posts")
+              .update({
+                status: "posted",
+                posted_at: new Date().toISOString(),
+                metadata: {
+                  ...post.metadata,
+                  webhook_results: webhookResults,
+                },
+              })
+              .eq("id", post.id);
+            
+            if (updateError) {
+              console.error(`Failed to update post ${post.id}:`, updateError);
+              results.push({ 
+                postId: post.id, 
+                success: false, 
+                error: updateError.message 
+              });
+            } else {
+              console.log(`Successfully published post ${post.id}`);
+              results.push({ 
+                postId: post.id, 
+                success: true, 
+                webhookResults 
+              });
+            }
+          } catch (error) {
+            console.error(`Error publishing post ${post.id}:`, error);
+            results.push({ 
+              postId: post.id, 
+              success: false, 
+              error: error.message 
+            });
+          }
+        }
+      } else {
+        results.push({ message: "No pending posts found to publish" });
+      }
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          automated: true,
+          publishing_only: true,
           results,
           timestamp: new Date().toISOString(),
         }),
@@ -590,12 +764,14 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
     content_url: contentUrl,
     webhook_urls: webhookUrls,
     ai_prompt_used: `Short: ${shortPrompt}\n\nLong: ${longPrompt}`,
-    status: autoPublish ? "posted" : "draft",
+    status: autoPublish ? "posted" : "generated",
     posted_at: autoPublish ? new Date().toISOString() : null,
     metadata: {
       content_data: selectedContent,
       generation_timestamp: new Date().toISOString(),
       automated_generation: true,
+      auto_publish: autoPublish,
+      webhook_triggered: autoPublish,
       post_formats: {
         twitter_threads: {
           content: shortContent,

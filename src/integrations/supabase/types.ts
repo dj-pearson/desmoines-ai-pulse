@@ -3977,6 +3977,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      run_social_media_publishing: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       trigger_due_scraping_jobs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
