@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Social Media Manager</title>
+</head>
+<body>
+    <h1>Test Social Media Manager</h1>
+    <button id="testGenerate">Test Generate Event Post</button>
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('testGenerate').onclick = async () => {
+            try {
+                const response = await fetch('https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/social-media-manager', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE'
+                    },
+                    body: JSON.stringify({
+                        action: 'generate',
+                        contentType: 'event',
+                        subjectType: 'event_of_the_day'
+                    })
+                });
+                
+                const result = await response.json();
+                document.getElementById('result').innerHTML = `
+                    <h3>Response (${response.status}):</h3>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+            } catch (error) {
+                document.getElementById('result').innerHTML = `
+                    <h3>Error:</h3>
+                    <pre>${error.message}</pre>
+                `;
+            }
+        };
+    </script>
+</body>
+</html>

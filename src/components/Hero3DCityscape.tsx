@@ -82,7 +82,10 @@ function Building({
     if (glowRef.current && hasGlow) {
       const pulse = Math.sin(state.clock.elapsedTime * 2) * 0.3 + 0.7;
       glowRef.current.scale.setScalar(pulse);
-      glowRef.current.material.opacity = pulse * 0.6;
+      const material = Array.isArray(glowRef.current.material) ? glowRef.current.material[0] : glowRef.current.material;
+      if (material) {
+        material.opacity = pulse * 0.6;
+      }
     }
   });
 
