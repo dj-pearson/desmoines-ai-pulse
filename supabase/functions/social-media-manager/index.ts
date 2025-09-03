@@ -71,18 +71,38 @@ serve(async (req) => {
   // Helper function to check if we should post now based on time
   const shouldPostNow = (contentType: string): boolean => {
     const now = new Date();
-    const centralTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
-    const hour = centralTime.getHours();
-    const minute = centralTime.getMinutes();
+    // Use Intl.DateTimeFormat for more reliable timezone conversion
+    const centralTimeString = now.toLocaleString("en-US", { 
+      timeZone: "America/Chicago",
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    });
     
-    console.log(`Current Central Time: ${centralTime.toISOString()}, Hour: ${hour}, Minute: ${minute}`);
+    // Parse the formatted string to get reliable Central Time
+    const [datePart, timePart] = centralTimeString.split(', ');
+    const [month, day, year] = datePart.split('/');
+    const [hour, minute, second] = timePart.split(':');
+    
+    const centralHour = parseInt(hour, 10);
+    const centralMinute = parseInt(minute, 10);
+    
+    console.log(`Current UTC: ${now.toISOString()}`);
+    console.log(`Current Central Time String: ${centralTimeString}`);
+    console.log(`Parsed Central Hour: ${centralHour}, Minute: ${centralMinute}`);
     
     if (contentType === "event") {
       // Event posts at 9:00 AM Central (allow 9:00-9:59 AM)
-      return hour === 9;
+      console.log(`Event check: Current hour ${centralHour} === 9? ${centralHour === 9}`);
+      return centralHour === 9;
     } else if (contentType === "restaurant") {
       // Restaurant posts at 6:00 PM Central (allow 6:00-6:59 PM)
-      return hour === 18;
+      console.log(`Restaurant check: Current hour ${centralHour} === 18? ${centralHour === 18}`);
+      return centralHour === 18;
     }
     
     return false;
@@ -90,45 +110,71 @@ serve(async (req) => {
 
   // Helper function to check if we already posted today
   const alreadyPostedToday = async (supabase: any, contentType: string): Promise<boolean> => {
-    const today = new Date();
-    const centralToday = new Date(today.toLocaleString("en-US", { timeZone: "America/Chicago" }));
-    const startOfDay = new Date(centralToday);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(centralToday);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Get current Central Time date
+    const now = new Date();
+    const centralTimeString = now.toLocaleString("en-US", { 
+      timeZone: "America/Chicago",
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const [month, day, year] = centralTimeString.split('/');
+    
+    // Create start and end of Central Time day in UTC
+    const centralDate = new Date(`${year}-${month}-${day}T00:00:00`);
+    const centralStartUTC = new Date(centralDate.getTime() + (6 * 60 * 60 * 1000)); // Central is UTC-6 in summer
+    const centralEndUTC = new Date(centralStartUTC.getTime() + (24 * 60 * 60 * 1000) - 1);
+    
+    console.log(`Checking for posts between ${centralStartUTC.toISOString()} and ${centralEndUTC.toISOString()}`);
     
     const { data: todayPosts } = await supabase
       .from("social_media_posts")
-      .select("id")
+      .select("id, created_at")
       .eq("content_type", contentType)
-      .gte("created_at", startOfDay.toISOString())
-      .lte("created_at", endOfDay.toISOString())
+      .gte("created_at", centralStartUTC.toISOString())
+      .lte("created_at", centralEndUTC.toISOString())
       .eq("status", "posted");
     
     const hasPosted = (todayPosts?.length || 0) > 0;
     console.log(`Already posted ${contentType} today: ${hasPosted} (found ${todayPosts?.length || 0} posts)`);
+    if (todayPosts && todayPosts.length > 0) {
+      console.log("Today's posts:", todayPosts.map(p => p.created_at));
+    }
     return hasPosted;
   };
 
   // Helper function to check if we already generated today
   const alreadyGeneratedToday = async (supabase: any, contentType: string): Promise<boolean> => {
-    const today = new Date();
-    const centralToday = new Date(today.toLocaleString("en-US", { timeZone: "America/Chicago" }));
-    const startOfDay = new Date(centralToday);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(centralToday);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Get current Central Time date
+    const now = new Date();
+    const centralTimeString = now.toLocaleString("en-US", { 
+      timeZone: "America/Chicago",
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const [month, day, year] = centralTimeString.split('/');
+    
+    // Create start and end of Central Time day in UTC
+    const centralDate = new Date(`${year}-${month}-${day}T00:00:00`);
+    const centralStartUTC = new Date(centralDate.getTime() + (6 * 60 * 60 * 1000)); // Central is UTC-6 in summer
+    const centralEndUTC = new Date(centralStartUTC.getTime() + (24 * 60 * 60 * 1000) - 1);
+    
+    console.log(`Checking for generated posts between ${centralStartUTC.toISOString()} and ${centralEndUTC.toISOString()}`);
     
     const { data: todayPosts } = await supabase
       .from("social_media_posts")
-      .select("id")
+      .select("id, created_at, status")
       .eq("content_type", contentType)
-      .gte("created_at", startOfDay.toISOString())
-      .lte("created_at", endOfDay.toISOString())
+      .gte("created_at", centralStartUTC.toISOString())
+      .lte("created_at", centralEndUTC.toISOString())
       .in("status", ["draft", "posted"]);
     
     const hasGenerated = (todayPosts?.length || 0) > 0;
     console.log(`Already generated ${contentType} today: ${hasGenerated} (found ${todayPosts?.length || 0} posts)`);
+    if (todayPosts && todayPosts.length > 0) {
+      console.log("Today's generated posts:", todayPosts.map(p => `${p.created_at} (${p.status})`));
+    }
     return hasGenerated;
   };
 
