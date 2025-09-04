@@ -40,8 +40,8 @@ export default function SeasonalContent() {
         "Hotels and lodging during State Fair"
       ]
     },
-    // July - RAGBRAI
-    6: {
+    // June - RAGBRAI
+    5: {
       title: "RAGBRAI Cyclist Services Guide",
       description: "Comprehensive business directory for Iowa's famous cycling event",
       dates: "July 21-27, 2024",

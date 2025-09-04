@@ -47,7 +47,7 @@ export default function RealTimeBusinessInfo() {
   useEffect(() => {
     const fetchRealTimeData = () => {
       const currentTime = new Date();
-      const currentDay = currentTime.toLocaleLowerCase().substring(0, 3); // mon, tue, etc.
+      const currentDay = currentTime.toLocaleDateString('en-US', { weekday: 'short' }).toLowerCase(); // mon, tue, etc.
       
       const mockBusinesses: RealTimeBusinessInfo[] = [
         {

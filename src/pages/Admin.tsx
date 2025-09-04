@@ -30,6 +30,7 @@ import WeekendGuideManager from "@/components/WeekendGuideManager";
 import AdminSecurityManager from "@/components/AdminSecurityManager";
 import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import AdminSystemControls from "@/components/AdminSystemControls";
+import AdminApplicationSettings from '@/components/AdminApplicationSettings';
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import { CompetitorAnalysisDashboard } from "@/components/CompetitorAnalysisDashboard";
@@ -1343,37 +1344,7 @@ export default function Admin() {
             
             {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 
-            {canManageContent() && activeTab === "settings" && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Cog className="h-5 w-5" />
-                    Application Settings
-                  </CardTitle>
-                  <CardDescription>
-                    Configure system settings and preferences
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <Alert>
-                      <Settings className="h-4 w-4" />
-                      <AlertDescription>
-                        <strong>Coming Soon:</strong> Advanced configuration
-                        options including:
-                        <ul className="list-disc list-inside mt-2 space-y-1">
-                          <li>Site-wide settings and preferences</li>
-                          <li>Email notification templates</li>
-                          <li>Content moderation settings</li>
-                          <li>API rate limiting configuration</li>
-                          <li>Analytics and tracking preferences</li>
-                        </ul>
-                      </AlertDescription>
-                    </Alert>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            {canManageContent() && activeTab === "settings" && <AdminApplicationSettings />}
 
             {canManageContent() && activeTab === "seo" && <SEOTools />}
 

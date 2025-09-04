@@ -47,8 +47,8 @@ export const useWebVitals = () => {
 
   const sendToAnalytics = (metric: WebVitalMetric) => {
     // Send to Google Analytics 4 with custom metrics
-    if (typeof gtag !== 'undefined') {
-      gtag('event', 'web_vitals', {
+    if (typeof window !== 'undefined' && 'gtag' in window) {
+      (window as any).gtag('event', 'web_vitals', {
         custom_metric_name: metric.name,
         custom_metric_value: metric.value,
         custom_metric_rating: metric.rating,
