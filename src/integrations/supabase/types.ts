@@ -3929,6 +3929,23 @@ export type Database = {
         Args: { base_time?: string }
         Returns: string
       }
+      get_user_profile_safe: {
+        Args: { target_user_id: string }
+        Returns: {
+          communication_preferences: Json
+          created_at: string
+          email: string
+          first_name: string
+          id: string
+          interests: string[]
+          last_name: string
+          location: string
+          phone: string
+          updated_at: string
+          user_id: string
+          user_role: Database["public"]["Enums"]["user_role"]
+        }[]
+      }
       get_user_reputation_weight: {
         Args: { user_id: string }
         Returns: number

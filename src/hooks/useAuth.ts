@@ -102,18 +102,7 @@ export function useAuth() {
       console.error("Error checking admin status:", error);
     }
 
-    // Fallback to email check for backward compatibility
-    const adminEmails = [
-      "admin@desmoines.ai",
-      "admin@desmoinesinsider.com", 
-      "pearson.performance@gmail.com",
-      "djpearson@pm.me", // Root admin email
-    ];
-
-    if (user.email && adminEmails.includes(user.email)) {
-      return true;
-    }
-
+    // Security Fix: No email fallback - all admin access must be through database roles
     return false;
   };
 
