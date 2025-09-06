@@ -3871,6 +3871,10 @@ export type Database = {
           conflicting_events: Json
         }[]
       }
+      check_vault_security_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       cleanup_old_security_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
@@ -3928,6 +3932,10 @@ export type Database = {
       get_next_optimal_posting_time: {
         Args: { base_time?: string }
         Returns: string
+      }
+      get_security_recommendations: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
       }
       get_user_profile_safe: {
         Args: { target_user_id: string }
