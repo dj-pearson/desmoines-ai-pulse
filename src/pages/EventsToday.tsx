@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -6,45 +6,53 @@ import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, MapPin, Clock } from "lucide-react";
-import { format, isToday, parseISO } from "date-fns";
+import { format } from "date-fns";
 
 export default function EventsToday() {
-  const { data: events, isLoading } = useQuery({
-    queryKey: ["events-today"],
-    queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .gte("date", today)
-        .lte("date", today)
-        .eq("status", "active")
-        .order("date", { ascending: true })
-        .order("time", { ascending: true });
+  const [events, setEvents] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 5 * 60 * 1000, // Refetch every 5 minutes for fresh data
-  });
-
-  const todaysEvents =
-    events?.filter((event) => {
+  useEffect(() => {
+    const fetchEvents = async () => {
       try {
-        return isToday(parseISO(event.date));
-      } catch {
-        return false;
+        setIsLoading(true);
+        const today = new Date().toISOString().split("T")[0];
+        
+        const { data, error } = await supabase
+          .from("events")
+          .select("id, title, date, time, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, status")
+          .eq("date", today)
+          .order("date", { ascending: true });
+        
+        if (error) {
+          console.error('Error fetching events:', error);
+          setEvents([]);
+        } else {
+          setEvents(data || []);
+        }
+      } catch (error) {
+        console.error('Error in fetchEvents:', error);
+        setEvents([]);
+      } finally {
+        setIsLoading(false);
       }
-    }) || [];
+    };
 
-  const pageTitle = `Des Moines Events Today - ${format(
-    new Date(),
-    "EEEE, MMMM d, yyyy"
-  )} | Des Moines Insider`;
-  const pageDescription = `See what's happening in Des Moines today, ${format(
-    new Date(),
-    "EEEE, MMMM d"
-  )}. Fresh list of events with dates, times, locations, and quick tips. Updated hourly.`;
+    fetchEvents();
+  }, []);
+
+  const todaysEvents = events?.filter((event) => {
+    try {
+      const eventDate = new Date(event.date).toISOString().split("T")[0];
+      const today = new Date().toISOString().split("T")[0];
+      return eventDate === today;
+    } catch {
+      return false;
+    }
+  }) || [];
+
+  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | Des Moines Insider`;
+  const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
 
   const breadcrumbs = [
     { name: "Events", url: "/events" },
@@ -53,23 +61,20 @@ export default function EventsToday() {
 
   const faqData = [
     {
-      question: "What events are happening in Des Moines today?",
-      answer: `We have ${
-        todaysEvents.length
-      } events happening in Des Moines today, ${format(
-        new Date(),
-        "EEEE, MMMM d"
-      )}. See times, locations, and get directions below.`,
+      question: `What's happening today in Des Moines?`,
+      answer: `We have ${todaysEvents.length} events happening today in Des Moines and surrounding areas. See our complete list with times, locations, and details.`,
     },
     {
-      question: "Are these events free?",
-      answer:
-        "We list both free and paid events. Check each event for pricing details and ticket information.",
+      question: "How current is this information?",
+      answer: "Our event information is updated in real-time throughout the day, so you'll always see the most current listings for today's activities.",
     },
     {
-      question: "How often is this list updated?",
-      answer:
-        "This page is updated every hour to show the most current events happening today in Des Moines.",
+      question: "Are there free events today?",
+      answer: "Yes! Use our event cards to see pricing information. Many events in Des Moines are free or low-cost.",
+    },
+    {
+      question: "Can I get directions to events?",
+      answer: "Each event card includes location information. Click through to get detailed directions and parking information.",
     },
   ];
 
@@ -107,8 +112,8 @@ export default function EventsToday() {
           </div>
 
           <p className="text-lg text-muted-foreground max-w-3xl">
-            See what's happening right now in Des Moines. Fresh list updated
-            hourly with times, locations, and quick tips.
+            Discover what's happening today in Des Moines and surrounding areas. 
+            From concerts to community events, find activities for every interest.
           </p>
         </div>
 
@@ -126,20 +131,13 @@ export default function EventsToday() {
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {
-                    todaysEvents.filter(
-                      (e) => e.price === "Free" || e.price === "0"
-                    ).length
-                  }
+                  {todaysEvents.filter(e => e.price === "Free" || e.price === "0").length}
                 </div>
                 <div className="text-sm text-muted-foreground">Free Events</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-primary">
-                  {
-                    new Set(todaysEvents.map((e) => e.location?.split(",")[0]))
-                      .size
-                  }
+                  {new Set(todaysEvents.map(e => e.location?.split(",")[0])).size}
                 </div>
                 <div className="text-sm text-muted-foreground">Locations</div>
               </div>
@@ -161,42 +159,23 @@ export default function EventsToday() {
             ))}
           </div>
         ) : todaysEvents.length > 0 ? (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-              {todaysEvents.map((event) => (
-                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
-              ))}
-            </div>
-
-            {/* FAQ Section */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Frequently Asked Questions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {faqData.map((faq, index) => (
-                  <div key={index} className="border-b pb-4 last:border-b-0">
-                    <h3 className="font-semibold mb-2">{faq.question}</h3>
-                    <p className="text-muted-foreground">{faq.answer}</p>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          </>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {todaysEvents.map((event) => (
+              <EventCard key={event.id} event={event} onViewDetails={() => {}} />
+            ))}
+          </div>
         ) : (
-          <Card>
-            <CardContent className="pt-6 text-center">
+          <Card className="text-center py-12">
+            <CardContent>
               <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">No Events Today</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                No Events Scheduled for Today
+              </h2>
               <p className="text-muted-foreground mb-4">
-                No events are scheduled for today in Des Moines. Check back
-                tomorrow or browse upcoming events.
+                Check back tomorrow or browse upcoming events happening this week.
               </p>
               <div className="flex justify-center gap-4">
-                <a
-                  href="/events/this-weekend"
-                  className="text-primary hover:underline"
-                >
+                <a href="/events/this-weekend" className="text-primary hover:underline">
                   This Weekend's Events
                 </a>
                 <a href="/events" className="text-primary hover:underline">
@@ -206,6 +185,44 @@ export default function EventsToday() {
             </CardContent>
           </Card>
         )}
+
+        {/* Related Links */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>More Event Ideas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <a
+                href="/events/this-weekend"
+                className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <h3 className="font-semibold mb-2">This Weekend</h3>
+                <p className="text-sm text-muted-foreground">
+                  Weekend events and activities happening in Des Moines
+                </p>
+              </a>
+              <a
+                href="/restaurants"
+                className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <h3 className="font-semibold mb-2">Dining Today</h3>
+                <p className="text-sm text-muted-foreground">
+                  Great restaurants and eateries open today
+                </p>
+              </a>
+              <a
+                href="/attractions"
+                className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+              >
+                <h3 className="font-semibold mb-2">Attractions</h3>
+                <p className="text-sm text-muted-foreground">
+                  Museums, parks, and attractions to visit today
+                </p>
+              </a>
+            </div>
+          </CardContent>
+        </Card>
       </main>
 
       <Footer />

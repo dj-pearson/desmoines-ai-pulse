@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,36 +70,50 @@ export default function EventsByLocation() {
     ? SUBURBS[location as keyof typeof SUBURBS]
     : null;
 
-  const { data: events, isLoading } = useQuery({
-    queryKey: ["events-by-location", location],
-    queryFn: async () => {
-      if (!suburbInfo) return [];
+  const [events, setEvents] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-      const today = new Date().toISOString().split("T")[0];
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .gte("date", today)
-        .eq("status", "active")
-        .order("date", { ascending: true })
-        .order("time", { ascending: true });
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setIsLoading(true);
+        const today = new Date().toISOString().split("T")[0];
+        
+        const { data, error } = await supabase
+          .from("events")
+          .select("id, title, date, time, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, status, city")
+          .gte("date", today)
+          .order("date", { ascending: true });
+        
+        if (error) {
+          console.error('Error fetching events:', error);
+          setEvents([]);
+        } else {
+          // Filter events that match the suburb
+          const filteredData = (data || []).filter((event: any) => {
+            const eventLocation = (
+              event.location ||
+              event.venue ||
+              ""
+            ).toLowerCase();
+            return suburbInfo.searchTerms.some((term: string) =>
+              eventLocation.includes(term.toLowerCase())
+            );
+          });
+          setEvents(filteredData);
+        }
+      } catch (error) {
+        console.error('Error in fetchEvents:', error);
+        setEvents([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-      if (error) throw error;
-
-      // Filter events that match the suburb
-      return (data || []).filter((event) => {
-        const eventLocation = (
-          event.location ||
-          event.venue ||
-          ""
-        ).toLowerCase();
-        return suburbInfo.searchTerms.some((term) =>
-          eventLocation.includes(term.toLowerCase())
-        );
-      });
-    },
-    enabled: !!suburbInfo,
-  });
+    if (suburbInfo) {
+      fetchEvents();
+    }
+  }, [suburbInfo]);
 
   const { data: restaurants } = useQuery({
     queryKey: ["restaurants-by-location", location],
