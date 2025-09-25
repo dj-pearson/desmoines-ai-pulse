@@ -117,7 +117,7 @@ export default function EventsByLocation() {
       return (data || []).filter((restaurant) => {
         const restaurantLocation = (
           restaurant.location ||
-          restaurant.address ||
+          restaurant.city ||
           ""
         ).toLowerCase();
         return suburbInfo.searchTerms.some((term) =>
@@ -266,7 +266,7 @@ export default function EventsByLocation() {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {upcomingEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
           </div>
@@ -313,7 +313,7 @@ export default function EventsByLocation() {
                       {restaurant.cuisine || "Restaurant"}
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      {restaurant.location || restaurant.address}
+                      {restaurant.location || restaurant.city}
                     </p>
                     <div className="flex justify-between items-center mt-3">
                       <div className="flex items-center gap-1">

@@ -66,7 +66,7 @@ export default function EventsThisWeekend() {
     const categoryMatch =
       selectedCategory === "all" ||
       event.category?.toLowerCase().includes(selectedCategory.toLowerCase()) ||
-      event.subcategory?.toLowerCase().includes(selectedCategory.toLowerCase());
+      event.category?.toLowerCase().includes(selectedCategory.toLowerCase());
 
     const locationMatch =
       selectedLocation === "all" ||
@@ -194,8 +194,8 @@ export default function EventsThisWeekend() {
                     weekendEvents.filter(
                       (e) =>
                         e.category?.toLowerCase().includes("family") ||
-                        e.subcategory?.toLowerCase().includes("family") ||
-                        e.description?.toLowerCase().includes("kid")
+                        e.category?.toLowerCase().includes("family") ||
+                        e.enhanced_description?.toLowerCase().includes("kid")
                     ).length
                   }
                 </div>
@@ -316,7 +316,7 @@ export default function EventsThisWeekend() {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               {filteredEvents.map((event) => (
-                <EventCard key={event.id} event={event} />
+                <EventCard key={event.id} event={event} onViewDetails={() => {}} />
               ))}
             </div>
 

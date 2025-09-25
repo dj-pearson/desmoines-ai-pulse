@@ -242,7 +242,7 @@ export default function Index() {
                             src={event.image_url || "/placeholder.svg"}
                             alt={event.title}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            fetchpriority="high"
+                            priority={true}
                           />
                           <div className="absolute top-2 right-2">
                             <Badge

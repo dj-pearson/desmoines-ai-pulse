@@ -35,9 +35,9 @@ const SmartCalendarIntegration = lazy(
 );
 const Gamification = lazy(() => import("./pages/Gamification"));
 const BusinessPartnership = lazy(() => import("./pages/BusinessPartnership"));
-const AdvancedSearchPage = lazy(
-  () => import("./components/AdvancedSearchPage")
-);
+const GuidesPage = lazy(() => import("./pages/GuidesPage"));
+const MonthlyEventsPage = lazy(() => import("./pages/MonthlyEventsPage"));
+const AdvancedSearchPage = lazy(() => import("./components/AdvancedSearchPage"));
 const RealTimePage = lazy(() => import("./components/RealTimePage"));
 
 // SEO-focused time-sensitive pages
@@ -123,6 +123,8 @@ const App = () => (
               element={<BusinessPartnership />}
             />
             <Route path="/search" element={<AdvancedSearchPage />} />
+            <Route path="/guides" element={<GuidesPage />} />
+            <Route path="/events/:monthYear" element={<MonthlyEventsPage />} />
             <Route path="/real-time" element={<RealTimePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />

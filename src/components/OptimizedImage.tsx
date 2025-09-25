@@ -7,13 +7,11 @@ interface OptimizedImageProps {
   className?: string;
   width?: number;
   height?: number;
-  loading?: "lazy" | "eager";
-  sizes?: string;
+  priority?: boolean;
   quality?: number;
-  placeholder?: string;
-  fetchpriority?: "auto" | "high" | "low" | string;
-  onLoad?: () => void;
-  onError?: () => void;
+  sizes?: string;
+  placeholder?: "blur" | "empty";
+  blurDataURL?: string;
 }
 
 export default function OptimizedImage({
@@ -22,34 +20,31 @@ export default function OptimizedImage({
   className,
   width,
   height,
-  loading = "lazy",
-  sizes = "(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw",
-  quality = 80,
-  placeholder = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PC9zdmc+",
-  fetchpriority,
-  onLoad,
-  onError,
+  priority = false,
+  quality = 75,
+  sizes = "100vw",
+  placeholder = "empty",
+  blurDataURL,
 }: OptimizedImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
-  const [hasError, setHasError] = useState(false);
-  const [isInView, setIsInView] = useState(false);
+  const [error, setError] = useState(false);
+  const [isInView, setIsInView] = useState(priority);
   const imgRef = useRef<HTMLImageElement>(null);
 
   // Intersection Observer for lazy loading
   useEffect(() => {
-    if (loading === "eager") {
-      setIsInView(true);
-      return;
-    }
+    if (priority) return;
 
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
+      (entries) => {
+        if (entries[0].isIntersecting) {
           setIsInView(true);
           observer.disconnect();
         }
       },
-      { rootMargin: "50px" }
+      {
+        rootMargin: "50px",
+      }
     );
 
     if (imgRef.current) {
@@ -57,71 +52,65 @@ export default function OptimizedImage({
     }
 
     return () => observer.disconnect();
-  }, [loading]);
-
-  // Generate responsive image sources
-  const generateSrcSet = (originalSrc: string, widths: number[]) => {
-    if (!originalSrc) return "";
-    
-    // For external images, we can't generate multiple sizes
-    // In a real app, you'd use a service like Cloudinary or ImgProxy
-    return widths
-      .map((width) => {
-        // Simple proxy for resizing (would need actual implementation)
-        const resizedSrc = originalSrc.includes('googleusercontent.com') 
-          ? `${originalSrc}=w${width}-h${Math.round(width * 0.75)}-c`
-          : originalSrc;
-        return `${resizedSrc} ${width}w`;
-      })
-      .join(", ");
-  };
+  }, [priority]);
 
   const handleLoad = () => {
     setIsLoaded(true);
-    onLoad?.();
+    setError(false);
   };
 
   const handleError = () => {
-    setHasError(true);
-    onError?.();
+    setError(true);
+    setIsLoaded(false);
   };
-
-  const imageSrc = isInView ? src : placeholder;
-  const srcSet = isInView && !hasError ? generateSrcSet(src, [320, 640, 960, 1280]) : "";
 
   return (
     <div
       ref={imgRef}
-      className={cn(
-        "relative overflow-hidden",
-        !isLoaded && "bg-muted animate-pulse",
-        className
-      )}
-      style={{ width, height }}
+      className={cn("relative overflow-hidden", className)}
+      style={{ aspectRatio: width && height ? `${width}/${height}` : undefined }}
     >
-      {!hasError ? (
+      {/* Placeholder */}
+      {!isLoaded && !error && (
+        <div
+          className={cn(
+            "absolute inset-0 bg-muted animate-pulse",
+            placeholder === "blur" && "backdrop-blur-sm"
+          )}
+          style={{
+            backgroundImage: blurDataURL ? `url(${blurDataURL})` : undefined,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        />
+      )}
+
+      {/* Error fallback */}
+      {error && (
+        <div className="absolute inset-0 bg-muted flex items-center justify-center">
+          <div className="text-muted-foreground text-sm">
+            Failed to load image
+          </div>
+        </div>
+      )}
+
+      {/* Actual image */}
+      {(isInView || priority) && (
         <img
-          src={imageSrc}
-          srcSet={srcSet}
-          sizes={sizes}
+          src={src}
           alt={alt}
-          loading={loading}
           width={width}
           height={height}
+          loading={priority ? "eager" : "lazy"}
+          decoding="async"
           onLoad={handleLoad}
           onError={handleError}
           className={cn(
-            "transition-opacity duration-300",
-            isLoaded ? "opacity-100" : "opacity-0",
-            "w-full h-full object-cover"
+            "w-full h-full object-cover transition-opacity duration-300",
+            isLoaded ? "opacity-100" : "opacity-0"
           )}
-          decoding="async"
-          fetchpriority={fetchpriority}
+          sizes={sizes}
         />
-      ) : (
-        <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">
-          <span className="text-sm">Image unavailable</span>
-        </div>
       )}
     </div>
   );
