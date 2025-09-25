@@ -7,6 +7,8 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, MapPin, Clock } from "lucide-react";
 import { format } from "date-fns";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { Link } from "react-router-dom";
 
 export default function EventsToday() {
   const [events, setEvents] = useState<any[]>([]);
@@ -16,12 +18,19 @@ export default function EventsToday() {
     const fetchEvents = async () => {
       try {
         setIsLoading(true);
-        const today = new Date().toISOString().split("T")[0];
+        const tz = "America/Chicago";
+        const now = new Date();
+        const nowLocal = toZonedTime(now, tz);
+        const startLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
+        const endLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 23, 59, 59, 999);
+        const startUtc = fromZonedTime(startLocal, tz).toISOString();
+        const endUtc = fromZonedTime(endLocal, tz).toISOString();
         
         const { data, error } = await supabase
           .from("events")
           .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
-          .eq("date", today)
+          .gte("date", startUtc)
+          .lte("date", endUtc)
           .order("event_start_utc", { ascending: true, nullsFirst: false });
         
         if (error) {
@@ -41,15 +50,7 @@ export default function EventsToday() {
     fetchEvents();
   }, []);
 
-  const todaysEvents = events?.filter((event) => {
-    try {
-      const eventDate = new Date(event.date).toISOString().split("T")[0];
-      const today = new Date().toISOString().split("T")[0];
-      return eventDate === today;
-    } catch {
-      return false;
-    }
-  }) || [];
+  const todaysEvents = events || [];
 
   const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | Des Moines Insider`;
   const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
@@ -175,12 +176,12 @@ export default function EventsToday() {
                 Check back tomorrow or browse upcoming events happening this week.
               </p>
               <div className="flex justify-center gap-4">
-                <a href="/events/this-weekend" className="text-primary hover:underline">
+                <Link to="/events/this-weekend" className="text-primary hover:underline">
                   This Weekend's Events
-                </a>
-                <a href="/events" className="text-primary hover:underline">
+                </Link>
+                <Link to="/events" className="text-primary hover:underline">
                   All Upcoming Events
-                </a>
+                </Link>
               </div>
             </CardContent>
           </Card>
@@ -193,33 +194,33 @@ export default function EventsToday() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <a
-                href="/events/this-weekend"
+              <Link
+                to="/events/this-weekend"
                 className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
               >
                 <h3 className="font-semibold mb-2">This Weekend</h3>
                 <p className="text-sm text-muted-foreground">
                   Weekend events and activities happening in Des Moines
                 </p>
-              </a>
-              <a
-                href="/restaurants"
+              </Link>
+              <Link
+                to="/restaurants"
                 className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
               >
                 <h3 className="font-semibold mb-2">Dining Today</h3>
                 <p className="text-sm text-muted-foreground">
                   Great restaurants and eateries open today
                 </p>
-              </a>
-              <a
-                href="/attractions"
+              </Link>
+              <Link
+                to="/attractions"
                 className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
               >
                 <h3 className="font-semibold mb-2">Attractions</h3>
                 <p className="text-sm text-muted-foreground">
                   Museums, parks, and attractions to visit today
                 </p>
-              </a>
+              </Link>
             </div>
           </CardContent>
         </Card>

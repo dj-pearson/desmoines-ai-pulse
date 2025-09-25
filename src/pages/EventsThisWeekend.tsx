@@ -16,6 +16,8 @@ import {
 } from "date-fns";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -24,17 +26,27 @@ export default function EventsThisWeekend() {
   const { data: events, isLoading } = useQuery({
     queryKey: ["events-weekend"],
     queryFn: async () => {
+      const tz = "America/Chicago";
       const now = new Date();
-      const weekStart = startOfWeek(now);
-      const weekEnd = endOfWeek(now);
+      const nowLocal = toZonedTime(now, tz);
+      const day = nowLocal.getDay(); // 0 Sun - 6 Sat
+      const offsetToFriday = day === 0 ? -2 : day >= 5 ? 5 - day : 5 - day;
+      const fridayStartLocal = new Date(nowLocal.getFullYear(), nowLocal.getMonth(), nowLocal.getDate(), 0, 0, 0, 0);
+      fridayStartLocal.setDate(fridayStartLocal.getDate() + offsetToFriday);
+      const sundayEndLocal = new Date(fridayStartLocal);
+      sundayEndLocal.setDate(fridayStartLocal.getDate() + 2);
+      sundayEndLocal.setHours(23, 59, 59, 999);
+
+      const startUtc = fromZonedTime(fridayStartLocal, tz).toISOString();
+      const endUtc = fromZonedTime(sundayEndLocal, tz).toISOString();
 
       const { data, error } = await supabase
         .from("events")
         .select("*")
-        .gte("date", format(weekStart, "yyyy-MM-dd"))
-        .lte("date", format(weekEnd, "yyyy-MM-dd"))
-        .order("date", { ascending: true })
-        .order("event_start_utc", { ascending: true, nullsFirst: false });
+        .gte("date", startUtc)
+        .lte("date", endUtc)
+        .order("event_start_utc", { ascending: true, nullsFirst: false })
+        .order("date", { ascending: true });
 
       if (error) throw error;
       return data || [];
@@ -42,23 +54,7 @@ export default function EventsThisWeekend() {
     staleTime: 10 * 60 * 1000, // Refetch every 10 minutes
   });
 
-  const weekendEvents =
-    events?.filter((event) => {
-      try {
-        const eventDate = parseISO(event.date);
-        const now = new Date();
-        const currentWeekend = {
-          start: startOfWeek(now),
-          end: endOfWeek(now),
-        };
-
-        return (
-          isWeekend(eventDate) && isWithinInterval(eventDate, currentWeekend)
-        );
-      } catch {
-        return false;
-      }
-    }) || [];
+  const weekendEvents = events || [];
 
   // Filter events based on selected filters
   const filteredEvents = weekendEvents.filter((event) => {
@@ -326,8 +322,8 @@ export default function EventsThisWeekend() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <a
-                    href="/restaurants"
+                  <Link
+                    to="/restaurants"
                     className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
                     <h3 className="font-semibold mb-2">Weekend Dining</h3>
@@ -335,9 +331,9 @@ export default function EventsThisWeekend() {
                       Best restaurants for weekend brunch, dinner, and late
                       night eats
                     </p>
-                  </a>
-                  <a
-                    href="/attractions"
+                  </Link>
+                  <Link
+                    to="/attractions"
                     className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
                     <h3 className="font-semibold mb-2">Places to Visit</h3>
@@ -345,16 +341,16 @@ export default function EventsThisWeekend() {
                       Parks, museums, and attractions perfect for weekend
                       exploring
                     </p>
-                  </a>
-                  <a
-                    href="/playgrounds"
+                  </Link>
+                  <Link
+                    to="/playgrounds"
                     className="block p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                   >
                     <h3 className="font-semibold mb-2">Family Fun</h3>
                     <p className="text-sm text-muted-foreground">
                       Playgrounds and family activities for weekend adventures
                     </p>
-                  </a>
+                  </Link>
                 </div>
               </CardContent>
             </Card>
@@ -398,9 +394,9 @@ export default function EventsThisWeekend() {
                     Clear Filters
                   </Button>
                 )}
-                <a href="/events" className="text-primary hover:underline">
+                <Link to="/events" className="text-primary hover:underline">
                   Browse All Events
-                </a>
+                </Link>
               </div>
             </CardContent>
           </Card>
