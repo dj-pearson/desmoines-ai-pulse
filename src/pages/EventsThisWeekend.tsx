@@ -33,9 +33,8 @@ export default function EventsThisWeekend() {
         .select("*")
         .gte("date", format(weekStart, "yyyy-MM-dd"))
         .lte("date", format(weekEnd, "yyyy-MM-dd"))
-        .eq("status", "active")
         .order("date", { ascending: true })
-        .order("time", { ascending: true });
+        .order("event_start_utc", { ascending: true, nullsFirst: false });
 
       if (error) throw error;
       return data || [];

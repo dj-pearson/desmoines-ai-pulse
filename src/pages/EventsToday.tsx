@@ -20,9 +20,9 @@ export default function EventsToday() {
         
         const { data, error } = await supabase
           .from("events")
-          .select("id, title, date, time, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc, status")
+          .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
           .eq("date", today)
-          .order("date", { ascending: true });
+          .order("event_start_utc", { ascending: true, nullsFirst: false });
         
         if (error) {
           console.error('Error fetching events:', error);
