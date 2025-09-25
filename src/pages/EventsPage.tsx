@@ -7,7 +7,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
+import {
+  CardsGridSkeleton,
+  LoadingSpinner,
+} from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
 import {
   Select,
@@ -20,7 +23,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
-import EnhancedEventSEO from "@/components/EnhancedEventSEO";
+import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -82,55 +85,62 @@ export default function EventsPage() {
       }
 
       if (dateFilter) {
-        if (dateFilter.mode === 'single' && dateFilter.start) {
+        if (dateFilter.mode === "single" && dateFilter.start) {
           // For single date selection, filter by event_start_local date or fallback to legacy date field
           const centralDate = dateFilter.start.toISOString().split("T")[0];
           query = query.or(
             `event_start_local.gte.${centralDate}T00:00:00,event_start_local.lt.${centralDate}T24:00:00,and(date.eq.${centralDate},event_start_local.is.null)`
           );
-        } else if (dateFilter.mode === 'range' && dateFilter.start) {
+        } else if (dateFilter.mode === "range" && dateFilter.start) {
           // For date range, show events within the range
           const startDate = dateFilter.start.toISOString().split("T")[0];
           query = query.gte("date", startDate);
-          
+
           if (dateFilter.end) {
             const endDate = dateFilter.end.toISOString().split("T")[0];
             query = query.lte("date", endDate);
           }
-        } else if (dateFilter.mode === 'preset' && dateFilter.preset && dateFilter.preset !== 'any-date') {
+        } else if (
+          dateFilter.mode === "preset" &&
+          dateFilter.preset &&
+          dateFilter.preset !== "any-date"
+        ) {
           // Handle preset date ranges
           const today = new Date();
           const tomorrow = new Date(today);
           tomorrow.setDate(today.getDate() + 1);
-          
+
           switch (dateFilter.preset) {
-            case 'today':
+            case "today":
               query = query.eq("date", today.toISOString().split("T")[0]);
               break;
-            case 'tomorrow':
+            case "tomorrow":
               query = query.eq("date", tomorrow.toISOString().split("T")[0]);
               break;
-            case 'this-week':
+            case "this-week":
               const endOfWeek = new Date(today);
               endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
-              query = query.gte("date", today.toISOString().split("T")[0])
-                          .lte("date", endOfWeek.toISOString().split("T")[0]);
+              query = query
+                .gte("date", today.toISOString().split("T")[0])
+                .lte("date", endOfWeek.toISOString().split("T")[0]);
               break;
-            case 'this-weekend':
+            case "this-weekend":
               const saturday = new Date(today);
               saturday.setDate(today.getDate() + (6 - today.getDay()));
               const sunday = new Date(saturday);
               sunday.setDate(saturday.getDate() + 1);
-              query = query.gte("date", saturday.toISOString().split("T")[0])
-                          .lte("date", sunday.toISOString().split("T")[0]);
+              query = query
+                .gte("date", saturday.toISOString().split("T")[0])
+                .lte("date", sunday.toISOString().split("T")[0]);
               break;
-            case 'next-week':
+            case "next-week":
               const nextMonday = new Date(today);
               nextMonday.setDate(today.getDate() + (7 - today.getDay()) + 1);
               const nextSunday = new Date(nextMonday);
               nextSunday.setDate(nextMonday.getDate() + 6);
-              query = query.gte("date", nextMonday.toISOString().split("T")[0])
-                          .lte("date", nextSunday.toISOString().split("T")[0]);
+              query = query
+                .gte("date", nextMonday.toISOString().split("T")[0])
+                .lte("date", nextSunday.toISOString().split("T")[0]);
               break;
           }
         }
@@ -215,8 +225,8 @@ export default function EventsPage() {
       about: {
         "@type": "City",
         name: "Des Moines",
-        sameAs: "https://en.wikipedia.org/wiki/Des_Moines,_Iowa"
-      }
+        sameAs: "https://en.wikipedia.org/wiki/Des_Moines,_Iowa",
+      },
     },
     provider: {
       "@type": "LocalBusiness",
@@ -225,8 +235,8 @@ export default function EventsPage() {
       areaServed: {
         "@type": "City",
         name: "Des Moines",
-        addressRegion: "Iowa"
-      }
+        addressRegion: "Iowa",
+      },
     },
     itemListElement:
       events?.slice(0, 30).map((event, index) => ({
@@ -234,13 +244,23 @@ export default function EventsPage() {
         position: index + 1,
         item: {
           "@type": "Event",
-          "@id": `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`,
+          "@id": `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(
+            event.title,
+            event
+          )}`,
           name: event.title,
-          description: event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in Des Moines, Iowa`,
+          description:
+            event.enhanced_description ||
+            event.original_description ||
+            `${event.title} - ${event.category} event in Des Moines, Iowa`,
           startDate: event.event_start_utc || event.date,
-          endDate: event.event_start_utc 
-            ? new Date(new Date(event.event_start_utc).getTime() + 3 * 60 * 60 * 1000).toISOString()
-            : new Date(new Date(event.date).getTime() + 3 * 60 * 60 * 1000).toISOString(),
+          endDate: event.event_start_utc
+            ? new Date(
+                new Date(event.event_start_utc).getTime() + 3 * 60 * 60 * 1000
+              ).toISOString()
+            : new Date(
+                new Date(event.date).getTime() + 3 * 60 * 60 * 1000
+              ).toISOString(),
           location: {
             "@type": "Place",
             name: event.venue || event.location || "Des Moines Area",
@@ -250,18 +270,25 @@ export default function EventsPage() {
               addressLocality: event.city || "Des Moines",
               addressRegion: "Iowa",
               addressCountry: "US",
-              postalCode: event.city === "Des Moines" ? "50309" : undefined
+              postalCode: event.city === "Des Moines" ? "50309" : undefined,
             },
-            ...(event.latitude && event.longitude && {
-              geo: {
-                "@type": "GeoCoordinates",
-                latitude: event.latitude,
-                longitude: event.longitude
-              }
-            })
+            ...(event.latitude &&
+              event.longitude && {
+                geo: {
+                  "@type": "GeoCoordinates",
+                  latitude: event.latitude,
+                  longitude: event.longitude,
+                },
+              }),
           },
-          image: [event.image_url || "https://desmoinesinsider.com/default-event-image.jpg"],
-          url: `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`,
+          image: [
+            event.image_url ||
+              "https://desmoinesinsider.com/default-event-image.jpg",
+          ],
+          url: `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(
+            event.title,
+            event
+          )}`,
           eventStatus: "https://schema.org/EventScheduled",
           eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
           organizer: {
@@ -271,51 +298,55 @@ export default function EventsPage() {
             url: "https://desmoinesinsider.com",
             logo: {
               "@type": "ImageObject",
-              url: "https://desmoinesinsider.com/DMI-Logo.png"
-            }
+              url: "https://desmoinesinsider.com/DMI-Logo.png",
+            },
           },
-          offers: event.price && event.price.toLowerCase() !== 'free'
-            ? {
-                "@type": "Offer",
-                price: event.price.replace(/[^0-9.]/g, '') || "0",
-                priceCurrency: "USD",
-                availability: "https://schema.org/InStock",
-                category: event.category
-              }
-            : {
-                "@type": "Offer",
-                price: "0",
-                priceCurrency: "USD",
-                availability: "https://schema.org/InStock"
-              },
+          offers:
+            event.price && event.price.toLowerCase() !== "free"
+              ? {
+                  "@type": "Offer",
+                  price: event.price.replace(/[^0-9.]/g, "") || "0",
+                  priceCurrency: "USD",
+                  availability: "https://schema.org/InStock",
+                  category: event.category,
+                }
+              : {
+                  "@type": "Offer",
+                  price: "0",
+                  priceCurrency: "USD",
+                  availability: "https://schema.org/InStock",
+                },
           keywords: [
             event.category,
             "Des Moines events",
             "Iowa events",
             "things to do Des Moines",
             event.venue || "",
-            "Central Iowa activities"
-          ].filter(Boolean).join(", "),
+            "Central Iowa activities",
+          ]
+            .filter(Boolean)
+            .join(", "),
           about: [
             {
               "@type": "Thing",
-              name: event.category
+              name: event.category,
             },
             {
               "@type": "Place",
-              name: "Des Moines, Iowa"
-            }
+              name: "Des Moines, Iowa",
+            },
           ],
           inLanguage: "en-US",
-          isAccessibleForFree: !event.price || event.price.toLowerCase().includes('free'),
+          isAccessibleForFree:
+            !event.price || event.price.toLowerCase().includes("free"),
           audience: {
             "@type": "Audience",
             audienceType: "local residents and visitors",
             geographicArea: {
               "@type": "AdministrativeArea",
-              name: "Greater Des Moines Area"
-            }
-          }
+              name: "Greater Des Moines Area",
+            },
+          },
         },
       })) || [],
   };
@@ -330,7 +361,7 @@ export default function EventsPage() {
         />
         <div className="min-h-screen bg-background">
           <Header />
-          
+
           {/* Hero Section Skeleton */}
           <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]">
             <div className="absolute inset-0 bg-black/20"></div>
@@ -344,7 +375,10 @@ export default function EventsPage() {
           </section>
 
           <div className="container mx-auto px-4 py-8">
-            <CardsGridSkeleton count={9} className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" />
+            <CardsGridSkeleton
+              count={9}
+              className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+            />
           </div>
           <Footer />
         </div>
@@ -354,7 +388,7 @@ export default function EventsPage() {
 
   return (
     <>
-      <SEOEnhancedHead 
+      <SEOEnhancedHead
         title={seoTitle}
         description={seoDescription}
         url="https://desmoinesinsider.com/events"
@@ -544,12 +578,17 @@ export default function EventsPage() {
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {events?.map((event) => (
-                <SocialEventCard 
-                  key={event.id} 
-                  event={event} 
+                <SocialEventCard
+                  key={event.id}
+                  event={event}
                   onViewDetails={() => {
                     // Navigate to event details using React Router
-                    navigate(`/events/${createEventSlugWithCentralTime(event.title, event)}`);
+                    navigate(
+                      `/events/${createEventSlugWithCentralTime(
+                        event.title,
+                        event
+                      )}`
+                    );
                   }}
                 />
               ))}

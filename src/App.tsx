@@ -30,11 +30,20 @@ const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
 const IowaStateFairPage = lazy(() => import("./pages/IowaStateFairPage"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
 const Social = lazy(() => import("./pages/Social"));
-const SmartCalendarIntegration = lazy(() => import("./components/SmartCalendarIntegration"));
+const SmartCalendarIntegration = lazy(
+  () => import("./components/SmartCalendarIntegration")
+);
 const Gamification = lazy(() => import("./pages/Gamification"));
 const BusinessPartnership = lazy(() => import("./pages/BusinessPartnership"));
-const AdvancedSearchPage = lazy(() => import("./components/AdvancedSearchPage"));
+const AdvancedSearchPage = lazy(
+  () => import("./components/AdvancedSearchPage")
+);
 const RealTimePage = lazy(() => import("./components/RealTimePage"));
+
+// SEO-focused time-sensitive pages
+const EventsToday = lazy(() => import("./pages/EventsToday"));
+const EventsThisWeekend = lazy(() => import("./pages/EventsThisWeekend"));
+const EventsByLocation = lazy(() => import("./pages/EventsByLocation"));
 
 // Mobile-optimized loading component
 const PageLoader = () => (
@@ -63,11 +72,37 @@ const App = () => (
             <Route path="/attractions" element={<Attractions />} />
             <Route path="/playgrounds" element={<Playgrounds />} />
             <Route path="/events" element={<EventsPage />} />
+            {/* Time-sensitive SEO pages */}
+            <Route path="/events/today" element={<EventsToday />} />
+            <Route
+              path="/events/this-weekend"
+              element={<EventsThisWeekend />}
+            />
+            {/* Location-based event pages */}
+            <Route
+              path="/events/west-des-moines"
+              element={<EventsByLocation />}
+            />
+            <Route path="/events/ankeny" element={<EventsByLocation />} />
+            <Route path="/events/urbandale" element={<EventsByLocation />} />
+            <Route path="/events/johnston" element={<EventsByLocation />} />
+            <Route path="/events/altoona" element={<EventsByLocation />} />
+            <Route path="/events/clive" element={<EventsByLocation />} />
+            <Route
+              path="/events/windsor-heights"
+              element={<EventsByLocation />}
+            />
             <Route path="/events/:slug" element={<EventDetails />} />
             <Route path="/articles" element={<Articles />} />
-          <Route path="/articles/:slug" element={<ArticleDetails />} />
-          <Route path="/admin/articles/new" element={<AdminArticleEditor />} />
-          <Route path="/admin/articles/edit/:id" element={<AdminArticleEditor />} />
+            <Route path="/articles/:slug" element={<ArticleDetails />} />
+            <Route
+              path="/admin/articles/new"
+              element={<AdminArticleEditor />}
+            />
+            <Route
+              path="/admin/articles/edit/:id"
+              element={<AdminArticleEditor />}
+            />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
@@ -75,14 +110,20 @@ const App = () => (
             <Route path="/campaigns" element={<CampaignDashboard />} />
             <Route path="/weekend" element={<WeekendPage />} />
             <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
-            <Route path="/neighborhoods/:neighborhood" element={<NeighborhoodPage />} />
+            <Route
+              path="/neighborhoods/:neighborhood"
+              element={<NeighborhoodPage />}
+            />
             <Route path="/iowa-state-fair" element={<IowaStateFairPage />} />
             <Route path="/social" element={<Social />} />
             <Route path="/calendar" element={<SmartCalendarIntegration />} />
             <Route path="/gamification" element={<Gamification />} />
-          <Route path="/business-partnership" element={<BusinessPartnership />} />
-          <Route path="/search" element={<AdvancedSearchPage />} />
-          <Route path="/real-time" element={<RealTimePage />} />
+            <Route
+              path="/business-partnership"
+              element={<BusinessPartnership />}
+            />
+            <Route path="/search" element={<AdvancedSearchPage />} />
+            <Route path="/real-time" element={<RealTimePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

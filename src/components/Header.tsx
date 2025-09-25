@@ -51,14 +51,14 @@ export default function Header() {
   useEffect(() => {
     const pageTitle = document.title;
     if (pageTitle) {
-      announceToScreenReader(`Navigated to ${pageTitle}`, 'polite');
+      announceToScreenReader(`Navigated to ${pageTitle}`, "polite");
     }
   }, [location.pathname, announceToScreenReader]);
 
   const handleLogout = async () => {
-    announceToScreenReader('Signing out...', 'polite');
+    announceToScreenReader("Signing out...", "polite");
     await logout();
-    announceToScreenReader('Successfully signed out', 'polite');
+    announceToScreenReader("Successfully signed out", "polite");
   };
 
   const handleMobileMenuToggle = (isOpen: boolean) => {
@@ -78,11 +78,25 @@ export default function Header() {
   };
 
   const isActivePath = (path: string) => {
-    return location.pathname === path || location.pathname.startsWith(path + "/");
+    return (
+      location.pathname === path || location.pathname.startsWith(path + "/")
+    );
   };
 
   const navigationLinks = [
     { href: "/events", label: "Events", icon: Calendar },
+    {
+      href: "/events/today",
+      label: "Today's Events",
+      icon: Calendar,
+      priority: true,
+    },
+    {
+      href: "/events/this-weekend",
+      label: "This Weekend",
+      icon: Calendar,
+      priority: true,
+    },
     { href: "/restaurants", label: "Restaurants", icon: MapPin },
     { href: "/attractions", label: "Attractions", icon: Camera },
     { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
@@ -102,14 +116,20 @@ export default function Header() {
               src="/DMI-Logo-Header.png"
               alt="Des Moines Insider"
               loading="eager"
-              {...({ fetchpriority: 'high' } as any)}
+              {...({
+                fetchPriority: "high",
+              } as React.ImgHTMLAttributes<HTMLImageElement>)}
               decoding="async"
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
             />
           </Link>
 
           {/* Desktop Navigation */}
-          <nav className="hidden lg:flex items-center space-x-6" role="navigation" aria-label="Main navigation">
+          <nav
+            className="hidden lg:flex items-center space-x-6"
+            role="navigation"
+            aria-label="Main navigation"
+          >
             {navigationLinks.map((link) => (
               <Link
                 key={link.href}
@@ -133,21 +153,28 @@ export default function Header() {
           {/* Mobile Menu + User Actions */}
           <div className="flex items-center gap-2">
             {/* Mobile Menu */}
-            <Sheet open={isMobileMenuOpen} onOpenChange={handleMobileMenuToggle}>
+            <Sheet
+              open={isMobileMenuOpen}
+              onOpenChange={handleMobileMenuToggle}
+            >
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
                   className="lg:hidden touch-target"
-                  aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
+                  aria-label={
+                    isMobileMenuOpen
+                      ? "Close navigation menu"
+                      : "Open navigation menu"
+                  }
                   aria-expanded={isMobileMenuOpen}
                   aria-controls="mobile-navigation"
                 >
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
-              <SheetContent 
-                side="right" 
+              <SheetContent
+                side="right"
                 className="w-[300px] sm:w-[350px] flex flex-col max-h-screen"
                 id="mobile-navigation"
                 aria-label="Mobile navigation menu"
@@ -156,7 +183,11 @@ export default function Header() {
                   <SheetTitle>Navigation Menu</SheetTitle>
                 </SheetHeader>
                 <div className="flex-1 overflow-y-auto py-6" role="none">
-                  <nav className="space-y-2" role="navigation" aria-label="Mobile navigation">
+                  <nav
+                    className="space-y-2"
+                    role="navigation"
+                    aria-label="Mobile navigation"
+                  >
                     {navigationLinks.map((link) => (
                       <Link
                         key={link.href}
@@ -170,7 +201,9 @@ export default function Header() {
                         )}
                         onMouseEnter={() => prefetchRoute(link.href)}
                         onFocus={() => prefetchRoute(link.href)}
-                        aria-current={isActivePath(link.href) ? "page" : undefined}
+                        aria-current={
+                          isActivePath(link.href) ? "page" : undefined
+                        }
                       >
                         <link.icon className="h-5 w-5 flex-shrink-0" />
                         <span className="text-base font-medium">
@@ -179,7 +212,7 @@ export default function Header() {
                       </Link>
                     ))}
                   </nav>
-                  
+
                   {/* Mobile Theme Toggle */}
                   <div className="border-t border-border pt-4 mt-6">
                     <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
@@ -189,10 +222,16 @@ export default function Header() {
                   </div>
                   {/* Mobile Submit Event and Advertise Buttons */}
                   <div className="border-t border-border pt-4 mt-6 space-y-3">
-                    <div onClick={() => handleMobileMenuToggle(false)} className="w-full">
+                    <div
+                      onClick={() => handleMobileMenuToggle(false)}
+                      className="w-full"
+                    >
                       <SubmitEventButton />
                     </div>
-                    <div onClick={() => handleMobileMenuToggle(false)} className="w-full">
+                    <div
+                      onClick={() => handleMobileMenuToggle(false)}
+                      className="w-full"
+                    >
                       <AdvertiseButton />
                     </div>
                   </div>
@@ -225,7 +264,10 @@ export default function Header() {
                           className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
                           aria-label="Go to profile page"
                         >
-                          <User className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
+                          <User
+                            className="h-5 w-5 text-primary flex-shrink-0"
+                            aria-hidden="true"
+                          />
                           <span className="text-base">Profile</span>
                         </Link>
 
@@ -236,7 +278,10 @@ export default function Header() {
                             className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
                             aria-label="Go to admin dashboard"
                           >
-                            <Shield className="h-5 w-5 text-primary flex-shrink-0" aria-hidden="true" />
+                            <Shield
+                              className="h-5 w-5 text-primary flex-shrink-0"
+                              aria-hidden="true"
+                            />
                             <span className="text-base">Admin</span>
                           </Link>
                         )}
@@ -249,7 +294,10 @@ export default function Header() {
                           className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target w-full text-left"
                           aria-label="Sign out of your account"
                         >
-                          <LogOut className="h-5 w-5 text-destructive flex-shrink-0" aria-hidden="true" />
+                          <LogOut
+                            className="h-5 w-5 text-destructive flex-shrink-0"
+                            aria-hidden="true"
+                          />
                           <span className="text-base">Sign out</span>
                         </button>
                       </div>
@@ -262,7 +310,9 @@ export default function Header() {
                         className="block w-full"
                         aria-label="Sign in to your account"
                       >
-                        <Button className="w-full h-12 text-base touch-target">Sign In</Button>
+                        <Button className="w-full h-12 text-base touch-target">
+                          Sign In
+                        </Button>
                       </Link>
                     </div>
                   )}
@@ -282,7 +332,9 @@ export default function Header() {
                       <Button
                         variant="ghost"
                         className="relative touch-target rounded-full"
-                        aria-label={`Account menu for ${profile?.first_name || 'User'}`}
+                        aria-label={`Account menu for ${
+                          profile?.first_name || "User"
+                        }`}
                         aria-expanded="false"
                         aria-haspopup="menu"
                       >
@@ -315,45 +367,88 @@ export default function Header() {
                       </div>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem asChild role="none">
-                        <Link to="/profile" className="flex items-center" role="menuitem" aria-label="Go to profile page">
+                        <Link
+                          to="/profile"
+                          className="flex items-center"
+                          role="menuitem"
+                          aria-label="Go to profile page"
+                        >
                           <User className="mr-2 h-4 w-4" aria-hidden="true" />
                           Profile
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild role="none">
-                        <Link to="/gamification" className="flex items-center" role="menuitem" aria-label="Go to level up page">
+                        <Link
+                          to="/gamification"
+                          className="flex items-center"
+                          role="menuitem"
+                          aria-label="Go to level up page"
+                        >
                           <Trophy className="mr-2 h-4 w-4" aria-hidden="true" />
                           Level Up
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild role="none">
-                        <Link to="/social" className="flex items-center" role="menuitem" aria-label="Go to social page">
+                        <Link
+                          to="/social"
+                          className="flex items-center"
+                          role="menuitem"
+                          aria-label="Go to social page"
+                        >
                           <Users className="mr-2 h-4 w-4" aria-hidden="true" />
                           Social
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild role="none">
-                        <Link to="/calendar" className="flex items-center" role="menuitem" aria-label="Go to smart calendar page">
-                          <Calendar className="mr-2 h-4 w-4" aria-hidden="true" />
+                        <Link
+                          to="/calendar"
+                          className="flex items-center"
+                          role="menuitem"
+                          aria-label="Go to smart calendar page"
+                        >
+                          <Calendar
+                            className="mr-2 h-4 w-4"
+                            aria-hidden="true"
+                          />
                           Smart Calendar
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild role="none">
-                        <Link to="/business-partnership" className="flex items-center" role="menuitem" aria-label="Go to business partnership page">
-                          <Building2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                        <Link
+                          to="/business-partnership"
+                          className="flex items-center"
+                          role="menuitem"
+                          aria-label="Go to business partnership page"
+                        >
+                          <Building2
+                            className="mr-2 h-4 w-4"
+                            aria-hidden="true"
+                          />
                           Business Portal
                         </Link>
                       </DropdownMenuItem>
                       {isAdmin && (
                         <DropdownMenuItem asChild role="none">
-                          <Link to="/admin" className="flex items-center" role="menuitem" aria-label="Go to admin dashboard">
-                            <Shield className="mr-2 h-4 w-4" aria-hidden="true" />
+                          <Link
+                            to="/admin"
+                            className="flex items-center"
+                            role="menuitem"
+                            aria-label="Go to admin dashboard"
+                          >
+                            <Shield
+                              className="mr-2 h-4 w-4"
+                              aria-hidden="true"
+                            />
                             Admin
                           </Link>
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={handleLogout} role="menuitem" aria-label="Sign out of your account">
+                      <DropdownMenuItem
+                        onClick={handleLogout}
+                        role="menuitem"
+                        aria-label="Sign out of your account"
+                      >
                         <LogOut className="mr-2 h-4 w-4" aria-hidden="true" />
                         Sign out
                       </DropdownMenuItem>

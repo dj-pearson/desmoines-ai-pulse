@@ -1,11 +1,12 @@
 # Des Moines Insider - Robots.txt
-# Optimized for search engine indexing
+# Optimized for search engine indexing and AI crawlers
 
 User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /auth
 Disallow: /profile
+Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
@@ -19,27 +20,46 @@ Allow: /restaurants/
 Allow: /playgrounds/
 Allow: /attractions/
 Allow: /neighborhoods/
+Allow: /articles/
+Allow: /guides/
 
 # Special permissions for AI crawlers
 User-agent: GPTBot
 Allow: /
 Disallow: /admin
 Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
 
 User-agent: PerplexityBot
 Allow: /
 Disallow: /admin
 Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
 
 User-agent: Claude-Web
 Allow: /
 Disallow: /admin
 Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
 
 # Sitemap locations
 Sitemap: https://desmoinesinsider.com/sitemap.xml
 Sitemap: https://desmoinesinsider.com/sitemap-events.xml
 Sitemap: https://desmoinesinsider.com/sitemap-restaurants.xml
+Sitemap: https://desmoinesinsider.com/sitemap-attractions.xml
+Sitemap: https://desmoinesinsider.com/sitemap-playgrounds.xml
+Sitemap: https://desmoinesinsider.com/sitemap-articles.xml
+Sitemap: https://desmoinesinsider.com/sitemap-guides.xml
 
 # Crawl delay for respectful crawling
 Crawl-delay: 1
