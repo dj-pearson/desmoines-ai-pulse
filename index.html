@@ -38,13 +38,20 @@
     <style>
       :root{--background:0 0% 100%;--foreground:222.2 84% 4.9%;--primary:214 100% 35%;--primary-foreground:0 0% 100%;--border:214.3 31.8% 91.4%;--radius:0.75rem}
       *{border-color:hsl(var(--border))}
-      body{background-color:hsl(var(--background));color:hsl(var(--foreground));font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
+      body{background-color:hsl(var(--background));color:hsl(var(--foreground));font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
       .min-h-screen{min-height:100vh}
       .bg-background{background-color:hsl(var(--background))}
       .text-foreground{color:hsl(var(--foreground))}
       .flex{display:flex}
       .items-center{align-items:center}
       .justify-center{justify-content:center}
+      .justify-between{justify-content:space-between}
+      .container{width:100%;margin-left:auto;margin-right:auto;padding-left:1rem;padding-right:1rem}
+      @media(min-width:640px){.container{max-width:640px}}
+      @media(min-width:768px){.container{max-width:768px}}
+      @media(min-width:1024px){.container{max-width:1024px}}
+      @media(min-width:1280px){.container{max-width:1280px}}
+      header{position:sticky;top:0;z-index:50;border-bottom:1px solid hsl(var(--border));background-color:hsl(var(--background))}
       .animate-pulse{animation:pulse 2s cubic-bezier(0.4,0,0.6,1) infinite}
       @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
     </style>
@@ -58,7 +65,7 @@
     <link rel="dns-prefetch" href="https://www.google-analytics.com" />
     
     <!-- Critical resource preloading for LCP optimization -->
-    <link rel="preload" as="image" href="/DMI-Logo-Header.png" />
+    <link rel="preload" as="image" href="/DMI-Logo-Header.png" fetchpriority="high" />
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
     <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" /></noscript>
 
@@ -175,110 +182,17 @@
     />
 
     <!-- JSON-LD Structured Data for Local SEO optimization -->
-    <script type="application/ld+json">
+    <script type="application/ld+json" defer>
       {
         "@context": "https://schema.org",
         "@type": "LocalBusiness",
-        "name": "Des Moines Insider",
-        "alternateName": "Des Moines Local Events & Restaurant Guide",
-        "url": "https://desmoinssider.com",
-        "description": "Your complete local guide to Des Moines, Iowa events, restaurants, attractions, and activities. Discover what's happening this weekend in Des Moines metro area.",
-        "address": {
-          "@type": "PostalAddress",
-          "addressLocality": "Des Moines",
-          "addressRegion": "Iowa",
-          "addressCountry": "US",
-          "postalCode": "50309"
-        },
-        "geo": {
-          "@type": "GeoCoordinates",
-          "latitude": 41.5868,
-          "longitude": -93.625
-        },
-        "areaServed": [
-          {
-            "@type": "City",
-            "name": "Des Moines",
-            "sameAs": "https://en.wikipedia.org/wiki/Des_Moines,_Iowa"
-          },
-          {
-            "@type": "City",
-            "name": "West Des Moines",
-            "sameAs": "https://en.wikipedia.org/wiki/West_Des_Moines,_Iowa"
-          },
-          {
-            "@type": "City",
-            "name": "Ankeny",
-            "sameAs": "https://en.wikipedia.org/wiki/Ankeny,_Iowa"
-          },
-          {
-            "@type": "City",
-            "name": "Urbandale"
-          },
-          {
-            "@type": "City",
-            "name": "Johnston"
-          },
-          {
-            "@type": "City",
-            "name": "Clive"
-          },
-          {
-            "@type": "City",
-            "name": "Waukee"
-          }
-        ],
-        "serviceType": "Local Information Guide",
-        "hasOfferCatalog": {
-          "@type": "OfferCatalog",
-          "name": "Des Moines Local Services",
-          "itemListElement": [
-            {
-              "@type": "Offer",
-              "itemOffered": {
-                "@type": "Service",
-                "name": "Des Moines Event Listings",
-                "description": "Comprehensive calendar of events happening in Des Moines metro area"
-              }
-            },
-            {
-              "@type": "Offer",
-              "itemOffered": {
-                "@type": "Service",
-                "name": "Des Moines Restaurant Guide",
-                "description": "Local restaurant directory with new openings and dining recommendations"
-              }
-            },
-            {
-              "@type": "Offer",
-              "itemOffered": {
-                "@type": "Service",
-                "name": "Family Activity Guide",
-                "description": "Kid-friendly events and attractions in Des Moines area"
-              }
-            }
-          ]
-        },
-        "publisher": {
-          "@type": "Organization",
-          "@id": "https://desmoinssider.com/#organization",
-          "name": "Des Moines Insider",
-          "url": "https://desmoinssider.com",
-          "logo": {
-            "@type": "ImageObject",
-            "url": "https://desmoinssider.com/DMI-Logo.png"
-          }
-        },
-        "potentialAction": {
-          "@type": "SearchAction",
-          "target": "https://desmoinssider.com/?q={search_term_string}",
-          "query-input": "required name=search_term_string"
+...
         }
       }
     </script>
 
     <!-- FAQ Schema for Local SEO optimization -->
-    <script type="application/ld+json">
+    <script type="application/ld+json" defer>
       {
         "@context": "https://schema.org",
         "@type": "FAQPage",
@@ -332,9 +246,9 @@
     <div id="root"></div>
     
     <!-- Preload critical JavaScript for faster TTI -->
-    <link rel="modulepreload" href="/src/main.tsx" />
+    <link rel="modulepreload" href="/src/main.tsx" fetchpriority="high" />
     <link rel="modulepreload" href="/src/App.tsx" />
     
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="/src/main.tsx" fetchpriority="high"></script>
   </body>
 </html>
