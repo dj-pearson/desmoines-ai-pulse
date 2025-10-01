@@ -25,7 +25,6 @@ import MostSearched from "@/components/MostSearched";
 import EventFilters from "@/components/EventFilters";
 import GEOContent from "@/components/GEOContent";
 import Newsletter from "@/components/Newsletter";
-import Hero3DCityscape from "@/components/Hero3DCityscape";
 import { EventSocialHub } from "@/components/EventSocialHub";
 
 export default function Index() {
@@ -146,7 +145,9 @@ export default function Index() {
 
         {/* Hero section with structured data */}
         <section className="relative min-h-screen bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69] py-16 overflow-hidden">
-          <Hero3DCityscape />
+          {/* Static gradient background for instant paint */}
+          <div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />
+          
           <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 drop-shadow-lg">
               Discover Des Moines Like Never Before
