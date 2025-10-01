@@ -6,12 +6,21 @@ import { componentTagger } from "lovable-tagger";
 // https://vitejs.dev/config/
 // Force rebuild: 2025-08-13
 export default defineConfig(({ command }) => ({
-  base: "/", // Use absolute paths for Cloudflare Pages
+  base: "/",
   server: {
     host: "::",
     port: 8080,
   },
-  plugins: [react(), command === "serve" && componentTagger()].filter(Boolean),
+  plugins: [
+    react({
+      babel: {
+        plugins: [
+          ['babel-plugin-react-remove-properties', { properties: ['data-testid'] }]
+        ]
+      }
+    }), 
+    command === "serve" && componentTagger()
+  ].filter(Boolean),
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -22,26 +31,81 @@ export default defineConfig(({ command }) => ({
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true,
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info'],
+        passes: 2
+      },
+      mangle: {
+        safari10: true
+      },
+      format: {
+        comments: false
+      }
+    },
     rollupOptions: {
       output: {
         manualChunks: (id) => {
-          // Split vendor code for better caching and FID
+          // Aggressive code splitting for smaller initial bundles
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom')) {
-              return 'react-vendor';
+            // Core React (must load first)
+            if (id.includes('react/') || id.includes('react-dom/')) {
+              return 'react-core';
             }
-            if (id.includes('@tanstack/react-query')) {
-              return 'query-vendor';
+            if (id.includes('scheduler')) {
+              return 'react-core';
             }
-            if (id.includes('@supabase')) {
-              return 'supabase-vendor';
-            }
+            
+            // Router (load on demand)
             if (id.includes('react-router')) {
-              return 'router-vendor';
+              return 'router';
             }
+            
+            // Query (load on demand)
+            if (id.includes('@tanstack')) {
+              return 'query';
+            }
+            
+            // Supabase (defer)
+            if (id.includes('@supabase')) {
+              return 'supabase';
+            }
+            
+            // UI components (load on demand)
             if (id.includes('@radix-ui')) {
-              return 'ui-vendor';
+              const component = id.split('node_modules/')[1].split('/')[0];
+              return `ui-${component.replace('@radix-ui/react-', '')}`;
             }
+            
+            // Lucide icons (defer)
+            if (id.includes('lucide-react')) {
+              return 'icons';
+            }
+            
+            // Date libraries (defer)
+            if (id.includes('date-fns')) {
+              return 'date-utils';
+            }
+            
+            // Form libraries (defer)
+            if (id.includes('react-hook-form') || id.includes('zod')) {
+              return 'forms';
+            }
+            
+            // Map libraries (heavy, defer)
+            if (id.includes('leaflet') || id.includes('react-leaflet')) {
+              return 'maps';
+            }
+            
+            // 3D libraries (heavy, defer)
+            if (id.includes('three') || id.includes('@react-three')) {
+              return '3d';
+            }
+            
+            // Other vendors
             return 'vendor';
           }
         },
@@ -55,5 +119,6 @@ export default defineConfig(({ command }) => ({
         entryFileNames: "assets/[name]-[hash].js",
       },
     },
+    chunkSizeWarningLimit: 500,
   },
 }));

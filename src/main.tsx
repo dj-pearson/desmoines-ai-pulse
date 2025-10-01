@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import App from './App.tsx';
 import './index.css';
 
-// Initialize query client
+// Initialize query client with optimized settings for performance
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -16,6 +16,7 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 60 * 1000,
       gcTime: 5 * 60 * 1000,
+      networkMode: 'online',
     },
   },
 });
