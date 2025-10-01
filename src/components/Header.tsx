@@ -106,11 +106,11 @@ export default function Header() {
   return (
     <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50 safe-area-top">
       <div className="container mx-auto mobile-padding">
-        <div className="flex justify-between items-center touch-target">
-          {/* Logo - Mobile Optimized with Dark Mode Glow */}
+        <div className="flex justify-between items-center touch-target gap-4">
+          {/* Logo - Mobile Optimized with Dark Mode Glow - Fixed Width */}
           <Link
             to="/"
-            className="flex items-center smooth-transition hover:opacity-80"
+            className="flex items-center smooth-transition hover:opacity-80 flex-shrink-0"
             aria-label="Des Moines Insider Home"
           >
             <img
@@ -127,13 +127,13 @@ export default function Header() {
                 console.error('Logo failed to load:', e);
                 (e.target as HTMLImageElement).style.display = 'none';
               }}
-              className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
+              className="h-8 md:h-10 w-auto min-w-[120px] dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
             />
           </Link>
 
           {/* Desktop Navigation */}
           <nav
-            className="hidden lg:flex items-center space-x-6"
+            className="hidden lg:flex items-center space-x-4 xl:space-x-6 flex-1 justify-center"
             role="navigation"
             aria-label="Main navigation"
           >
