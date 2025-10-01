@@ -8,9 +8,15 @@
    - Added `https://www.googletagmanager.com` to `connect-src`
    - Added `data:` to `font-src` to allow inline fonts
 
-2. **Updated Header logo** to use `DMI-Logo-Header.png`
+2. **Fixed lazy-loaded component routing** in `public/_redirects`:
 
-3. **Rebuilt the application** with the fixes
+   - Added explicit rules for static assets (`/assets/*`, `*.js`, `*.css`, etc.)
+   - This prevents JavaScript chunks from being redirected to HTML
+   - Fixes "SyntaxError: expected expression, got '<'" errors
+
+3. **Updated Header logo** to use `DMI-Logo-Header.png`
+
+4. **Rebuilt the application** with all fixes
 
 ## To view the fixed site:
 

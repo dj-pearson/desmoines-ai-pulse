@@ -1,8 +1,8 @@
 // Service Worker for Des Moines Insider
-const CACHE_NAME = 'dmi-cache-v1';
-const STATIC_CACHE = 'dmi-static-v1';
-const API_CACHE = 'dmi-api-v1';
-const IMAGE_CACHE = 'dmi-images-v1';
+const CACHE_NAME = 'dmi-cache-v2';
+const STATIC_CACHE = 'dmi-static-v2';
+const API_CACHE = 'dmi-api-v2';
+const IMAGE_CACHE = 'dmi-images-v2';
 
 // Assets to cache immediately
 const STATIC_ASSETS = [
@@ -216,16 +216,29 @@ async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName);
   const cachedResponse = await cache.match(request);
   
+  // Skip caching for external resources that might violate CSP
+  const url = request.url || '';
+  const skipCache = url.includes('googleapis.com') || 
+                    url.includes('googletagmanager.com') ||
+                    url.includes('chrome-extension:') ||
+                    url.startsWith('chrome-extension:');
+  
   // Always try to fetch from network in background
   const fetchPromise = fetch(request).then((networkResponse) => {
-    if (networkResponse.ok && networkResponse.status !== 206 && !request.headers.has('range')) {
+    if (!skipCache && networkResponse.ok && networkResponse.status !== 206 && !request.headers.has('range')) {
       try {
         cache.put(request, networkResponse.clone());
       } catch (err) {
-        console.warn('SW cache put failed, skipping:', err);
+        // Silently skip caching errors
       }
     }
     return networkResponse;
+  }).catch((err) => {
+    // If fetch fails, return cached version or error
+    if (cachedResponse) {
+      return cachedResponse;
+    }
+    throw err;
   });
   
   // Return cached version immediately if available
