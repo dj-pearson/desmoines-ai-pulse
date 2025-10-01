@@ -203,7 +203,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                 />
               </div>
               <Select value={category} onValueChange={handleCategoryChange}>
-                <SelectTrigger className="touch-target w-full sm:w-48 bg-background/95 backdrop-blur border-0">
+                <SelectTrigger className="touch-target w-full sm:w-48 bg-background/95 backdrop-blur border-0" aria-label="Category filter">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -269,7 +269,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                 <span>Location</span>
               </div>
               <Select value={location} onValueChange={handleLocationChange}>
-                <SelectTrigger className="bg-background/95 backdrop-blur border-0 touch-target">
+                <SelectTrigger className="bg-background/95 backdrop-blur border-0 touch-target" aria-label="Location filter">
                   <SelectValue placeholder="Any location" />
                 </SelectTrigger>
                 <SelectContent>
@@ -291,7 +291,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                 <span>Price Range</span>
               </div>
               <Select value={priceRange} onValueChange={handlePriceChange}>
-                <SelectTrigger className="bg-background/95 backdrop-blur border-0 touch-target">
+                <SelectTrigger className="bg-background/95 backdrop-blur border-0 touch-target" aria-label="Price range filter">
                   <SelectValue placeholder="Any price" />
                 </SelectTrigger>
                 <SelectContent>
