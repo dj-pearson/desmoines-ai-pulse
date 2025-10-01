@@ -266,7 +266,7 @@ export default function Index() {
                               {event.city}
                             </div>
                             <Link to={`/events/${event.slug}`}>
-                              <Button size="sm">Learn More</Button>
+                              <Button size="sm" aria-label={`Learn more about ${event.title}`}>Learn More</Button>
                             </Link>
                           </div>
                         </CardContent>

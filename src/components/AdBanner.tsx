@@ -67,6 +67,7 @@ export function AdBanner({ placement, className = "" }: AdBannerProps) {
           <Button
             size="sm"
             className="relative z-10 ml-4 bg-white/90 text-primary hover:bg-white"
+            aria-label={ad.title ? `Learn more about ${ad.title}` : "Learn more about this advertisement"}
           >
             {ad.cta_text || "Learn More"}
             <ExternalLink className="ml-1 h-3 w-3" />

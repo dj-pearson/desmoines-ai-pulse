@@ -696,6 +696,7 @@ export default function AllInclusiveDashboard({
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={handleLinkClick}
+                  aria-label={`Learn more about ${item.title || item.name}`}
                 >
                   <ExternalLink className="h-3 w-3 mr-1" />
                   Learn More

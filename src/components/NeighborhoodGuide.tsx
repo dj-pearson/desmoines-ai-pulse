@@ -280,7 +280,7 @@ export default function NeighborhoodGuide({
                     <p className="text-sm mb-2">{attraction.description?.slice(0, 100)}...</p>
                     <div className="flex justify-between items-center">
                       <Badge variant="outline">{attraction.category}</Badge>
-                      <Button size="sm" variant="outline">
+                      <Button size="sm" variant="outline" aria-label={`Learn more about ${attraction.name}`}>
                         <ExternalLink className="h-3 w-3 mr-1" />
                         Learn More
                       </Button>
