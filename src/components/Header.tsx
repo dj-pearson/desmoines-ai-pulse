@@ -111,6 +111,7 @@ export default function Header() {
           <Link
             to="/"
             className="flex items-center smooth-transition hover:opacity-80"
+            aria-label="Des Moines Insider Home"
           >
             <img
               src="/DMI-Logo-Header.png"
@@ -120,6 +121,12 @@ export default function Header() {
                 fetchPriority: "high",
               } as React.ImgHTMLAttributes<HTMLImageElement>)}
               decoding="async"
+              width="auto"
+              height="40"
+              onError={(e) => {
+                console.error('Logo failed to load:', e);
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
             />
           </Link>
