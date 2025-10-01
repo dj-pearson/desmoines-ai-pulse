@@ -31,7 +31,6 @@ export default defineConfig(({ command }) => ({
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
-    cssMinify: 'lightningcss',
     minify: 'terser',
     target: 'es2020',
     terserOptions: {
@@ -39,15 +38,10 @@ export default defineConfig(({ command }) => ({
         drop_console: true,
         drop_debugger: true,
         pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
-        passes: 3,
-        unsafe: true,
-        unsafe_comps: true,
-        unsafe_math: true,
-        unsafe_methods: true,
+        passes: 2,
       },
       mangle: {
         safari10: true,
-        toplevel: true,
       },
       format: {
         comments: false
@@ -56,93 +50,48 @@ export default defineConfig(({ command }) => ({
     rollupOptions: {
       treeshake: {
         preset: 'recommended',
-        moduleSideEffects: false,
-        propertyReadSideEffects: false,
-        unknownGlobalSideEffects: false,
       },
       output: {
         manualChunks: (id) => {
-          // Aggressive code splitting for smaller initial bundles
+          // Simpler code splitting to avoid empty chunks
           if (id.includes('node_modules')) {
-            // Core React (must load first) - keep minimal
-            if (id.includes('react/') && !id.includes('react-dom')) {
-              return 'react';
-            }
-            if (id.includes('react-dom/')) {
-              return 'react-dom';
-            }
-            if (id.includes('scheduler')) {
-              return 'react';
+            // Core React bundle
+            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
+              return 'vendor-react';
             }
             
-            // Router (defer)
+            // Router bundle
             if (id.includes('react-router')) {
-              return 'router';
+              return 'vendor-router';
             }
             
-            // Query (defer)
+            // Query bundle
             if (id.includes('@tanstack')) {
-              return 'query';
+              return 'vendor-query';
             }
             
-            // Supabase (defer)
+            // Supabase bundle
             if (id.includes('@supabase')) {
-              return 'supabase';
+              return 'vendor-supabase';
             }
             
-            // Date libraries (defer, heavy)
-            if (id.includes('date-fns')) {
-              return 'date';
-            }
-            
-            // Form libraries (defer)
-            if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
-              return 'forms';
-            }
-            
-            // UI components - split by component for granular loading
-            if (id.includes('@radix-ui/react-dialog')) {
-              return 'ui-dialog';
-            }
-            if (id.includes('@radix-ui/react-select')) {
-              return 'ui-select';
-            }
-            if (id.includes('@radix-ui/react-popover')) {
-              return 'ui-popover';
-            }
+            // UI components bundle
             if (id.includes('@radix-ui')) {
-              // Group remaining radix components
-              return 'ui-radix';
+              return 'vendor-ui';
             }
             
-            // Icons (defer)
+            // Icons bundle
             if (id.includes('lucide-react')) {
-              return 'icons';
+              return 'vendor-icons';
             }
             
-            // Map libraries (very heavy, defer)
-            if (id.includes('leaflet') || id.includes('react-leaflet')) {
-              return 'maps';
+            // Date utilities bundle
+            if (id.includes('date-fns')) {
+              return 'vendor-date';
             }
             
-            // 3D libraries (very heavy, defer)
-            if (id.includes('three') || id.includes('@react-three')) {
-              return '3d';
-            }
-            
-            // Charts (defer)
-            if (id.includes('recharts')) {
-              return 'charts';
-            }
-            
-            // Other small vendors can be grouped
-            return 'vendor';
-          }
-          
-          // Split app code by route
-          if (id.includes('src/pages/')) {
-            const pageName = id.split('src/pages/')[1].split('.')[0];
-            return `page-${pageName.toLowerCase()}`;
+            // Other vendors
+            return 'vendor-other';
           }
         },
         assetFileNames: (assetInfo) => {
@@ -155,6 +104,6 @@ export default defineConfig(({ command }) => ({
         entryFileNames: "assets/[name]-[hash].js",
       },
     },
-    chunkSizeWarningLimit: 400,
+    chunkSizeWarningLimit: 600,
   },
 }));

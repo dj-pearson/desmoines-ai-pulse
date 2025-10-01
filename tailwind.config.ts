@@ -2,25 +2,20 @@ import type { Config } from "tailwindcss";
 
 export default {
 	darkMode: ["class"],
-	content: {
-		files: [
-			"./pages/**/*.{ts,tsx}",
-			"./components/**/*.{ts,tsx}",
-			"./app/**/*.{ts,tsx}",
-			"./src/**/*.{ts,tsx}",
-		],
-		// Remove unused CSS more aggressively
-		options: {
-			safelist: [
-				// Preserve dynamic classes that might be generated
-				'bg-[#DC143C]',
-				'bg-[#FFD700]',
-				'bg-[#0a0a1a]',
-				'bg-[#1a1a2e]',
-				'bg-[#2D1B69]',
-			],
-		},
-	},
+	content: [
+		"./pages/**/*.{ts,tsx}",
+		"./components/**/*.{ts,tsx}",
+		"./app/**/*.{ts,tsx}",
+		"./src/**/*.{ts,tsx}",
+	],
+	safelist: [
+		// Preserve dynamic classes
+		'bg-[#DC143C]',
+		'bg-[#FFD700]',
+		'bg-[#0a0a1a]',
+		'bg-[#1a1a2e]',
+		'bg-[#2D1B69]',
+	],
 	prefix: "",
 	theme: {
 		container: {
