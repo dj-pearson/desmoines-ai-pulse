@@ -59,22 +59,27 @@ const InteractiveButton = React.forwardRef<HTMLButtonElement, InteractiveButtonP
       // Add ripple effect for certain variants
       if (variant === "default" || variant === "destructive") {
         const button = e.currentTarget
-        const rect = button.getBoundingClientRect()
-        const ripple = document.createElement("span")
-        const size = Math.max(rect.width, rect.height)
-        const x = e.clientX - rect.left - size / 2
-        const y = e.clientY - rect.top - size / 2
+        const clientX = e.clientX
+        const clientY = e.clientY
         
-        ripple.style.width = ripple.style.height = size + "px"
-        ripple.style.left = x + "px"
-        ripple.style.top = y + "px"
-        ripple.classList.add("absolute", "animate-ripple", "bg-white/30", "rounded-full", "pointer-events-none")
-        
-        button.appendChild(ripple)
-        
-        setTimeout(() => {
-          ripple.remove()
-        }, 600)
+        // Use requestAnimationFrame to avoid forced reflow
+        requestAnimationFrame(() => {
+          const rect = button.getBoundingClientRect()
+          const ripple = document.createElement("span")
+          const size = Math.max(rect.width, rect.height)
+          const x = clientX - rect.left - size / 2
+          const y = clientY - rect.top - size / 2
+          
+          // Batch DOM writes together
+          ripple.style.cssText = `width: ${size}px; height: ${size}px; left: ${x}px; top: ${y}px;`
+          ripple.classList.add("absolute", "animate-ripple", "bg-white/30", "rounded-full", "pointer-events-none")
+          
+          button.appendChild(ripple)
+          
+          setTimeout(() => {
+            ripple.remove()
+          }, 600)
+        })
       }
       
       onClick?.(e)
