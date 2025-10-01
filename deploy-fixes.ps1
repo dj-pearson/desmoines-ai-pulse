@@ -6,7 +6,7 @@ Write-Host ""
 
 # Add all changes
 Write-Host "Adding changes..." -ForegroundColor Yellow
-git add public/_headers public/_redirects src/components/Header.tsx
+git add public/_headers public/_redirects public/sw.js src/components/Header.tsx
 
 # Show what will be committed
 Write-Host ""
@@ -20,9 +20,11 @@ git commit -m "Fix: Resolve blank page and lazy loading errors
 
 - Update CSP headers to allow Google Fonts and Tag Manager
 - Fix _redirects to serve static assets correctly (prevents JS chunks from redirecting to HTML)
+- Update service worker to skip caching CSP-violating resources (v1 -> v2)
 - Update header logo to use DMI-Logo-Header.png
 - Fixes 'SyntaxError: expected expression, got <' errors
-- Fixes Content Security Policy violations"
+- Fixes Content Security Policy violations
+- Fixes service worker fetch errors"
 
 # Push to origin
 Write-Host ""
