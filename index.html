@@ -323,16 +323,11 @@
 
   <body>
     <div id="root"></div>
-    <script>
-      // Minimal cache management (defer full cleanup)
-      if ("serviceWorker" in navigator && window.location.hostname === "localhost") {
-        setTimeout(() => {
-          navigator.serviceWorker.getRegistrations().then((regs) => {
-            regs.forEach((reg) => reg.unregister());
-          });
-        }, 100);
-      }
-    </script>
+    
+    <!-- Preload critical JavaScript for faster TTI -->
+    <link rel="modulepreload" href="/src/main.tsx" />
+    <link rel="modulepreload" href="/src/App.tsx" />
+    
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

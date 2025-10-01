@@ -7,8 +7,9 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 
 import App from './App.tsx';
 import './index.css';
+import { initializeOnInteraction } from './lib/lazyInit';
 
-// Initialize query client with optimized settings for performance
+// Optimized query client with minimal configuration for faster TTI
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -21,67 +22,35 @@ const queryClient = new QueryClient({
   },
 });
 
-// Ensure DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeApp);
-} else {
-  initializeApp();
+// Fast initial render for optimal TTI
+function initializeApp() {
+  const rootElement = document.getElementById("root");
+  if (!rootElement) {
+    throw new Error("Root element not found");
+  }
+
+  const root = createRoot(rootElement);
+  
+  // Render immediately - this is the critical path
+  root.render(
+    <StrictMode>
+      <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
+        <HelmetProvider>
+          <QueryClientProvider client={queryClient}>
+            <App />
+          </QueryClientProvider>
+        </HelmetProvider>
+      </ThemeProvider>
+    </StrictMode>
+  );
+
+  // Defer all non-critical features until after interaction
+  initializeOnInteraction();
 }
 
-function initializeApp() {
-  try {
-    // Create and render React app immediately for better FID
-    const rootElement = document.getElementById("root");
-    if (!rootElement) {
-      throw new Error("Root element not found");
-    }
-
-    const root = createRoot(rootElement);
-    
-    root.render(
-      <StrictMode>
-        <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
-          <HelmetProvider>
-            <QueryClientProvider client={queryClient}>
-              <App />
-            </QueryClientProvider>
-          </HelmetProvider>
-        </ThemeProvider>
-      </StrictMode>
-    );
-
-    // Defer non-critical initialization using idle callback
-    const initNonCritical = () => {
-      // Initialize performance features
-      import('./lib/performance').then(({ registerServiceWorker, addResourceHints, trackWebVitals }) => {
-        registerServiceWorker();
-        addResourceHints();
-        trackWebVitals();
-      });
-
-      // Initialize error suppression
-      import('./lib/errorSuppression').then(({ suppressSESWarnings, handleGitHubPagesRouting, initializeRuntimeErrorHandling }) => {
-        suppressSESWarnings();
-        handleGitHubPagesRouting();
-        initializeRuntimeErrorHandling();
-      });
-    };
-
-    // Use requestIdleCallback for non-critical tasks
-    if ('requestIdleCallback' in window) {
-      requestIdleCallback(initNonCritical, { timeout: 2000 });
-    } else {
-      setTimeout(initNonCritical, 1);
-    }
-  } catch (error) {
-    console.error('Failed to initialize app:', error);
-    // Show a basic error message
-    document.body.innerHTML = `
-      <div style="padding: 20px; text-align: center; font-family: system-ui;">
-        <h1>Loading Error</h1>
-        <p>The application failed to load. Please refresh the page.</p>
-        <button onclick="location.reload()">Refresh</button>
-      </div>
-    `;
-  }
+// Start as soon as DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeApp, { once: true });
+} else {
+  initializeApp();
 }
