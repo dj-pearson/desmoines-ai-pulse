@@ -27,7 +27,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   build: {
-    sourcemap: false,
+    sourcemap: true,
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
