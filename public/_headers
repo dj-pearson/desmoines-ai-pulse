@@ -42,10 +42,12 @@
   Content-Type: text/javascript; charset=utf-8
   Cache-Control: public, max-age=31536000, immutable
   
-# CSS Files
+# CSS Files - Preload with high priority
 /assets/*.css
   Content-Type: text/css; charset=utf-8
   Cache-Control: public, max-age=31536000, immutable
+  X-Content-Type-Options: nosniff
+  Link: </assets/*.css>; rel=preload; as=style
   
 # Font Files
 /*.woff2

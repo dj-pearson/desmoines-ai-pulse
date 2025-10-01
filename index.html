@@ -34,6 +34,11 @@
     <meta name="color-scheme" content="light dark" />
     <meta name="mobile-web-app-capable" content="yes" />
     
+    <!-- Critical inline CSS for above-the-fold content -->
+    <style>
+      *{border-color:hsl(var(--border))}body{background-color:hsl(var(--background));color:hsl(var(--foreground));font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}:root{--background:0 0% 100%;--foreground:222.2 84% 4.9%;--primary:214 100% 35%;--primary-foreground:0 0% 100%;--border:214.3 31.8% 91.4%;--radius:0.75rem}
+    </style>
+
     <!-- Enhanced performance optimizations per SEO research -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -42,7 +47,8 @@
     
     <!-- Critical resource preloading for LCP optimization -->
     <link rel="preload" as="image" href="/DMI-Logo-Header.png" media="(min-width: 768px)" />
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" />
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'" />
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" /></noscript>
     
     <!-- Mobile-first responsive images -->
     <link rel="prefetch" href="/DMI-Logo-Header-mobile.png" media="(max-width: 767px)" />

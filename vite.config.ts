@@ -21,10 +21,16 @@ export default defineConfig(({ command }) => ({
     sourcemap: false,
     outDir: "dist",
     assetsDir: "assets",
+    cssCodeSplit: true,
     rollupOptions: {
       output: {
-        manualChunks: undefined, // Disable manual chunking to avoid 404s
-        assetFileNames: "assets/[name]-[hash][extname]",
+        manualChunks: undefined,
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name?.endsWith('.css')) {
+            return 'assets/[name]-[hash][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
+        },
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",
       },
