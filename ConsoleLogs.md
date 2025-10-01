@@ -6,3 +6,4 @@ at index.mjs:1:481
 (anonymous) @ index.mjs:1
 (index):1 Unchecked runtime.lastError: The message port closed before a response was received.
 (index):1 The resource https://desmoinesinsider.com/DMI-Logo-Header.png was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
+(index):1 The resource https://desmoinesinsider.com/DMI-Logo-Header.png was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
