@@ -1,13 +1,12 @@
-
 import { StrictMode } from "react";
-import { createRoot } from 'react-dom/client';
+import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-import App from './App';
-import './index.css';
-import { initializeOnInteraction } from './lib/lazyInit';
+import App from "./App";
+import "./index.css";
+import { initializeOnInteraction } from "./lib/lazyInit";
 
 // Optimized query client with minimal configuration for faster TTI
 const queryClient = new QueryClient({
@@ -17,7 +16,7 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 60 * 1000,
       gcTime: 5 * 60 * 1000,
-      networkMode: 'online',
+      networkMode: "online",
     },
   },
 });
@@ -30,7 +29,7 @@ function initializeApp() {
   }
 
   const root = createRoot(rootElement);
-  
+
   // Render immediately - this is the critical path
   root.render(
     <StrictMode>
@@ -49,8 +48,8 @@ function initializeApp() {
 }
 
 // Start as soon as DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeApp, { once: true });
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initializeApp, { once: true });
 } else {
   initializeApp();
 }

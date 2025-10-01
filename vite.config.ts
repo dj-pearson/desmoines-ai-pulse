@@ -15,11 +15,14 @@ export default defineConfig(({ command }) => ({
     react({
       babel: {
         plugins: [
-          ['babel-plugin-react-remove-properties', { properties: ['data-testid'] }]
-        ]
-      }
-    }), 
-    command === "serve" && componentTagger()
+          [
+            "babel-plugin-react-remove-properties",
+            { properties: ["data-testid"] },
+          ],
+        ],
+      },
+    }),
+    command === "serve" && componentTagger(),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -31,82 +34,91 @@ export default defineConfig(({ command }) => ({
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
-    minify: 'terser',
-    target: 'es2020',
+    minify: "terser",
+    target: "es2020",
     terserOptions: {
       compress: {
         drop_console: true,
         drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn'],
+        pure_funcs: [
+          "console.log",
+          "console.info",
+          "console.debug",
+          "console.warn",
+        ],
         passes: 2,
       },
       mangle: {
         safari10: true,
       },
       format: {
-        comments: false
-      }
+        comments: false,
+      },
     },
     rollupOptions: {
       treeshake: {
-        preset: 'recommended',
+        preset: "recommended",
       },
       output: {
         manualChunks: (id) => {
           // Simpler code splitting to avoid empty chunks
-          if (id.includes('node_modules')) {
+          if (id.includes("node_modules")) {
             // Core React bundle
-            if (id.includes('react') || id.includes('react-dom') || id.includes('scheduler')) {
-              return 'vendor-react';
+            if (
+              id.includes("react") ||
+              id.includes("react-dom") ||
+              id.includes("scheduler")
+            ) {
+              return "vendor-react";
             }
-            
+
             // Router bundle
-            if (id.includes('react-router')) {
-              return 'vendor-router';
+            if (id.includes("react-router")) {
+              return "vendor-router";
             }
-            
+
             // Query bundle
-            if (id.includes('@tanstack')) {
-              return 'vendor-query';
+            if (id.includes("@tanstack")) {
+              return "vendor-query";
             }
-            
+
             // Supabase bundle
-            if (id.includes('@supabase')) {
-              return 'vendor-supabase';
+            if (id.includes("@supabase")) {
+              return "vendor-supabase";
             }
-            
+
             // UI components bundle
-            if (id.includes('@radix-ui')) {
-              return 'vendor-ui';
+            if (id.includes("@radix-ui")) {
+              return "vendor-ui";
             }
-            
+
             // Icons bundle
-            if (id.includes('lucide-react')) {
-              return 'vendor-icons';
+            if (id.includes("lucide-react")) {
+              return "vendor-icons";
             }
-            
+
             // Date utilities bundle
-            if (id.includes('date-fns')) {
-              return 'vendor-date';
+            if (id.includes("date-fns")) {
+              return "vendor-date";
             }
-            
+
             // Other vendors
-            return 'vendor-other';
+            return "vendor-other";
           }
         },
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name?.endsWith('.css')) {
-            return 'assets/[name]-[hash].css';
+          if (assetInfo.name?.endsWith(".css")) {
+            return "assets/[name]-[hash].css";
           }
-          return 'assets/[name]-[hash][extname]';
+          return "assets/[name]-[hash][extname]";
         },
         chunkFileNames: (chunkInfo) => {
           // Ensure all JS chunks have .js extension, not .tsx
-          return 'assets/[name]-[hash].js';
+          return "assets/[name]-[hash].js";
         },
         entryFileNames: (chunkInfo) => {
           // Ensure all entry files have .js extension, not .tsx
-          return 'assets/[name]-[hash].js';
+          return "assets/[name]-[hash].js";
         },
       },
     },
