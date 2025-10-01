@@ -1,8 +1,8 @@
 // Service Worker for Des Moines Insider
-const CACHE_NAME = 'dmi-cache-v2';
-const STATIC_CACHE = 'dmi-static-v2';
-const API_CACHE = 'dmi-api-v2';
-const IMAGE_CACHE = 'dmi-images-v2';
+const CACHE_NAME = 'dmi-cache-v3';
+const STATIC_CACHE = 'dmi-static-v3';
+const API_CACHE = 'dmi-api-v3';
+const IMAGE_CACHE = 'dmi-images-v3';
 
 // Assets to cache immediately
 const STATIC_ASSETS = [
