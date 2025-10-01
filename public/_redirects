@@ -1,3 +1,22 @@
+# Static assets should be served directly (no redirect)
+/assets/* 200
+/*.js 200
+/*.css 200
+/*.png 200
+/*.jpg 200
+/*.jpeg 200
+/*.gif 200
+/*.svg 200
+/*.webp 200
+/*.ico 200
+/*.woff 200
+/*.woff2 200
+/*.ttf 200
+/manifest.json 200
+/robots.txt 200
+/sitemap*.xml 200
+/sw.js 200
+
 # Specific SPA routes to avoid infinite loops
 /restaurants/* /index.html 200
 /events/* /index.html 200
@@ -19,4 +38,7 @@
 /playgrounds /index.html 200
 /attractions /index.html 200
 /neighborhoods /index.html 200
-/articles /index.html 200 
+/articles /index.html 200
+
+# Catch-all for SPA (must be last)
+/* /index.html 200 
