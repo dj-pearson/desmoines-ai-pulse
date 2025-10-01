@@ -31,6 +31,7 @@ export default defineConfig(({ command }) => ({
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
+    cssMinify: 'lightningcss',
     minify: 'terser',
     terserOptions: {
       compress: {
