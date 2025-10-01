@@ -99,8 +99,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // HTML pages - Network First with cache fallback
-  if (request.mode === 'navigate') {
+  // HTML pages - ALWAYS get fresh HTML (critical for SPA with hashed assets)
+  if (request.mode === 'navigate' || request.destination === 'document' || url.pathname.endsWith('.html')) {
     event.respondWith(networkFirstForNavigation(request));
     return;
   }
@@ -199,12 +199,14 @@ async function networkFirstWithCache(request, cacheName) {
   }
 }
 
-// Network First for Navigation
+// Network First for Navigation - ALWAYS bypass cache for HTML
 async function networkFirstForNavigation(request) {
   try {
-    return await fetch(request);
+    // CRITICAL: Always fetch fresh HTML to get correct asset hashes
+    const response = await fetch(request, { cache: 'no-cache' });
+    return response;
   } catch (error) {
-    // Return cached index.html for SPA routing
+    // Only if completely offline, use cached HTML
     const cache = await caches.open(STATIC_CACHE);
     const cachedResponse = await cache.match('/index.html');
     return cachedResponse || new Response('Offline', { status: 503 });
