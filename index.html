@@ -72,19 +72,29 @@
     />
     <link rel="manifest" href="/site.webmanifest" />
 
-    <!-- Google tag (gtag.js) -->
-    <script
-      async
-      src="https://www.googletagmanager.com/gtag/js?id=G-XGQFFP9BHZ"
-    ></script>
+    <!-- Defer Google Analytics to reduce FID -->
     <script>
       window.dataLayer = window.dataLayer || [];
-      function gtag() {
-        dataLayer.push(arguments);
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-XGQFFP9BHZ');
+      
+      // Load GA after page is interactive
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => {
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = 'https://www.googletagmanager.com/gtag/js?id=G-XGQFFP9BHZ';
+          document.head.appendChild(script);
+        });
+      } else {
+        setTimeout(() => {
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = 'https://www.googletagmanager.com/gtag/js?id=G-XGQFFP9BHZ';
+          document.head.appendChild(script);
+        }, 2000);
       }
-      gtag("js", new Date());
-
-      gtag("config", "G-XGQFFP9BHZ");
     </script>
 
     <title>

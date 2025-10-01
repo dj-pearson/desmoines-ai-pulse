@@ -29,21 +29,7 @@ if (document.readyState === 'loading') {
 
 function initializeApp() {
   try {
-    // Initialize basic performance features first
-    import('./lib/performance').then(({ registerServiceWorker, addResourceHints, trackWebVitals }) => {
-      registerServiceWorker();
-      addResourceHints();
-      trackWebVitals();
-    });
-
-    // Initialize error suppression
-    import('./lib/errorSuppression').then(({ suppressSESWarnings, handleGitHubPagesRouting, initializeRuntimeErrorHandling }) => {
-      suppressSESWarnings();
-      handleGitHubPagesRouting();
-      initializeRuntimeErrorHandling();
-    });
-
-    // Create and render React app
+    // Create and render React app immediately for better FID
     const rootElement = document.getElementById("root");
     if (!rootElement) {
       throw new Error("Root element not found");
@@ -62,6 +48,30 @@ function initializeApp() {
         </ThemeProvider>
       </StrictMode>
     );
+
+    // Defer non-critical initialization using idle callback
+    const initNonCritical = () => {
+      // Initialize performance features
+      import('./lib/performance').then(({ registerServiceWorker, addResourceHints, trackWebVitals }) => {
+        registerServiceWorker();
+        addResourceHints();
+        trackWebVitals();
+      });
+
+      // Initialize error suppression
+      import('./lib/errorSuppression').then(({ suppressSESWarnings, handleGitHubPagesRouting, initializeRuntimeErrorHandling }) => {
+        suppressSESWarnings();
+        handleGitHubPagesRouting();
+        initializeRuntimeErrorHandling();
+      });
+    };
+
+    // Use requestIdleCallback for non-critical tasks
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(initNonCritical, { timeout: 2000 });
+    } else {
+      setTimeout(initNonCritical, 1);
+    }
   } catch (error) {
     console.error('Failed to initialize app:', error);
     // Show a basic error message
