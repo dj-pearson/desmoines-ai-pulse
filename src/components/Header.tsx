@@ -112,16 +112,30 @@ export default function Header() {
             to="/"
             className="flex items-center smooth-transition hover:opacity-80"
           >
-            <img
-              src="/DMI-Logo-Header.png"
-              alt="Des Moines Insider"
-              loading="eager"
-              {...({
-                fetchPriority: "high",
-              } as React.ImgHTMLAttributes<HTMLImageElement>)}
-              decoding="async"
-              className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
-            />
+            <picture>
+              <source 
+                srcSet="/DMI-Logo-Header-sm.webp" 
+                type="image/webp"
+                media="(max-width: 768px)"
+              />
+              <source 
+                srcSet="/DMI-Logo-Header-md.webp" 
+                type="image/webp"
+                media="(min-width: 769px)"
+              />
+              <img
+                src="/DMI-Logo-Header.png"
+                alt="Des Moines Insider"
+                width="120"
+                height="36"
+                loading="eager"
+                {...({
+                  fetchPriority: "high",
+                } as React.ImgHTMLAttributes<HTMLImageElement>)}
+                decoding="async"
+                className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
+              />
+            </picture>
           </Link>
 
           {/* Desktop Navigation */}
