@@ -96,12 +96,18 @@ export default defineConfig(({ command }) => ({
         },
         assetFileNames: (assetInfo) => {
           if (assetInfo.name?.endsWith('.css')) {
-            return 'assets/[name]-[hash][extname]';
+            return 'assets/[name]-[hash].css';
           }
           return 'assets/[name]-[hash][extname]';
         },
-        chunkFileNames: "assets/[name]-[hash].js",
-        entryFileNames: "assets/[name]-[hash].js",
+        chunkFileNames: (chunkInfo) => {
+          // Ensure all JS chunks have .js extension, not .tsx
+          return 'assets/[name]-[hash].js';
+        },
+        entryFileNames: (chunkInfo) => {
+          // Ensure all entry files have .js extension, not .tsx
+          return 'assets/[name]-[hash].js';
+        },
       },
     },
     chunkSizeWarningLimit: 600,

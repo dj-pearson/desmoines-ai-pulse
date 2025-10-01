@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
 
-import App from './App.tsx';
+import App from './App';
 import './index.css';
 import { initializeOnInteraction } from './lib/lazyInit';
 
