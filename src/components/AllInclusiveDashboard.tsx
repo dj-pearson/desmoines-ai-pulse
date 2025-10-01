@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurantOpenings } from "@/hooks/useSupabase";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -117,21 +117,24 @@ export default function AllInclusiveDashboard({
   onViewEventDetails,
   filters,
 }: AllInclusiveDashboardProps) {
-  // Get base data without filtering first
+  const [activeTab, setActiveTab] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 9;
+  const { trackEvent } = useAnalytics();
+  const sectionRef = useRef<HTMLDivElement>(null);
+
+  // Load events first (critical for homepage)
   const { events: allEvents, isLoading: eventsLoading } = useEvents({
     limit: 100,
   });
+
+  // Load other data sources - React Query will handle caching
   const { data: allRestaurantOpenings = [], isLoading: restaurantsLoading } =
     useRestaurantOpenings();
   const { attractions: allAttractions, isLoading: attractionsLoading } =
     useAttractions({ limit: 100 });
   const { playgrounds: allPlaygrounds, isLoading: playgroundsLoading } =
     usePlaygrounds({ limit: 100 });
-
-  const [activeTab, setActiveTab] = useState("all");
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 9;
-  const { trackEvent } = useAnalytics();
 
   // Comprehensive filtering function
   const applyFilters = (
@@ -706,7 +709,7 @@ export default function AllInclusiveDashboard({
   };
 
   return (
-    <section className="py-8 md:py-16 bg-muted/30">
+    <section ref={sectionRef} className="py-8 md:py-16 bg-muted/30">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-8 md:mb-12">
           <h2 className="text-mobile-title md:text-3xl font-bold text-foreground mb-3 md:mb-4 mobile-safe-text">
