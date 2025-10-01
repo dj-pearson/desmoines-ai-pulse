@@ -113,10 +113,8 @@ export default function Header() {
             className="flex items-center smooth-transition hover:opacity-80"
           >
             <img
-              src="/DMI-Logo-Header.png"
+              src="/DMI-Logo2.png"
               alt="Des Moines Insider"
-              width="120"
-              height="36"
               loading="eager"
               {...({
                 fetchPriority: "high",
