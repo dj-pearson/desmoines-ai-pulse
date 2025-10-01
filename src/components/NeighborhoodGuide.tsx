@@ -282,7 +282,8 @@ export default function NeighborhoodGuide({
                       <Badge variant="outline">{attraction.category}</Badge>
                       <Button size="sm" variant="outline" aria-label={`Learn more about ${attraction.name}`}>
                         <ExternalLink className="h-3 w-3 mr-1" />
-                        Learn More
+                        <span aria-hidden="true">Learn More</span>
+                        <span className="sr-only"> about {attraction.name}</span>
                       </Button>
                     </div>
                   </CardContent>

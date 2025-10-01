@@ -699,7 +699,8 @@ export default function AllInclusiveDashboard({
                   aria-label={`Learn more about ${item.title || item.name}`}
                 >
                   <ExternalLink className="h-3 w-3 mr-1" />
-                  Learn More
+                  <span aria-hidden="true">Learn More</span>
+                  <span className="sr-only"> about {item.title || item.name}</span>
                 </a>
               </Button>
             )}
