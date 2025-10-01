@@ -266,6 +266,21 @@
     />
     <link rel="manifest" href="/site.webmanifest" />
 
+    <!-- CRITICAL: Force clear all service worker caches -->
+    <script>
+      // Unregister ALL service workers and clear ALL caches immediately
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          registrations.forEach(reg => reg.unregister());
+        });
+      }
+      if ('caches' in window) {
+        caches.keys().then(cacheNames => {
+          cacheNames.forEach(cacheName => caches.delete(cacheName));
+        });
+      }
+    </script>
+
     <!-- Defer Google Analytics to reduce FID -->
     <script>
       window.dataLayer = window.dataLayer || [];

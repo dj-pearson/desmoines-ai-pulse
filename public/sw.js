@@ -1,8 +1,9 @@
 // Service Worker for Des Moines Insider
-const CACHE_NAME = 'dmi-cache-v3';
-const STATIC_CACHE = 'dmi-static-v3';
-const API_CACHE = 'dmi-api-v3';
-const IMAGE_CACHE = 'dmi-images-v3';
+// CRITICAL: Increment version on every deploy to force cache clear
+const CACHE_NAME = 'dmi-cache-v4';
+const STATIC_CACHE = 'dmi-static-v4';
+const API_CACHE = 'dmi-api-v4';
+const IMAGE_CACHE = 'dmi-images-v4';
 
 // Assets to cache immediately
 const STATIC_ASSETS = [
@@ -102,6 +103,12 @@ self.addEventListener('fetch', (event) => {
   // HTML pages - ALWAYS get fresh HTML (critical for SPA with hashed assets)
   if (request.mode === 'navigate' || request.destination === 'document' || url.pathname.endsWith('.html')) {
     event.respondWith(networkFirstForNavigation(request));
+    return;
+  }
+
+  // JavaScript and CSS assets - ALWAYS fetch fresh (no cache for now)
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.mjs') || url.pathname.endsWith('.css')) {
+    event.respondWith(fetch(request, { cache: 'no-cache' }));
     return;
   }
 
