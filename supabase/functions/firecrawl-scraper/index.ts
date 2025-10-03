@@ -74,9 +74,10 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 
     // Strategy 1: Look for any link with class="action-item" and text containing "Visit Website"
     // This regex is flexible with attribute order
-    const actionItemPattern = /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
+    const actionItemPattern =
+      /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
     const actionItemLinks = html.matchAll(actionItemPattern);
-    
+
     for (const linkMatch of actionItemLinks) {
       const fullLink = linkMatch[0];
       // Check if it contains "Visit Website" text
@@ -85,7 +86,11 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
         const hrefMatch = fullLink.match(/href=["']([^"']+)["']/);
         if (hrefMatch && hrefMatch[1]) {
           const url = hrefMatch[1];
-          if (url.startsWith("http") && !url.includes("catchdesmoines.com") && !url.startsWith("mailto:")) {
+          if (
+            url.startsWith("http") &&
+            !url.includes("catchdesmoines.com") &&
+            !url.startsWith("mailto:")
+          ) {
             console.log(`✅ Found Visit Website URL: ${url}`);
             return url;
           }
@@ -104,7 +109,11 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 
       for (const link of links) {
         const url = link[1];
-        if (url.startsWith("http") && !url.includes("catchdesmoines.com") && !url.startsWith("mailto:")) {
+        if (
+          url.startsWith("http") &&
+          !url.includes("catchdesmoines.com") &&
+          !url.startsWith("mailto:")
+        ) {
           console.log(`✅ Found in bottom-actions: ${url}`);
           return url;
         }
@@ -720,7 +729,10 @@ Return empty array [] if no competitive content found.`,
           if (eventDetailUrl) {
             try {
               const visitWebsiteUrl =
-                await extractCatchDesMoinesVisitWebsiteUrl(eventDetailUrl, firecrawlApiKey);
+                await extractCatchDesMoinesVisitWebsiteUrl(
+                  eventDetailUrl,
+                  firecrawlApiKey
+                );
               if (visitWebsiteUrl) {
                 finalSourceUrl = visitWebsiteUrl;
                 console.log(
