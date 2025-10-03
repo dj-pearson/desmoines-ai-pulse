@@ -1,8 +1,15 @@
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { fromZonedTime, utcToZonedTime, format } from "https://esm.sh/date-fns-tz@2.0.0?deps=date-fns@2.30.0";
-import { format as dateFnsFormat, parseISO } from "https://esm.sh/date-fns@2.30.0";
+import {
+  fromZonedTime,
+  utcToZonedTime,
+  format,
+} from "https://esm.sh/date-fns-tz@2.0.0?deps=date-fns@2.30.0";
+import {
+  format as dateFnsFormat,
+  parseISO,
+} from "https://esm.sh/date-fns@2.30.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,12 +97,15 @@ function findBestEventUrl(originalUrl: string): string[] {
 }
 
 // Try to find API endpoints or JSON data in the page
-async function findApiEndpoints(html: string, baseUrl: string): Promise<string[]> {
+async function findApiEndpoints(
+  html: string,
+  baseUrl: string
+): Promise<string[]> {
   const apiEndpoints = [];
-  
+
   // Look for common API patterns in script tags
   const scriptMatches = html.match(/<script[^>]*>([\s\S]*?)<\/script>/gi) || [];
-  
+
   for (const script of scriptMatches) {
     // Look for API endpoints in script content
     const apiPatterns = [
@@ -105,21 +115,21 @@ async function findApiEndpoints(html: string, baseUrl: string): Promise<string[]
       /fetch\s*\(\s*["']([^"']*events?[^"']*?)["']/gi,
       /ajax\s*\(\s*["']([^"']*events?[^"']*?)["']/gi,
     ];
-    
+
     for (const pattern of apiPatterns) {
       let match;
       while ((match = pattern.exec(script)) !== null) {
         let endpoint = match[1];
-        if (endpoint.startsWith('/')) {
+        if (endpoint.startsWith("/")) {
           endpoint = new URL(endpoint, baseUrl).href;
         }
-        if (endpoint.startsWith('http')) {
+        if (endpoint.startsWith("http")) {
           apiEndpoints.push(endpoint);
         }
       }
     }
   }
-  
+
   // Look for data attributes or inline JSON
   const dataMatches = [
     ...html.matchAll(/data-events=["']([^"']+)["']/gi),
@@ -127,24 +137,145 @@ async function findApiEndpoints(html: string, baseUrl: string): Promise<string[]
     ...html.matchAll(/window\.__INITIAL_STATE__\s*=\s*(\{.*?\});/gi),
     ...html.matchAll(/var\s+events\s*=\s*(\[.*?\]);/gi),
   ];
-  
+
   return [...new Set(apiEndpoints)];
+}
+
+// Extract the "Visit Website" URL from a CatchDesMoines event page
+async function extractCatchDesMoinesVisitWebsiteUrl(
+  eventUrl: string
+): Promise<string | null> {
+  try {
+    console.log(`🔍 Extracting Visit Website URL from: ${eventUrl}`);
+
+    const response = await fetch(eventUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        Connection: "keep-alive",
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+      console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
+      return null;
+    }
+
+    const html = await response.text();
+
+    // Strategy 1: Look for the "Visit Website" button specifically in bottom-actions
+    // Pattern: <a href="URL" target="_blank" class="action-item">Visit Website</a>
+    const visitWebsitePattern =
+      /<a\s+href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/i;
+    let match = html.match(visitWebsitePattern);
+
+    if (match && match[1]) {
+      const url = match[1];
+      if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
+        console.log(`✅ Found via action-item button: ${url}`);
+        return url;
+      }
+    }
+
+    // Strategy 2: Look for any link with "Visit Website" text
+    const visitLinkPattern =
+      /<a\s+href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/gi;
+    const allMatches = html.matchAll(visitLinkPattern);
+
+    for (const linkMatch of allMatches) {
+      const url = linkMatch[1];
+      if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
+        console.log(`✅ Found via Visit Website link: ${url}`);
+        return url;
+      }
+    }
+
+    // Strategy 3: Look in the bottom-actions div for any external link
+    const bottomActionsPattern =
+      /<div\s+class=["']bottom-actions["'][^>]*>([\s\S]*?)<\/div>/i;
+    match = html.match(bottomActionsPattern);
+
+    if (match) {
+      const bottomActionsHtml = match[1];
+      const linkPattern = /<a\s+href=["']([^"']+)["']/gi;
+      const links = bottomActionsHtml.matchAll(linkPattern);
+
+      for (const link of links) {
+        const url = link[1];
+        if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
+          console.log(`✅ Found in bottom-actions: ${url}`);
+          return url;
+        }
+      }
+    }
+
+    // Strategy 4: Universal fallback - find first external link with "visit" or "website" indicators
+    const excludeDomains = [
+      "catchdesmoines.com",
+      "facebook.com/catchdesmoines",
+      "twitter.com/catchdesmoines",
+      "instagram.com/catchdesmoines",
+      "google.com",
+      "maps.google.com",
+      "simpleviewcrm.com",
+      "simpleviewinc.com",
+    ];
+
+    const allLinkPattern =
+      /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    const allLinks = html.matchAll(allLinkPattern);
+
+    for (const linkMatch of allLinks) {
+      const url = linkMatch[1];
+      const linkText = linkMatch[2].toLowerCase();
+
+      if (url.startsWith("http")) {
+        const shouldExclude = excludeDomains.some((domain) =>
+          url.includes(domain)
+        );
+
+        if (
+          !shouldExclude &&
+          (linkText.includes("visit") ||
+            linkText.includes("website") ||
+            linkText.includes("official"))
+        ) {
+          console.log(`✅ Found via universal fallback: ${url}`);
+          return url;
+        }
+      }
+    }
+
+    console.log(`⚠️ No suitable external URL found for: ${eventUrl}`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Error extracting URL from ${eventUrl}:`, error);
+    return null;
+  }
 }
 
 // Enhanced HTML content extraction with better patterns for CatchDesMoines
 function extractRelevantContent(html: string): string {
-  console.log(`🔍 Starting content extraction from ${html.length} character HTML`);
-  
+  console.log(
+    `🔍 Starting content extraction from ${html.length} character HTML`
+  );
+
   // Simple approach: just clean HTML and limit size to avoid CPU timeout
   const cleanHtml = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "");
-  
+
   // Limit to 15000 characters to avoid CPU timeout
   const finalContent = cleanHtml.substring(0, 15000);
-  
-  console.log(`📏 Final content length: ${finalContent.length} characters (reduced from ${html.length})`);
+
+  console.log(
+    `📏 Final content length: ${finalContent.length} characters (reduced from ${html.length})`
+  );
   return finalContent;
 }
 
@@ -172,6 +303,7 @@ CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
 - Date patterns (July 26, Jul 26th, 7/26, 2025, etc.)
 - Event categories (concerts, festivals, sports, shows, fairs, etc.)
 - HTML structures: <article class="slide">, event cards, lists, grids
+- **IMPORTANT**: Look for individual event detail page URLs (e.g., /event/event-name/12345/)
 
 🔍 SPECIFIC EVENT PATTERNS:
 - Look for proper nouns that sound like event names
@@ -179,6 +311,7 @@ CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
 - Entertainment venues (theaters, halls, stadiums)
 - Event types (fair, festival, concert, show, game, exhibition)
 - Time indicators (daily, weekly, through August, etc.)
+- **Event detail URLs**: Links in format like "/event/chef-georges-steak-bar-classics/53924/"
 
 💡 EXTRACTION EXAMPLES:
 - "Warren County Fair" → title: "Warren County Fair"
@@ -235,7 +368,8 @@ FORMAT AS JSON ARRAY:
     "location": "Des Moines, IA",
     "venue": "Venue Name",
     "category": "Event Type",
-    "price": "Price or See website"
+    "price": "Price or See website",
+    "detail_url": "/event/event-name/12345/" // IMPORTANT: Include if you find individual event detail page URLs
   }
 ]
 
@@ -462,126 +596,206 @@ Format as JSON array:
 Return empty array [] if no attractions found.`,
   };
 
-    try {
-      console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
-      console.log(
-        `📄 Content length being sent to AI: ${relevantContent.length} characters`
-      );
-      console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
+  try {
+    console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
+    console.log(
+      `📄 Content length being sent to AI: ${relevantContent.length} characters`
+    );
+    console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
 
-      // Try to find API endpoints first
-      if (category === 'events') {
-        const apiEndpoints = await findApiEndpoints(html, url);
-        if (apiEndpoints.length > 0) {
-          console.log(`🔍 Found potential API endpoints: ${apiEndpoints.join(', ')}`);
-          
-          // Try to fetch from API endpoints
-          for (const endpoint of apiEndpoints.slice(0, 3)) { // Try first 3 endpoints
-            try {
-              const apiResponse = await fetch(endpoint, {
-                headers: {
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                  "Accept": "application/json, text/javascript, */*",
-                },
-              });
-              
-              if (apiResponse.ok) {
-                const apiData = await apiResponse.text();
-                if (apiData.length > 100) {
-                  console.log(`✅ Got API data from ${endpoint}: ${apiData.length} chars`);
-                  relevantContent = apiData + "\n\n--- ORIGINAL HTML ---\n\n" + relevantContent;
-                  break;
-                }
+    // Try to find API endpoints first
+    if (category === "events") {
+      const apiEndpoints = await findApiEndpoints(html, url);
+      if (apiEndpoints.length > 0) {
+        console.log(
+          `🔍 Found potential API endpoints: ${apiEndpoints.join(", ")}`
+        );
+
+        // Try to fetch from API endpoints
+        for (const endpoint of apiEndpoints.slice(0, 3)) {
+          // Try first 3 endpoints
+          try {
+            const apiResponse = await fetch(endpoint, {
+              headers: {
+                "User-Agent":
+                  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                Accept: "application/json, text/javascript, */*",
+              },
+            });
+
+            if (apiResponse.ok) {
+              const apiData = await apiResponse.text();
+              if (apiData.length > 100) {
+                console.log(
+                  `✅ Got API data from ${endpoint}: ${apiData.length} chars`
+                );
+                relevantContent =
+                  apiData + "\n\n--- ORIGINAL HTML ---\n\n" + relevantContent;
+                break;
               }
-            } catch (error) {
-              console.log(`⚠️ API endpoint failed ${endpoint}:`, error.message);
             }
+          } catch (error) {
+            console.log(`⚠️ API endpoint failed ${endpoint}:`, error.message);
           }
         }
       }
+    }
 
-      const claudeResponse = await fetch(
-        "https://api.anthropic.com/v1/messages",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": claudeApiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-3-5-sonnet-20241022", // Use stable model
-            max_tokens: 8000, // Increased for multiple events
-            temperature: 0.1, // Lower temperature for more precise extraction
-            messages: [
-              {
-                role: "user",
-                content: prompts[category as keyof typeof prompts],
-              },
-            ],
-          }),
-        }
-      );
+    const claudeResponse = await fetch(
+      "https://api.anthropic.com/v1/messages",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": claudeApiKey,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-3-5-sonnet-20241022", // Use stable model
+          max_tokens: 8000, // Increased for multiple events
+          temperature: 0.1, // Lower temperature for more precise extraction
+          messages: [
+            {
+              role: "user",
+              content: prompts[category as keyof typeof prompts],
+            },
+          ],
+        }),
+      }
+    );
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
       const responseText = claudeData.content?.[0]?.text?.trim();
-      
+
       console.log(`🔍 Claude API response status: ${claudeResponse.status}`);
-      console.log(`🔍 Claude response structure check - content exists: ${!!claudeData.content}`);
-      console.log(`🔍 Claude response text length: ${responseText?.length || 0}`);
-      console.log(`🔍 Claude response preview: ${responseText?.substring(0, 1000) || 'No text'}...`);
+      console.log(
+        `🔍 Claude response structure check - content exists: ${!!claudeData.content}`
+      );
+      console.log(
+        `🔍 Claude response text length: ${responseText?.length || 0}`
+      );
+      console.log(
+        `🔍 Claude response preview: ${
+          responseText?.substring(0, 1000) || "No text"
+        }...`
+      );
 
       if (responseText) {
         try {
           // Extract JSON from the response - try multiple patterns
           let jsonMatch = responseText.match(/\[[\s\S]*\]/);
-          
+
           if (!jsonMatch) {
             // Try to find JSON in code blocks
-            jsonMatch = responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
-                       responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
+            jsonMatch =
+              responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
+              responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
             if (jsonMatch) jsonMatch[0] = jsonMatch[1];
           }
-          
+
           if (!jsonMatch) {
-            console.error(`❌ No JSON array found in Claude response. Full response: ${responseText}`);
+            console.error(
+              `❌ No JSON array found in Claude response. Full response: ${responseText}`
+            );
             return [];
           }
-          
-          console.log(`🔍 Extracted JSON string: ${jsonMatch[0].substring(0, 500)}...`);
-          
+
+          console.log(
+            `🔍 Extracted JSON string: ${jsonMatch[0].substring(0, 500)}...`
+          );
+
           const extractedData = JSON.parse(jsonMatch[0]);
-          
+
           if (!Array.isArray(extractedData)) {
-            console.error(`❌ Parsed data is not an array: ${typeof extractedData}`);
+            console.error(
+              `❌ Parsed data is not an array: ${typeof extractedData}`
+            );
             return [];
           }
-          
-          console.log(`🤖 AI extracted ${extractedData.length} ${category} items from ${url}`);
-          
-          // Add source_url to each extracted item
-          const itemsWithSource = extractedData.map(item => ({
-            ...item,
-            source_url: url
-          }));
-          
+
+          console.log(
+            `🤖 AI extracted ${extractedData.length} ${category} items from ${url}`
+          );
+
+           // Add source_url to each extracted item
+           // For CatchDesMoines events, try to extract the actual venue website URL
+           const itemsWithSource = await Promise.all(
+             extractedData.map(async (item) => {
+               let actualSourceUrl = url;
+
+               // If this is a catchdesmoines.com event, try to extract the "Visit Website" link
+               if (category === "events" && url.includes("catchdesmoines.com")) {
+                 try {
+                   let eventDetailUrl = null;
+                   
+                   // Check if we have a detail_url from the AI extraction
+                   if (item.detail_url) {
+                     // If it's a relative URL, make it absolute
+                     if (item.detail_url.startsWith('/')) {
+                       eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
+                     } else if (item.detail_url.includes('catchdesmoines.com')) {
+                       eventDetailUrl = item.detail_url;
+                     }
+                   }
+                   // If the URL we're crawling is already an event detail page, use it
+                   else if (url.includes('catchdesmoines.com/event/')) {
+                     eventDetailUrl = url;
+                   }
+                   
+                   // If we have an event detail URL, extract the "Visit Website" link from it
+                   if (eventDetailUrl) {
+                     console.log(`🔗 Fetching event detail page: ${eventDetailUrl}`);
+                     const visitWebsiteUrl = await extractCatchDesMoinesVisitWebsiteUrl(eventDetailUrl);
+                     if (visitWebsiteUrl) {
+                       actualSourceUrl = visitWebsiteUrl;
+                       console.log(`✅ Extracted Visit Website URL: ${visitWebsiteUrl}`);
+                     } else {
+                       console.log(`⚠️ No Visit Website URL found, using event detail URL: ${eventDetailUrl}`);
+                       actualSourceUrl = eventDetailUrl; // Use the event detail URL if we can't find Visit Website
+                     }
+                   } else {
+                     console.log(`⚠️ No event detail URL available, using list page URL`);
+                   }
+                 } catch (error) {
+                   console.error(
+                     `❌ Error extracting Visit Website URL: ${error.message}`
+                   );
+                 }
+               }
+
+               return {
+                 ...item,
+                 source_url: actualSourceUrl,
+               };
+             })
+           );
+
           // Log sample item for debugging
           if (itemsWithSource.length > 0) {
-            console.log(`🔍 Sample extracted item: ${JSON.stringify(itemsWithSource[0])}`);
+            console.log(
+              `🔍 Sample extracted item: ${JSON.stringify(itemsWithSource[0])}`
+            );
           }
-          
+
           return itemsWithSource;
         } catch (parseError) {
           console.error(`❌ Could not parse AI response JSON:`, parseError);
-          console.error(`❌ JSON string that failed to parse: ${responseText.substring(0, 2000)}`);
+          console.error(
+            `❌ JSON string that failed to parse: ${responseText.substring(
+              0,
+              2000
+            )}`
+          );
         }
       } else {
         console.error(`❌ No response text from Claude API`);
       }
     } else {
       const errorText = await claudeResponse.text();
-      console.error(`❌ Claude API error: ${claudeResponse.status} - ${errorText}`);
+      console.error(
+        `❌ Claude API error: ${claudeResponse.status} - ${errorText}`
+      );
     }
   } catch (error) {
     console.error(`❌ Error in AI content extraction:`, error);
@@ -590,34 +804,34 @@ Return empty array [] if no attractions found.`,
   return [];
 }
 
-interface ParsedDateTime { 
-  event_start_local: string; 
-  event_timezone: string; 
-  event_start_utc: Date; 
-} 
- 
-// Enhanced time parsing for AI-extracted events 
-function parseEventDateTime(dateStr: string): ParsedDateTime | null { 
-  if (!dateStr) return null; 
- 
-  const eventTimeZone = "America/Chicago"; // Default to Central Time 
- 
-  try { 
+interface ParsedDateTime {
+  event_start_local: string;
+  event_timezone: string;
+  event_start_utc: Date;
+}
+
+// Enhanced time parsing for AI-extracted events
+function parseEventDateTime(dateStr: string): ParsedDateTime | null {
+  if (!dateStr) return null;
+
+  const eventTimeZone = "America/Chicago"; // Default to Central Time
+
+  try {
     console.log(`🕐 Parsing date string: "${dateStr}"`);
-    
+
     // Parse the date string as Central Time and convert to UTC
     // The AI provides dates like "2025-09-13 19:00:00" which should be interpreted as Central Time
-    
+
     let centralTimeString: string;
-    
+
     // Match YYYY-MM-DD HH:MM:SS format
     if (dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
       centralTimeString = dateStr;
-    } 
+    }
     // Match YYYY-MM-DD format (default to 7:30 PM Central)
     else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
       centralTimeString = `${dateStr} 19:30:00`;
-    } 
+    }
     // Fallback: try to parse and reformat
     else {
       const fallbackDate = new Date(dateStr);
@@ -627,54 +841,59 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
       }
       // Assume the parsed date is in Central Time
       const year = fallbackDate.getFullYear();
-      const month = (fallbackDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = fallbackDate.getDate().toString().padStart(2, '0');
-      const hours = fallbackDate.getHours().toString().padStart(2, '0');
-      const minutes = fallbackDate.getMinutes().toString().padStart(2, '0');
-      const seconds = fallbackDate.getSeconds().toString().padStart(2, '0');
+      const month = (fallbackDate.getMonth() + 1).toString().padStart(2, "0");
+      const day = fallbackDate.getDate().toString().padStart(2, "0");
+      const hours = fallbackDate.getHours().toString().padStart(2, "0");
+      const minutes = fallbackDate.getMinutes().toString().padStart(2, "0");
+      const seconds = fallbackDate.getSeconds().toString().padStart(2, "0");
       centralTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
-    
+
     // Convert Central Time to UTC
     // parseISO treats the string as naive time, then fromZonedTime converts it assuming it's in Central Time
     const localDate = parseISO(centralTimeString);
     const utcDate = fromZonedTime(localDate, eventTimeZone);
-    
-    console.log(`🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`);
- 
-    if (!isNaN(utcDate.getTime())) { 
-      return { 
-        event_start_local: centralTimeString, 
-        event_timezone: eventTimeZone, 
-        event_start_utc: utcDate, 
-      }; 
-    } 
-  } catch (error) { 
-    console.log(`⚠️ Could not parse AI date: ${dateStr}`, error); 
-  } 
- 
+
+    console.log(
+      `🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`
+    );
+
+    if (!isNaN(utcDate.getTime())) {
+      return {
+        event_start_local: centralTimeString,
+        event_timezone: eventTimeZone,
+        event_start_utc: utcDate,
+      };
+    }
+  } catch (error) {
+    console.log(`⚠️ Could not parse AI date: ${dateStr}`, error);
+  }
+
   return null;
 }
- 
-// Filter out past events with enhanced date handling 
-function filterFutureEvents(events: any[]): any[] { 
-  const nowInCentral = utcToZonedTime(new Date(), "America/Chicago"); 
- 
-  return events.filter((event) => { 
-    if (!event.date) return true; // Keep events without dates 
- 
-    try { 
-      const parsed = parseEventDateTime(event.date); 
-      if (parsed && parsed.event_start_utc) { 
-        // Compare the UTC timestamp of the event with the current UTC time 
-        return parsed.event_start_utc.getTime() >= nowInCentral.getTime(); 
-      } 
-      return true; // Keep if parsing fails 
-    } catch (error) { 
-      console.log(`⚠️ Could not parse date for filtering: ${event.date}`, error); 
-      return true; // Keep events with unparseable dates 
-    } 
-  }); 
+
+// Filter out past events with enhanced date handling
+function filterFutureEvents(events: any[]): any[] {
+  const nowInCentral = utcToZonedTime(new Date(), "America/Chicago");
+
+  return events.filter((event) => {
+    if (!event.date) return true; // Keep events without dates
+
+    try {
+      const parsed = parseEventDateTime(event.date);
+      if (parsed && parsed.event_start_utc) {
+        // Compare the UTC timestamp of the event with the current UTC time
+        return parsed.event_start_utc.getTime() >= nowInCentral.getTime();
+      }
+      return true; // Keep if parsing fails
+    } catch (error) {
+      console.log(
+        `⚠️ Could not parse date for filtering: ${event.date}`,
+        error
+      );
+      return true; // Keep events with unparseable dates
+    }
+  });
 }
 
 // Generate fingerprint for duplicate detection
@@ -718,17 +937,19 @@ async function checkForDuplicates(
   // First remove duplicates within the batch itself
   const seen = new Set();
   const uniqueItems = [];
-  
+
   for (const item of items) {
     let key;
     switch (category) {
       case "events":
-        key = `${item.title?.toLowerCase()?.trim()}|${item.venue?.toLowerCase()?.trim()}`;
+        key = `${item.title?.toLowerCase()?.trim()}|${item.venue
+          ?.toLowerCase()
+          ?.trim()}`;
         break;
       default:
         key = item.name?.toLowerCase()?.trim();
     }
-    
+
     if (!seen.has(key)) {
       seen.add(key);
       uniqueItems.push(item);
@@ -767,16 +988,21 @@ async function checkForDuplicates(
             .from(tableName)
             .select("id")
             .eq("name", item.name?.trim());
-          
+
           // Debug for restaurant_openings
-          console.log(`🔍 Checking duplicate for restaurant opening: "${item.name?.trim()}" in table ${tableName} (exact match)`);
+          console.log(
+            `🔍 Checking duplicate for restaurant opening: "${item.name?.trim()}" in table ${tableName} (exact match)`
+          );
           break;
       }
 
       const { data: existing, error } = await query.limit(1);
 
       if (error) {
-        console.error(`Error checking duplicate for ${item.title || item.name}:`, error);
+        console.error(
+          `Error checking duplicate for ${item.title || item.name}:`,
+          error
+        );
         // On error, still add the item
         newItems.push({ ...item, fingerprint });
       } else if (existing && existing.length > 0) {
@@ -813,97 +1039,108 @@ async function insertData(
 
     try {
       // Transform data for database schema
-      const transformedBatch = batch.map((item) => {
-        const baseItem = {
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          is_featured: Math.random() > 0.8, // 20% chance of being featured
-        };
+      const transformedBatch = batch
+        .map((item) => {
+          const baseItem = {
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            is_featured: Math.random() > 0.8, // 20% chance of being featured
+          };
 
-        switch (category) {
-          case "events":
-            const parsedEventDateTime = item.date ? parseEventDateTime(item.date) : null;
-            
-            // Skip events where we can't parse the date properly
-            if (!parsedEventDateTime?.event_start_utc) {
-              console.warn(`⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`);
-              return null; // This will be filtered out
-            }
-            
-            return {
-              ...baseItem,
-              title: item.title?.substring(0, 200) || "Untitled Event",
-              original_description: item.description?.substring(0, 500) || "",
-              enhanced_description: item.description?.substring(0, 500) || "",
-              date: parsedEventDateTime.event_start_utc.toISOString(),
-              event_start_local: parsedEventDateTime.event_start_local,
-              event_timezone: parsedEventDateTime.event_timezone,
-              event_start_utc: parsedEventDateTime.event_start_utc,
-              location: item.location?.substring(0, 100) || "Des Moines, IA",
-              venue:
-                item.venue?.substring(0, 100) ||
-                item.location?.substring(0, 100) ||
-                "TBD",
-              category: item.category?.substring(0, 50) || "General",
-              price: item.price?.substring(0, 50) || "See website",
-              source_url: item.source_url || "",
-              is_enhanced: false,
-            };
-          case "restaurants":
-            return {
-              ...baseItem,
-              name: item.name?.substring(0, 200) || "Unnamed Restaurant",
-              cuisine: item.cuisine?.substring(0, 100) || "American",
-              location: item.location?.substring(0, 200) || "Des Moines, IA",
-              rating: item.rating || null,
-              price_range: item.price_range?.substring(0, 20) || "$$",
-              description: item.description?.substring(0, 500) || "",
-              phone: item.phone?.substring(0, 20) || null,
-              website: item.website?.substring(0, 200) || null,
-            };
-          case "restaurant_openings":
-            return {
-              ...baseItem,
-              name: item.name?.substring(0, 200) || "New Restaurant",
-              cuisine: item.cuisine?.substring(0, 100) || "American",
-              location: item.location?.substring(0, 200) || "Des Moines, IA",
-              description: item.description?.substring(0, 500) || "",
-              phone: item.phone?.substring(0, 20) || null,
-              website: item.website?.substring(0, 200) || null,
-              price_range: item.price_range?.substring(0, 20) || null,
-              rating: item.rating || null,
-              opening_date: item.opening_date
-                ? (parseEventDateTime(item.opening_date) || new Date(item.opening_date)).toISOString().split("T")[0]
-                : null,
-              status: item.status || "announced",
-              source_url: item.source_url || "",
-            };
-          case "playgrounds":
-            return {
-              ...baseItem,
-              name: item.name?.substring(0, 200) || "Playground",
-              location: item.location?.substring(0, 200) || "Des Moines, IA",
-              description: item.description?.substring(0, 500) || "",
-              age_range: item.age_range?.substring(0, 50) || "All ages",
-              amenities: Array.isArray(item.amenities)
-                ? item.amenities.slice(0, 10)
-                : [],
-              rating: item.rating || null,
-            };
-          case "attractions":
-            return {
-              ...baseItem,
-              name: item.name?.substring(0, 200) || "Attraction",
-              type: item.type?.substring(0, 100) || "General",
-              location: item.location?.substring(0, 200) || "Des Moines, IA",
-              description: item.description?.substring(0, 500) || "",
-              rating: item.rating || null,
-              website: item.website?.substring(0, 200) || null,
-            };
-          default:
-            return item;
-        }
-      }).filter(item => item !== null); // Remove null items (events with bad dates)
+          switch (category) {
+            case "events":
+              const parsedEventDateTime = item.date
+                ? parseEventDateTime(item.date)
+                : null;
+
+              // Skip events where we can't parse the date properly
+              if (!parsedEventDateTime?.event_start_utc) {
+                console.warn(
+                  `⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`
+                );
+                return null; // This will be filtered out
+              }
+
+              return {
+                ...baseItem,
+                title: item.title?.substring(0, 200) || "Untitled Event",
+                original_description: item.description?.substring(0, 500) || "",
+                enhanced_description: item.description?.substring(0, 500) || "",
+                date: parsedEventDateTime.event_start_utc.toISOString(),
+                event_start_local: parsedEventDateTime.event_start_local,
+                event_timezone: parsedEventDateTime.event_timezone,
+                event_start_utc: parsedEventDateTime.event_start_utc,
+                location: item.location?.substring(0, 100) || "Des Moines, IA",
+                venue:
+                  item.venue?.substring(0, 100) ||
+                  item.location?.substring(0, 100) ||
+                  "TBD",
+                category: item.category?.substring(0, 50) || "General",
+                price: item.price?.substring(0, 50) || "See website",
+                source_url: item.source_url || "",
+                is_enhanced: false,
+              };
+            case "restaurants":
+              return {
+                ...baseItem,
+                name: item.name?.substring(0, 200) || "Unnamed Restaurant",
+                cuisine: item.cuisine?.substring(0, 100) || "American",
+                location: item.location?.substring(0, 200) || "Des Moines, IA",
+                rating: item.rating || null,
+                price_range: item.price_range?.substring(0, 20) || "$$",
+                description: item.description?.substring(0, 500) || "",
+                phone: item.phone?.substring(0, 20) || null,
+                website: item.website?.substring(0, 200) || null,
+              };
+            case "restaurant_openings":
+              return {
+                ...baseItem,
+                name: item.name?.substring(0, 200) || "New Restaurant",
+                cuisine: item.cuisine?.substring(0, 100) || "American",
+                location: item.location?.substring(0, 200) || "Des Moines, IA",
+                description: item.description?.substring(0, 500) || "",
+                phone: item.phone?.substring(0, 20) || null,
+                website: item.website?.substring(0, 200) || null,
+                price_range: item.price_range?.substring(0, 20) || null,
+                rating: item.rating || null,
+                opening_date: item.opening_date
+                  ? (
+                      parseEventDateTime(item.opening_date) ||
+                      new Date(item.opening_date)
+                    )
+                      .toISOString()
+                      .split("T")[0]
+                  : null,
+                status: item.status || "announced",
+                source_url: item.source_url || "",
+              };
+            case "playgrounds":
+              return {
+                ...baseItem,
+                name: item.name?.substring(0, 200) || "Playground",
+                location: item.location?.substring(0, 200) || "Des Moines, IA",
+                description: item.description?.substring(0, 500) || "",
+                age_range: item.age_range?.substring(0, 50) || "All ages",
+                amenities: Array.isArray(item.amenities)
+                  ? item.amenities.slice(0, 10)
+                  : [],
+                rating: item.rating || null,
+              };
+            case "attractions":
+              return {
+                ...baseItem,
+                name: item.name?.substring(0, 200) || "Attraction",
+                type: item.type?.substring(0, 100) || "General",
+                location: item.location?.substring(0, 200) || "Des Moines, IA",
+                description: item.description?.substring(0, 500) || "",
+                rating: item.rating || null,
+                website: item.website?.substring(0, 200) || null,
+              };
+            default:
+              return item;
+          }
+        })
+        .filter((item) => item !== null); // Remove null items (events with bad dates)
 
       // Skip empty batches
       if (transformedBatch.length === 0) {
@@ -919,14 +1156,20 @@ async function insertData(
       if (error) {
         console.error(`❌ Error inserting batch:`, error);
         if (category === "restaurant_openings") {
-          console.error(`❌ Restaurant openings batch that failed:`, JSON.stringify(transformedBatch, null, 2));
+          console.error(
+            `❌ Restaurant openings batch that failed:`,
+            JSON.stringify(transformedBatch, null, 2)
+          );
         }
         errors.push(error);
       } else {
         insertedCount += data.length;
         console.log(`✅ Inserted ${data.length} ${category} items`);
         if (category === "restaurant_openings" && data.length > 0) {
-          console.log(`🍽️ Successfully inserted restaurant openings:`, data.map(d => d.name).join(', '));
+          console.log(
+            `🍽️ Successfully inserted restaurant openings:`,
+            data.map((d) => d.name).join(", ")
+          );
         }
       }
     } catch (error) {
@@ -1009,16 +1252,19 @@ Deno.serve(async (req) => {
     console.log(`🚀 Starting AI crawl of ${url} for ${category}`);
 
     // For CatchDesMoines and similar sites, try multiple strategies
-    const urlsToTry = category === 'events' ? [
-      url,
-      url.replace(/\/$/, '') + '/events/',
-      url.replace(/\/$/, '') + '/calendar/',
-      // Try common CatchDesMoines patterns
-      'https://www.catchdesmoines.com/events/',
-      'https://www.catchdesmoines.com/events/search/',
-      'https://www.catchdesmoines.com/calendar/',
-    ] : findBestEventUrl(url);
-    
+    const urlsToTry =
+      category === "events"
+        ? [
+            url,
+            url.replace(/\/$/, "") + "/events/",
+            url.replace(/\/$/, "") + "/calendar/",
+            // Try common CatchDesMoines patterns
+            "https://www.catchdesmoines.com/events/",
+            "https://www.catchdesmoines.com/events/search/",
+            "https://www.catchdesmoines.com/calendar/",
+          ]
+        : findBestEventUrl(url);
+
     console.log(`🔍 Will try these URLs: ${urlsToTry.join(", ")}`);
 
     let bestHtml = "";
@@ -1034,11 +1280,12 @@ Deno.serve(async (req) => {
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            Accept:
+              "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.5",
             "Accept-Encoding": "gzip, deflate, br",
-            "DNT": "1",
-            "Connection": "keep-alive",
+            DNT: "1",
+            Connection: "keep-alive",
             "Upgrade-Insecure-Requests": "1",
           },
         });
@@ -1047,13 +1294,33 @@ Deno.serve(async (req) => {
           const html = await response.text();
 
           // Enhanced scoring for CatchDesMoines-style content
-          const eventKeywords = (html.match(/event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi) || []).length;
-          const venueKeywords = (html.match(/arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi) || []).length;
-          const dateKeywords = (html.match(/2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi) || []).length;
-          const titleKeywords = (html.match(/warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi) || []).length;
-          
-          const totalScore = eventKeywords + (venueKeywords * 2) + (dateKeywords * 1.5) + (titleKeywords * 3);
-          
+          const eventKeywords = (
+            html.match(
+              /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi
+            ) || []
+          ).length;
+          const venueKeywords = (
+            html.match(
+              /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi
+            ) || []
+          ).length;
+          const dateKeywords = (
+            html.match(
+              /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi
+            ) || []
+          ).length;
+          const titleKeywords = (
+            html.match(
+              /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
+            ) || []
+          ).length;
+
+          const totalScore =
+            eventKeywords +
+            venueKeywords * 2 +
+            dateKeywords * 1.5 +
+            titleKeywords * 3;
+
           console.log(
             `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
           );
@@ -1062,9 +1329,7 @@ Deno.serve(async (req) => {
             maxEventContent = totalScore;
             bestHtml = html;
             bestUrl = tryUrl;
-            console.log(
-              `✅ New best URL: ${tryUrl} (score: ${totalScore})`
-            );
+            console.log(`✅ New best URL: ${tryUrl} (score: ${totalScore})`);
           }
         } else {
           console.log(`❌ Failed to fetch ${tryUrl}: ${response.status}`);
@@ -1129,10 +1394,13 @@ Deno.serve(async (req) => {
     }
 
     console.log(`🤖 AI extracted ${filteredItems.length} ${category} items`);
-    
+
     // Debug: Log a few sample items for restaurant_openings
     if (category === "restaurant_openings" && filteredItems.length > 0) {
-      console.log(`🔍 Sample restaurant opening items:`, JSON.stringify(filteredItems.slice(0, 2), null, 2));
+      console.log(
+        `🔍 Sample restaurant opening items:`,
+        JSON.stringify(filteredItems.slice(0, 2), null, 2)
+      );
     }
 
     // Check for duplicates
@@ -1151,13 +1419,17 @@ Deno.serve(async (req) => {
 
     // Insert new items
     if (newItems.length > 0) {
-      console.log(`💾 Attempting to insert ${newItems.length} ${category} items`);
+      console.log(
+        `💾 Attempting to insert ${newItems.length} ${category} items`
+      );
       const insertResult = await insertData(supabase, category, newItems);
       insertedCount = insertResult.insertedCount;
       insertErrors = insertResult.errors;
-      
+
       if (category === "restaurant_openings") {
-        console.log(`🍽️ Restaurant openings insertion result: ${insertedCount} inserted, ${insertErrors.length} errors`);
+        console.log(
+          `🍽️ Restaurant openings insertion result: ${insertedCount} inserted, ${insertErrors.length} errors`
+        );
         if (insertErrors.length > 0) {
           console.log(`❌ Restaurant opening insertion errors:`, insertErrors);
         }

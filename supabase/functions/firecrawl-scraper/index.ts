@@ -14,38 +14,104 @@ interface ScrapRequest {
 }
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 // Initialize Supabase client
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY')!;
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const firecrawlApiKey = Deno.env.get("FIRECRAWL_API_KEY")!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Enhanced time parsing for events with Central Time handling 
-interface ParsedDateTime { 
-  event_start_local: string; 
-  event_timezone: string; 
-  event_start_utc: Date; 
-} 
+// Enhanced time parsing for events with Central Time handling
+interface ParsedDateTime {
+  event_start_local: string;
+  event_timezone: string;
+  event_start_utc: Date;
+}
 
-function parseEventDateTime(dateStr: string): ParsedDateTime | null { 
-  if (!dateStr) return null; 
- 
-  const eventTimeZone = "America/Chicago"; // Default to Central Time 
- 
-  try { 
+// Extract the "Visit Website" URL from a CatchDesMoines event detail page
+async function extractCatchDesMoinesVisitWebsiteUrl(
+  eventUrl: string
+): Promise<string | null> {
+  try {
+    console.log(`🔍 Extracting Visit Website URL from: ${eventUrl}`);
+
+    const response = await fetch(eventUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (!response.ok) {
+      console.error(`❌ HTTP ${response.status}`);
+      return null;
+    }
+
+    const html = await response.text();
+
+    // Strategy 1: Look for action-item button with "Visit Website" text
+    const visitWebsitePattern =
+      /<a\s+href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/i;
+    let match = html.match(visitWebsitePattern);
+
+    if (
+      match &&
+      match[1] &&
+      match[1].startsWith("http") &&
+      !match[1].includes("catchdesmoines.com")
+    ) {
+      console.log(`✅ Found via action-item: ${match[1]}`);
+      return match[1];
+    }
+
+    // Strategy 2: Look in bottom-actions div for external links
+    const bottomActionsPattern =
+      /<div\s+class=["']bottom-actions["'][^>]*>([\s\S]*?)<\/div>/i;
+    match = html.match(bottomActionsPattern);
+
+    if (match) {
+      const linkPattern = /<a\s+href=["']([^"']+)["']/gi;
+      const links = match[1].matchAll(linkPattern);
+
+      for (const link of links) {
+        const url = link[1];
+        if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
+          console.log(`✅ Found in bottom-actions: ${url}`);
+          return url;
+        }
+      }
+    }
+
+    console.log(`⚠️ No external URL found`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Error extracting URL:`, error);
+    return null;
+  }
+}
+
+function parseEventDateTime(dateStr: string): ParsedDateTime | null {
+  if (!dateStr) return null;
+
+  const eventTimeZone = "America/Chicago"; // Default to Central Time
+
+  try {
     console.log(`🕐 Parsing date string: "${dateStr}"`);
-    
+
     let centralTimeString: string;
-    
+
     // Match YYYY-MM-DD HH:MM:SS format
     if (dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
       centralTimeString = dateStr;
-    } 
+    }
     // Match YYYY-MM-DD format (use marker time to indicate no specific time)
     else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
       centralTimeString = `${dateStr} ${NO_TIME_MARKER}`;
@@ -59,31 +125,33 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
       }
       // Assume the parsed date is in Central Time
       const year = fallbackDate.getFullYear();
-      const month = (fallbackDate.getMonth() + 1).toString().padStart(2, '0');
-      const day = fallbackDate.getDate().toString().padStart(2, '0');
-      const hours = fallbackDate.getHours().toString().padStart(2, '0');
-      const minutes = fallbackDate.getMinutes().toString().padStart(2, '0');
-      const seconds = fallbackDate.getSeconds().toString().padStart(2, '0');
+      const month = (fallbackDate.getMonth() + 1).toString().padStart(2, "0");
+      const day = fallbackDate.getDate().toString().padStart(2, "0");
+      const hours = fallbackDate.getHours().toString().padStart(2, "0");
+      const minutes = fallbackDate.getMinutes().toString().padStart(2, "0");
+      const seconds = fallbackDate.getSeconds().toString().padStart(2, "0");
       centralTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
-    
+
     // Convert Central Time to UTC
     const localDate = parseISO(centralTimeString);
     const utcDate = fromZonedTime(localDate, eventTimeZone);
-    
-    console.log(`🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`);
- 
-    if (!isNaN(utcDate.getTime())) { 
-      return { 
-        event_start_local: centralTimeString, 
-        event_timezone: eventTimeZone, 
-        event_start_utc: utcDate, 
-      }; 
-    } 
-  } catch (error) { 
-    console.log(`⚠️ Could not parse date: ${dateStr}`, error); 
-  } 
- 
+
+    console.log(
+      `🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`
+    );
+
+    if (!isNaN(utcDate.getTime())) {
+      return {
+        event_start_local: centralTimeString,
+        event_timezone: eventTimeZone,
+        event_start_utc: utcDate,
+      };
+    }
+  } catch (error) {
+    console.log(`⚠️ Could not parse date: ${dateStr}`, error);
+  }
+
   return null;
 }
 
@@ -113,21 +181,26 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🚀 Starting Firecrawl scrape of ${url} for ${category} (max ${maxPages} pages)`);
+    console.log(
+      `🚀 Starting Firecrawl scrape of ${url} for ${category} (max ${maxPages} pages)`
+    );
 
     // Generate URLs for pagination if it's a Catch Des Moines events page
     const urlsToScrape = [];
     const urlObj = new URL(url);
-    
-    if (urlObj.hostname.includes('catchdesmoines.com') && urlObj.pathname.includes('/events')) {
+
+    if (
+      urlObj.hostname.includes("catchdesmoines.com") &&
+      urlObj.pathname.includes("/events")
+    ) {
       // Generate paginated URLs for Catch Des Moines
       for (let page = 0; page < maxPages; page++) {
         const pageUrl = new URL(url);
         if (page > 0) {
-          pageUrl.searchParams.set('skip', (page * 12).toString());
-          pageUrl.searchParams.set('bounds', 'false');
-          pageUrl.searchParams.set('view', 'grid');
-          pageUrl.searchParams.set('sort', 'date');
+          pageUrl.searchParams.set("skip", (page * 12).toString());
+          pageUrl.searchParams.set("bounds", "false");
+          pageUrl.searchParams.set("view", "grid");
+          pageUrl.searchParams.set("sort", "date");
         }
         urlsToScrape.push(pageUrl.toString());
       }
@@ -136,7 +209,9 @@ serve(async (req) => {
       urlsToScrape.push(url);
     }
 
-    console.log(`📄 Will scrape ${urlsToScrape.length} pages: ${urlsToScrape.join(', ')}`);
+    console.log(
+      `📄 Will scrape ${urlsToScrape.length} pages: ${urlsToScrape.join(", ")}`
+    );
 
     let allExtractedItems = [];
     let totalContentLength = 0;
@@ -144,32 +219,40 @@ serve(async (req) => {
     // Process each URL for pagination support
     for (const currentUrl of urlsToScrape) {
       console.log(`🌐 Scraping page: ${currentUrl}`);
-      
+
       // Use Firecrawl to get JavaScript-rendered content
-      const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${firecrawlApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: currentUrl,
-          formats: ['markdown', 'html'],
-          waitFor: 3000, // Reduced wait time for pagination
-          timeout: 20000, // Reduced timeout for pagination
-        }),
-      });
+      const firecrawlResponse = await fetch(
+        "https://api.firecrawl.dev/v1/scrape",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${firecrawlApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            url: currentUrl,
+            formats: ["markdown", "html"],
+            waitFor: 3000, // Reduced wait time for pagination
+            timeout: 20000, // Reduced timeout for pagination
+          }),
+        }
+      );
 
       if (!firecrawlResponse.ok) {
         const errorText = await firecrawlResponse.text();
-        console.error(`❌ Firecrawl API error for ${currentUrl}: ${firecrawlResponse.status} - ${errorText}`);
+        console.error(
+          `❌ Firecrawl API error for ${currentUrl}: ${firecrawlResponse.status} - ${errorText}`
+        );
         continue; // Skip this page and continue with others
       }
 
       const firecrawlData = await firecrawlResponse.json();
-      const content = firecrawlData.data?.markdown || firecrawlData.data?.html || '';
-      
-      console.log(`📄 Firecrawl returned ${content.length} characters from ${currentUrl}`);
+      const content =
+        firecrawlData.data?.markdown || firecrawlData.data?.html || "";
+
+      console.log(
+        `📄 Firecrawl returned ${content.length} characters from ${currentUrl}`
+      );
       totalContentLength += content.length;
 
       if (!content || content.length < 100) {
@@ -178,8 +261,8 @@ serve(async (req) => {
       }
 
       // Extract events using Claude AI for this page
-      const claudeApiKey = Deno.env.get('CLAUDE_API');
-      
+      const claudeApiKey = Deno.env.get("CLAUDE_API");
+
       if (!claudeApiKey) {
         console.error(`❌ Claude API key not found`);
         break; // Exit loop if no API key
@@ -233,13 +316,18 @@ EXAMPLES:
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
-🎯 PRIORITY URL EXTRACTION: Look specifically for "Visit Website" links or buttons that lead to external venue/event websites. These are usually found in:
-- HTML like: <a href="https://external-venue.com" class="action-item">Visit Website</a>
-- Links with text containing "Visit Website", "Official Website", "Venue Website"
+🎯 PRIORITY URL EXTRACTION:
+For CatchDesMoines event list pages, you need to extract BOTH:
+1. **Event detail page URL** - The individual event page on catchdesmoines.com (e.g., /event/concert-name/12345/)
+2. **Visit Website URL** (if visible in the list) - External venue/event website links
+
+Look for these patterns:
+- Event detail URLs: href="/event/event-name/NUMBER/" or href="https://www.catchdesmoines.com/event/..."
+- Visit Website links: <a href="https://external-venue.com" class="action-item">Visit Website</a>
 - External URLs that are NOT catchdesmoines.com URLs
 - Venue-specific website links (paintingwithatwist.com, etc.)
 
-If you find a "Visit Website" or venue-specific URL, use that as the source_url instead of the catchdesmoines.com page URL.
+**IMPORTANT**: If you only see the event detail URL but not the "Visit Website" URL, still include the detail_url field - we'll fetch it separately.
 
 🏢 VENUE EXTRACTION:
 - Look for venue names near event titles
@@ -274,7 +362,8 @@ FORMAT AS JSON ARRAY ONLY - no other text:
     "description": "Event description",
     "category": "Concert",
     "price": "$25",
-    "source_url": "https://specific-venue-website.com"
+    "source_url": "https://specific-venue-website.com",
+    "detail_url": "/event/event-name/12345/" // IMPORTANT: Include individual event detail URL if found
   }
 ]
 
@@ -459,43 +548,55 @@ Format as JSON array:
   }
 ]
 
-Return empty array [] if no competitive content found.`
+Return empty array [] if no competitive content found.`,
       };
 
-      const selectedPrompt = prompts[category as keyof typeof prompts] || prompts.events;
+      const selectedPrompt =
+        prompts[category as keyof typeof prompts] || prompts.events;
 
-      console.log(`🤖 Sending ${content.length} characters to Claude AI for ${currentUrl}`);
+      console.log(
+        `🤖 Sending ${content.length} characters to Claude AI for ${currentUrl}`
+      );
 
-      const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 6000,
-          temperature: 0.1,
-          messages: [
-            {
-              role: "user",
-              content: selectedPrompt,
-            },
-          ],
-        }),
-      });
+      const claudeResponse = await fetch(
+        "https://api.anthropic.com/v1/messages",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": claudeApiKey,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-3-5-sonnet-20241022",
+            max_tokens: 6000,
+            temperature: 0.1,
+            messages: [
+              {
+                role: "user",
+                content: selectedPrompt,
+              },
+            ],
+          }),
+        }
+      );
 
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
-        console.error(`❌ Claude API error for ${currentUrl}: ${claudeResponse.status} - ${errorText}`);
+        console.error(
+          `❌ Claude API error for ${currentUrl}: ${claudeResponse.status} - ${errorText}`
+        );
         continue; // Skip this page
       }
 
       const claudeData = await claudeResponse.json();
       const responseText = claudeData.content?.[0]?.text?.trim();
 
-      console.log(`🔍 Claude response length for ${currentUrl}: ${responseText?.length || 0}`);
+      console.log(
+        `🔍 Claude response length for ${currentUrl}: ${
+          responseText?.length || 0
+        }`
+      );
 
       if (!responseText) {
         console.error(`❌ No response text from Claude API for ${currentUrl}`);
@@ -507,43 +608,54 @@ Return empty array [] if no competitive content found.`
       try {
         // Extract JSON from the response
         let jsonMatch = responseText.match(/\[[\s\S]*\]/);
-        
+
         if (!jsonMatch) {
           // Try to find JSON in code blocks
-          jsonMatch = responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
-                     responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
+          jsonMatch =
+            responseText.match(/```json\s*(\[[\s\S]*?\])\s*```/) ||
+            responseText.match(/```\s*(\[[\s\S]*?\])\s*```/);
           if (jsonMatch) jsonMatch[0] = jsonMatch[1];
         }
-        
+
         if (!jsonMatch) {
-          console.error(`❌ No JSON array found in Claude response for ${currentUrl}`);
+          console.error(
+            `❌ No JSON array found in Claude response for ${currentUrl}`
+          );
           continue; // Skip this page
         }
-        
+
         pageItems = JSON.parse(jsonMatch[0]);
-        
+
         if (!Array.isArray(pageItems)) {
-          console.error(`❌ Parsed data is not an array for ${currentUrl}: ${typeof pageItems}`);
+          console.error(
+            `❌ Parsed data is not an array for ${currentUrl}: ${typeof pageItems}`
+          );
           pageItems = [];
         }
-        
-        console.log(`🤖 AI extracted ${pageItems.length} ${category} items from ${currentUrl}`);
+
+        console.log(
+          `🤖 AI extracted ${pageItems.length} ${category} items from ${currentUrl}`
+        );
         allExtractedItems.push(...pageItems);
-        
       } catch (parseError) {
-        console.error(`❌ Could not parse AI response JSON for ${currentUrl}:`, parseError);
+        console.error(
+          `❌ Could not parse AI response JSON for ${currentUrl}:`,
+          parseError
+        );
         continue; // Skip this page
       }
     }
 
-    console.log(`🎯 Total ${category} extracted from all pages: ${allExtractedItems.length}`);
+    console.log(
+      `🎯 Total ${category} extracted from all pages: ${allExtractedItems.length}`
+    );
 
     // For events category, filter out past events
     let filteredItems = allExtractedItems;
-    if (category === 'events') {
+    if (category === "events") {
       const currentDate = new Date();
       currentDate.setHours(0, 0, 0, 0);
-      filteredItems = allExtractedItems.filter(item => {
+      filteredItems = allExtractedItems.filter((item) => {
         if (!item.date) return true;
         try {
           const itemDate = new Date(item.date);
@@ -556,19 +668,82 @@ Return empty array [] if no competitive content found.`
       });
     }
 
-    console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
+    console.log(
+      `🕒 After filtering: ${filteredItems.length} items (removed ${
+        allExtractedItems.length - filteredItems.length
+      } items)`
+    );
+
+    // For CatchDesMoines events, try to extract "Visit Website" URLs from detail pages
+    if (category === "events" && url.includes("catchdesmoines.com")) {
+      console.log(
+        `🔗 Processing ${filteredItems.length} events to extract Visit Website URLs...`
+      );
+
+      filteredItems = await Promise.all(
+        filteredItems.map(async (item) => {
+          let finalSourceUrl = item.source_url || url;
+
+          // Check if we have a detail_url to fetch
+          let eventDetailUrl = null;
+          if (item.detail_url) {
+            // Make it absolute if it's relative
+            if (item.detail_url.startsWith("/")) {
+              eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
+            } else if (item.detail_url.includes("catchdesmoines.com")) {
+              eventDetailUrl = item.detail_url;
+            }
+          }
+
+          // If we have an event detail URL, extract the "Visit Website" link
+          if (eventDetailUrl) {
+            try {
+              const visitWebsiteUrl =
+                await extractCatchDesMoinesVisitWebsiteUrl(eventDetailUrl);
+              if (visitWebsiteUrl) {
+                finalSourceUrl = visitWebsiteUrl;
+                console.log(
+                  `✅ Extracted Visit Website URL for "${item.title}": ${visitWebsiteUrl}`
+                );
+              } else {
+                // Fallback to event detail URL if no Visit Website link found
+                finalSourceUrl = eventDetailUrl;
+                console.log(
+                  `⚠️ No Visit Website found for "${item.title}", using detail URL: ${eventDetailUrl}`
+                );
+              }
+            } catch (error) {
+              console.error(
+                `❌ Error extracting Visit Website URL for "${item.title}":`,
+                error
+              );
+            }
+          }
+
+          return {
+            ...item,
+            source_url: finalSourceUrl,
+          };
+        })
+      );
+
+      console.log(
+        `✅ Completed URL extraction for ${filteredItems.length} events`
+      );
+    }
 
     // Get appropriate table name and process items
     const tableMapping = {
-      events: 'events',
-      restaurants: 'restaurants', 
-      playgrounds: 'playgrounds',
-      restaurant_openings: 'restaurant_openings',
-      attractions: 'attractions',
-      competitor_analysis: 'competitor_content'
+      events: "events",
+      restaurants: "restaurants",
+      playgrounds: "playgrounds",
+      restaurant_openings: "restaurant_openings",
+      attractions: "attractions",
+      competitor_analysis: "competitor_content",
     };
 
-    const tableName = tableMapping[category as keyof typeof tableMapping] || 'events';
+    const tableName =
+      tableMapping[category as keyof typeof tableMapping] || "events";
     let insertedCount = 0;
     let updatedCount = 0;
     const errors = [];
@@ -583,27 +758,37 @@ Return empty array [] if no competitive content found.`
           try {
             // Transform data based on category
             let transformedData: any = {};
-            
+
             switch (category) {
-              case 'events':
-                const parsedEventDateTime = item.date ? parseEventDateTime(item.date) : null;
-                
+              case "events":
+                const parsedEventDateTime = item.date
+                  ? parseEventDateTime(item.date)
+                  : null;
+
                 // Skip events where we can't parse the date properly
                 if (!parsedEventDateTime?.event_start_utc) {
-                  console.warn(`⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`);
+                  console.warn(
+                    `⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`
+                  );
                   continue; // Skip this item
                 }
-                
+
                 transformedData = {
                   title: item.title?.substring(0, 200) || "Untitled Event",
-                  original_description: item.description?.substring(0, 500) || "",
-                  enhanced_description: item.description?.substring(0, 500) || "",
+                  original_description:
+                    item.description?.substring(0, 500) || "",
+                  enhanced_description:
+                    item.description?.substring(0, 500) || "",
                   date: parsedEventDateTime.event_start_utc.toISOString(),
                   event_start_local: parsedEventDateTime.event_start_local,
                   event_timezone: parsedEventDateTime.event_timezone,
                   event_start_utc: parsedEventDateTime.event_start_utc,
-                  location: item.location?.substring(0, 100) || "Des Moines, IA",
-                  venue: item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD",
+                  location:
+                    item.location?.substring(0, 100) || "Des Moines, IA",
+                  venue:
+                    item.venue?.substring(0, 100) ||
+                    item.location?.substring(0, 100) ||
+                    "TBD",
                   category: item.category?.substring(0, 50) || "General",
                   price: item.price?.substring(0, 50) || "See website",
                   source_url: item.source_url || url,
@@ -611,12 +796,13 @@ Return empty array [] if no competitive content found.`
                   updated_at: new Date().toISOString(),
                 };
                 break;
-                
-              case 'restaurants':
+
+              case "restaurants":
                 transformedData = {
                   name: item.name?.substring(0, 200) || "Unnamed Restaurant",
                   cuisine: item.cuisine?.substring(0, 100) || "American",
-                  location: item.location?.substring(0, 200) || "Des Moines, IA",
+                  location:
+                    item.location?.substring(0, 200) || "Des Moines, IA",
                   rating: item.rating || null,
                   price_range: item.price_range?.substring(0, 20) || "$$",
                   description: item.description?.substring(0, 500) || "",
@@ -627,26 +813,30 @@ Return empty array [] if no competitive content found.`
                   updated_at: new Date().toISOString(),
                 };
                 break;
-                
-              case 'playgrounds':
+
+              case "playgrounds":
                 transformedData = {
                   name: item.name?.substring(0, 200) || "Playground",
-                  location: item.location?.substring(0, 200) || "Des Moines, IA",
+                  location:
+                    item.location?.substring(0, 200) || "Des Moines, IA",
                   description: item.description?.substring(0, 500) || "",
                   age_range: item.age_range?.substring(0, 50) || "All ages",
-                  amenities: Array.isArray(item.amenities) ? item.amenities.slice(0, 10) : [],
+                  amenities: Array.isArray(item.amenities)
+                    ? item.amenities.slice(0, 10)
+                    : [],
                   rating: item.rating || null,
                   is_featured: Math.random() > 0.8,
                   created_at: new Date().toISOString(),
                   updated_at: new Date().toISOString(),
                 };
                 break;
-                
-              case 'attractions':
+
+              case "attractions":
                 transformedData = {
                   name: item.name?.substring(0, 200) || "Attraction",
                   type: item.type?.substring(0, 100) || "General",
-                  location: item.location?.substring(0, 200) || "Des Moines, IA",
+                  location:
+                    item.location?.substring(0, 200) || "Des Moines, IA",
                   description: item.description?.substring(0, 500) || "",
                   rating: item.rating || null,
                   website: item.website?.substring(0, 200) || null,
@@ -655,62 +845,67 @@ Return empty array [] if no competitive content found.`
                   updated_at: new Date().toISOString(),
                 };
                 break;
-                
-              case 'competitor_analysis':
+
+              case "competitor_analysis":
                 // Find the competitor_id based on the URL
                 const { data: competitors } = await supabase
-                  .from('competitors')
-                  .select('id')
-                  .eq('website_url', url)
+                  .from("competitors")
+                  .select("id")
+                  .eq("website_url", url)
                   .single();
-                
+
                 transformedData = {
                   competitor_id: competitors?.id || null,
                   title: item.title?.substring(0, 200) || "Untitled Content",
                   description: item.description?.substring(0, 1000) || "",
                   url: item.url?.substring(0, 500) || url,
-                  content_type: item.content_type?.substring(0, 100) || "General",
+                  content_type:
+                    item.content_type?.substring(0, 100) || "General",
                   category: item.category?.substring(0, 100) || "General",
                   content_score: Math.floor(Math.random() * 10) + 1,
                   engagement_metrics: item.engagement_indicators || {},
                   scraped_at: new Date().toISOString(),
                 };
                 break;
-                
+
               default:
                 continue; // Skip unknown categories
             }
 
             // Check for duplicates
             let existingItems = [];
-            if (category === 'events') {
+            if (category === "events") {
               const { data, error } = await supabase
                 .from(tableName)
-                .select('*')
-                .eq('title', transformedData.title)
-                .eq('venue', transformedData.venue);
+                .select("*")
+                .eq("title", transformedData.title)
+                .eq("venue", transformedData.venue);
               existingItems = data || [];
-            } else if (category === 'competitor_analysis') {
+            } else if (category === "competitor_analysis") {
               const { data, error } = await supabase
                 .from(tableName)
-                .select('*')
-                .eq('title', transformedData.title)
-                .eq('competitor_id', transformedData.competitor_id);
+                .select("*")
+                .eq("title", transformedData.title)
+                .eq("competitor_id", transformedData.competitor_id);
               existingItems = data || [];
             } else {
               const { data, error } = await supabase
                 .from(tableName)
-                .select('*')
-                .eq('name', transformedData.name);
+                .select("*")
+                .eq("name", transformedData.name);
               existingItems = data || [];
             }
 
             if (existingItems.length > 0) {
-              console.log(`⚠️ Duplicate found: ${transformedData.title || transformedData.name}`);
+              console.log(
+                `⚠️ Duplicate found: ${
+                  transformedData.title || transformedData.name
+                }`
+              );
               // Could implement update logic here if needed
             } else {
               // Insert new item
-              if (category === 'events') {
+              if (category === "events") {
                 transformedData.is_featured = Math.random() > 0.8;
                 transformedData.created_at = new Date().toISOString();
               }
@@ -720,11 +915,18 @@ Return empty array [] if no competitive content found.`
                 .insert([transformedData]);
 
               if (insertError) {
-                console.error(`❌ Error inserting ${category} item:`, insertError);
+                console.error(
+                  `❌ Error inserting ${category} item:`,
+                  insertError
+                );
                 errors.push(insertError);
               } else {
                 insertedCount++;
-                console.log(`✅ Inserted new ${category}: ${transformedData.title || transformedData.name}`);
+                console.log(
+                  `✅ Inserted new ${category}: ${
+                    transformedData.title || transformedData.name
+                  }`
+                );
               }
             }
           } catch (error) {
@@ -742,7 +944,7 @@ Return empty array [] if no competitive content found.`
       inserted: insertedCount,
       updated: updatedCount,
       errors: errors.length,
-      url: url
+      url: url,
     };
 
     console.log(`✅ Scrape completed: ${JSON.stringify(result)}`);
@@ -750,13 +952,12 @@ Return empty array [] if no competitive content found.`
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
   } catch (error) {
     console.error(`❌ Error in Firecrawl scraper:`, error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: "Internal server error",
-        details: error.message 
+        details: error.message,
       }),
       {
         status: 500,
