@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -93,23 +94,22 @@ serve(async (req) => {
           ? createEventSEOPrompt(item)
           : createRestaurantSEOPrompt(item);
 
-        const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        const config = await getAIConfig(supabaseUrl, supabaseKey);
+        const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
+        const requestBody = await buildClaudeRequest(
+          [{ role: 'user', content: prompt }],
+          { 
+            supabaseUrl, 
+            supabaseKey,
+            customMaxTokens: 1000,
+            customTemperature: 0.1
+          }
+        );
+
+        const claudeResponse = await fetch(config.api_endpoint, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': claudeApiKey,
-            'anthropic-version': '2023-06-01'
-          },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1000,
-            messages: [
-              {
-                role: 'user',
-                content: prompt
-              }
-            ]
-          })
+          headers,
+          body: JSON.stringify(requestBody)
         });
 
         console.log('Claude API Response Status:', claudeResponse.status);

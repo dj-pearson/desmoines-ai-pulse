@@ -10,6 +10,7 @@ import {
   format as dateFnsFormat,
   parseISO,
 } from "https://esm.sh/date-fns@2.30.0";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -641,28 +642,26 @@ Return empty array [] if no attractions found.`,
       }
     }
 
-    const claudeResponse = await fetch(
-      "https://api.anthropic.com/v1/messages",
-      {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      
+      const config = await getAIConfig(supabaseUrl, supabaseKey);
+      const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
+      const requestBody = await buildClaudeRequest(
+        [{ role: "user", content: prompts[category as keyof typeof prompts] }],
+        { 
+          supabaseUrl, 
+          supabaseKey,
+          useLargeTokens: true,
+          customTemperature: 0.1
+        }
+      );
+
+      const claudeResponse = await fetch(config.api_endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022", // Use stable model
-          max_tokens: 8000, // Increased for multiple events
-          temperature: 0.1, // Lower temperature for more precise extraction
-          messages: [
-            {
-              role: "user",
-              content: prompts[category as keyof typeof prompts],
-            },
-          ],
-        }),
-      }
-    );
+        headers,
+        body: JSON.stringify(requestBody)
+      });
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();

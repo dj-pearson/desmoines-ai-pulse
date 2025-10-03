@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -174,22 +175,23 @@ CRITICAL: Return your response as a properly formatted JSON object with this exa
 
 Write engaging, informative content that provides real value to Des Moines residents and visitors while being perfectly optimized for search engines and local discovery.`;
 
-    // Call Claude API with Sonnet 4
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    // Call Claude API using centralized config
+    const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
+    const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
+    const requestBody = await buildClaudeRequest(
+      [{ role: 'user', content: articlePrompt }],
+      { 
+        supabaseUrl, 
+        supabaseKey: supabaseServiceKey,
+        useLargeTokens: true,
+        useCreativeTemp: false
+      }
+    );
+
+    const response = await fetch(config.api_endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 8000,
-        messages: [{
-          role: 'user',
-          content: articlePrompt
-        }]
-      })
+      headers,
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
