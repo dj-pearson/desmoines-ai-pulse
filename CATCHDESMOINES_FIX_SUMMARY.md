@@ -117,6 +117,59 @@ Events will now have:
 
 This provides users with direct links to get tickets, RSVP, or learn more about the event from the source.
 
+## Rate Limiting Issue & Fix (CRITICAL UPDATE)
+
+### New Problem: HTTP 429 Errors
+
+After deploying the Firecrawl-based extraction, we hit **Firecrawl's rate limits**. All requests were failing with:
+
+```
+❌ Firecrawl error: 429
+```
+
+**Why?** We were making 35 simultaneous Firecrawl API calls (using `Promise.all()`), which exceeded Firecrawl's rate limits.
+
+### Solution: Sequential Processing with Delays
+
+Changed from **parallel** to **sequential** processing with 1-second delays between requests:
+
+**Before (Broken - Rate Limited):**
+
+```typescript
+filteredItems = await Promise.all(
+  filteredItems.map(async (item) => {
+    // All requests fire simultaneously ❌
+    const visitWebsiteUrl = await extractCatchDesMoinesVisitWebsiteUrl(...);
+  })
+);
+```
+
+**After (Working - Rate Limited):**
+
+```typescript
+// Process events one at a time with 1-second delays
+for (let i = 0; i < filteredItems.length; i++) {
+  const visitWebsiteUrl = await extractCatchDesMoinesVisitWebsiteUrl(...);
+
+  // Wait 1 second before next request ✅
+  if (i < filteredItems.length - 1) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+}
+```
+
+### Performance Impact
+
+- **35 events** = ~35 seconds total processing time (1 second per event)
+- **Trade-off**: Slower processing, but successfully avoids rate limits
+- **Progress tracking**: Now shows `[1/35]`, `[2/35]`, etc. in logs
+
 ## Ready to Deploy
 
-The fix is complete and ready to test. Run your next scraping job and check the Supabase Function logs to verify the new behavior!
+The fix is complete with rate limiting. Run your next scraping job and you should see:
+
+1. ✅ Sequential processing with progress indicators
+2. ✅ Actual venue URLs being extracted
+3. ✅ No more 429 errors!
+
+**Expected runtime**: ~35-40 seconds for 35 events (vs 5 seconds parallel, but that was getting rate limited)

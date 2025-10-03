@@ -707,58 +707,75 @@ Return empty array [] if no competitive content found.`,
     // For CatchDesMoines events, try to extract "Visit Website" URLs from detail pages
     if (category === "events" && url.includes("catchdesmoines.com")) {
       console.log(
-        `🔗 Processing ${filteredItems.length} events to extract Visit Website URLs...`
+        `🔗 Processing ${filteredItems.length} events to extract Visit Website URLs (with rate limiting)...`
       );
 
-      filteredItems = await Promise.all(
-        filteredItems.map(async (item) => {
-          let finalSourceUrl = item.source_url || url;
+      // Process events sequentially with rate limiting to avoid 429 errors
+      const updatedItems = [];
+      for (let i = 0; i < filteredItems.length; i++) {
+        const item = filteredItems[i];
+        let finalSourceUrl = item.source_url || url;
 
-          // Check if we have a detail_url to fetch
-          let eventDetailUrl = null;
-          if (item.detail_url) {
-            // Make it absolute if it's relative
-            if (item.detail_url.startsWith("/")) {
-              eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
-            } else if (item.detail_url.includes("catchdesmoines.com")) {
-              eventDetailUrl = item.detail_url;
-            }
+        // Check if we have a detail_url to fetch
+        let eventDetailUrl = null;
+        if (item.detail_url) {
+          // Make it absolute if it's relative
+          if (item.detail_url.startsWith("/")) {
+            eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
+          } else if (item.detail_url.includes("catchdesmoines.com")) {
+            eventDetailUrl = item.detail_url;
           }
+        }
 
-          // If we have an event detail URL, extract the "Visit Website" link
-          if (eventDetailUrl) {
-            try {
-              const visitWebsiteUrl =
-                await extractCatchDesMoinesVisitWebsiteUrl(
-                  eventDetailUrl,
-                  firecrawlApiKey
-                );
-              if (visitWebsiteUrl) {
-                finalSourceUrl = visitWebsiteUrl;
-                console.log(
-                  `✅ Extracted Visit Website URL for "${item.title}": ${visitWebsiteUrl}`
-                );
-              } else {
-                // Fallback to event detail URL if no Visit Website link found
-                finalSourceUrl = eventDetailUrl;
-                console.log(
-                  `⚠️ No Visit Website found for "${item.title}", using detail URL: ${eventDetailUrl}`
-                );
-              }
-            } catch (error) {
-              console.error(
-                `❌ Error extracting Visit Website URL for "${item.title}":`,
-                error
+        // If we have an event detail URL, extract the "Visit Website" link
+        if (eventDetailUrl) {
+          try {
+            const visitWebsiteUrl = await extractCatchDesMoinesVisitWebsiteUrl(
+              eventDetailUrl,
+              firecrawlApiKey
+            );
+            if (visitWebsiteUrl) {
+              finalSourceUrl = visitWebsiteUrl;
+              console.log(
+                `✅ [${i + 1}/${
+                  filteredItems.length
+                }] Extracted Visit Website URL for "${
+                  item.title
+                }": ${visitWebsiteUrl}`
+              );
+            } else {
+              // Fallback to event detail URL if no Visit Website link found
+              finalSourceUrl = eventDetailUrl;
+              console.log(
+                `⚠️ [${i + 1}/${
+                  filteredItems.length
+                }] No Visit Website found for "${
+                  item.title
+                }", using detail URL: ${eventDetailUrl}`
               );
             }
+          } catch (error) {
+            console.error(
+              `❌ [${i + 1}/${
+                filteredItems.length
+              }] Error extracting Visit Website URL for "${item.title}":`,
+              error
+            );
           }
 
-          return {
-            ...item,
-            source_url: finalSourceUrl,
-          };
-        })
-      );
+          // Rate limiting: Wait 1 second between requests to avoid 429 errors
+          if (i < filteredItems.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+
+        updatedItems.push({
+          ...item,
+          source_url: finalSourceUrl,
+        });
+      }
+
+      filteredItems = updatedItems;
 
       console.log(
         `✅ Completed URL extraction for ${filteredItems.length} events`
