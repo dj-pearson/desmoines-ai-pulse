@@ -153,6 +153,29 @@ https://www.facebook.com/events/reinhardt-room/chef-georges-steak-bar-classics/1
 
 **Result**: The event in your database will have `source_url` = Facebook event URL
 
+## Root Cause & Fix Summary
+
+### The Root Cause
+
+CatchDesMoines.com is a **JavaScript-rendered** website. The "Visit Website" buttons are added to the page AFTER the initial HTML loads via JavaScript. When we used plain `fetch()` to retrieve event detail pages, we only got the server-rendered HTML, which didn't include these dynamically-added buttons.
+
+### The Fix
+
+Changed from `fetch()` to **Firecrawl API** for fetching event detail pages. Firecrawl:
+
+1. Loads the page in a real browser
+2. Waits for JavaScript to execute
+3. Returns the fully-rendered HTML with all dynamic content
+
+This is the same approach already used for the list pages, ensuring consistency.
+
+### Cost Consideration
+
+- **Previous approach**: 1 Firecrawl call per list page (e.g., 3 pages = 3 calls)
+- **New approach**: 1 Firecrawl call per list page + 1 call per event detail page (e.g., 3 list pages + 30 events = 33 calls)
+
+This increase in API usage is necessary to get the actual venue URLs, which provide much more value to users.
+
 ## Console Output
 
 When running the scraper, you'll see logs like:
