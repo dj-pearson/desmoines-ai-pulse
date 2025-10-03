@@ -35,62 +35,83 @@ interface ParsedDateTime {
 
 // Extract the "Visit Website" URL from a CatchDesMoines event detail page
 async function extractCatchDesMoinesVisitWebsiteUrl(
-  eventUrl: string
+  eventUrl: string,
+  firecrawlApiKey: string
 ): Promise<string | null> {
   try {
     console.log(`🔍 Extracting Visit Website URL from: ${eventUrl}`);
 
-    const response = await fetch(eventUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-      signal: AbortSignal.timeout(15000),
-    });
+    // Use Firecrawl to get JavaScript-rendered content
+    const firecrawlResponse = await fetch(
+      "https://api.firecrawl.dev/v1/scrape",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${firecrawlApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          url: eventUrl,
+          formats: ["html"],
+          waitFor: 2000,
+          timeout: 15000,
+        }),
+      }
+    );
 
-    if (!response.ok) {
-      console.error(`❌ HTTP ${response.status}`);
+    if (!firecrawlResponse.ok) {
+      console.error(`❌ Firecrawl error: ${firecrawlResponse.status}`);
       return null;
     }
 
-    const html = await response.text();
+    const firecrawlData = await firecrawlResponse.json();
+    const html = firecrawlData.data?.html || "";
 
-    // Strategy 1: Look for action-item button with "Visit Website" text
-    const visitWebsitePattern =
-      /<a\s+href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/i;
-    let match = html.match(visitWebsitePattern);
-
-    if (
-      match &&
-      match[1] &&
-      match[1].startsWith("http") &&
-      !match[1].includes("catchdesmoines.com")
-    ) {
-      console.log(`✅ Found via action-item: ${match[1]}`);
-      return match[1];
+    if (!html || html.length < 100) {
+      console.log(`⚠️ No HTML content received from Firecrawl`);
+      return null;
     }
 
-    // Strategy 2: Look in bottom-actions div for external links
-    const bottomActionsPattern =
-      /<div\s+class=["']bottom-actions["'][^>]*>([\s\S]*?)<\/div>/i;
-    match = html.match(bottomActionsPattern);
+    // Strategy 1: Look for any link with class="action-item" and text containing "Visit Website"
+    // This regex is flexible with attribute order
+    const actionItemPattern = /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
+    const actionItemLinks = html.matchAll(actionItemPattern);
+    
+    for (const linkMatch of actionItemLinks) {
+      const fullLink = linkMatch[0];
+      // Check if it contains "Visit Website" text
+      if (/Visit\s+Website/i.test(fullLink)) {
+        // Extract the href
+        const hrefMatch = fullLink.match(/href=["']([^"']+)["']/);
+        if (hrefMatch && hrefMatch[1]) {
+          const url = hrefMatch[1];
+          if (url.startsWith("http") && !url.includes("catchdesmoines.com") && !url.startsWith("mailto:")) {
+            console.log(`✅ Found Visit Website URL: ${url}`);
+            return url;
+          }
+        }
+      }
+    }
 
-    if (match) {
+    // Strategy 2: Look in bottom-actions div for any external links
+    const bottomActionsPattern =
+      /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i;
+    const bottomMatch = html.match(bottomActionsPattern);
+
+    if (bottomMatch) {
       const linkPattern = /<a\s+href=["']([^"']+)["']/gi;
-      const links = match[1].matchAll(linkPattern);
+      const links = bottomMatch[1].matchAll(linkPattern);
 
       for (const link of links) {
         const url = link[1];
-        if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
+        if (url.startsWith("http") && !url.includes("catchdesmoines.com") && !url.startsWith("mailto:")) {
           console.log(`✅ Found in bottom-actions: ${url}`);
           return url;
         }
       }
     }
 
-    console.log(`⚠️ No external URL found`);
+    console.log(`⚠️ No external URL found in page`);
     return null;
   } catch (error) {
     console.error(`❌ Error extracting URL:`, error);
@@ -699,7 +720,7 @@ Return empty array [] if no competitive content found.`,
           if (eventDetailUrl) {
             try {
               const visitWebsiteUrl =
-                await extractCatchDesMoinesVisitWebsiteUrl(eventDetailUrl);
+                await extractCatchDesMoinesVisitWebsiteUrl(eventDetailUrl, firecrawlApiKey);
               if (visitWebsiteUrl) {
                 finalSourceUrl = visitWebsiteUrl;
                 console.log(

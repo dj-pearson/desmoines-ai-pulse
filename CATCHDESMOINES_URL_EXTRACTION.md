@@ -19,7 +19,11 @@ Previously, when scraping events from CatchDesMoines.com, the scraper would stor
 
 However, each event page on CatchDesMoines has a **"Visit Website"** button that links to the actual venue or event website, which is more valuable for users.
 
-When scraping the **events list page** (`https://www.catchdesmoines.com/events/`), the AI only sees the list content, not the individual event detail pages where the "Visit Website" buttons are located.
+### Multiple Issues Discovered
+
+1. **List Page Problem**: When scraping the events list page (`https://www.catchdesmoines.com/events/`), the AI only sees the list content, not the individual event detail pages where the "Visit Website" buttons are located.
+
+2. **JavaScript Rendering Problem**: CatchDesMoines.com uses **JavaScript to dynamically render** the "Visit Website" buttons. Using plain `fetch()` only gets server-rendered HTML, which doesn't include these buttons. This is why the extraction was failing with "⚠️ No external URL found" errors.
 
 ## The Solution
 
@@ -62,18 +66,22 @@ Look for these patterns:
 - Visit Website links: <a href="https://external-venue.com" class="action-item">Visit Website</a>
 ```
 
-#### 2. URL Extraction Function (Lines 35-88)
+#### 2. URL Extraction Function (Lines 36-120)
 
-`extractCatchDesMoinesVisitWebsiteUrl()` - Fetches event detail pages and extracts "Visit Website" URLs using multiple strategies:
+`extractCatchDesMoinesVisitWebsiteUrl()` - Uses **Firecrawl API** (not plain fetch) to get JavaScript-rendered content, then extracts "Visit Website" URLs:
 
-- **Strategy 1**: Look for `<a class="action-item">` with "Visit Website" text
+**Key Fix**: Uses Firecrawl instead of `fetch()` to ensure JavaScript-rendered buttons are visible.
+
+- **Strategy 1**: Look for any `<a class="action-item">` link containing "Visit Website" text (flexible attribute order)
 - **Strategy 2**: Search within `<div class="bottom-actions">` for external links
+- **Filtering**: Excludes `catchdesmoines.com` URLs and `mailto:` links
 
 ```typescript
 async function extractCatchDesMoinesVisitWebsiteUrl(
-  eventUrl: string
+  eventUrl: string,
+  firecrawlApiKey: string
 ): Promise<string | null> {
-  // Fetches the event detail page
+  // Uses Firecrawl API to get JavaScript-rendered HTML
   // Extracts the "Visit Website" URL using regex patterns
   // Returns the external URL or null if not found
 }
