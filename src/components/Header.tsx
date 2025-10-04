@@ -114,12 +114,10 @@ export default function Header() {
             aria-label="Des Moines Insider Home"
           >
             <img
-              src="/DMI-Logo-Header.png"
+              src="/DMI-Logo2.png"
               alt="Des Moines Insider"
               loading="eager"
-              {...({
-                fetchPriority: "high",
-              } as React.ImgHTMLAttributes<HTMLImageElement>)}
+              fetchPriority="high"
               decoding="async"
               width="auto"
               height="40"
