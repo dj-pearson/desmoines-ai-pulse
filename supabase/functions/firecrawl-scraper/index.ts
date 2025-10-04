@@ -27,6 +27,11 @@ const firecrawlApiKey = Deno.env.get("FIRECRAWL_API_KEY")!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Performance and safety limits
+const MAX_ITEMS_PER_PAGE = 8;
+const MAX_TOTAL_ITEMS = 16;
+const MAX_RUN_MS = 55000; // 55s to stay under edge function limit
+
 // Enhanced time parsing for events with Central Time handling
 interface ParsedDateTime {
   event_start_local: string;
@@ -200,7 +205,7 @@ serve(async (req) => {
       });
     }
 
-    const { url, category, maxPages = 2 }: ScrapRequest = await req.json();
+    const { url, category, maxPages = 1 }: ScrapRequest = await req.json();
 
     if (!url || !category) {
       return new Response(
@@ -215,6 +220,7 @@ serve(async (req) => {
     console.log(
       `🚀 Starting Firecrawl scrape of ${url} for ${category} (max ${maxPages} pages)`
     );
+    const startTime = Date.now();
 
     // Generate URLs for pagination if it's a Catch Des Moines events page
     const urlsToScrape = [];
@@ -249,6 +255,10 @@ serve(async (req) => {
 
     // Process each URL for pagination support
     for (const currentUrl of urlsToScrape) {
+      if (Date.now() - startTime > MAX_RUN_MS) {
+        console.warn('⏱️ Time budget exceeded before scraping next page; stopping pagination.');
+        break;
+      }
       console.log(`🌐 Scraping page: ${currentUrl}`);
 
       // Use Firecrawl to get JavaScript-rendered content
@@ -263,8 +273,8 @@ serve(async (req) => {
           body: JSON.stringify({
             url: currentUrl,
             formats: ["markdown", "html"],
-            waitFor: 3000, // Reduced wait time for pagination
-            timeout: 20000, // Reduced timeout for pagination
+            waitFor: 2000, // Faster to reduce overall runtime
+            timeout: 12000, // Lower timeout to avoid long hangs
           }),
         }
       );
@@ -305,7 +315,7 @@ serve(async (req) => {
 
 CURRENT DATE: July 30, 2025
 WEBSITE CONTENT:
-${content.substring(0, 15000)}
+${content.substring(0, 12000)}
 
 CRITICAL PARSING INSTRUCTIONS:
 
@@ -403,7 +413,7 @@ FORMAT AS JSON ARRAY ONLY - no other text:
         restaurants: `You are an expert at extracting restaurant information from websites like Eater.com, Des Moines Register, and restaurant listing sites. Your task is to find EVERY SINGLE RESTAURANT mentioned in this content from ${currentUrl}.
 
 WEBSITE CONTENT:
-${content.substring(0, 15000)}
+${content.substring(0, 12000)}
 
 CRITICAL PARSING INSTRUCTIONS FOR RESTAURANT SITES:
 
@@ -452,7 +462,7 @@ FORMAT AS JSON ARRAY:
         playgrounds: `You are an expert at extracting playground and children's recreation information from websites like visitdesmoines.com, Greater DSM, and family activity sites. Your task is to find EVERY SINGLE PLAYGROUND or children's recreational facility mentioned in this content from ${currentUrl}.
 
 WEBSITE CONTENT:
-${content.substring(0, 15000)}
+${content.substring(0, 12000)}
 
 CRITICAL PARSING INSTRUCTIONS FOR PLAYGROUND SITES:
 
@@ -489,7 +499,7 @@ FORMAT AS JSON ARRAY:
         restaurant_openings: `Extract information about new restaurant openings from this website content from ${currentUrl}.
 
 WEBSITE CONTENT:
-${content.substring(0, 15000)}
+${content.substring(0, 12000)}
 
 Please analyze this content and extract information about NEW restaurant openings, upcoming restaurants, or recently opened restaurants. For each opening, provide:
 - name: Restaurant name
@@ -516,7 +526,7 @@ Return empty array [] if no restaurant openings found.`,
         attractions: `Extract all attractions, tourist spots, or places of interest from this website content from ${currentUrl}.
 
 WEBSITE CONTENT:
-${content.substring(0, 15000)}
+${content.substring(0, 12000)}
 
 Please analyze this content and extract ALL attractions, tourist destinations, or points of interest. For each attraction, provide:
 - name: Attraction name
@@ -543,7 +553,7 @@ Return empty array [] if no attractions found.`,
         competitor_analysis: `Analyze this competitor website content from ${currentUrl} and extract valuable content pieces for competitive analysis.
 
 WEBSITE CONTENT:
-${content.substring(0, 15000)}
+${content.substring(0, 12000)}
 
 Extract ALL content pieces that could be valuable for competitive analysis, including:
 - Articles/blog posts about local attractions, events, or dining
@@ -700,16 +710,30 @@ Return empty array [] if no competitive content found.`,
       } items)`
     );
 
+    // Cap total items to avoid timeouts
+    if (filteredItems.length > MAX_TOTAL_ITEMS) {
+      console.log(`⚠️ Limiting items to ${MAX_TOTAL_ITEMS} to meet time budget (from ${filteredItems.length})`);
+      filteredItems = filteredItems.slice(0, MAX_TOTAL_ITEMS);
+    }
+
     // For CatchDesMoines events, try to extract "Visit Website" URLs from detail pages
     if (category === "events" && url.includes("catchdesmoines.com")) {
       console.log(
         `🔗 Processing ${filteredItems.length} events to extract Visit Website URLs (with rate limiting)...`
       );
 
+      const processCount = Math.min(MAX_ITEMS_PER_PAGE, filteredItems.length);
+      const itemsToProcess = filteredItems.slice(0, processCount);
+      const remainingItems = filteredItems.slice(processCount);
+
       // Process events sequentially with rate limiting to avoid 429 errors
       const updatedItems = [];
-      for (let i = 0; i < filteredItems.length; i++) {
-        const item = filteredItems[i];
+      for (let i = 0; i < itemsToProcess.length; i++) {
+        if (Date.now() - startTime > MAX_RUN_MS) {
+          console.warn('⏱️ Time budget exceeded while extracting Visit Website URLs; stopping early.');
+          break;
+        }
+        const item = itemsToProcess[i];
         let finalSourceUrl = item.source_url || url;
 
         // Check if we have a detail_url to fetch
@@ -733,34 +757,24 @@ Return empty array [] if no competitive content found.`,
             if (visitWebsiteUrl) {
               finalSourceUrl = visitWebsiteUrl;
               console.log(
-                `✅ [${i + 1}/${
-                  filteredItems.length
-                }] Extracted Visit Website URL for "${
-                  item.title
-                }": ${visitWebsiteUrl}`
+                `✅ [${i + 1}/${itemsToProcess.length}] Extracted Visit Website URL for "${item.title}": ${visitWebsiteUrl}`
               );
             } else {
               // Fallback to event detail URL if no Visit Website link found
               finalSourceUrl = eventDetailUrl;
               console.log(
-                `⚠️ [${i + 1}/${
-                  filteredItems.length
-                }] No Visit Website found for "${
-                  item.title
-                }", using detail URL: ${eventDetailUrl}`
+                `⚠️ [${i + 1}/${itemsToProcess.length}] No Visit Website found for "${item.title}", using detail URL: ${eventDetailUrl}`
               );
             }
           } catch (error) {
             console.error(
-              `❌ [${i + 1}/${
-                filteredItems.length
-              }] Error extracting Visit Website URL for "${item.title}":`,
+              `❌ [${i + 1}/${itemsToProcess.length}] Error extracting Visit Website URL for "${item.title}":`,
               error
             );
           }
 
           // Rate limiting: Wait 500ms between requests to avoid 429 errors
-          if (i < filteredItems.length - 1) {
+          if (i < itemsToProcess.length - 1) {
             await new Promise((resolve) => setTimeout(resolve, 500));
           }
         }
@@ -771,7 +785,8 @@ Return empty array [] if no competitive content found.`,
         });
       }
 
-      filteredItems = updatedItems;
+      // Keep unprocessed items without changing their source_url
+      filteredItems = [...updatedItems, ...remainingItems];
 
       console.log(
         `✅ Completed URL extraction for ${filteredItems.length} events`
@@ -799,10 +814,18 @@ Return empty array [] if no competitive content found.`,
       // Process in batches
       const batchSize = 10;
       for (let i = 0; i < filteredItems.length; i += batchSize) {
+        if (Date.now() - startTime > MAX_RUN_MS) {
+          console.warn('⏱️ Time budget exceeded during DB insertion; stopping early.');
+          break;
+        }
         const batch = filteredItems.slice(i, i + batchSize);
         console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(filteredItems.length / batchSize)} (items ${i + 1}-${Math.min(i + batchSize, filteredItems.length)})`);
 
         for (const item of batch) {
+          if (Date.now() - startTime > MAX_RUN_MS) {
+            console.warn('⏱️ Time budget exceeded within batch; exiting.');
+            break;
+          }
           try {
             // Transform data based on category
             let transformedData: any = {};
