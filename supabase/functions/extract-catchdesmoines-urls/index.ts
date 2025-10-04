@@ -116,6 +116,7 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       'extranet.simpleview',
       'cloudflare.com',
       'cdnjs.cloudflare.com',
+      'unpkg.com',
       'facebook.com',
       'fb.com',
       'twitter.com',
