@@ -104,6 +104,66 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
 
     const html = await response.text();
     
+    // Define excluded domains
+    const excludeDomains = [
+      'catchdesmoines.com',
+      'facebook.com',
+      'fb.com',
+      'twitter.com',
+      'x.com',
+      'instagram.com',
+      'youtube.com',
+      'youtu.be',
+      'tiktok.com',
+      'linkedin.com',
+      'pinterest.com',
+      'reddit.com',
+      'snapchat.com',
+      'whatsapp.com',
+      'telegram.org',
+      'discord.com',
+      'google.com',
+      'maps.google.com',
+      'goo.gl',
+      'bit.ly',
+      'ow.ly',
+      'simpleviewcrm.com',
+      'extranet.simpleview',
+      'mailto:',
+      'tel:',
+      '#'
+    ];
+    
+    // Extract all URLs from the HTML
+    const allLinkMatches = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi);
+    const foundUrls: string[] = [];
+    
+    if (allLinkMatches) {
+      for (const linkMatch of allLinkMatches) {
+        const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
+        if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http')) {
+          const url = hrefMatch[1];
+          
+          // Check if URL should be excluded
+          const shouldExclude = excludeDomains.some(domain => url.toLowerCase().includes(domain.toLowerCase()));
+          
+          if (!shouldExclude) {
+            foundUrls.push(url);
+            console.log('Found potential URL:', url);
+          }
+        }
+      }
+    }
+    
+    // Return the first non-excluded external URL
+    const visitUrl = foundUrls.length > 0 ? foundUrls[0] : null;
+    
+    if (visitUrl) {
+      console.log('Selected visit URL:', visitUrl);
+    } else {
+      console.log('No suitable external URL found for:', eventUrl);
+    }
+    
     // Extract date/time information
     let dateStr: string | null = null;
     let timeStr: string | null = null;
@@ -141,160 +201,8 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
         break;
       }
     }
-    
-    // PROVEN LOGIC FROM AI CRAWLER - Multi-strategy URL extraction
-    
-    // Strategy 1: Look for "Visit Website" or similar buttons/links
-    const visitPatterns = [
-      /<a[^>]*class=["'][^"']*visit[^"']*["'][^>]*href=["']([^"']+)["']/gi,
-      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*visit[^"']*["']/gi,
-      /<a[^>]*>.*?visit\s+website.*?<\/a>/gi,
-    ];
-    
-    for (const pattern of visitPatterns) {
-      const matches = html.match(pattern);
-      if (matches) {
-        for (const match of matches) {
-          const hrefMatch = match.match(/href=["']([^"']+)["']/i);
-          if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http') && !hrefMatch[1].includes('catchdesmoines.com')) {
-            console.log('Found via visit website pattern:', hrefMatch[1]);
-            return { visitUrl: hrefMatch[1], dateStr, timeStr };
-          }
-        }
-      }
-    }
-    
-    // Strategy 2: CSS Class Patterns - external links
-    const classPatterns = [
-      /<a[^>]*class=["'][^"']*btn-external[^"']*["'][^>]*href=["']([^"']+)["']/gi,
-      /<a[^>]*class=["'][^"']*external-link[^"']*["'][^>]*href=["']([^"']+)["']/gi,
-      /<a[^>]*class=["'][^"']*external[^"']*["'][^>]*href=["']([^"']+)["']/gi,
-    ];
-    
-    for (const pattern of classPatterns) {
-      const matches = html.match(pattern);
-      if (matches) {
-        for (const match of matches) {
-          const hrefMatch = match.match(/href=["']([^"']+)["']/i);
-          if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http') && !hrefMatch[1].includes('catchdesmoines.com')) {
-            console.log('Found via class pattern:', hrefMatch[1]);
-            return { visitUrl: hrefMatch[1], dateStr, timeStr };
-          }
-        }
-      }
-    }
-    
-    // Strategy 3: Data attributes
-    const dataPatterns = [
-      /<a[^>]*data-external-url=["']([^"']+)["']/gi,
-      /<a[^>]*data-event-url=["']([^"']+)["']/gi,
-      /<a[^>]*data-url=["']([^"']+)["']/gi,
-    ];
-    
-    for (const pattern of dataPatterns) {
-      const matches = html.match(pattern);
-      if (matches) {
-        for (const match of matches) {
-          const urlMatch = match.match(/data-[^=]+-url=["']([^"']+)["']/i);
-          if (urlMatch && urlMatch[1] && urlMatch[1].startsWith('http') && !urlMatch[1].includes('catchdesmoines.com')) {
-            console.log('Found via data attribute:', urlMatch[1]);
-            return { visitUrl: urlMatch[1], dateStr, timeStr };
-          }
-        }
-      }
-    }
-    
-    // Strategy 4: Event actions section
-    const eventActionsPattern = /<div[^>]*class=["'][^"']*event-actions[^"']*["'][^>]*>[\s\S]{0,2000}?<\/div>/gi;
-    const eventActionsMatches = html.match(eventActionsPattern);
-    if (eventActionsMatches) {
-      for (const section of eventActionsMatches) {
-        const linkMatches = section.match(/<a[^>]*href=["']([^"']+)["']/gi);
-        if (linkMatches) {
-          for (const linkMatch of linkMatches) {
-            const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
-            if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http') && !hrefMatch[1].includes('catchdesmoines.com')) {
-              const url = hrefMatch[1];
-              // Exclude social media
-              if (!url.includes('facebook.com') && !url.includes('twitter.com') && !url.includes('x.com') && !url.includes('instagram.com')) {
-                console.log('Found via event-actions:', url);
-                return { visitUrl: url, dateStr, timeStr };
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    // Strategy 5: Universal fallback with strict exclusions
-    const excludeDomains = [
-      'catchdesmoines.com', 
-      'facebook.com', 
-      'twitter.com', 
-      'x.com', 
-      'instagram.com', 
-      'youtube.com', 
-      'tiktok.com', 
-      'linkedin.com', 
-      'pinterest.com',
-      'reddit.com',
-      'snapchat.com',
-      'whatsapp.com',
-      'telegram.org',
-      'discord.com',
-      'google.com', 
-      'maps.google.com',
-      'goo.gl',
-      'bit.ly',
-      'ow.ly',
-      'simpleviewcrm.com', 
-      'extranet.simpleview',
-      'mailto:',
-      'tel:',
-      '#'
-    ];
-    
-    const allLinkMatches = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi);
-    if (allLinkMatches) {
-      // First pass: look for links with "website", "official", "tickets", etc. in text or class
-      for (const linkMatch of allLinkMatches) {
-        const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
-        if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http')) {
-          const linkUrl = hrefMatch[1];
-          const shouldExclude = excludeDomains.some(domain => linkUrl.includes(domain));
-          
-          if (!shouldExclude) {
-            const linkElement = linkMatch.toLowerCase();
-            if (linkElement.includes('visit') || 
-                linkElement.includes('website') || 
-                linkElement.includes('official') ||
-                linkElement.includes('tickets') ||
-                linkElement.includes('register') ||
-                linkElement.includes('more info')) {
-              console.log('Found via keyword match:', linkUrl);
-              return { visitUrl: linkUrl, dateStr, timeStr };
-            }
-          }
-        }
-      }
-      
-      // Second pass: first non-excluded external link
-      for (const linkMatch of allLinkMatches) {
-        const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
-        if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http')) {
-          const linkUrl = hrefMatch[1];
-          const shouldExclude = excludeDomains.some(domain => linkUrl.includes(domain));
-          
-          if (!shouldExclude) {
-            console.log('Found via fallback:', linkUrl);
-            return { visitUrl: linkUrl, dateStr, timeStr };
-          }
-        }
-      }
-    }
 
-    console.log('No suitable external URL found for:', eventUrl);
-    return { visitUrl: null, dateStr, timeStr };
+    return { visitUrl, dateStr, timeStr };
     
   } catch (error) {
     console.error('Error extracting URL from', eventUrl, ':', error);
