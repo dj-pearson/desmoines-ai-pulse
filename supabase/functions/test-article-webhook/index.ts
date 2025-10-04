@@ -24,7 +24,7 @@ serve(async (req) => {
       test: true,
       article_id: "test-id",
       article_title: "Test Article",
-      article_url: "https://desmoinesguide.com/articles/test",
+      article_url: "https://desmoinesinsider.com/articles/test",
       short_description: "This is a test short description for Twitter (280 chars max)",
       long_description: "This is a test longer description for Facebook. It contains more details about the article and can be up to 500 characters long.",
       excerpt: "Test excerpt",

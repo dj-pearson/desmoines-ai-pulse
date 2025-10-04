@@ -106,7 +106,7 @@ Return ONLY a JSON object with this exact structure:
     }
 
     // Prepare webhook payload
-    const articleUrl = `https://desmoinesguide.com/articles/${article.slug}`;
+    const articleUrl = `https://desmoinesinsider.com/articles/${article.slug}`;
     
     const webhookPayload = {
       article_id: article.id,
