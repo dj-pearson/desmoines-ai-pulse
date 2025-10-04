@@ -128,33 +128,28 @@ export function hasSpecificTime(event: any): boolean {
  */
 export function formatEventDate(event: any): string {
   try {
-    // Check if event has a specific time
-    if (!hasSpecificTime(event)) {
-      // For events without specific times, show date only
-      if (event.event_start_utc || event.event_start_local) {
-        const dateToUse = event.event_start_local || event.event_start_utc;
-        return formatInCentralTime(dateToUse, "EEEE, MMMM d, yyyy");
-      }
-      
-      if (event.date) {
-        return formatInCentralTime(event.date, "EEEE, MMMM d, yyyy");
-      }
-      
-      return "Date to be announced";
-    }
-    
-    // Use new timezone-aware fields if available
+    // Always use UTC field for display - it's the source of truth
     if (event.event_start_utc) {
-      return formatInCentralTime(event.event_start_utc, "EEEE, MMMM d, yyyy 'at' h:mm a");
+      // Check if this event has a specific time set
+      if (hasSpecificTime(event)) {
+        return formatInCentralTime(event.event_start_utc, "EEEE, MMMM d, yyyy 'at' h:mm a");
+      } else {
+        return formatInCentralTime(event.event_start_utc, "EEEE, MMMM d, yyyy");
+      }
     }
     
     // Fallback to legacy date field
     if (event.date) {
-      return formatInCentralTime(event.date, "EEEE, MMMM d, yyyy 'at' h:mm a");
+      if (hasSpecificTime(event)) {
+        return formatInCentralTime(event.date, "EEEE, MMMM d, yyyy 'at' h:mm a");
+      } else {
+        return formatInCentralTime(event.date, "EEEE, MMMM d, yyyy");
+      }
     }
     
     return "Date and time to be announced";
-  } catch {
+  } catch (error) {
+    console.error("Error formatting event date:", error);
     return "Date and time to be announced";
   }
 }
@@ -165,33 +160,27 @@ export function formatEventDate(event: any): string {
  */
 export function formatEventDateShort(event: any): string {
   try {
-    // Check if event has a specific time
-    if (!hasSpecificTime(event)) {
-      // For events without specific times, show date only
-      if (event.event_start_utc || event.event_start_local) {
-        const dateToUse = event.event_start_local || event.event_start_utc;
-        return formatInCentralTime(dateToUse, "MMM d, yyyy");
-      }
-      
-      if (event.date) {
-        return formatInCentralTime(event.date, "MMM d, yyyy");
-      }
-      
-      return "Date TBA";
-    }
-    
-    // Use new timezone-aware fields if available
+    // Always use UTC field for display - it's the source of truth
     if (event.event_start_utc) {
-      return formatInCentralTime(event.event_start_utc, "MMM d, yyyy 'at' h:mm a");
+      if (hasSpecificTime(event)) {
+        return formatInCentralTime(event.event_start_utc, "MMM d, yyyy 'at' h:mm a");
+      } else {
+        return formatInCentralTime(event.event_start_utc, "MMM d, yyyy");
+      }
     }
     
     // Fallback to legacy date field
     if (event.date) {
-      return formatInCentralTime(event.date, "MMM d, yyyy 'at' h:mm a");
+      if (hasSpecificTime(event)) {
+        return formatInCentralTime(event.date, "MMM d, yyyy 'at' h:mm a");
+      } else {
+        return formatInCentralTime(event.date, "MMM d, yyyy");
+      }
     }
     
     return "Date TBA";
-  } catch {
+  } catch (error) {
+    console.error("Error formatting short event date:", error);
     return "Date TBA";
   }
 }

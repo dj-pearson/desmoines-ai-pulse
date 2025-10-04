@@ -819,42 +819,60 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
     console.log(`🕐 Parsing date string: "${dateStr}"`);
 
     // Parse the date string as Central Time and convert to UTC
-    // The AI provides dates like "2025-09-13 19:00:00" which should be interpreted as Central Time
+    // The AI provides dates like "2025-10-04 19:00:00" which should be interpreted as Central Time
 
-    let centralTimeString: string;
+    let year: number, month: number, day: number, hours: number, minutes: number, seconds: number;
 
     // Match YYYY-MM-DD HH:MM:SS format
-    if (dateStr.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-      centralTimeString = dateStr;
+    const datetimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (datetimeMatch) {
+      [, year, month, day, hours, minutes, seconds] = datetimeMatch.map(Number);
     }
     // Match YYYY-MM-DD format (default to 7:30 PM Central)
-    else if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      centralTimeString = `${dateStr} 19:30:00`;
-    }
-    // Fallback: try to parse and reformat
     else {
-      const fallbackDate = new Date(dateStr);
-      if (isNaN(fallbackDate.getTime())) {
-        console.log(`⚠️ Could not parse date: ${dateStr}`);
-        return null;
+      const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (dateMatch) {
+        [, year, month, day] = dateMatch.map(Number);
+        hours = 19;
+        minutes = 30;
+        seconds = 0;
+      } else {
+        // Fallback: try to parse with Date constructor
+        const fallbackDate = new Date(dateStr);
+        if (isNaN(fallbackDate.getTime())) {
+          console.log(`⚠️ Could not parse date: ${dateStr}`);
+          return null;
+        }
+        year = fallbackDate.getFullYear();
+        month = fallbackDate.getMonth() + 1;
+        day = fallbackDate.getDate();
+        hours = fallbackDate.getHours() || 19;
+        minutes = fallbackDate.getMinutes() || 30;
+        seconds = fallbackDate.getSeconds() || 0;
       }
-      // Assume the parsed date is in Central Time
-      const year = fallbackDate.getFullYear();
-      const month = (fallbackDate.getMonth() + 1).toString().padStart(2, "0");
-      const day = fallbackDate.getDate().toString().padStart(2, "0");
-      const hours = fallbackDate.getHours().toString().padStart(2, "0");
-      const minutes = fallbackDate.getMinutes().toString().padStart(2, "0");
-      const seconds = fallbackDate.getSeconds().toString().padStart(2, "0");
-      centralTimeString = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
     }
 
-    // Convert Central Time to UTC
-    // parseISO treats the string as naive time, then fromZonedTime converts it assuming it's in Central Time
-    const localDate = parseISO(centralTimeString);
-    const utcDate = fromZonedTime(localDate, eventTimeZone);
+    // Create a proper date object representing this time in Central timezone
+    // We build the ISO string without timezone, then tell date-fns-tz to interpret it as Central
+    const centralTimeString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    
+    // CRITICAL FIX: Create a date in Central timezone, then convert to UTC
+    // First, we need to create a Date object that represents the correct instant in time
+    // For October 4th 7:30 PM Central, we need to get the UTC equivalent
+    
+    // Method: Build an ISO string with timezone offset for Central Time
+    // Determine DST offset (CDT = UTC-5, CST = UTC-6)
+    const testDate = new Date(year, month - 1, day, 12, 0, 0); // noon on that day
+    const isDST = testDate.getMonth() >= 2 && testDate.getMonth() <= 10; // rough DST check (Mar-Nov)
+    const offset = isDST ? -5 : -6; // CDT or CST
+    const offsetStr = offset >= 0 ? `+${String(Math.abs(offset)).padStart(2, '0')}:00` : `-${String(Math.abs(offset)).padStart(2, '0')}:00`;
+    
+    // Create ISO string with timezone
+    const isoWithTimezone = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${offsetStr}`;
+    const utcDate = new Date(isoWithTimezone);
 
     console.log(
-      `🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} -> UTC: ${utcDate.toISOString()}`
+      `🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} (offset: ${offsetStr}) -> UTC: ${utcDate.toISOString()}`
     );
 
     if (!isNaN(utcDate.getTime())) {
