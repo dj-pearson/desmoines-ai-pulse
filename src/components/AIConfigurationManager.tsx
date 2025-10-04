@@ -4,13 +4,20 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAIConfiguration } from "@/hooks/useAIConfiguration";
-import { Loader2, Save, Bot, Settings, Zap, Cpu } from "lucide-react";
+import { Loader2, Save, Bot, Settings, Zap, Cpu, TestTube, CheckCircle, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export function AIConfigurationManager() {
-  const { settings, isLoading, updateSetting, isUpdating } = useAIConfiguration();
+  const { settings, isLoading, updateSetting, isUpdating, getSetting } = useAIConfiguration();
   const [editedValues, setEditedValues] = useState<Record<string, any>>({});
+  const [selectedModel, setSelectedModel] = useState<string>('google/gemini-2.5-flash');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; response?: string } | null>(null);
 
   if (isLoading) {
     return (
@@ -50,6 +57,50 @@ export function AIConfigurationManager() {
     return <Settings className="h-4 w-4" />;
   };
 
+  const testAIModel = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+
+    try {
+      toast.info('Testing AI model...', {
+        description: `Testing ${selectedModel}`
+      });
+
+      const { data, error } = await supabase.functions.invoke('test-ai-model', {
+        body: {
+          model: selectedModel,
+          testPrompt: 'Generate a brief, engaging one-sentence description of a jazz music event in Des Moines.'
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setTestResult({
+          success: true,
+          message: 'Model test successful',
+          response: data.generatedText
+        });
+        toast.success('AI model test successful', {
+          description: `${selectedModel} is working correctly`
+        });
+      } else {
+        throw new Error(data.message || 'Test failed');
+      }
+    } catch (error) {
+      console.error('Error testing AI model:', error);
+      setTestResult({
+        success: false,
+        message: error.message || 'Test failed'
+      });
+      toast.error('AI model test failed', {
+        description: error.message
+      });
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -80,6 +131,84 @@ export function AIConfigurationManager() {
               <div>• Weekend Guide</div>
             </div>
           </div>
+
+          <Separator />
+
+          {/* AI Model Testing Section */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TestTube className="h-5 w-5" />
+                Test AI Model
+              </CardTitle>
+              <CardDescription>
+                Test different AI models to verify they're working correctly
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="google/gemini-2.5-flash">Gemini 2.5 Flash (Default)</SelectItem>
+                    <SelectItem value="google/gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
+                    <SelectItem value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</SelectItem>
+                    <SelectItem value="openai/gpt-5">GPT-5</SelectItem>
+                    <SelectItem value="openai/gpt-5-mini">GPT-5 Mini</SelectItem>
+                    <SelectItem value="openai/gpt-5-nano">GPT-5 Nano</SelectItem>
+                  </SelectContent>
+                </Select>
+                
+                <Button 
+                  onClick={testAIModel} 
+                  disabled={isTesting}
+                  size="default"
+                >
+                  {isTesting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Testing...
+                    </>
+                  ) : (
+                    <>
+                      <TestTube className="h-4 w-4 mr-2" />
+                      Test Model
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {testResult && (
+                <Alert variant={testResult.success ? "default" : "destructive"}>
+                  <div className="flex items-start gap-2">
+                    {testResult.success ? (
+                      <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
+                    ) : (
+                      <XCircle className="h-4 w-4 text-red-500 mt-0.5" />
+                    )}
+                    <div className="flex-1 space-y-2">
+                      <AlertDescription>
+                        <strong>{testResult.message}</strong>
+                      </AlertDescription>
+                      {testResult.response && (
+                        <div className="text-sm bg-muted/50 p-3 rounded-md">
+                          <p className="font-medium mb-1">Generated Response:</p>
+                          <p className="text-muted-foreground">{testResult.response}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Alert>
+              )}
+
+              <div className="text-xs text-muted-foreground">
+                <p>This test sends a sample prompt to verify the selected model is responding correctly.</p>
+                <p className="mt-1">Current configured model: <code className="px-1 py-0.5 rounded bg-muted">{getSetting('default_model', 'google/gemini-2.5-flash')}</code></p>
+              </div>
+            </CardContent>
+          </Card>
 
           <Separator />
 
