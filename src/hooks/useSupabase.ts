@@ -7,21 +7,28 @@ export function useFeaturedEvents() {
   const today = new Date().toISOString().split('T')[0];
   
   return useQuery<Event[]>({
-    queryKey: ['events', 'featured', today], // Include today's date to force cache refresh
+    queryKey: ['events', 'featured', today],
     queryFn: async () => {
       console.log('Fetching featured events for date >= ', today);
       const { data, error } = await supabase
         .from('events')
         .select('*')
         .eq('is_featured', true)
-        .gte('date', today) // Only today and future events
+        .gte('date', today)
         .order('date', { ascending: true })
         .limit(6);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching featured events:', error);
+        throw error;
+      }
       console.log('Featured events fetched:', data?.length, 'events');
       return data?.map(transformEvent) || [];
     },
+    staleTime: 60000, // 1 minute
+    gcTime: 300000, // 5 minutes
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -29,11 +36,10 @@ export function useEvents(filters?: { category?: string; location?: string; date
   const today = new Date().toISOString().split('T')[0];
   
   return useQuery<Event[]>({
-    queryKey: ['events', filters, today], // Include today's date to force cache refresh
+    queryKey: ['events', filters, today],
     queryFn: async () => {
       let query = supabase.from('events').select('*');
       
-      // Always filter to only show today and future events
       const dateFilter = filters?.date || today;
       console.log('Fetching events for date >=', dateFilter);
       query = query.gte('date', dateFilter);
@@ -47,10 +53,17 @@ export function useEvents(filters?: { category?: string; location?: string; date
       
       const { data, error } = await query.order('date', { ascending: true });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching events:', error);
+        throw error;
+      }
       console.log('Events fetched:', data?.length, 'events');
       return data?.map(transformEvent) || [];
     },
+    staleTime: 60000,
+    gcTime: 300000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -64,9 +77,17 @@ export function useRestaurantOpenings() {
         .in('status', ['opening_soon', 'announced'])
         .order('opening_date', { ascending: true, nullsFirst: false });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching restaurant openings:', error);
+        throw error;
+      }
+      console.log('Restaurant openings fetched:', data?.length);
       return data?.map(transformRestaurant) || [];
     },
+    staleTime: 120000, // 2 minutes
+    gcTime: 600000, // 10 minutes
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
@@ -81,9 +102,17 @@ export function useFeaturedRestaurants() {
         .order('rating', { ascending: false })
         .limit(6);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching featured restaurants:', error);
+        throw error;
+      }
+      console.log('Featured restaurants fetched:', data?.length);
       return data?.map(transformRestaurant) || [];
     },
+    staleTime: 120000,
+    gcTime: 600000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
   });
 }
 
