@@ -27,7 +27,7 @@ import ShareDialog from '@/components/ShareDialog';
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
-  const { getArticleBySlug } = useArticles();
+  const { getArticleBySlug } = useArticles({ autoLoad: false });
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -106,6 +106,8 @@ const ArticleDetails: React.FC = () => {
         title={article.seo_title || article.title}
         description={article.seo_description || article.excerpt || `Read ${article.title} on Des Moines Insider`}
         keywords={article.seo_keywords || article.tags || []}
+        type="article"
+        canonicalUrl={`https://desmoinesinsider.com/articles/${article.slug}`}
       />
       <Header />
       
