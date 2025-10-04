@@ -3,12 +3,14 @@
 ## What Changed
 
 ### ❌ Old Approach (50% Accuracy)
+
 - Searched the entire page for any links
 - Found Vimeo players, API endpoints, random embeds
 - No specific exclusion list
 - No priority system
 
 ### ✅ New Approach (99%+ Accuracy)
+
 - **ONLY** searches inside `<div class="bottom-actions">`
 - Requires EXACT "Visit Website" text match
 - Comprehensive exclusion list (Vimeo, APIs, JS files, etc.)
@@ -33,6 +35,7 @@
 ## What Gets Blocked Now
 
 ✅ **Blocked (False Positives):**
+
 - `player.vimeo.com/api/player.js` ← Your main problem
 - `vimeo.com/player/`
 - `youtube.com/embed/`
@@ -43,6 +46,7 @@
 - CMS tracking URLs
 
 ✅ **Allowed (Real Event URLs):**
+
 - `desmoinesartcenter.org/art/exhibitions/...`
 - `dmplayhouse.com/events/...`
 - `facebook.com/events/...` (actual events, not catchdesmoines page)
@@ -52,11 +56,13 @@
 ## Test It Now
 
 1. **Deploy the updated function:**
+
    ```bash
    # Function is already updated in firecrawl-scraper/index.ts
    ```
 
 2. **Run a test extraction:**
+
    - Open your CatchDesmoinUrlExtractor UI
    - Click "Dry Run (Test)" with batch size 5-10
    - Check the logs for:
@@ -75,6 +81,7 @@
 ## Expected Results
 
 **Before (50% accuracy):**
+
 ```
 ✅ Event 1: https://venue.com/event          ← Correct
 ❌ Event 2: https://player.vimeo.com/api/player.js  ← WRONG (Vimeo player)
@@ -83,6 +90,7 @@
 ```
 
 **After (99%+ accuracy):**
+
 ```
 ✅ Event 1: https://venue.com/event          ← Correct
 ✅ Event 2: https://venue2.com/concerts      ← Correct (Vimeo blocked!)
@@ -95,6 +103,7 @@
 ### If you still see wrong URLs:
 
 1. **Check the logs** - They'll show exactly what was found:
+
    ```
    🔗 Found 3 total links in bottom-actions
    ⏭️ Skipped excluded URL: https://player.vimeo.com/...
@@ -102,6 +111,7 @@
    ```
 
 2. **New false positive pattern?** Add to exclusion list:
+
    - Open `supabase/functions/firecrawl-scraper/index.ts`
    - Find `excludePatterns` array (line ~103)
    - Add new pattern, e.g., `'example.com/bad-pattern'`

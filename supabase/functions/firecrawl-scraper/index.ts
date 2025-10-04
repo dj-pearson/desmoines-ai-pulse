@@ -84,7 +84,7 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 
     // FOOLPROOF STRATEGY: Surgical extraction targeting ONLY the bottom-actions div
     // This is the ONLY place where the real "Visit Website" link lives
-    
+
     // Step 1: Find the bottom-actions div
     const bottomActionsPattern =
       /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i;
@@ -96,54 +96,58 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
     }
 
     const bottomActionsHtml = bottomMatch[1];
-    console.log(`📦 Found bottom-actions div (${bottomActionsHtml.length} chars)`);
+    console.log(
+      `📦 Found bottom-actions div (${bottomActionsHtml.length} chars)`
+    );
 
     // Step 2: Comprehensive exclusion list for false positives
     const isInvalidUrl = (url: string): boolean => {
       const excludePatterns = [
-        'catchdesmoines.com',
-        'mailto:',
+        "catchdesmoines.com",
+        "mailto:",
         // Video/media embeds and players
-        'vimeo.com/api',
-        'vimeo.com/player',
-        'player.vimeo.com',
-        'youtube.com/embed',
-        'youtube.com/player',
-        'youtu.be/player',
+        "vimeo.com/api",
+        "vimeo.com/player",
+        "player.vimeo.com",
+        "youtube.com/embed",
+        "youtube.com/player",
+        "youtu.be/player",
         // Social media (catchdesmoines official only)
-        'facebook.com/catchdesmoines',
-        'fb.com/catchdesmoines',
-        'twitter.com/catchdesmoines',
-        'x.com/catchdesmoines',
-        'instagram.com/catchdesmoines',
-        'linkedin.com/company/catchdesmoines',
+        "facebook.com/catchdesmoines",
+        "fb.com/catchdesmoines",
+        "twitter.com/catchdesmoines",
+        "x.com/catchdesmoines",
+        "instagram.com/catchdesmoines",
+        "linkedin.com/company/catchdesmoines",
         // Maps and embeds
-        'google.com/maps/embed',
-        'maps.google.com/embed',
+        "google.com/maps/embed",
+        "maps.google.com/embed",
         // CMS and tracking
-        'simpleviewcrm.com',
-        'simpleviewinc.com',
-        'googletagmanager.com',
-        'google-analytics.com',
+        "simpleviewcrm.com",
+        "simpleviewinc.com",
+        "googletagmanager.com",
+        "google-analytics.com",
         // File types that aren't websites
-        '/api/',
-        '/player.js',
-        '/embed.js',
-        '.js?',
-        '.js#',
-        '.js$',
-        '.css',
-        '.json'
+        "/api/",
+        "/player.js",
+        "/embed.js",
+        ".js?",
+        ".js#",
+        ".js$",
+        ".css",
+        ".json",
       ];
 
       const lowerUrl = url.toLowerCase();
-      return excludePatterns.some(pattern => lowerUrl.includes(pattern.toLowerCase()));
+      return excludePatterns.some((pattern) =>
+        lowerUrl.includes(pattern.toLowerCase())
+      );
     };
 
     // Step 3: Extract ALL links from bottom-actions div with their full HTML context
     const allLinksPattern = /<a\s+([^>]*?)>([\s\S]*?)<\/a>/gi;
     const allLinks = [...bottomActionsHtml.matchAll(allLinksPattern)];
-    
+
     console.log(`🔗 Found ${allLinks.length} total links in bottom-actions`);
 
     // Step 4: PRIORITY PASS - Look for exact "Visit Website" link with action-item class
@@ -152,23 +156,27 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
       const linkText = linkMatch[2];
 
       // Check for action-item class
-      const hasActionItem = /class=["'][^"']*action-item[^"']*["']/i.test(attributes);
-      
+      const hasActionItem = /class=["'][^"']*action-item[^"']*["']/i.test(
+        attributes
+      );
+
       // Check for EXACT "Visit Website" text (not just "visit" or "website")
       const hasExactVisitWebsite = /Visit\s+Website/i.test(linkText);
 
       if (hasActionItem && hasExactVisitWebsite) {
         // Extract href
         const hrefMatch = attributes.match(/href=["']([^"']+)["']/i);
-        
+
         if (hrefMatch && hrefMatch[1]) {
           const url = hrefMatch[1].trim();
-          
+
           if (url.startsWith("http") && !isInvalidUrl(url)) {
             console.log(`✅ FOUND PRIORITY: Visit Website link = ${url}`);
             return url;
           } else if (isInvalidUrl(url)) {
-            console.log(`⏭️ Skipped excluded URL in Visit Website link: ${url}`);
+            console.log(
+              `⏭️ Skipped excluded URL in Visit Website link: ${url}`
+            );
           }
         }
       }
@@ -176,14 +184,14 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 
     // Step 5: FALLBACK PASS - Look for any valid external link in bottom-actions
     console.log(`⚠️ No "Visit Website" link found, trying fallback...`);
-    
+
     for (const linkMatch of allLinks) {
       const attributes = linkMatch[1];
       const hrefMatch = attributes.match(/href=["']([^"']+)["']/i);
-      
+
       if (hrefMatch && hrefMatch[1]) {
         const url = hrefMatch[1].trim();
-        
+
         if (url.startsWith("http") && !isInvalidUrl(url)) {
           console.log(`✅ FALLBACK: Found external link = ${url}`);
           return url;
