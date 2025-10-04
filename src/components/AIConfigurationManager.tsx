@@ -11,11 +11,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+
+const AI_MODELS = [
+  // Google Gemini Models
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash (Default)', category: 'Google' },
+  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', category: 'Google' },
+  { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', category: 'Google' },
+  { value: 'google/gemini-2.5-flash-image-preview', label: 'Gemini 2.5 Flash Image Preview', category: 'Google' },
+  
+  // OpenAI GPT Models
+  { value: 'openai/gpt-5', label: 'GPT-5', category: 'OpenAI' },
+  { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini', category: 'OpenAI' },
+  { value: 'openai/gpt-5-nano', label: 'GPT-5 Nano', category: 'OpenAI' },
+  
+  // Anthropic Claude Models
+  { value: 'claude-opus-4-1-20250805', label: 'Claude Opus 4.1', category: 'Anthropic' },
+  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', category: 'Anthropic' },
+  { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', category: 'Anthropic' },
+  { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', category: 'Anthropic' },
+];
 
 export function AIConfigurationManager() {
   const { settings, isLoading, updateSetting, isUpdating, getSetting } = useAIConfiguration();
   const [editedValues, setEditedValues] = useState<Record<string, any>>({});
-  const [selectedModel, setSelectedModel] = useState<string>('google/gemini-2.5-flash');
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; response?: string } | null>(null);
 
@@ -27,6 +46,8 @@ export function AIConfigurationManager() {
     );
   }
 
+  const currentModel = getSetting('default_model', 'google/gemini-2.5-flash');
+  
   const handleSave = (key: string) => {
     const value = editedValues[key];
     if (value !== undefined) {
@@ -50,25 +71,18 @@ export function AIConfigurationManager() {
 
   const hasChanges = (key: string) => editedValues[key] !== undefined;
 
-  const getCategoryIcon = (key: string) => {
-    if (key.includes("model")) return <Bot className="h-4 w-4" />;
-    if (key.includes("temperature")) return <Zap className="h-4 w-4" />;
-    if (key.includes("tokens")) return <Cpu className="h-4 w-4" />;
-    return <Settings className="h-4 w-4" />;
-  };
-
   const testAIModel = async () => {
     setIsTesting(true);
     setTestResult(null);
 
     try {
-      toast.info('Testing AI model...', {
-        description: `Testing ${selectedModel}`
+      toast.info('Testing current AI model...', {
+        description: `Testing ${currentModel}`
       });
 
       const { data, error } = await supabase.functions.invoke('test-ai-model', {
         body: {
-          model: selectedModel,
+          model: currentModel,
           testPrompt: 'Generate a brief, engaging one-sentence description of a jazz music event in Des Moines.'
         }
       });
@@ -82,7 +96,7 @@ export function AIConfigurationManager() {
           response: data.generatedText
         });
         toast.success('AI model test successful', {
-          description: `${selectedModel} is working correctly`
+          description: `${currentModel} is working correctly`
         });
       } else {
         throw new Error(data.message || 'Test failed');
@@ -139,27 +153,18 @@ export function AIConfigurationManager() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TestTube className="h-5 w-5" />
-                Test AI Model
+                Test Current AI Model
               </CardTitle>
               <CardDescription>
-                Test different AI models to verify they're working correctly
+                Test the currently configured default model to verify it's working correctly
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Select value={selectedModel} onValueChange={setSelectedModel}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="Select model" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="google/gemini-2.5-flash">Gemini 2.5 Flash (Default)</SelectItem>
-                    <SelectItem value="google/gemini-2.5-pro">Gemini 2.5 Pro</SelectItem>
-                    <SelectItem value="google/gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</SelectItem>
-                    <SelectItem value="openai/gpt-5">GPT-5</SelectItem>
-                    <SelectItem value="openai/gpt-5-mini">GPT-5 Mini</SelectItem>
-                    <SelectItem value="openai/gpt-5-nano">GPT-5 Nano</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <div className="text-sm font-medium mb-1">Current Model:</div>
+                  <code className="px-3 py-2 rounded bg-muted text-sm block">{currentModel}</code>
+                </div>
                 
                 <Button 
                   onClick={testAIModel} 
@@ -204,76 +209,118 @@ export function AIConfigurationManager() {
               )}
 
               <div className="text-xs text-muted-foreground">
-                <p>This test sends a sample prompt to verify the selected model is responding correctly.</p>
-                <p className="mt-1">Current configured model: <code className="px-1 py-0.5 rounded bg-muted">{getSetting('default_model', 'google/gemini-2.5-flash')}</code></p>
+                <p>This test sends a sample prompt to verify the model is responding correctly. Change the default model in the table below to test different models.</p>
               </div>
             </CardContent>
           </Card>
 
           <Separator />
 
-          <div className="space-y-4">
-            {settings?.map((setting) => (
-              <Card key={setting.id} className="border-muted">
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-center gap-2 flex-1">
-                        {getCategoryIcon(setting.setting_key)}
-                        <div className="flex-1">
-                          <Label htmlFor={setting.setting_key} className="text-base font-medium">
-                            {setting.setting_key.split("_").map(word => 
-                              word.charAt(0).toUpperCase() + word.slice(1)
-                            ).join(" ")}
-                          </Label>
+          {/* Compact Table Layout for Settings */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">AI Configuration Settings</h3>
+              <Badge variant="outline">{settings?.length || 0} Settings</Badge>
+            </div>
+            
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[200px]">Setting</TableHead>
+                    <TableHead>Value</TableHead>
+                    <TableHead className="w-[100px]">Status</TableHead>
+                    <TableHead className="w-[100px]">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {settings?.map((setting) => (
+                    <TableRow key={setting.id}>
+                      <TableCell className="font-medium">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            {setting.setting_key.includes("model") && <Bot className="h-4 w-4 text-muted-foreground" />}
+                            {setting.setting_key.includes("temperature") && <Zap className="h-4 w-4 text-muted-foreground" />}
+                            {setting.setting_key.includes("tokens") && <Cpu className="h-4 w-4 text-muted-foreground" />}
+                            {!setting.setting_key.includes("model") && !setting.setting_key.includes("temperature") && !setting.setting_key.includes("tokens") && <Settings className="h-4 w-4 text-muted-foreground" />}
+                            <span className="text-sm">
+                              {setting.setting_key.split("_").map(word => 
+                                word.charAt(0).toUpperCase() + word.slice(1)
+                              ).join(" ")}
+                            </span>
+                          </div>
                           {setting.description && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              {setting.description}
-                            </p>
+                            <p className="text-xs text-muted-foreground">{setting.description}</p>
                           )}
                         </div>
-                      </div>
-                      <Badge variant={hasChanges(setting.setting_key) ? "default" : "outline"} className="shrink-0">
-                        {hasChanges(setting.setting_key) ? "Modified" : "Saved"}
-                      </Badge>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Input
-                        id={setting.setting_key}
-                        value={getDisplayValue(setting.setting_key, setting.setting_value)}
-                        onChange={(e) =>
-                          setEditedValues((prev) => ({
-                            ...prev,
-                            [setting.setting_key]: e.target.value,
-                          }))
-                        }
-                        placeholder={`Enter ${setting.setting_key}`}
-                        className="flex-1"
-                      />
-                      <Button
-                        onClick={() => handleSave(setting.setting_key)}
-                        disabled={!hasChanges(setting.setting_key) || isUpdating}
-                        size="default"
-                      >
-                        {isUpdating ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                      </TableCell>
+                      <TableCell>
+                        {setting.setting_key === 'default_model' ? (
+                          <Select
+                            value={getDisplayValue(setting.setting_key, setting.setting_value)}
+                            onValueChange={(value) =>
+                              setEditedValues((prev) => ({
+                                ...prev,
+                                [setting.setting_key]: value,
+                              }))
+                            }
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="Select model" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {AI_MODELS.map((model) => (
+                                <SelectItem key={model.value} value={model.value}>
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-xs">{model.category}</Badge>
+                                    {model.label}
+                                  </div>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         ) : (
-                          <>
-                            <Save className="h-4 w-4 mr-2" />
-                            Save
-                          </>
+                          <Input
+                            value={getDisplayValue(setting.setting_key, setting.setting_value)}
+                            onChange={(e) =>
+                              setEditedValues((prev) => ({
+                                ...prev,
+                                [setting.setting_key]: e.target.value,
+                              }))
+                            }
+                            placeholder={`Enter ${setting.setting_key}`}
+                            className="w-full"
+                          />
                         )}
-                      </Button>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground">
-                      Last updated: {new Date(setting.updated_at).toLocaleString()}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={hasChanges(setting.setting_key) ? "default" : "outline"} className="text-xs">
+                          {hasChanges(setting.setting_key) ? "Modified" : "Saved"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          onClick={() => handleSave(setting.setting_key)}
+                          disabled={!hasChanges(setting.setting_key) || isUpdating}
+                          size="sm"
+                          variant={hasChanges(setting.setting_key) ? "default" : "ghost"}
+                        >
+                          {isUpdating ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4" />
+                          )}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            
+            <div className="text-xs text-muted-foreground">
+              Last updated: {settings?.[0] ? new Date(settings[0].updated_at).toLocaleString() : 'N/A'}
+            </div>
           </div>
 
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-4">
@@ -281,11 +328,10 @@ export function AIConfigurationManager() {
               <Bot className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
               <div className="text-sm">
                 <p className="font-medium text-amber-900 dark:text-amber-100 mb-1">
-                  Model Update Guide
+                  Model Configuration Guide
                 </p>
                 <p className="text-amber-800 dark:text-amber-200">
-                  When updating models (e.g., to <code className="px-1 py-0.5 rounded bg-amber-100 dark:bg-amber-900">claude-sonnet-4-5-20250929</code>), 
-                  change the <strong>Default Model</strong> setting above. All modules will automatically use the new model on their next execution.
+                  Select your preferred AI model from the dropdown above. All modules (Firecrawl Scraper, AI Crawler, Social Media Manager, etc.) will automatically use the configured model. After changing the model, use the "Test Model" button to verify it's working correctly.
                 </p>
               </div>
             </div>
