@@ -150,42 +150,44 @@ ADVANCED SEO OPTIMIZATION REQUIREMENTS:
 ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
 
 CRITICAL FORMATTING REQUIREMENTS FOR THE "content" FIELD:
-- The content field MUST contain ONLY the article body in clean, semantic HTML
-- Use proper HTML5 tags: <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>
-- Start with an engaging opening paragraph (no H1 - that's the title)
-- Structure with clear H2 sections and H3 subsections
-- Use <p> tags for all paragraphs
-- Use <ul> or <ol> for lists with proper <li> items
-- Add <strong> for emphasis on key points
-- No markdown syntax (no ##, no *, no -)
+- The content field MUST contain ONLY the article body in clean MARKDOWN format
+- Use proper markdown syntax: ## for H2, ### for H3, - for lists, **bold**, *italic*
+- Start with an engaging opening paragraph (no # H1 - that's the title)
+- Structure with clear ## H2 sections and ### H3 subsections
+- Use blank lines between sections
+- Use - or * for bullet lists
+- Use 1. 2. 3. for numbered lists
+- Use **text** for emphasis on key points
+- No HTML tags
 - No backend metadata or comments in the content
 - No placeholder text like "[Content continues...]" - write the FULL article
-- Make it publication-ready HTML that can be directly rendered
+- Make it publication-ready markdown
 
-EXAMPLE OF PROPER CONTENT FORMATTING:
-<p>Opening paragraph that hooks the reader and introduces the topic naturally...</p>
+EXAMPLE OF PROPER MARKDOWN FORMATTING:
+Opening paragraph that hooks the reader and introduces the topic naturally. This sets the stage for what's to come.
 
-<h2>First Major Section</h2>
-<p>Detailed paragraph explaining this section...</p>
+## First Major Section
 
-<h3>Specific Subtopic</h3>
-<p>More detailed information...</p>
+Detailed paragraph explaining this section with engaging content that keeps readers interested.
 
-<ul>
-<li>First key point with details</li>
-<li>Second key point with details</li>
-<li>Third key point with details</li>
-</ul>
+### Specific Subtopic
 
-<p>Connecting paragraph that transitions to the next section...</p>
+More detailed information about this particular aspect. Here's what you need to know:
 
-<h2>Second Major Section</h2>
-<p>Content continues with the same pattern...</p>
+- First key point with details
+- Second key point with details  
+- Third key point with details
+
+Connecting paragraph that transitions smoothly to the next section and maintains reader engagement.
+
+## Second Major Section
+
+Content continues with the same pattern, providing value throughout.
 
 CRITICAL: Return your response as a properly formatted JSON object with this exact structure:
 {
   "title": "SEO-optimized article title (include Des Moines when relevant)",
-  "content": "FULL article body content in clean, semantic HTML format with proper <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong> tags. NO markdown, NO placeholders, NO backend notes. Complete, publication-ready HTML.",
+  "content": "FULL article body in clean MARKDOWN format. Use ## for sections, ### for subsections, - for lists, **bold** for emphasis. NO HTML tags, NO placeholders, NO backend notes. Complete, publication-ready markdown.",
   "excerpt": "Compelling 2-3 sentence summary that hooks readers (150-160 characters)",
   "seo_title": "Title optimized for search engines (under 60 characters)",
   "seo_description": "Meta description with local keywords (150-160 characters)", 

@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Calendar, 
   Eye, 
@@ -228,8 +230,7 @@ const ArticleDetails: React.FC = () => {
               {/* Main Content */}
               <article className="lg:col-span-8">
                 <Card className="p-6 md:p-8">
-                  <div 
-                    className="prose prose-lg max-w-none dark:prose-invert 
+                  <div className="prose prose-lg max-w-none dark:prose-invert 
                                prose-headings:font-bold prose-headings:text-foreground
                                prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
                                prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3
@@ -239,11 +240,13 @@ const ArticleDetails: React.FC = () => {
                                prose-li:mb-2 prose-li:text-foreground/90
                                prose-strong:text-foreground prose-strong:font-semibold
                                prose-a:text-primary prose-a:no-underline hover:prose-a:underline
-                               prose-img:rounded-lg prose-img:shadow-md"
-                    dangerouslySetInnerHTML={{ 
-                      __html: article.content 
-                    }}
-                  />
+                               prose-img:rounded-lg prose-img:shadow-md
+                               prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic
+                               prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {article.content}
+                    </ReactMarkdown>
+                  </div>
                 </Card>
 
                 {/* Article Footer */}
