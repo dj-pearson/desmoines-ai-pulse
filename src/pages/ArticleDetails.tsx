@@ -42,7 +42,8 @@ const ArticleDetails: React.FC = () => {
     };
 
     loadArticle();
-  }, [slug, getArticleBySlug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
