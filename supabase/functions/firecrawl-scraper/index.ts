@@ -51,12 +51,12 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
           Authorization: `Bearer ${firecrawlApiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          url: eventUrl,
-          formats: ["html"],
-          waitFor: 2000,
-          timeout: 15000,
-        }),
+          body: JSON.stringify({
+            url: eventUrl,
+            formats: ["html"],
+            waitFor: 1500,
+            timeout: 10000,
+          }),
       }
     );
 
@@ -200,7 +200,7 @@ serve(async (req) => {
       });
     }
 
-    const { url, category, maxPages = 3 }: ScrapRequest = await req.json();
+    const { url, category, maxPages = 2 }: ScrapRequest = await req.json();
 
     if (!url || !category) {
       return new Response(
@@ -759,9 +759,9 @@ Return empty array [] if no competitive content found.`,
             );
           }
 
-          // Rate limiting: Wait 1 second between requests to avoid 429 errors
+          // Rate limiting: Wait 500ms between requests to avoid 429 errors
           if (i < filteredItems.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 500));
           }
         }
 
@@ -795,10 +795,12 @@ Return empty array [] if no competitive content found.`,
     const errors = [];
 
     if (filteredItems.length > 0) {
+      console.log(`💾 Starting database insertion for ${filteredItems.length} items...`);
       // Process in batches
       const batchSize = 10;
       for (let i = 0; i < filteredItems.length; i += batchSize) {
         const batch = filteredItems.slice(i, i + batchSize);
+        console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(filteredItems.length / batchSize)} (items ${i + 1}-${Math.min(i + batchSize, filteredItems.length)})`);
 
         for (const item of batch) {
           try {
