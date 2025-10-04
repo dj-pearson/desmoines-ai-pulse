@@ -84,35 +84,15 @@ export function ArticleWebhookConfig() {
         throw new Error("Please save a webhook URL first");
       }
 
-      // Send a test payload
-      const testPayload = {
-        test: true,
-        article_id: "test-id",
-        article_title: "Test Article",
-        article_url: "https://desmoinesguide.com/articles/test",
-        short_description: "This is a test short description for Twitter (280 chars max)",
-        long_description: "This is a test longer description for Facebook. It contains more details about the article and can be up to 500 characters long.",
-        excerpt: "Test excerpt",
-        category: "Test",
-        tags: ["test", "webhook"],
-        seo_keywords: ["test", "webhook", "article"],
-        featured_image_url: "https://example.com/image.jpg",
-        published_at: new Date().toISOString(),
-      };
-
-      const response = await fetch(webhook.webhook_url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(testPayload),
+      // Call the test webhook edge function
+      const { data, error } = await supabase.functions.invoke('test-article-webhook', {
+        body: { webhookUrl: webhook.webhook_url }
       });
 
-      if (!response.ok) {
-        throw new Error(`Webhook test failed: ${response.status} ${response.statusText}`);
-      }
-
-      return response;
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error || 'Test failed');
+      
+      return data;
     },
     onSuccess: () => {
       toast.success("Test webhook sent successfully! Check your Make.com scenario.");
