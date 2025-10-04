@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { getAIConfig, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,24 +13,34 @@ serve(async (req) => {
 
   try {
     const { model, testPrompt } = await req.json();
-    
-    if (!model) {
-      throw new Error('Model parameter is required');
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    // Resolve model: request param or default from AI configuration
+    let effectiveModel = model as string | undefined;
+    if (!effectiveModel) {
+      const cfg = await getAIConfig(supabaseUrl, supabaseKey);
+      effectiveModel = cfg.default_model;
+    }
+
+    if (!effectiveModel) {
+      throw new Error('No model specified and default_model is not configured');
     }
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const CLAUDE_API_KEY = Deno.env.get('CLAUDE_API_KEY');
+    const CLAUDE_API_KEY = Deno.env.get('CLAUDE_API_KEY') || Deno.env.get('CLAUDE_API');
     
     // Determine which API to use based on model prefix
     let response;
     let generatedText = '';
-    
-    if (model.startsWith('google/') || model.startsWith('openai/')) {
+
+    if (effectiveModel.startsWith('google/') || effectiveModel.startsWith('openai/')) {
       // Use Lovable AI Gateway
       if (!LOVABLE_API_KEY) {
         throw new Error('LOVABLE_API_KEY not configured');
       }
-      
+
       response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -37,7 +48,7 @@ serve(async (req) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: model,
+          model: effectiveModel,
           messages: [
             { role: 'system', content: 'You are a helpful assistant for testing AI model connectivity.' },
             { role: 'user', content: testPrompt || 'Respond with a brief test message to confirm the model is working.' }
@@ -53,22 +64,21 @@ serve(async (req) => {
 
       const data = await response.json();
       generatedText = data.choices?.[0]?.message?.content || '';
-      
-    } else if (model.startsWith('claude-')) {
+
+    } else if (effectiveModel.startsWith('claude')) {
       // Use Anthropic API directly
-      if (!CLAUDE_API_KEY) {
-        throw new Error('CLAUDE_API_KEY not configured');
+      const claudeKey = CLAUDE_API_KEY;
+      if (!claudeKey) {
+        throw new Error('Claude API key not configured (expected CLAUDE_API_KEY or CLAUDE_API)');
       }
-      
+
+      const headers = await getClaudeHeaders(claudeKey, supabaseUrl, supabaseKey);
+
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'x-api-key': CLAUDE_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
-          model: model,
+          model: effectiveModel,
           max_tokens: 150,
           messages: [
             { role: 'user', content: testPrompt || 'Respond with a brief test message to confirm the model is working.' }
@@ -84,13 +94,13 @@ serve(async (req) => {
       const data = await response.json();
       generatedText = data.content?.[0]?.text || '';
     } else {
-      throw new Error(`Unsupported model prefix: ${model}`);
+      throw new Error(`Unsupported model prefix: ${effectiveModel}`);
     }
 
     return new Response(
       JSON.stringify({
         success: true,
-        model: model,
+        model: effectiveModel,
         generatedText: generatedText,
         message: 'Model test successful',
       }),

@@ -41,7 +41,7 @@ export function AIConfigurationManager() {
     );
   }
 
-  const currentModel = getSetting('default_model', 'claude-sonnet-4-5-20250929');
+  const currentModel = getSetting('default_model', '');
   
   const handleAddModel = () => {
     addModel(newModel);
@@ -403,6 +403,21 @@ export function AIConfigurationManager() {
                         </Badge>
                       </TableCell>
                       <TableCell>
+                        {setting.setting_key === 'default_model' && (
+                          <Button
+                            onClick={() =>
+                              testAIModel(
+                                editedValues['default_model'] ?? getDisplayValue(setting.setting_key, setting.setting_value)
+                              )
+                            }
+                            disabled={isTesting}
+                            size="sm"
+                            variant="outline"
+                            className="mr-2"
+                          >
+                            <TestTube className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           onClick={() => handleSave(setting.setting_key)}
                           disabled={!hasChanges(setting.setting_key) || isUpdating}
