@@ -229,9 +229,19 @@ const ArticleDetails: React.FC = () => {
               <article className="lg:col-span-8">
                 <Card className="p-6 md:p-8">
                   <div 
-                    className="prose prose-lg max-w-none dark:prose-invert prose-headings:font-bold prose-p:leading-relaxed prose-img:rounded-lg prose-img:shadow-md"
+                    className="prose prose-lg max-w-none dark:prose-invert 
+                               prose-headings:font-bold prose-headings:text-foreground
+                               prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
+                               prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3
+                               prose-p:leading-relaxed prose-p:mb-4 prose-p:text-foreground/90
+                               prose-ul:my-4 prose-ul:list-disc prose-ul:pl-6
+                               prose-ol:my-4 prose-ol:list-decimal prose-ol:pl-6
+                               prose-li:mb-2 prose-li:text-foreground/90
+                               prose-strong:text-foreground prose-strong:font-semibold
+                               prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+                               prose-img:rounded-lg prose-img:shadow-md"
                     dangerouslySetInnerHTML={{ 
-                      __html: article.content.replace(/\n/g, '<br/>') 
+                      __html: article.content 
                     }}
                   />
                 </Card>

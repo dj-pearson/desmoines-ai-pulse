@@ -149,10 +149,43 @@ ADVANCED SEO OPTIMIZATION REQUIREMENTS:
 
 ${customInstructions ? `CUSTOM INSTRUCTIONS: ${customInstructions}` : ''}
 
+CRITICAL FORMATTING REQUIREMENTS FOR THE "content" FIELD:
+- The content field MUST contain ONLY the article body in clean, semantic HTML
+- Use proper HTML5 tags: <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>, <em>
+- Start with an engaging opening paragraph (no H1 - that's the title)
+- Structure with clear H2 sections and H3 subsections
+- Use <p> tags for all paragraphs
+- Use <ul> or <ol> for lists with proper <li> items
+- Add <strong> for emphasis on key points
+- No markdown syntax (no ##, no *, no -)
+- No backend metadata or comments in the content
+- No placeholder text like "[Content continues...]" - write the FULL article
+- Make it publication-ready HTML that can be directly rendered
+
+EXAMPLE OF PROPER CONTENT FORMATTING:
+<p>Opening paragraph that hooks the reader and introduces the topic naturally...</p>
+
+<h2>First Major Section</h2>
+<p>Detailed paragraph explaining this section...</p>
+
+<h3>Specific Subtopic</h3>
+<p>More detailed information...</p>
+
+<ul>
+<li>First key point with details</li>
+<li>Second key point with details</li>
+<li>Third key point with details</li>
+</ul>
+
+<p>Connecting paragraph that transitions to the next section...</p>
+
+<h2>Second Major Section</h2>
+<p>Content continues with the same pattern...</p>
+
 CRITICAL: Return your response as a properly formatted JSON object with this exact structure:
 {
   "title": "SEO-optimized article title (include Des Moines when relevant)",
-  "content": "Full article content in clean HTML format with proper H2, H3 tags, paragraphs, lists, and emphasis",
+  "content": "FULL article body content in clean, semantic HTML format with proper <h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong> tags. NO markdown, NO placeholders, NO backend notes. Complete, publication-ready HTML.",
   "excerpt": "Compelling 2-3 sentence summary that hooks readers (150-160 characters)",
   "seo_title": "Title optimized for search engines (under 60 characters)",
   "seo_description": "Meta description with local keywords (150-160 characters)", 
@@ -173,7 +206,7 @@ CRITICAL: Return your response as a properly formatted JSON object with this exa
   }
 }
 
-Write engaging, informative content that provides real value to Des Moines residents and visitors while being perfectly optimized for search engines and local discovery.`;
+Write the COMPLETE article from start to finish. No placeholders, no "[Content continues...]" - deliver the full ${wordCounts[length]} word article with engaging, informative content that provides real value to Des Moines residents and visitors.`;
 
     // Call Claude API using centralized config
     const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
