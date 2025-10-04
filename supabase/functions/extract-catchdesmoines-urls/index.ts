@@ -109,6 +109,7 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     const excludeDomains = [
       'catchdesmoines.com',
       'simpleview.com',
+      'simpleviewinc.com',
       'simpleviewcrm.com',
       'simpleviewcms.com',
       'extranet.simpleview',
