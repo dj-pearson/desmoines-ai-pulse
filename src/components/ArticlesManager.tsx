@@ -9,6 +9,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
 
 export default function ArticlesManager() {
   const { articles, loading, error, deleteArticle, publishArticle, loadArticles } = useArticles();
@@ -96,27 +97,30 @@ export default function ArticlesManager() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Articles Management
-            </CardTitle>
-            <CardDescription>
-              Manage blog articles and content posts
-            </CardDescription>
+    <div className="space-y-6">
+      <ArticleWebhookConfig />
+      
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Articles Management
+              </CardTitle>
+              <CardDescription>
+                Manage blog articles and content posts
+              </CardDescription>
+            </div>
+            <Button asChild>
+              <a href="/admin/articles/new" target="_blank" rel="noopener noreferrer">
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Article
+              </a>
+            </Button>
           </div>
-          <Button asChild>
-            <a href="/admin/articles/new" target="_blank" rel="noopener noreferrer">
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Article
-            </a>
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </CardHeader>
+        <CardContent className="space-y-4">
         {/* Search */}
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
@@ -285,5 +289,6 @@ export default function ArticlesManager() {
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }

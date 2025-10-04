@@ -3,11 +3,15 @@ project_id = "wtkhfqpmcegzcbngroui"
 [functions.test-ai-model]
 verify_jwt = true
 
+[functions.publish-article-webhook]
+verify_jwt = false
+
 [functions.scrape-events]
 verify_jwt = false
 
 [functions.personalized-recommendations]
 verify_jwt = false
+
 [functions.geocode-location]
 verify_jwt = false
 
