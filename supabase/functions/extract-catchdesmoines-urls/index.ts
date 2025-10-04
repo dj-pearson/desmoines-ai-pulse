@@ -114,9 +114,24 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       'simpleviewcrm.com',
       'simpleviewcms.com',
       'extranet.simpleview',
+      // CDNs/assets/fonts
       'cloudflare.com',
       'cdnjs.cloudflare.com',
+      'static.cloudflareinsights.com',
       'unpkg.com',
+      'jsdelivr.net',
+      'cdn.jsdelivr.net',
+      'bootstrapcdn.com',
+      'stackpath.bootstrapcdn.com',
+      'fontawesome.com',
+      'kit.fontawesome.com',
+      'fonts.googleapis.com',
+      'fonts.gstatic.com',
+      'gstatic.com',
+      'ajax.googleapis.com',
+      'typekit.net',
+      'use.typekit.net',
+      // Social & misc
       'facebook.com',
       'fb.com',
       'twitter.com',
@@ -132,6 +147,9 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       'whatsapp.com',
       'telegram.org',
       'discord.com',
+      'googletagmanager.com',
+      'google-analytics.com',
+      'analytics.google.com',
       'google.com',
       'maps.google.com',
       'goo.gl',
@@ -345,9 +363,32 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     if (scored.length > 0) {
       visitUrl = scored[0].url;
     } else {
-      // As a last resort, pick the first non-excluded absolute URL from the page body
-      const fallback = allCandidates.find((u) => /^https?:\/\//i.test(u) && !isExcluded(u));
-      visitUrl = fallback || null;
+      // Fallback: search within main content first
+      const mainMatch = html.match(/<div[^>]*id=["']main-content["'][^>]*>([\s\S]*?)<\/div>/i);
+      if (mainMatch) {
+        const mainHtml = mainMatch[1];
+        // Prefer explicit Visit Website anchor inside main content
+        const visitInMain = mainHtml.match(/<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*visit\s*website[^<]*<\/a>/i);
+        const c1 = visitInMain && /^https?:\/\//i.test(visitInMain[1]) && !isExcluded(visitInMain[1]) ? visitInMain[1] : null;
+        if (c1) {
+          visitUrl = c1;
+        } else {
+          const anyMain = mainHtml.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi) || [];
+          const firstClean = anyMain
+            .map((m) => {
+              const hm = m.match(/href=["']([^"']+)["']/i);
+              return hm ? hm[1] : null;
+            })
+            .filter((u): u is string => !!u && /^https?:\/\//i.test(u) && !isExcluded(u))[0] || null;
+          visitUrl = firstClean;
+        }
+      }
+
+      // Final resort: first non-excluded absolute URL anywhere
+      if (!visitUrl) {
+        const fallback = allCandidates.find((u) => /^https?:\/\//i.test(u) && !isExcluded(u));
+        visitUrl = fallback || null;
+      }
     }
 
     console.log('Extraction diagnostic:', {
