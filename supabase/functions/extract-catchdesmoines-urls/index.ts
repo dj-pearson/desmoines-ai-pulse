@@ -502,8 +502,9 @@ serve(async (req) => {
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       const batchSize = Math.min(Math.max(body.batchSize || 20, 1), 50); // Min 1, max 50, default 20
+      const dryRun = body.dryRun === true; // Dry run mode - extract URLs but don't update DB
       
-      console.log(`Processing batch of ${batchSize} events`);
+      console.log(`Processing batch of ${batchSize} events (dry run: ${dryRun})`);
       
       // Get events with catchdesmoines.com URLs
       const { data: events, error: fetchError } = await supabaseClient
@@ -539,7 +540,7 @@ serve(async (req) => {
         updated: []
       };
 
-      console.log(`Processing ${events.length} events with catchdesmoines.com URLs...`);
+      console.log(`Processing ${events.length} events with catchdesmoines.com URLs... ${dryRun ? '(DRY RUN - no database changes)' : ''}`);
 
       // Process each event
       for (const event of events) {
@@ -561,24 +562,34 @@ serve(async (req) => {
               }
             }
             
-            // Update the event with the new URL and potentially datetime
-            const { error: updateError } = await supabaseClient
-              .from('events')
-              .update(updateData)
-              .eq('id', event.id);
-
-            if (updateError) {
-              result.errors.push({
-                eventId: event.id,
-                error: `Failed to update: ${updateError.message}`
-              });
-            } else {
+            if (dryRun) {
+              // Dry run mode - don't update database, just report what would be changed
               result.updated.push({
                 eventId: event.id,
                 oldUrl: event.source_url,
                 newUrl: extractedData.visitUrl
               });
-              console.log(`Updated event ${event.id}: ${event.source_url} -> ${extractedData.visitUrl}${updateData.event_start_utc ? ` (datetime: ${updateData.event_start_utc})` : ''}`);
+              console.log(`[DRY RUN] Would update event ${event.id}: ${event.source_url} -> ${extractedData.visitUrl}${updateData.event_start_utc ? ` (datetime: ${updateData.event_start_utc})` : ''}`);
+            } else {
+              // Real mode - update the event with the new URL and potentially datetime
+              const { error: updateError } = await supabaseClient
+                .from('events')
+                .update(updateData)
+                .eq('id', event.id);
+
+              if (updateError) {
+                result.errors.push({
+                  eventId: event.id,
+                  error: `Failed to update: ${updateError.message}`
+                });
+              } else {
+                result.updated.push({
+                  eventId: event.id,
+                  oldUrl: event.source_url,
+                  newUrl: extractedData.visitUrl
+                });
+                console.log(`Updated event ${event.id}: ${event.source_url} -> ${extractedData.visitUrl}${updateData.event_start_utc ? ` (datetime: ${updateData.event_start_utc})` : ''}`);
+              }
             }
           } else {
             result.errors.push({
