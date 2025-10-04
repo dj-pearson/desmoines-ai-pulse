@@ -2,8 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 interface ExtractResponse {
@@ -19,20 +20,20 @@ interface ExtractResponse {
  */
 function parseEventDateTime(dateStr: string, timeStr?: string): Date | null {
   try {
-    console.log('Parsing datetime:', { dateStr, timeStr });
-    
+    console.log("Parsing datetime:", { dateStr, timeStr });
+
     // Parse date components
     const dateMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
     if (!dateMatch) {
-      console.error('Invalid date format:', dateStr);
+      console.error("Invalid date format:", dateStr);
       return null;
     }
-    
+
     const [, year, month, day] = dateMatch;
     let hours = 0;
     let minutes = 0;
     let seconds = 0;
-    
+
     // Parse time if provided
     if (timeStr) {
       const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
@@ -42,36 +43,42 @@ function parseEventDateTime(dateStr: string, timeStr?: string): Date | null {
         seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
       }
     }
-    
+
     // Determine Central Time offset (CST = -06:00, CDT = -05:00)
     const monthNum = parseInt(month, 10);
     const dayNum = parseInt(day, 10);
-    
+
     // Rough DST check: March 2nd Sunday through November 1st Sunday
-    const isDST = (monthNum > 3 && monthNum < 11) || 
-                  (monthNum === 3 && dayNum >= 8) || 
-                  (monthNum === 11 && dayNum < 7);
-    
-    const offset = isDST ? '-05:00' : '-06:00';
-    
+    const isDST =
+      (monthNum > 3 && monthNum < 11) ||
+      (monthNum === 3 && dayNum >= 8) ||
+      (monthNum === 11 && dayNum < 7);
+
+    const offset = isDST ? "-05:00" : "-06:00";
+
     // Build ISO string with Central timezone
-    const isoWithTimezone = `${year}-${month}-${day}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}${offset}`;
-    
-    console.log('Built ISO string:', isoWithTimezone);
-    
+    const isoWithTimezone = `${year}-${month}-${day}T${String(hours).padStart(
+      2,
+      "0"
+    )}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
+      2,
+      "0"
+    )}${offset}`;
+
+    console.log("Built ISO string:", isoWithTimezone);
+
     // Parse to Date (browser will convert to UTC internally)
     const date = new Date(isoWithTimezone);
-    
+
     if (isNaN(date.getTime())) {
-      console.error('Invalid date result:', isoWithTimezone);
+      console.error("Invalid date result:", isoWithTimezone);
       return null;
     }
-    
-    console.log('Parsed to UTC:', date.toISOString());
+
+    console.log("Parsed to UTC:", date.toISOString());
     return date;
-    
   } catch (error) {
-    console.error('Error parsing datetime:', error);
+    console.error("Error parsing datetime:", error);
     return null;
   }
 }
@@ -82,118 +89,155 @@ interface ExtractedEventData {
   timeStr: string | null;
 }
 
-async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventData> {
+async function extractVisitWebsiteUrl(
+  eventUrl: string
+): Promise<ExtractedEventData> {
   try {
-    console.log('Processing URL:', eventUrl);
-    
+    console.log("Processing URL:", eventUrl);
+
     // Use fetch with user agent to simulate browser request
     const response = await fetch(eventUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-        'Accept-Encoding': 'gzip, deflate',
-        'Connection': 'keep-alive',
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        "Accept-Encoding": "gzip, deflate",
+        Connection: "keep-alive",
       },
-      signal: AbortSignal.timeout(12000) // 12 second timeout
+      signal: AbortSignal.timeout(12000), // 12 second timeout
     });
 
     // Even if non-200, try to parse the body (some 410/404 pages still include useful HTML)
     if (!response.ok) {
-      console.warn(`Non-2xx response for ${eventUrl}: ${response.status} ${response.statusText}`);
+      console.warn(
+        `Non-2xx response for ${eventUrl}: ${response.status} ${response.statusText}`
+      );
     }
 
     const html = await response.text();
 
     // Define excluded domains (social, shorteners, host site & related CMS)
     const excludeDomains = [
-      'catchdesmoines.com',
-      'simpleview.com',
-      'simpleviewinc.com',
-      'assets.simpleviewinc.com',
-      'simpleviewcrm.com',
-      'simpleviewcms.com',
-      'extranet.simpleview',
+      "catchdesmoines.com",
+      "simpleview.com",
+      "simpleviewinc.com",
+      "assets.simpleviewinc.com",
+      "simpleviewcrm.com",
+      "simpleviewcms.com",
+      "extranet.simpleview",
+      // ⭐ VIDEO PLAYERS AND EMBEDS (CRITICAL FIX)
+      "vimeo.com/api",
+      "vimeo.com/player",
+      "player.vimeo.com",
+      "player.vimeo",
+      "youtube.com/embed",
+      "youtube.com/player",
+      "youtube.com/watch",
+      "youtu.be/player",
+      "/player.js",
+      "/embed.js",
+      "/api/",
+      ".js?",
+      ".js#",
+      ".js$",
+      ".css",
+      ".json",
       // CDNs/assets/fonts
-      'cloudflare.com',
-      'cdnjs.cloudflare.com',
-      'static.cloudflareinsights.com',
-      'unpkg.com',
-      'jsdelivr.net',
-      'cdn.jsdelivr.net',
-      'bootstrapcdn.com',
-      'stackpath.bootstrapcdn.com',
-      'fontawesome.com',
-      'kit.fontawesome.com',
-      'fonts.googleapis.com',
-      'fonts.gstatic.com',
-      'gstatic.com',
-      'ajax.googleapis.com',
-      'typekit.net',
-      'use.typekit.net',
+      "cloudflare.com",
+      "cdnjs.cloudflare.com",
+      "static.cloudflareinsights.com",
+      "unpkg.com",
+      "jsdelivr.net",
+      "cdn.jsdelivr.net",
+      "bootstrapcdn.com",
+      "stackpath.bootstrapcdn.com",
+      "fontawesome.com",
+      "kit.fontawesome.com",
+      "fonts.googleapis.com",
+      "fonts.gstatic.com",
+      "gstatic.com",
+      "ajax.googleapis.com",
+      "typekit.net",
+      "use.typekit.net",
       // Social & misc
-      'facebook.com',
-      'fb.com',
-      'twitter.com',
-      'x.com',
-      'instagram.com',
-      'youtube.com',
-      'youtu.be',
-      'tiktok.com',
-      'linkedin.com',
-      'pinterest.com',
-      'reddit.com',
-      'snapchat.com',
-      'whatsapp.com',
-      'telegram.org',
-      'discord.com',
-      'googletagmanager.com',
-      'google-analytics.com',
-      'analytics.google.com',
-      'google.com',
-      'maps.google.com',
-      'goo.gl',
-      'bit.ly',
-      'ow.ly',
-      'mailto:',
-      'tel:',
-      '#'
+      "facebook.com",
+      "fb.com",
+      "twitter.com",
+      "x.com",
+      "instagram.com",
+      "youtube.com",
+      "youtu.be",
+      "tiktok.com",
+      "linkedin.com",
+      "pinterest.com",
+      "reddit.com",
+      "snapchat.com",
+      "whatsapp.com",
+      "telegram.org",
+      "discord.com",
+      "googletagmanager.com",
+      "google-analytics.com",
+      "analytics.google.com",
+      "google.com",
+      "maps.google.com",
+      "goo.gl",
+      "bit.ly",
+      "ow.ly",
+      "mailto:",
+      "tel:",
+      "#",
     ];
 
     const candidatesSet = new Set<string>();
 
     // Helper: normalize protocol-relative URLs
     const normalizeUrl = (url: string) => {
-      if (url.startsWith('//')) return `https:${url}`;
+      if (url.startsWith("//")) return `https:${url}`;
       return url;
     };
 
     // 0) Prioritized extraction paths specific to CatchDesMoines templates
-    const isExcludedInline = (u: string) => excludeDomains.some((d) => u.toLowerCase().includes(d.toLowerCase()));
+    const isExcludedInline = (u: string) =>
+      excludeDomains.some((d) => u.toLowerCase().includes(d.toLowerCase()));
     let prioritizedUrl: string | null = null;
 
     // 0-a) Embedded JSON variable: linkUrl
-    const linkUrlMatch = html.match(/["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+    const linkUrlMatch = html.match(
+      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
+    );
     if (linkUrlMatch) {
       const u = normalizeUrl(linkUrlMatch[1].trim());
-      if ((/^https?:\/\//i.test(u) || u.startsWith('//')) && !isExcludedInline(u)) {
+      if (
+        (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
+        !isExcludedInline(u)
+      ) {
         prioritizedUrl = u;
-        console.log('Found linkUrl candidate:', prioritizedUrl);
+        console.log("Found linkUrl candidate:", prioritizedUrl);
       }
     }
 
     // 0-b) Bottom actions "Visit Website" button
     if (!prioritizedUrl) {
-      const bottomActionsMatch = html.match(/<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+      const bottomActionsMatch = html.match(
+        /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
+      );
       if (bottomActionsMatch) {
         const inner = bottomActionsMatch[1];
-        const bottomLinkMatch = inner.match(/<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+        const bottomLinkMatch = inner.match(
+          /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i
+        );
         if (bottomLinkMatch) {
           const u = normalizeUrl(bottomLinkMatch[1].trim());
-          const t = (bottomLinkMatch[2] || '').replace(/<[^>]*>/g, ' ').trim();
-          if ((/^https?:\/\//i.test(u) || u.startsWith('//')) && !isExcludedInline(u) && /visit\s*website/i.test(t)) {
+          const t = (bottomLinkMatch[2] || "").replace(/<[^>]*>/g, " ").trim();
+          if (
+            (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
+            !isExcludedInline(u) &&
+            /visit\s*website/i.test(t)
+          ) {
             prioritizedUrl = u;
-            console.log('Found bottom-actions Visit Website:', prioritizedUrl);
+            console.log("Found bottom-actions Visit Website:", prioritizedUrl);
           }
         }
       }
@@ -201,12 +245,17 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
 
     // 0-c) Any anchor with text 'Visit Website'
     if (!prioritizedUrl) {
-      const anyVisitMatch = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*visit\s*website[^<]*<\/a>/i);
+      const anyVisitMatch = html.match(
+        /<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*visit\s*website[^<]*<\/a>/i
+      );
       if (anyVisitMatch) {
         const u = normalizeUrl(anyVisitMatch[1].trim());
-        if ((/^https?:\/\//i.test(u) || u.startsWith('//')) && !isExcludedInline(u)) {
+        if (
+          (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
+          !isExcludedInline(u)
+        ) {
           prioritizedUrl = u;
-          console.log('Found generic Visit Website link:', prioritizedUrl);
+          console.log("Found generic Visit Website link:", prioritizedUrl);
         }
       }
     }
@@ -219,37 +268,45 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     while ((anchorMatch = anchorRegex.exec(html)) !== null) {
       anchorCount++;
       let href = anchorMatch[1].trim();
-      const inner = (anchorMatch[2] || '').replace(/<[^>]*>/g, ' ').trim();
+      const inner = (anchorMatch[2] || "").replace(/<[^>]*>/g, " ").trim();
       href = normalizeUrl(href);
 
       // Ignore non-http(s) & obvious internal relative paths
-      const isHttp = /^https?:\/\//i.test(href) || href.startsWith('//');
+      const isHttp = /^https?:\/\//i.test(href) || href.startsWith("//");
       if (!isHttp) continue;
 
       candidatesSet.add(href);
       collectedFromAnchors++;
 
       // Also try to capture onclick/data-* inside this same <a ...>
-      const tagStartIdx = Math.max(html.lastIndexOf('<a', anchorRegex.lastIndex - anchorMatch[0].length - 1), 0);
+      const tagStartIdx = Math.max(
+        html.lastIndexOf(
+          "<a",
+          anchorRegex.lastIndex - anchorMatch[0].length - 1
+        ),
+        0
+      );
       const tagEndIdx = anchorRegex.lastIndex; // end of </a>
       const anchorTagHtml = html.slice(tagStartIdx, tagEndIdx);
 
       // data-* attributes
-      const dataAttrRegex = /data-(?:href|url|website|externalurl|external-url|link)=["']([^"']+)["']/gi;
+      const dataAttrRegex =
+        /data-(?:href|url|website|externalurl|external-url|link)=["']([^"']+)["']/gi;
       let dataMatch: RegExpExecArray | null;
       while ((dataMatch = dataAttrRegex.exec(anchorTagHtml)) !== null) {
         const dataUrl = normalizeUrl(dataMatch[1].trim());
-        if (/^https?:\/\//i.test(dataUrl) || dataUrl.startsWith('//')) {
+        if (/^https?:\/\//i.test(dataUrl) || dataUrl.startsWith("//")) {
           candidatesSet.add(dataUrl);
         }
       }
 
       // onclick patterns
-      const onclickRegex = /onclick=["'][^"']*(?:window\.open|location\.(?:assign|href|replace))\(['"]([^'"\)]+)['"][^"']*["']/i;
+      const onclickRegex =
+        /onclick=["'][^"']*(?:window\.open|location\.(?:assign|href|replace))\(['"]([^'"\)]+)['"][^"']*["']/i;
       const onclickMatch = anchorTagHtml.match(onclickRegex);
       if (onclickMatch && onclickMatch[1]) {
         const clickUrl = normalizeUrl(onclickMatch[1].trim());
-        if (/^https?:\/\//i.test(clickUrl) || clickUrl.startsWith('//')) {
+        if (/^https?:\/\//i.test(clickUrl) || clickUrl.startsWith("//")) {
           candidatesSet.add(clickUrl);
         }
       }
@@ -271,13 +328,14 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     }
 
     // 3) Parse JSON-LD blocks for potential URLs
-    const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    const jsonLdRegex =
+      /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
     let jsonMatch: RegExpExecArray | null;
     let jsonBlocks = 0;
     let collectedJson = 0;
     function collectUrlsFromJson(obj: any) {
       if (obj == null) return;
-      if (typeof obj === 'string') {
+      if (typeof obj === "string") {
         const s = obj.trim();
         if (/^https?:\/\//i.test(s)) candidatesSet.add(s);
         return;
@@ -286,9 +344,13 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
         for (const item of obj) collectUrlsFromJson(item);
         return;
       }
-      if (typeof obj === 'object') {
+      if (typeof obj === "object") {
         for (const [k, v] of Object.entries(obj)) {
-          if (k.toLowerCase() === 'url' || k.toLowerCase() === 'sameas' || k.toLowerCase() === 'website') {
+          if (
+            k.toLowerCase() === "url" ||
+            k.toLowerCase() === "sameas" ||
+            k.toLowerCase() === "website"
+          ) {
             collectUrlsFromJson(v);
           } else {
             collectUrlsFromJson(v);
@@ -324,19 +386,29 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     const scored: Scored[] = [];
 
     // Prioritize deterministic candidates
-    if (typeof prioritizedUrl !== 'undefined' && prioritizedUrl && !isExcluded(prioritizedUrl)) {
+    if (
+      typeof prioritizedUrl !== "undefined" &&
+      prioritizedUrl &&
+      !isExcluded(prioritizedUrl)
+    ) {
       scored.push({ url: prioritizedUrl, score: 100 });
     }
 
     // Build a quick map from URL to best anchor-context score based on keyword proximity
-    const visitAnchorRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    const visitAnchorRegex =
+      /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
     const anchorContextScores = new Map<string, number>();
     let vaMatch: RegExpExecArray | null;
     while ((vaMatch = visitAnchorRegex.exec(html)) !== null) {
       const href = normalizeUrl(vaMatch[1].trim());
-      const text = (vaMatch[2] || '').replace(/<[^>]*>/g, ' ').trim();
+      const text = (vaMatch[2] || "").replace(/<[^>]*>/g, " ").trim();
       let score = 0;
-      if (/\b(visit\s*website|official\s*site|event\s*website|website)\b/i.test(text)) score += 10;
+      if (
+        /\b(visit\s*website|official\s*site|event\s*website|website)\b/i.test(
+          text
+        )
+      )
+        score += 10;
       if (/\b(learn\s*more|details)\b/i.test(text)) score += 2;
       if (/btn|button|cta|visit|website/i.test(vaMatch[0])) score += 2;
       if (score > 0) {
@@ -364,34 +436,50 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       visitUrl = scored[0].url;
     } else {
       // Fallback: search within main content first
-      const mainMatch = html.match(/<div[^>]*id=["']main-content["'][^>]*>([\s\S]*?)<\/div>/i);
+      const mainMatch = html.match(
+        /<div[^>]*id=["']main-content["'][^>]*>([\s\S]*?)<\/div>/i
+      );
       if (mainMatch) {
         const mainHtml = mainMatch[1];
         // Prefer explicit Visit Website anchor inside main content
-        const visitInMain = mainHtml.match(/<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*visit\s*website[^<]*<\/a>/i);
-        const c1 = visitInMain && /^https?:\/\//i.test(visitInMain[1]) && !isExcluded(visitInMain[1]) ? visitInMain[1] : null;
+        const visitInMain = mainHtml.match(
+          /<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*visit\s*website[^<]*<\/a>/i
+        );
+        const c1 =
+          visitInMain &&
+          /^https?:\/\//i.test(visitInMain[1]) &&
+          !isExcluded(visitInMain[1])
+            ? visitInMain[1]
+            : null;
         if (c1) {
           visitUrl = c1;
         } else {
-          const anyMain = mainHtml.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi) || [];
-          const firstClean = anyMain
-            .map((m) => {
-              const hm = m.match(/href=["']([^"']+)["']/i);
-              return hm ? hm[1] : null;
-            })
-            .filter((u): u is string => !!u && /^https?:\/\//i.test(u) && !isExcluded(u))[0] || null;
+          const anyMain =
+            mainHtml.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi) || [];
+          const firstClean =
+            anyMain
+              .map((m) => {
+                const hm = m.match(/href=["']([^"']+)["']/i);
+                return hm ? hm[1] : null;
+              })
+              .filter(
+                (u): u is string =>
+                  !!u && /^https?:\/\//i.test(u) && !isExcluded(u)
+              )[0] || null;
           visitUrl = firstClean;
         }
       }
 
       // Final resort: first non-excluded absolute URL anywhere
       if (!visitUrl) {
-        const fallback = allCandidates.find((u) => /^https?:\/\//i.test(u) && !isExcluded(u));
+        const fallback = allCandidates.find(
+          (u) => /^https?:\/\//i.test(u) && !isExcluded(u)
+        );
         visitUrl = fallback || null;
       }
     }
 
-    console.log('Extraction diagnostic:', {
+    console.log("Extraction diagnostic:", {
       anchorCount,
       collectedFromAnchors,
       collectedRaw,
@@ -403,9 +491,9 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     });
 
     if (visitUrl) {
-      console.log('Selected visit URL:', visitUrl);
+      console.log("Selected visit URL:", visitUrl);
     } else {
-      console.log('No suitable external URL found for:', eventUrl);
+      console.log("No suitable external URL found for:", eventUrl);
     }
 
     // Extract date/time information (keep existing lightweight heuristics)
@@ -417,14 +505,14 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       /<meta[^>]*property=["']event:start_date["'][^>]*content=["']([^"']+)["']/i,
       /<span[^>]*class=["'][^"']*date[^"']*["'][^>]*>([^<]+)</i,
       /Date:\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
-      /(\d{4}-\d{2}-\d{2})/
+      /(\d{4}-\d{2}-\d{2})/,
     ];
 
     for (const pattern of datePatterns) {
       const match = html.match(pattern);
       if (match && match[1]) {
         dateStr = match[1];
-        console.log('Found date:', dateStr);
+        console.log("Found date:", dateStr);
         break;
       }
     }
@@ -432,85 +520,96 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     const timePatterns = [
       /<time[^>]*>([^<]*\d{1,2}:\d{2}[^<]*)<\/time>/i,
       /Time:\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i,
-      /(\d{1,2}:\d{2}\s*(?:AM|PM))/i
+      /(\d{1,2}:\d{2}\s*(?:AM|PM))/i,
     ];
 
     for (const pattern of timePatterns) {
       const match = html.match(pattern);
       if (match && match[1]) {
         timeStr = match[1];
-        console.log('Found time:', timeStr);
+        console.log("Found time:", timeStr);
         break;
       }
     }
 
     return { visitUrl, dateStr, timeStr };
-    
   } catch (error) {
-    console.error('Error extracting URL from', eventUrl, ':', error);
+    console.error("Error extracting URL from", eventUrl, ":", error);
     return { visitUrl: null, dateStr: null, timeStr: null };
   }
 }
 
 serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
     // Get authorization header
-    const authHeader = req.headers.get('Authorization');
+    const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'No authorization header' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "No authorization header" }),
+        {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
     // Verify user is admin
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
 
     if (authError || !user) {
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // Check if user has admin role
     const { data: profile } = await supabaseClient
-      .from('profiles')
-      .select('user_role')
-      .eq('user_id', user.id)
+      .from("profiles")
+      .select("user_role")
+      .eq("user_id", user.id)
       .single();
 
-    if (!profile || !['admin', 'root_admin', 'moderator'].includes(profile.user_role)) {
+    if (
+      !profile ||
+      !["admin", "root_admin", "moderator"].includes(profile.user_role)
+    ) {
       return new Response(
-        JSON.stringify({ error: 'Insufficient permissions' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: "Insufficient permissions" }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
       );
     }
 
-    if (req.method === 'POST') {
+    if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
       const batchSize = Math.min(Math.max(body.batchSize || 20, 1), 50); // Min 1, max 50, default 20
       const dryRun = body.dryRun === true; // Dry run mode - extract URLs but don't update DB
-      
-      console.log(`Processing batch of ${batchSize} events (dry run: ${dryRun})`);
-      
+
+      console.log(
+        `Processing batch of ${batchSize} events (dry run: ${dryRun})`
+      );
+
       // Get events with catchdesmoines.com URLs
       const { data: events, error: fetchError } = await supabaseClient
-        .from('events')
-        .select('id, title, source_url')
-        .ilike('source_url', '%catchdesmoines.com%')
+        .from("events")
+        .select("id, title, source_url")
+        .ilike("source_url", "%catchdesmoines.com%")
         .limit(batchSize);
 
       if (fetchError) {
@@ -519,16 +618,16 @@ serve(async (req) => {
 
       if (!events || events.length === 0) {
         return new Response(
-          JSON.stringify({ 
-            success: true, 
-            processed: 0, 
-            errors: [], 
+          JSON.stringify({
+            success: true,
+            processed: 0,
+            errors: [],
             updated: [],
-            message: 'No events with catchdesmoines.com URLs found' 
+            message: "No events with catchdesmoines.com URLs found",
           }),
-          { 
-            status: 200, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
           }
         );
       }
@@ -537,120 +636,144 @@ serve(async (req) => {
         success: true,
         processed: events.length,
         errors: [],
-        updated: []
+        updated: [],
       };
 
-      console.log(`Processing ${events.length} events with catchdesmoines.com URLs... ${dryRun ? '(DRY RUN - no database changes)' : ''}`);
+      console.log(
+        `Processing ${events.length} events with catchdesmoines.com URLs... ${
+          dryRun ? "(DRY RUN - no database changes)" : ""
+        }`
+      );
 
       // Process each event
       for (const event of events) {
         try {
           const extractedData = await extractVisitWebsiteUrl(event.source_url);
-          
+
           if (extractedData.visitUrl) {
             // Prepare update data
             const updateData: any = { source_url: extractedData.visitUrl };
-            
+
             // If we extracted datetime info, parse and update event_start_utc
             if (extractedData.dateStr) {
-              const parsedDate = parseEventDateTime(extractedData.dateStr, extractedData.timeStr || undefined);
+              const parsedDate = parseEventDateTime(
+                extractedData.dateStr,
+                extractedData.timeStr || undefined
+              );
               if (parsedDate) {
                 updateData.event_start_utc = parsedDate.toISOString();
-                console.log(`Parsed event datetime for ${event.id}: ${parsedDate.toISOString()}`);
+                console.log(
+                  `Parsed event datetime for ${
+                    event.id
+                  }: ${parsedDate.toISOString()}`
+                );
               } else {
-                console.warn(`Failed to parse datetime for event ${event.id}: ${extractedData.dateStr} ${extractedData.timeStr}`);
+                console.warn(
+                  `Failed to parse datetime for event ${event.id}: ${extractedData.dateStr} ${extractedData.timeStr}`
+                );
               }
             }
-            
+
             if (dryRun) {
               // Dry run mode - don't update database, just report what would be changed
               result.updated.push({
                 eventId: event.id,
                 oldUrl: event.source_url,
-                newUrl: extractedData.visitUrl
+                newUrl: extractedData.visitUrl,
               });
-              console.log(`[DRY RUN] Would update event ${event.id}: ${event.source_url} -> ${extractedData.visitUrl}${updateData.event_start_utc ? ` (datetime: ${updateData.event_start_utc})` : ''}`);
+              console.log(
+                `[DRY RUN] Would update event ${event.id}: ${
+                  event.source_url
+                } -> ${extractedData.visitUrl}${
+                  updateData.event_start_utc
+                    ? ` (datetime: ${updateData.event_start_utc})`
+                    : ""
+                }`
+              );
             } else {
               // Real mode - update the event with the new URL and potentially datetime
               const { error: updateError } = await supabaseClient
-                .from('events')
+                .from("events")
                 .update(updateData)
-                .eq('id', event.id);
+                .eq("id", event.id);
 
               if (updateError) {
                 result.errors.push({
                   eventId: event.id,
-                  error: `Failed to update: ${updateError.message}`
+                  error: `Failed to update: ${updateError.message}`,
                 });
               } else {
                 result.updated.push({
                   eventId: event.id,
                   oldUrl: event.source_url,
-                  newUrl: extractedData.visitUrl
+                  newUrl: extractedData.visitUrl,
                 });
-                console.log(`Updated event ${event.id}: ${event.source_url} -> ${extractedData.visitUrl}${updateData.event_start_utc ? ` (datetime: ${updateData.event_start_utc})` : ''}`);
+                console.log(
+                  `Updated event ${event.id}: ${event.source_url} -> ${
+                    extractedData.visitUrl
+                  }${
+                    updateData.event_start_utc
+                      ? ` (datetime: ${updateData.event_start_utc})`
+                      : ""
+                  }`
+                );
               }
             }
           } else {
             result.errors.push({
               eventId: event.id,
-              error: 'No external URL found on page'
+              error: "No external URL found on page",
             });
           }
 
           // Add small delay between requests to be respectful
-          await new Promise(resolve => setTimeout(resolve, 800));
-
+          await new Promise((resolve) => setTimeout(resolve, 800));
         } catch (error) {
           result.errors.push({
             eventId: event.id,
-            error: `Processing failed: ${error.message}`
+            error: `Processing failed: ${error.message}`,
           });
         }
       }
 
-      return new Response(
-        JSON.stringify(result),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-    
-    if (req.method === 'GET') {
+
+    if (req.method === "GET") {
       // Return count of remaining catchdesmoines URLs
       const { count, error: countError } = await supabaseClient
-        .from('events')
-        .select('id', { count: 'exact', head: true })
-        .ilike('source_url', '%catchdesmoines.com%');
-      
+        .from("events")
+        .select("id", { count: "exact", head: true })
+        .ilike("source_url", "%catchdesmoines.com%");
+
       if (countError) {
         throw new Error(`Failed to count events: ${countError.message}`);
       }
-      
+
       return new Response(
-        JSON.stringify({ 
-          success: true, 
-          remaining: count || 0 
+        JSON.stringify({
+          success: true,
+          remaining: count || 0,
         }),
-        { 
-          status: 200, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    return new Response(
-      JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error('Function error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error("Function error:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
