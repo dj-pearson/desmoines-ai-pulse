@@ -110,9 +110,12 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       'catchdesmoines.com',
       'simpleview.com',
       'simpleviewinc.com',
+      'assets.simpleviewinc.com',
       'simpleviewcrm.com',
       'simpleviewcms.com',
       'extranet.simpleview',
+      'cloudflare.com',
+      'cdnjs.cloudflare.com',
       'facebook.com',
       'fb.com',
       'twitter.com',
@@ -145,6 +148,49 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       if (url.startsWith('//')) return `https:${url}`;
       return url;
     };
+
+    // 0) Prioritized extraction paths specific to CatchDesMoines templates
+    const isExcludedInline = (u: string) => excludeDomains.some((d) => u.toLowerCase().includes(d.toLowerCase()));
+    let prioritizedUrl: string | null = null;
+
+    // 0-a) Embedded JSON variable: linkUrl
+    const linkUrlMatch = html.match(/["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+    if (linkUrlMatch) {
+      const u = normalizeUrl(linkUrlMatch[1].trim());
+      if ((/^https?:\/\//i.test(u) || u.startsWith('//')) && !isExcludedInline(u)) {
+        prioritizedUrl = u;
+        console.log('Found linkUrl candidate:', prioritizedUrl);
+      }
+    }
+
+    // 0-b) Bottom actions "Visit Website" button
+    if (!prioritizedUrl) {
+      const bottomActionsMatch = html.match(/<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i);
+      if (bottomActionsMatch) {
+        const inner = bottomActionsMatch[1];
+        const bottomLinkMatch = inner.match(/<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/i);
+        if (bottomLinkMatch) {
+          const u = normalizeUrl(bottomLinkMatch[1].trim());
+          const t = (bottomLinkMatch[2] || '').replace(/<[^>]*>/g, ' ').trim();
+          if ((/^https?:\/\//i.test(u) || u.startsWith('//')) && !isExcludedInline(u) && /visit\s*website/i.test(t)) {
+            prioritizedUrl = u;
+            console.log('Found bottom-actions Visit Website:', prioritizedUrl);
+          }
+        }
+      }
+    }
+
+    // 0-c) Any anchor with text 'Visit Website'
+    if (!prioritizedUrl) {
+      const anyVisitMatch = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>[^<]*visit\s*website[^<]*<\/a>/i);
+      if (anyVisitMatch) {
+        const u = normalizeUrl(anyVisitMatch[1].trim());
+        if ((/^https?:\/\//i.test(u) || u.startsWith('//')) && !isExcludedInline(u)) {
+          prioritizedUrl = u;
+          console.log('Found generic Visit Website link:', prioritizedUrl);
+        }
+      }
+    }
 
     // 1) Collect URLs from full anchor tags (capture href and inner text)
     const anchorRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
@@ -257,6 +303,11 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     type Scored = { url: string; score: number };
 
     const scored: Scored[] = [];
+
+    // Prioritize deterministic candidates
+    if (typeof prioritizedUrl !== 'undefined' && prioritizedUrl && !isExcluded(prioritizedUrl)) {
+      scored.push({ url: prioritizedUrl, score: 100 });
+    }
 
     // Build a quick map from URL to best anchor-context score based on keyword proximity
     const visitAnchorRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
