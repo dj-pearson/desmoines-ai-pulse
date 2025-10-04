@@ -1,802 +1,802 @@
 [
 {
-"event_message": "[DRY RUN] Would update event 6d76d894-1b95-4881-a5a7-9f13bd48deea: https://www.catchdesmoines.com/event/the-best-christmas-pageant-ever/51788/ -> https://www.dmplayhouse.com/events/best-christmas-pageant-ever-2025/ (datetime: 2025-09-18T12:00:00.000Z)\n",
+"event_message": "Built ISO string: 2025-09-18T07:00:00-05:00\n",
 "event_type": "Log",
 "function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "b7e49e7d-b277-4e1c-ac43-bcaca35ad9b8",
+"id": "187e6c9f-7e84-4ff9-ab8f-1a0f46fdf8f7",
 "level": "info",
-"timestamp": 1759613282800000
-},
-{
-"event_message": "Parsed to UTC: 2025-09-18T12:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "32dad5e9-1504-4bd7-947c-f8d82749217b",
-"level": "info",
-"timestamp": 1759613282800000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2025-09-18\", timeStr: \"7:00pm\" }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "9541b8f9-b4e5-4e8a-b0ed-e963fb902772",
-"level": "info",
-"timestamp": 1759613282800000
+"timestamp": 1759613989179000
 },
 {
 "event_message": "Parsed event datetime for 6d76d894-1b95-4881-a5a7-9f13bd48deea: 2025-09-18T12:00:00.000Z\n",
 "event_type": "Log",
 "function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "a34fe1c7-a479-4a4d-bdcb-4da4109e82f1",
+"id": "b0e7eded-e3d7-4da8-acb4-1361ddc07e4b",
 "level": "info",
-"timestamp": 1759613282800000
+"timestamp": 1759613989179000
+},
+{
+"event_message": "Parsed to UTC: 2025-09-18T12:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "413ceb1f-d97e-4c3e-925f-9c2599a3c5b2",
+"level": "info",
+"timestamp": 1759613989179000
+},
+{
+"event_message": "[DRY RUN] Would update event 6d76d894-1b95-4881-a5a7-9f13bd48deea: https://www.catchdesmoines.com/event/the-best-christmas-pageant-ever/51788/ -> https://www.dmplayhouse.com/events/best-christmas-pageant-ever-2025/ (datetime: 2025-09-18T12:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "56432abd-5979-4149-9f96-b391b4079696",
+"level": "info",
+"timestamp": 1759613989179000
 },
 {
 "event_message": "Found time: 7:00pm\n",
 "event_type": "Log",
 "function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "db718076-de0a-4b5e-9c95-d8471627225a",
+"id": "8b2a7d8e-a673-4967-87b2-177234bb1910",
 "level": "info",
-"timestamp": 1759613282800000
+"timestamp": 1759613989179000
 },
 {
-"event_message": "Found date: 2025-09-18\n",
+"event_message": "Parsing datetime: { dateStr: \"2025-09-18\", timeStr: \"7:00pm\" }\n",
 "event_type": "Log",
 "function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "f3e7f7cc-18a6-4d7b-8cc8-c6f57e9d2c6a",
+"id": "daab5447-1bff-4d9d-952d-c1e87d90ab43",
 "level": "info",
-"timestamp": 1759613282800000
-},
-{
-"event_message": "Built ISO string: 2025-09-18T07:00:00-05:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "02cc02b4-1b62-452d-a146-335089a5add2",
-"level": "info",
-"timestamp": 1759613282800000
+"timestamp": 1759613989179000
 },
 {
 "event_message": "Selected visit URL: https://www.dmplayhouse.com/events/best-christmas-pageant-ever-2025/\n",
 "event_type": "Log",
 "function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "99cc8f80-1880-4280-95e1-e3950c11d432",
+"id": "7ed4e8ee-e97c-4cc1-8e5c-4fa62ce03b75",
 "level": "info",
-"timestamp": 1759613282799000
+"timestamp": 1759613989178000
 },
 {
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 82,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 64,\n candidatesAfterFilter: 9,\n selected: \"https://www.dmplayhouse.com/events/best-christmas-pageant-ever-2025/\"\n}\n",
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 82,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 64,\n candidatesAfterFilter: 8,\n selected: \"https://www.dmplayhouse.com/events/best-christmas-pageant-ever-2025/\"\n}\n",
 "event_type": "Log",
 "function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "b03f3eef-049f-4662-af4c-6b1abf630cbb",
+"id": "e155a033-ceea-49b8-8675-245a31ffc62d",
 "level": "info",
-"timestamp": 1759613282799000
-},
-{
-"event_message": "Found linkUrl candidate: https://www.dmplayhouse.com/events/best-christmas-pageant-ever-2025/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "e975135a-2140-4f0e-aecf-a86d5c73ef39",
-"level": "info",
-"timestamp": 1759613282798000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/the-best-christmas-pageant-ever/51788/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "49f5e2eb-218f-486e-94f9-044e917f0343",
-"level": "info",
-"timestamp": 1759613282787000
-},
-{
-"event_message": "Built ISO string: 2018-03-21T00:00:00-05:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "a7bacdc2-940f-43fa-aa4d-f592540e5735",
-"level": "info",
-"timestamp": 1759613281986000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2018-03-21\", timeStr: undefined }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "c3b491bb-3563-4edd-80bc-91e9ff0d117f",
-"level": "info",
-"timestamp": 1759613281986000
-},
-{
-"event_message": "Parsed to UTC: 2018-03-21T05:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "afe858ab-cdda-4480-b10a-f71059d01c97",
-"level": "info",
-"timestamp": 1759613281986000
-},
-{
-"event_message": "Found date: 2018-03-21\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "5a7dec18-79b7-48ee-bd2a-6b6011eacd47",
-"level": "info",
-"timestamp": 1759613281986000
-},
-{
-"event_message": "Parsed event datetime for 31ee0d2a-2f85-4eab-8d04-fa3a43f1ec2d: 2018-03-21T05:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "62747915-50e0-4ecb-b9d9-5c0bd73ebe1d",
-"level": "info",
-"timestamp": 1759613281986000
-},
-{
-"event_message": "[DRY RUN] Would update event 31ee0d2a-2f85-4eab-8d04-fa3a43f1ec2d: https://www.catchdesmoines.com/event/one-frame-at-a-time%3a-photography-workshop-for-vets-w-ptsd/53518/ -> https://player.vimeo.com/api/player.js (datetime: 2018-03-21T05:00:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "0f047828-eb06-4922-a78e-786dbb3353e8",
-"level": "info",
-"timestamp": 1759613281986000
-},
-{
-"event_message": "Selected visit URL: https://player.vimeo.com/api/player.js\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "5870f109-d303-4e51-abfc-8f7220b396a4",
-"level": "info",
-"timestamp": 1759613281985000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 80,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 61,\n candidatesAfterFilter: 8,\n selected: \"https://player.vimeo.com/api/player.js\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "919b6d7f-b0fe-46ee-aa21-756182a59436",
-"level": "info",
-"timestamp": 1759613281985000
-},
-{
-"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/one-frame-at-a-time%3a-photography-workshop-for-vets-w-ptsd/53518/: 410 Gone\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "50a4567a-0c23-4c7f-b05d-d998e1fb03e6",
-"level": "warning",
-"timestamp": 1759613281982000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/one-frame-at-a-time%3a-photography-workshop-for-vets-w-ptsd/53518/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "0698aa25-65b6-4286-82c4-e6f29465a4fe",
-"level": "info",
-"timestamp": 1759613281973000
-},
-{
-"event_message": "Built ISO string: 2025-07-22T07:00:00-05:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "59ee7800-ace1-468a-92c7-3faf0e43edef",
-"level": "info",
-"timestamp": 1759613281172000
-},
-{
-"event_message": "[DRY RUN] Would update event e5f546b9-9890-449c-b155-823a76392956: https://www.catchdesmoines.com/event/walking-wednesday/53070/ -> https://dmbotanicalgarden.com/event/walking-wednesday-10-8/ (datetime: 2025-07-22T12:00:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "c09f8673-ced5-4cea-9d9a-f376819adc07",
-"level": "info",
-"timestamp": 1759613281172000
-},
-{
-"event_message": "Found date: 2025-07-22\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "c6b1c8fc-a5f8-4f45-b90a-a39493cf13b6",
-"level": "info",
-"timestamp": 1759613281172000
-},
-{
-"event_message": "Found time: 7:00 AM\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "9e82054f-0163-417f-bba0-e4a7421b54a9",
-"level": "info",
-"timestamp": 1759613281172000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2025-07-22\", timeStr: \"7:00 AM\" }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "950af98c-d8bc-410e-96a8-ac795d41b119",
-"level": "info",
-"timestamp": 1759613281172000
-},
-{
-"event_message": "Parsed event datetime for e5f546b9-9890-449c-b155-823a76392956: 2025-07-22T12:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "511cbc0b-2b76-4c93-a790-a8f874e31581",
-"level": "info",
-"timestamp": 1759613281172000
-},
-{
-"event_message": "Parsed to UTC: 2025-07-22T12:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "b59d4573-bb87-421c-a93a-ea294dfb2ae4",
-"level": "info",
-"timestamp": 1759613281172000
-},
-{
-"event_message": "Selected visit URL: https://dmbotanicalgarden.com/event/walking-wednesday-10-8/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "948545a2-5b41-4922-a958-8e61d8a6270d",
-"level": "info",
-"timestamp": 1759613281171000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 106,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 68,\n candidatesAfterFilter: 12,\n selected: \"https://dmbotanicalgarden.com/event/walking-wednesday-10-8/\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "ee64e09c-d2c4-4152-b895-0d1e3fc15e7c",
-"level": "info",
-"timestamp": 1759613281171000
-},
-{
-"event_message": "Found linkUrl candidate: https://dmbotanicalgarden.com/event/walking-wednesday-10-8/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "0ba2346f-6f6b-478c-8ee1-a19b64292954",
-"level": "info",
-"timestamp": 1759613281170000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/walking-wednesday/53070/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "fdca0e83-ed4e-4b23-a655-604cbf19bfcf",
-"level": "info",
-"timestamp": 1759613281160000
-},
-{
-"event_message": "Found time: 7:00 PM\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "1b70b045-e072-4727-977b-e52aa0f6a3f6",
-"level": "info",
-"timestamp": 1759613280358000
-},
-{
-"event_message": "[DRY RUN] Would update event 7d45a11a-912e-4f52-ac32-493bcdfe00dc: https://www.catchdesmoines.com/event/breaking-benjamin-%26-three-days-grace/52526/ -> https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace (datetime: 2025-09-23T12:00:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "e3150308-faed-4776-a39c-fa5b8a59113a",
-"level": "info",
-"timestamp": 1759613280358000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2025-09-23\", timeStr: \"7:00 PM\" }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "387af0a3-6060-4fa0-b3ae-2499d38463b5",
-"level": "info",
-"timestamp": 1759613280358000
-},
-{
-"event_message": "Built ISO string: 2025-09-23T07:00:00-05:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "4767a19a-3bb9-48cc-8b82-eebc675720f5",
-"level": "info",
-"timestamp": 1759613280358000
-},
-{
-"event_message": "Parsed event datetime for 7d45a11a-912e-4f52-ac32-493bcdfe00dc: 2025-09-23T12:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "e9381f03-5eea-4b4a-8bfc-5db81b1bf96a",
-"level": "info",
-"timestamp": 1759613280358000
-},
-{
-"event_message": "Parsed to UTC: 2025-09-23T12:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "e3a008ac-50d5-4df7-85a1-cc0929f6cbdb",
-"level": "info",
-"timestamp": 1759613280358000
-},
-{
-"event_message": "Found date: 2025-09-23\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "ba7fbd91-f84c-4382-859c-3d065fe885af",
-"level": "info",
-"timestamp": 1759613280355000
-},
-{
-"event_message": "Selected visit URL: https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "48852918-7257-4f42-930d-3ab2ceb54311",
-"level": "info",
-"timestamp": 1759613280354000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 75,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 61,\n candidatesAfterFilter: 9,\n selected: \"https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "9ef80c86-11fc-4683-9647-7ae2d5c0f4dc",
-"level": "info",
-"timestamp": 1759613280352000
-},
-{
-"event_message": "Found linkUrl candidate: https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "a9198868-e5a1-41d3-923a-b1a0ab79175b",
-"level": "info",
-"timestamp": 1759613280350000
-},
-{
-"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/breaking-benjamin-%26-three-days-grace/52526/: 410 Gone\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "878f93fd-1ec8-4a0b-802f-4c772908f8aa",
-"level": "warning",
-"timestamp": 1759613280347000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/breaking-benjamin-%26-three-days-grace/52526/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "944e79fb-0499-4366-8ecc-ab8a1b4cbe1f",
-"level": "info",
-"timestamp": 1759613280318000
-},
-{
-"event_message": "[DRY RUN] Would update event 8ae59f13-edb6-4178-89f6-40adac2ce2f1: https://www.catchdesmoines.com/event/dog-days-of-summer%3a-pet-friendly-vendor-market/52971/ -> https://player.vimeo.com/api/player.js\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "f673f068-0a99-4cdc-9bc8-54476e0daaad",
-"level": "info",
-"timestamp": 1759613279517000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 360,\n collectedFromAnchors: 30,\n collectedRaw: 54,\n jsonBlocks: 0,\n collectedJson: 0,\n candidatesTotal: 39,\n candidatesAfterFilter: 5,\n selected: \"https://player.vimeo.com/api/player.js\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "be31195e-1b54-47a4-bdf7-04610300bfd1",
-"level": "info",
-"timestamp": 1759613279516000
-},
-{
-"event_message": "Selected visit URL: https://player.vimeo.com/api/player.js\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "dea21a07-6cec-40af-ad15-8c0ee713dd89",
-"level": "info",
-"timestamp": 1759613279516000
-},
-{
-"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/dog-days-of-summer%3a-pet-friendly-vendor-market/52971/: 404 Not Found\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "7bf31750-5e5b-4794-bcfa-095e28aee2fc",
-"level": "warning",
-"timestamp": 1759613279512000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/dog-days-of-summer%3a-pet-friendly-vendor-market/52971/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "5d75ce76-8ee1-48ee-b41b-487551cccf0b",
-"level": "info",
-"timestamp": 1759613279504000
-},
-{
-"event_message": "Parsed event datetime for 4caab04f-5cf3-4962-bba7-20db91c3ace8: 2018-01-25T06:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "6dc217c2-4944-4198-8e43-22d490692a91",
-"level": "info",
-"timestamp": 1759613278703000
-},
-{
-"event_message": "Built ISO string: 2018-01-25T00:00:00-06:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "8142ec71-e4dd-491f-9536-44ad530b6a36",
-"level": "info",
-"timestamp": 1759613278703000
-},
-{
-"event_message": "Parsed to UTC: 2018-01-25T06:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "d740cf00-e10a-42f3-ab13-d80c70be240a",
-"level": "info",
-"timestamp": 1759613278703000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2018-01-25\", timeStr: undefined }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "236c9450-b097-4317-a05c-b957db888f74",
-"level": "info",
-"timestamp": 1759613278703000
-},
-{
-"event_message": "[DRY RUN] Would update event 4caab04f-5cf3-4962-bba7-20db91c3ace8: https://www.catchdesmoines.com/event/des-moines-holiday-boutique/53346/ -> https://desmoinesholidayboutique.com (datetime: 2018-01-25T06:00:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "ad3f3871-0e28-40dc-bfcc-550be8644c26",
-"level": "info",
-"timestamp": 1759613278703000
-},
-{
-"event_message": "Found date: 2018-01-25\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "ee24f6bf-a2a7-4eed-993b-7bda65a04022",
-"level": "info",
-"timestamp": 1759613278702000
-},
-{
-"event_message": "Selected visit URL: https://desmoinesholidayboutique.com\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "de151b72-0a05-4e26-ac05-1246653d15b3",
-"level": "info",
-"timestamp": 1759613278701000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 62,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 54,\n candidatesAfterFilter: 8,\n selected: \"https://desmoinesholidayboutique.com\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "3ddd2740-8803-4f34-8d46-2fcc3002a8a7",
-"level": "info",
-"timestamp": 1759613278701000
-},
-{
-"event_message": "Found linkUrl candidate: https://desmoinesholidayboutique.com\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "b6a11cf0-4d30-423d-9299-3dce49f2b45b",
-"level": "info",
-"timestamp": 1759613278700000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/des-moines-holiday-boutique/53346/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "b84feb44-5ee3-43e5-9f07-02dd399c5336",
-"level": "info",
-"timestamp": 1759613278684000
-},
-{
-"event_message": "Parsed to UTC: 2018-01-25T09:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "9f1593f1-ee2a-40de-913d-71fa5674a4cd",
-"level": "info",
-"timestamp": 1759613277883000
-},
-{
-"event_message": "Found time: 3:00 PM\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "f724ed1a-5942-4eee-8911-b47eac3b4200",
-"level": "info",
-"timestamp": 1759613277883000
-},
-{
-"event_message": "Built ISO string: 2018-01-25T03:00:00-06:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "8f2e53e5-2b7a-4f37-8e4c-d5d49d3c416d",
-"level": "info",
-"timestamp": 1759613277883000
-},
-{
-"event_message": "Parsed event datetime for 12d6ecdb-528c-47e7-acc6-6b6bc1bf438c: 2018-01-25T09:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "035e5c33-44ca-4eac-b96b-1a26b39d45e5",
-"level": "info",
-"timestamp": 1759613277883000
-},
-{
-"event_message": "[DRY RUN] Would update event 12d6ecdb-528c-47e7-acc6-6b6bc1bf438c: https://www.catchdesmoines.com/event/season-of-souls-psychic-fair/53893/ -> http://dmnaf.com (datetime: 2018-01-25T09:00:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "a3594bdf-9ddd-41ab-8631-128d8448b07b",
-"level": "info",
-"timestamp": 1759613277883000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2018-01-25\", timeStr: \"3:00 PM\" }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "6e3f3b4f-8461-4325-9ad5-ded1ee78b132",
-"level": "info",
-"timestamp": 1759613277883000
-},
-{
-"event_message": "Selected visit URL: http://dmnaf.com\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "f7af2aa6-55b0-4007-aabb-8c0be19428a6",
-"level": "info",
-"timestamp": 1759613277882000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 62,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 54,\n candidatesAfterFilter: 8,\n selected: \"http://dmnaf.com\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "4adc8821-19c5-4a97-8ca5-93130b2660d8",
-"level": "info",
-"timestamp": 1759613277882000
-},
-{
-"event_message": "Found date: 2018-01-25\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "01add693-d846-4732-8628-d7117d90ff2f",
-"level": "info",
-"timestamp": 1759613277882000
-},
-{
-"event_message": "Found linkUrl candidate: http://dmnaf.com\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "74a4658f-c4e6-481c-977c-b9f0eed0af41",
-"level": "info",
-"timestamp": 1759613277880000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/season-of-souls-psychic-fair/53893/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "0ec30959-8cb5-4f80-a36c-c0e229639855",
-"level": "info",
-"timestamp": 1759613277870000
-},
-{
-"event_message": "Found time: 7:00 PM\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "a2ddda9d-52f2-40df-9da4-2221be4e8777",
-"level": "info",
-"timestamp": 1759613277069000
-},
-{
-"event_message": "Built ISO string: 2025-09-30T07:00:00-05:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "2cc35133-1f53-4acb-9718-238037acbcbd",
-"level": "info",
-"timestamp": 1759613277069000
-},
-{
-"event_message": "Parsed event datetime for 44b3f6cd-1b80-482d-b090-49977a07f996: 2025-09-30T12:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "64b8b596-56f0-4aad-9e74-4f3e89b0219d",
-"level": "info",
-"timestamp": 1759613277069000
-},
-{
-"event_message": "Found date: 2025-09-30\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "132f5392-830d-4fe5-88ef-72f3e545e181",
-"level": "info",
-"timestamp": 1759613277069000
-},
-{
-"event_message": "Parsed to UTC: 2025-09-30T12:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "fee940d6-90bb-492c-bd1b-f59776db1659",
-"level": "info",
-"timestamp": 1759613277069000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2025-09-30\", timeStr: \"7:00 PM\" }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "953c2e9e-d5f2-4f7c-88be-601d34e3f188",
-"level": "info",
-"timestamp": 1759613277069000
-},
-{
-"event_message": "[DRY RUN] Would update event 44b3f6cd-1b80-482d-b090-49977a07f996: https://www.catchdesmoines.com/event/ninja-kidz-live/49589/ -> https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/ (datetime: 2025-09-30T12:00:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "08e9dea2-f70d-4b78-9127-f76ece527437",
-"level": "info",
-"timestamp": 1759613277069000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 92,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 69,\n candidatesAfterFilter: 9,\n selected: \"https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "898334fb-48d2-410b-bc7f-55f01577a0a9",
-"level": "info",
-"timestamp": 1759613277068000
-},
-{
-"event_message": "Selected visit URL: https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "46f39c8e-a562-4d33-ae1e-1cd3b5397f8b",
-"level": "info",
-"timestamp": 1759613277068000
-},
-{
-"event_message": "Found linkUrl candidate: https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "10090879-0b67-4eb8-8554-cd8ccc67260d",
-"level": "info",
-"timestamp": 1759613277067000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/ninja-kidz-live/49589/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "e069d4c7-c87e-488f-95c1-fd9a075dfcac",
-"level": "info",
-"timestamp": 1759613277057000
-},
-{
-"event_message": "Parsed to UTC: 2018-01-25T13:30:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "80d4b512-55c3-4ab7-9635-711bc357ba6a",
-"level": "info",
-"timestamp": 1759613276256000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2018-01-25\", timeStr: \"7:30 PM\" }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "f00d94fb-b5db-40fd-bee7-64ef1e82e3d2",
-"level": "info",
-"timestamp": 1759613276256000
-},
-{
-"event_message": "Built ISO string: 2018-01-25T07:30:00-06:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "5072b6a8-02aa-44a3-82c1-ddac0df6fb67",
-"level": "info",
-"timestamp": 1759613276256000
-},
-{
-"event_message": "Found time: 7:30 PM\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "265ba0cb-2b85-4112-b5c7-3f64e420fbcd",
-"level": "info",
-"timestamp": 1759613276256000
-},
-{
-"event_message": "Parsed event datetime for 09d9cfe2-3a5a-4fed-aa47-73c69a6aa49e: 2018-01-25T13:30:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "ba4c178f-a49b-44d5-9d7e-030d58b86dfc",
-"level": "info",
-"timestamp": 1759613276256000
-},
-{
-"event_message": "[DRY RUN] Would update event 09d9cfe2-3a5a-4fed-aa47-73c69a6aa49e: https://www.catchdesmoines.com/event/peach-pit/52307/ -> https://www.firstfleetconcerts.com/events/detail/peach-pit-970042 (datetime: 2018-01-25T13:30:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "ff8e8675-b017-4c1f-8d81-8f50731b8682",
-"level": "info",
-"timestamp": 1759613276256000
-},
-{
-"event_message": "Found date: 2018-01-25\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "f4bfce08-0574-4536-8f94-1c35384dfd97",
-"level": "info",
-"timestamp": 1759613276255000
-},
-{
-"event_message": "Selected visit URL: https://www.firstfleetconcerts.com/events/detail/peach-pit-970042\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "fec5f683-d071-436c-8b31-65301c18275d",
-"level": "info",
-"timestamp": 1759613276255000
-},
-{
-"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 62,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 54,\n candidatesAfterFilter: 8,\n selected: \"https://www.firstfleetconcerts.com/events/detail/peach-pit-970042\"\n}\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "8abe2ba3-d1cb-4d55-8536-b0c83e760313",
-"level": "info",
-"timestamp": 1759613276255000
-},
-{
-"event_message": "Found linkUrl candidate: https://www.firstfleetconcerts.com/events/detail/peach-pit-970042\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "bf8da0f2-cb52-4d5a-8c2f-414de706f04d",
-"level": "info",
-"timestamp": 1759613276253000
-},
-{
-"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/peach-pit/52307/: 410 Gone\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "d68fbad7-a3d6-472c-8882-395b365d75eb",
-"level": "warning",
-"timestamp": 1759613276252000
-},
-{
-"event_message": "Processing URL: https://www.catchdesmoines.com/event/peach-pit/52307/\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "ca015f1d-b5ce-4b79-891d-5a78e533b3fd",
-"level": "info",
-"timestamp": 1759613276244000
-},
-{
-"event_message": "[DRY RUN] Would update event a5aaabe5-6759-43f3-81f5-e7c256cf54c2: https://www.catchdesmoines.com/event/des-moines-area-quilters-guild-annual-quilt-show/50372/ -> https://dmaqg.org/ (datetime: 2025-09-18T14:00:00.000Z)\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "d14154b4-f321-4689-93df-627bb558bb2d",
-"level": "info",
-"timestamp": 1759613275437000
-},
-{
-"event_message": "Parsing datetime: { dateStr: \"2025-09-18\", timeStr: \"9:00 AM\" }\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "3249dadb-dffb-4e55-bc9e-35c2a810cbdd",
-"level": "info",
-"timestamp": 1759613275437000
-},
-{
-"event_message": "Found time: 9:00 AM\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "153cdf2e-2c5f-48c4-9881-cc70413e9901",
-"level": "info",
-"timestamp": 1759613275437000
-},
-{
-"event_message": "Parsed event datetime for a5aaabe5-6759-43f3-81f5-e7c256cf54c2: 2025-09-18T14:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "6e683a38-ad6c-407d-8b12-58c2acacafee",
-"level": "info",
-"timestamp": 1759613275437000
-},
-{
-"event_message": "Built ISO string: 2025-09-18T09:00:00-05:00\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "9c722391-27ff-4c45-84ee-b6033894a8b1",
-"level": "info",
-"timestamp": 1759613275437000
-},
-{
-"event_message": "Parsed to UTC: 2025-09-18T14:00:00.000Z\n",
-"event_type": "Log",
-"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "77abbbd2-dc88-47af-9031-677f8253ef22",
-"level": "info",
-"timestamp": 1759613275437000
+"timestamp": 1759613989178000
 },
 {
 "event_message": "Found date: 2025-09-18\n",
 "event_type": "Log",
 "function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
-"id": "42c4e4e2-2abd-4afb-8f2b-1ebd682c6816",
+"id": "6743257f-0ff5-4f18-810a-aea6c491d7df",
 "level": "info",
-"timestamp": 1759613275436000
+"timestamp": 1759613989178000
+},
+{
+"event_message": "Found linkUrl candidate: https://www.dmplayhouse.com/events/best-christmas-pageant-ever-2025/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "07bb0b01-0b29-4d17-ae33-7028e35e9b7c",
+"level": "info",
+"timestamp": 1759613989176000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/the-best-christmas-pageant-ever/51788/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "85e8fdd7-9918-4b65-ae9c-633a2a44aebf",
+"level": "info",
+"timestamp": 1759613989166000
+},
+{
+"event_message": "Parsed to UTC: 2018-03-21T05:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "2dd605a3-8cf1-492f-a18d-79452aa4a601",
+"level": "info",
+"timestamp": 1759613988365000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2018-03-21\", timeStr: undefined }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "d90d9234-5a3d-49f3-b4a1-47521f89b7b7",
+"level": "info",
+"timestamp": 1759613988365000
+},
+{
+"event_message": "Built ISO string: 2018-03-21T00:00:00-05:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "c5c94c47-d8bc-4890-a59b-2f03fd0a9662",
+"level": "info",
+"timestamp": 1759613988365000
+},
+{
+"event_message": "Found date: 2018-03-21\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "df885231-c866-40f2-963c-2833ab1f5d97",
+"level": "info",
+"timestamp": 1759613988365000
+},
+{
+"event_message": "[DRY RUN] Would update event 31ee0d2a-2f85-4eab-8d04-fa3a43f1ec2d: https://www.catchdesmoines.com/event/one-frame-at-a-time%3a-photography-workshop-for-vets-w-ptsd/53518/ -> https://securepubads.g.doubleclick.net (datetime: 2018-03-21T05:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "d3b1db83-df2c-4ff6-86a3-905508103263",
+"level": "info",
+"timestamp": 1759613988365000
+},
+{
+"event_message": "Parsed event datetime for 31ee0d2a-2f85-4eab-8d04-fa3a43f1ec2d: 2018-03-21T05:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "2908cf5c-2e76-45b3-bd9b-7e6660f56555",
+"level": "info",
+"timestamp": 1759613988365000
+},
+{
+"event_message": "Selected visit URL: https://securepubads.g.doubleclick.net\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "cbad4d5b-0c4c-4395-a645-29829aa05f3a",
+"level": "info",
+"timestamp": 1759613988364000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 80,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 61,\n candidatesAfterFilter: 7,\n selected: \"https://securepubads.g.doubleclick.net\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "e31c5e59-0616-4941-b09f-44916b52da69",
+"level": "info",
+"timestamp": 1759613988364000
+},
+{
+"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/one-frame-at-a-time%3a-photography-workshop-for-vets-w-ptsd/53518/: 410 Gone\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "96ad5156-3e23-4a10-b786-28c2b4daa2b5",
+"level": "warning",
+"timestamp": 1759613988359000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/one-frame-at-a-time%3a-photography-workshop-for-vets-w-ptsd/53518/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "8d357395-fe1a-4cfe-8c8a-af5e827f1e85",
+"level": "info",
+"timestamp": 1759613988351000
+},
+{
+"event_message": "Parsed event datetime for e5f546b9-9890-449c-b155-823a76392956: 2025-07-22T12:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "9345139d-a276-4519-8acb-6279ea6545bb",
+"level": "info",
+"timestamp": 1759613987550000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2025-07-22\", timeStr: \"7:00 AM\" }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b204115d-2b14-4905-ba98-e2a3e25fede8",
+"level": "info",
+"timestamp": 1759613987550000
+},
+{
+"event_message": "Built ISO string: 2025-07-22T07:00:00-05:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "1246b1d8-7b3c-46f2-b24c-3adc0391dd77",
+"level": "info",
+"timestamp": 1759613987550000
+},
+{
+"event_message": "[DRY RUN] Would update event e5f546b9-9890-449c-b155-823a76392956: https://www.catchdesmoines.com/event/walking-wednesday/53070/ -> https://dmbotanicalgarden.com/event/walking-wednesday-10-8/ (datetime: 2025-07-22T12:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b901a185-41b5-4ba6-b983-02fd11185518",
+"level": "info",
+"timestamp": 1759613987550000
+},
+{
+"event_message": "Found time: 7:00 AM\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "dc6f007a-dd22-4e75-ac7a-092b52d87804",
+"level": "info",
+"timestamp": 1759613987550000
+},
+{
+"event_message": "Parsed to UTC: 2025-07-22T12:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b9cbfb36-1ad8-4897-94ee-e4a702947f45",
+"level": "info",
+"timestamp": 1759613987550000
+},
+{
+"event_message": "Found date: 2025-07-22\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "4d15349f-1937-44f6-9c47-601ee9ff7683",
+"level": "info",
+"timestamp": 1759613987550000
+},
+{
+"event_message": "Selected visit URL: https://dmbotanicalgarden.com/event/walking-wednesday-10-8/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "37880a0d-fc68-495b-ab3f-fac51f672098",
+"level": "info",
+"timestamp": 1759613987549000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 106,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 68,\n candidatesAfterFilter: 11,\n selected: \"https://dmbotanicalgarden.com/event/walking-wednesday-10-8/\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "76c1606b-eb51-4113-a4db-c043b06ffcd4",
+"level": "info",
+"timestamp": 1759613987549000
+},
+{
+"event_message": "Found linkUrl candidate: https://dmbotanicalgarden.com/event/walking-wednesday-10-8/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b7223a0f-ae84-4e46-a0d2-7603591c1261",
+"level": "info",
+"timestamp": 1759613987548000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/walking-wednesday/53070/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "9813dbd2-bc51-411b-a362-00c641a6996a",
+"level": "info",
+"timestamp": 1759613987537000
+},
+{
+"event_message": "Built ISO string: 2025-09-23T07:00:00-05:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "fbbdaab7-76db-4be2-ae6a-3c37c74b8a33",
+"level": "info",
+"timestamp": 1759613986737000
+},
+{
+"event_message": "Found time: 7:00 PM\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "cc88c1de-4840-4f6d-88cb-0d526cc6ba18",
+"level": "info",
+"timestamp": 1759613986737000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2025-09-23\", timeStr: \"7:00 PM\" }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "ba5e484a-a902-476e-a71d-6f59c773e325",
+"level": "info",
+"timestamp": 1759613986737000
+},
+{
+"event_message": "Parsed event datetime for 7d45a11a-912e-4f52-ac32-493bcdfe00dc: 2025-09-23T12:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "4fe497bb-adea-403b-b237-e00947e09c49",
+"level": "info",
+"timestamp": 1759613986737000
+},
+{
+"event_message": "Parsed to UTC: 2025-09-23T12:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "5b15ee17-6561-4818-9195-05ea0042aaa9",
+"level": "info",
+"timestamp": 1759613986737000
+},
+{
+"event_message": "[DRY RUN] Would update event 7d45a11a-912e-4f52-ac32-493bcdfe00dc: https://www.catchdesmoines.com/event/breaking-benjamin-%26-three-days-grace/52526/ -> https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace (datetime: 2025-09-23T12:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "2afc05f2-3d48-478f-bd7d-5d3afc2bc5a1",
+"level": "info",
+"timestamp": 1759613986737000
+},
+{
+"event_message": "Found date: 2025-09-23\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "7f161f9e-9d93-4035-8bbc-0c4f3fd43425",
+"level": "info",
+"timestamp": 1759613986736000
+},
+{
+"event_message": "Selected visit URL: https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "2bbcbbb8-32fb-4e27-af47-4d41ae7f39a7",
+"level": "info",
+"timestamp": 1759613986736000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 75,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 61,\n candidatesAfterFilter: 8,\n selected: \"https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "08997087-cb9d-4970-a3fa-537555c0b043",
+"level": "info",
+"timestamp": 1759613986736000
+},
+{
+"event_message": "Found linkUrl candidate: https://www.iowaeventscenter.com/events/detail/breaking-benjamin-three-days-grace\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "65cfa9d9-5ac5-472b-a63b-7c9db76c0fa7",
+"level": "info",
+"timestamp": 1759613986734000
+},
+{
+"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/breaking-benjamin-%26-three-days-grace/52526/: 410 Gone\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "91b45e6b-45f2-41b6-b529-0f0f560caa8a",
+"level": "warning",
+"timestamp": 1759613986732000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/breaking-benjamin-%26-three-days-grace/52526/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "ed31a13f-7c41-4a4b-9356-36dfeac71b92",
+"level": "info",
+"timestamp": 1759613986727000
+},
+{
+"event_message": "[DRY RUN] Would update event 8ae59f13-edb6-4178-89f6-40adac2ce2f1: https://www.catchdesmoines.com/event/dog-days-of-summer%3a-pet-friendly-vendor-market/52971/ -> https://securepubads.g.doubleclick.net\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "633c8749-b2b0-4ce2-9a78-a0a22b226a2b",
+"level": "info",
+"timestamp": 1759613985926000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 360,\n collectedFromAnchors: 30,\n collectedRaw: 54,\n jsonBlocks: 0,\n collectedJson: 0,\n candidatesTotal: 39,\n candidatesAfterFilter: 4,\n selected: \"https://securepubads.g.doubleclick.net\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b6b65031-5d01-4758-8acd-ab47d3b7bcb9",
+"level": "info",
+"timestamp": 1759613985925000
+},
+{
+"event_message": "Selected visit URL: https://securepubads.g.doubleclick.net\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "8d688ad1-2bb3-4c46-a221-d5fb9ab076f1",
+"level": "info",
+"timestamp": 1759613985925000
+},
+{
+"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/dog-days-of-summer%3a-pet-friendly-vendor-market/52971/: 404 Not Found\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "f31dc222-02f8-4dc0-b78f-ae5a16fbe47d",
+"level": "warning",
+"timestamp": 1759613985920000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/dog-days-of-summer%3a-pet-friendly-vendor-market/52971/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "49b09f3f-eb75-4b6c-b1b6-370291e187ed",
+"level": "info",
+"timestamp": 1759613985914000
+},
+{
+"event_message": "Found date: 2018-01-25\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "88cdc12e-d559-409f-b39f-07d0282861fa",
+"level": "info",
+"timestamp": 1759613985114000
+},
+{
+"event_message": "Parsed to UTC: 2018-01-25T06:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "50451be0-8cf2-4864-b75a-cd8d5155b8bb",
+"level": "info",
+"timestamp": 1759613985114000
+},
+{
+"event_message": "Parsed event datetime for 4caab04f-5cf3-4962-bba7-20db91c3ace8: 2018-01-25T06:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "2e7c6e0e-cfd6-4ee0-bdad-1a7d81e53d02",
+"level": "info",
+"timestamp": 1759613985114000
+},
+{
+"event_message": "Built ISO string: 2018-01-25T00:00:00-06:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "4474a184-d1ab-4612-9a60-ae7c92b31a2b",
+"level": "info",
+"timestamp": 1759613985114000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2018-01-25\", timeStr: undefined }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "0309bdcf-be99-4eb7-aeb1-6ef963c1139b",
+"level": "info",
+"timestamp": 1759613985114000
+},
+{
+"event_message": "[DRY RUN] Would update event 4caab04f-5cf3-4962-bba7-20db91c3ace8: https://www.catchdesmoines.com/event/des-moines-holiday-boutique/53346/ -> https://desmoinesholidayboutique.com (datetime: 2018-01-25T06:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "50b60ff3-4765-4371-8026-e7ca3b4e4ce3",
+"level": "info",
+"timestamp": 1759613985114000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 62,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 54,\n candidatesAfterFilter: 7,\n selected: \"https://desmoinesholidayboutique.com\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "94f8291f-5674-4dac-8ec5-d8dac2e0b46b",
+"level": "info",
+"timestamp": 1759613985113000
+},
+{
+"event_message": "Selected visit URL: https://desmoinesholidayboutique.com\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "ed7b8db0-c1eb-420c-97f8-04e1ce3adaab",
+"level": "info",
+"timestamp": 1759613985113000
+},
+{
+"event_message": "Found linkUrl candidate: https://desmoinesholidayboutique.com\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "eabf1619-8117-44dc-9706-4f9dbf55c686",
+"level": "info",
+"timestamp": 1759613985112000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/des-moines-holiday-boutique/53346/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b6da1413-0933-46cb-a982-ccd7c5e6ba00",
+"level": "info",
+"timestamp": 1759613985102000
+},
+{
+"event_message": "Built ISO string: 2018-01-25T03:00:00-06:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "6dcfbb90-aef0-4f78-8b1a-bdaccbca54c2",
+"level": "info",
+"timestamp": 1759613984301000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2018-01-25\", timeStr: \"3:00 PM\" }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "c087c76b-1ed4-40fb-93ff-4a8f0211c6e8",
+"level": "info",
+"timestamp": 1759613984301000
+},
+{
+"event_message": "Parsed to UTC: 2018-01-25T09:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "7393a105-b1fa-405e-a686-201eece2a302",
+"level": "info",
+"timestamp": 1759613984301000
+},
+{
+"event_message": "Parsed event datetime for 12d6ecdb-528c-47e7-acc6-6b6bc1bf438c: 2018-01-25T09:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "e8b5d561-7770-401b-8591-dc5263d2e083",
+"level": "info",
+"timestamp": 1759613984301000
+},
+{
+"event_message": "Found date: 2018-01-25\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "f4ad4dd8-6db2-4a5b-9a74-74cdb98bbe00",
+"level": "info",
+"timestamp": 1759613984301000
+},
+{
+"event_message": "Found time: 3:00 PM\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "2c7b41c6-8a82-473c-b03b-011e76e247a5",
+"level": "info",
+"timestamp": 1759613984301000
+},
+{
+"event_message": "[DRY RUN] Would update event 12d6ecdb-528c-47e7-acc6-6b6bc1bf438c: https://www.catchdesmoines.com/event/season-of-souls-psychic-fair/53893/ -> http://dmnaf.com (datetime: 2018-01-25T09:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "1a7990c1-167f-4fbe-bf3c-cae9ca762bfd",
+"level": "info",
+"timestamp": 1759613984301000
+},
+{
+"event_message": "Selected visit URL: http://dmnaf.com\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "deda1dab-e8a2-4d17-86b7-80d954b6e524",
+"level": "info",
+"timestamp": 1759613984300000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 62,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 54,\n candidatesAfterFilter: 7,\n selected: \"http://dmnaf.com\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "604ac969-7915-43f2-a9c0-47593ef504bd",
+"level": "info",
+"timestamp": 1759613984300000
+},
+{
+"event_message": "Found linkUrl candidate: http://dmnaf.com\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "f6366e0f-d3c6-4439-a56e-79e259d27295",
+"level": "info",
+"timestamp": 1759613984299000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/season-of-souls-psychic-fair/53893/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "f21c78fc-c496-4127-b492-154b5e6d06a4",
+"level": "info",
+"timestamp": 1759613984290000
+},
+{
+"event_message": "Found date: 2025-09-30\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "13732c68-f8fe-47ad-9703-21641f5ff2b0",
+"level": "info",
+"timestamp": 1759613983488000
+},
+{
+"event_message": "Found time: 7:00 PM\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "1904657b-86d7-44f6-a601-2b83d8471599",
+"level": "info",
+"timestamp": 1759613983488000
+},
+{
+"event_message": "Parsed event datetime for 44b3f6cd-1b80-482d-b090-49977a07f996: 2025-09-30T12:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "a9cbc5d1-dbb5-4860-b8ee-2f89272964c0",
+"level": "info",
+"timestamp": 1759613983488000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2025-09-30\", timeStr: \"7:00 PM\" }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "0064ef94-5030-4bf8-9d4b-8eebb9d127af",
+"level": "info",
+"timestamp": 1759613983488000
+},
+{
+"event_message": "[DRY RUN] Would update event 44b3f6cd-1b80-482d-b090-49977a07f996: https://www.catchdesmoines.com/event/ninja-kidz-live/49589/ -> https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/ (datetime: 2025-09-30T12:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "59e91595-d749-43c9-bc26-442f14fc8a53",
+"level": "info",
+"timestamp": 1759613983488000
+},
+{
+"event_message": "Built ISO string: 2025-09-30T07:00:00-05:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "0939f6b6-7bf7-4e78-9153-1bc677ce6b90",
+"level": "info",
+"timestamp": 1759613983488000
+},
+{
+"event_message": "Parsed to UTC: 2025-09-30T12:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "88d40f22-3b12-4241-b2b3-e704573a00e1",
+"level": "info",
+"timestamp": 1759613983488000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 92,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 69,\n candidatesAfterFilter: 8,\n selected: \"https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "63edafc4-a786-49ef-b9ef-0699cec1b0c7",
+"level": "info",
+"timestamp": 1759613983487000
+},
+{
+"event_message": "Selected visit URL: https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "abe6c228-adbc-4410-956e-8c459a2236bb",
+"level": "info",
+"timestamp": 1759613983487000
+},
+{
+"event_message": "Found linkUrl candidate: https://hoytsherman.org/event/ninja-kidz-live-infinite-possibilities/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b91d2e6c-4342-4ab5-9600-c13b44f945d5",
+"level": "info",
+"timestamp": 1759613983485000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/ninja-kidz-live/49589/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "aa77805c-cae5-4ffe-9b30-eb258d9d0f0b",
+"level": "info",
+"timestamp": 1759613983477000
+},
+{
+"event_message": "Parsed event datetime for 09d9cfe2-3a5a-4fed-aa47-73c69a6aa49e: 2018-01-25T13:30:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "7fab4070-204e-459e-8caf-d4451417cce9",
+"level": "info",
+"timestamp": 1759613982675000
+},
+{
+"event_message": "Found time: 7:30 PM\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "29dd0d42-14e8-4088-b6d7-04e0c2cc6b04",
+"level": "info",
+"timestamp": 1759613982675000
+},
+{
+"event_message": "Built ISO string: 2018-01-25T07:30:00-06:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "56bbb977-f136-474b-a3b9-0073c6a74020",
+"level": "info",
+"timestamp": 1759613982675000
+},
+{
+"event_message": "Found date: 2018-01-25\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "72f15487-71a5-4159-b178-a59ee0bf9026",
+"level": "info",
+"timestamp": 1759613982675000
+},
+{
+"event_message": "[DRY RUN] Would update event 09d9cfe2-3a5a-4fed-aa47-73c69a6aa49e: https://www.catchdesmoines.com/event/peach-pit/52307/ -> https://www.firstfleetconcerts.com/events/detail/peach-pit-970042 (datetime: 2018-01-25T13:30:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "e0bc0f6b-62a0-4c1a-84fe-3c7983264133",
+"level": "info",
+"timestamp": 1759613982675000
+},
+{
+"event_message": "Parsed to UTC: 2018-01-25T13:30:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "49562430-d2e1-48b4-a38b-10efe075e2ef",
+"level": "info",
+"timestamp": 1759613982675000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2018-01-25\", timeStr: \"7:30 PM\" }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "87cc4208-b52b-4363-a333-fb62f3494fcc",
+"level": "info",
+"timestamp": 1759613982675000
+},
+{
+"event_message": "Extraction diagnostic: {\n anchorCount: 212,\n collectedFromAnchors: 24,\n collectedRaw: 62,\n jsonBlocks: 1,\n collectedJson: 0,\n candidatesTotal: 54,\n candidatesAfterFilter: 7,\n selected: \"https://www.firstfleetconcerts.com/events/detail/peach-pit-970042\"\n}\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "a2a992dc-aa31-423d-bdc8-7efc839ce359",
+"level": "info",
+"timestamp": 1759613982674000
+},
+{
+"event_message": "Selected visit URL: https://www.firstfleetconcerts.com/events/detail/peach-pit-970042\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "f7ce4d3c-f5b3-46ea-abf7-c44006c1916e",
+"level": "info",
+"timestamp": 1759613982674000
+},
+{
+"event_message": "Found linkUrl candidate: https://www.firstfleetconcerts.com/events/detail/peach-pit-970042\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "153eb161-8be0-415d-963c-6129094d6e24",
+"level": "info",
+"timestamp": 1759613982673000
+},
+{
+"event_message": "Non-2xx response for https://www.catchdesmoines.com/event/peach-pit/52307/: 410 Gone\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "4467739d-43eb-4941-91da-52255e9a3c45",
+"level": "warning",
+"timestamp": 1759613982671000
+},
+{
+"event_message": "Processing URL: https://www.catchdesmoines.com/event/peach-pit/52307/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "5400f2f7-bb91-4ab2-b298-eab8a9fadf1f",
+"level": "info",
+"timestamp": 1759613982664000
+},
+{
+"event_message": "Parsed event datetime for a5aaabe5-6759-43f3-81f5-e7c256cf54c2: 2025-09-18T14:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "3bc2d518-6b93-4403-8d53-9bf0625e938a",
+"level": "info",
+"timestamp": 1759613981864000
+},
+{
+"event_message": "Built ISO string: 2025-09-18T09:00:00-05:00\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b4867047-9fbb-4763-ac8b-b759c37d9c52",
+"level": "info",
+"timestamp": 1759613981864000
+},
+{
+"event_message": "Parsing datetime: { dateStr: \"2025-09-18\", timeStr: \"9:00 AM\" }\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "6938b685-5d53-47ef-853b-863739076720",
+"level": "info",
+"timestamp": 1759613981864000
+},
+{
+"event_message": "[DRY RUN] Would update event a5aaabe5-6759-43f3-81f5-e7c256cf54c2: https://www.catchdesmoines.com/event/des-moines-area-quilters-guild-annual-quilt-show/50372/ -> https://dmaqg.org/ (datetime: 2025-09-18T14:00:00.000Z)\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "553bf5e3-ae67-43a0-b5b3-b1f04d12e17a",
+"level": "info",
+"timestamp": 1759613981864000
+},
+{
+"event_message": "Parsed to UTC: 2025-09-18T14:00:00.000Z\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "47a1b956-8066-4ea0-ba16-0010e5607cfc",
+"level": "info",
+"timestamp": 1759613981864000
+},
+{
+"event_message": "Found time: 9:00 AM\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "ff8a5ed0-8752-49a6-8cc2-858625be1cfc",
+"level": "info",
+"timestamp": 1759613981864000
+},
+{
+"event_message": "Selected visit URL: https://dmaqg.org/\n",
+"event_type": "Log",
+"function_id": "1fb40c01-7b4f-4912-9805-e89de54dcacf",
+"id": "b5422f78-03ae-44fd-b27c-ff1dc6af9aae",
+"level": "info",
+"timestamp": 1759613981863000
 }
 ]

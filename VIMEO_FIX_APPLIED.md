@@ -135,9 +135,15 @@ Event 4: https://theater.org                     ✅
 ## Summary
 
 ✅ **Reverted `firecrawl-scraper`** - Back to original working state  
-✅ **Fixed `extract-catchdesmoines-urls`** - Blocks Vimeo in URL extraction tool  
-✅ **Added 30+ exclusion patterns** to `extract-catchdesmoines-urls`  
-✅ **Your logs should show NO MORE Vimeo URLs**
+✅ **Fixed `extract-catchdesmoines-urls`** - Blocks Vimeo, DoubleClick ads, and other false positives  
+✅ **Added 40+ exclusion patterns** to `extract-catchdesmoines-urls`:
+
+- Video players (Vimeo, YouTube)
+- Ad networks (DoubleClick, securepubads, googlesyndication)
+- API endpoints and JS files
+- CDNs and tracking scripts
+
+✅ **Your logs should show NO MORE Vimeo or DoubleClick URLs**
 
 **The correct function has been fixed - the one your UI component actually calls!** 🎯
 
