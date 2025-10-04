@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAIConfiguration } from "@/hooks/useAIConfiguration";
-import { Loader2, Save, Bot, Settings, Zap, Cpu, TestTube, CheckCircle, XCircle } from "lucide-react";
+import { useAIModels } from "@/hooks/useAIModels";
+import { Loader2, Save, Bot, Settings, Zap, Cpu, TestTube, CheckCircle, XCircle, Plus, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,33 +12,28 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-
-const AI_MODELS = [
-  // Google Gemini Models
-  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash (Default)', category: 'Google' },
-  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro', category: 'Google' },
-  { value: 'google/gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', category: 'Google' },
-  { value: 'google/gemini-2.5-flash-image-preview', label: 'Gemini 2.5 Flash Image Preview', category: 'Google' },
-  
-  // OpenAI GPT Models
-  { value: 'openai/gpt-5', label: 'GPT-5', category: 'OpenAI' },
-  { value: 'openai/gpt-5-mini', label: 'GPT-5 Mini', category: 'OpenAI' },
-  { value: 'openai/gpt-5-nano', label: 'GPT-5 Nano', category: 'OpenAI' },
-  
-  // Anthropic Claude Models
-  { value: 'claude-opus-4-1-20250805', label: 'Claude Opus 4.1', category: 'Anthropic' },
-  { value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', category: 'Anthropic' },
-  { value: 'claude-3-5-haiku-20241022', label: 'Claude 3.5 Haiku', category: 'Anthropic' },
-  { value: 'claude-3-7-sonnet-20250219', label: 'Claude 3.7 Sonnet', category: 'Anthropic' },
-];
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 export function AIConfigurationManager() {
   const { settings, isLoading, updateSetting, isUpdating, getSetting } = useAIConfiguration();
+  const { models, isLoading: modelsLoading, addModel, deleteModel, isAdding, isDeleting } = useAIModels();
   const [editedValues, setEditedValues] = useState<Record<string, any>>({});
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; response?: string } | null>(null);
+  const [isAddModelOpen, setIsAddModelOpen] = useState(false);
+  const [newModel, setNewModel] = useState({
+    model_id: '',
+    model_name: '',
+    provider: 'Anthropic',
+    description: '',
+    context_window: 200000,
+    max_output_tokens: 8192,
+    supports_vision: true,
+  });
 
-  if (isLoading) {
+  if (isLoading || modelsLoading) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -46,7 +41,21 @@ export function AIConfigurationManager() {
     );
   }
 
-  const currentModel = getSetting('default_model', 'google/gemini-2.5-flash');
+  const currentModel = getSetting('default_model', 'claude-sonnet-4-5-20250929');
+  
+  const handleAddModel = () => {
+    addModel(newModel);
+    setIsAddModelOpen(false);
+    setNewModel({
+      model_id: '',
+      model_name: '',
+      provider: 'Anthropic',
+      description: '',
+      context_window: 200000,
+      max_output_tokens: 8192,
+      supports_vision: true,
+    });
+  };
   
   const handleSave = (key: string) => {
     const value = editedValues[key];
@@ -71,18 +80,19 @@ export function AIConfigurationManager() {
 
   const hasChanges = (key: string) => editedValues[key] !== undefined;
 
-  const testAIModel = async () => {
+  const testAIModel = async (modelId?: string) => {
+    const modelToTest = modelId || currentModel;
     setIsTesting(true);
     setTestResult(null);
 
     try {
-      toast.info('Testing current AI model...', {
-        description: `Testing ${currentModel}`
+      toast.info('Testing AI model...', {
+        description: `Testing ${modelToTest}`
       });
 
       const { data, error } = await supabase.functions.invoke('test-ai-model', {
         body: {
-          model: currentModel,
+          model: modelToTest,
           testPrompt: 'Generate a brief, engaging one-sentence description of a jazz music event in Des Moines.'
         }
       });
@@ -96,12 +106,12 @@ export function AIConfigurationManager() {
           response: data.generatedText
         });
         toast.success('AI model test successful', {
-          description: `${currentModel} is working correctly`
+          description: `${modelToTest} is working correctly`
         });
       } else {
-        throw new Error(data.message || 'Test failed');
+        throw new Error(data.error || data.message || 'Test failed');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error testing AI model:', error);
       setTestResult({
         success: false,
@@ -148,42 +158,140 @@ export function AIConfigurationManager() {
 
           <Separator />
 
-          {/* AI Model Testing Section */}
-          <Card className="border-primary/20 bg-primary/5">
+          {/* Model Bank Management */}
+          <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TestTube className="h-5 w-5" />
-                Test Current AI Model
-              </CardTitle>
-              <CardDescription>
-                Test the currently configured default model to verify it's working correctly
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Bot className="h-5 w-5" />
+                    AI Model Bank
+                  </CardTitle>
+                  <CardDescription>
+                    Manage available AI models and test them
+                  </CardDescription>
+                </div>
+                <Dialog open={isAddModelOpen} onOpenChange={setIsAddModelOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Model
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New AI Model</DialogTitle>
+                      <DialogDescription>
+                        Add a new model to your available models bank
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="model_id">Model ID</Label>
+                        <Input
+                          id="model_id"
+                          placeholder="claude-sonnet-4-5-20250929"
+                          value={newModel.model_id}
+                          onChange={(e) => setNewModel({ ...newModel, model_id: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="model_name">Display Name</Label>
+                        <Input
+                          id="model_name"
+                          placeholder="Claude Sonnet 4.5"
+                          value={newModel.model_name}
+                          onChange={(e) => setNewModel({ ...newModel, model_name: e.target.value })}
+                        />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="provider">Provider</Label>
+                        <Select value={newModel.provider} onValueChange={(value) => setNewModel({ ...newModel, provider: value })}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Anthropic">Anthropic</SelectItem>
+                            <SelectItem value="Google">Google</SelectItem>
+                            <SelectItem value="OpenAI">OpenAI</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label htmlFor="description">Description</Label>
+                        <Input
+                          id="description"
+                          placeholder="Model description"
+                          value={newModel.description}
+                          onChange={(e) => setNewModel({ ...newModel, description: e.target.value })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="supports_vision">Supports Vision</Label>
+                        <Switch
+                          id="supports_vision"
+                          checked={newModel.supports_vision}
+                          onCheckedChange={(checked) => setNewModel({ ...newModel, supports_vision: checked })}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button onClick={handleAddModel} disabled={isAdding || !newModel.model_id || !newModel.model_name}>
+                        {isAdding && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Add Model
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <div className="text-sm font-medium mb-1">Current Model:</div>
-                  <code className="px-3 py-2 rounded bg-muted text-sm block">{currentModel}</code>
-                </div>
-                
-                <Button 
-                  onClick={testAIModel} 
-                  disabled={isTesting}
-                  size="default"
-                >
-                  {isTesting ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      Testing...
-                    </>
-                  ) : (
-                    <>
-                      <TestTube className="h-4 w-4 mr-2" />
-                      Test Model
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Model</TableHead>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Context</TableHead>
+                    <TableHead>Max Output</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {models?.map((model) => (
+                    <TableRow key={model.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{model.model_name}</div>
+                          <div className="text-xs text-muted-foreground">{model.model_id}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{model.provider}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs">{model.context_window?.toLocaleString()}</TableCell>
+                      <TableCell className="text-xs">{model.max_output_tokens?.toLocaleString()}</TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => testAIModel(model.model_id)}
+                          disabled={isTesting}
+                        >
+                          <TestTube className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => deleteModel(model.id)}
+                          disabled={isDeleting}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
 
               {testResult && (
                 <Alert variant={testResult.success ? "default" : "destructive"}>
@@ -207,10 +315,6 @@ export function AIConfigurationManager() {
                   </div>
                 </Alert>
               )}
-
-              <div className="text-xs text-muted-foreground">
-                <p>This test sends a sample prompt to verify the model is responding correctly. Change the default model in the table below to test different models.</p>
-              </div>
             </CardContent>
           </Card>
 
@@ -269,11 +373,11 @@ export function AIConfigurationManager() {
                               <SelectValue placeholder="Select model" />
                             </SelectTrigger>
                             <SelectContent>
-                              {AI_MODELS.map((model) => (
-                                <SelectItem key={model.value} value={model.value}>
+                              {models?.map((model) => (
+                                <SelectItem key={model.id} value={model.model_id}>
                                   <div className="flex items-center gap-2">
-                                    <Badge variant="outline" className="text-xs">{model.category}</Badge>
-                                    {model.label}
+                                    <Badge variant="outline" className="text-xs">{model.provider}</Badge>
+                                    {model.model_name}
                                   </div>
                                 </SelectItem>
                               ))}
@@ -331,7 +435,7 @@ export function AIConfigurationManager() {
                   Model Configuration Guide
                 </p>
                 <p className="text-amber-800 dark:text-amber-200">
-                  Select your preferred AI model from the dropdown above. All modules (Firecrawl Scraper, AI Crawler, Social Media Manager, etc.) will automatically use the configured model. After changing the model, use the "Test Model" button to verify it's working correctly.
+                  Manage your AI model bank above. Add new models as they're released, test them individually, then select your default model in the settings below. All modules will use the configured default model. Current default: <strong>{currentModel}</strong>
                 </p>
               </div>
             </div>

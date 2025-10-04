@@ -122,6 +122,51 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_models: {
+        Row: {
+          context_window: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          max_output_tokens: number | null
+          model_id: string
+          model_name: string
+          provider: string
+          supports_vision: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          context_window?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_output_tokens?: number | null
+          model_id: string
+          model_name: string
+          provider: string
+          supports_vision?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          context_window?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_output_tokens?: number | null
+          model_id?: string
+          model_name?: string
+          provider?: string
+          supports_vision?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       article_comments: {
         Row: {
           article_id: string
