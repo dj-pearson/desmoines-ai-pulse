@@ -98,15 +98,19 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       signal: AbortSignal.timeout(12000) // 12 second timeout
     });
 
+    // Even if non-200, try to parse the body (some 410/404 pages still include useful HTML)
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      console.warn(`Non-2xx response for ${eventUrl}: ${response.status} ${response.statusText}`);
     }
 
     const html = await response.text();
-    
-    // Define excluded domains
+
+    // Define excluded domains (social, shorteners, host site & related CMS)
     const excludeDomains = [
       'catchdesmoines.com',
+      'simpleviewcrm.com',
+      'simpleviewcms.com',
+      'extranet.simpleview',
       'facebook.com',
       'fb.com',
       'twitter.com',
@@ -127,48 +131,192 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       'goo.gl',
       'bit.ly',
       'ow.ly',
-      'simpleviewcrm.com',
-      'extranet.simpleview',
       'mailto:',
       'tel:',
       '#'
     ];
-    
-    // Extract all URLs from the HTML
-    const allLinkMatches = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi);
-    const foundUrls: string[] = [];
-    
-    if (allLinkMatches) {
-      for (const linkMatch of allLinkMatches) {
-        const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
-        if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http')) {
-          const url = hrefMatch[1];
-          
-          // Check if URL should be excluded
-          const shouldExclude = excludeDomains.some(domain => url.toLowerCase().includes(domain.toLowerCase()));
-          
-          if (!shouldExclude) {
-            foundUrls.push(url);
-            console.log('Found potential URL:', url);
+
+    const candidatesSet = new Set<string>();
+
+    // Helper: normalize protocol-relative URLs
+    const normalizeUrl = (url: string) => {
+      if (url.startsWith('//')) return `https:${url}`;
+      return url;
+    };
+
+    // 1) Collect URLs from full anchor tags (capture href and inner text)
+    const anchorRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let anchorMatch: RegExpExecArray | null;
+    let anchorCount = 0;
+    let collectedFromAnchors = 0;
+    while ((anchorMatch = anchorRegex.exec(html)) !== null) {
+      anchorCount++;
+      let href = anchorMatch[1].trim();
+      const inner = (anchorMatch[2] || '').replace(/<[^>]*>/g, ' ').trim();
+      href = normalizeUrl(href);
+
+      // Ignore non-http(s) & obvious internal relative paths
+      const isHttp = /^https?:\/\//i.test(href) || href.startsWith('//');
+      if (!isHttp) continue;
+
+      candidatesSet.add(href);
+      collectedFromAnchors++;
+
+      // Also try to capture onclick/data-* inside this same <a ...>
+      const tagStartIdx = Math.max(html.lastIndexOf('<a', anchorRegex.lastIndex - anchorMatch[0].length - 1), 0);
+      const tagEndIdx = anchorRegex.lastIndex; // end of </a>
+      const anchorTagHtml = html.slice(tagStartIdx, tagEndIdx);
+
+      // data-* attributes
+      const dataAttrRegex = /data-(?:href|url|website|externalurl|external-url|link)=["']([^"']+)["']/gi;
+      let dataMatch: RegExpExecArray | null;
+      while ((dataMatch = dataAttrRegex.exec(anchorTagHtml)) !== null) {
+        const dataUrl = normalizeUrl(dataMatch[1].trim());
+        if (/^https?:\/\//i.test(dataUrl) || dataUrl.startsWith('//')) {
+          candidatesSet.add(dataUrl);
+        }
+      }
+
+      // onclick patterns
+      const onclickRegex = /onclick=["'][^"']*(?:window\.open|location\.(?:assign|href|replace))\(['"]([^'"\)]+)['"][^"']*["']/i;
+      const onclickMatch = anchorTagHtml.match(onclickRegex);
+      if (onclickMatch && onclickMatch[1]) {
+        const clickUrl = normalizeUrl(onclickMatch[1].trim());
+        if (/^https?:\/\//i.test(clickUrl) || clickUrl.startsWith('//')) {
+          candidatesSet.add(clickUrl);
+        }
+      }
+
+      // If this looks like the explicit Visit Website link, prefer it by adding again (will score higher later)
+      if (/\b(visit\s*website|official\s*site|website)\b/i.test(inner)) {
+        candidatesSet.add(href);
+      }
+    }
+
+    // 2) Collect raw URLs anywhere in the HTML (including scripts)
+    const rawUrlRegex = /https?:\/\/[^\s"'<>]+/gi;
+    let rawMatch: RegExpExecArray | null;
+    let collectedRaw = 0;
+    while ((rawMatch = rawUrlRegex.exec(html)) !== null) {
+      const rawUrl = normalizeUrl(rawMatch[0].trim());
+      candidatesSet.add(rawUrl);
+      collectedRaw++;
+    }
+
+    // 3) Parse JSON-LD blocks for potential URLs
+    const jsonLdRegex = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+    let jsonMatch: RegExpExecArray | null;
+    let jsonBlocks = 0;
+    let collectedJson = 0;
+    function collectUrlsFromJson(obj: any) {
+      if (obj == null) return;
+      if (typeof obj === 'string') {
+        const s = obj.trim();
+        if (/^https?:\/\//i.test(s)) candidatesSet.add(s);
+        return;
+      }
+      if (Array.isArray(obj)) {
+        for (const item of obj) collectUrlsFromJson(item);
+        return;
+      }
+      if (typeof obj === 'object') {
+        for (const [k, v] of Object.entries(obj)) {
+          if (k.toLowerCase() === 'url' || k.toLowerCase() === 'sameas' || k.toLowerCase() === 'website') {
+            collectUrlsFromJson(v);
+          } else {
+            collectUrlsFromJson(v);
           }
         }
       }
     }
-    
-    // Return the first non-excluded external URL
-    const visitUrl = foundUrls.length > 0 ? foundUrls[0] : null;
-    
+    while ((jsonMatch = jsonLdRegex.exec(html)) !== null) {
+      jsonBlocks++;
+      const block = jsonMatch[1];
+      try {
+        const json = JSON.parse(block);
+        const before = candidatesSet.size;
+        collectUrlsFromJson(json);
+        const after = candidatesSet.size;
+        collectedJson += Math.max(0, after - before);
+      } catch (_e) {
+        // ignore parse errors
+      }
+    }
+
+    // Convert set to array and filter out excluded
+    const allCandidates = Array.from(candidatesSet);
+
+    const isExcluded = (u: string) => {
+      const lower = u.toLowerCase();
+      return excludeDomains.some((d) => lower.includes(d.toLowerCase()));
+    };
+
+    // Score candidates: prefer explicit visit/website anchors, and de-prioritize anything from excluded
+    type Scored = { url: string; score: number };
+
+    const scored: Scored[] = [];
+
+    // Build a quick map from URL to best anchor-context score based on keyword proximity
+    const visitAnchorRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    const anchorContextScores = new Map<string, number>();
+    let vaMatch: RegExpExecArray | null;
+    while ((vaMatch = visitAnchorRegex.exec(html)) !== null) {
+      const href = normalizeUrl(vaMatch[1].trim());
+      const text = (vaMatch[2] || '').replace(/<[^>]*>/g, ' ').trim();
+      let score = 0;
+      if (/\b(visit\s*website|official\s*site|event\s*website|website)\b/i.test(text)) score += 10;
+      if (/\b(learn\s*more|details)\b/i.test(text)) score += 2;
+      if (/btn|button|cta|visit|website/i.test(vaMatch[0])) score += 2;
+      if (score > 0) {
+        const prev = anchorContextScores.get(href) ?? 0;
+        if (score > prev) anchorContextScores.set(href, score);
+      }
+    }
+
+    for (const url of allCandidates) {
+      if (isExcluded(url)) continue;
+      // Skip obvious tracking redirectors unless they are the only option (handled by later fallback)
+      let s = 0;
+      s += anchorContextScores.get(url) ?? 0;
+      // Slight boost for non-tracking clean domains
+      if (!/[?&](utm_|fbclid|gclid|mc_cid|mc_eid)/i.test(url)) s += 1;
+      scored.push({ url, score: s });
+    }
+
+    // Choose best candidate
+    scored.sort((a, b) => b.score - a.score);
+
+    let visitUrl: string | null = null;
+
+    if (scored.length > 0) {
+      visitUrl = scored[0].url;
+    } else {
+      // As a last resort, pick the first non-excluded absolute URL from the page body
+      const fallback = allCandidates.find((u) => /^https?:\/\//i.test(u) && !isExcluded(u));
+      visitUrl = fallback || null;
+    }
+
+    console.log('Extraction diagnostic:', {
+      anchorCount,
+      collectedFromAnchors,
+      collectedRaw,
+      jsonBlocks,
+      collectedJson,
+      candidatesTotal: allCandidates.length,
+      candidatesAfterFilter: scored.length,
+      selected: visitUrl || null,
+    });
+
     if (visitUrl) {
       console.log('Selected visit URL:', visitUrl);
     } else {
       console.log('No suitable external URL found for:', eventUrl);
     }
-    
-    // Extract date/time information
+
+    // Extract date/time information (keep existing lightweight heuristics)
     let dateStr: string | null = null;
     let timeStr: string | null = null;
-    
-    // Look for date patterns in the HTML
+
     const datePatterns = [
       /<time[^>]*datetime=["']([^"']+)["']/i,
       /<meta[^>]*property=["']event:start_date["'][^>]*content=["']([^"']+)["']/i,
@@ -176,7 +324,7 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       /Date:\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
       /(\d{4}-\d{2}-\d{2})/
     ];
-    
+
     for (const pattern of datePatterns) {
       const match = html.match(pattern);
       if (match && match[1]) {
@@ -185,14 +333,13 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
         break;
       }
     }
-    
-    // Look for time patterns
+
     const timePatterns = [
       /<time[^>]*>([^<]*\d{1,2}:\d{2}[^<]*)<\/time>/i,
       /Time:\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i,
       /(\d{1,2}:\d{2}\s*(?:AM|PM))/i
     ];
-    
+
     for (const pattern of timePatterns) {
       const match = html.match(pattern);
       if (match && match[1]) {
