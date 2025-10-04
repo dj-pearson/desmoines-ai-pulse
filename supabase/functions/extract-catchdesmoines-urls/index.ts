@@ -89,13 +89,13 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
     // Use fetch with user agent to simulate browser request
     const response = await fetch(eventUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         'Accept-Encoding': 'gzip, deflate',
         'Connection': 'keep-alive',
       },
-      signal: AbortSignal.timeout(15000) // 15 second timeout
+      signal: AbortSignal.timeout(12000) // 12 second timeout
     });
 
     if (!response.ok) {
@@ -142,103 +142,135 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
       }
     }
     
-    // Helper function to extract URLs using CSS-like selectors via regex
-    const extractUrlByPattern = (pattern: RegExp): string | null => {
+    // PROVEN LOGIC FROM AI CRAWLER - Multi-strategy URL extraction
+    
+    // Strategy 1: Look for "Visit Website" or similar buttons/links
+    const visitPatterns = [
+      /<a[^>]*class=["'][^"']*visit[^"']*["'][^>]*href=["']([^"']+)["']/gi,
+      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*visit[^"']*["']/gi,
+      /<a[^>]*>.*?visit\s+website.*?<\/a>/gi,
+    ];
+    
+    for (const pattern of visitPatterns) {
       const matches = html.match(pattern);
       if (matches) {
         for (const match of matches) {
           const hrefMatch = match.match(/href=["']([^"']+)["']/i);
-          if (hrefMatch && hrefMatch[1] && 
-              hrefMatch[1].startsWith('http') && 
-              !hrefMatch[1].includes('catchdesmoines.com')) {
-            return hrefMatch[1];
+          if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http') && !hrefMatch[1].includes('catchdesmoines.com')) {
+            console.log('Found via visit website pattern:', hrefMatch[1]);
+            return { visitUrl: hrefMatch[1], dateStr, timeStr };
           }
         }
       }
-      return null;
-    };
-
-    // Strategy 1: CSS Class Patterns - a.btn-external or a.external-link
-    let url = extractUrlByPattern(/<a[^>]*class=["'][^"']*btn-external[^"']*["'][^>]*href=["']([^"']+)["']/gi);
-    if (url) {
-      console.log('Found via btn-external class:', url);
-      return { visitUrl: url, dateStr, timeStr };
     }
-
-    url = extractUrlByPattern(/<a[^>]*class=["'][^"']*external-link[^"']*["'][^>]*href=["']([^"']+)["']/gi);
-    if (url) {
-      console.log('Found via external-link class:', url);
-      return { visitUrl: url, dateStr, timeStr };
-    }
-
-    url = extractUrlByPattern(/<a[^>]*class=["'][^"']*external[^"']*["'][^>]*href=["']([^"']+)["']/gi);
-    if (url) {
-      console.log('Found via external class:', url);
-      return { visitUrl: url, dateStr, timeStr };
-    }
-
-    // Strategy 2: Data Attributes - [data-external-url] or [data-event-url]
-    url = extractUrlByPattern(/<a[^>]*data-external-url=["']([^"']+)["']/gi);
-    if (url) {
-      console.log('Found via data-external-url:', url);
-      return { visitUrl: url, dateStr, timeStr };
-    }
-
-    url = extractUrlByPattern(/<a[^>]*data-event-url=["']([^"']+)["']/gi);
-    if (url) {
-      console.log('Found via data-event-url:', url);
-      return { visitUrl: url, dateStr, timeStr };
-    }
-
-    // Strategy 3: Context-Specific - .event-actions a[href^='http']:not([href*='catchdesmoines.com'])
-    const eventActionsPattern = /<div[^>]*class=["'][^"']*event-actions[^"']*["'][^>]*>[\s\S]*?<\/div>/gi;
-    const eventActionsMatches = html.match(eventActionsPattern);
-    if (eventActionsMatches) {
-      for (const section of eventActionsMatches) {
-        url = extractUrlByPattern(/<a[^>]*href=["']([^"']+)["']/gi);
-        if (url && !url.includes('catchdesmoines.com') && 
-            !url.includes('facebook.com') && 
-            !url.includes('twitter.com') && 
-            !url.includes('x.com') &&
-            !url.includes('instagram.com')) {
-          console.log('Found via event-actions section:', url);
-          return { visitUrl: url, dateStr, timeStr };
+    
+    // Strategy 2: CSS Class Patterns - external links
+    const classPatterns = [
+      /<a[^>]*class=["'][^"']*btn-external[^"']*["'][^>]*href=["']([^"']+)["']/gi,
+      /<a[^>]*class=["'][^"']*external-link[^"']*["'][^>]*href=["']([^"']+)["']/gi,
+      /<a[^>]*class=["'][^"']*external[^"']*["'][^>]*href=["']([^"']+)["']/gi,
+    ];
+    
+    for (const pattern of classPatterns) {
+      const matches = html.match(pattern);
+      if (matches) {
+        for (const match of matches) {
+          const hrefMatch = match.match(/href=["']([^"']+)["']/i);
+          if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http') && !hrefMatch[1].includes('catchdesmoines.com')) {
+            console.log('Found via class pattern:', hrefMatch[1]);
+            return { visitUrl: hrefMatch[1], dateStr, timeStr };
+          }
         }
       }
     }
-
-    // Strategy 4: Universal Fallback with strict exclusions
-    const excludeDomains = [
-      'catchdesmoines.com', 'facebook.com', 'twitter.com', 'x.com', 'instagram.com', 
-      'youtube.com', 'tiktok.com', 'linkedin.com', 'google.com', 'maps.google.com',
-      'simpleviewcrm.com', 'extranet.simpleview', 'eventbrite.com', 'ticketmaster.com'
+    
+    // Strategy 3: Data attributes
+    const dataPatterns = [
+      /<a[^>]*data-external-url=["']([^"']+)["']/gi,
+      /<a[^>]*data-event-url=["']([^"']+)["']/gi,
+      /<a[^>]*data-url=["']([^"']+)["']/gi,
     ];
-
+    
+    for (const pattern of dataPatterns) {
+      const matches = html.match(pattern);
+      if (matches) {
+        for (const match of matches) {
+          const urlMatch = match.match(/data-[^=]+-url=["']([^"']+)["']/i);
+          if (urlMatch && urlMatch[1] && urlMatch[1].startsWith('http') && !urlMatch[1].includes('catchdesmoines.com')) {
+            console.log('Found via data attribute:', urlMatch[1]);
+            return { visitUrl: urlMatch[1], dateStr, timeStr };
+          }
+        }
+      }
+    }
+    
+    // Strategy 4: Event actions section
+    const eventActionsPattern = /<div[^>]*class=["'][^"']*event-actions[^"']*["'][^>]*>[\s\S]{0,2000}?<\/div>/gi;
+    const eventActionsMatches = html.match(eventActionsPattern);
+    if (eventActionsMatches) {
+      for (const section of eventActionsMatches) {
+        const linkMatches = section.match(/<a[^>]*href=["']([^"']+)["']/gi);
+        if (linkMatches) {
+          for (const linkMatch of linkMatches) {
+            const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
+            if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http') && !hrefMatch[1].includes('catchdesmoines.com')) {
+              const url = hrefMatch[1];
+              // Exclude social media
+              if (!url.includes('facebook.com') && !url.includes('twitter.com') && !url.includes('x.com') && !url.includes('instagram.com')) {
+                console.log('Found via event-actions:', url);
+                return { visitUrl: url, dateStr, timeStr };
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    // Strategy 5: Universal fallback with strict exclusions
+    const excludeDomains = [
+      'catchdesmoines.com', 
+      'facebook.com', 
+      'twitter.com', 
+      'x.com', 
+      'instagram.com', 
+      'youtube.com', 
+      'tiktok.com', 
+      'linkedin.com', 
+      'pinterest.com',
+      'google.com', 
+      'maps.google.com',
+      'simpleviewcrm.com', 
+      'extranet.simpleview',
+      'mailto:',
+      'tel:',
+      '#'
+    ];
+    
     const allLinkMatches = html.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/gi);
     if (allLinkMatches) {
+      // First pass: look for links with "website", "official", "tickets", etc. in text or class
       for (const linkMatch of allLinkMatches) {
         const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
         if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http')) {
           const linkUrl = hrefMatch[1];
-          
-          // Check if URL should be excluded
           const shouldExclude = excludeDomains.some(domain => linkUrl.includes(domain));
           
           if (!shouldExclude) {
-            // Additional check for common website indicators in the link
             const linkElement = linkMatch.toLowerCase();
             if (linkElement.includes('visit') || 
                 linkElement.includes('website') || 
-                linkElement.includes('external') ||
-                linkElement.includes('official')) {
-              console.log('Found via universal fallback with indicators:', linkUrl);
+                linkElement.includes('official') ||
+                linkElement.includes('tickets') ||
+                linkElement.includes('register') ||
+                linkElement.includes('more info')) {
+              console.log('Found via keyword match:', linkUrl);
               return { visitUrl: linkUrl, dateStr, timeStr };
             }
           }
         }
       }
-
-      // Last resort - first non-excluded external link
+      
+      // Second pass: first non-excluded external link
       for (const linkMatch of allLinkMatches) {
         const hrefMatch = linkMatch.match(/href=["']([^"']+)["']/i);
         if (hrefMatch && hrefMatch[1] && hrefMatch[1].startsWith('http')) {
@@ -246,7 +278,7 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventD
           const shouldExclude = excludeDomains.some(domain => linkUrl.includes(domain));
           
           if (!shouldExclude) {
-            console.log('Found via last resort fallback:', linkUrl);
+            console.log('Found via fallback:', linkUrl);
             return { visitUrl: linkUrl, dateStr, timeStr };
           }
         }
@@ -310,12 +342,17 @@ serve(async (req) => {
     }
 
     if (req.method === 'POST') {
+      const body = await req.json().catch(() => ({}));
+      const batchSize = Math.min(Math.max(body.batchSize || 20, 1), 50); // Min 1, max 50, default 20
+      
+      console.log(`Processing batch of ${batchSize} events`);
+      
       // Get events with catchdesmoines.com URLs
       const { data: events, error: fetchError } = await supabaseClient
         .from('events')
         .select('id, title, source_url')
         .ilike('source_url', '%catchdesmoines.com%')
-        .limit(50); // Process in batches of 50
+        .limit(batchSize);
 
       if (fetchError) {
         throw new Error(`Failed to fetch events: ${fetchError.message}`);
@@ -393,7 +430,7 @@ serve(async (req) => {
           }
 
           // Add small delay between requests to be respectful
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 800));
 
         } catch (error) {
           result.errors.push({
@@ -405,6 +442,29 @@ serve(async (req) => {
 
       return new Response(
         JSON.stringify(result),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+    
+    if (req.method === 'GET') {
+      // Return count of remaining catchdesmoines URLs
+      const { count, error: countError } = await supabaseClient
+        .from('events')
+        .select('id', { count: 'exact', head: true })
+        .ilike('source_url', '%catchdesmoines.com%');
+      
+      if (countError) {
+        throw new Error(`Failed to count events: ${countError.message}`);
+      }
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          remaining: count || 0 
+        }),
         { 
           status: 200, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

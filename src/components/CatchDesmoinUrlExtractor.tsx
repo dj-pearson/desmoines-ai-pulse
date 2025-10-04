@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { ExternalLink, AlertTriangle, CheckCircle2, XCircle, Loader2, Link } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { ExternalLink, AlertTriangle, CheckCircle2, XCircle, Loader2, Link, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -20,6 +22,37 @@ export default function CatchDesmoinUrlExtractor() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [progress, setProgress] = useState(0);
+  const [batchSize, setBatchSize] = useState(20);
+  const [remainingCount, setRemainingCount] = useState<number | null>(null);
+  const [isLoadingCount, setIsLoadingCount] = useState(false);
+
+  const fetchRemainingCount = async () => {
+    setIsLoadingCount(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const response = await fetch(`https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/extract-catchdesmoines-urls`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRemainingCount(data.remaining);
+      }
+    } catch (error) {
+      console.error('Failed to fetch count:', error);
+    } finally {
+      setIsLoadingCount(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRemainingCount();
+  }, []);
 
   const handleExtractUrls = async () => {
     setIsExtracting(true);
@@ -47,7 +80,8 @@ export default function CatchDesmoinUrlExtractor() {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify({ batchSize })
       });
 
       clearInterval(progressInterval);
@@ -63,6 +97,8 @@ export default function CatchDesmoinUrlExtractor() {
 
       if (data.success) {
         toast.success(`Successfully processed ${data.processed} events! Updated ${data.updated.length} URLs.`);
+        // Refresh count after successful extraction
+        fetchRemainingCount();
       } else {
         toast.error("URL extraction completed with errors");
       }
@@ -96,11 +132,59 @@ export default function CatchDesmoinUrlExtractor() {
       </CardHeader>
       
       <CardContent className="space-y-4">
+        {/* Remaining Count Badge */}
+        <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+          <div className="flex items-center gap-2">
+            <Link className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <div className="font-medium">Remaining CatchDesMoines URLs</div>
+              <div className="text-sm text-muted-foreground">Events still using catchdesmoines.com source URLs</div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {isLoadingCount ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              <Badge variant="secondary" className="text-lg px-3 py-1">
+                {remainingCount ?? '-'}
+              </Badge>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={fetchRemainingCount}
+              disabled={isLoadingCount}
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoadingCount ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+        </div>
+
+        {/* Batch Size Control */}
+        <div className="space-y-2">
+          <Label htmlFor="batchSize">Batch Size (events per run)</Label>
+          <div className="flex items-center gap-3">
+            <Input
+              id="batchSize"
+              type="number"
+              min="1"
+              max="50"
+              value={batchSize}
+              onChange={(e) => setBatchSize(Math.min(50, Math.max(1, parseInt(e.target.value) || 20)))}
+              disabled={isExtracting}
+              className="w-32"
+            />
+            <span className="text-sm text-muted-foreground">
+              (Max: 50, Recommended: 10-20 for reliability)
+            </span>
+          </div>
+        </div>
+
         {/* Action Button */}
         <div className="flex items-center gap-3">
           <Button 
             onClick={handleExtractUrls}
-            disabled={isExtracting}
+            disabled={isExtracting || remainingCount === 0}
             className="flex items-center gap-2"
           >
             {isExtracting ? (
@@ -119,7 +203,7 @@ export default function CatchDesmoinUrlExtractor() {
           {isExtracting && (
             <Badge variant="secondary" className="flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
-              Processing...
+              Processing {batchSize} events...
             </Badge>
           )}
         </div>
@@ -242,7 +326,9 @@ export default function CatchDesmoinUrlExtractor() {
                 <li>Visits each CatchDesMoines event page</li>
                 <li>Looks for "Visit Website" links and external URLs</li>
                 <li>Updates the database with the extracted organizer URLs</li>
-                <li>Processes up to 50 events per run with rate limiting</li>
+                <li>Processes events in batches (configurable size) with rate limiting</li>
+                <li>Uses proven multi-strategy URL extraction from AI Crawler</li>
+                <li>Run multiple times until all catchdesmoines.com URLs are replaced</li>
               </ul>
             </div>
           </AlertDescription>
