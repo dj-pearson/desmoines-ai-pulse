@@ -13,7 +13,76 @@ interface ExtractResponse {
   updated: Array<{ eventId: string; oldUrl: string; newUrl: string }>;
 }
 
-async function extractVisitWebsiteUrl(eventUrl: string): Promise<string | null> {
+/**
+ * Parse event date/time string and convert from Central Time to UTC
+ * Uses proper timezone offset detection for CST/CDT
+ */
+function parseEventDateTime(dateStr: string, timeStr?: string): Date | null {
+  try {
+    console.log('Parsing datetime:', { dateStr, timeStr });
+    
+    // Parse date components
+    const dateMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
+    if (!dateMatch) {
+      console.error('Invalid date format:', dateStr);
+      return null;
+    }
+    
+    const [, year, month, day] = dateMatch;
+    let hours = 0;
+    let minutes = 0;
+    let seconds = 0;
+    
+    // Parse time if provided
+    if (timeStr) {
+      const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+      if (timeMatch) {
+        hours = parseInt(timeMatch[1], 10);
+        minutes = parseInt(timeMatch[2], 10);
+        seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+      }
+    }
+    
+    // Determine Central Time offset (CST = -06:00, CDT = -05:00)
+    const monthNum = parseInt(month, 10);
+    const dayNum = parseInt(day, 10);
+    
+    // Rough DST check: March 2nd Sunday through November 1st Sunday
+    const isDST = (monthNum > 3 && monthNum < 11) || 
+                  (monthNum === 3 && dayNum >= 8) || 
+                  (monthNum === 11 && dayNum < 7);
+    
+    const offset = isDST ? '-05:00' : '-06:00';
+    
+    // Build ISO string with Central timezone
+    const isoWithTimezone = `${year}-${month}-${day}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}${offset}`;
+    
+    console.log('Built ISO string:', isoWithTimezone);
+    
+    // Parse to Date (browser will convert to UTC internally)
+    const date = new Date(isoWithTimezone);
+    
+    if (isNaN(date.getTime())) {
+      console.error('Invalid date result:', isoWithTimezone);
+      return null;
+    }
+    
+    console.log('Parsed to UTC:', date.toISOString());
+    return date;
+    
+  } catch (error) {
+    console.error('Error parsing datetime:', error);
+    return null;
+  }
+}
+
+interface ExtractedEventData {
+  visitUrl: string | null;
+  dateStr: string | null;
+  timeStr: string | null;
+}
+
+async function extractVisitWebsiteUrl(eventUrl: string): Promise<ExtractedEventData> {
   try {
     console.log('Processing URL:', eventUrl);
     
@@ -35,6 +104,44 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<string | null> 
 
     const html = await response.text();
     
+    // Extract date/time information
+    let dateStr: string | null = null;
+    let timeStr: string | null = null;
+    
+    // Look for date patterns in the HTML
+    const datePatterns = [
+      /<time[^>]*datetime=["']([^"']+)["']/i,
+      /<meta[^>]*property=["']event:start_date["'][^>]*content=["']([^"']+)["']/i,
+      /<span[^>]*class=["'][^"']*date[^"']*["'][^>]*>([^<]+)</i,
+      /Date:\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
+      /(\d{4}-\d{2}-\d{2})/
+    ];
+    
+    for (const pattern of datePatterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        dateStr = match[1];
+        console.log('Found date:', dateStr);
+        break;
+      }
+    }
+    
+    // Look for time patterns
+    const timePatterns = [
+      /<time[^>]*>([^<]*\d{1,2}:\d{2}[^<]*)<\/time>/i,
+      /Time:\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i,
+      /(\d{1,2}:\d{2}\s*(?:AM|PM))/i
+    ];
+    
+    for (const pattern of timePatterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        timeStr = match[1];
+        console.log('Found time:', timeStr);
+        break;
+      }
+    }
+    
     // Helper function to extract URLs using CSS-like selectors via regex
     const extractUrlByPattern = (pattern: RegExp): string | null => {
       const matches = html.match(pattern);
@@ -55,32 +162,32 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<string | null> 
     let url = extractUrlByPattern(/<a[^>]*class=["'][^"']*btn-external[^"']*["'][^>]*href=["']([^"']+)["']/gi);
     if (url) {
       console.log('Found via btn-external class:', url);
-      return url;
+      return { visitUrl: url, dateStr, timeStr };
     }
 
     url = extractUrlByPattern(/<a[^>]*class=["'][^"']*external-link[^"']*["'][^>]*href=["']([^"']+)["']/gi);
     if (url) {
       console.log('Found via external-link class:', url);
-      return url;
+      return { visitUrl: url, dateStr, timeStr };
     }
 
     url = extractUrlByPattern(/<a[^>]*class=["'][^"']*external[^"']*["'][^>]*href=["']([^"']+)["']/gi);
     if (url) {
       console.log('Found via external class:', url);
-      return url;
+      return { visitUrl: url, dateStr, timeStr };
     }
 
     // Strategy 2: Data Attributes - [data-external-url] or [data-event-url]
     url = extractUrlByPattern(/<a[^>]*data-external-url=["']([^"']+)["']/gi);
     if (url) {
       console.log('Found via data-external-url:', url);
-      return url;
+      return { visitUrl: url, dateStr, timeStr };
     }
 
     url = extractUrlByPattern(/<a[^>]*data-event-url=["']([^"']+)["']/gi);
     if (url) {
       console.log('Found via data-event-url:', url);
-      return url;
+      return { visitUrl: url, dateStr, timeStr };
     }
 
     // Strategy 3: Context-Specific - .event-actions a[href^='http']:not([href*='catchdesmoines.com'])
@@ -95,7 +202,7 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<string | null> 
             !url.includes('x.com') &&
             !url.includes('instagram.com')) {
           console.log('Found via event-actions section:', url);
-          return url;
+          return { visitUrl: url, dateStr, timeStr };
         }
       }
     }
@@ -125,7 +232,7 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<string | null> 
                 linkElement.includes('external') ||
                 linkElement.includes('official')) {
               console.log('Found via universal fallback with indicators:', linkUrl);
-              return linkUrl;
+              return { visitUrl: linkUrl, dateStr, timeStr };
             }
           }
         }
@@ -140,18 +247,18 @@ async function extractVisitWebsiteUrl(eventUrl: string): Promise<string | null> 
           
           if (!shouldExclude) {
             console.log('Found via last resort fallback:', linkUrl);
-            return linkUrl;
+            return { visitUrl: linkUrl, dateStr, timeStr };
           }
         }
       }
     }
 
     console.log('No suitable external URL found for:', eventUrl);
-    return null;
+    return { visitUrl: null, dateStr, timeStr };
     
   } catch (error) {
     console.error('Error extracting URL from', eventUrl, ':', error);
-    return null;
+    return { visitUrl: null, dateStr: null, timeStr: null };
   }
 }
 
@@ -242,13 +349,27 @@ serve(async (req) => {
       // Process each event
       for (const event of events) {
         try {
-          const extractedUrl = await extractVisitWebsiteUrl(event.source_url);
+          const extractedData = await extractVisitWebsiteUrl(event.source_url);
           
-          if (extractedUrl) {
-            // Update the event with the new URL
+          if (extractedData.visitUrl) {
+            // Prepare update data
+            const updateData: any = { source_url: extractedData.visitUrl };
+            
+            // If we extracted datetime info, parse and update event_start_utc
+            if (extractedData.dateStr) {
+              const parsedDate = parseEventDateTime(extractedData.dateStr, extractedData.timeStr || undefined);
+              if (parsedDate) {
+                updateData.event_start_utc = parsedDate.toISOString();
+                console.log(`Parsed event datetime for ${event.id}: ${parsedDate.toISOString()}`);
+              } else {
+                console.warn(`Failed to parse datetime for event ${event.id}: ${extractedData.dateStr} ${extractedData.timeStr}`);
+              }
+            }
+            
+            // Update the event with the new URL and potentially datetime
             const { error: updateError } = await supabaseClient
               .from('events')
-              .update({ source_url: extractedUrl })
+              .update(updateData)
               .eq('id', event.id);
 
             if (updateError) {
@@ -260,9 +381,9 @@ serve(async (req) => {
               result.updated.push({
                 eventId: event.id,
                 oldUrl: event.source_url,
-                newUrl: extractedUrl
+                newUrl: extractedData.visitUrl
               });
-              console.log(`Updated event ${event.id}: ${event.source_url} -> ${extractedUrl}`);
+              console.log(`Updated event ${event.id}: ${event.source_url} -> ${extractedData.visitUrl}${updateData.event_start_utc ? ` (datetime: ${updateData.event_start_utc})` : ''}`);
             }
           } else {
             result.errors.push({
