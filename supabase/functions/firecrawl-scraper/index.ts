@@ -3,7 +3,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import {
+  getAIConfig,
+  buildClaudeRequest,
+  getClaudeHeaders,
+} from "../_shared/aiConfig.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -56,12 +60,12 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
           Authorization: `Bearer ${firecrawlApiKey}`,
           "Content-Type": "application/json",
         },
-          body: JSON.stringify({
-            url: eventUrl,
-            formats: ["html"],
-            waitFor: 1500,
-            timeout: 10000,
-          }),
+        body: JSON.stringify({
+          url: eventUrl,
+          formats: ["html"],
+          waitFor: 1500,
+          timeout: 10000,
+        }),
       }
     );
 
@@ -78,55 +82,116 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
       return null;
     }
 
-    // Strategy 1: Look for any link with class="action-item" and text containing "Visit Website"
-    // This regex is flexible with attribute order
-    const actionItemPattern =
-      /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?<\/a>/gi;
-    const actionItemLinks = html.matchAll(actionItemPattern);
+    // FOOLPROOF STRATEGY: Surgical extraction targeting ONLY the bottom-actions div
+    // This is the ONLY place where the real "Visit Website" link lives
+    
+    // Step 1: Find the bottom-actions div
+    const bottomActionsPattern =
+      /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i;
+    const bottomMatch = html.match(bottomActionsPattern);
 
-    for (const linkMatch of actionItemLinks) {
-      const fullLink = linkMatch[0];
-      // Check if it contains "Visit Website" text
-      if (/Visit\s+Website/i.test(fullLink)) {
-        // Extract the href
-        const hrefMatch = fullLink.match(/href=["']([^"']+)["']/);
+    if (!bottomMatch) {
+      console.log(`⚠️ No bottom-actions div found on page`);
+      return null;
+    }
+
+    const bottomActionsHtml = bottomMatch[1];
+    console.log(`📦 Found bottom-actions div (${bottomActionsHtml.length} chars)`);
+
+    // Step 2: Comprehensive exclusion list for false positives
+    const isInvalidUrl = (url: string): boolean => {
+      const excludePatterns = [
+        'catchdesmoines.com',
+        'mailto:',
+        // Video/media embeds and players
+        'vimeo.com/api',
+        'vimeo.com/player',
+        'player.vimeo.com',
+        'youtube.com/embed',
+        'youtube.com/player',
+        'youtu.be/player',
+        // Social media (catchdesmoines official only)
+        'facebook.com/catchdesmoines',
+        'fb.com/catchdesmoines',
+        'twitter.com/catchdesmoines',
+        'x.com/catchdesmoines',
+        'instagram.com/catchdesmoines',
+        'linkedin.com/company/catchdesmoines',
+        // Maps and embeds
+        'google.com/maps/embed',
+        'maps.google.com/embed',
+        // CMS and tracking
+        'simpleviewcrm.com',
+        'simpleviewinc.com',
+        'googletagmanager.com',
+        'google-analytics.com',
+        // File types that aren't websites
+        '/api/',
+        '/player.js',
+        '/embed.js',
+        '.js?',
+        '.js#',
+        '.js$',
+        '.css',
+        '.json'
+      ];
+
+      const lowerUrl = url.toLowerCase();
+      return excludePatterns.some(pattern => lowerUrl.includes(pattern.toLowerCase()));
+    };
+
+    // Step 3: Extract ALL links from bottom-actions div with their full HTML context
+    const allLinksPattern = /<a\s+([^>]*?)>([\s\S]*?)<\/a>/gi;
+    const allLinks = [...bottomActionsHtml.matchAll(allLinksPattern)];
+    
+    console.log(`🔗 Found ${allLinks.length} total links in bottom-actions`);
+
+    // Step 4: PRIORITY PASS - Look for exact "Visit Website" link with action-item class
+    for (const linkMatch of allLinks) {
+      const attributes = linkMatch[1];
+      const linkText = linkMatch[2];
+
+      // Check for action-item class
+      const hasActionItem = /class=["'][^"']*action-item[^"']*["']/i.test(attributes);
+      
+      // Check for EXACT "Visit Website" text (not just "visit" or "website")
+      const hasExactVisitWebsite = /Visit\s+Website/i.test(linkText);
+
+      if (hasActionItem && hasExactVisitWebsite) {
+        // Extract href
+        const hrefMatch = attributes.match(/href=["']([^"']+)["']/i);
+        
         if (hrefMatch && hrefMatch[1]) {
-          const url = hrefMatch[1];
-          if (
-            url.startsWith("http") &&
-            !url.includes("catchdesmoines.com") &&
-            !url.startsWith("mailto:")
-          ) {
-            console.log(`✅ Found Visit Website URL: ${url}`);
+          const url = hrefMatch[1].trim();
+          
+          if (url.startsWith("http") && !isInvalidUrl(url)) {
+            console.log(`✅ FOUND PRIORITY: Visit Website link = ${url}`);
             return url;
+          } else if (isInvalidUrl(url)) {
+            console.log(`⏭️ Skipped excluded URL in Visit Website link: ${url}`);
           }
         }
       }
     }
 
-    // Strategy 2: Look in bottom-actions div for any external links
-    const bottomActionsPattern =
-      /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i;
-    const bottomMatch = html.match(bottomActionsPattern);
-
-    if (bottomMatch) {
-      const linkPattern = /<a\s+href=["']([^"']+)["']/gi;
-      const links = bottomMatch[1].matchAll(linkPattern);
-
-      for (const link of links) {
-        const url = link[1];
-        if (
-          url.startsWith("http") &&
-          !url.includes("catchdesmoines.com") &&
-          !url.startsWith("mailto:")
-        ) {
-          console.log(`✅ Found in bottom-actions: ${url}`);
+    // Step 5: FALLBACK PASS - Look for any valid external link in bottom-actions
+    console.log(`⚠️ No "Visit Website" link found, trying fallback...`);
+    
+    for (const linkMatch of allLinks) {
+      const attributes = linkMatch[1];
+      const hrefMatch = attributes.match(/href=["']([^"']+)["']/i);
+      
+      if (hrefMatch && hrefMatch[1]) {
+        const url = hrefMatch[1].trim();
+        
+        if (url.startsWith("http") && !isInvalidUrl(url)) {
+          console.log(`✅ FALLBACK: Found external link = ${url}`);
           return url;
         }
       }
     }
 
-    console.log(`⚠️ No external URL found in page`);
+    console.log(`❌ No valid external URL found in bottom-actions div`);
     return null;
   } catch (error) {
     console.error(`❌ Error extracting URL:`, error);
@@ -256,7 +321,9 @@ serve(async (req) => {
     // Process each URL for pagination support
     for (const currentUrl of urlsToScrape) {
       if (Date.now() - startTime > MAX_RUN_MS) {
-        console.warn('⏱️ Time budget exceeded before scraping next page; stopping pagination.');
+        console.warn(
+          "⏱️ Time budget exceeded before scraping next page; stopping pagination."
+        );
         break;
       }
       console.log(`🌐 Scraping page: ${currentUrl}`);
@@ -600,21 +667,25 @@ Return empty array [] if no competitive content found.`,
       );
 
       const config = await getAIConfig(supabaseUrl, supabaseKey);
-      const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
+      const headers = await getClaudeHeaders(
+        claudeApiKey,
+        supabaseUrl,
+        supabaseKey
+      );
       const requestBody = await buildClaudeRequest(
         [{ role: "user", content: selectedPrompt }],
-        { 
-          supabaseUrl, 
+        {
+          supabaseUrl,
           supabaseKey,
           useLargeTokens: true,
-          customTemperature: 0.1
+          customTemperature: 0.1,
         }
       );
 
       const claudeResponse = await fetch(config.api_endpoint, {
         method: "POST",
         headers,
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       });
 
       if (!claudeResponse.ok) {
@@ -712,7 +783,9 @@ Return empty array [] if no competitive content found.`,
 
     // Cap total items to avoid timeouts
     if (filteredItems.length > MAX_TOTAL_ITEMS) {
-      console.log(`⚠️ Limiting items to ${MAX_TOTAL_ITEMS} to meet time budget (from ${filteredItems.length})`);
+      console.log(
+        `⚠️ Limiting items to ${MAX_TOTAL_ITEMS} to meet time budget (from ${filteredItems.length})`
+      );
       filteredItems = filteredItems.slice(0, MAX_TOTAL_ITEMS);
     }
 
@@ -730,7 +803,9 @@ Return empty array [] if no competitive content found.`,
       const updatedItems = [];
       for (let i = 0; i < itemsToProcess.length; i++) {
         if (Date.now() - startTime > MAX_RUN_MS) {
-          console.warn('⏱️ Time budget exceeded while extracting Visit Website URLs; stopping early.');
+          console.warn(
+            "⏱️ Time budget exceeded while extracting Visit Website URLs; stopping early."
+          );
           break;
         }
         const item = itemsToProcess[i];
@@ -757,18 +832,28 @@ Return empty array [] if no competitive content found.`,
             if (visitWebsiteUrl) {
               finalSourceUrl = visitWebsiteUrl;
               console.log(
-                `✅ [${i + 1}/${itemsToProcess.length}] Extracted Visit Website URL for "${item.title}": ${visitWebsiteUrl}`
+                `✅ [${i + 1}/${
+                  itemsToProcess.length
+                }] Extracted Visit Website URL for "${
+                  item.title
+                }": ${visitWebsiteUrl}`
               );
             } else {
               // Fallback to event detail URL if no Visit Website link found
               finalSourceUrl = eventDetailUrl;
               console.log(
-                `⚠️ [${i + 1}/${itemsToProcess.length}] No Visit Website found for "${item.title}", using detail URL: ${eventDetailUrl}`
+                `⚠️ [${i + 1}/${
+                  itemsToProcess.length
+                }] No Visit Website found for "${
+                  item.title
+                }", using detail URL: ${eventDetailUrl}`
               );
             }
           } catch (error) {
             console.error(
-              `❌ [${i + 1}/${itemsToProcess.length}] Error extracting Visit Website URL for "${item.title}":`,
+              `❌ [${i + 1}/${
+                itemsToProcess.length
+              }] Error extracting Visit Website URL for "${item.title}":`,
               error
             );
           }
@@ -810,20 +895,28 @@ Return empty array [] if no competitive content found.`,
     const errors = [];
 
     if (filteredItems.length > 0) {
-      console.log(`💾 Starting database insertion for ${filteredItems.length} items...`);
+      console.log(
+        `💾 Starting database insertion for ${filteredItems.length} items...`
+      );
       // Process in batches
       const batchSize = 10;
       for (let i = 0; i < filteredItems.length; i += batchSize) {
         if (Date.now() - startTime > MAX_RUN_MS) {
-          console.warn('⏱️ Time budget exceeded during DB insertion; stopping early.');
+          console.warn(
+            "⏱️ Time budget exceeded during DB insertion; stopping early."
+          );
           break;
         }
         const batch = filteredItems.slice(i, i + batchSize);
-        console.log(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(filteredItems.length / batchSize)} (items ${i + 1}-${Math.min(i + batchSize, filteredItems.length)})`);
+        console.log(
+          `📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
+            filteredItems.length / batchSize
+          )} (items ${i + 1}-${Math.min(i + batchSize, filteredItems.length)})`
+        );
 
         for (const item of batch) {
           if (Date.now() - startTime > MAX_RUN_MS) {
-            console.warn('⏱️ Time budget exceeded within batch; exiting.');
+            console.warn("⏱️ Time budget exceeded within batch; exiting.");
             break;
           }
           try {
