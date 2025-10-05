@@ -381,12 +381,30 @@ serve(async (req) => {
         `Processing batch of ${batchSize} events (dry run: ${dryRun})`
       );
 
-      // Get events with catchdesmoines.com URLs
+      // Get total count of catchdesmoines URLs for randomization
+      const { count: totalCount, error: countError } = await supabaseClient
+        .from("events")
+        .select("id", { count: "exact", head: true })
+        .ilike("source_url", "%catchdesmoines.com%");
+
+      if (countError) {
+        throw new Error(`Failed to count events: ${countError.message}`);
+      }
+
+      const totalEvents = totalCount || 0;
+      console.log(`Total catchdesmoines events: ${totalEvents}`);
+
+      // Generate random offset to get different events each time
+      const maxOffset = Math.max(0, totalEvents - batchSize);
+      const randomOffset = Math.floor(Math.random() * (maxOffset + 1));
+      console.log(`Using random offset: ${randomOffset}`);
+
+      // Get random batch of events with catchdesmoines.com URLs
       const { data: events, error: fetchError } = await supabaseClient
         .from("events")
         .select("id, title, source_url")
         .ilike("source_url", "%catchdesmoines.com%")
-        .limit(batchSize);
+        .range(randomOffset, randomOffset + batchSize - 1);
 
       if (fetchError) {
         throw new Error(`Failed to fetch events: ${fetchError.message}`);
