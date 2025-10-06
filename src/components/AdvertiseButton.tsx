@@ -18,7 +18,7 @@ export function AdvertiseButton() {
     <Button
       onClick={handleAdvertiseClick}
       variant="outline"
-      className="bg-gradient-to-r from-primary to-primary-glow text-white border-none hover:opacity-90 transition-opacity"
+      className="bg-gradient-to-r from-primary to-primary-glow text-white border-none hover:opacity-90 transition-opacity cursor-pointer"
     >
       Advertise with Us
     </Button>

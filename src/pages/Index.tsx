@@ -128,7 +128,7 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <SEOEnhancedHead 
         title="Des Moines Insider - Your Complete Guide to DSM Events, Restaurants & Attractions"
         description="Discover the best events, restaurants, and attractions in Des Moines, Iowa. Find upcoming concerts, festivals, dining spots, and things to do in the Des Moines metro area."
