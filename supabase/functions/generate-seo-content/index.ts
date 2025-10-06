@@ -20,10 +20,10 @@ serve(async (req) => {
     
     console.log('Parsed request body successfully:', { contentType, batchSize });
     
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
     console.log('Supabase client created');
 
