@@ -30,7 +30,11 @@
     "test:search": "playwright test tests/search-filters.spec.ts",
     "test:a11y": "playwright test tests/accessibility.spec.ts",
     "test:report": "playwright show-report",
-    "test:codegen": "playwright codegen http://localhost:5173"
+    "test:codegen": "playwright codegen http://localhost:5173",
+    "test:export": "node export-test-results.cjs markdown && node export-test-results.cjs csv && node export-test-results.cjs json",
+    "test:export:md": "node export-test-results.cjs markdown",
+    "test:export:csv": "node export-test-results.cjs csv",
+    "test:export:json": "node export-test-results.cjs json"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",

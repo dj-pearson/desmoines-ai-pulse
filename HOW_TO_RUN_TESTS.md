@@ -1,41 +1,42 @@
 # How to Run Tests - Simple Guide
 
-## 🎯 The Easiest Way (Recommended)
+## 🎯 The Easiest Way (2 Steps)
 
-**You DON'T need to manually start the dev server!** Playwright does it automatically.
+### Step 1: Start the Dev Server
+Open a terminal and run:
+```bash
+npm run dev
+```
 
-Just run:
+Wait until you see:
+```
+➜  Local:   http://localhost:8082/
+```
+(or whatever port it starts on)
+
+### Step 2: Open Playwright UI
+In a **second terminal**, run:
 ```bash
 npm run test:ui
 ```
 
-That's it! Playwright will:
-1. Automatically start the dev server
-2. Open the interactive UI
-3. Show all 2,997 tests ready to run
+That's it! The Playwright UI will open showing all **2,997 tests** ready to run! 🎉
 
 ---
 
-## 🔧 If You Get Port Conflicts
+## 🔧 If Your Dev Server Uses a Different Port
 
-If you see "Port in use" errors or "No tests" showing:
-
-### Option 1: Let Playwright Handle Everything
-1. **Close any running dev servers** (Ctrl+C in terminals running `npm run dev`)
-2. Run: `npm run test:ui`
-
-### Option 2: Use Your Existing Dev Server
-If you already have `npm run dev` running on a custom port (like 8082):
+The config is set to use **port 8082** by default. If your dev server starts on a different port:
 
 **Windows PowerShell:**
 ```powershell
-$env:PLAYWRIGHT_TEST_BASE_URL = "http://localhost:8082"
+$env:PLAYWRIGHT_TEST_BASE_URL = "http://localhost:YOUR_PORT"
 npm run test:ui
 ```
 
 **Mac/Linux:**
 ```bash
-export PLAYWRIGHT_TEST_BASE_URL=http://localhost:8082
+export PLAYWRIGHT_TEST_BASE_URL=http://localhost:YOUR_PORT
 npm run test:ui
 ```
 
