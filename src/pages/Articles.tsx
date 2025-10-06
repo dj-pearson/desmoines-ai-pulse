@@ -18,7 +18,7 @@ const Articles: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState('grid');
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true); // Show filters by default
 
   // Get unique categories from published articles
   const categories = Array.from(new Set(articles.filter(article => article.status === 'published').map(article => article.category)));

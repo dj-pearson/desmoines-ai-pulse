@@ -289,6 +289,8 @@ export default function Index() {
                     src={selectedEvent.image_url}
                     alt={selectedEvent.title}
                     className="w-full h-64 object-cover rounded-lg"
+                    loading="lazy"
+                    decoding="async"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
                       target.style.display = "none";

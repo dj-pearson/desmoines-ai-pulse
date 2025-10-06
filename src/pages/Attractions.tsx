@@ -38,7 +38,7 @@ export default function Attractions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [minRating, setMinRating] = useState("any-rating");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [featuredOnly, setFeaturedOnly] = useState("all");
   const [viewMode, setViewMode] = useState('list');
 

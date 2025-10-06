@@ -45,7 +45,7 @@ export default function EventsPage() {
   } | null>(null);
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [viewMode, setViewMode] = useState("list");
   const { toast } = useToast();
 

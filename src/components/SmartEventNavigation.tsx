@@ -226,6 +226,8 @@ export const SmartEventNavigation: React.FC<SmartEventNavigationProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"
+              aria-label="Search events by keyword or category"
+              role="searchbox"
             />
           </div>
           {(selectedTags.length > 0 || searchQuery || selectedDateRange !== 'all') && (

@@ -119,8 +119,9 @@ export function BusinessPartnershipApplication() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Business Name *</label>
+                <label htmlFor="business-name" className="text-sm font-medium">Business Name *</label>
                 <Input
+                  id="business-name"
                   placeholder="Enter your business name"
                   value={formData.business_name}
                   onChange={(e) => setFormData(prev => ({ ...prev, business_name: e.target.value }))}
@@ -129,9 +130,9 @@ export function BusinessPartnershipApplication() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Business Type *</label>
+                <label htmlFor="business-type" className="text-sm font-medium">Business Type *</label>
                 <Select value={formData.business_type} onValueChange={(value) => setFormData(prev => ({ ...prev, business_type: value }))}>
-                  <SelectTrigger>
+                  <SelectTrigger id="business-type" aria-label="Select business type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -148,8 +149,9 @@ export function BusinessPartnershipApplication() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Contact Email *</label>
+                <label htmlFor="contact-email" className="text-sm font-medium">Contact Email *</label>
                 <Input
+                  id="contact-email"
                   type="email"
                   placeholder="Enter contact email"
                   value={formData.contact_email}
@@ -159,8 +161,9 @@ export function BusinessPartnershipApplication() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Contact Phone</label>
+                <label htmlFor="contact-phone" className="text-sm font-medium">Contact Phone</label>
                 <Input
+                  id="contact-phone"
                   type="tel"
                   placeholder="Enter contact phone"
                   value={formData.contact_phone}
@@ -169,8 +172,9 @@ export function BusinessPartnershipApplication() {
               </div>
 
               <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-medium">Website</label>
+                <label htmlFor="website" className="text-sm font-medium">Website</label>
                 <Input
+                  id="website"
                   type="url"
                   placeholder="https://www.yourwebsite.com"
                   value={formData.website}
@@ -180,8 +184,9 @@ export function BusinessPartnershipApplication() {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium">Business Description</label>
+              <label htmlFor="business-description" className="text-sm font-medium">Business Description</label>
               <Textarea
+                id="business-description"
                 placeholder="Tell us about your business..."
                 value={formData.description}
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
