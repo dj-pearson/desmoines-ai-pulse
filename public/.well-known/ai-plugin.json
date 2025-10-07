@@ -1,0 +1,18 @@
+{
+  "schema_version": "v1",
+  "name_for_human": "Des Moines Insider",
+  "name_for_model": "desmoines_insider",
+  "description_for_human": "Discover local events, restaurants, and attractions in Des Moines, Iowa and surrounding areas.",
+  "description_for_model": "Plugin for discovering events, restaurants, and local attractions in Des Moines, Iowa and surrounding suburbs (West Des Moines, Ankeny, Urbandale, Johnston, Altoona, Clive, Windsor Heights). Search for upcoming events, explore restaurants by cuisine, find event details, and get recommendations for things to do in the Des Moines metro area. The plugin provides real-time information about 330+ current events, restaurant openings, hours, ratings, and locations with coordinates.",
+  "auth": {
+    "type": "none"
+  },
+  "api": {
+    "type": "openapi",
+    "url": "https://desmoinesinsider.com/openapi.yaml",
+    "is_user_authenticated": false
+  },
+  "logo_url": "https://desmoinesinsider.com/DMI-Logo.png",
+  "contact_email": "info@desmoinesinsider.com",
+  "legal_info_url": "https://desmoinesinsider.com"
+}

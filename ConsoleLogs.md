@@ -3,13 +3,8 @@
 App-BsTyPTsK.tsx:1 Failed to load module script: Expected a JavaScript-or-Wasm module script but the server responded with a MIME type of "application/octet-stream". Strict MIME type checking is enforced for module scripts per HTML spec.
 index.mjs:1 Uncaught ReferenceError: Cannot access 'n' before initialization
 at index.mjs:1:481
-(anonymous) @ index.mjs:1
 (index):1 Unchecked runtime.lastError: The message port closed before a response was received.
 (index):1 The resource https://desmoinesinsider.com/DMI-Logo-Header.png was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
 (index):1 The resource https://desmoinesinsider.com/DMI-Logo-Header.png was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
-
-Mozilla private browser:
-Uncaught ReferenceError: can't access lexical declaration 'n' before initialization
-<anonymous> index.mjs:1
-vendor-other-BlNzYQKF.js:1:23393
-Cookie warnings 2
+(index):1 The resource https://desmoinesinsider.com/DMI-Logo-Header.png was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.
+(index):1 The resource https://desmoinesinsider.com/DMI-Logo-Header.png was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.

@@ -1,0 +1,386 @@
+openapi: 3.0.1
+info:
+  title: Des Moines Insider API
+  description: API for discovering events, restaurants, and local attractions in Des Moines, Iowa and surrounding areas. Access real-time information about 330+ current events, restaurant details, ratings, and locations.
+  version: "v1"
+  contact:
+    email: info@desmoinesinsider.com
+servers:
+  - url: https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1
+    description: Supabase Edge Functions API
+paths:
+  /api-events:
+    get:
+      operationId: listEvents
+      summary: List and search upcoming events in Des Moines area
+      description: Get a paginated list of upcoming events in Des Moines, Iowa and surrounding suburbs. Filter by category, location, date range, or search by keywords. Returns events with details including title, date, venue, price, and description.
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of events to return (default 20, max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of events to skip for pagination (default 0)
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: category
+          in: query
+          description: Filter by event category (e.g., Music, Family, Sports, Food & Drink, Arts & Culture)
+          required: false
+          schema:
+            type: string
+        - name: city
+          in: query
+          description: Filter by city or location (e.g., Des Moines, West Des Moines, Ankeny, Urbandale)
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Search events by title, description, or venue name
+          required: false
+          schema:
+            type: string
+        - name: start_date
+          in: query
+          description: Filter events starting from this date (YYYY-MM-DD format, defaults to today)
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          description: Filter events until this date (YYYY-MM-DD format)
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Successfully retrieved events list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          description: Bad request - invalid parameters
+        "500":
+          description: Internal server error
+  /api-events/{eventId}:
+    get:
+      operationId: getEventDetails
+      summary: Get detailed information about a specific event
+      description: Retrieve complete details for a specific event including full description, venue information, pricing, category, coordinates, and links.
+      parameters:
+        - name: eventId
+          in: path
+          description: Unique identifier of the event (UUID format)
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Successfully retrieved event details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/EventDetails"
+        "404":
+          description: Event not found
+        "500":
+          description: Internal server error
+  /api-restaurants:
+    get:
+      operationId: listRestaurants
+      summary: Search and list restaurants in Des Moines area
+      description: Get a paginated list of restaurants in Des Moines, Iowa and surrounding suburbs. Search by name, filter by cuisine type, location, price range, or status (open, coming soon). Returns restaurant details including cuisine, rating, price range, and contact info.
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of restaurants to return (default 20, max 100)
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: offset
+          in: query
+          description: Number of restaurants to skip for pagination (default 0)
+          required: false
+          schema:
+            type: integer
+            default: 0
+        - name: cuisine
+          in: query
+          description: Filter by cuisine type (e.g., Italian, Mexican, American, Asian, Pizza)
+          required: false
+          schema:
+            type: string
+        - name: city
+          in: query
+          description: Filter by city or location (e.g., Des Moines, West Des Moines, Ankeny)
+          required: false
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Search restaurants by name, description, or cuisine
+          required: false
+          schema:
+            type: string
+        - name: price_range
+          in: query
+          description: Filter by price range (1-4, where 1=$ and 4=$$$$)
+          required: false
+          schema:
+            type: string
+            enum: ["1", "2", "3", "4"]
+        - name: status
+          in: query
+          description: Filter by restaurant status (open, coming_soon, closed)
+          required: false
+          schema:
+            type: string
+            enum: [open, coming_soon, closed]
+      responses:
+        "200":
+          description: Successfully retrieved restaurants list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Restaurant"
+                  pagination:
+                    $ref: "#/components/schemas/Pagination"
+        "400":
+          description: Bad request - invalid parameters
+        "500":
+          description: Internal server error
+  /api-restaurants/{restaurantId}:
+    get:
+      operationId: getRestaurantDetails
+      summary: Get detailed information about a specific restaurant
+      description: Retrieve complete details for a specific restaurant including full description, menu URL, hours of operation, rating, contact information, and coordinates.
+      parameters:
+        - name: restaurantId
+          in: path
+          description: Unique identifier of the restaurant (UUID format)
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Successfully retrieved restaurant details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/RestaurantDetails"
+        "404":
+          description: Restaurant not found
+        "500":
+          description: Internal server error
+components:
+  schemas:
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique event identifier
+        title:
+          type: string
+          description: Event title
+        date:
+          type: string
+          format: date
+          description: Event date (YYYY-MM-DD)
+        time:
+          type: string
+          description: Event time (e.g., "7:00 PM")
+        venue:
+          type: string
+          description: Venue name
+        location:
+          type: string
+          description: Full address or location description
+        city:
+          type: string
+          description: City name
+        price:
+          type: string
+          description: Pricing information (e.g., "Free", "$20", "$15-$30")
+        category:
+          type: string
+          description: Event category
+        description:
+          type: string
+          description: Event description
+        image_url:
+          type: string
+          format: uri
+          description: Event image URL
+        event_url:
+          type: string
+          format: uri
+          description: External link to event page
+        coordinates:
+          type: object
+          nullable: true
+          properties:
+            latitude:
+              type: number
+              format: float
+            longitude:
+              type: number
+              format: float
+        is_featured:
+          type: boolean
+          description: Whether this is a featured event
+    EventDetails:
+      allOf:
+        - $ref: "#/components/schemas/Event"
+        - type: object
+          properties:
+            event_start_utc:
+              type: string
+              format: date-time
+              description: Event start time in UTC
+            ai_writeup:
+              type: string
+              description: AI-generated detailed writeup about the event
+            source:
+              type: string
+              description: Source website of the event information
+    Restaurant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique restaurant identifier
+        name:
+          type: string
+          description: Restaurant name
+        cuisine:
+          type: string
+          description: Type of cuisine (e.g., Italian, Mexican, American)
+        description:
+          type: string
+          description: Restaurant description
+        location:
+          type: string
+          description: Full address
+        city:
+          type: string
+          description: City name
+        rating:
+          type: number
+          format: float
+          description: Average rating (0-5 scale)
+        price_range:
+          type: string
+          description: Price range indicator (1-4, where 1=$ and 4=$$$$)
+        phone:
+          type: string
+          description: Phone number
+        website:
+          type: string
+          format: uri
+          description: Restaurant website URL
+        image_url:
+          type: string
+          format: uri
+          description: Restaurant image URL
+        opening_date:
+          type: string
+          format: date
+          description: Opening date (for new restaurants)
+        opening_timeframe:
+          type: string
+          description: Expected opening timeframe (e.g., "Coming Spring 2025")
+        status:
+          type: string
+          enum: [open, coming_soon, closed]
+          description: Current restaurant status
+        coordinates:
+          type: object
+          nullable: true
+          properties:
+            latitude:
+              type: number
+              format: float
+            longitude:
+              type: number
+              format: float
+    RestaurantDetails:
+      allOf:
+        - $ref: "#/components/schemas/Restaurant"
+        - type: object
+          properties:
+            google_place_id:
+              type: string
+              description: Google Places API identifier
+            ai_writeup:
+              type: string
+              description: AI-generated detailed writeup about the restaurant
+            hours:
+              type: object
+              description: Hours of operation (JSON object with days and times)
+            menu_url:
+              type: string
+              format: uri
+              description: Link to menu
+    Pagination:
+      type: object
+      properties:
+        total:
+          type: integer
+          description: Total number of items available
+        limit:
+          type: integer
+          description: Number of items per page
+        offset:
+          type: integer
+          description: Number of items skipped
+        has_more:
+          type: boolean
+          description: Whether there are more items available
