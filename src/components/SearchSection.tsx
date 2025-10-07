@@ -200,6 +200,8 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                   value={query}
                   onChange={handleQueryChange}
                   className="touch-target text-base md:text-lg bg-background/95 backdrop-blur border-0 focus:ring-2 focus:ring-primary-foreground"
+                  aria-label="Search events, restaurants, and attractions"
+                  role="searchbox"
                 />
               </div>
               <Select value={category} onValueChange={handleCategoryChange}>

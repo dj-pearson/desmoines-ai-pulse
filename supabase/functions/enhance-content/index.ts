@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -190,21 +191,22 @@ IMPORTANT: Always return valid JSON. If you cannot verify ANY information, retur
 
 Do not include any explanatory text outside the JSON. Return only the JSON object.`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
+  const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
+  const requestBody = await buildClaudeRequest(
+    [{ role: 'user', content: prompt }],
+    { 
+      supabaseUrl, 
+      supabaseKey: supabaseServiceKey,
+      customMaxTokens: 1000,
+      customTemperature: 0.1
+    }
+  );
+
+  const response = await fetch(config.api_endpoint, {
     method: 'POST',
-    headers: {
-      'x-api-key': claudeApiKey,
-      'Content-Type': 'application/json',
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 1000,
-      temperature: 0.1,
-      messages: [
-        { role: 'user', content: prompt }
-      ],
-    }),
+    headers,
+    body: JSON.stringify(requestBody)
   });
 
   const aiResponse = await response.json();

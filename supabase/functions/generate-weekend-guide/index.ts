@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.4';
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -122,24 +123,22 @@ Structure it with clear day sections and make it sound exciting and informative!
 
     console.log('Sending request to Claude API...');
 
-    // Call Claude API
-    const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+    // Call Claude API using centralized config
+    const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
+    const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
+    const requestBody = await buildClaudeRequest(
+      [{ role: 'user', content: prompt }],
+      { 
+        supabaseUrl, 
+        supabaseKey: supabaseServiceKey,
+        useCreativeTemp: false
+      }
+    );
+
+    const claudeResponse = await fetch(config.api_endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2000,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ]
-      })
+      headers,
+      body: JSON.stringify(requestBody)
     });
 
     if (!claudeResponse.ok) {

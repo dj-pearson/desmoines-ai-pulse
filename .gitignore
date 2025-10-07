@@ -43,3 +43,9 @@ get_secret.js
 temp_run_script.bat
 temp_run_script.sh
 gitcalls.md
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/

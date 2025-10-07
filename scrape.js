@@ -1,0 +1,873 @@
+[
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Live Music: Mancat Three @ Middlebrook Mercantile", using detail URL: https://www.catchdesmoines.com/event/live-music%3a-mancat-three-%40-middlebrook-mercantile/53472/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "6a93e6ef-580b-4581-899d-eab3d1d9b433",
+    level: "info",
+    timestamp: 1759532154639000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "62b43081-f8e6-41d4-92bb-0550149db541",
+    level: "error",
+    timestamp: 1759532154639000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Trivia @ Middlebrook Mercantile", using detail URL: https://www.catchdesmoines.com/event/trivia-%40-middlebrook-mercantile/52942/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "60006dca-5554-4e9d-9176-9e6e49363422",
+    level: "info",
+    timestamp: 1759532154638000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "9a0e9340-0f36-49ac-b08d-84c983ebf6d4",
+    level: "error",
+    timestamp: 1759532154638000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Glow in the Park Foam Party", using detail URL: https://www.catchdesmoines.com/event/glow-in-the-park-foam-party/53965/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "e996de39-059c-4eb9-91e4-a21bbd46787d",
+    level: "info",
+    timestamp: 1759532153964000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "31954d04-c5ed-4998-a29c-b29818b71d35",
+    level: "error",
+    timestamp: 1759532153964000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "3rd Annual Backpocket Beer Mile and Fun Run", using detail URL: https://www.catchdesmoines.com/event/3rd-annual-backpocket-beer-mile-and-fun-run/52746/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "42531973-b442-4e5f-a809-e84c63e1d131",
+    level: "info",
+    timestamp: 1759532153962000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Teen Halloween: Pokémon (Grades 6-12)", using detail URL: https://www.catchdesmoines.com/event/teen-halloween%3a-pok%c3%a9mon-(grades-6-12)/54034/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "98da6891-1fd0-4b80-8e6d-72b895f177cc",
+    level: "info",
+    timestamp: 1759532153962000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "3ab50541-3f84-4372-9bc9-f4acff39e44b",
+    level: "error",
+    timestamp: 1759532153962000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "831527e3-b7a1-4a85-b3d5-d8b13adddbb0",
+    level: "error",
+    timestamp: 1759532153962000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "83037fdd-23ae-4bc0-a6bf-f252659eb5d7",
+    level: "error",
+    timestamp: 1759532153957000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Eddie Griffin", using detail URL: https://www.catchdesmoines.com/event/eddie-griffin/52166/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "d8ae1e0f-ef94-4796-908d-ea709c91a86c",
+    level: "info",
+    timestamp: 1759532153957000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Fall Author Series 2025", using detail URL: https://www.catchdesmoines.com/event/fall-author-series-2025%3a-presented-by-des-moines-public-library/53849/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "121f284f-4d60-4146-bd07-c766bab9453a",
+    level: "info",
+    timestamp: 1759532153957000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "bd7a4560-3f86-4afc-b85f-2d574c3413d6",
+    level: "error",
+    timestamp: 1759532153957000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "f6c6dae9-5df6-420f-a869-01fdbcb06043",
+    level: "error",
+    timestamp: 1759532153956000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Cocktails and Cardboard", using detail URL: https://www.catchdesmoines.com/event/cocktails-and-cardboard/53830/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "4912ccd9-134d-48bb-8a8f-f9f0b21136a4",
+    level: "info",
+    timestamp: 1759532153956000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Robert Rauschenberg: Currents, 1970 Exhibition Tour", using detail URL: https://www.catchdesmoines.com/event/%e2%80%9crobert-rauschenberg%3a-currents-1970%e2%80%b3-exhibition-tour/53640/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "d69e0b6b-1503-455f-88d2-c063a24bb66a",
+    level: "info",
+    timestamp: 1759532153954000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "243e3002-d2fd-4346-9dfd-ef63ff17ed0f",
+    level: "error",
+    timestamp: 1759532153954000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "a53c58bd-2eb2-458b-aa64-272dd205a4d0",
+    level: "error",
+    timestamp: 1759532153954000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Family Halloween", using detail URL: https://www.catchdesmoines.com/event/family-halloween/50655/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "f2bd70d8-b585-4046-b271-c126636f4dab",
+    level: "info",
+    timestamp: 1759532153954000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "17cbc189-6875-458b-b967-eb8965d91cf7",
+    level: "error",
+    timestamp: 1759532153954000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Author Reading | Carson Faust and Anna North", using detail URL: https://www.catchdesmoines.com/event/author-reading-%7c-carson-faust-and-anna-north-at-storyhouse-bookpub/53525/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "30d378c3-459e-469d-b354-3fa08c3ce1a9",
+    level: "info",
+    timestamp: 1759532153954000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Des Moines Community Baby Shower", using detail URL: https://www.catchdesmoines.com/event/des-moines-community-baby-shower/53916/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "06f77d8b-6c4c-46b7-86a4-58b7a1e9b085",
+    level: "info",
+    timestamp: 1759532153953000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "ca900ef5-586e-4669-8ab3-73776f5cfcac",
+    level: "error",
+    timestamp: 1759532153953000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Statemint West Des Moines", using detail URL: https://www.catchdesmoines.com/event/statemint-west-des-moines/53853/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "00db8796-1cf3-4662-9ca1-b8d348c57b0c",
+    level: "info",
+    timestamp: 1759532153953000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Friday Nights at Skate South", using detail URL: https://www.catchdesmoines.com/event/friday-nights-at-skate-south-the-place-to-be-for-fun!/53857/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "8db676cb-7d3c-4e69-8a36-79c9a04e2472",
+    level: "info",
+    timestamp: 1759532153953000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "fa675764-faf2-4c2b-ba29-cd09a54bf433",
+    level: "error",
+    timestamp: 1759532153953000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "6f407a6c-1b59-4ae8-9296-c6f23707600a",
+    level: "error",
+    timestamp: 1759532153953000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "fb82f196-7e18-441a-8356-92325b0b9760",
+    level: "error",
+    timestamp: 1759532153952000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Harvest Hoedown", using detail URL: https://www.catchdesmoines.com/event/harvest-hoedown/53913/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "b71f9da5-c01e-4599-b066-4aa37e22e4a2",
+    level: "info",
+    timestamp: 1759532153952000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Night Eyes", using detail URL: https://www.catchdesmoines.com/event/night-eyes/53724/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "2fb66897-fadf-47fd-a4b7-520c49de3561",
+    level: "info",
+    timestamp: 1759532153952000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "1eb1ceed-33ec-439e-ad37-a46e097f0c22",
+    level: "error",
+    timestamp: 1759532153952000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Unfurling Garden: Exhibition by Nikki Renee Anderson", using detail URL: https://www.catchdesmoines.com/event/unfurling-garden%3a-exhibition-by-nikki-renee-anderson/53513/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "47dd4840-6014-428b-8a0d-886b34ef98bf",
+    level: "info",
+    timestamp: 1759532153951000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Candlelight: Coldplay & Imagine Dragons", using detail URL: https://www.catchdesmoines.com/event/candlelight%3a-coldplay-%26-imagine-dragons/53539/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "887d31cd-c9d0-43d5-9f8a-076405dc1731",
+    level: "info",
+    timestamp: 1759532153951000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Backpocket\'s Fall Family Festival", using detail URL: https://www.catchdesmoines.com/event/backpockets-fall-family-festival/53748/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "e5d95d12-a355-4c11-9aad-0ca0a67e695c",
+    level: "info",
+    timestamp: 1759532153951000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "7d7779d4-65c2-41cc-96aa-3991ca2a72f6",
+    level: "error",
+    timestamp: 1759532153951000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "73c4675d-5795-411b-8c3d-a38ea61570d7",
+    level: "error",
+    timestamp: 1759532153951000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "53bab0f1-914d-4cab-9e20-c0460df32dc3",
+    level: "error",
+    timestamp: 1759532153951000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Prairie Meadows Battle Of The Bands", using detail URL: https://www.catchdesmoines.com/event/prairie-meadows-battle-of-the-bands/53510/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "8f0da40c-3a5f-4dd4-8909-d493cf377d6f",
+    level: "info",
+    timestamp: 1759532153950000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "fe65f3cb-7d60-46ab-8f9d-36477cb73d4e",
+    level: "error",
+    timestamp: 1759532153950000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "dd5ad66b-bdd6-475f-b4e7-2b0afe55be8b",
+    level: "error",
+    timestamp: 1759532153950000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Candlelight: Halloween Classics", using detail URL: https://www.catchdesmoines.com/event/candlelight%3a-halloween-classics/53778/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "f36e4952-e43e-4ece-adde-e238fd4e6c3c",
+    level: "info",
+    timestamp: 1759532153950000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "ae17c014-61f0-4bf9-ae1a-2f717d921a8b",
+    level: "error",
+    timestamp: 1759532153950000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Tour the Historic Jordan House Museum", using detail URL: https://www.catchdesmoines.com/event/tour-the-historic-jordan-house-museum/46306/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "665ae39e-0def-43e2-ba68-f51feaf9da7a",
+    level: "info",
+    timestamp: 1759532153950000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Buried Child by Sam Shepard", using detail URL: https://www.catchdesmoines.com/event/buried-child-by-sam-shepard/50203/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "5ee8f8cd-1d53-49a0-b313-a813066601b3",
+    level: "info",
+    timestamp: 1759532153949000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "9559899f-86ac-4d0d-91dc-18a43e627df7",
+    level: "error",
+    timestamp: 1759532153949000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "e1a8240e-beff-4ff2-86d0-37ac6cc27000",
+    level: "error",
+    timestamp: 1759532153948000,
+  },
+  {
+    event_message: "❌ Firecrawl error: 429\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "955cfad8-f121-45ff-9f5b-14b9442593df",
+    level: "error",
+    timestamp: 1759532153948000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "Jonas Magram Live at Confluence", using detail URL: https://www.catchdesmoines.com/event/jonas-magram-live-at-confluence/53896/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "d0afaaec-267b-466b-a0b9-9cc06e69d4b9",
+    level: "info",
+    timestamp: 1759532153948000,
+  },
+  {
+    event_message:
+      '⚠️ No Visit Website found for "The Haunting @ Exile", using detail URL: https://www.catchdesmoines.com/event/the-haunting-%40-exile/53293/\n',
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "7fe20866-ca03-4e39-9e1c-f0cdbd834d6d",
+    level: "info",
+    timestamp: 1759532153948000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/live-music%3a-mancat-three-%40-middlebrook-mercantile/53472/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "7037162d-20ed-4707-83ac-d8125792fc4d",
+    level: "info",
+    timestamp: 1759532153930000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/harvest-hoedown/53913/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "2455b402-155a-462e-b8b3-fb50e9c60a2c",
+    level: "info",
+    timestamp: 1759532153930000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/eddie-griffin/52166/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "2d2767ce-5716-482b-bf12-7f6b8910e306",
+    level: "info",
+    timestamp: 1759532153930000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/friday-nights-at-skate-south-the-place-to-be-for-fun!/53857/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "d7d0e370-6390-4606-91a1-0e8592a43039",
+    level: "info",
+    timestamp: 1759532153930000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/glow-in-the-park-foam-party/53965/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "e804ca8f-1a91-4cb0-8c1d-3e09cade2e64",
+    level: "info",
+    timestamp: 1759532153930000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/author-reading-%7c-carson-faust-and-anna-north-at-storyhouse-bookpub/53525/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "044b8e8d-448e-4533-a032-e1d04c6415e8",
+    level: "info",
+    timestamp: 1759532153930000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/teen-halloween%3a-pok%c3%a9mon-(grades-6-12)/54034/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "bf384967-21fe-4076-acc4-190e45a099d5",
+    level: "info",
+    timestamp: 1759532153930000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/fall-author-series-2025%3a-presented-by-des-moines-public-library/53849/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "ad6e90d7-d151-454b-b208-c5fa0cd96a4d",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/backpockets-fall-family-festival/53748/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "bd2e58af-0e9b-4a5e-9ee0-42e5d91e7f73",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/3rd-annual-backpocket-beer-mile-and-fun-run/52746/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "4a2494ba-c72f-4fdb-9a8e-3a3cef4f4692",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/candlelight%3a-coldplay-%26-imagine-dragons/53539/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "75a38252-41a3-4695-b89a-d9cf948c13cc",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/family-halloween/50655/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "69b32917-dc1a-4563-ac28-2d245cc266a3",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/candlelight%3a-halloween-classics/53778/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "6b38b359-c731-45fa-ac40-f3224f2f12d6",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/des-moines-community-baby-shower/53916/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "b41e3acc-1c97-4885-88f5-73c2b3ca232c",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/buried-child-by-sam-shepard/50203/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "8044ff31-3749-4aab-b433-3a82d7590ae4",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/tour-the-historic-jordan-house-museum/46306/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "856bb80d-438f-42f9-96b3-985a28e5198d",
+    level: "info",
+    timestamp: 1759532153929000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/statemint-west-des-moines/53853/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "418f4d5f-850d-446a-90db-3bb404327f6a",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/2025-harkin-retirement-security-symposium%3a-inclusive-long-term-care-pollicies-%26-supports/53561/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "d9146e55-66df-45e2-928f-89380f017a97",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/cocktails-and-cardboard/53830/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "04eb6dda-5b3a-4f8b-9958-1f8a178167c2",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/prairie-meadows-battle-of-the-bands/53510/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "65f2ed61-3439-492f-b91f-9f98de59f847",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/jonas-magram-live-at-confluence/53896/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "c4550f0b-50a2-428f-ab91-1caca9fdec9b",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/trivia-%40-middlebrook-mercantile/52942/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "463e02b0-538c-491d-b8ac-59b36b3afbbf",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/21st-annual-works-of-growth-%26-recovery-juried-art-exhibition/53921/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "1945c1a9-f7da-465c-aafe-62bc442eeef7",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/artist-lecture%3a-ben-millett/53927/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "94134b5a-ce06-4098-9bf4-251e1c588a17",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/scarecrow-festival/53272/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "74fd5398-1fbf-4a56-aa03-2d1e78db8800",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/night-eyes/53724/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "ea79cc2b-db81-420d-96a2-1c984ae3f6af",
+    level: "info",
+    timestamp: 1759532153928000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/%e2%80%9caliza-nisenbaum%3a-d%c3%ada-de-los-muertos%e2%80%9d-exhibition/53680/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "9c287d6e-c2f2-469a-8266-cd3467d04a47",
+    level: "info",
+    timestamp: 1759532153927000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/%e2%80%9crobert-rauschenberg%3a-currents-1970%e2%80%b3-exhibition-tour/53640/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "6c203d16-4002-46ef-b0b4-a1dd9211523d",
+    level: "info",
+    timestamp: 1759532153927000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/tours-of-the-historic-mansion-theater-%26-art-gallery/52537/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "813259d8-133a-4946-bbaf-a91dbb3e5a9c",
+    level: "info",
+    timestamp: 1759532153927000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/hope-ministries-mission%3a-christmas/53263/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "ba93ef29-38cb-4590-b85d-3e347d0801d2",
+    level: "info",
+    timestamp: 1759532153927000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/nightmare-on-ingersoll/54035/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "527de53e-7456-4296-b05e-2bd4d5a64e2c",
+    level: "info",
+    timestamp: 1759532153927000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/unfurling-garden%3a-exhibition-by-nikki-renee-anderson/53513/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "7b83d6ee-beaa-498d-bd60-c385231c1435",
+    level: "info",
+    timestamp: 1759532153927000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/the-haunting-%40-exile/53293/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "eee5fc97-0874-4cd3-82f9-56f6634448fa",
+    level: "info",
+    timestamp: 1759532153927000,
+  },
+  {
+    event_message:
+      "🔍 Claude response length for https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=24: 4211\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "ee99dcab-428c-4328-8854-8075ffd6174f",
+    level: "info",
+    timestamp: 1759532153926000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/%e2%80%9ciowa-artists-2025%3a-ben-millett%e2%80%9d/52186/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "49e474c5-043c-4284-8f44-95922da46fe1",
+    level: "info",
+    timestamp: 1759532153926000,
+  },
+  {
+    event_message:
+      "🔍 Extracting Visit Website URL from: https://www.catchdesmoines.com/event/disenchanted!-the-hit-musical-comedy/53817/\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "74a97938-499e-4944-ace1-9381a465ec45",
+    level: "info",
+    timestamp: 1759532153926000,
+  },
+  {
+    event_message:
+      "🤖 AI extracted 12 events items from https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=24\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "a21bb27c-e6ca-4405-b49e-66bec8581b50",
+    level: "info",
+    timestamp: 1759532153926000,
+  },
+  {
+    event_message: "🕒 After filtering: 35 items (removed 0 items)\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "fcea0eff-9659-4c93-a516-58bbc698a507",
+    level: "info",
+    timestamp: 1759532153926000,
+  },
+  {
+    event_message: "🎯 Total events extracted from all pages: 35\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "c10fa7a8-6559-4363-99e5-66ea93c61d7e",
+    level: "info",
+    timestamp: 1759532153926000,
+  },
+  {
+    event_message: "🔗 Processing 35 events to extract Visit Website URLs...\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "e0708e2c-d5de-4f91-aa63-f51a7efbebbf",
+    level: "info",
+    timestamp: 1759532153926000,
+  },
+  {
+    event_message: "shutdown",
+    event_type: "Shutdown",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "e8110357-480b-4026-9bc3-699e95f8f406",
+    level: "log",
+    timestamp: 1759532148593000,
+  },
+  {
+    event_message:
+      "🤖 Sending 16360 characters to Claude AI for https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=24\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "3854294a-6ee7-4f3d-8108-f815a54b8061",
+    level: "info",
+    timestamp: 1759532133744000,
+  },
+  {
+    event_message:
+      "📄 Firecrawl returned 16360 characters from https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=24\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "e84c0e20-9800-4b92-877b-08cda774ebf6",
+    level: "info",
+    timestamp: 1759532133744000,
+  },
+  {
+    event_message:
+      "🌐 Scraping page: https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=24\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "22b47dbe-035b-4341-858b-09a352001f2a",
+    level: "info",
+    timestamp: 1759532126966000,
+  },
+  {
+    event_message:
+      "🤖 AI extracted 12 events items from https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=12\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "416cc8c6-1e65-4758-a454-30e5f298e029",
+    level: "info",
+    timestamp: 1759532126966000,
+  },
+  {
+    event_message:
+      "🔍 Claude response length for https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=12: 4101\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "1397d48a-c36c-4f79-88be-a32643b43e0a",
+    level: "info",
+    timestamp: 1759532126966000,
+  },
+  {
+    event_message:
+      "📄 Firecrawl returned 16531 characters from https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=12\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "038d9d19-520f-4422-9a8d-c8d74759c9c0",
+    level: "info",
+    timestamp: 1759532107020000,
+  },
+  {
+    event_message:
+      "🤖 Sending 16531 characters to Claude AI for https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=12\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "23a882d5-e813-444d-b456-2376bd50c310",
+    level: "info",
+    timestamp: 1759532107020000,
+  },
+  {
+    event_message:
+      "🌐 Scraping page: https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23&skip=12\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "3fe4585c-0d13-48a6-829b-9f35ed005c3b",
+    level: "info",
+    timestamp: 1759532101147000,
+  },
+  {
+    event_message:
+      "🔍 Claude response length for https://www.catchdesmoines.com/events/?bounds=false&view=grid&sort=date&filter_daterange%5Bstart%5D=2025-10-16&filter_daterange%5Bend%5D=2025-10-23: 4344\n",
+    event_type: "Log",
+    function_id: "d5abfbf1-9009-46c7-ad37-7d190ac388c3",
+    id: "2d23e539-5aff-4802-98df-88b3852b9197",
+    level: "info",
+    timestamp: 1759532101147000,
+  },
+];

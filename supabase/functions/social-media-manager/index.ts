@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -735,19 +736,25 @@ ${contentType === "restaurant" ? `Cuisine: ${selectedContent.cuisine || ""}` : "
 
 Make it detailed and engaging for Facebook/LinkedIn. Include compelling details, storytelling elements, and a strong call to action.`;
 
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  
   // Generate short post
-  const shortResponse = await fetch("https://api.anthropic.com/v1/messages", {
+  const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
+  const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
+  const shortRequestBody = await buildClaudeRequest(
+    [{ role: "user", content: shortPrompt }],
+    { 
+      supabaseUrl, 
+      supabaseKey: supabaseServiceKey,
+      customMaxTokens: 300
+    }
+  );
+
+  const shortResponse = await fetch(config.api_endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": claudeApiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 300,
-      messages: [{ role: "user", content: shortPrompt }],
-    }),
+    headers,
+    body: JSON.stringify(shortRequestBody)
   });
 
   if (!shortResponse.ok) {
@@ -762,18 +769,19 @@ Make it detailed and engaging for Facebook/LinkedIn. Include compelling details,
   const shortContent = shortData.content[0].text;
 
   // Generate long post
-  const longResponse = await fetch("https://api.anthropic.com/v1/messages", {
+  const longRequestBody = await buildClaudeRequest(
+    [{ role: "user", content: longPrompt }],
+    { 
+      supabaseUrl, 
+      supabaseKey: supabaseServiceKey,
+      customMaxTokens: 500
+    }
+  );
+
+  const longResponse = await fetch(config.api_endpoint, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": claudeApiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 500,
-      messages: [{ role: "user", content: longPrompt }],
-    }),
+    headers,
+    body: JSON.stringify(longRequestBody)
   });
 
   if (!longResponse.ok) {

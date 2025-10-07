@@ -18,7 +18,7 @@ const Articles: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [viewMode, setViewMode] = useState('grid');
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true); // Show filters by default
 
   // Get unique categories from published articles
   const categories = Array.from(new Set(articles.filter(article => article.status === 'published').map(article => article.category)));
@@ -146,6 +146,8 @@ const Articles: React.FC = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 h-12 text-base"
+                  aria-label="Search articles"
+                  role="searchbox"
                 />
               </div>
 
@@ -168,6 +170,8 @@ const Articles: React.FC = () => {
                     size="sm"
                     onClick={() => setViewMode('grid')}
                     className="rounded-r-none"
+                    aria-label="Switch to grid view"
+                    title="Switch to grid view"
                   >
                     <Grid className="h-4 w-4" />
                   </Button>
@@ -176,6 +180,8 @@ const Articles: React.FC = () => {
                     size="sm"
                     onClick={() => setViewMode('list')}
                     className="rounded-l-none"
+                    aria-label="Switch to list view"
+                    title="Switch to list view"
                   >
                     <List className="h-4 w-4" />
                   </Button>

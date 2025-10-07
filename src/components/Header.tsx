@@ -106,27 +106,32 @@ export default function Header() {
   return (
     <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50 safe-area-top">
       <div className="container mx-auto mobile-padding">
-        <div className="flex justify-between items-center touch-target">
-          {/* Logo - Mobile Optimized with Dark Mode Glow */}
+        <div className="flex items-center touch-target gap-2 lg:gap-4">
+          {/* Logo - Mobile Optimized with Dark Mode Glow - Fixed Width */}
           <Link
             to="/"
-            className="flex items-center smooth-transition hover:opacity-80"
+            className="flex items-center smooth-transition hover:opacity-80 flex-shrink-0"
+            aria-label="Des Moines Insider Home"
           >
             <img
-              src="/DMI-Logo-Header.png"
+              src="/DMI-Logo2.png"
               alt="Des Moines Insider"
               loading="eager"
-              {...({
-                fetchPriority: "high",
-              } as React.ImgHTMLAttributes<HTMLImageElement>)}
+              fetchPriority="high"
               decoding="async"
+              width="auto"
+              height="40"
+              onError={(e) => {
+                console.error('Logo failed to load:', e);
+                (e.target as HTMLImageElement).style.display = 'none';
+              }}
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
             />
           </Link>
 
-          {/* Desktop Navigation */}
+          {/* Desktop Navigation - Grows to fill space */}
           <nav
-            className="hidden lg:flex items-center space-x-6"
+            className="hidden lg:flex items-center space-x-3 xl:space-x-4 flex-1"
             role="navigation"
             aria-label="Main navigation"
           >
@@ -135,7 +140,7 @@ export default function Header() {
                 key={link.href}
                 to={link.href}
                 className={cn(
-                  "flex items-center gap-2 smooth-transition touch-target relative",
+                  "flex items-center gap-1.5 smooth-transition touch-target relative text-sm xl:text-base",
                   isActivePath(link.href)
                     ? "text-primary font-medium after:absolute after:bottom-[-8px] after:left-0 after:right-0 after:h-0.5 after:bg-primary"
                     : "text-muted-foreground hover:text-primary"
@@ -145,7 +150,7 @@ export default function Header() {
                 aria-current={isActivePath(link.href) ? "page" : undefined}
               >
                 <link.icon className="h-4 w-4" />
-                {link.label}
+                <span className="whitespace-nowrap">{link.label}</span>
               </Link>
             ))}
           </nav>
@@ -320,8 +325,8 @@ export default function Header() {
               </SheetContent>
             </Sheet>
 
-            {/* Desktop User Actions */}
-            <div className="hidden lg:flex items-center gap-2">
+            {/* Desktop User Actions - Stays on the right */}
+            <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
               <ThemeToggle />
               <SubmitEventButton />
               <AdvertiseButton />

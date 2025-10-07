@@ -328,6 +328,8 @@ export default function RestaurantDetails() {
                     src={imageUrl}
                     alt={restaurant.name}
                     className="absolute inset-0 w-full h-full object-cover z-20"
+                    loading="eager"
+                    decoding="async"
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
                     onError={(e) => {

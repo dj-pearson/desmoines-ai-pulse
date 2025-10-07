@@ -40,7 +40,7 @@ export interface UpdateArticleData extends Partial<CreateArticleData> {
   id: string;
 }
 
-export const useArticles = () => {
+export const useArticles = (options?: { autoLoad?: boolean }) => {
   const [articles, setArticles] = useState<Article[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -282,7 +282,10 @@ export const useArticles = () => {
   };
 
   useEffect(() => {
-    loadArticles();
+    if (options?.autoLoad !== false) {
+      loadArticles();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {

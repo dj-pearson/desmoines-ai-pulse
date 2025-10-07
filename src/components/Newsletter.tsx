@@ -53,6 +53,7 @@ export default function Newsletter() {
         <form
           onSubmit={handleSubmit}
           className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto"
+          aria-label="Newsletter subscription form"
         >
           <Input
             type="email"
@@ -61,11 +62,15 @@ export default function Newsletter() {
             onChange={(e) => setEmail(e.target.value)}
             className="flex-1 h-12"
             required
+            aria-label="Email address for newsletter"
+            id="newsletter-email"
+            name="email"
           />
           <Button
             type="submit"
             disabled={isLoading}
-            className="h-12 px-8 bg-accent hover:bg-green-700 text-white"
+            className="h-12 px-8 bg-green-600 hover:bg-green-700 text-white"
+            aria-label="Subscribe to newsletter"
           >
             {isLoading ? "Subscribing..." : "Subscribe"}
           </Button>

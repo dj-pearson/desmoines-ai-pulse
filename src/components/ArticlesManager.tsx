@@ -6,9 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search } from "lucide-react";
+import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
+import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
+import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery } from "@tanstack/react-query";
 
 export default function ArticlesManager() {
   const { articles, loading, error, deleteArticle, publishArticle, loadArticles } = useArticles();
@@ -18,6 +21,47 @@ export default function ArticlesManager() {
   useEffect(() => {
     loadArticles('all'); // Load all articles regardless of status
   }, []);
+
+  // Get webhook configuration
+  const { data: webhook } = useQuery({
+    queryKey: ["article-webhook"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("article_webhooks")
+        .select("*")
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return data;
+    },
+  });
+
+  // Resend article to webhook
+  const resendMutation = useMutation({
+    mutationFn: async (articleId: string) => {
+      if (!webhook?.webhook_url || !webhook.is_active) {
+        throw new Error("Webhook is not configured or not active");
+      }
+
+      const { data, error } = await supabase.functions.invoke('publish-article-webhook', {
+        body: { 
+          articleId,
+          webhookUrl: webhook.webhook_url 
+        }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data, articleId) => {
+      const article = articles.find(a => a.id === articleId);
+      toast.success(`Webhook sent successfully for "${article?.title}"`);
+    },
+    onError: (error: Error, articleId) => {
+      const article = articles.find(a => a.id === articleId);
+      toast.error(`Failed to send webhook for "${article?.title}": ${error.message}`);
+    },
+  });
 
   const filteredArticles = articles.filter(article => 
     article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -96,27 +140,30 @@ export default function ArticlesManager() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Articles Management
-            </CardTitle>
-            <CardDescription>
-              Manage blog articles and content posts
-            </CardDescription>
+    <div className="space-y-6">
+      <ArticleWebhookConfig />
+      
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Articles Management
+              </CardTitle>
+              <CardDescription>
+                Manage blog articles and content posts
+              </CardDescription>
+            </div>
+            <Button asChild>
+              <a href="/admin/articles/new" target="_blank" rel="noopener noreferrer">
+                <Plus className="h-4 w-4 mr-2" />
+                Create New Article
+              </a>
+            </Button>
           </div>
-          <Button asChild>
-            <a href="/admin/articles/new" target="_blank" rel="noopener noreferrer">
-              <Plus className="h-4 w-4 mr-2" />
-              Create New Article
-            </a>
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        </CardHeader>
+        <CardContent className="space-y-4">
         {/* Search */}
         <div className="flex items-center gap-2">
           <Search className="h-4 w-4 text-muted-foreground" />
@@ -251,6 +298,19 @@ export default function ArticlesManager() {
                           </Button>
                         )}
                         
+                        {article.status === 'published' && webhook?.is_active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => resendMutation.mutate(article.id)}
+                            disabled={resendMutation.isPending}
+                            className="text-blue-600 hover:text-blue-700"
+                            title="Send to webhook"
+                          >
+                            <Send className="h-3 w-3" />
+                          </Button>
+                        )}
+                        
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="sm">
@@ -285,5 +345,6 @@ export default function ArticlesManager() {
         </div>
       </CardContent>
     </Card>
+    </div>
   );
 }

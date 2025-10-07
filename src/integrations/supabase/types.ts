@@ -92,6 +92,81 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_configuration: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: Json
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      ai_models: {
+        Row: {
+          context_window: number | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          max_output_tokens: number | null
+          model_id: string
+          model_name: string
+          provider: string
+          supports_vision: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          context_window?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_output_tokens?: number | null
+          model_id: string
+          model_name: string
+          provider: string
+          supports_vision?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          context_window?: number | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          max_output_tokens?: number | null
+          model_id?: string
+          model_name?: string
+          provider?: string
+          supports_vision?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       article_comments: {
         Row: {
           article_id: string
@@ -139,6 +214,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      article_webhooks: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          updated_at: string | null
+          webhook_url: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          webhook_url: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          updated_at?: string | null
+          webhook_url?: string
+        }
+        Relationships: []
       }
       articles: {
         Row: {

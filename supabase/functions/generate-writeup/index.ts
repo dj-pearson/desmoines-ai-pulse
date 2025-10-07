@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAIConfig, getClaudeHeaders, buildClaudeRequest } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -184,21 +185,24 @@ Write the content as a complete, flowing article without headers or bullet point
       "https://api.anthropic.com/v1/messages",
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-0",
-          max_tokens: 400,
-          messages: [
+        headers: await getClaudeHeaders(claudeApiKey, Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!),
+        body: JSON.stringify(
+          await buildClaudeRequest(
+            [
+              {
+                role: "user",
+                content: prompt,
+              },
+            ],
             {
-              role: "user",
-              content: prompt,
-            },
-          ],
-        }),
+              supabaseUrl: Deno.env.get("SUPABASE_URL")!,
+              supabaseKey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+              useLargeTokens: false,
+              useCreativeTemp: true,
+              customMaxTokens: 400,
+            }
+          )
+        ),
       }
     );
 

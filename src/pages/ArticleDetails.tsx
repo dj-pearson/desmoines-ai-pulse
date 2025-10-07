@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { 
   Calendar, 
   Eye, 
@@ -27,7 +29,7 @@ import ShareDialog from '@/components/ShareDialog';
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
-  const { getArticleBySlug } = useArticles();
+  const { getArticleBySlug } = useArticles({ autoLoad: false });
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -42,7 +44,8 @@ const ArticleDetails: React.FC = () => {
     };
 
     loadArticle();
-  }, [slug, getArticleBySlug]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -105,6 +108,8 @@ const ArticleDetails: React.FC = () => {
         title={article.seo_title || article.title}
         description={article.seo_description || article.excerpt || `Read ${article.title} on Des Moines Insider`}
         keywords={article.seo_keywords || article.tags || []}
+        type="article"
+        canonicalUrl={`https://desmoinesinsider.com/articles/${article.slug}`}
       />
       <Header />
       
@@ -225,12 +230,23 @@ const ArticleDetails: React.FC = () => {
               {/* Main Content */}
               <article className="lg:col-span-8">
                 <Card className="p-6 md:p-8">
-                  <div 
-                    className="prose prose-lg max-w-none dark:prose-invert prose-headings:font-bold prose-p:leading-relaxed prose-img:rounded-lg prose-img:shadow-md"
-                    dangerouslySetInnerHTML={{ 
-                      __html: article.content.replace(/\n/g, '<br/>') 
-                    }}
-                  />
+                  <div className="prose prose-lg max-w-none dark:prose-invert 
+                               prose-headings:font-bold prose-headings:text-foreground
+                               prose-h2:text-2xl prose-h2:mt-8 prose-h2:mb-4
+                               prose-h3:text-xl prose-h3:mt-6 prose-h3:mb-3
+                               prose-p:leading-relaxed prose-p:mb-4 prose-p:text-foreground/90
+                               prose-ul:my-4 prose-ul:list-disc prose-ul:pl-6
+                               prose-ol:my-4 prose-ol:list-decimal prose-ol:pl-6
+                               prose-li:mb-2 prose-li:text-foreground/90
+                               prose-strong:text-foreground prose-strong:font-semibold
+                               prose-a:text-primary prose-a:no-underline hover:prose-a:underline
+                               prose-img:rounded-lg prose-img:shadow-md
+                               prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic
+                               prose-code:bg-muted prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-sm">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {article.content}
+                    </ReactMarkdown>
+                  </div>
                 </Card>
 
                 {/* Article Footer */}

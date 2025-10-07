@@ -30,96 +30,19 @@ export default defineConfig(({ command }) => ({
     },
   },
   build: {
-    sourcemap: true,
+    sourcemap: false, // Disable sourcemaps in production for smaller files
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
-    minify: "terser",
+    minify: "esbuild", // Use esbuild - faster and more reliable than terser
     target: "es2020",
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-        pure_funcs: [
-          "console.log",
-          "console.info",
-          "console.debug",
-          "console.warn",
-        ],
-        passes: 2,
-      },
-      mangle: {
-        safari10: true,
-      },
-      format: {
-        comments: false,
-      },
-    },
     rollupOptions: {
-      treeshake: {
-        preset: "recommended",
-      },
       output: {
-        manualChunks: (id) => {
-          // Simpler code splitting to avoid empty chunks
-          if (id.includes("node_modules")) {
-            // Core React bundle
-            if (
-              id.includes("react") ||
-              id.includes("react-dom") ||
-              id.includes("scheduler")
-            ) {
-              return "vendor-react";
-            }
-
-            // Router bundle
-            if (id.includes("react-router")) {
-              return "vendor-router";
-            }
-
-            // Query bundle
-            if (id.includes("@tanstack")) {
-              return "vendor-query";
-            }
-
-            // Supabase bundle
-            if (id.includes("@supabase")) {
-              return "vendor-supabase";
-            }
-
-            // UI components bundle
-            if (id.includes("@radix-ui")) {
-              return "vendor-ui";
-            }
-
-            // Icons bundle
-            if (id.includes("lucide-react")) {
-              return "vendor-icons";
-            }
-
-            // Date utilities bundle
-            if (id.includes("date-fns")) {
-              return "vendor-date";
-            }
-
-            // Other vendors
-            return "vendor-other";
-          }
-        },
-        assetFileNames: (assetInfo) => {
-          if (assetInfo.name?.endsWith(".css")) {
-            return "assets/[name]-[hash].css";
-          }
-          return "assets/[name]-[hash][extname]";
-        },
-        chunkFileNames: (chunkInfo) => {
-          // Ensure all JS chunks have .js extension, not .tsx
-          return "assets/[name]-[hash].js";
-        },
-        entryFileNames: (chunkInfo) => {
-          // Ensure all entry files have .js extension, not .tsx
-          return "assets/[name]-[hash].js";
-        },
+        // Let Vite handle chunking automatically - no manual chunks to avoid circular deps
+        manualChunks: undefined,
+        assetFileNames: "assets/[name]-[hash][extname]",
+        chunkFileNames: "assets/[name]-[hash].js",
+        entryFileNames: "assets/[name]-[hash].js",
       },
     },
     chunkSizeWarningLimit: 600,

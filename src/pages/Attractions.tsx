@@ -38,7 +38,7 @@ export default function Attractions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [minRating, setMinRating] = useState("any-rating");
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [featuredOnly, setFeaturedOnly] = useState("all");
   const [viewMode, setViewMode] = useState('list');
 
@@ -126,6 +126,8 @@ export default function Attractions() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
+                  aria-label="Search attractions"
+                  role="searchbox"
                 />
               </div>
               <div className="flex items-center gap-3">
@@ -143,6 +145,8 @@ export default function Attractions() {
                     variant={viewMode === 'list' ? 'secondary' : 'ghost'}
                     size="icon"
                     className={viewMode === 'list' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
+                    aria-label="Switch to list view"
+                    title="Switch to list view"
                   >
                     <List className="h-5 w-5" />
                   </Button>
@@ -151,6 +155,8 @@ export default function Attractions() {
                     variant={viewMode === 'map' ? 'secondary' : 'ghost'}
                     size="icon"
                     className={viewMode === 'map' ? 'bg-white/30 text-white h-11' : 'text-white/70 hover:bg-white/30 hover:text-white h-11'}
+                    aria-label="Switch to map view"
+                    title="Switch to map view"
                   >
                     <Map className="h-5 w-5" />
                   </Button>

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -160,24 +161,22 @@ Generate writeups for ALL ${eventsToEnhance.length} events listed above. Each wr
     // Make Claude API call
     console.log('🤖 Sending bulk request to Claude API...');
     
-    const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+    const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
+    const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
+    const requestBody = await buildClaudeRequest(
+      [{ role: "user", content: bulkPrompt }],
+      { 
+        supabaseUrl, 
+        supabaseKey: supabaseServiceKey,
+        useLargeTokens: true,
+        useCreativeTemp: true
+      }
+    );
+
+    const claudeResponse = await fetch(config.api_endpoint, {
       method: "POST",
-      headers: {
-        "x-api-key": claudeApiKey,
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 4000,
-        temperature: 0.7,
-        messages: [
-          {
-            role: "user",
-            content: bulkPrompt
-          }
-        ]
-      })
+      headers,
+      body: JSON.stringify(requestBody)
     });
 
     if (!claudeResponse.ok) {

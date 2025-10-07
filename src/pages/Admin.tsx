@@ -37,6 +37,7 @@ import { CompetitorAnalysisDashboard } from "@/components/CompetitorAnalysisDash
 import ArticlesManager from "@/components/ArticlesManager";
 import AIArticleGenerator from "@/components/AIArticleGenerator";
 import AIEnhancementManager from "@/components/AIEnhancementManager";
+import { AIConfigurationManager } from "@/components/AIConfigurationManager";
 import { useArticles } from "@/hooks/useArticles";
 import {
   Shield,
@@ -534,6 +535,21 @@ export default function Admin() {
                   >
                     <Bot className="h-4 w-4" />
                     {!sidebarCollapsed && <span>AI Crawler</span>}
+                  </button>
+
+                  <button
+                    onClick={() => setActiveTab("ai-configuration")}
+                    className={`w-full flex items-center ${
+                      sidebarCollapsed ? "justify-center" : "gap-3"
+                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                      activeTab === "ai-configuration"
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-accent hover:text-accent-foreground"
+                    }`}
+                    title={sidebarCollapsed ? "AI Configuration" : ""}
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {!sidebarCollapsed && <span>AI Configuration</span>}
                   </button>
 
                   <button
@@ -1066,6 +1082,10 @@ export default function Admin() {
             )}
 
             {canManageContent() && activeTab === "ai-crawler" && <AICrawler />}
+
+            {canManageContent() && activeTab === "ai-configuration" && (
+              <AIConfigurationManager />
+            )}
 
             {canManageContent() && activeTab === "scraping" && (
               <div className="space-y-6">

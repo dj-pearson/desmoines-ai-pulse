@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/ui/loading-button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Textarea } from "@/components/ui/textarea";
@@ -934,13 +935,14 @@ ${JSON.stringify(eventListSchema, null, 2)}
                     <div className="text-sm text-muted-foreground">
                       Will generate: SEO title, meta description, H1 tag, keywords, GEO summary, key facts, and FAQ sections for individual event pages
                     </div>
-                    <Button
+                    <LoadingButton
                       onClick={() => handleSeoGeneration('event')}
-                      disabled={isSeoGenerating.events}
+                      loading={isSeoGenerating.events}
+                      loadingText="Generating SEO Content..."
                       className="w-full"
                     >
-                      {isSeoGenerating.events ? 'Generating SEO Content...' : 'Generate Event SEO'}
-                    </Button>
+                      Generate Event SEO
+                    </LoadingButton>
                     {seoResults.event && (
                       <div className="p-3 bg-muted rounded-lg text-sm">
                         <div className="font-medium text-green-600 mb-1">✅ Generation Complete</div>
@@ -973,13 +975,14 @@ ${JSON.stringify(eventListSchema, null, 2)}
                     <div className="text-sm text-muted-foreground">
                       Will generate: SEO title, meta description, H1 tag, keywords, GEO summary, key facts, and FAQ sections for individual restaurant pages
                     </div>
-                    <Button
+                    <LoadingButton
                       onClick={() => handleSeoGeneration('restaurant')}
-                      disabled={isSeoGenerating.restaurants}
+                      loading={isSeoGenerating.restaurants}
+                      loadingText="Generating SEO Content..."
                       className="w-full"
                     >
-                      {isSeoGenerating.restaurants ? 'Generating SEO Content...' : 'Generate Restaurant SEO'}
-                    </Button>
+                      Generate Restaurant SEO
+                    </LoadingButton>
                     {seoResults.restaurant && (
                       <div className="p-3 bg-muted rounded-lg text-sm">
                         <div className="font-medium text-green-600 mb-1">✅ Generation Complete</div>

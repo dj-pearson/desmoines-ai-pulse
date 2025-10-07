@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx playwright install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8084 npx playwright test --project=chromium-desktop tests/links-and-buttons.spec.ts --reporter=list --max-failures=3)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
