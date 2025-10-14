@@ -52,7 +52,7 @@ export function PageLayout({
           </div>
         )}
         
-        <main className="relative">
+        <main id="main-content" className="relative" tabIndex={-1}>
           {children}
         </main>
       </div>

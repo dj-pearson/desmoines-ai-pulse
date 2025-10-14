@@ -4,7 +4,11 @@
       "Bash(npm install:*)",
       "Bash(npx playwright install:*)",
       "Bash(npm run dev:*)",
-      "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8084 npx playwright test --project=chromium-desktop tests/links-and-buttons.spec.ts --reporter=list --max-failures=3)"
+      "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8084 npx playwright test --project=chromium-desktop tests/links-and-buttons.spec.ts --reporter=list --max-failures=3)",
+      "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npx playwright test --project=chromium-desktop tests/links-and-buttons.spec.ts --reporter=list --max-failures=3)",
+      "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npx playwright test --project=mobile-chrome tests/mobile-responsive.spec.ts --reporter=list --max-failures=5 --workers=1)",
+      "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npx playwright test --project=chromium-desktop tests/performance.spec.ts --reporter=list --max-failures=5 --workers=1)",
+      "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npx playwright test --project=chromium-desktop tests/accessibility.spec.ts --reporter=list --max-failures=5 --workers=1)"
     ],
     "deny": [],
     "ask": []
