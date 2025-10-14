@@ -271,37 +271,67 @@ async function extractVisitWebsiteUrl(
       /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
     );
     if (bottomActionsMatch) {
+      console.log("📦 Found bottom-actions div");
       const inner = bottomActionsMatch[1];
       // Look for ALL links in bottom-actions with "Visit Website" text
       const linkPattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
       let match;
+      let linkCount = 0;
       while ((match = linkPattern.exec(inner)) !== null) {
+        linkCount++;
         const u = normalizeUrl(match[1].trim());
         const text = (match[2] || "").replace(/<[^>]*>/g, " ").trim();
+        console.log(`🔗 Link ${linkCount} in bottom-actions:`, u, "text:", text);
+        
+        if (isExcludedInline(u)) {
+          console.log("⏭️ Skipped excluded URL:", u);
+          continue;
+        }
+        
         if (
           /visit\s*website/i.test(text) &&
-          (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
-          !isExcludedInline(u)
+          (/^https?:\/\//i.test(u) || u.startsWith("//"))
         ) {
           console.log("✅ Found 'Visit Website' button in bottom-actions:", u);
           return { visitUrl: u, dateStr, timeStr };
         }
       }
+      console.log(`📊 Checked ${linkCount} links in bottom-actions, none matched`);
+    } else {
+      console.log("⚠️ No bottom-actions div found");
     }
 
-    // Method 3: Any anchor with exact "Visit Website" text anywhere on page
-    const visitWebsitePattern =
-      /<a[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
-    let anchorMatch;
-    while ((anchorMatch = visitWebsitePattern.exec(html)) !== null) {
-      const u = normalizeUrl(anchorMatch[1].trim());
-      const text = anchorMatch[2].trim();
+    // Method 3: Look for action-item class with Visit Website
+    const actionItemPattern = /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let actionMatch;
+    while ((actionMatch = actionItemPattern.exec(html)) !== null) {
+      const u = normalizeUrl(actionMatch[1].trim());
+      const text = (actionMatch[2] || "").replace(/<[^>]*>/g, " ").trim();
+      console.log("🎯 Found action-item link:", u, "text:", text);
+      
       if (
         /visit\s*website/i.test(text) &&
         (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
         !isExcludedInline(u)
       ) {
-        console.log("✅ Found 'Visit Website' anchor:", u);
+        console.log("✅ Found 'Visit Website' via action-item class:", u);
+        return { visitUrl: u, dateStr, timeStr };
+      }
+    }
+
+    // Method 4: Any anchor with "Visit Website" text anywhere on page (broader search)
+    const visitWebsitePattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+    let anchorMatch;
+    while ((anchorMatch = visitWebsitePattern.exec(html)) !== null) {
+      const u = normalizeUrl(anchorMatch[1].trim());
+      const text = (anchorMatch[2] || "").replace(/<[^>]*>/g, " ").trim();
+      
+      if (
+        /visit\s*website/i.test(text) &&
+        (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
+        !isExcludedInline(u)
+      ) {
+        console.log("✅ Found 'Visit Website' anchor (fallback):", u);
         return { visitUrl: u, dateStr, timeStr };
       }
     }
