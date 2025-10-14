@@ -339,37 +339,43 @@ serve(async (req) => {
       );
     }
 
-    // Verify user is admin
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
+    const token = authHeader.replace("Bearer ", "");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Check if using service role key (for Make.com and other automated systems)
+    if (token !== serviceRoleKey) {
+      // If not service role, verify user is admin
+      const {
+        data: { user },
+        error: authError,
+      } = await supabaseClient.auth.getUser(token);
 
-    // Check if user has admin role
-    const { data: profile } = await supabaseClient
-      .from("profiles")
-      .select("user_role")
-      .eq("user_id", user.id)
-      .single();
-
-    if (
-      !profile ||
-      !["admin", "root_admin", "moderator"].includes(profile.user_role)
-    ) {
-      return new Response(
-        JSON.stringify({ error: "Insufficient permissions" }),
-        {
-          status: 403,
+      if (authError || !user) {
+        return new Response(JSON.stringify({ error: "Unauthorized" }), {
+          status: 401,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+        });
+      }
+
+      // Check if user has admin role
+      const { data: profile } = await supabaseClient
+        .from("profiles")
+        .select("user_role")
+        .eq("user_id", user.id)
+        .single();
+
+      if (
+        !profile ||
+        !["admin", "root_admin", "moderator"].includes(profile.user_role)
+      ) {
+        return new Response(
+          JSON.stringify({ error: "Insufficient permissions" }),
+          {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
     if (req.method === "POST") {
