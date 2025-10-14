@@ -26,3 +26,12 @@ verify_jwt = false
 
 [functions.populate-playgrounds]
 verify_jwt = false
+
+[functions.extract-catchdesmoines-urls]
+verify_jwt = false
+
+[functions.backfill-coordinates]
+verify_jwt = false
+
+[functions.generate-seo-content]
+verify_jwt = false
