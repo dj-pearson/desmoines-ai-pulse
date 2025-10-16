@@ -3,7 +3,7 @@
  * Supports multiple scraping backends: Puppeteer, Playwright, and Firecrawl
  */
 
-export type ScraperBackend = 'puppeteer' | 'playwright' | 'firecrawl';
+export type ScraperBackend = 'fetch' | 'puppeteer' | 'playwright' | 'firecrawl';
 
 export interface ScraperConfig {
   backend: ScraperBackend;
@@ -28,7 +28,8 @@ export interface ScraperResult {
  * Get scraper configuration from environment or defaults
  */
 export function getScraperConfig(): ScraperConfig {
-  const backend = (Deno.env.get('SCRAPER_BACKEND') || 'puppeteer') as ScraperBackend;
+  // Default to 'fetch' as it works in edge functions without external dependencies
+  const backend = (Deno.env.get('SCRAPER_BACKEND') || 'fetch') as ScraperBackend;
   
   return {
     backend,
@@ -41,7 +42,73 @@ export function getScraperConfig(): ScraperConfig {
 }
 
 /**
+ * Scrape a URL using simple fetch (works in edge functions)
+ */
+async function scrapeWithFetch(
+  url: string,
+  config: ScraperConfig
+): Promise<ScraperResult> {
+  const startTime = Date.now();
+  
+  try {
+    console.log(`🌐 Using fetch to scrape: ${url}`);
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), config.timeout);
+    
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': config.userAgent || '',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+      },
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const html = await response.text();
+    
+    // Extract text content from HTML (simple approach)
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    console.log(`✅ Fetch scraped ${html.length} chars HTML, ${text.length} chars text`);
+    
+    return {
+      success: true,
+      html,
+      text,
+      backend: 'fetch',
+      duration: Date.now() - startTime,
+    };
+    
+  } catch (error) {
+    console.error(`❌ Fetch error:`, error);
+    return {
+      success: false,
+      error: error.message,
+      backend: 'fetch',
+      duration: Date.now() - startTime,
+    };
+  }
+}
+
+/**
  * Scrape a URL using Puppeteer (Chromium)
+ * NOTE: This will NOT work in Supabase edge functions as Chrome binary is not available
  */
 async function scrapeWithPuppeteer(
   url: string,
@@ -291,11 +358,17 @@ export async function scrapeUrl(
   let result: ScraperResult;
   
   switch (config.backend) {
+    case 'fetch':
+      result = await scrapeWithFetch(url, config);
+      break;
+    
     case 'puppeteer':
+      console.log(`⚠️ Warning: Puppeteer requires Chrome binary, not available in edge functions. Use 'fetch' or 'firecrawl' instead.`);
       result = await scrapeWithPuppeteer(url, config);
       break;
       
     case 'playwright':
+      console.log(`⚠️ Warning: Playwright requires browser binary, not available in edge functions. Use 'fetch' or 'firecrawl' instead.`);
       result = await scrapeWithPlaywright(url, config);
       break;
       
@@ -312,10 +385,18 @@ export async function scrapeUrl(
       };
   }
   
-  // If primary backend fails and Firecrawl is available, try it as fallback
-  if (!result.success && config.backend !== 'firecrawl' && config.firecrawlApiKey) {
-    console.log(`⚠️ Primary backend failed, falling back to Firecrawl...`);
-    result = await scrapeWithFirecrawl(url, config);
+  // If primary backend fails, try fallbacks
+  if (!result.success) {
+    // Try Firecrawl if available and not already tried
+    if (config.backend !== 'firecrawl' && config.firecrawlApiKey) {
+      console.log(`⚠️ Primary backend failed, falling back to Firecrawl...`);
+      result = await scrapeWithFirecrawl(url, config);
+    }
+    // Try fetch if available and not already tried
+    else if (config.backend !== 'fetch') {
+      console.log(`⚠️ Primary backend failed, falling back to fetch...`);
+      result = await scrapeWithFetch(url, config);
+    }
   }
   
   return result;

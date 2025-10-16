@@ -1,31 +1,34 @@
 # Scraper Backend Configuration
 
-This project now supports **multiple scraping backends** with automatic failover. You can choose between:
+This project supports **multiple scraping backends** for different use cases.
 
-1. **Puppeteer** (Chromium-based, local) - Default
-2. **Playwright** (Multi-browser, local)
-3. **Firecrawl** (Cloud service, paid)
+## Available Backends
+
+1. **Fetch** (Default) - Simple HTTP requests, works in edge functions ✅
+2. **Firecrawl** (Recommended for JS sites) - Cloud service with full JS support ✅
+3. **Puppeteer** ⚠️ - Does NOT work in Supabase edge functions
+4. **Playwright** ⚠️ - Does NOT work in Supabase edge functions
 
 ## Quick Start
 
-### Set Your Preferred Backend
+### Default Configuration (Fetch)
 
-Add this environment variable to your Supabase Edge Functions:
+No setup required! The scraper uses simple HTTP fetch by default, which works in Supabase edge functions.
 
-```bash
-# Choose one:
-SCRAPER_BACKEND=puppeteer   # Default - Uses Chromium locally
-SCRAPER_BACKEND=playwright  # Uses Playwright locally
-SCRAPER_BACKEND=firecrawl   # Uses Firecrawl cloud service (requires API key)
-```
+**Limitations:**
+- ❌ Does NOT execute JavaScript
+- ❌ Won't see dynamically loaded content
+- ✅ Fast and reliable for server-rendered HTML
+- ✅ No external dependencies
 
-### Configure Firecrawl (Optional Fallback)
+### For JavaScript-Heavy Sites (Firecrawl)
 
-If you want Firecrawl as a fallback when Puppeteer/Playwright fail:
+If you need to scrape sites that load content with JavaScript (like many modern SPAs):
 
 1. Get your API key from [Firecrawl](https://firecrawl.dev)
 2. Add to Supabase Edge Functions secrets:
    ```bash
+   SCRAPER_BACKEND=firecrawl
    FIRECRAWL_API_KEY=fc-your-api-key-here
    ```
 
@@ -33,24 +36,25 @@ If you want Firecrawl as a fallback when Puppeteer/Playwright fail:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SCRAPER_BACKEND` | `puppeteer` | Which backend to use: `puppeteer`, `playwright`, or `firecrawl` |
+| `SCRAPER_BACKEND` | `fetch` | Backend: `fetch` or `firecrawl` |
 | `SCRAPER_WAIT_TIME` | `5000` | Milliseconds to wait for JS rendering |
 | `SCRAPER_TIMEOUT` | `30000` | Max time for page load (ms) |
-| `SCRAPER_USER_AGENT` | Chrome 120 | User agent string |
 | `FIRECRAWL_API_KEY` | - | Required for Firecrawl backend |
 
 ## How It Works
 
 ### Automatic Failover
 
-If your primary backend (Puppeteer/Playwright) fails and you have `FIRECRAWL_API_KEY` set, the scraper will automatically fall back to Firecrawl.
+If your primary backend fails:
+1. Falls back to **Firecrawl** (if API key is set)
+2. Falls back to **fetch** as last resort
 
 ```typescript
 // Example usage in edge function
 import { scrapeUrl } from "../_shared/scraper.ts";
 
 const result = await scrapeUrl("https://example.com", {
-  backend: 'puppeteer', // Optional: override default
+  backend: 'fetch', // Optional: override default
   waitTime: 5000,
   timeout: 30000,
 });
@@ -72,7 +76,7 @@ const urls = [
 ];
 
 // Scrape 2 URLs at a time
-const results = await scrapeUrls(urls, { backend: 'puppeteer' }, 2);
+const results = await scrapeUrls(urls, { backend: 'fetch' }, 2);
 ```
 
 ## Functions Updated
@@ -81,96 +85,104 @@ The following edge functions now use the universal scraper:
 
 1. ✅ **restaurant-opening-scraper** - Restaurant opening scraper
 2. ✅ **firecrawl-scraper** - Generic event/content scraper
-3. 🔄 **ai-crawler** - AI content crawler (uses native fetch, no changes needed)
-4. 🔄 **scrape-events** - Calls firecrawl-scraper (automatically uses new system)
+3. ✅ **ai-crawler** - AI content crawler
 
 ## Testing Different Backends
 
-You can test each backend from the admin dashboard:
+### Test with fetch (default):
+```bash
+curl -X POST 'https://YOUR_PROJECT.supabase.co/functions/v1/firecrawl-scraper' \
+  -H 'Authorization: Bearer YOUR_ANON_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.catchdesmoines.com/events/",
+    "category": "events"
+  }'
+```
 
-1. Go to **Admin** → **Scraping** tab
-2. Click "Run Restaurant Scraper" or other scraping jobs
-3. Check the logs to see which backend was used
-
-To change backends:
-
-1. Go to Supabase Dashboard
-2. Navigate to **Edge Functions** → **Secrets**
-3. Update `SCRAPER_BACKEND` value
-4. Save and retry your scraping job
+### Test with Firecrawl:
+```bash
+# First set FIRECRAWL_API_KEY in edge function secrets, then:
+curl -X POST 'https://YOUR_PROJECT.supabase.co/functions/v1/firecrawl-scraper' \
+  -H 'Authorization: Bearer YOUR_ANON_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "url": "https://www.catchdesmoines.com/events/",
+    "category": "events",
+    "scraperBackend": "firecrawl"
+  }'
+```
 
 ## Performance Comparison
 
-| Backend | Speed | JS Support | Reliability | Cost |
-|---------|-------|------------|-------------|------|
-| Puppeteer | Fast | Excellent | High | Free |
-| Playwright | Fast | Excellent | Very High | Free |
-| Firecrawl | Medium | Excellent | High | $$ |
+| Backend | Speed | JS Support | Reliability | Cost | Works in Edge Functions |
+|---------|-------|------------|-------------|------|------------------------|
+| Fetch | Very Fast | ❌ None | High | Free | ✅ Yes |
+| Firecrawl | Medium | ✅ Full | High | $$ | ✅ Yes |
+| Puppeteer | - | - | - | - | ❌ No (requires Chrome binary) |
+| Playwright | - | - | - | - | ❌ No (requires browser binary) |
 
 ## Cost Comparison
 
-- **Puppeteer/Playwright**: Free, runs on your Supabase functions
-- **Firecrawl**: Paid API, $0.50 per 1000 pages (as of 2024)
+- **Fetch**: Free, runs on your Supabase functions
+- **Firecrawl**: Paid API, ~$0.50 per 1000 pages (varies by plan)
 
 ## Troubleshooting
 
-### "Browser executable not found"
+### "0 events found" or empty results
 
-If Puppeteer/Playwright fails to launch:
-1. Set `SCRAPER_BACKEND=firecrawl` temporarily
-2. Check Supabase function logs for details
-3. Contact Supabase support if issue persists
+This usually means the site uses JavaScript to load content. Solutions:
+
+1. **Switch to Firecrawl**:
+   ```bash
+   SCRAPER_BACKEND=firecrawl
+   FIRECRAWL_API_KEY=your-key
+   ```
+
+2. **Check the HTML**: The fetch backend only gets the initial HTML response. If the site loads data via JavaScript after page load, you won't see that content.
 
 ### Firecrawl API errors
 
-- **402 Payment Required**: Out of credits, add more or switch to Puppeteer
+- **402 Payment Required**: Out of credits, add more or switch to fetch (for static sites)
 - **429 Rate Limit**: Too many requests, reduce concurrency or wait
 - **401 Unauthorized**: Check your `FIRECRAWL_API_KEY`
 
-### Puppeteer/Playwright timeout
+### Why don't Puppeteer/Playwright work?
 
-Increase timeouts:
-```bash
-SCRAPER_TIMEOUT=60000  # 60 seconds
-SCRAPER_WAIT_TIME=10000  # 10 seconds
-```
+Supabase edge functions run in isolated Deno environments that don't have:
+- Chrome/Chromium binary
+- Browser automation capabilities
+- Graphics rendering support
 
-## Migration from Firecrawl
+For browser automation, you need:
+- A cloud service like Firecrawl
+- Your own server running Puppeteer/Playwright
+- Or use the fetch backend for static content
 
-If you were previously using only Firecrawl:
+## When to Use Each Backend
 
-1. **No action required** - System defaults to Puppeteer
-2. **Keep Firecrawl as fallback** - Leave `FIRECRAWL_API_KEY` set
-3. **Save money** - Remove `FIRECRAWL_API_KEY` to use only local scrapers
+### Use Fetch (Default) When:
+- Site content is server-rendered (traditional HTML)
+- You're scraping static pages
+- Speed is critical
+- You want to minimize costs
 
-## Advanced Configuration
+### Use Firecrawl When:
+- Site uses React/Vue/Angular with client-side rendering
+- Content loads via AJAX/XHR after page load
+- You need to interact with the page (click buttons, etc.)
+- Site requires JavaScript to display content
 
-### Per-Function Backend Selection
+## Migration from Firecrawl-Only Setup
 
-You can override the backend for specific scraping jobs:
+If you were using only Firecrawl before:
 
-```typescript
-// In your edge function
-const result = await scrapeUrl(url, {
-  backend: 'playwright', // Override default
-  waitForSelector: '.event-list', // Wait for specific element
-  waitTime: 8000,
-});
-```
-
-### Custom User Agents
-
-Set custom user agent for specific sites:
-
-```typescript
-const result = await scrapeUrl(url, {
-  userAgent: 'MyBot/1.0 (+https://mysite.com/bot)',
-});
-```
+1. **Try fetch first** - Many sites work fine with it
+2. **Keep Firecrawl as fallback** - Set `FIRECRAWL_API_KEY` for automatic fallback
+3. **Save money** - Use fetch by default, Firecrawl only when needed
 
 ## Support
 
 - **Scraper Issues**: Check function logs in Supabase Dashboard
 - **Firecrawl Issues**: Visit [Firecrawl Docs](https://docs.firecrawl.dev)
-- **Puppeteer Docs**: [puppeteer.dev](https://pptr.dev/)
-- **Playwright Docs**: [playwright.dev](https://playwright.dev/)
+- **Edge Function Limits**: See [Supabase Docs](https://supabase.com/docs/guides/functions/limits)

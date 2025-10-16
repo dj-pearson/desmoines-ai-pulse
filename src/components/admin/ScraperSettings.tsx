@@ -9,32 +9,39 @@ import { Settings, Zap, DollarSign, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function ScraperSettings() {
-  const [backend, setBackend] = useState<string>("puppeteer");
+  const [backend, setBackend] = useState<string>("fetch");
   const [waitTime, setWaitTime] = useState<string>("5000");
   const [timeout, setTimeout] = useState<string>("30000");
   const { toast } = useToast();
 
   const backendInfo = {
-    puppeteer: {
-      name: "Puppeteer",
+    fetch: {
+      name: "Fetch",
       icon: <Zap className="h-4 w-4" />,
-      description: "Fast, Chromium-based, runs locally",
+      description: "Simple HTTP requests, works in edge functions",
       cost: "Free",
-      status: "Recommended",
-    },
-    playwright: {
-      name: "Playwright",
-      icon: <Zap className="h-4 w-4" />,
-      description: "Very reliable, multi-browser support",
-      cost: "Free",
-      status: "Alternative",
+      status: "Default",
     },
     firecrawl: {
       name: "Firecrawl",
       icon: <DollarSign className="h-4 w-4" />,
-      description: "Cloud-based, reliable, requires credits",
+      description: "Cloud service with full JS support",
       cost: "$0.50/1000 pages",
-      status: "Fallback",
+      status: "For JS Sites",
+    },
+    puppeteer: {
+      name: "Puppeteer",
+      icon: <Zap className="h-4 w-4" />,
+      description: "⚠️ Does NOT work in Supabase edge functions",
+      cost: "N/A",
+      status: "Not Supported",
+    },
+    playwright: {
+      name: "Playwright",
+      icon: <Zap className="h-4 w-4" />,
+      description: "⚠️ Does NOT work in Supabase edge functions",
+      cost: "N/A",
+      status: "Not Supported",
     },
   };
 
@@ -80,22 +87,28 @@ export function ScraperSettings() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="puppeteer">
+              <SelectItem value="fetch">
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
-                  Puppeteer (Default)
-                </div>
-              </SelectItem>
-              <SelectItem value="playwright">
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4" />
-                  Playwright
+                  Fetch (Default)
                 </div>
               </SelectItem>
               <SelectItem value="firecrawl">
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4" />
-                  Firecrawl (Paid)
+                  Firecrawl (For JS Sites)
+                </div>
+              </SelectItem>
+              <SelectItem value="puppeteer" disabled>
+                <div className="flex items-center gap-2 opacity-50">
+                  <Zap className="h-4 w-4" />
+                  Puppeteer (Not Supported)
+                </div>
+              </SelectItem>
+              <SelectItem value="playwright" disabled>
+                <div className="flex items-center gap-2 opacity-50">
+                  <Zap className="h-4 w-4" />
+                  Playwright (Not Supported)
                 </div>
               </SelectItem>
             </SelectContent>
@@ -173,8 +186,8 @@ export function ScraperSettings() {
                   Automatic Failover Enabled
                 </h4>
                 <p className="text-xs text-green-700 dark:text-green-300">
-                  If Puppeteer or Playwright fails and you have FIRECRAWL_API_KEY configured,
-                  the system will automatically fall back to Firecrawl to ensure scraping succeeds.
+                  If fetch fails and you have FIRECRAWL_API_KEY configured,
+                  the system will automatically fall back to Firecrawl for JavaScript-heavy sites.
                 </p>
               </div>
             </div>
