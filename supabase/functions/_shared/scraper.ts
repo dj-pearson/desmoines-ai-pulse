@@ -76,7 +76,7 @@ async function scrapeWithBrowserless(
           waitUntil: 'networkidle2',
           timeout: config.timeout,
         },
-        waitFor: config.waitTime,
+        waitForTimeout: config.waitTime,
         userAgent: config.userAgent,
       }),
     });
