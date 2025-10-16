@@ -52,6 +52,7 @@ import {
   Calendar,
   Building,
   Utensils,
+  UtensilsCrossed,
   Camera,
   Play,
   Globe,
@@ -1091,6 +1092,53 @@ export default function Admin() {
               <div className="space-y-6">
                 {/* Cron Monitor */}
                 <CronMonitorSimple />
+
+                {/* Restaurant Opening Scraper */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <UtensilsCrossed className="h-5 w-5 text-orange-600" />
+                      Restaurant Opening Scraper
+                    </CardTitle>
+                    <CardDescription>
+                      Automatically discover and add new restaurant openings to the database
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const { data, error } = await supabase.functions.invoke(
+                              "restaurant-opening-scraper",
+                              { body: {} }
+                            );
+                            if (error) throw error;
+                            toast.success("Restaurant Scraper Complete", {
+                              description: `Found ${data.totalFound} restaurants, Inserted ${data.inserted}, Updated ${data.updated}`,
+                            });
+                          } catch (error: any) {
+                            toast.error("Scraper Error", {
+                              description: error.message,
+                            });
+                          }
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <UtensilsCrossed className="h-4 w-4" />
+                        Run Restaurant Scraper
+                      </Button>
+                      <div className="text-sm text-muted-foreground">
+                        <p>This will scrape the following sources:</p>
+                        <ul className="list-disc list-inside mt-2 space-y-1">
+                          <li>Des Moines Register - Restaurant Openings</li>
+                          <li>Catch Des Moines - Restaurants</li>
+                          <li>Eater Des Moines - New Restaurants</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Original Scraping Management */}
                 <Card>
