@@ -43,7 +43,7 @@ export function getScraperConfig(): ScraperConfig {
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     firecrawlApiKey: Deno.env.get('FIRECRAWL_API_KEY'),
     browserlessApiKey: browserlessKey,
-    browserlessUrl: Deno.env.get('BROWSERLESS_URL') || 'https://chrome.browserless.io',
+    browserlessUrl: Deno.env.get('BROWSERLESS_URL') || 'https://production-sfo.browserless.io',
   };
 }
 
