@@ -65,21 +65,30 @@ async function scrapeWithBrowserless(
     
     const browserlessUrl = `${config.browserlessUrl}/content?token=${config.browserlessApiKey}`;
     
-    const response = await fetch(browserlessUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url,
-        gotoOptions: {
-          waitUntil: 'networkidle2',
-          timeout: config.timeout,
+    let response: Response;
+    for (let attempt = 1; ; attempt++) {
+      response = await fetch(browserlessUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        waitForTimeout: config.waitTime,
-        userAgent: config.userAgent,
-      }),
-    });
+        body: JSON.stringify({
+          url,
+          gotoOptions: {
+            waitUntil: 'networkidle2',
+            timeout: config.timeout,
+          },
+          waitForTimeout: config.waitTime,
+          headers: {
+            'User-Agent': config.userAgent || '',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        }),
+      });
+      if (response.status !== 429 || attempt >= 3) break;
+      console.log(`⏳ Browserless rate limited (429). Retry #${attempt}...`);
+      await new Promise((r) => setTimeout(r, attempt * 1000));
+    }
     
     if (!response.ok) {
       const errorText = await response.text();
