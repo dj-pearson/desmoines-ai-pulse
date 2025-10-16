@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -233,7 +234,7 @@ async function extractVisitWebsiteUrl(
     const isExcluded = (url: string) =>
       excludeDomains.some((d) => url.toLowerCase().includes(d.toLowerCase()));
 
-    // Use DOMParser to properly parse HTML (available in Deno)
+    // Use DOMParser from deno_dom to properly parse HTML
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
     
@@ -245,7 +246,7 @@ async function extractVisitWebsiteUrl(
     console.log("Successfully parsed HTML document");
 
     // Strategy: Find all anchor tags and check their text content for "Visit Website"
-    const allAnchors = doc.querySelectorAll("a");
+    const allAnchors = doc.querySelectorAll("a") as NodeListOf<HTMLAnchorElement>;
     console.log(`Found ${allAnchors.length} total anchor tags on page`);
 
     let foundCount = 0;

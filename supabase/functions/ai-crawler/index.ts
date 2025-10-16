@@ -10,6 +10,7 @@ import {
   format as dateFnsFormat,
   parseISO,
 } from "https://esm.sh/date-fns@2.30.0";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
@@ -201,7 +202,7 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
     const isExcluded = (url: string) =>
       excludeDomains.some((d) => url.toLowerCase().includes(d.toLowerCase()));
 
-    // Use DOMParser to properly parse HTML (available in Deno)
+    // Use DOMParser from deno_dom to properly parse HTML
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
     
@@ -213,7 +214,7 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
     console.log("✅ Successfully parsed HTML document");
 
     // Strategy: Find all anchor tags and check their text content for "Visit Website"
-    const allAnchors = doc.querySelectorAll("a");
+    const allAnchors = doc.querySelectorAll("a") as NodeListOf<HTMLAnchorElement>;
     console.log(`📊 Found ${allAnchors.length} total anchor tags on page`);
 
     let foundCount = 0;
