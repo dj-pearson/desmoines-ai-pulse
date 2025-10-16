@@ -1,5 +1,8 @@
 project_id = "wtkhfqpmcegzcbngroui"
 
+[functions.restaurant-opening-scraper]
+verify_jwt = false
+
 [functions.test-ai-model]
 verify_jwt = true
 
