@@ -12,6 +12,7 @@ import {
 } from "https://esm.sh/date-fns@2.30.0";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -150,24 +151,19 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
   try {
     console.log(`🔍 Extracting Visit Website URL from: ${eventUrl}`);
 
-    const response = await fetch(eventUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        Connection: "keep-alive",
-      },
-      signal: AbortSignal.timeout(15000),
+    // Use universal scraper for better JavaScript rendering
+    const scrapeResult = await scrapeUrl(eventUrl, {
+      waitTime: 5000,
+      timeout: 15000,
     });
 
-    if (!response.ok) {
-      console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
+    if (!scrapeResult.success || !scrapeResult.html) {
+      console.error(`❌ Failed to scrape: ${scrapeResult.error}`);
       return null;
     }
 
-    const html = await response.text();
+    const html = scrapeResult.html;
+    console.log(`✅ Scraped ${html.length} chars using ${scrapeResult.backend} (took ${scrapeResult.duration}ms)`);
 
     // Define excluded domains
     const excludeDomains = [
@@ -1372,71 +1368,69 @@ Deno.serve(async (req) => {
     let bestUrl = url;
     let maxEventContent = 0;
 
-    // Try each URL to find the one with the most event content
-    for (const tryUrl of urlsToTry) {
+    // Use universal scraper to fetch URLs with JavaScript rendering
+    console.log(`📄 Scraping ${urlsToTry.length} URLs with Puppeteer/Playwright...`);
+    const scrapeResults = await scrapeUrls(urlsToTry, {
+      waitTime: 5000,
+      timeout: 30000,
+    }, 2); // Scrape 2 at a time
+
+    // Try each result to find the one with the most event content
+    for (let i = 0; i < scrapeResults.length; i++) {
+      const result = scrapeResults[i];
+      const tryUrl = urlsToTry[i];
+      
       try {
-        console.log(`📄 Trying URL: ${tryUrl}`);
+        console.log(`📄 Processing result from: ${tryUrl}`);
 
-        const response = await fetch(tryUrl, {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            Accept:
-              "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            DNT: "1",
-            Connection: "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-          },
-        });
+        if (!result.success || !result.html) {
+          console.log(`❌ Failed to scrape ${tryUrl}: ${result.error}`);
+          continue;
+        }
 
-        if (response.ok) {
-          const html = await response.text();
+        const html = result.html;
+        console.log(`✅ Got ${html.length} chars from ${tryUrl} using ${result.backend} (took ${result.duration}ms)`);
 
-          // Enhanced scoring for CatchDesMoines-style content
-          const eventKeywords = (
-            html.match(
-              /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi
-            ) || []
-          ).length;
-          const venueKeywords = (
-            html.match(
-              /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi
-            ) || []
-          ).length;
-          const dateKeywords = (
-            html.match(
-              /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi
-            ) || []
-          ).length;
-          const titleKeywords = (
-            html.match(
-              /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
-            ) || []
-          ).length;
+        // Enhanced scoring for CatchDesMoines-style content
+        const eventKeywords = (
+          html.match(
+            /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi
+          ) || []
+        ).length;
+        const venueKeywords = (
+          html.match(
+            /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi
+          ) || []
+        ).length;
+        const dateKeywords = (
+          html.match(
+            /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi
+          ) || []
+        ).length;
+        const titleKeywords = (
+          html.match(
+            /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
+          ) || []
+        ).length;
 
-          const totalScore =
-            eventKeywords +
-            venueKeywords * 2 +
-            dateKeywords * 1.5 +
-            titleKeywords * 3;
+        const totalScore =
+          eventKeywords +
+          venueKeywords * 2 +
+          dateKeywords * 1.5 +
+          titleKeywords * 3;
 
-          console.log(
-            `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
-          );
+        console.log(
+          `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
+        );
 
-          if (totalScore > maxEventContent) {
-            maxEventContent = totalScore;
-            bestHtml = html;
-            bestUrl = tryUrl;
-            console.log(`✅ New best URL: ${tryUrl} (score: ${totalScore})`);
-          }
-        } else {
-          console.log(`❌ Failed to fetch ${tryUrl}: ${response.status}`);
+        if (totalScore > maxEventContent) {
+          maxEventContent = totalScore;
+          bestHtml = html;
+          bestUrl = tryUrl;
+          console.log(`✅ New best URL: ${tryUrl} (score: ${totalScore})`);
         }
       } catch (error) {
-        console.log(`⚠️ Error fetching ${tryUrl}:`, error.message);
+        console.log(`⚠️ Error processing ${tryUrl}:`, error.message);
       }
     }
 
