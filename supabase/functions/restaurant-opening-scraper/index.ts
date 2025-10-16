@@ -247,38 +247,98 @@ FORMAT AS JSON ARRAY ONLY - no other text:
         // Insert or update restaurants in database
         for (const restaurant of restaurants) {
           try {
-            // Check if restaurant already exists (by name and location)
-            const { data: existing } = await supabase
+            // Check if restaurant already exists (by name AND similar location)
+            const { data: existingList } = await supabase
               .from('restaurants')
-              .select('id, status')
-              .ilike('name', restaurant.name)
-              .maybeSingle();
+              .select('id, name, location, status, opening_date, opening_timeframe')
+              .ilike('name', restaurant.name);
+
+            // Find best match considering location similarity
+            let existing = null;
+            if (existingList && existingList.length > 0) {
+              // If location matches or is very similar, it's likely the same restaurant
+              const locationMatch = existingList.find(r => {
+                const newLoc = (restaurant.location || '').toLowerCase();
+                const existLoc = (r.location || '').toLowerCase();
+                // Check if locations contain similar city/area names
+                return existLoc.includes(newLoc.split(',')[0]) || 
+                       newLoc.includes(existLoc.split(',')[0]) ||
+                       existLoc === newLoc;
+              });
+              existing = locationMatch || existingList[0]; // Default to first if no location match
+            }
 
             if (existing) {
-              // Update existing restaurant
-              const { error: updateError } = await supabase
-                .from('restaurants')
-                .update({
-                  description: restaurant.description || existing.description,
-                  location: restaurant.location || existing.location,
-                  cuisine: restaurant.cuisine || existing.cuisine,
-                  opening_date: restaurant.opening_date || existing.opening_date,
-                  opening_timeframe: restaurant.opening_timeframe || existing.opening_timeframe,
-                  status: restaurant.status || existing.status,
-                  source_url: restaurant.source_url || existing.source_url,
-                  phone: restaurant.phone || existing.phone,
-                  website: restaurant.website || existing.website,
-                  price_range: restaurant.price_range || existing.price_range,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq('id', existing.id);
+              // Define status hierarchy (lower number = earlier in lifecycle)
+              const statusHierarchy: Record<string, number> = {
+                'announced': 1,
+                'opening_soon': 2,
+                'newly_opened': 3,
+                'open': 4,
+              };
 
-              if (updateError) {
-                console.error(`❌ Error updating restaurant ${restaurant.name}:`, updateError);
-                errors.push(`Failed to update ${restaurant.name}: ${updateError.message}`);
+              const existingStatusLevel = statusHierarchy[existing.status] || 0;
+              const newStatusLevel = statusHierarchy[restaurant.status] || 0;
+
+              // Determine if we should update
+              const shouldUpdate = 
+                // Status is elevated (announced -> opening_soon -> newly_opened -> open)
+                newStatusLevel > existingStatusLevel ||
+                // Opening date changed (only update if new date exists and is different)
+                (restaurant.opening_date && existing.opening_date !== restaurant.opening_date) ||
+                // Opening timeframe changed
+                (restaurant.opening_timeframe && existing.opening_timeframe !== restaurant.opening_timeframe) ||
+                // New information added (description, website, etc.)
+                (restaurant.description && !existing.description) ||
+                (restaurant.website && !existing.website);
+
+              if (shouldUpdate) {
+                // Build update object with smart merging
+                const updateData: any = {
+                  updated_at: new Date().toISOString(),
+                };
+
+                // Update status if elevated or if current is null
+                if (newStatusLevel > existingStatusLevel || !existing.status) {
+                  updateData.status = restaurant.status;
+                }
+
+                // Update opening date if changed
+                if (restaurant.opening_date && existing.opening_date !== restaurant.opening_date) {
+                  updateData.opening_date = restaurant.opening_date;
+                }
+
+                // Update opening timeframe if changed
+                if (restaurant.opening_timeframe && existing.opening_timeframe !== restaurant.opening_timeframe) {
+                  updateData.opening_timeframe = restaurant.opening_timeframe;
+                }
+
+                // Add new information (don't overwrite existing)
+                if (restaurant.description) updateData.description = restaurant.description;
+                if (restaurant.cuisine) updateData.cuisine = restaurant.cuisine;
+                if (restaurant.location) updateData.location = restaurant.location;
+                if (restaurant.source_url) updateData.source_url = restaurant.source_url;
+                if (restaurant.phone) updateData.phone = restaurant.phone;
+                if (restaurant.website) updateData.website = restaurant.website;
+                if (restaurant.price_range) updateData.price_range = restaurant.price_range;
+
+                const { error: updateError } = await supabase
+                  .from('restaurants')
+                  .update(updateData)
+                  .eq('id', existing.id);
+
+                if (updateError) {
+                  console.error(`❌ Error updating restaurant ${restaurant.name}:`, updateError);
+                  errors.push(`Failed to update ${restaurant.name}: ${updateError.message}`);
+                } else {
+                  const changes = [];
+                  if (updateData.status) changes.push(`status: ${existing.status} → ${restaurant.status}`);
+                  if (updateData.opening_date) changes.push(`date: ${existing.opening_date || 'none'} → ${restaurant.opening_date}`);
+                  console.log(`✅ Updated: ${restaurant.name} (${changes.join(', ')})`);
+                  totalUpdated++;
+                }
               } else {
-                console.log(`✅ Updated: ${restaurant.name}`);
-                totalUpdated++;
+                console.log(`⏭️ Skipped: ${restaurant.name} (no significant changes)`);
               }
             } else {
               // Insert new restaurant
