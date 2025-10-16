@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { scrapeUrl } from "../_shared/scraper.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +11,6 @@ const corsHeaders = {
 // Initialize Supabase client
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY')!;
 const claudeApiKey = Deno.env.get('CLAUDE_API')!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -73,32 +73,21 @@ serve(async (req) => {
       console.log(`🌐 Scraping source: ${source.name} (${source.url})`);
 
       try {
-        // Use Firecrawl to get content
-        const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${firecrawlApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            url: source.url,
-            formats: ['markdown', 'html'],
-            waitFor: 5000,
-            timeout: 30000,
-          }),
+        // Use universal scraper (Puppeteer/Playwright/Firecrawl)
+        const scrapeResult = await scrapeUrl(source.url, {
+          waitTime: 5000,
+          timeout: 30000,
         });
 
-        if (!firecrawlResponse.ok) {
-          const errorText = await firecrawlResponse.text();
-          console.error(`❌ Firecrawl API error for ${source.url}: ${firecrawlResponse.status} - ${errorText}`);
-          errors.push(`Failed to scrape ${source.name}: ${errorText}`);
+        if (!scrapeResult.success) {
+          console.error(`❌ Scraping error for ${source.url}: ${scrapeResult.error}`);
+          errors.push(`Failed to scrape ${source.name}: ${scrapeResult.error}`);
           continue;
         }
 
-        const firecrawlData = await firecrawlResponse.json();
-        const content = firecrawlData.data?.markdown || firecrawlData.data?.html || '';
+        const content = scrapeResult.markdown || scrapeResult.text || scrapeResult.html || '';
         
-        console.log(`📄 Firecrawl returned ${content.length} characters from ${source.name}`);
+        console.log(`📄 ${scrapeResult.backend} returned ${content.length} characters from ${source.name} (took ${scrapeResult.duration}ms)`);
 
         if (!content || content.length < 100) {
           console.error(`❌ No usable content returned from ${source.url}`);

@@ -3,6 +3,21 @@ project_id = "wtkhfqpmcegzcbngroui"
 [functions.restaurant-opening-scraper]
 verify_jwt = false
 
+[functions.firecrawl-scraper]
+verify_jwt = false
+
+[functions.ai-crawler]
+verify_jwt = false
+
+[functions.analyze-competitor]
+verify_jwt = false
+
+[functions.bulk-enhance-events]
+verify_jwt = false
+
+[functions.log-content-metrics]
+verify_jwt = false
+
 [functions.test-ai-model]
 verify_jwt = true
 
