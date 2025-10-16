@@ -253,19 +253,29 @@ FORMAT AS JSON ARRAY ONLY - no other text:
               .select('id, name, location, status, opening_date, opening_timeframe')
               .ilike('name', restaurant.name);
 
-            // Find best match considering location similarity
+            // Find match only if BOTH name and location match (same restaurant in same location)
+            // If name matches but location is different, treat as new location (allow it)
             let existing = null;
             if (existingList && existingList.length > 0) {
-              // If location matches or is very similar, it's likely the same restaurant
+              // Extract city/area from locations for comparison
+              const newLoc = (restaurant.location || '').toLowerCase();
+              const newCity = newLoc.split(',')[0].trim(); // Get city/area part
+              
+              // Find restaurant with matching name AND location
               const locationMatch = existingList.find(r => {
-                const newLoc = (restaurant.location || '').toLowerCase();
                 const existLoc = (r.location || '').toLowerCase();
-                // Check if locations contain similar city/area names
-                return existLoc.includes(newLoc.split(',')[0]) || 
-                       newLoc.includes(existLoc.split(',')[0]) ||
+                const existCity = existLoc.split(',')[0].trim();
+                
+                // Match if cities are the same or one contains the other
+                return existCity === newCity || 
+                       existCity.includes(newCity) || 
+                       newCity.includes(existCity) ||
                        existLoc === newLoc;
               });
-              existing = locationMatch || existingList[0]; // Default to first if no location match
+              
+              // Only update if we found a location match (same restaurant in same city)
+              // If no location match, it's a new location - allow as new entry
+              existing = locationMatch || null;
             }
 
             if (existing) {
