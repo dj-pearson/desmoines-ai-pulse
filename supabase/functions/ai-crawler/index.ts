@@ -168,86 +168,107 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 
     const html = await response.text();
 
-    // Strategy 1: Look for the "Visit Website" button specifically in bottom-actions
-    // Pattern: <a href="URL" target="_blank" class="action-item">Visit Website</a>
-    const visitWebsitePattern =
-      /<a\s+href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/i;
-    let match = html.match(visitWebsitePattern);
-
-    if (match && match[1]) {
-      const url = match[1];
-      if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
-        console.log(`✅ Found via action-item button: ${url}`);
-        return url;
-      }
-    }
-
-    // Strategy 2: Look for any link with "Visit Website" text
-    const visitLinkPattern =
-      /<a\s+href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/gi;
-    const allMatches = html.matchAll(visitLinkPattern);
-
-    for (const linkMatch of allMatches) {
-      const url = linkMatch[1];
-      if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
-        console.log(`✅ Found via Visit Website link: ${url}`);
-        return url;
-      }
-    }
-
-    // Strategy 3: Look in the bottom-actions div for any external link
-    const bottomActionsPattern =
-      /<div\s+class=["']bottom-actions["'][^>]*>([\s\S]*?)<\/div>/i;
-    match = html.match(bottomActionsPattern);
-
-    if (match) {
-      const bottomActionsHtml = match[1];
-      const linkPattern = /<a\s+href=["']([^"']+)["']/gi;
-      const links = bottomActionsHtml.matchAll(linkPattern);
-
-      for (const link of links) {
-        const url = link[1];
-        if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
-          console.log(`✅ Found in bottom-actions: ${url}`);
-          return url;
-        }
-      }
-    }
-
-    // Strategy 4: Universal fallback - find first external link with "visit" or "website" indicators
+    // Define excluded domains
     const excludeDomains = [
       "catchdesmoines.com",
-      "facebook.com/catchdesmoines",
-      "twitter.com/catchdesmoines",
-      "instagram.com/catchdesmoines",
+      "simpleview.com",
+      "simpleviewinc.com",
+      "assets.simpleviewinc.com",
+      "simpleviewcrm.com",
+      "simpleviewcms.com",
+      "extranet.simpleview",
+      "vimeo.com/api",
+      "vimeo.com/player",
+      "player.vimeo.com",
+      "youtube.com/embed",
+      "youtube.com/player",
+      "youtube.com/watch",
+      "facebook.com",
+      "twitter.com",
+      "instagram.com",
       "google.com",
       "maps.google.com",
-      "simpleviewcrm.com",
-      "simpleviewinc.com",
+      "cloudflare.com",
+      "googleapis.com",
+      "gstatic.com",
+      "googletagmanager.com",
+      "doubleclick.net",
+      "mailto:",
+      "tel:",
+      "#",
     ];
 
-    const allLinkPattern =
-      /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    const allLinks = html.matchAll(allLinkPattern);
+    const isExcluded = (url: string) =>
+      excludeDomains.some((d) => url.toLowerCase().includes(d.toLowerCase()));
 
-    for (const linkMatch of allLinks) {
-      const url = linkMatch[1];
-      const linkText = linkMatch[2].toLowerCase();
+    // Use DOMParser to properly parse HTML (available in Deno)
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    
+    if (!doc) {
+      console.error("❌ Failed to parse HTML");
+      return null;
+    }
 
-      if (url.startsWith("http")) {
-        const shouldExclude = excludeDomains.some((domain) =>
-          url.includes(domain)
-        );
+    console.log("✅ Successfully parsed HTML document");
 
-        if (
-          !shouldExclude &&
-          (linkText.includes("visit") ||
-            linkText.includes("website") ||
-            linkText.includes("official"))
-        ) {
-          console.log(`✅ Found via universal fallback: ${url}`);
-          return url;
+    // Strategy: Find all anchor tags and check their text content for "Visit Website"
+    const allAnchors = doc.querySelectorAll("a");
+    console.log(`📊 Found ${allAnchors.length} total anchor tags on page`);
+
+    let foundCount = 0;
+    for (const anchor of allAnchors) {
+      const href = anchor.getAttribute("href");
+      const textContent = anchor.textContent?.trim().toLowerCase() || "";
+      
+      // Check if this anchor contains "visit website" text
+      if (textContent.includes("visit") && textContent.includes("website")) {
+        foundCount++;
+        console.log(`🔗 Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent}"`);
+        
+        if (!href) {
+          console.log("  ⏭️ Skipped: no href attribute");
+          continue;
         }
+
+        // Normalize URL
+        let normalizedUrl = href.trim();
+        if (normalizedUrl.startsWith("//")) {
+          normalizedUrl = `https:${normalizedUrl}`;
+        } else if (normalizedUrl.startsWith("/")) {
+          // Relative URL - make absolute
+          const baseUrl = new URL(eventUrl);
+          normalizedUrl = `${baseUrl.origin}${normalizedUrl}`;
+        }
+
+        // Check if it's a valid external URL
+        if (!normalizedUrl.match(/^https?:\/\//i)) {
+          console.log(`  ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
+          continue;
+        }
+
+        // Check if URL is excluded
+        if (isExcluded(normalizedUrl)) {
+          console.log(`  ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
+          continue;
+        }
+
+        console.log(`  ✅ Found valid "Visit Website" URL: ${normalizedUrl}`);
+        return normalizedUrl;
+      }
+    }
+
+    console.log(`⚠️ No valid "Visit Website" link found (checked ${foundCount} potential matches out of ${allAnchors.length} total anchors)`);
+    
+    // Fallback: Check for linkUrl in JSON embedded in the page
+    const linkUrlMatch = html.match(
+      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
+    );
+    if (linkUrlMatch) {
+      const url = linkUrlMatch[1].trim();
+      if (!isExcluded(url)) {
+        console.log("✅ Found linkUrl in JSON:", url);
+        return url;
       }
     }
 

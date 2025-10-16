@@ -109,7 +109,6 @@ async function extractVisitWebsiteUrl(
       signal: AbortSignal.timeout(12000), // 12 second timeout
     });
 
-    // Even if non-200, try to parse the body (some 410/404 pages still include useful HTML)
     if (!response.ok) {
       console.warn(
         `Non-2xx response for ${eventUrl}: ${response.status} ${response.statusText}`
@@ -118,7 +117,7 @@ async function extractVisitWebsiteUrl(
 
     const html = await response.text();
 
-    // Extract date/time information FIRST (needed for all returns)
+    // Extract date/time information
     let dateStr: string | null = null;
     let timeStr: string | null = null;
 
@@ -154,7 +153,7 @@ async function extractVisitWebsiteUrl(
       }
     }
 
-    // Define excluded domains (social, shorteners, host site & related CMS)
+    // Define excluded domains
     const excludeDomains = [
       "catchdesmoines.com",
       "simpleview.com",
@@ -163,7 +162,6 @@ async function extractVisitWebsiteUrl(
       "simpleviewcrm.com",
       "simpleviewcms.com",
       "extranet.simpleview",
-      // ⭐ VIDEO PLAYERS AND EMBEDS (CRITICAL FIX)
       "vimeo.com/api",
       "vimeo.com/player",
       "player.vimeo.com",
@@ -180,7 +178,6 @@ async function extractVisitWebsiteUrl(
       ".js$",
       ".css",
       ".json",
-      // CDNs/assets/fonts
       "cloudflare.com",
       "cdnjs.cloudflare.com",
       "static.cloudflareinsights.com",
@@ -197,7 +194,6 @@ async function extractVisitWebsiteUrl(
       "ajax.googleapis.com",
       "typekit.net",
       "use.typekit.net",
-      // Social & misc
       "facebook.com",
       "fb.com",
       "twitter.com",
@@ -213,19 +209,17 @@ async function extractVisitWebsiteUrl(
       "whatsapp.com",
       "telegram.org",
       "discord.com",
-      // Tracking, analytics, and ad networks
       "googletagmanager.com",
       "google-analytics.com",
       "analytics.google.com",
-      "doubleclick.net", // ⭐ Google DoubleClick ads (securepubads.g.doubleclick.net)
-      "securepubads", // ⭐ Ad serving domain
-      "googlesyndication.com", // Google AdSense
+      "doubleclick.net",
+      "securepubads",
+      "googlesyndication.com",
       "adservice.google.com",
       "googleadservices.com",
-      "2mdn.net", // DoubleClick media
+      "2mdn.net",
       "googleads.g.doubleclick.net",
       "pagead2.googlesyndication.com",
-      // Misc
       "google.com",
       "maps.google.com",
       "goo.gl",
@@ -236,108 +230,80 @@ async function extractVisitWebsiteUrl(
       "#",
     ];
 
-    const candidatesSet = new Set<string>();
+    const isExcluded = (url: string) =>
+      excludeDomains.some((d) => url.toLowerCase().includes(d.toLowerCase()));
 
-    // Helper: normalize protocol-relative URLs
-    const normalizeUrl = (url: string) => {
-      if (url.startsWith("//")) return `https:${url}`;
-      return url;
-    };
+    // Use DOMParser to properly parse HTML (available in Deno)
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    
+    if (!doc) {
+      console.error("Failed to parse HTML");
+      return { visitUrl: null, dateStr, timeStr };
+    }
 
-    // ⭐ STRATEGY: ONLY extract URLs explicitly marked as "Visit Website"
-    // Do NOT fall back to generic URL collection - if we can't find an explicit
-    // "Visit Website" link, return null. This prevents false positives.
+    console.log("Successfully parsed HTML document");
 
-    const isExcludedInline = (u: string) =>
-      excludeDomains.some((d) => u.toLowerCase().includes(d.toLowerCase()));
+    // Strategy: Find all anchor tags and check their text content for "Visit Website"
+    const allAnchors = doc.querySelectorAll("a");
+    console.log(`Found ${allAnchors.length} total anchor tags on page`);
 
-    // Method 1: Embedded JSON variable: linkUrl (most reliable)
+    let foundCount = 0;
+    for (const anchor of allAnchors) {
+      const href = anchor.getAttribute("href");
+      const textContent = anchor.textContent?.trim().toLowerCase() || "";
+      
+      // Check if this anchor contains "visit website" text
+      if (textContent.includes("visit") && textContent.includes("website")) {
+        foundCount++;
+        console.log(`Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent}"`);
+        
+        if (!href) {
+          console.log("  ⏭️ Skipped: no href attribute");
+          continue;
+        }
+
+        // Normalize URL
+        let normalizedUrl = href.trim();
+        if (normalizedUrl.startsWith("//")) {
+          normalizedUrl = `https:${normalizedUrl}`;
+        } else if (normalizedUrl.startsWith("/")) {
+          // Relative URL - make absolute
+          const baseUrl = new URL(eventUrl);
+          normalizedUrl = `${baseUrl.origin}${normalizedUrl}`;
+        }
+
+        // Check if it's a valid external URL
+        if (!normalizedUrl.match(/^https?:\/\//i)) {
+          console.log(`  ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
+          continue;
+        }
+
+        // Check if URL is excluded
+        if (isExcluded(normalizedUrl)) {
+          console.log(`  ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
+          continue;
+        }
+
+        console.log(`  ✅ Found valid "Visit Website" URL: ${normalizedUrl}`);
+        return { visitUrl: normalizedUrl, dateStr, timeStr };
+      }
+    }
+
+    console.log(`⚠️ No valid "Visit Website" link found (checked ${foundCount} potential matches out of ${allAnchors.length} total anchors)`);
+    
+    // Fallback: Check for linkUrl in JSON embedded in the page
     const linkUrlMatch = html.match(
       /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
     );
     if (linkUrlMatch) {
-      const u = normalizeUrl(linkUrlMatch[1].trim());
-      if (
-        (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
-        !isExcludedInline(u)
-      ) {
-        console.log("✅ Found linkUrl in JSON:", u);
-        return { visitUrl: u, dateStr, timeStr };
+      const url = linkUrlMatch[1].trim();
+      if (!isExcluded(url)) {
+        console.log("✅ Found linkUrl in JSON:", url);
+        return { visitUrl: url, dateStr, timeStr };
       }
     }
 
-    // Method 2: Bottom actions "Visit Website" button (CatchDesMoines template)
-    const bottomActionsMatch = html.match(
-      /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
-    );
-    if (bottomActionsMatch) {
-      console.log("📦 Found bottom-actions div");
-      const inner = bottomActionsMatch[1];
-      // Look for ALL links in bottom-actions with "Visit Website" text
-      const linkPattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-      let match;
-      let linkCount = 0;
-      while ((match = linkPattern.exec(inner)) !== null) {
-        linkCount++;
-        const u = normalizeUrl(match[1].trim());
-        const text = (match[2] || "").replace(/<[^>]*>/g, " ").trim();
-        console.log(`🔗 Link ${linkCount} in bottom-actions:`, u, "text:", text);
-        
-        if (isExcludedInline(u)) {
-          console.log("⏭️ Skipped excluded URL:", u);
-          continue;
-        }
-        
-        if (
-          /visit\s*website/i.test(text) &&
-          (/^https?:\/\//i.test(u) || u.startsWith("//"))
-        ) {
-          console.log("✅ Found 'Visit Website' button in bottom-actions:", u);
-          return { visitUrl: u, dateStr, timeStr };
-        }
-      }
-      console.log(`📊 Checked ${linkCount} links in bottom-actions, none matched`);
-    } else {
-      console.log("⚠️ No bottom-actions div found");
-    }
-
-    // Method 3: Look for action-item class with Visit Website
-    const actionItemPattern = /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    let actionMatch;
-    while ((actionMatch = actionItemPattern.exec(html)) !== null) {
-      const u = normalizeUrl(actionMatch[1].trim());
-      const text = (actionMatch[2] || "").replace(/<[^>]*>/g, " ").trim();
-      console.log("🎯 Found action-item link:", u, "text:", text);
-      
-      if (
-        /visit\s*website/i.test(text) &&
-        (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
-        !isExcludedInline(u)
-      ) {
-        console.log("✅ Found 'Visit Website' via action-item class:", u);
-        return { visitUrl: u, dateStr, timeStr };
-      }
-    }
-
-    // Method 4: Any anchor with "Visit Website" text anywhere on page (broader search)
-    const visitWebsitePattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    let anchorMatch;
-    while ((anchorMatch = visitWebsitePattern.exec(html)) !== null) {
-      const u = normalizeUrl(anchorMatch[1].trim());
-      const text = (anchorMatch[2] || "").replace(/<[^>]*>/g, " ").trim();
-      
-      if (
-        /visit\s*website/i.test(text) &&
-        (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
-        !isExcludedInline(u)
-      ) {
-        console.log("✅ Found 'Visit Website' anchor (fallback):", u);
-        return { visitUrl: u, dateStr, timeStr };
-      }
-    }
-
-    // ⚠️ No explicit "Visit Website" link found - return null
-    console.log("⚠️ No explicit 'Visit Website' link found on page");
     return { visitUrl: null, dateStr, timeStr };
   } catch (error) {
     console.error("Error extracting URL from", eventUrl, ":", error);
