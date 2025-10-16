@@ -30,8 +30,8 @@ export interface ScraperResult {
  * Get scraper configuration from environment or defaults
  */
 export function getScraperConfig(): ScraperConfig {
-  // Default to 'browserless' if API key is set, otherwise 'fetch'
-  const browserlessKey = Deno.env.get('BROWSERLESS_API_KEY');
+  // Support both BROWSERLESS_API and BROWSERLESS_API_KEY
+  const browserlessKey = Deno.env.get('BROWSERLESS_API') || Deno.env.get('BROWSERLESS_API_KEY');
   const defaultBackend = browserlessKey ? 'browserless' : 'fetch';
   const backend = (Deno.env.get('SCRAPER_BACKEND') || defaultBackend) as ScraperBackend;
   
