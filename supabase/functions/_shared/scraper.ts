@@ -3,7 +3,7 @@
  * Supports multiple scraping backends: Puppeteer, Playwright, and Firecrawl
  */
 
-export type ScraperBackend = 'fetch' | 'puppeteer' | 'playwright' | 'firecrawl';
+export type ScraperBackend = 'browserless' | 'fetch' | 'puppeteer' | 'playwright' | 'firecrawl';
 
 export interface ScraperConfig {
   backend: ScraperBackend;
@@ -12,6 +12,8 @@ export interface ScraperConfig {
   timeout?: number;
   userAgent?: string;
   firecrawlApiKey?: string;
+  browserlessApiKey?: string;
+  browserlessUrl?: string;
 }
 
 export interface ScraperResult {
@@ -28,8 +30,10 @@ export interface ScraperResult {
  * Get scraper configuration from environment or defaults
  */
 export function getScraperConfig(): ScraperConfig {
-  // Default to 'fetch' as it works in edge functions without external dependencies
-  const backend = (Deno.env.get('SCRAPER_BACKEND') || 'fetch') as ScraperBackend;
+  // Default to 'browserless' if API key is set, otherwise 'fetch'
+  const browserlessKey = Deno.env.get('BROWSERLESS_API_KEY');
+  const defaultBackend = browserlessKey ? 'browserless' : 'fetch';
+  const backend = (Deno.env.get('SCRAPER_BACKEND') || defaultBackend) as ScraperBackend;
   
   return {
     backend,
@@ -38,7 +42,79 @@ export function getScraperConfig(): ScraperConfig {
     userAgent: Deno.env.get('SCRAPER_USER_AGENT') || 
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     firecrawlApiKey: Deno.env.get('FIRECRAWL_API_KEY'),
+    browserlessApiKey: browserlessKey,
+    browserlessUrl: Deno.env.get('BROWSERLESS_URL') || 'https://chrome.browserless.io',
   };
+}
+
+/**
+ * Scrape a URL using Browserless.io (cloud Chrome automation)
+ */
+async function scrapeWithBrowserless(
+  url: string,
+  config: ScraperConfig
+): Promise<ScraperResult> {
+  const startTime = Date.now();
+  
+  try {
+    console.log(`🌐 Using Browserless to scrape: ${url}`);
+    
+    if (!config.browserlessApiKey) {
+      throw new Error('Browserless API key not configured');
+    }
+    
+    const browserlessUrl = `${config.browserlessUrl}/content?token=${config.browserlessApiKey}`;
+    
+    const response = await fetch(browserlessUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        url,
+        gotoOptions: {
+          waitUntil: 'networkidle2',
+          timeout: config.timeout,
+        },
+        waitFor: config.waitTime,
+        userAgent: config.userAgent,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Browserless API error: ${response.status} - ${errorText}`);
+    }
+    
+    const html = await response.text();
+    
+    // Extract text content from HTML
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    console.log(`✅ Browserless scraped ${html.length} chars HTML, ${text.length} chars text`);
+    
+    return {
+      success: true,
+      html,
+      text,
+      backend: 'browserless',
+      duration: Date.now() - startTime,
+    };
+    
+  } catch (error) {
+    console.error(`❌ Browserless error:`, error);
+    return {
+      success: false,
+      error: error.message,
+      backend: 'browserless',
+      duration: Date.now() - startTime,
+    };
+  }
 }
 
 /**
@@ -358,17 +434,21 @@ export async function scrapeUrl(
   let result: ScraperResult;
   
   switch (config.backend) {
+    case 'browserless':
+      result = await scrapeWithBrowserless(url, config);
+      break;
+      
     case 'fetch':
       result = await scrapeWithFetch(url, config);
       break;
     
     case 'puppeteer':
-      console.log(`⚠️ Warning: Puppeteer requires Chrome binary, not available in edge functions. Use 'fetch' or 'firecrawl' instead.`);
+      console.log(`⚠️ Warning: Puppeteer requires Chrome binary, not available in edge functions. Use 'browserless' instead.`);
       result = await scrapeWithPuppeteer(url, config);
       break;
       
     case 'playwright':
-      console.log(`⚠️ Warning: Playwright requires browser binary, not available in edge functions. Use 'fetch' or 'firecrawl' instead.`);
+      console.log(`⚠️ Warning: Playwright requires browser binary, not available in edge functions. Use 'browserless' instead.`);
       result = await scrapeWithPlaywright(url, config);
       break;
       
@@ -385,16 +465,21 @@ export async function scrapeUrl(
       };
   }
   
-  // If primary backend fails, try fallbacks
+  // If primary backend fails, try fallbacks in order
   if (!result.success) {
+    // Try Browserless if available and not already tried
+    if (config.backend !== 'browserless' && config.browserlessApiKey) {
+      console.log(`⚠️ Primary backend failed, falling back to Browserless...`);
+      result = await scrapeWithBrowserless(url, config);
+    }
     // Try Firecrawl if available and not already tried
-    if (config.backend !== 'firecrawl' && config.firecrawlApiKey) {
+    else if (config.backend !== 'firecrawl' && config.firecrawlApiKey) {
       console.log(`⚠️ Primary backend failed, falling back to Firecrawl...`);
       result = await scrapeWithFirecrawl(url, config);
     }
-    // Try fetch if available and not already tried
+    // Try fetch as last resort if not already tried
     else if (config.backend !== 'fetch') {
-      console.log(`⚠️ Primary backend failed, falling back to fetch...`);
+      console.log(`⚠️ All backends failed, trying basic fetch as last resort...`);
       result = await scrapeWithFetch(url, config);
     }
   }

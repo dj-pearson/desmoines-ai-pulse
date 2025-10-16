@@ -1,96 +1,135 @@
 # Scraper Backend Configuration
 
-This project supports **multiple scraping backends** for different use cases.
+This project supports **multiple scraping backends** for JavaScript-heavy websites.
 
-## Available Backends
+## Available Backends (for JS Sites)
 
-1. **Fetch** (Default) - Simple HTTP requests, works in edge functions ✅
-2. **Firecrawl** (Recommended for JS sites) - Cloud service with full JS support ✅
-3. **Puppeteer** ⚠️ - Does NOT work in Supabase edge functions
-4. **Playwright** ⚠️ - Does NOT work in Supabase edge functions
+### 1. **Browserless** (Recommended) ✅
+- Cloud-based Chrome automation API
+- **Free tier: 6 hours/month** (usually enough for regular scraping)
+- Full JavaScript execution
+- Works perfectly in edge functions
+- Sign up: https://browserless.io
+
+**Setup:**
+```bash
+SCRAPER_BACKEND=browserless
+BROWSERLESS_API_KEY=your-api-key-here
+```
+
+### 2. **Self-Hosted Puppeteer** (Best for heavy usage)
+- Deploy your own Puppeteer service
+- **Free** on services like Render.com, Railway.app, or Fly.io
+- Unlimited scraping (within your server limits)
+- See "Self-Hosting Guide" below
+
+### 3. **Firecrawl** (Premium option)
+- Most reliable, professional service
+- $0.50 per 1000 pages
+- Best for mission-critical scraping
+
+### 4. **Fetch** (Static sites only)
+- Simple HTTP requests
+- ❌ Does NOT execute JavaScript
+- Only use for server-rendered HTML sites
 
 ## Quick Start
 
-### Default Configuration (Fetch)
+### Option A: Browserless (Easiest)
 
-No setup required! The scraper uses simple HTTP fetch by default, which works in Supabase edge functions.
-
-**Limitations:**
-- ❌ Does NOT execute JavaScript
-- ❌ Won't see dynamically loaded content
-- ✅ Fast and reliable for server-rendered HTML
-- ✅ No external dependencies
-
-### For JavaScript-Heavy Sites (Firecrawl)
-
-If you need to scrape sites that load content with JavaScript (like many modern SPAs):
-
-1. Get your API key from [Firecrawl](https://firecrawl.dev)
-2. Add to Supabase Edge Functions secrets:
+1. Sign up at https://browserless.io (free tier available)
+2. Get your API token
+3. Add to Supabase Edge Function Secrets:
    ```bash
-   SCRAPER_BACKEND=firecrawl
-   FIRECRAWL_API_KEY=fc-your-api-key-here
+   BROWSERLESS_API_KEY=your-token-here
+   SCRAPER_BACKEND=browserless
    ```
+4. Done! Your scraper now handles JavaScript sites
+
+### Option B: Self-Host Puppeteer
+
+Deploy this simple service to Render/Railway/Fly.io:
+
+```javascript
+// server.js
+const express = require('express');
+const puppeteer = require('puppeteer');
+const app = express();
+
+app.use(express.json());
+
+app.post('/scrape', async (req, res) => {
+  const { url, waitTime = 5000 } = req.body;
+  
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
+  
+  try {
+    const page = await browser.newPage();
+    await page.goto(url, { waitUntil: 'networkidle2' });
+    await page.waitForTimeout(waitTime);
+    
+    const html = await page.content();
+    const text = await page.evaluate(() => document.body.innerText);
+    
+    res.json({ success: true, html, text });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  } finally {
+    await browser.close();
+  }
+});
+
+app.listen(3000);
+```
+
+Then set:
+```bash
+SCRAPER_BACKEND=browserless
+BROWSERLESS_URL=https://your-service.onrender.com/scrape
+BROWSERLESS_API_KEY=optional-auth-token
+```
 
 ## Environment Variables
 
-| Variable | Default | Description |
+| Variable | Example | Description |
 |----------|---------|-------------|
-| `SCRAPER_BACKEND` | `fetch` | Backend: `fetch` or `firecrawl` |
-| `SCRAPER_WAIT_TIME` | `5000` | Milliseconds to wait for JS rendering |
-| `SCRAPER_TIMEOUT` | `30000` | Max time for page load (ms) |
-| `FIRECRAWL_API_KEY` | - | Required for Firecrawl backend |
+| `SCRAPER_BACKEND` | `browserless` | Which backend to use |
+| `BROWSERLESS_API_KEY` | `abc123...` | Browserless.io API token |
+| `BROWSERLESS_URL` | Custom URL | For self-hosted Puppeteer |
+| `SCRAPER_WAIT_TIME` | `5000` | Wait time for JS (ms) |
+| `SCRAPER_TIMEOUT` | `30000` | Request timeout (ms) |
+| `FIRECRAWL_API_KEY` | `fc-...` | Firecrawl fallback key |
 
 ## How It Works
 
-### Automatic Failover
-
-If your primary backend fails:
-1. Falls back to **Firecrawl** (if API key is set)
-2. Falls back to **fetch** as last resort
+### Automatic Backend Selection
 
 ```typescript
-// Example usage in edge function
-import { scrapeUrl } from "../_shared/scraper.ts";
+// If BROWSERLESS_API_KEY is set
+→ Uses Browserless by default
+→ Falls back to Firecrawl if available
+→ Falls back to fetch as last resort
 
-const result = await scrapeUrl("https://example.com", {
-  backend: 'fetch', // Optional: override default
-  waitTime: 5000,
-  timeout: 30000,
+// If no API keys set
+→ Uses fetch (won't work for JS sites)
+```
+
+### Per-Request Override
+
+```typescript
+const result = await scrapeUrl(url, {
+  backend: 'browserless', // Override default
+  waitTime: 8000,
 });
-
-if (result.success) {
-  console.log(`Scraped ${result.html?.length} chars using ${result.backend}`);
-  const content = result.markdown || result.text || result.html;
-}
 ```
 
-### Multiple URLs
+## Testing
 
-```typescript
-import { scrapeUrls } from "../_shared/scraper.ts";
-
-const urls = [
-  "https://example.com/events",
-  "https://example.com/restaurants",
-];
-
-// Scrape 2 URLs at a time
-const results = await scrapeUrls(urls, { backend: 'fetch' }, 2);
-```
-
-## Functions Updated
-
-The following edge functions now use the universal scraper:
-
-1. ✅ **restaurant-opening-scraper** - Restaurant opening scraper
-2. ✅ **firecrawl-scraper** - Generic event/content scraper
-3. ✅ **ai-crawler** - AI content crawler
-
-## Testing Different Backends
-
-### Test with fetch (default):
 ```bash
+# Test with Browserless
 curl -X POST 'https://YOUR_PROJECT.supabase.co/functions/v1/firecrawl-scraper' \
   -H 'Authorization: Bearer YOUR_ANON_KEY' \
   -H 'Content-Type: application/json' \
@@ -100,89 +139,113 @@ curl -X POST 'https://YOUR_PROJECT.supabase.co/functions/v1/firecrawl-scraper' \
   }'
 ```
 
-### Test with Firecrawl:
-```bash
-# First set FIRECRAWL_API_KEY in edge function secrets, then:
-curl -X POST 'https://YOUR_PROJECT.supabase.co/functions/v1/firecrawl-scraper' \
-  -H 'Authorization: Bearer YOUR_ANON_KEY' \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "url": "https://www.catchdesmoines.com/events/",
-    "category": "events",
-    "scraperBackend": "firecrawl"
-  }'
-```
-
-## Performance Comparison
-
-| Backend | Speed | JS Support | Reliability | Cost | Works in Edge Functions |
-|---------|-------|------------|-------------|------|------------------------|
-| Fetch | Very Fast | ❌ None | High | Free | ✅ Yes |
-| Firecrawl | Medium | ✅ Full | High | $$ | ✅ Yes |
-| Puppeteer | - | - | - | - | ❌ No (requires Chrome binary) |
-| Playwright | - | - | - | - | ❌ No (requires browser binary) |
-
 ## Cost Comparison
 
-- **Fetch**: Free, runs on your Supabase functions
-- **Firecrawl**: Paid API, ~$0.50 per 1000 pages (varies by plan)
+| Backend | Free Tier | Cost | JS Support | Best For |
+|---------|-----------|------|------------|----------|
+| Browserless | 6 hrs/month | $10/mo for 20 hrs | ✅ Full | Getting started |
+| Self-Hosted | Unlimited | ~$5/mo hosting | ✅ Full | Heavy usage |
+| Firecrawl | Limited | $0.50/1000 pages | ✅ Full | Enterprise |
+| Fetch | Unlimited | Free | ❌ None | Static sites only |
+
+## Recommended Setup
+
+For your use case (scraping CatchDesMoines.com and similar JS sites):
+
+**Start with Browserless:**
+- Free tier is probably enough
+- Set it up in 2 minutes
+- Upgrade to $10/mo if needed
+
+**Scale to Self-Hosted:**
+- Deploy when you exceed free tier
+- Full control, no limits
+- Costs ~$5/mo for hosting
 
 ## Troubleshooting
 
-### "0 events found" or empty results
+### "0 events found" with fetch backend
 
-This usually means the site uses JavaScript to load content. Solutions:
+✅ **Solution:** Switch to Browserless - the site uses JavaScript
 
-1. **Switch to Firecrawl**:
-   ```bash
-   SCRAPER_BACKEND=firecrawl
-   FIRECRAWL_API_KEY=your-key
-   ```
+```bash
+SCRAPER_BACKEND=browserless
+BROWSERLESS_API_KEY=your-key
+```
 
-2. **Check the HTML**: The fetch backend only gets the initial HTML response. If the site loads data via JavaScript after page load, you won't see that content.
+### Browserless timeout errors
 
-### Firecrawl API errors
+Increase wait time for slow sites:
+```bash
+SCRAPER_WAIT_TIME=10000  # 10 seconds
+SCRAPER_TIMEOUT=60000    # 60 seconds
+```
 
-- **402 Payment Required**: Out of credits, add more or switch to fetch (for static sites)
-- **429 Rate Limit**: Too many requests, reduce concurrency or wait
-- **401 Unauthorized**: Check your `FIRECRAWL_API_KEY`
+### Self-hosted service failing
 
-### Why don't Puppeteer/Playwright work?
+Check your service logs and ensure:
+- Puppeteer dependencies are installed
+- Enough memory (512MB minimum)
+- `--no-sandbox` flag is set
 
-Supabase edge functions run in isolated Deno environments that don't have:
-- Chrome/Chromium binary
-- Browser automation capabilities
-- Graphics rendering support
+## Self-Hosting Puppeteer (Detailed Guide)
 
-For browser automation, you need:
-- A cloud service like Firecrawl
-- Your own server running Puppeteer/Playwright
-- Or use the fetch backend for static content
+### Deploy to Render.com (Free)
 
-## When to Use Each Backend
+1. Create `package.json`:
+```json
+{
+  "name": "puppeteer-scraper",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "puppeteer": "^21.0.0"
+  }
+}
+```
 
-### Use Fetch (Default) When:
-- Site content is server-rendered (traditional HTML)
-- You're scraping static pages
-- Speed is critical
-- You want to minimize costs
+2. Create `server.js` (see code above)
 
-### Use Firecrawl When:
-- Site uses React/Vue/Angular with client-side rendering
-- Content loads via AJAX/XHR after page load
-- You need to interact with the page (click buttons, etc.)
-- Site requires JavaScript to display content
+3. Deploy to Render:
+   - Connect GitHub repo
+   - Select "Web Service"
+   - Build command: `npm install`
+   - Start command: `npm start`
 
-## Migration from Firecrawl-Only Setup
+4. Set in Supabase:
+```bash
+SCRAPER_BACKEND=browserless
+BROWSERLESS_URL=https://your-app.onrender.com/scrape
+```
 
-If you were using only Firecrawl before:
+### Deploy to Railway.app (Free)
 
-1. **Try fetch first** - Many sites work fine with it
-2. **Keep Firecrawl as fallback** - Set `FIRECRAWL_API_KEY` for automatic fallback
-3. **Save money** - Use fetch by default, Firecrawl only when needed
+Railway auto-detects Node.js apps - just:
+1. Connect repo
+2. Deploy
+3. Copy URL to `BROWSERLESS_URL`
+
+### Deploy to Fly.io
+
+```bash
+fly launch
+fly deploy
+```
 
 ## Support
 
-- **Scraper Issues**: Check function logs in Supabase Dashboard
-- **Firecrawl Issues**: Visit [Firecrawl Docs](https://docs.firecrawl.dev)
-- **Edge Function Limits**: See [Supabase Docs](https://supabase.com/docs/guides/functions/limits)
+- **Browserless Issues**: https://docs.browserless.io
+- **Self-hosting Help**: Check your hosting provider's logs
+- **Scraper Issues**: Check Supabase edge function logs
+
+## Migration from Fetch
+
+If you were using `fetch` and getting no results:
+
+1. Sign up for Browserless free tier
+2. Add API key to Supabase secrets
+3. Done! Your scraper now works with JS sites
+
+No code changes needed - the scraper automatically uses the best available backend.

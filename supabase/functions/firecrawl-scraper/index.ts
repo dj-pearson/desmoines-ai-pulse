@@ -12,7 +12,7 @@ interface ScrapRequest {
   url: string;
   category: string;
   maxPages?: number; // Optional parameter for pagination
-  scraperBackend?: 'puppeteer' | 'playwright' | 'firecrawl'; // Allow backend override
+  scraperBackend?: 'browserless' | 'puppeteer' | 'playwright' | 'firecrawl' | 'fetch'; // Allow backend override
 }
 
 const corsHeaders = {

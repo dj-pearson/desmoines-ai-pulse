@@ -9,25 +9,32 @@ import { Settings, Zap, DollarSign, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export function ScraperSettings() {
-  const [backend, setBackend] = useState<string>("fetch");
+  const [backend, setBackend] = useState<string>("browserless");
   const [waitTime, setWaitTime] = useState<string>("5000");
   const [timeout, setTimeout] = useState<string>("30000");
   const { toast } = useToast();
 
   const backendInfo = {
+    browserless: {
+      name: "Browserless",
+      icon: <Zap className="h-4 w-4" />,
+      description: "Cloud Chrome automation - 6 hours/month free",
+      cost: "Free tier available",
+      status: "Recommended",
+    },
     fetch: {
       name: "Fetch",
       icon: <Zap className="h-4 w-4" />,
-      description: "Simple HTTP requests, works in edge functions",
+      description: "⚠️ Does NOT execute JavaScript",
       cost: "Free",
-      status: "Default",
+      status: "Static Sites Only",
     },
     firecrawl: {
       name: "Firecrawl",
       icon: <DollarSign className="h-4 w-4" />,
-      description: "Cloud service with full JS support",
+      description: "Premium cloud service with full JS support",
       cost: "$0.50/1000 pages",
-      status: "For JS Sites",
+      status: "Premium",
     },
     puppeteer: {
       name: "Puppeteer",
@@ -87,16 +94,22 @@ export function ScraperSettings() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="browserless">
+                <div className="flex items-center gap-2">
+                  <Zap className="h-4 w-4" />
+                  Browserless (Recommended)
+                </div>
+              </SelectItem>
               <SelectItem value="fetch">
                 <div className="flex items-center gap-2">
                   <Zap className="h-4 w-4" />
-                  Fetch (Default)
+                  Fetch (Static Sites Only)
                 </div>
               </SelectItem>
               <SelectItem value="firecrawl">
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-4 w-4" />
-                  Firecrawl (For JS Sites)
+                  Firecrawl (Premium)
                 </div>
               </SelectItem>
               <SelectItem value="puppeteer" disabled>
@@ -183,11 +196,11 @@ export function ScraperSettings() {
               <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5" />
               <div className="space-y-1">
                 <h4 className="text-sm font-semibold text-green-900 dark:text-green-100">
-                  Automatic Failover Enabled
+                  Smart Failover System
                 </h4>
                 <p className="text-xs text-green-700 dark:text-green-300">
-                  If fetch fails and you have FIRECRAWL_API_KEY configured,
-                  the system will automatically fall back to Firecrawl for JavaScript-heavy sites.
+                  If Browserless fails → tries Firecrawl (if key set) → tries fetch as last resort.
+                  Always gets you the best result possible.
                 </p>
               </div>
             </div>
