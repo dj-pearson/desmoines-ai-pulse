@@ -457,28 +457,32 @@ serve(async (req) => {
       );
 
       // Get total count of catchdesmoines URLs for randomization
+      // Exclude events that have already been successfully processed
+      // (if event_website_url is populated, URL was already extracted)
       const { count: totalCount, error: countError } = await supabaseClient
         .from("events")
         .select("id", { count: "exact", head: true })
-        .ilike("source_url", "%catchdesmoines.com%");
+        .ilike("source_url", "%catchdesmoines.com%")
+        .is("event_website_url", null); // Only events that haven't had URL extracted yet
 
       if (countError) {
         throw new Error(`Failed to count events: ${countError.message}`);
       }
 
       const totalEvents = totalCount || 0;
-      console.log(`Total catchdesmoines events: ${totalEvents}`);
+      console.log(`Total unprocessed catchdesmoines events: ${totalEvents}`);
 
       // Generate random offset to get different events each time
       const maxOffset = Math.max(0, totalEvents - batchSize);
       const randomOffset = Math.floor(Math.random() * (maxOffset + 1));
-      console.log(`Using random offset: ${randomOffset}`);
+      console.log(`Using random offset: ${randomOffset} of max ${maxOffset}`);
 
-      // Get random batch of events with catchdesmoines.com URLs
+      // Get random batch of unprocessed events with catchdesmoines.com URLs
       const { data: events, error: fetchError } = await supabaseClient
         .from("events")
-        .select("id, title, source_url")
+        .select("id, title, source_url, event_website_url")
         .ilike("source_url", "%catchdesmoines.com%")
+        .is("event_website_url", null) // Only unprocessed events
         .range(randomOffset, randomOffset + batchSize - 1);
 
       if (fetchError) {
@@ -520,8 +524,11 @@ serve(async (req) => {
           const extractedData = await extractVisitWebsiteUrl(event.source_url);
 
           if (extractedData.visitUrl) {
-            // Prepare update data
-            const updateData: any = { source_url: extractedData.visitUrl };
+            // Prepare update data - store extracted URL in event_website_url field
+            const updateData: any = { 
+              event_website_url: extractedData.visitUrl,
+              // Keep source_url as catchdesmoines for reference, but mark as processed
+            };
 
             // If we extracted datetime info, parse and update event_start_utc
             if (extractedData.dateStr) {
@@ -612,11 +619,12 @@ serve(async (req) => {
     }
 
     if (req.method === "GET") {
-      // Return count of remaining catchdesmoines URLs
+      // Return count of remaining unprocessed catchdesmoines URLs
       const { count, error: countError } = await supabaseClient
         .from("events")
         .select("id", { count: "exact", head: true })
-        .ilike("source_url", "%catchdesmoines.com%");
+        .ilike("source_url", "%catchdesmoines.com%")
+        .is("event_website_url", null); // Only count unprocessed events
 
       if (countError) {
         throw new Error(`Failed to count events: ${countError.message}`);
