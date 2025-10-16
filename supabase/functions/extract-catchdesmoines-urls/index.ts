@@ -245,53 +245,134 @@ async function extractVisitWebsiteUrl(
 
     console.log("Successfully parsed HTML document");
 
-    // Strategy: Find all anchor tags and check their text content for "Visit Website"
+    // Strategy 1: Find anchors with "Visit Website" text
     const allAnchors = doc.querySelectorAll("a") as NodeListOf<HTMLAnchorElement>;
     console.log(`Found ${allAnchors.length} total anchor tags on page`);
 
+    // Helper function to check if text matches "visit website"
+    const isVisitWebsiteText = (text: string): boolean => {
+      const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
+      return (
+        normalized.includes('visit website') ||
+        normalized.includes('visit web site') ||
+        (normalized.includes('visit') && normalized.includes('website'))
+      );
+    };
+
+    // Helper function to validate and normalize URL
+    const validateAndNormalizeUrl = (href: string | null, strategy: string): string | null => {
+      if (!href) {
+        console.log(`  [${strategy}] ⏭️ Skipped: no href attribute`);
+        return null;
+      }
+
+      let normalizedUrl = href.trim();
+      if (normalizedUrl.startsWith("//")) {
+        normalizedUrl = `https:${normalizedUrl}`;
+      } else if (normalizedUrl.startsWith("/")) {
+        const baseUrl = new URL(eventUrl);
+        normalizedUrl = `${baseUrl.origin}${normalizedUrl}`;
+      }
+
+      if (!normalizedUrl.match(/^https?:\/\//i)) {
+        console.log(`  [${strategy}] ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
+        return null;
+      }
+
+      if (isExcluded(normalizedUrl)) {
+        console.log(`  [${strategy}] ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
+        return null;
+      }
+
+      return normalizedUrl;
+    };
+
+    // Strategy 1: Direct anchor text match
     let foundCount = 0;
     for (const anchor of allAnchors) {
       const href = anchor.getAttribute("href");
-      const textContent = anchor.textContent?.trim().toLowerCase() || "";
+      const textContent = anchor.textContent || "";
+      const innerHTML = anchor.innerHTML || "";
       
-      // Check if this anchor contains "visit website" text
-      if (textContent.includes("visit") && textContent.includes("website")) {
+      console.log(`Checking anchor: text="${textContent.trim()}", href="${href}"`);
+      
+      if (isVisitWebsiteText(textContent)) {
         foundCount++;
-        console.log(`Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent}"`);
+        console.log(`[Strategy 1] Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent.trim()}"`);
         
-        if (!href) {
-          console.log("  ⏭️ Skipped: no href attribute");
-          continue;
+        const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 1");
+        if (normalizedUrl) {
+          console.log(`  ✅ [Strategy 1] Found valid "Visit Website" URL: ${normalizedUrl}`);
+          return { visitUrl: normalizedUrl, dateStr, timeStr };
         }
-
-        // Normalize URL
-        let normalizedUrl = href.trim();
-        if (normalizedUrl.startsWith("//")) {
-          normalizedUrl = `https:${normalizedUrl}`;
-        } else if (normalizedUrl.startsWith("/")) {
-          // Relative URL - make absolute
-          const baseUrl = new URL(eventUrl);
-          normalizedUrl = `${baseUrl.origin}${normalizedUrl}`;
-        }
-
-        // Check if it's a valid external URL
-        if (!normalizedUrl.match(/^https?:\/\//i)) {
-          console.log(`  ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
-          continue;
-        }
-
-        // Check if URL is excluded
-        if (isExcluded(normalizedUrl)) {
-          console.log(`  ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
-          continue;
-        }
-
-        console.log(`  ✅ Found valid "Visit Website" URL: ${normalizedUrl}`);
-        return { visitUrl: normalizedUrl, dateStr, timeStr };
       }
     }
 
-    console.log(`⚠️ No valid "Visit Website" link found (checked ${foundCount} potential matches out of ${allAnchors.length} total anchors)`);
+    console.log(`[Strategy 1] Checked ${foundCount} potential matches out of ${allAnchors.length} total anchors`);
+
+    // Strategy 2: Check buttons that might contain or be near anchors
+    console.log(`[Strategy 2] Searching for buttons with "visit website" text...`);
+    const allButtons = doc.querySelectorAll("button, .button, .btn");
+    console.log(`Found ${allButtons.length} button elements`);
+    
+    for (const button of allButtons) {
+      const buttonText = button.textContent || "";
+      if (isVisitWebsiteText(buttonText)) {
+        console.log(`[Strategy 2] Found button with "visit website" text: "${buttonText.trim()}"`);
+        
+        // Check if button contains an anchor
+        const innerAnchor = button.querySelector("a");
+        if (innerAnchor) {
+          const href = innerAnchor.getAttribute("href");
+          const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 2 - Inner Anchor");
+          if (normalizedUrl) {
+            console.log(`  ✅ [Strategy 2] Found URL in button's inner anchor: ${normalizedUrl}`);
+            return { visitUrl: normalizedUrl, dateStr, timeStr };
+          }
+        }
+        
+        // Check if button has onclick with URL
+        const onclick = button.getAttribute("onclick");
+        if (onclick) {
+          const urlMatch = onclick.match(/(?:window\.location|location\.href)\s*=\s*['"]([^'"]+)['"]/);
+          if (urlMatch) {
+            const normalizedUrl = validateAndNormalizeUrl(urlMatch[1], "Strategy 2 - Onclick");
+            if (normalizedUrl) {
+              console.log(`  ✅ [Strategy 2] Found URL in button onclick: ${normalizedUrl}`);
+              return { visitUrl: normalizedUrl, dateStr, timeStr };
+            }
+          }
+        }
+      }
+    }
+
+    // Strategy 3: Look for common class patterns
+    console.log(`[Strategy 3] Searching for links with common "visit" or "website" classes...`);
+    const classSelectors = [
+      'a[class*="visit"]',
+      'a[class*="website"]',
+      'a[class*="external"]',
+      'a[class*="event-link"]',
+      '.visit-website a',
+      '.event-website a'
+    ];
+    
+    for (const selector of classSelectors) {
+      const links = doc.querySelectorAll(selector);
+      if (links.length > 0) {
+        console.log(`[Strategy 3] Found ${links.length} links matching selector: ${selector}`);
+        for (const link of links) {
+          const href = link.getAttribute("href");
+          const normalizedUrl = validateAndNormalizeUrl(href, `Strategy 3 - ${selector}`);
+          if (normalizedUrl) {
+            console.log(`  ✅ [Strategy 3] Found URL via class selector: ${normalizedUrl}`);
+            return { visitUrl: normalizedUrl, dateStr, timeStr };
+          }
+        }
+      }
+    }
+
+    console.log(`⚠️ No valid "Visit Website" link found after trying all strategies`);
     
     // Fallback: Check for linkUrl in JSON embedded in the page
     const linkUrlMatch = html.match(
