@@ -287,12 +287,19 @@ async function extractVisitWebsiteUrl(
     let visitWebsiteAnchors: HTMLAnchorElement[] = [];
     
     for (const anchor of allAnchors) {
-      const textContent = anchor.textContent || "";
+      // Get both textContent and innerText to handle different parsing behaviors
+      const textContent = (anchor.textContent || "").trim();
+      const innerHTML = anchor.innerHTML || "";
+      
+      // Log first few anchors with external-link icon for debugging
+      if (innerHTML.includes('fa-external-link') && foundCount < 3) {
+        console.log(`[Debug] External link anchor: text="${textContent}", innerHTML="${innerHTML.substring(0, 200)}"`);
+      }
       
       if (isVisitWebsiteText(textContent)) {
         foundCount++;
         visitWebsiteAnchors.push(anchor);
-        console.log(`[Strategy 1] Found "Visit Website" link #${foundCount}: text="${textContent.trim()}"`);
+        console.log(`[Strategy 1] Found "Visit Website" link #${foundCount}: text="${textContent}"`);
       }
     }
 
@@ -369,15 +376,17 @@ async function extractVisitWebsiteUrl(
       }
     }
 
-    // Strategy 3: Look for common class patterns
+    // Strategy 3: Look for common class patterns and specific structures
     console.log(`[Strategy 3] Searching for links with common "visit" or "website" classes...`);
     const classSelectors = [
       'a[class*="visit"]',
       'a[class*="website"]',
       'a[class*="external"]',
       'a[class*="event-link"]',
+      'a[class*="action-item"]', // CatchDesMoines uses this for Visit Website links
       '.visit-website a',
-      '.event-website a'
+      '.event-website a',
+      '.bottom-actions a' // CatchDesMoines structure
     ];
     
     for (const selector of classSelectors) {
@@ -386,10 +395,20 @@ async function extractVisitWebsiteUrl(
         console.log(`[Strategy 3] Found ${links.length} links matching selector: ${selector}`);
         for (const link of links) {
           const href = link.getAttribute("href");
-          const normalizedUrl = validateAndNormalizeUrl(href, `Strategy 3 - ${selector}`);
-          if (normalizedUrl) {
-            console.log(`  ✅ [Strategy 3] Found URL via class selector: ${normalizedUrl}`);
-            return { visitUrl: normalizedUrl, dateStr, timeStr };
+          const linkText = (link.textContent || "").trim();
+          const innerHTML = link.innerHTML || "";
+          
+          // Check if this looks like a "Visit Website" link
+          const hasExternalIcon = innerHTML.includes('fa-external-link') || innerHTML.includes('external-link');
+          const hasVisitText = isVisitWebsiteText(linkText);
+          
+          if (hasExternalIcon || hasVisitText) {
+            console.log(`[Strategy 3] Checking potential visit link: text="${linkText}", hasIcon=${hasExternalIcon}, href="${href}"`);
+            const normalizedUrl = validateAndNormalizeUrl(href, `Strategy 3 - ${selector}`);
+            if (normalizedUrl) {
+              console.log(`  ✅ [Strategy 3] Found URL via class selector: ${normalizedUrl}`);
+              return { visitUrl: normalizedUrl, dateStr, timeStr };
+            }
           }
         }
       }
