@@ -71,17 +71,13 @@ async function scrapeWithBrowserless(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'User-Agent': config.userAgent || '',
         },
         body: JSON.stringify({
           url,
           gotoOptions: {
             waitUntil: 'networkidle2',
             timeout: config.timeout,
-          },
-          waitFor: config.waitTime,
-          headers: {
-            'User-Agent': config.userAgent || '',
-            'Accept-Language': 'en-US,en;q=0.9',
           },
         }),
       });
@@ -441,6 +437,8 @@ export async function scrapeUrl(
   const config = { ...defaults, ...overrides } as ScraperConfig;
   
   console.log(`🚀 Starting scrape of ${url} using ${config.backend}`);
+  
+  let result: ScraperResult;
   
   switch (config.backend) {
     case 'browserless':
