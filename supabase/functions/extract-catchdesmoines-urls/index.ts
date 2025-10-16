@@ -154,9 +154,10 @@ async function extractVisitWebsiteUrl(
       }
     }
 
-    // Define excluded domains
+    // Define excluded domains - URLs we don't want to extract
     const excludeDomains = [
       "catchdesmoines.com",
+      "visitdesmoines.com",
       "simpleview.com",
       "simpleviewinc.com",
       "assets.simpleviewinc.com",
@@ -231,8 +232,10 @@ async function extractVisitWebsiteUrl(
       "#",
     ];
 
-    const isExcluded = (url: string) =>
-      excludeDomains.some((d) => url.toLowerCase().includes(d.toLowerCase()));
+    const isExcluded = (url: string) => {
+      const lowerUrl = url.toLowerCase();
+      return excludeDomains.some((d) => lowerUrl.includes(d.toLowerCase()));
+    };
 
     // Use DOMParser from deno_dom to properly parse HTML
     const parser = new DOMParser();
@@ -253,6 +256,8 @@ async function extractVisitWebsiteUrl(
     const isVisitWebsiteText = (text: string): boolean => {
       const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
       return (
+        normalized === 'visit website' ||
+        normalized === 'visit web site' ||
         normalized.includes('visit website') ||
         normalized.includes('visit web site') ||
         (normalized.includes('visit') && normalized.includes('website'))
@@ -287,28 +292,56 @@ async function extractVisitWebsiteUrl(
       return normalizedUrl;
     };
 
-    // Strategy 1: Direct anchor text match
+    // Strategy 1: Direct anchor text match for "Visit Website"
     let foundCount = 0;
+    let visitWebsiteAnchors: HTMLAnchorElement[] = [];
+    
     for (const anchor of allAnchors) {
-      const href = anchor.getAttribute("href");
       const textContent = anchor.textContent || "";
-      const innerHTML = anchor.innerHTML || "";
-      
-      console.log(`Checking anchor: text="${textContent.trim()}", href="${href}"`);
       
       if (isVisitWebsiteText(textContent)) {
         foundCount++;
-        console.log(`[Strategy 1] Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent.trim()}"`);
-        
-        const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 1");
-        if (normalizedUrl) {
-          console.log(`  ✅ [Strategy 1] Found valid "Visit Website" URL: ${normalizedUrl}`);
-          return { visitUrl: normalizedUrl, dateStr, timeStr };
-        }
+        visitWebsiteAnchors.push(anchor);
+        console.log(`[Strategy 1] Found "Visit Website" link #${foundCount}: text="${textContent.trim()}"`);
       }
     }
 
-    console.log(`[Strategy 1] Checked ${foundCount} potential matches out of ${allAnchors.length} total anchors`);
+    console.log(`[Strategy 1] Found ${foundCount} "Visit Website" anchors out of ${allAnchors.length} total anchors`);
+
+    // Check each "Visit Website" anchor and its preceding sibling
+    for (const anchor of visitWebsiteAnchors) {
+      const href = anchor.getAttribute("href");
+      const textContent = anchor.textContent || "";
+      
+      console.log(`[Strategy 1a] Checking "Visit Website" anchor href="${href}"`);
+      
+      // First, try the href of the "Visit Website" anchor itself
+      const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 1a - Direct");
+      if (normalizedUrl) {
+        console.log(`  ✅ [Strategy 1a] Found valid URL in "Visit Website" anchor: ${normalizedUrl}`);
+        return { visitUrl: normalizedUrl, dateStr, timeStr };
+      }
+      
+      // If that didn't work, check the immediately preceding anchor
+      console.log(`[Strategy 1b] "Visit Website" anchor has no valid href, checking preceding anchor...`);
+      let previousSibling = anchor.previousElementSibling;
+      
+      while (previousSibling) {
+        if (previousSibling.tagName === "A") {
+          const prevHref = previousSibling.getAttribute("href");
+          const prevText = previousSibling.textContent || "";
+          console.log(`[Strategy 1b] Found preceding <a>: text="${prevText.trim()}", href="${prevHref}"`);
+          
+          const prevNormalizedUrl = validateAndNormalizeUrl(prevHref, "Strategy 1b - Preceding");
+          if (prevNormalizedUrl) {
+            console.log(`  ✅ [Strategy 1b] Found valid URL in preceding anchor: ${prevNormalizedUrl}`);
+            return { visitUrl: prevNormalizedUrl, dateStr, timeStr };
+          }
+          break; // Only check the immediate preceding anchor
+        }
+        previousSibling = previousSibling.previousElementSibling;
+      }
+    }
 
     // Strategy 2: Check buttons that might contain or be near anchors
     console.log(`[Strategy 2] Searching for buttons with "visit website" text...`);

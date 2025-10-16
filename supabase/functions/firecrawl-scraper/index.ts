@@ -227,13 +227,28 @@ EXAMPLES:
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
-🎯 PRIORITY URL EXTRACTION: Look specifically for "Visit Website" links or buttons that lead to external venue/event websites. These are usually found in:
-- HTML like: <a href="https://external-venue.com" class="action-item">Visit Website</a>
-- Links with text containing "Visit Website", "Official Website", "Venue Website"
-- External URLs that are NOT catchdesmoines.com URLs
-- Venue-specific website links (paintingwithatwist.com, etc.)
+🎯 CRITICAL URL EXTRACTION RULE FOR CATCHDESMOINES.COM EVENTS:
 
-If you find a "Visit Website" or venue-specific URL, use that as the source_url instead of the catchdesmoines.com page URL.
+When extracting events from CatchDesMoines pages, the source_url MUST be the external event website, NOT the catchdesmoines.com page.
+
+HOW TO FIND THE CORRECT URL:
+1. Look for anchor text "Visit Website" (case-insensitive) in the HTML
+2. Extract the href from that anchor tag
+3. If the "Visit Website" anchor has no href, check the immediately preceding <a> tag for an external URL
+4. The URL must be external (NOT catchdesmoines.com, NOT simpleview.com, NOT social media, NOT javascript/css files)
+5. Only use catchdesmoines.com URLs as a last resort fallback if no external URL exists
+
+VALIDATION:
+- URL must start with http:// or https://
+- URL must NOT contain: catchdesmoines.com, simpleview, facebook.com, twitter.com, instagram.com, youtube.com, vimeo.com, .js, .css, cdn, analytics
+- Prefer venue-specific websites (restaurant sites, theater sites, event organizer sites)
+
+EXAMPLE:
+If you see HTML like:
+<a href="https://statemint.com/west-des-moines">Visit Website</a>
+Use: "https://statemint.com/west-des-moines" as the source_url
+
+If the "Visit Website" link is missing or internal, you may use the catchdesmoines page URL as a fallback.
 
 🏢 VENUE EXTRACTION:
 - Look for venue names near event titles
