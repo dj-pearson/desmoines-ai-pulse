@@ -78,7 +78,7 @@ async function scrapeWithBrowserless(
             waitUntil: 'networkidle2',
             timeout: config.timeout,
           },
-          waitForTimeout: config.waitTime,
+          waitFor: config.waitTime,
           headers: {
             'User-Agent': config.userAgent || '',
             'Accept-Language': 'en-US,en;q=0.9',
@@ -436,11 +436,11 @@ export async function scrapeUrl(
   url: string,
   customConfig?: Partial<ScraperConfig>
 ): Promise<ScraperResult> {
-  const config = { ...getScraperConfig(), ...customConfig };
+  const defaults = getScraperConfig();
+  const overrides = Object.fromEntries(Object.entries(customConfig || {}).filter(([_, v]) => v !== undefined));
+  const config = { ...defaults, ...overrides } as ScraperConfig;
   
   console.log(`🚀 Starting scrape of ${url} using ${config.backend}`);
-  
-  let result: ScraperResult;
   
   switch (config.backend) {
     case 'browserless':
