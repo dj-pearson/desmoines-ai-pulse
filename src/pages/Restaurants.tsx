@@ -28,10 +28,16 @@ import {
   ChefHat,
   Search,
   Filter,
+  SearchX,
+  Utensils,
+  X,
+  Sparkles,
+  AlertCircle,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const createSlug = (name: string): string => {
   return name
@@ -228,33 +234,65 @@ export default function Restaurants() {
               {isLoading ? (
                 <CardsGridSkeleton count={9} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" />
               ) : error ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Error loading restaurants. Please try again later.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={AlertCircle}
+                  title="Unable to load restaurants"
+                  description="We're having trouble loading the restaurant list. Please check your connection and try again."
+                  actions={[
+                    {
+                      label: "Try Again",
+                      onClick: () => window.location.reload(),
+                      variant: "default",
+                    },
+                  ]}
+                />
               ) : restaurants.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-muted-foreground mb-4">
-                    {filters.search ||
+                <EmptyState
+                  icon={
+                    filters.search ||
                     filters.cuisine.length > 0 ||
                     filters.priceRange.length > 0 ||
                     filters.location.length > 0
-                      ? "No restaurants match your current filters. Try adjusting your search criteria."
-                      : "No restaurants found."}
-                  </p>
-                  {(filters.search ||
+                      ? SearchX
+                      : Utensils
+                  }
+                  title={
+                    filters.search
+                      ? `No results for "${filters.search}"`
+                      : "No restaurants found"
+                  }
+                  description={
+                    filters.search ||
                     filters.cuisine.length > 0 ||
                     filters.priceRange.length > 0 ||
-                    filters.location.length > 0) && (
-                    <button
-                      onClick={handleClearFilters}
-                      className="text-primary hover:underline"
-                    >
-                      Clear all filters
-                    </button>
-                  )}
-                </div>
+                    filters.location.length > 0
+                      ? "Try adjusting your search criteria or filters to find more restaurants"
+                      : "No restaurants available at the moment. Check back soon for updates!"
+                  }
+                  actions={
+                    filters.search ||
+                    filters.cuisine.length > 0 ||
+                    filters.priceRange.length > 0 ||
+                    filters.location.length > 0
+                      ? [
+                          {
+                            label: "Clear All Filters",
+                            onClick: handleClearFilters,
+                            variant: "outline",
+                            icon: X,
+                          },
+                          {
+                            label: "Browse All Restaurants",
+                            onClick: () => {
+                              handleClearFilters();
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            },
+                            icon: Sparkles,
+                          },
+                        ]
+                      : undefined
+                  }
+                />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {restaurants.map((restaurant) => (

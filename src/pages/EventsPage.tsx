@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal } from "lucide-react";
+import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal, SearchX, Sparkles } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   Sheet,
   SheetContent,
@@ -783,20 +784,37 @@ export default function EventsPage() {
 
           {/* No Results State */}
           {!isLoading && (!events || events.length === 0) && (
-            <div className={`text-center ${isMobile ? 'py-12 section-mobile' : 'py-16'}`}>
-              <Calendar className={`${isMobile ? 'h-12 w-12' : 'h-16 w-16'} text-gray-400 mx-auto mb-4`} />
-              <h3 className={`${isMobile ? 'text-lg' : 'text-xl'} font-medium mb-2`}>No events found</h3>
-              <p className={`text-muted-foreground mb-6 ${isMobile ? 'text-sm' : ''}`}>
-                {searchQuery || selectedCategory !== "all"
-                  ? "Try adjusting your search criteria or filters"
-                  : "Check back soon for upcoming events!"}
-              </p>
-              {(searchQuery || selectedCategory !== "all" || dateFilter || location !== "any-location" || priceRange !== "any-price") && (
-                <Button onClick={handleClearFilters} variant="outline" className={isMobile ? 'btn-mobile' : ''}>
-                  Clear Filters
-                </Button>
-              )}
-            </div>
+            <EmptyState
+              icon={searchQuery || selectedCategory !== "all" || dateFilter || location !== "any-location" || priceRange !== "any-price" ? SearchX : Calendar}
+              title={searchQuery ? `No results for "${searchQuery}"` : "No events found"}
+              description={
+                searchQuery || selectedCategory !== "all" || dateFilter || location !== "any-location" || priceRange !== "any-price"
+                  ? "Try adjusting your search criteria or filters to find more events"
+                  : "Check back soon for upcoming events! New events are added regularly."
+              }
+              actions={
+                (searchQuery || selectedCategory !== "all" || dateFilter || location !== "any-location" || priceRange !== "any-price")
+                  ? [
+                      {
+                        label: "Clear All Filters",
+                        onClick: handleClearFilters,
+                        variant: "outline",
+                        icon: X,
+                      },
+                      {
+                        label: "Browse All Events",
+                        onClick: () => {
+                          handleClearFilters();
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        },
+                        icon: Sparkles,
+                      },
+                    ]
+                  : undefined
+              }
+              compact={isMobile}
+              className={isMobile ? 'section-mobile' : ''}
+            />
           )}
         </main>
 

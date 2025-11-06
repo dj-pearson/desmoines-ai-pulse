@@ -3,7 +3,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
+import { WelcomeModal } from "@/components/WelcomeModal";
 
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
@@ -55,14 +58,35 @@ const PageLoader = () => (
   </div>
 );
 
+const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) => {
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  useKeyboardShortcuts({
+    enabled: true,
+    onShowHelp: () => setShowShortcutsModal(true),
+  });
+
+  return (
+    <>
+      {children}
+      <KeyboardShortcutsModal
+        open={showShortcutsModal}
+        onOpenChange={setShowShortcutsModal}
+      />
+      <WelcomeModal />
+    </>
+  );
+};
+
 const App = () => (
   <TooltipProvider>
     <BrowserRouter>
       <ErrorBoundary>
-        <Toaster />
-        <Sonner />
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
+        <KeyboardShortcutsProvider>
+          <Toaster />
+          <Sonner />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/profile" element={<Profile />} />
@@ -130,6 +154,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        </KeyboardShortcutsProvider>
       </ErrorBoundary>
     </BrowserRouter>
   </TooltipProvider>
