@@ -1,0 +1,47 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    /* Strict Type-Checking Options - Enable gradually */
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    /* Additional Checks */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+
+    /* Import Checks */
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  /*
+   * Usage: Gradually migrate files to strict mode
+   *
+   * Option 1: Migrate individual files
+   * Add this comment at the top of files that pass strict checks:
+   * // @ts-check with strict enabled
+   *
+   * Option 2: Migrate directories
+   * Update "include" below to add directories that are fully strict-compliant
+   */
+  "include": [
+    // Add directories here as they become strict-mode compliant
+    // Example: "src/lib/safeStorage.ts"
+    // Example: "src/lib/errorHandler.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build"
+  ]
+}
