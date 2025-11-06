@@ -2,10 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { visualizer } from "rollup-plugin-visualizer";
 
 // https://vitejs.dev/config/
 // Force rebuild: 2025-08-13
-export default defineConfig(({ command }) => ({
+export default defineConfig(({ command, mode }) => ({
   base: "/",
   server: {
     host: "::",
@@ -23,6 +24,13 @@ export default defineConfig(({ command }) => ({
       },
     }),
     command === "serve" && componentTagger(),
+    // Bundle analyzer - run with ANALYZE=true npm run build
+    process.env.ANALYZE === 'true' && visualizer({
+      open: true,
+      filename: 'dist/stats.html',
+      gzipSize: true,
+      brotliSize: true,
+    }),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -30,7 +38,9 @@ export default defineConfig(({ command }) => ({
     },
   },
   build: {
-    sourcemap: false, // Disable sourcemaps in production for smaller files
+    // Generate hidden sourcemaps for production debugging
+    // Upload to error tracking service but don't deploy publicly
+    sourcemap: mode === 'production' ? 'hidden' : true,
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
@@ -46,5 +56,17 @@ export default defineConfig(({ command }) => ({
       },
     },
     chunkSizeWarningLimit: 600,
+    // Improve build performance
+    reportCompressedSize: false,
+  },
+  // Optimize dependencies
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@tanstack/react-query',
+    ],
+    exclude: ['@react-three/fiber', '@react-three/drei'], // Lazy load heavy 3D libs
   },
 }));

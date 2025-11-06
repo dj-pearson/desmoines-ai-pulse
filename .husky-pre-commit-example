@@ -1,0 +1,63 @@
+#!/usr/bin/env sh
+# Pre-commit hook for code quality checks
+#
+# To install Husky and set up pre-commit hooks:
+# 1. npm install --save-dev husky
+# 2. npx husky init
+# 3. Copy this file to .husky/pre-commit
+# 4. chmod +x .husky/pre-commit
+
+echo "🔍 Running pre-commit checks..."
+
+# Check for TypeScript errors
+echo "Checking TypeScript..."
+npm run type-check
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript check failed. Please fix type errors before committing."
+  exit 1
+fi
+
+# Run ESLint
+echo "Running ESLint..."
+npm run lint
+if [ $? -ne 0 ]; then
+  echo "❌ ESLint check failed. Run 'npm run lint:fix' to auto-fix issues."
+  exit 1
+fi
+
+# Check for console.log statements (without import.meta.env.DEV wrapping)
+echo "Checking for unwrapped console statements..."
+if git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | xargs grep -n 'console\.\(log\|warn\|error\)' | grep -v 'import\.meta\.env\.DEV' | grep -v '// '; then
+  echo "⚠️  Warning: Found unwrapped console statements. These will run in production!"
+  echo "   Wrap them with: if (import.meta.env.DEV) { console.log(...) }"
+  # Uncomment to make this blocking:
+  # exit 1
+fi
+
+# Check for process.env usage (should be import.meta.env in Vite)
+echo "Checking for process.env usage..."
+if git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | xargs grep -n 'process\.env' 2>/dev/null; then
+  echo "❌ Found process.env usage. Use import.meta.env instead for Vite compatibility."
+  exit 1
+fi
+
+# Check for .env files being committed
+echo "Checking for .env files..."
+if git diff --cached --name-only | grep -E '\.env$'; then
+  echo "❌ .env files should not be committed! Add to .gitignore."
+  exit 1
+fi
+
+# Check for large files (>1MB)
+echo "Checking for large files..."
+for file in $(git diff --cached --name-only); do
+  if [ -f "$file" ]; then
+    size=$(wc -c <"$file")
+    if [ $size -gt 1048576 ]; then
+      echo "❌ File $file is larger than 1MB ($size bytes). Consider optimization."
+      exit 1
+    fi
+  fi
+done
+
+echo "✅ All pre-commit checks passed!"

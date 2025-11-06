@@ -38,7 +38,6 @@ serve(async (req) => {
         offset: { type: 'number', min: 0, default: 0 },
         category: { type: 'string', max: 50 },
         location: { type: 'string', max: 100 },
-        city: { type: 'string', max: 100 },
         search: { type: 'string', max: 200 },
         start_date: { type: 'string', max: 10 },
         end_date: { type: 'string', max: 10 },
@@ -47,11 +46,7 @@ serve(async (req) => {
 
       if (!validationResult.success) {
         const errorResponse = new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Invalid parameters',
-            details: validationResult.errors
-          }),
+          JSON.stringify({ error: 'Invalid parameters', details: validationResult.errors }),
           {
             status: 400,
             headers: { 'Content-Type': 'application/json' },
@@ -61,7 +56,6 @@ serve(async (req) => {
       }
 
       const params = validationResult.data!;
-      const location = params.location || params.city;
       const today = new Date().toISOString().split("T")[0];
 
       let query = supabase
@@ -82,9 +76,9 @@ serve(async (req) => {
         query = query.eq("category", params.category);
       }
 
-      if (location) {
+      if (params.location) {
         query = query.or(
-          `location.ilike.%${location}%,city.ilike.%${location}%,venue.ilike.%${location}%`
+          `location.ilike.%${params.location}%,city.ilike.%${params.location}%,venue.ilike.%${params.location}%`
         );
       }
 
@@ -127,86 +121,17 @@ serve(async (req) => {
 
       const response = new Response(
         JSON.stringify({
-          success: true,
-          data: events,
+          events,
           pagination: {
             total: count || 0,
             limit: params.limit,
             offset: params.offset,
-            has_more: params.offset + params.limit < (count || 0),
+            hasMore: (params.offset + params.limit) < (count || 0),
           },
         }),
         {
-          headers: { "Content-Type": "application/json" },
           status: 200,
-        }
-      );
-
-      return addRateLimitHeaders(addCorsHeaders(response), rateLimitResult);
-    }
-
-    // GET /api-events/{id} - Get event details
-    if (req.method === "GET" && pathname.includes("/")) {
-      const pathParts = pathname.split("/").filter(Boolean);
-      const eventId = pathParts[pathParts.length - 1];
-
-      const { data, error } = await supabase
-        .from("events")
-        .select("*")
-        .eq("id", eventId)
-        .single();
-
-      if (error) {
-        if (error.code === "PGRST116") {
-          const errorResponse = new Response(
-            JSON.stringify({
-              success: false,
-              error: "Event not found",
-            }),
-            {
-              headers: { "Content-Type": "application/json" },
-              status: 404,
-            }
-          );
-          return addRateLimitHeaders(addCorsHeaders(errorResponse), rateLimitResult);
-        }
-        throw error;
-      }
-
-      const event = {
-        id: data.id,
-        title: data.title,
-        date: data.date,
-        time: data.time,
-        venue: data.venue,
-        location: data.location,
-        city: data.city,
-        price: data.price,
-        category: data.category,
-        description: data.enhanced_description || data.original_description,
-        image_url: data.image_url,
-        event_url: data.event_url,
-        event_start_utc: data.event_start_utc,
-        coordinates:
-          data.latitude && data.longitude
-            ? {
-                latitude: data.latitude,
-                longitude: data.longitude,
-              }
-            : null,
-        is_featured: data.is_featured,
-        ai_writeup: data.ai_writeup,
-        source: data.source,
-      };
-
-      const response = new Response(
-        JSON.stringify({
-          success: true,
-          data: event,
-        }),
-        {
           headers: { "Content-Type": "application/json" },
-          status: 200,
         }
       );
 
@@ -214,32 +139,29 @@ serve(async (req) => {
     }
 
     // Method not allowed
-    const methodNotAllowedResponse = new Response(
-      JSON.stringify({
-        success: false,
-        error: "Method not allowed",
-      }),
+    const response = new Response(
+      JSON.stringify({ error: "Method not allowed" }),
       {
-        headers: { "Content-Type": "application/json" },
         status: 405,
+        headers: { "Content-Type": "application/json" },
       }
     );
 
-    return addRateLimitHeaders(addCorsHeaders(methodNotAllowedResponse), rateLimitResult);
-  } catch (error) {
-    console.error("API Error:", error);
+    return addRateLimitHeaders(addCorsHeaders(response), rateLimitResult);
 
-    const errorResponse = new Response(
+  } catch (error) {
+    console.error("Error in api-events:", error);
+
+    const response = new Response(
       JSON.stringify({
-        success: false,
         error: error instanceof Error ? error.message : "Internal server error",
       }),
       {
-        headers: { "Content-Type": "application/json" },
         status: 500,
+        headers: { "Content-Type": "application/json" },
       }
     );
 
-    return addRateLimitHeaders(addCorsHeaders(errorResponse), rateLimitResult);
+    return addRateLimitHeaders(addCorsHeaders(response), rateLimitResult);
   }
 });
