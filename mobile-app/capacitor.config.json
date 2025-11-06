@@ -1,0 +1,37 @@
+{
+  "appId": "com.desmoines.aipulse",
+  "appName": "Des Moines AI Pulse",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#000000",
+      "showSpinner": false,
+      "androidSpinnerStyle": "small",
+      "iosSpinnerStyle": "small",
+      "spinnerColor": "#ffffff"
+    },
+    "StatusBar": {
+      "style": "dark",
+      "backgroundColor": "#000000"
+    },
+    "Keyboard": {
+      "resize": "native",
+      "style": "dark"
+    }
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "scheme": "Des Moines AI Pulse"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false
+  }
+}

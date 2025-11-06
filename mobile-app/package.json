@@ -1,0 +1,36 @@
+{
+  "name": "desmoines-ai-pulse-mobile",
+  "version": "1.0.0",
+  "description": "Native mobile app for Des Moines AI Pulse",
+  "main": "index.js",
+  "scripts": {
+    "dev": "npm run copy:web && cap sync",
+    "build": "npm run build:web && npm run copy:web && cap sync",
+    "build:web": "cd .. && npm run build",
+    "copy:web": "rm -rf www && mkdir -p www && cp -r ../dist/* www/",
+    "sync": "cap sync",
+    "sync:ios": "cap sync ios",
+    "sync:android": "cap sync android",
+    "open:ios": "cap open ios",
+    "open:android": "cap open android",
+    "add:ios": "cap add ios",
+    "add:android": "cap add android",
+    "update": "cap update"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/app": "^6.0.1",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/haptics": "^6.0.1",
+    "@capacitor/ios": "^6.1.2",
+    "@capacitor/keyboard": "^6.0.2",
+    "@capacitor/splash-screen": "^6.0.2",
+    "@capacitor/status-bar": "^6.0.1",
+    "@capacitor/share": "^6.0.2",
+    "@capacitor/browser": "^6.0.2",
+    "@capacitor/network": "^6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2"
+  }
+}
