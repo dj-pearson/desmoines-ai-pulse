@@ -1,20 +1,28 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { handleCors, addCorsHeaders } from "../_shared/cors.ts";
+import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import { validateQueryParams } from "../_shared/validation.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
 serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const corsResponse = handleCors(req);
+  if (corsResponse) {
+    return corsResponse;
+  }
+
+  // Check rate limit (100 requests per 15 minutes per IP)
+  const rateLimitResult = checkRateLimit(req, {
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+  });
+
+  if (!rateLimitResult.success) {
+    return addCorsHeaders(rateLimitResult.response!);
   }
 
   try {
@@ -24,17 +32,37 @@ serve(async (req) => {
 
     // GET /api-restaurants - List/search restaurants
     if (req.method === "GET" && !pathname.includes("/restaurants/")) {
-      const searchParams = url.searchParams;
+      // Validate query parameters
+      const validationResult = validateQueryParams(url, {
+        limit: { type: 'number', min: 1, max: 100, default: 20 },
+        offset: { type: 'number', min: 0, default: 0 },
+        cuisine: { type: 'string', max: 50 },
+        city: { type: 'string', max: 100 },
+        location: { type: 'string', max: 100 },
+        search: { type: 'string', max: 200 },
+        term: { type: 'string', max: 200 },
+        price: { type: 'string', max: 10 },
+        price_range: { type: 'string', max: 10 },
+        status: { type: 'string', max: 20 },
+      });
 
-      // Query parameters
-      const limit = parseInt(searchParams.get("limit") || "20");
-      const offset = parseInt(searchParams.get("offset") || "0");
-      const cuisine = searchParams.get("cuisine");
-      const city = searchParams.get("city") || searchParams.get("location");
-      const search = searchParams.get("search") || searchParams.get("term");
-      const priceRange =
-        searchParams.get("price") || searchParams.get("price_range");
-      const status = searchParams.get("status");
+      if (!validationResult.success) {
+        const errorResponse = new Response(
+          JSON.stringify({ error: 'Invalid parameters', details: validationResult.errors }),
+          {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+        return addRateLimitHeaders(addCorsHeaders(errorResponse), rateLimitResult);
+      }
+
+      const params = validationResult.data!;
+
+      // Handle aliases
+      const city = params.city || params.location;
+      const search = params.search || params.term;
+      const priceRange = params.price || params.price_range;
 
       let query = supabase
         .from("restaurants")
@@ -45,8 +73,8 @@ serve(async (req) => {
         .order("name", { ascending: true });
 
       // Apply filters
-      if (cuisine) {
-        query = query.ilike("cuisine", `%${cuisine}%`);
+      if (params.cuisine) {
+        query = query.ilike("cuisine", `%${params.cuisine}%`);
       }
 
       if (city) {
@@ -63,12 +91,12 @@ serve(async (req) => {
         query = query.eq("price_range", priceRange);
       }
 
-      if (status) {
-        query = query.eq("status", status);
+      if (params.status) {
+        query = query.eq("status", params.status);
       }
 
       // Pagination
-      query = query.range(offset, offset + limit - 1);
+      query = query.range(params.offset, params.offset + params.limit - 1);
 
       const { data, error, count } = await query;
 
@@ -88,7 +116,6 @@ serve(async (req) => {
         website: restaurant.website,
         image_url: restaurant.image_url,
         opening_date: restaurant.opening_date,
-        opening_timeframe: restaurant.opening_timeframe,
         status: restaurant.status,
         coordinates:
           restaurant.latitude && restaurant.longitude
@@ -97,115 +124,53 @@ serve(async (req) => {
                 longitude: restaurant.longitude,
               }
             : null,
+        google_place_id: restaurant.google_place_id,
+        opening_timeframe: restaurant.opening_timeframe,
       }));
 
-      return new Response(
+      const response = new Response(
         JSON.stringify({
-          success: true,
-          data: restaurants,
+          restaurants,
           pagination: {
             total: count || 0,
-            limit,
-            offset,
-            has_more: offset + limit < (count || 0),
+            limit: params.limit,
+            offset: params.offset,
+            hasMore: (params.offset + params.limit) < (count || 0),
           },
         }),
         {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
+          headers: { "Content-Type": "application/json" },
         }
       );
-    }
 
-    // GET /api-restaurants/{id} - Get restaurant details
-    if (req.method === "GET" && pathname.includes("/")) {
-      const pathParts = pathname.split("/").filter(Boolean);
-      const restaurantId = pathParts[pathParts.length - 1];
-
-      const { data, error } = await supabase
-        .from("restaurants")
-        .select("*")
-        .eq("id", restaurantId)
-        .single();
-
-      if (error) {
-        if (error.code === "PGRST116") {
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: "Restaurant not found",
-            }),
-            {
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-              status: 404,
-            }
-          );
-        }
-        throw error;
-      }
-
-      const restaurant = {
-        id: data.id,
-        name: data.name,
-        cuisine: data.cuisine,
-        description: data.description,
-        location: data.location,
-        city: data.city,
-        rating: data.rating,
-        price_range: data.price_range,
-        phone: data.phone,
-        website: data.website,
-        image_url: data.image_url,
-        opening_date: data.opening_date,
-        opening_timeframe: data.opening_timeframe,
-        status: data.status,
-        coordinates:
-          data.latitude && data.longitude
-            ? {
-                latitude: data.latitude,
-                longitude: data.longitude,
-              }
-            : null,
-        google_place_id: data.google_place_id,
-        ai_writeup: data.ai_writeup,
-        hours: data.hours,
-        menu_url: data.menu_url,
-      };
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          data: restaurant,
-        }),
-        {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        }
-      );
+      return addRateLimitHeaders(addCorsHeaders(response), rateLimitResult);
     }
 
     // Method not allowed
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: "Method not allowed",
-      }),
+    const response = new Response(
+      JSON.stringify({ error: "Method not allowed" }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 405,
+        headers: { "Content-Type": "application/json" },
       }
     );
+
+    return addRateLimitHeaders(addCorsHeaders(response), rateLimitResult);
+
   } catch (error) {
-    console.error("API Error:", error);
-    return new Response(
+    console.error("Error in api-restaurants:", error);
+
+    const response = new Response(
       JSON.stringify({
-        success: false,
-        error: error.message || "Internal server error",
+        error: error instanceof Error ? error.message : "Internal server error",
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
+        headers: { "Content-Type": "application/json" },
       }
     );
+
+    return addRateLimitHeaders(addCorsHeaders(response), rateLimitResult);
   }
 });
