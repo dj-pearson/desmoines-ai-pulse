@@ -110,16 +110,14 @@ export function SmartEventCard({ event, className = '' }: SmartEventCardProps) {
     }
   };
 
-  const CardWrapper = event.slug ? Link : 'div';
-  const cardProps = event.slug ? { to: `/events/${event.slug}` } : {};
-
   return (
     <Card className={`group card-mobile-interactive border-l-4 border-l-blue-500 ${className}`}>
       <CardContent className="p-4 md:p-6">
-        <CardWrapper
-          {...cardProps}
-          className="flex flex-col md:flex-row md:items-start gap-4"
-        >
+        {event.slug ? (
+          <Link
+            to={`/events/${event.slug}`}
+            className="flex flex-col md:flex-row md:items-start gap-4"
+          >
           {event.image_url && (
             <div className="relative w-full md:w-24 h-48 md:h-24 rounded-lg overflow-hidden flex-shrink-0">
               <img
@@ -264,7 +262,155 @@ export function SmartEventCard({ event, className = '' }: SmartEventCardProps) {
               )}
             </div>
           </div>
-        </CardWrapper>
+        </Link>
+        ) : (
+          <div className="flex flex-col md:flex-row md:items-start gap-4">
+            {event.image_url && (
+              <div className="relative w-full md:w-24 h-48 md:h-24 rounded-lg overflow-hidden flex-shrink-0">
+                <img
+                  src={event.image_url}
+                  alt={event.title}
+                  className="w-full h-full object-cover img-mobile"
+                  loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
+
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-col gap-2 mb-3">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="heading-mobile line-clamp-2 group-hover:text-primary transition-colors flex-1">
+                    {event.title}
+                  </h3>
+                  {isMobile && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleShare();
+                      }}
+                      className="btn-mobile-icon flex-shrink-0"
+                      aria-label="Share event"
+                    >
+                      <Share2Icon className="h-5 w-5" />
+                    </Button>
+                  )}
+                </div>
+                <div className="inline-mobile">
+                  <Badge variant="secondary" className="bg-gradient-to-r from-blue-500 to-purple-600 text-white chip-mobile">
+                    <SparklesIcon className="w-3 h-3" />
+                    <span className="ml-1">Smart</span>
+                  </Badge>
+                  {event.category && (
+                    <Badge variant="outline" className="chip-mobile">
+                      {event.category}
+                    </Badge>
+                  )}
+                  {event.price && (
+                    <Badge variant="outline" className="chip-mobile text-green-600 border-green-600">
+                      {event.price}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="stack-mobile-sm mb-4">
+                <div className="flex items-center gap-2 caption-mobile">
+                  <CalendarIcon className="w-4 h-4 flex-shrink-0" />
+                  <span className="mobile-text-wrap">
+                    {format(parseISO(event.date), isMobile ? 'MMM d, h:mm a' : 'MMM d, yyyy h:mm a')}
+                  </span>
+                </div>
+                {event.location && (
+                  <div className="flex items-center gap-2 caption-mobile">
+                    <MapPinIcon className="w-4 h-4 flex-shrink-0" />
+                    <span className="line-clamp-2 mobile-text-wrap flex-1">
+                      {event.location}
+                    </span>
+                    {isMobile && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleGetDirections();
+                        }}
+                        className="touch-feedback p-2 h-auto"
+                        aria-label="Get directions"
+                      >
+                        <NavigationIcon className="h-4 w-4 text-primary" />
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className={isMobile ? "stack-mobile-sm" : "flex items-center justify-between"}>
+                <div className={isMobile ? "inline-mobile" : "flex items-center space-x-2"}>
+                  <Button
+                    variant="outline"
+                    size={isMobile ? "default" : "sm"}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleCheckSchedule();
+                    }}
+                    disabled={checking}
+                    className={`${isMobile ? 'btn-mobile flex-1' : ''} ${
+                      hasConflicts === false
+                        ? 'border-green-500 text-green-600 hover:bg-green-50 dark:hover:bg-green-950'
+                        : hasConflicts === true
+                        ? 'border-amber-500 text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950'
+                        : ''
+                    }`}
+                  >
+                    {getConflictIcon()}
+                    <span className="ml-2">{isMobile ? getConflictText() : getConflictText()}</span>
+                  </Button>
+
+                  {hasConflicts === false && (
+                    <Button
+                      size={isMobile ? "default" : "sm"}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleAddToCalendar();
+                      }}
+                      className={`${isMobile ? 'btn-mobile flex-1' : ''} bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700`}
+                    >
+                      <CalendarIcon className="w-4 h-4" />
+                      <span className="ml-2">{isMobile ? 'Add' : 'Add to Calendar'}</span>
+                    </Button>
+                  )}
+
+                  {!isMobile && !isShareSupported && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleShare();
+                      }}
+                      aria-label="Share event"
+                    >
+                      <Share2Icon className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+
+                {!isMobile && (
+                  <div className="flex items-center space-x-2">
+                    <div className="text-xs text-muted-foreground">
+                      AI-powered scheduling
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

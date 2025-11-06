@@ -73,39 +73,9 @@ export function useUserPreferences() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Load preferences from server if authenticated
+  // TODO: Implement server-side preferences storage once user_profiles table is created
   useEffect(() => {
-    const loadServerPreferences = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-
-        setIsLoading(true);
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .select('preferences')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          if (error.code !== 'PGRST116') { // Not found error is ok
-            console.error('Failed to load server preferences:', error);
-          }
-          return;
-        }
-
-        if (data?.preferences) {
-          const serverPrefs = { ...DEFAULT_PREFERENCES, ...data.preferences };
-          setPreferences(serverPrefs);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(serverPrefs));
-        }
-      } catch (error) {
-        console.error('Error loading server preferences:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadServerPreferences();
+    setIsLoading(false);
   }, []);
 
   // Save preferences to localStorage
@@ -118,28 +88,10 @@ export function useUserPreferences() {
   }, []);
 
   // Sync preferences to server if authenticated
+  // TODO: Implement server-side preferences storage once user_profiles table is created
   const syncToServer = useCallback(async (newPrefs: UserPreferences) => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      setIsSyncing(true);
-      const { error } = await supabase
-        .from('user_profiles')
-        .upsert({
-          id: user.id,
-          preferences: newPrefs,
-          updated_at: new Date().toISOString(),
-        });
-
-      if (error) {
-        console.error('Failed to sync preferences to server:', error);
-      }
-    } catch (error) {
-      console.error('Error syncing preferences:', error);
-    } finally {
-      setIsSyncing(false);
-    }
+    // Placeholder for future server sync
+    setIsSyncing(false);
   }, []);
 
   // Update preferences

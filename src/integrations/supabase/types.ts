@@ -3169,7 +3169,7 @@ export type Database = {
           event_type: string
           filters_used: Json | null
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           page_url: string | null
           referrer: string | null
           search_query: string | null
@@ -3185,7 +3185,7 @@ export type Database = {
           event_type: string
           filters_used?: Json | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           page_url?: string | null
           referrer?: string | null
           search_query?: string | null
@@ -3201,7 +3201,7 @@ export type Database = {
           event_type?: string
           filters_used?: Json | null
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           page_url?: string | null
           referrer?: string | null
           search_query?: string | null
@@ -3928,10 +3928,7 @@ export type Database = {
         }
         Returns: undefined
       }
-      calculate_level_xp: {
-        Args: { level: number }
-        Returns: number
-      }
+      calculate_level_xp: { Args: { level: number }; Returns: number }
       calculate_reputation_level: {
         Args: { points: number }
         Returns: Database["public"]["Enums"]["reputation_level"]
@@ -3955,10 +3952,7 @@ export type Database = {
         }
         Returns: number
       }
-      calculate_trending_scores: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      calculate_trending_scores: { Args: never; Returns: undefined }
       check_auth_rate_limit: {
         Args: { p_email: string; p_ip_address: string }
         Returns: Json
@@ -3970,17 +3964,49 @@ export type Database = {
           conflicting_events: Json
         }[]
       }
-      check_vault_security_status: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
+      check_vault_security_status: { Args: never; Returns: Json }
+      cleanup_old_security_logs: { Args: never; Returns: undefined }
+      cleanup_security_logs: { Args: never; Returns: undefined }
+      fuzzy_search_events: {
+        Args: { search_limit?: number; search_query: string }
+        Returns: {
+          ai_writeup: string
+          category: string
+          city: string
+          date: string
+          description: string
+          enhanced_description: string
+          id: string
+          image_url: string
+          latitude: number
+          location: string
+          longitude: number
+          original_description: string
+          price: string
+          relevance_score: number
+          source_url: string
+          title: string
+          venue: string
+        }[]
       }
-      cleanup_old_security_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_security_logs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
+      fuzzy_search_restaurants: {
+        Args: { search_limit?: number; search_query: string }
+        Returns: {
+          city: string
+          cuisine: string
+          description: string
+          id: string
+          image_url: string
+          latitude: number
+          location: string
+          longitude: number
+          name: string
+          phone: string
+          price_range: string
+          rating: number
+          relevance_score: number
+          website: string
+        }[]
       }
       generate_article_slug: {
         Args: { article_title: string }
@@ -4007,10 +4033,7 @@ export type Database = {
           title: string
         }[]
       }
-      get_database_metrics: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      get_database_metrics: { Args: never; Returns: Json }
       get_friends_near_event: {
         Args: {
           p_event_latitude: number
@@ -4024,18 +4047,12 @@ export type Database = {
           friend_name: string
         }[]
       }
-      get_level_from_xp: {
-        Args: { xp: number }
-        Returns: number
-      }
+      get_level_from_xp: { Args: { xp: number }; Returns: number }
       get_next_optimal_posting_time: {
         Args: { base_time?: string }
         Returns: string
       }
-      get_security_recommendations: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      get_security_recommendations: { Args: never; Returns: Json }
       get_user_profile_safe: {
         Args: { target_user_id: string }
         Returns: {
@@ -4053,10 +4070,7 @@ export type Database = {
           user_role: Database["public"]["Enums"]["user_role"]
         }[]
       }
-      get_user_reputation_weight: {
-        Args: { user_id: string }
-        Returns: number
-      }
+      get_user_reputation_weight: { Args: { user_id: string }; Returns: number }
       get_user_role: {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
@@ -4077,38 +4091,14 @@ export type Database = {
         }
         Returns: string
       }
-      optimize_database_performance: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
-      populate_event_live_stats: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      purge_old_events: {
-        Args: { retention_months?: number }
-        Returns: Json
-      }
-      run_scraping_jobs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      run_scraping_jobs_simple: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      run_social_media_automation: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      run_social_media_publishing: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      trigger_due_scraping_jobs: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      optimize_database_performance: { Args: never; Returns: Json }
+      populate_event_live_stats: { Args: never; Returns: undefined }
+      purge_old_events: { Args: { retention_months?: number }; Returns: Json }
+      run_scraping_jobs: { Args: never; Returns: undefined }
+      run_scraping_jobs_simple: { Args: never; Returns: undefined }
+      run_social_media_automation: { Args: never; Returns: undefined }
+      run_social_media_publishing: { Args: never; Returns: undefined }
+      trigger_due_scraping_jobs: { Args: never; Returns: undefined }
       update_content_rating_aggregate: {
         Args: {
           p_content_id: string
@@ -4116,10 +4106,7 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_trending_scores: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      update_trending_scores: { Args: never; Returns: undefined }
       update_user_gamification: {
         Args: { p_user_id: string }
         Returns: undefined

@@ -17,7 +17,7 @@ import {
   Bell,
   Globe,
   Bot,
-  Sitemap,
+  FileCode2,
   Sparkles,
   Code,
   Gauge,
@@ -202,7 +202,7 @@ export function SEOManager() {
             <span className="hidden sm:inline">Robots</span>
           </TabsTrigger>
           <TabsTrigger value="sitemap" className="flex items-center gap-2">
-            <Sitemap className="h-4 w-4" />
+            <FileCode2 className="h-4 w-4" />
             <span className="hidden sm:inline">Sitemap</span>
           </TabsTrigger>
           <TabsTrigger value="structured" className="flex items-center gap-2">
@@ -388,7 +388,7 @@ export function SEOManager() {
           { value: "monitoring", title: "Automated Monitoring", icon: Bell },
           { value: "meta", title: "Meta Tags Management", icon: Globe },
           { value: "robots", title: "Robots.txt", icon: Bot },
-          { value: "sitemap", title: "XML Sitemap", icon: Sitemap },
+          { value: "sitemap", title: "XML Sitemap", icon: FileCode2 },
           { value: "structured", title: "Structured Data", icon: Code },
           { value: "performance", title: "Core Web Vitals", icon: Gauge },
         ].map(({ value, title, icon: Icon }) => (

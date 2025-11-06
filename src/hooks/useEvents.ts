@@ -94,12 +94,11 @@ export function useEvents(filters: EventFilters = {}) {
         const { data: fuzzyData, error: fuzzyError } = await supabase
           .rpc('fuzzy_search_events', {
             search_query: filters.search,
-            similarity_threshold: 0.3,
-            limit_count: filters.limit || 50
+            search_limit: filters.limit || 50
           });
 
         if (!fuzzyError && fuzzyData) {
-          data = fuzzyData;
+          data = fuzzyData as unknown as Event[];
           count = fuzzyData.length;
           console.log('useEvents: Fuzzy search found', fuzzyData.length, 'events');
         }
