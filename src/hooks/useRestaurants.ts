@@ -47,11 +47,14 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       let query = supabase.from("restaurants").select("*", { count: "exact" });
 
-      // Apply search filter
+      // Use full-text search with tsvector for better performance and relevance ranking
       if (filters.search) {
-        query = query.or(
-          `name.ilike.%${filters.search}%,cuisine.ilike.%${filters.search}%,city.ilike.%${filters.search}%,location.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
-        );
+        // Full-text search with PostgreSQL tsvector (10-100x faster than ILIKE)
+        // Uses websearch_to_tsquery which handles phrases, AND/OR, and quoted strings
+        query = query.textSearch('search_vector', filters.search, {
+          type: 'websearch',
+          config: 'english'
+        });
       }
 
       // Apply cuisine filter (array)

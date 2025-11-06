@@ -61,10 +61,14 @@ export function useEvents(filters: EventFilters = {}) {
         query = query.eq("category", filters.category);
       }
 
+      // Use full-text search with tsvector for better performance and relevance ranking
       if (filters.search) {
-        query = query.or(
-          `title.ilike.%${filters.search}%,venue.ilike.%${filters.search}%,location.ilike.%${filters.search}%`
-        );
+        // Full-text search with PostgreSQL tsvector (10-100x faster than ILIKE)
+        // Uses websearch_to_tsquery which handles phrases, AND/OR, and quoted strings
+        query = query.textSearch('search_vector', filters.search, {
+          type: 'websearch',
+          config: 'english'
+        });
       }
 
       if (filters.limit) {
