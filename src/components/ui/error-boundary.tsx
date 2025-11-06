@@ -26,7 +26,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Don't log SES-related errors as they're from browser extensions
-    if (!error.message.includes('SES') && !error.message.includes('lockdown')) {
+    if (import.meta.env.DEV && !error.message.includes('SES') && !error.message.includes('lockdown')) {
       console.error('Error Boundary caught an error:', error, errorInfo);
     }
   }
@@ -64,7 +64,7 @@ function DefaultErrorFallback({ error, resetError }: { error?: Error; resetError
             We encountered an unexpected error. Please try refreshing the page or return to the homepage.
           </p>
           
-          {error && process.env.NODE_ENV === 'development' && (
+          {error && import.meta.env.DEV && (
             <details className="bg-muted p-3 rounded text-sm">
               <summary className="cursor-pointer font-medium">Error Details</summary>
               <pre className="mt-2 whitespace-pre-wrap text-xs">{error.message}</pre>

@@ -56,7 +56,7 @@ export const trackWebVitals = () => {
     // Track Core Web Vitals using dynamic import with modern API
     import('web-vitals').then(({ onCLS, onINP, onFCP, onLCP, onTTFB }) => {
       // Only log in development mode to reduce console noise
-      const logMetric = process.env.NODE_ENV === 'development' ? console.log : () => {};
+      const logMetric = import.meta.env.DEV ? console.log : () => {};
       onCLS(logMetric);
       onINP(logMetric); // replaces FID in web-vitals v3+
       onFCP(logMetric);
@@ -64,7 +64,7 @@ export const trackWebVitals = () => {
       onTTFB(logMetric);
     }).catch(() => {
       // Silent fallback to avoid console noise
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log('Web Vitals tracking not available');
       }
     });
@@ -73,7 +73,7 @@ export const trackWebVitals = () => {
 
 // Memory usage monitoring
 export const monitorMemoryUsage = () => {
-  if ('memory' in performance) {
+  if (import.meta.env.DEV && 'memory' in performance) {
     const memory = (performance as any).memory;
     console.log('Memory usage:', {
       usedJSHeapSize: memory.usedJSHeapSize,
@@ -112,7 +112,9 @@ export const registerServiceWorker = async () => {
   const isSecureContext = location.protocol === 'https:' || location.hostname === 'localhost';
 
   if (!('serviceWorker' in navigator)) {
-    console.log('Service Worker not supported');
+    if (import.meta.env.DEV) {
+      console.log('Service Worker not supported');
+    }
     return;
   }
 
@@ -122,16 +124,20 @@ export const registerServiceWorker = async () => {
       // Unregister ALL service workers
       const regs = await navigator.serviceWorker.getRegistrations();
       await Promise.all(regs.map((r) => r.unregister()));
-      
+
       // Clear ALL caches that might interfere
       if ('caches' in window) {
         const keys = await caches.keys();
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
-      
-      console.log('Service Workers disabled for development/insecure context');
+
+      if (import.meta.env.DEV) {
+        console.log('Service Workers disabled for development/insecure context');
+      }
     } catch (err) {
-      console.warn('Failed to clear service workers/caches:', err);
+      if (import.meta.env.DEV) {
+        console.warn('Failed to clear service workers/caches:', err);
+      }
     }
     return;
   }
@@ -140,29 +146,37 @@ export const registerServiceWorker = async () => {
     // Check if service worker script exists before registering
     const response = await fetch('/sw.js', { method: 'HEAD' });
     if (!response.ok) {
-      console.warn('Service Worker script not found, skipping registration');
+      if (import.meta.env.DEV) {
+        console.warn('Service Worker script not found, skipping registration');
+      }
       return;
     }
 
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/'
     });
-    console.log('Service Worker registered successfully:', registration);
-    
+    if (import.meta.env.DEV) {
+      console.log('Service Worker registered successfully:', registration);
+    }
+
     // Handle updates
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
       if (newWorker) {
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            console.log('New content available, please refresh.');
+            if (import.meta.env.DEV) {
+              console.log('New content available, please refresh.');
+            }
           }
         });
       }
     });
     return registration;
   } catch (error) {
-    console.error('Service Worker registration failed:', error);
+    if (import.meta.env.DEV) {
+      console.error('Service Worker registration failed:', error);
+    }
     // Don't let SW registration failures break the app
     return null;
   }
@@ -199,7 +213,7 @@ export const addResourceHints = () => {
 
 // Bundle size analyzer (development only)
 export const analyzeBundleSize = () => {
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     // Log bundle information
     console.log('Bundle analysis would run here in development');
   }
