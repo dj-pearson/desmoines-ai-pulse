@@ -131,10 +131,27 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         );
       }
 
-      const { data, error, count } = await query;
+      let { data, error, count } = await query;
 
       if (error) {
         throw error;
+      }
+
+      // Fallback to fuzzy search if no results found with full-text search
+      if (filters.search && (!data || data.length === 0)) {
+        console.log('useRestaurants: No results with full-text search, trying fuzzy search...');
+        const { data: fuzzyData, error: fuzzyError } = await supabase
+          .rpc('fuzzy_search_restaurants', {
+            search_query: filters.search,
+            similarity_threshold: 0.3,
+            limit_count: filters.limit || 50
+          });
+
+        if (!fuzzyError && fuzzyData) {
+          data = fuzzyData;
+          count = fuzzyData.length;
+          console.log('useRestaurants: Fuzzy search found', fuzzyData.length, 'restaurants');
+        }
       }
 
       setState({
