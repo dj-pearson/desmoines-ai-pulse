@@ -61,10 +61,14 @@ export function useEvents(filters: EventFilters = {}) {
         query = query.eq("category", filters.category);
       }
 
+      // Use full-text search with tsvector for better performance and relevance ranking
       if (filters.search) {
-        query = query.or(
-          `title.ilike.%${filters.search}%,venue.ilike.%${filters.search}%,location.ilike.%${filters.search}%`
-        );
+        // Full-text search with PostgreSQL tsvector (10-100x faster than ILIKE)
+        // Uses websearch_to_tsquery which handles phrases, AND/OR, and quoted strings
+        query = query.textSearch('search_vector', filters.search, {
+          type: 'websearch',
+          config: 'english'
+        });
       }
 
       if (filters.limit) {
@@ -78,14 +82,31 @@ export function useEvents(filters: EventFilters = {}) {
         );
       }
 
-      const { data, error, count } = await query;
+      let { data, error, count } = await query;
 
       if (error) {
         throw error;
       }
 
+      // Fallback to fuzzy search if no results found with full-text search
+      if (filters.search && (!data || data.length === 0)) {
+        console.log('useEvents: No results with full-text search, trying fuzzy search...');
+        const { data: fuzzyData, error: fuzzyError } = await supabase
+          .rpc('fuzzy_search_events', {
+            search_query: filters.search,
+            similarity_threshold: 0.3,
+            limit_count: filters.limit || 50
+          });
+
+        if (!fuzzyError && fuzzyData) {
+          data = fuzzyData;
+          count = fuzzyData.length;
+          console.log('useEvents: Fuzzy search found', fuzzyData.length, 'events');
+        }
+      }
+
       console.log('useEvents: Found', data?.length, 'events from', today, 'onwards');
-      
+
       setState({
         events: data || [],
         isLoading: false,
