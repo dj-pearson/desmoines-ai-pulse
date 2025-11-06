@@ -50,3 +50,12 @@ playwright-report/
 blob-report/
 playwright/.cache/
 supabase-cron-setup.sql
+
+# Mobile app build artifacts
+mobile-app/www/
+mobile-app/ios/App/Podfile.lock
+mobile-app/ios/App/Pods/
+mobile-app/android/app/build/
+mobile-app/android/.gradle/
+mobile-app/android/local.properties
+mobile-app/node_modules/
