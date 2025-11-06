@@ -14,8 +14,13 @@ CREATE INDEX IF NOT EXISTS restaurants_name_trgm_idx ON restaurants USING GIN (n
 CREATE INDEX IF NOT EXISTS restaurants_cuisine_trgm_idx ON restaurants USING GIN (cuisine gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS restaurants_location_trgm_idx ON restaurants USING GIN (location gin_trgm_ops);
 
--- Step 4: Create fuzzy search function for events
-CREATE OR REPLACE FUNCTION fuzzy_search_events(
+-- Step 4: Drop existing functions if they exist (to handle any conflicts)
+DROP FUNCTION IF EXISTS fuzzy_search_events(text, real, integer);
+DROP FUNCTION IF EXISTS fuzzy_search_restaurants(text, real, integer);
+DROP FUNCTION IF EXISTS get_event_suggestions(text, integer);
+
+-- Step 5: Create fuzzy search function for events
+CREATE FUNCTION fuzzy_search_events(
   search_query text,
   similarity_threshold real DEFAULT 0.3,
   limit_count integer DEFAULT 50
@@ -52,10 +57,10 @@ BEGIN
   ORDER BY similarity_score DESC, e.date ASC
   LIMIT limit_count;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql STABLE;
 
--- Step 5: Create fuzzy search function for restaurants
-CREATE OR REPLACE FUNCTION fuzzy_search_restaurants(
+-- Step 6: Create fuzzy search function for restaurants
+CREATE FUNCTION fuzzy_search_restaurants(
   search_query text,
   similarity_threshold real DEFAULT 0.3,
   limit_count integer DEFAULT 50
@@ -89,10 +94,10 @@ BEGIN
   ORDER BY similarity_score DESC, r.popularity_score DESC NULLS LAST
   LIMIT limit_count;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql STABLE;
 
--- Step 6: Create helper function to get search suggestions (autocomplete)
-CREATE OR REPLACE FUNCTION get_event_suggestions(
+-- Step 7: Create helper function to get search suggestions (autocomplete)
+CREATE FUNCTION get_event_suggestions(
   search_query text,
   limit_count integer DEFAULT 10
 )
@@ -145,18 +150,17 @@ BEGIN
   ORDER BY similarity_score DESC
   LIMIT limit_count;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql STABLE;
 
--- Step 7: Grant necessary permissions
-GRANT EXECUTE ON FUNCTION fuzzy_search_events TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION fuzzy_search_restaurants TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION get_event_suggestions TO anon, authenticated;
+-- Step 8: Grant necessary permissions
+GRANT EXECUTE ON FUNCTION fuzzy_search_events(text, real, integer) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION fuzzy_search_restaurants(text, real, integer) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION get_event_suggestions(text, integer) TO anon, authenticated;
 
--- Step 8: Add comments for documentation
-COMMENT ON EXTENSION pg_trgm IS 'Trigram similarity matching for fuzzy search and typo tolerance';
-COMMENT ON FUNCTION fuzzy_search_events IS 'Performs fuzzy matching search on events with configurable similarity threshold (default 0.3)';
-COMMENT ON FUNCTION fuzzy_search_restaurants IS 'Performs fuzzy matching search on restaurants with configurable similarity threshold (default 0.3)';
-COMMENT ON FUNCTION get_event_suggestions IS 'Returns search suggestions for autocomplete based on trigram similarity';
+-- Step 9: Add comments for documentation
+COMMENT ON FUNCTION fuzzy_search_events(text, real, integer) IS 'Performs fuzzy matching search on events with configurable similarity threshold (default 0.3)';
+COMMENT ON FUNCTION fuzzy_search_restaurants(text, real, integer) IS 'Performs fuzzy matching search on restaurants with configurable similarity threshold (default 0.3)';
+COMMENT ON FUNCTION get_event_suggestions(text, integer) IS 'Returns search suggestions for autocomplete based on trigram similarity';
 
 -- Log success
 DO $$
