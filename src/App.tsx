@@ -27,11 +27,18 @@ const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
 const AdminArticleEditor = lazy(() => import("./pages/AdminArticleEditor"));
 const Advertise = lazy(() => import("./pages/Advertise"));
+const AdvertiseSuccess = lazy(() => import("./pages/AdvertiseSuccess"));
+const AdvertiseCancel = lazy(() => import("./pages/AdvertiseCancel"));
 const WeekendPage = lazy(() => import("./pages/WeekendPage"));
 const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
 const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
 const IowaStateFairPage = lazy(() => import("./pages/IowaStateFairPage"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
+const UploadCreatives = lazy(() => import("./pages/UploadCreatives"));
+const AdminCampaigns = lazy(() => import("./pages/AdminCampaigns"));
+const AdminCampaignDetail = lazy(() => import("./pages/AdminCampaignDetail"));
+const CampaignAnalytics = lazy(() => import("./pages/CampaignAnalytics"));
+const TeamManagement = lazy(() => import("./pages/TeamManagement"));
 const Social = lazy(() => import("./pages/Social"));
 const SmartCalendarIntegration = lazy(
   () => import("./components/SmartCalendarIntegration")
@@ -127,11 +134,18 @@ const App = () => (
               path="/admin/articles/edit/:id"
               element={<AdminArticleEditor />}
             />
+            <Route path="/admin/campaigns" element={<AdminCampaigns />} />
+            <Route path="/admin/campaigns/:campaignId" element={<AdminCampaignDetail />} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
             <Route path="/advertise" element={<Advertise />} />
+            <Route path="/advertise/success" element={<AdvertiseSuccess />} />
+            <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
             <Route path="/campaigns" element={<CampaignDashboard />} />
+            <Route path="/campaigns/:campaignId/creatives" element={<UploadCreatives />} />
+            <Route path="/campaigns/:campaignId/analytics" element={<CampaignAnalytics />} />
+            <Route path="/campaigns/team" element={<TeamManagement />} />
             <Route path="/weekend" element={<WeekendPage />} />
             <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
             <Route

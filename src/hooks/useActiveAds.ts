@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface ActiveAd {
-  id: string;
+  campaign_id: string;
+  creative_id: string;
   title?: string;
   description?: string;
   image_url?: string;
