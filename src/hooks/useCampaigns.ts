@@ -11,6 +11,12 @@ export interface Campaign {
   total_cost?: number;
   stripe_session_id?: string;
   stripe_payment_intent_id?: string;
+  renewal_eligible?: boolean;
+  auto_renew?: boolean;
+  original_campaign_id?: string;
+  traffic_tier?: 'low' | 'medium' | 'high' | 'peak';
+  approval_notes?: string;
+  rejected_reason?: string;
   created_at: string;
   updated_at: string;
   campaign_placements?: CampaignPlacement[];
@@ -37,8 +43,23 @@ export interface CampaignCreative {
   link_url?: string;
   cta_text?: string;
   is_approved: boolean;
+  file_size?: number;
+  file_type?: string;
+  dimensions_width?: number;
+  dimensions_height?: number;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  rejection_reason?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface PricingInfo {
+  daily_price: number;
+  total_price: number;
+  base_price: number;
+  traffic_multiplier: number;
+  demand_multiplier: number;
 }
 
 export function useCampaigns() {
@@ -74,6 +95,53 @@ export function useCampaigns() {
     }
   };
 
+  const getCurrentPricing = async (
+    placementType: 'top_banner' | 'featured_spot' | 'below_fold',
+    daysCount: number
+  ): Promise<PricingInfo> => {
+    try {
+      const { data, error } = await supabase.rpc("calculate_campaign_pricing", {
+        p_placement_type: placementType,
+        p_days_count: daysCount,
+      });
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        // Fallback to default pricing if function fails
+        const defaultPrices = {
+          top_banner: 10,
+          featured_spot: 5,
+          below_fold: 5,
+        };
+        const dailyPrice = defaultPrices[placementType];
+        return {
+          daily_price: dailyPrice,
+          total_price: dailyPrice * daysCount,
+          base_price: dailyPrice,
+          traffic_multiplier: 1.0,
+          demand_multiplier: 1.0,
+        };
+      }
+
+      return data[0];
+    } catch (err) {
+      // Fallback pricing on error
+      const defaultPrices = {
+        top_banner: 10,
+        featured_spot: 5,
+        below_fold: 5,
+      };
+      const dailyPrice = defaultPrices[placementType];
+      return {
+        daily_price: dailyPrice,
+        total_price: dailyPrice * daysCount,
+        base_price: dailyPrice,
+        traffic_multiplier: 1.0,
+        demand_multiplier: 1.0,
+      };
+    }
+  };
+
   const createCampaign = async (campaignData: {
     name: string;
     placements: Array<{
@@ -85,14 +153,20 @@ export function useCampaigns() {
   }) => {
     try {
       if (!user) throw new Error("User not authenticated");
-      const placementCosts = {
-        top_banner: 10,
-        featured_spot: 5,
-        below_fold: 5,
-      };
 
-      const totalCost = campaignData.placements.reduce(
-        (sum, placement) => sum + (placementCosts[placement.placement_type] * placement.days_count),
+      // Get dynamic pricing for each placement
+      const placementPricing = await Promise.all(
+        campaignData.placements.map(async (placement) => {
+          const pricing = await getCurrentPricing(placement.placement_type, placement.days_count);
+          return {
+            placement,
+            pricing,
+          };
+        })
+      );
+
+      const totalCost = placementPricing.reduce(
+        (sum, { pricing }) => sum + pricing.total_price,
         0
       );
 
@@ -111,12 +185,12 @@ export function useCampaigns() {
 
       if (campaignError) throw campaignError;
 
-      const placementInserts = campaignData.placements.map(placement => ({
+      const placementInserts = placementPricing.map(({ placement, pricing }) => ({
         campaign_id: campaign.id,
         placement_type: placement.placement_type,
-        daily_cost: placementCosts[placement.placement_type],
+        daily_cost: pricing.daily_price,
         days_count: placement.days_count,
-        total_cost: placementCosts[placement.placement_type] * placement.days_count,
+        total_cost: pricing.total_price,
       }));
 
       const { error: placementError } = await supabase
@@ -199,6 +273,7 @@ export function useCampaigns() {
     verifyPayment,
     updateCreative,
     createCreative,
+    getCurrentPricing,
     refetch: fetchCampaigns,
   };
 }
