@@ -383,6 +383,9 @@ END;
 $$;
 
 -- Enhanced get_active_ads function with frequency capping
+-- First drop the existing function to avoid naming conflicts
+DROP FUNCTION IF EXISTS public.get_active_ads(placement_type);
+
 CREATE OR REPLACE FUNCTION public.get_active_ads(
   p_placement_type placement_type,
   p_session_id TEXT DEFAULT NULL,
