@@ -37,6 +37,8 @@ const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
 const UploadCreatives = lazy(() => import("./pages/UploadCreatives"));
 const AdminCampaigns = lazy(() => import("./pages/AdminCampaigns"));
 const AdminCampaignDetail = lazy(() => import("./pages/AdminCampaignDetail"));
+const CampaignAnalytics = lazy(() => import("./pages/CampaignAnalytics"));
+const TeamManagement = lazy(() => import("./pages/TeamManagement"));
 const Social = lazy(() => import("./pages/Social"));
 const SmartCalendarIntegration = lazy(
   () => import("./components/SmartCalendarIntegration")
@@ -142,6 +144,8 @@ const App = () => (
             <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
             <Route path="/campaigns" element={<CampaignDashboard />} />
             <Route path="/campaigns/:campaignId/creatives" element={<UploadCreatives />} />
+            <Route path="/campaigns/:campaignId/analytics" element={<CampaignAnalytics />} />
+            <Route path="/campaigns/team" element={<TeamManagement />} />
             <Route path="/weekend" element={<WeekendPage />} />
             <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
             <Route
