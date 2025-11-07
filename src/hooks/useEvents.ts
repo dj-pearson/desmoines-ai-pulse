@@ -91,16 +91,21 @@ export function useEvents(filters: EventFilters = {}) {
       // Fallback to fuzzy search if no results found with full-text search
       if (filters.search && (!data || data.length === 0)) {
         console.log('useEvents: No results with full-text search, trying fuzzy search...');
-        const { data: fuzzyData, error: fuzzyError } = await supabase
-          .rpc('fuzzy_search_events', {
-            search_query: filters.search,
-            search_limit: filters.limit || 50
-          });
+        try {
+          const { data: fuzzyData, error: fuzzyError } = await supabase
+            .rpc('fuzzy_search_events', {
+              search_query: filters.search,
+              search_limit: filters.limit || 50
+            });
 
-        if (!fuzzyError && fuzzyData) {
-          data = fuzzyData as unknown as Event[];
-          count = fuzzyData.length;
-          console.log('useEvents: Fuzzy search found', fuzzyData.length, 'events');
+          if (!fuzzyError && fuzzyData) {
+            data = fuzzyData as unknown as Event[];
+            count = fuzzyData.length;
+            console.log('useEvents: Fuzzy search found', fuzzyData.length, 'events');
+          }
+        } catch (fuzzyErr) {
+          // Fuzzy search function not available yet - silently continue
+          console.log('useEvents: Fuzzy search not available, using existing results');
         }
       }
 

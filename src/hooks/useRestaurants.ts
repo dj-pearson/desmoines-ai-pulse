@@ -140,16 +140,21 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       // Fallback to fuzzy search if no results found with full-text search
       if (filters.search && (!data || data.length === 0)) {
         console.log('useRestaurants: No results with full-text search, trying fuzzy search...');
-        const { data: fuzzyData, error: fuzzyError } = await supabase
-          .rpc('fuzzy_search_restaurants', {
-            search_query: filters.search,
-            search_limit: filters.limit || 50
-          });
+        try {
+          const { data: fuzzyData, error: fuzzyError } = await supabase
+            .rpc('fuzzy_search_restaurants', {
+              search_query: filters.search,
+              search_limit: filters.limit || 50
+            });
 
-        if (!fuzzyError && fuzzyData) {
-          data = fuzzyData as unknown as Restaurant[];
-          count = fuzzyData.length;
-          console.log('useRestaurants: Fuzzy search found', fuzzyData.length, 'restaurants');
+          if (!fuzzyError && fuzzyData) {
+            data = fuzzyData as unknown as Restaurant[];
+            count = fuzzyData.length;
+            console.log('useRestaurants: Fuzzy search found', fuzzyData.length, 'restaurants');
+          }
+        } catch (fuzzyErr) {
+          // Fuzzy search function not available yet - silently continue
+          console.log('useRestaurants: Fuzzy search not available, using existing results');
         }
       }
 
