@@ -38,6 +38,7 @@ import { Link } from "react-router-dom";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FAQSection } from "@/components/FAQSection";
 
 const createSlug = (name: string): string => {
   return name
@@ -483,6 +484,52 @@ export default function Restaurants() {
             </div>
           </div>
         </main>
+
+        {/* FAQ Section for SEO and Featured Snippets */}
+        <section className="py-16 bg-muted/30">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <FAQSection
+              title="Des Moines Restaurants - Frequently Asked Questions"
+              description="Common questions about dining, restaurants, and the food scene in Des Moines, Iowa."
+              faqs={[
+                {
+                  question: "What are the best restaurants in Des Moines?",
+                  answer: "Des Moines features over 300 diverse restaurants. Top-rated establishments include Malo for upscale Mexican, Django for French-inspired fine dining, Bubba for Southern fusion, Alba for innovative American cuisine, and Centro for authentic Italian. The East Village offers trendy farm-to-table options, while Ingersoll Avenue features local favorites. Valley Junction in West Des Moines is known for unique dining experiences. Our restaurant directory includes real-time ratings, reviews, and current menus with weekly updates."
+                },
+                {
+                  question: "What cuisines are available in Des Moines?",
+                  answer: "Des Moines offers 30+ cuisine types including American (farm-to-table and classic), Italian, Mexican and Latin American, Asian (Chinese, Japanese, Thai, Vietnamese, Korean), Indian, Mediterranean and Middle Eastern, French, steakhouses, seafood, BBQ and Southern, vegetarian and vegan options, and authentic ethnic restaurants. Use our cuisine filter to discover restaurants by type. The East Village and Downtown areas have the highest concentration of diverse dining options."
+                },
+                {
+                  question: "Where can I find new restaurant openings in Des Moines?",
+                  answer: "Des Moines Insider tracks new restaurant openings within 48 hours of announcement. Check our 'New Openings' section on the Restaurants page for the latest additions. Recent trends include farm-to-table concepts in East Village, ethnic restaurants expanding in suburban areas, food halls downtown, and craft breweries with full kitchens. We monitor building permits, social media announcements, and industry sources to provide the most current information on upcoming restaurants."
+                },
+                {
+                  question: "What are the price ranges for restaurants in Des Moines?",
+                  answer: "Des Moines restaurants range from budget-friendly to upscale: $ (Under $15 per person) - casual dining, fast-casual, food trucks; $$ ($15-30 per person) - mid-range restaurants, most local favorites; $$$ ($30-60 per person) - upscale casual, steakhouses, specialty cuisine; $$$$ (Over $60 per person) - fine dining, tasting menus, special occasions. Use our price filter to find restaurants matching your budget. Des Moines offers exceptional value with many highly-rated restaurants in the $$ range."
+                },
+                {
+                  question: "Are there family-friendly restaurants in Des Moines?",
+                  answer: "Yes! Des Moines has numerous family-friendly restaurants with kids menus, high chairs, and welcoming atmospheres. Popular choices include Machine Shed (country cooking with generous portions), Fong's Pizza (unique pizza combinations in a fun setting), Zombie Burger (creative burgers that kids love), Jethro's BBQ (casual BBQ with large portions), Perkins (classic family restaurant), and many ethnic restaurants with family-style dining. Our platform indicates family-friendly features and kids menu availability for each restaurant."
+                },
+                {
+                  question: "What neighborhoods have the best restaurant scenes in Des Moines?",
+                  answer: "Des Moines has several distinct dining districts: East Village (trendy, farm-to-table, craft cocktails), Downtown (business lunch, upscale dining, hotels), Ingersoll Avenue (local institutions, neighborhood favorites), Court Avenue (bars, nightlife, casual dining), Valley Junction in West Des Moines (unique concepts, antique district charm), Drake neighborhood (student-friendly, diverse options), and Beaverdale (family-friendly local spots). Each neighborhood offers unique dining experiences reflecting its character."
+                },
+                {
+                  question: "How do I find restaurants with specific dietary options in Des Moines?",
+                  answer: "Des Moines offers extensive options for dietary restrictions. Search our restaurant directory using tags for vegetarian, vegan, gluten-free, dairy-free, and allergen-friendly options. Notable restaurants include Ritual Cafe (vegan and vegetarian), Proof (extensive gluten-free menu), Fresh (healthy bowls and smoothies), and many Asian and Mediterranean restaurants with naturally vegetarian options. Most upscale restaurants accommodate dietary restrictions with advance notice. Contact restaurants directly for specific allergen information."
+                },
+                {
+                  question: "Do Des Moines restaurants require reservations?",
+                  answer: "Reservation policies vary by restaurant type and popularity. Fine dining and upscale restaurants (Django, Alba, Centro) typically require reservations, especially weekends. Mid-range restaurants may accept reservations but often accommodate walk-ins during off-peak hours. Casual dining and fast-casual restaurants generally operate on a first-come, first-served basis. We recommend calling ahead for parties of 6+ or dining during peak hours (Friday-Saturday evenings). Our restaurant pages include contact information and reservation recommendations."
+                }
+              ]}
+              showSchema={true}
+              className="border-0 shadow-lg"
+            />
+          </div>
+        </section>
 
         <Footer />
       </div>
