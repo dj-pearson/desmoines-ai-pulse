@@ -52,6 +52,34 @@ Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
 
+User-agent: Google-Extended
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+User-agent: Anthropic-AI
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+User-agent: Omgilibot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+User-agent: FacebookBot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
 # Sitemap locations
 Sitemap: https://desmoinesinsider.com/sitemap.xml
 Sitemap: https://desmoinesinsider.com/sitemap-events.xml

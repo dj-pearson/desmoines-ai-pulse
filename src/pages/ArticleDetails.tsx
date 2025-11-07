@@ -26,6 +26,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import ShareDialog from '@/components/ShareDialog';
+import { Helmet } from 'react-helmet-async';
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
@@ -102,15 +103,56 @@ const ArticleDetails: React.FC = () => {
     );
   }
 
+  // Article Schema for SEO
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": article.title,
+    "description": article.excerpt || article.seo_description || '',
+    "image": article.featured_image_url || "https://desmoinesinsider.com/DMI-Logo.png",
+    "datePublished": article.published_at || article.created_at,
+    "dateModified": article.updated_at || article.published_at || article.created_at,
+    "author": {
+      "@type": "Organization",
+      "name": "Des Moines Insider",
+      "url": "https://desmoinesinsider.com"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Des Moines Insider",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://desmoinesinsider.com/DMI-Logo.png"
+      }
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": `https://desmoinesinsider.com/articles/${article.slug}`
+    },
+    "articleSection": article.category || "Local News",
+    "keywords": Array.isArray(article.tags) ? article.tags.join(', ') : article.tags || '',
+    "wordCount": article.content ? article.content.split(/\s+/).length : 0,
+    "inLanguage": "en-US",
+    "about": {
+      "@type": "Place",
+      "name": "Des Moines, Iowa"
+    }
+  };
+
   return (
     <>
-      <SEOHead 
+      <SEOHead
         title={article.seo_title || article.title}
         description={article.seo_description || article.excerpt || `Read ${article.title} on Des Moines Insider`}
         keywords={article.seo_keywords || article.tags || []}
         type="article"
         canonicalUrl={`https://desmoinesinsider.com/articles/${article.slug}`}
       />
+      <Helmet>
+        <script type="application/ld+json">
+          {JSON.stringify(articleSchema)}
+        </script>
+      </Helmet>
       <Header />
       
       <div className="min-h-screen bg-background">

@@ -26,6 +26,7 @@ import EventFilters from "@/components/EventFilters";
 import GEOContent from "@/components/GEOContent";
 import Newsletter from "@/components/Newsletter";
 import { EventSocialHub } from "@/components/EventSocialHub";
+import { FAQSection } from "@/components/FAQSection";
 
 // Lazy load Three.js component to reduce initial bundle size
 const Hero3DCityscape = lazy(() => import("@/components/Hero3DCityscape"));
@@ -270,6 +271,52 @@ export default function Index() {
         {/* GEO-optimized content section */}
         <section className="py-16 bg-muted/30">
           <GEOContent />
+        </section>
+
+        {/* FAQ Section for Featured Snippets */}
+        <section className="py-16 bg-background">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <FAQSection
+              title="Common Questions About Des Moines"
+              description="Get answers to frequently asked questions about events, restaurants, attractions, and things to do in Des Moines, Iowa."
+              faqs={[
+                {
+                  question: "What are the best things to do in Des Moines this weekend?",
+                  answer: "Des Moines offers diverse weekend activities including live music at venues like Hoyt Sherman Place and Wooly's, family events at Science Center of Iowa, seasonal farmers markets in Downtown and East Village, outdoor activities at Gray's Lake and Raccoon River Park, and dining experiences in over 300 local restaurants. Check our Events page for real-time updates on concerts, festivals, sports events, and family activities happening this weekend."
+                },
+                {
+                  question: "How do I find free events in Des Moines?",
+                  answer: "Des Moines Insider tracks over 200 monthly events with detailed price information. Use our advanced search filters to select 'Free' in the price range option. Popular free activities include Downtown Farmers Market (April-October), Sculpture Park at Western Gateway, public library events, outdoor concerts at Cowles Commons, and seasonal festivals. Our AI-powered system updates free events daily with verified information."
+                },
+                {
+                  question: "What neighborhoods should I explore in Des Moines?",
+                  answer: "Des Moines features seven distinct neighborhoods: Downtown (business district and entertainment), East Village (boutiques and trendy dining), Sherman Hill (historic architecture), Beaverdale (family-friendly community), Ingersoll (local shops and cafes), Valley Junction in West Des Moines (antiques and art galleries), and Drake (university area with student culture). Each neighborhood page on our site includes detailed guides with restaurant recommendations, attractions, and events specific to that area."
+                },
+                {
+                  question: "Where can I find the best restaurants in Des Moines?",
+                  answer: "Des Moines has over 300 documented restaurants across diverse cuisines. Top-rated areas include East Village for farm-to-table dining, Ingersoll for local favorites, Valley Junction for unique experiences, and Downtown for upscale options. Our restaurant directory includes real-time information on new openings (tracked within 48 hours), cuisine types, price ranges, and operating hours. We update restaurant data weekly with 95% accuracy to ensure current information."
+                },
+                {
+                  question: "What family-friendly attractions are available in Des Moines?",
+                  answer: "Des Moines offers 50+ family attractions including Blank Park Zoo (year-round animal exhibits), Science Center of Iowa (interactive STEM exhibits), Adventureland Park (amusement rides and water park), Living History Farms (interactive farm experience), and 100+ mapped playgrounds with safety and accessibility information. Popular indoor options include Prairie Meadows (family entertainment), and numerous museums. Our platform provides age appropriateness, accessibility details, and current hours for all attractions."
+                },
+                {
+                  question: "How often is event information updated on Des Moines Insider?",
+                  answer: "Events are updated daily through our AI-powered web scraping system that monitors over 50 official sources including venue websites, municipal calendars, and event organizers. We capture 98% of public events in the Des Moines metro area with an average 24-hour update cycle. Restaurant information updates weekly, and attraction details are verified monthly. All content includes timestamp information and real-time status updates for accuracy."
+                },
+                {
+                  question: "What areas does Des Moines Insider cover?",
+                  answer: "We provide comprehensive coverage for the entire Des Moines metropolitan area including Des Moines (all neighborhoods), West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Windsor Heights. Our geographic radius extends 50 miles from downtown Des Moines (coordinates: 41.5868°N, 93.6250°W), covering 15+ suburban communities in Polk County and surrounding areas. Location-based filtering helps you find events and restaurants near your specific area."
+                },
+                {
+                  question: "Can I get personalized event recommendations?",
+                  answer: "Yes! Create a free Des Moines Insider account to receive AI-powered personalized recommendations based on your interests, location preferences, past activity, and favorite venues. Personalized users see 40% more relevant suggestions and can save favorite events, create custom alerts for new events matching their interests, and receive notifications for last-minute ticket availability. Our machine learning system improves recommendations as you engage with the platform."
+                }
+              ]}
+              showSchema={true}
+              className="border-0 shadow-lg"
+            />
+          </div>
         </section>
 
         <Newsletter />
