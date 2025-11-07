@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import LocalSEO from "@/components/LocalSEO";
+import { FAQSection } from "@/components/FAQSection";
 
 export default function NeighborhoodsPage() {
   
@@ -225,7 +226,53 @@ export default function NeighborhoodsPage() {
           </CardContent>
         </Card>
       </main>
-      
+
+      {/* FAQ Section for SEO and Featured Snippets */}
+      <section className="py-16 bg-muted/30">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+          <FAQSection
+            title="Des Moines Neighborhoods - Frequently Asked Questions"
+            description="Common questions about neighborhoods, communities, and areas in Des Moines, Iowa."
+            faqs={[
+              {
+                question: "What are the best neighborhoods in Des Moines?",
+                answer: "Des Moines features diverse neighborhoods each with unique character. Downtown and East Village offer urban living with trendy restaurants, nightlife, and cultural attractions. Sherman Hill showcases Victorian architecture and historic charm. West Des Moines provides premier shopping at Jordan Creek and the artsy Valley Junction district. Ankeny offers excellent schools and family amenities with the scenic High Trestle Trail. Beaverdale is known for its tight-knit community and local businesses. Urbandale features Living History Farms and extensive parks. The best neighborhood depends on your lifestyle preferences - urban vs. suburban, nightlife vs. family activities."
+              },
+              {
+                question: "What is the East Village neighborhood like in Des Moines?",
+                answer: "East Village is Des Moines' trendiest neighborhood located just east of downtown. This hip district features over 28 restaurants including farm-to-table dining and craft breweries, boutique shopping with local designers and vintage stores, vibrant nightlife with bars and live music venues, the Downtown Farmers Market (Iowa's largest), art galleries and creative spaces, and walkable streets with historic architecture. East Village attracts young professionals and creatives with its urban energy while maintaining Des Moines charm. The Court Avenue District within East Village is the epicenter of nightlife and entertainment."
+              },
+              {
+                question: "Is West Des Moines a good place to live?",
+                answer: "West Des Moines consistently ranks as one of Iowa's best places to live. Benefits include excellent schools (West Des Moines Community School District), premier shopping at Jordan Creek Town Center (Iowa's largest mall), diverse dining with 41+ restaurants from casual to upscale, Valley Junction's historic district with unique shops and antiques, extensive parks and trails including Raccoon River Park, family-friendly atmosphere with abundant activities, strong job market and economic growth, and safe neighborhoods with low crime rates. West Des Moines offers suburban comfort while being just minutes from downtown Des Moines amenities."
+              },
+              {
+                question: "What makes Ankeny a popular Des Moines suburb?",
+                answer: "Ankeny is one of Iowa's fastest-growing cities due to highly-rated schools (Ankeny Community School District), family-friendly environment with numerous parks and playgrounds, Ankeny Market & Pavilion for community events, High Trestle Trail (13.5-mile scenic trail with famous bridge), Prairie Trail neighborhood with modern amenities, strong business community and job opportunities, diverse dining options with 22+ restaurants, convenient location between Des Moines and Ames, and active community calendar with 28+ monthly events. Ankeny appeals particularly to families seeking excellent schools and suburban amenities with easy downtown access."
+              },
+              {
+                question: "Where should I live in Des Moines for nightlife and entertainment?",
+                answer: "For nightlife and entertainment, focus on Downtown Des Moines and East Village. The Court Avenue District in East Village is the nightlife hub with numerous bars, clubs, and late-night venues. East Village offers craft breweries like Exile Brewing Company, cocktail bars, live music venues including Wooly's and Gas Lamp, and trendy restaurants with evening scenes. Downtown features entertainment at Iowa Events Center, upscale hotel bars and restaurants, Wells Fargo Arena for concerts and sports, and Cowles Commons for outdoor events. These walkable urban neighborhoods provide the most concentrated nightlife and entertainment options in the metro area."
+              },
+              {
+                question: "Which Des Moines neighborhoods are best for families?",
+                answer: "Top family-friendly Des Moines neighborhoods include West Des Moines (excellent schools, Jordan Creek shopping, family restaurants, parks), Ankeny (highly-rated schools, modern neighborhoods, family activities, trails), Urbandale (Living History Farms, extensive park system, community center, safe neighborhoods), Beaverdale (tight-knit community, local schools, family events, affordable housing), and Clive (good schools, family amenities, Greenbelt Trail, low crime). These suburbs offer excellent public schools, abundant parks and playgrounds, family-oriented events, safe environments, and strong community connections while maintaining proximity to downtown Des Moines."
+              },
+              {
+                question: "What is unique about Valley Junction in West Des Moines?",
+                answer: "Valley Junction is West Des Moines' historic downtown district known for antique shopping with 30+ antique stores and vintage shops, unique local boutiques and galleries, farm-to-table restaurants and cafes, historic architecture dating to the 1890s, annual events including Valley Junction Market Days and Oktoberfest, walkable streets perfect for strolling, local artists and craftspeople, and small-town charm within a suburban setting. Valley Junction attracts visitors seeking unique shopping experiences, one-of-a-kind finds, and authentic local culture. The district hosts community events year-round making it a cultural hub for West Des Moines."
+              },
+              {
+                question: "How do Des Moines neighborhoods differ from each other?",
+                answer: "Des Moines neighborhoods vary significantly in character and offerings. Urban neighborhoods (Downtown, East Village, Sherman Hill) feature walkable streets, historic architecture, nightlife, apartments and condos, and cultural attractions. Suburban communities (West Des Moines, Ankeny, Urbandale) offer single-family homes, excellent schools, shopping centers, family activities, and newer developments. Each has distinct demographics - East Village attracts young professionals, Ankeny draws families, Beaverdale has longtime residents, and West Des Moines appeals to diverse ages. Price points, housing types, school districts, and community cultures differ substantially. Visit multiple neighborhoods to find your best fit."
+              }
+            ]}
+            showSchema={true}
+            className="border-0 shadow-lg"
+          />
+        </div>
+      </section>
+
       <Footer />
     </div>
   );
