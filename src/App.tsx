@@ -35,6 +35,8 @@ const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
 const IowaStateFairPage = lazy(() => import("./pages/IowaStateFairPage"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
 const UploadCreatives = lazy(() => import("./pages/UploadCreatives"));
+const AdminCampaigns = lazy(() => import("./pages/AdminCampaigns"));
+const AdminCampaignDetail = lazy(() => import("./pages/AdminCampaignDetail"));
 const Social = lazy(() => import("./pages/Social"));
 const SmartCalendarIntegration = lazy(
   () => import("./components/SmartCalendarIntegration")
@@ -130,6 +132,8 @@ const App = () => (
               path="/admin/articles/edit/:id"
               element={<AdminArticleEditor />}
             />
+            <Route path="/admin/campaigns" element={<AdminCampaigns />} />
+            <Route path="/admin/campaigns/:campaignId" element={<AdminCampaignDetail />} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
