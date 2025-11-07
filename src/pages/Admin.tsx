@@ -38,6 +38,7 @@ import ArticlesManager from "@/components/ArticlesManager";
 import AIArticleGenerator from "@/components/AIArticleGenerator";
 import AIEnhancementManager from "@/components/AIEnhancementManager";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
+import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard";
 import { useArticles } from "@/hooks/useArticles";
 import {
   Shield,
@@ -69,6 +70,7 @@ import {
   Target,
   Plus,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -866,6 +868,21 @@ export default function Admin() {
                    </button>
 
                    <button
+                     onClick={() => setActiveTab("search-traffic")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "search-traffic"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Search & Traffic Analytics" : ""}
+                   >
+                     <TrendingUp className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Search & Traffic</span>}
+                   </button>
+
+                   <button
                      onClick={() => setActiveTab("system")}
                      className={`w-full flex items-center ${
                        sidebarCollapsed ? "justify-center" : "gap-3"
@@ -1409,7 +1426,9 @@ export default function Admin() {
             {canManageUsers() && activeTab === "security" && <AdminSecurityManager />}
             
             {canManageUsers() && activeTab === "analytics" && <AdminAnalyticsDashboard />}
-            
+
+            {canManageUsers() && activeTab === "search-traffic" && <SearchTrafficDashboard />}
+
             {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 
             {canManageContent() && activeTab === "settings" && <AdminApplicationSettings />}
