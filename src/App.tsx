@@ -27,6 +27,8 @@ const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
 const AdminArticleEditor = lazy(() => import("./pages/AdminArticleEditor"));
 const Advertise = lazy(() => import("./pages/Advertise"));
+const AdvertiseSuccess = lazy(() => import("./pages/AdvertiseSuccess"));
+const AdvertiseCancel = lazy(() => import("./pages/AdvertiseCancel"));
 const WeekendPage = lazy(() => import("./pages/WeekendPage"));
 const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
 const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
@@ -132,6 +134,8 @@ const App = () => (
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
             <Route path="/advertise" element={<Advertise />} />
+            <Route path="/advertise/success" element={<AdvertiseSuccess />} />
+            <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
             <Route path="/campaigns" element={<CampaignDashboard />} />
             <Route path="/campaigns/:campaignId/creatives" element={<UploadCreatives />} />
             <Route path="/weekend" element={<WeekendPage />} />
