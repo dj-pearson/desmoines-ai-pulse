@@ -87,6 +87,46 @@ export default function Restaurants() {
     });
   };
 
+  const removeFilter = (filterType: string, value?: string) => {
+    setFilters((prev) => {
+      switch (filterType) {
+        case "search":
+          return { ...prev, search: "" };
+        case "cuisine":
+          return { ...prev, cuisine: prev.cuisine.filter((c) => c !== value) };
+        case "priceRange":
+          return { ...prev, priceRange: prev.priceRange.filter((p) => p !== value) };
+        case "location":
+          return { ...prev, location: prev.location.filter((l) => l !== value) };
+        case "tags":
+          return { ...prev, tags: prev.tags.filter((t) => t !== value) };
+        case "featuredOnly":
+          return { ...prev, featuredOnly: false };
+        case "openNow":
+          return { ...prev, openNow: false };
+        case "rating":
+          return { ...prev, rating: [0, 5] };
+        default:
+          return prev;
+      }
+    });
+  };
+
+  const getActiveFiltersCount = () => {
+    let count = 0;
+    if (filters.search) count++;
+    count += filters.cuisine.length;
+    count += filters.priceRange.length;
+    count += filters.location.length;
+    count += filters.tags.length;
+    if (filters.featuredOnly) count++;
+    if (filters.openNow) count++;
+    if (filters.rating[0] !== 0 || filters.rating[1] !== 5) count++;
+    return count;
+  };
+
+  const hasActiveFilters = getActiveFiltersCount() > 0;
+
   // Enhanced SEO data for restaurants page
   const restaurantsKeywords = [
     "Des Moines restaurants",
@@ -231,6 +271,107 @@ export default function Restaurants() {
                     : "Premium options first"}
                 </p>
               </div>
+
+              {/* Active Filters Chips */}
+              {hasActiveFilters && (
+                <div className="flex flex-wrap items-center gap-2 p-4 bg-muted/30 rounded-lg">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Active filters:
+                  </span>
+
+                  {filters.search && (
+                    <Badge variant="secondary" className="gap-1">
+                      Search: {filters.search}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("search")}
+                      />
+                    </Badge>
+                  )}
+
+                  {filters.cuisine.map((cuisine) => (
+                    <Badge key={cuisine} variant="secondary" className="gap-1">
+                      {cuisine}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("cuisine", cuisine)}
+                      />
+                    </Badge>
+                  ))}
+
+                  {filters.priceRange.map((price) => (
+                    <Badge key={price} variant="secondary" className="gap-1">
+                      {price}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("priceRange", price)}
+                      />
+                    </Badge>
+                  ))}
+
+                  {filters.location.map((location) => (
+                    <Badge key={location} variant="secondary" className="gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {location}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("location", location)}
+                      />
+                    </Badge>
+                  ))}
+
+                  {filters.tags.map((tag) => (
+                    <Badge key={tag} variant="secondary" className="gap-1">
+                      {tag}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("tags", tag)}
+                      />
+                    </Badge>
+                  ))}
+
+                  {filters.featuredOnly && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Star className="h-3 w-3" />
+                      Featured Only
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("featuredOnly")}
+                      />
+                    </Badge>
+                  )}
+
+                  {filters.openNow && (
+                    <Badge variant="secondary" className="gap-1 bg-green-100 text-green-800">
+                      Open Now
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("openNow")}
+                      />
+                    </Badge>
+                  )}
+
+                  {(filters.rating[0] !== 0 || filters.rating[1] !== 5) && (
+                    <Badge variant="secondary" className="gap-1">
+                      <Star className="h-3 w-3" />
+                      Rating: {filters.rating[0]} - {filters.rating[1]}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => removeFilter("rating")}
+                      />
+                    </Badge>
+                  )}
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearFilters}
+                    className="text-xs h-7"
+                  >
+                    Clear All
+                  </Button>
+                </div>
+              )}
 
               {isLoading ? (
                 <CardsGridSkeleton count={9} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" />

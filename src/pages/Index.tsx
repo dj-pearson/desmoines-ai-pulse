@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -29,6 +29,7 @@ import GEOContent from "@/components/GEOContent";
 import Newsletter from "@/components/Newsletter";
 import { EventSocialHub } from "@/components/EventSocialHub";
 import { FAQSection } from "@/components/FAQSection";
+import { OnboardingModal } from "@/components/OnboardingModal";
 
 // Lazy load Three.js component to reduce initial bundle size
 const Hero3DCityscape = lazy(() => import("@/components/Hero3DCityscape"));
@@ -52,8 +53,30 @@ export default function Index() {
     location?: string;
     priceRange?: string;
   } | undefined>(undefined);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+
+  // Check if user should see onboarding
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const hasSeenOnboarding = localStorage.getItem(`onboarding_complete_${user.id}`);
+      if (!hasSeenOnboarding) {
+        // Small delay to let page load before showing modal
+        const timer = setTimeout(() => {
+          setShowOnboarding(true);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isAuthenticated, user]);
+
+  const handleOnboardingComplete = () => {
+    if (user) {
+      localStorage.setItem(`onboarding_complete_${user.id}`, "true");
+    }
+    setShowOnboarding(false);
+  };
 
   const scrapeMutation = useEventScraper();
 
@@ -468,6 +491,9 @@ export default function Index() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* First-time User Onboarding */}
+      {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
     </div>
   );
 }
