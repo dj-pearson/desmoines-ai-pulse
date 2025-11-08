@@ -33,6 +33,7 @@ import {
   X,
   Sparkles,
   AlertCircle,
+  Clock,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState } from "react";
@@ -270,6 +271,37 @@ export default function Restaurants() {
                     ? "Most affordable first"
                     : "Premium options first"}
                 </p>
+              </div>
+
+              {/* Quick Filter Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={filters.openNow ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilters(prev => ({ ...prev, openNow: !prev.openNow }))}
+                  className={filters.openNow ? "bg-green-600 hover:bg-green-700 text-white" : ""}
+                >
+                  <Clock className="h-4 w-4 mr-2" />
+                  Open Now
+                  {filters.openNow && " ✓"}
+                </Button>
+                <Button
+                  variant={filters.featuredOnly ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setFilters(prev => ({ ...prev, featuredOnly: !prev.featuredOnly }))}
+                >
+                  <Star className="h-4 w-4 mr-2" />
+                  Featured
+                  {filters.featuredOnly && " ✓"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                >
+                  <Filter className="h-4 w-4 mr-2" />
+                  More Filters
+                </Button>
               </div>
 
               {/* Active Filters Chips */}

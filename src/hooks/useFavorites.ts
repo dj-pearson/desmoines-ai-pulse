@@ -3,11 +3,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
+import { useGamification } from "./useGamification";
 
 export function useFavorites() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { awardPoints } = useGamification();
 
   // Fetch user's favorited events
   const { data: favoritedEvents = [], isLoading } = useQuery({
@@ -43,11 +45,15 @@ export function useFavorites() {
       if (error) throw error;
       return eventId;
     },
-    onSuccess: () => {
+    onSuccess: (eventId) => {
       queryClient.invalidateQueries({ queryKey: ["favorites", user?.id] });
+
+      // Award XP for favoriting
+      awardPoints("favorite_event", 10, "event", eventId);
+
       toast({
-        title: "Added to Favorites",
-        description: "Event saved to your favorites",
+        title: "Added to Favorites ❤️",
+        description: "Event saved to your favorites • +10 XP earned!",
       });
     },
     onError: (error) => {

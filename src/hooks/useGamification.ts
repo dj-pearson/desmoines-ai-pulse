@@ -188,8 +188,6 @@ export function useGamification() {
         p_metadata: metadata
       });
 
-      if (error) throw error;
-
       // Refresh user data
       await fetchUserReputation();
       await fetchActivities();
@@ -265,6 +263,8 @@ export function useGamification() {
     leaderboard,
     isLoading,
     error,
+    userLevel: reputation?.current_level,
+    userXP: reputation?.experience_points,
     awardPoints,
     joinChallenge,
     refetch: () => {
