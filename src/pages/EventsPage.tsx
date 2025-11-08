@@ -63,6 +63,8 @@ export default function EventsPage() {
   const [showFilters, setShowFilters] = useState(!isMobile); // Hide filters by default on mobile
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState("list");
+  const [page, setPage] = useState(1);
+  const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
 
   // Debounce search query to prevent excessive API calls
@@ -74,7 +76,7 @@ export default function EventsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const { data: events, isLoading, refetch } = useQuery({
+  const { data: eventsData, isLoading, refetch } = useQuery({
     queryKey: [
       "events",
       debouncedSearchQuery,
@@ -82,19 +84,22 @@ export default function EventsPage() {
       dateFilter,
       location,
       priceRange,
+      page,
     ],
     queryFn: async () => {
       let query = supabase
         .from("events")
-        .select("*")
+        .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description", { count: 'exact' })
         .gte("date", new Date().toISOString().split("T")[0])
-        .order("date", { ascending: true });
+        .order("date", { ascending: true })
+        .range((page - 1) * EVENTS_PER_PAGE, page * EVENTS_PER_PAGE - 1);
 
-      // Apply filters
+      // Apply full-text search filter (10-100x faster than ILIKE)
       if (debouncedSearchQuery) {
-        query = query.or(
-          `title.ilike.%${debouncedSearchQuery}%,original_description.ilike.%${debouncedSearchQuery}%,enhanced_description.ilike.%${debouncedSearchQuery}%`
-        );
+        query = query.textSearch('search_vector', debouncedSearchQuery, {
+          type: 'websearch',
+          config: 'english'
+        });
       }
 
       if (selectedCategory && selectedCategory !== "all") {
@@ -163,25 +168,30 @@ export default function EventsPage() {
         }
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
-      return data;
+      return { events: data || [], totalCount: count || 0 };
     },
   });
 
+  const events = eventsData?.events || [];
+  const totalCount = eventsData?.totalCount || 0;
+  const hasMore = totalCount > page * EVENTS_PER_PAGE;
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange]);
+
+  // Fetch distinct categories using optimized RPC function (much faster than fetching all events)
   const { data: categories } = useQuery({
     queryKey: ["event-categories"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("events")
-        .select("category")
-        .gte("date", new Date().toISOString().split("T")[0]);
+        .rpc('get_event_categories');
 
       if (error) throw error;
-      const uniqueCategories = [
-        ...new Set(data.map((event) => event.category)),
-      ].filter(Boolean);
-      return uniqueCategories.sort();
+      return (data || []).map((row: { category: string }) => row.category);
     },
   });
 
@@ -793,6 +803,30 @@ export default function EventsPage() {
               ))}
             </div>
           ) : null}
+
+          {/* Load More Button */}
+          {!isLoading && events && events.length > 0 && hasMore && (
+            <div className="flex justify-center mt-8 mb-4">
+              <Button
+                onClick={() => setPage(p => p + 1)}
+                variant="outline"
+                size="lg"
+                className="min-w-[200px]"
+              >
+                Load More Events
+                <span className="ml-2 text-sm text-muted-foreground">
+                  ({events.length} of {totalCount})
+                </span>
+              </Button>
+            </div>
+          )}
+
+          {/* Showing count */}
+          {!isLoading && events && events.length > 0 && !hasMore && (
+            <div className="flex justify-center mt-8 mb-4 text-sm text-muted-foreground">
+              Showing all {totalCount} events
+            </div>
+          )}
 
           {/* No Results State */}
           {!isLoading && (!events || events.length === 0) && (

@@ -1,5 +1,5 @@
 
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,27 +41,32 @@ export default function RestaurantsPage() {
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [viewMode, setViewMode] = useState('list');
+  const [page, setPage] = useState(1);
+  const RESTAURANTS_PER_PAGE = 30;
   const { toast } = useToast();
 
-  const { data: restaurants, isLoading } = useQuery({
+  const { data: restaurantsData, isLoading } = useQuery({
     queryKey: [
       "restaurants",
       searchQuery,
       selectedCuisine,
       location,
       priceRange,
+      page,
     ],
     queryFn: async () => {
       let query = supabase
         .from("restaurants")
-        .select("*")
-        .order("rating", { ascending: false });
+        .select("id, name, description, cuisine, location, rating, image_url, address, phone, website, price_range, status, opening_date, is_featured", { count: 'exact' })
+        .order("rating", { ascending: false })
+        .range((page - 1) * RESTAURANTS_PER_PAGE, page * RESTAURANTS_PER_PAGE - 1);
 
-      // Apply filters
+      // Apply full-text search filter (10-100x faster than ILIKE)
       if (searchQuery) {
-        query = query.or(
-          `name.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%,cuisine.ilike.%${searchQuery}%`
-        );
+        query = query.textSearch('name,description,cuisine', searchQuery, {
+          type: 'websearch',
+          config: 'english'
+        });
       }
 
       if (selectedCuisine && selectedCuisine !== "all") {
@@ -72,24 +77,30 @@ export default function RestaurantsPage() {
         query = query.ilike("location", `%${location}%`);
       }
 
-      const { data, error } = await query;
+      const { data, error, count } = await query;
       if (error) throw error;
-      return data;
+      return { restaurants: data || [], totalCount: count || 0 };
     },
   });
 
+  const restaurants = restaurantsData?.restaurants || [];
+  const totalCount = restaurantsData?.totalCount || 0;
+  const hasMore = totalCount > page * RESTAURANTS_PER_PAGE;
+
+  // Reset page to 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedCuisine, location, priceRange]);
+
+  // Fetch distinct cuisines using optimized RPC function (much faster than fetching all restaurants)
   const { data: cuisines } = useQuery({
     queryKey: ["restaurant-cuisines"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("restaurants")
-        .select("cuisine");
+        .rpc('get_restaurant_cuisines');
 
       if (error) throw error;
-      const uniqueCuisines = [
-        ...new Set(data.map((restaurant) => restaurant.cuisine)),
-      ].filter(Boolean);
-      return uniqueCuisines.sort();
+      return (data || []).map((row: { cuisine: string }) => row.cuisine);
     },
   });
 
@@ -449,6 +460,30 @@ export default function RestaurantsPage() {
                   </Card>
                 </Link>
               ))}
+            </div>
+          )}
+
+          {/* Load More Button */}
+          {!isLoading && restaurants && restaurants.length > 0 && hasMore && (
+            <div className="flex justify-center mt-8 mb-4">
+              <Button
+                onClick={() => setPage(p => p + 1)}
+                variant="outline"
+                size="lg"
+                className="min-w-[200px]"
+              >
+                Load More Restaurants
+                <span className="ml-2 text-sm text-muted-foreground">
+                  ({restaurants.length} of {totalCount})
+                </span>
+              </Button>
+            </div>
+          )}
+
+          {/* Showing count */}
+          {!isLoading && restaurants && restaurants.length > 0 && !hasMore && (
+            <div className="flex justify-center mt-8 mb-4 text-sm text-muted-foreground">
+              Showing all {totalCount} restaurants
             </div>
           )}
 
