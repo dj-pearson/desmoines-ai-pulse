@@ -10,7 +10,9 @@ import {
   format as dateFnsFormat,
   parseISO,
 } from "https://esm.sh/date-fns@2.30.0";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -149,105 +151,183 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
   try {
     console.log(`🔍 Extracting Visit Website URL from: ${eventUrl}`);
 
-    const response = await fetch(eventUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        Connection: "keep-alive",
-      },
-      signal: AbortSignal.timeout(15000),
+    // Use universal scraper for better JavaScript rendering
+    const scrapeResult = await scrapeUrl(eventUrl, {
+      waitTime: 5000,
+      timeout: 15000,
     });
 
-    if (!response.ok) {
-      console.error(`❌ HTTP ${response.status}: ${response.statusText}`);
+    if (!scrapeResult.success || !scrapeResult.html) {
+      console.error(`❌ Failed to scrape: ${scrapeResult.error}`);
       return null;
     }
 
-    const html = await response.text();
+    const html = scrapeResult.html;
+    console.log(`✅ Scraped ${html.length} chars using ${scrapeResult.backend} (took ${scrapeResult.duration}ms)`);
 
-    // Strategy 1: Look for the "Visit Website" button specifically in bottom-actions
-    // Pattern: <a href="URL" target="_blank" class="action-item">Visit Website</a>
-    const visitWebsitePattern =
-      /<a\s+href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/i;
-    let match = html.match(visitWebsitePattern);
-
-    if (match && match[1]) {
-      const url = match[1];
-      if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
-        console.log(`✅ Found via action-item button: ${url}`);
-        return url;
-      }
-    }
-
-    // Strategy 2: Look for any link with "Visit Website" text
-    const visitLinkPattern =
-      /<a\s+href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s+Website[\s\S]*?<\/a>/gi;
-    const allMatches = html.matchAll(visitLinkPattern);
-
-    for (const linkMatch of allMatches) {
-      const url = linkMatch[1];
-      if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
-        console.log(`✅ Found via Visit Website link: ${url}`);
-        return url;
-      }
-    }
-
-    // Strategy 3: Look in the bottom-actions div for any external link
-    const bottomActionsPattern =
-      /<div\s+class=["']bottom-actions["'][^>]*>([\s\S]*?)<\/div>/i;
-    match = html.match(bottomActionsPattern);
-
-    if (match) {
-      const bottomActionsHtml = match[1];
-      const linkPattern = /<a\s+href=["']([^"']+)["']/gi;
-      const links = bottomActionsHtml.matchAll(linkPattern);
-
-      for (const link of links) {
-        const url = link[1];
-        if (url.startsWith("http") && !url.includes("catchdesmoines.com")) {
-          console.log(`✅ Found in bottom-actions: ${url}`);
-          return url;
-        }
-      }
-    }
-
-    // Strategy 4: Universal fallback - find first external link with "visit" or "website" indicators
+    // Define excluded domains
     const excludeDomains = [
       "catchdesmoines.com",
-      "facebook.com/catchdesmoines",
-      "twitter.com/catchdesmoines",
-      "instagram.com/catchdesmoines",
+      "simpleview.com",
+      "simpleviewinc.com",
+      "assets.simpleviewinc.com",
+      "simpleviewcrm.com",
+      "simpleviewcms.com",
+      "extranet.simpleview",
+      "vimeo.com/api",
+      "vimeo.com/player",
+      "player.vimeo.com",
+      "youtube.com/embed",
+      "youtube.com/player",
+      "youtube.com/watch",
+      "facebook.com",
+      "twitter.com",
+      "instagram.com",
       "google.com",
       "maps.google.com",
-      "simpleviewcrm.com",
-      "simpleviewinc.com",
+      "cloudflare.com",
+      "googleapis.com",
+      "gstatic.com",
+      "googletagmanager.com",
+      "doubleclick.net",
+      "mailto:",
+      "tel:",
+      "#",
     ];
 
-    const allLinkPattern =
-      /<a\s+[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-    const allLinks = html.matchAll(allLinkPattern);
+    const isExcluded = (url: string) =>
+      excludeDomains.some((d) => url.toLowerCase().includes(d.toLowerCase()));
 
-    for (const linkMatch of allLinks) {
-      const url = linkMatch[1];
-      const linkText = linkMatch[2].toLowerCase();
+    // Use DOMParser from deno_dom to properly parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    
+    if (!doc) {
+      console.error("❌ Failed to parse HTML");
+      return null;
+    }
 
-      if (url.startsWith("http")) {
-        const shouldExclude = excludeDomains.some((domain) =>
-          url.includes(domain)
-        );
+    console.log("✅ Successfully parsed HTML document");
 
-        if (
-          !shouldExclude &&
-          (linkText.includes("visit") ||
-            linkText.includes("website") ||
-            linkText.includes("official"))
-        ) {
-          console.log(`✅ Found via universal fallback: ${url}`);
-          return url;
+    // Helper function to check if text matches "visit website"
+    const isVisitWebsiteText = (text: string): boolean => {
+      const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
+      return (
+        normalized.includes('visit website') ||
+        normalized.includes('visit web site') ||
+        (normalized.includes('visit') && normalized.includes('website'))
+      );
+    };
+
+    // Helper function to validate and normalize URL
+    const validateAndNormalizeUrl = (href: string | null, strategy: string): string | null => {
+      if (!href) {
+        console.log(`  [${strategy}] ⏭️ Skipped: no href attribute`);
+        return null;
+      }
+
+      let normalizedUrl = href.trim();
+      if (normalizedUrl.startsWith("//")) {
+        normalizedUrl = `https:${normalizedUrl}`;
+      } else if (normalizedUrl.startsWith("/")) {
+        const baseUrl = new URL(eventUrl);
+        normalizedUrl = `${baseUrl.origin}${normalizedUrl}`;
+      }
+
+      if (!normalizedUrl.match(/^https?:\/\//i)) {
+        console.log(`  [${strategy}] ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
+        return null;
+      }
+
+      if (isExcluded(normalizedUrl)) {
+        console.log(`  [${strategy}] ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
+        return null;
+      }
+
+      return normalizedUrl;
+    };
+
+    // Strategy 1: Direct anchor text match
+    const allAnchors = doc.querySelectorAll("a") as NodeListOf<HTMLAnchorElement>;
+    console.log(`📊 [Strategy 1] Found ${allAnchors.length} total anchor tags on page`);
+
+    let foundCount = 0;
+    for (const anchor of allAnchors) {
+      const href = anchor.getAttribute("href");
+      const textContent = anchor.textContent || "";
+      
+      if (isVisitWebsiteText(textContent)) {
+        foundCount++;
+        console.log(`🔗 [Strategy 1] Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent.trim()}"`);
+        
+        const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 1");
+        if (normalizedUrl) {
+          console.log(`  ✅ [Strategy 1] Found valid URL: ${normalizedUrl}`);
+          return normalizedUrl;
         }
+      }
+    }
+
+    console.log(`[Strategy 1] Checked ${foundCount} matches out of ${allAnchors.length} anchors`);
+
+    // Strategy 2: Check buttons
+    console.log(`📊 [Strategy 2] Searching for buttons with "visit website" text...`);
+    const allButtons = doc.querySelectorAll("button, .button, .btn");
+    console.log(`Found ${allButtons.length} button elements`);
+    
+    for (const button of allButtons) {
+      const buttonText = button.textContent || "";
+      if (isVisitWebsiteText(buttonText)) {
+        console.log(`🔘 [Strategy 2] Found button: "${buttonText.trim()}"`);
+        
+        const innerAnchor = button.querySelector("a");
+        if (innerAnchor) {
+          const href = innerAnchor.getAttribute("href");
+          const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 2");
+          if (normalizedUrl) {
+            console.log(`  ✅ [Strategy 2] Found URL in button: ${normalizedUrl}`);
+            return normalizedUrl;
+          }
+        }
+      }
+    }
+
+    // Strategy 3: Look for common class patterns
+    console.log(`📊 [Strategy 3] Searching for links with common classes...`);
+    const classSelectors = [
+      'a[class*="visit"]',
+      'a[class*="website"]',
+      'a[class*="external"]',
+      '.visit-website a',
+      '.event-website a'
+    ];
+    
+    for (const selector of classSelectors) {
+      const links = doc.querySelectorAll(selector);
+      if (links.length > 0) {
+        console.log(`[Strategy 3] Found ${links.length} links matching: ${selector}`);
+        for (const link of links) {
+          const href = link.getAttribute("href");
+          const normalizedUrl = validateAndNormalizeUrl(href, `Strategy 3`);
+          if (normalizedUrl) {
+            console.log(`  ✅ [Strategy 3] Found URL: ${normalizedUrl}`);
+            return normalizedUrl;
+          }
+        }
+      }
+    }
+
+    console.log(`⚠️ No valid "Visit Website" link found after trying all strategies`);
+    
+    // Fallback: Check for linkUrl in JSON embedded in the page
+    const linkUrlMatch = html.match(
+      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
+    );
+    if (linkUrlMatch) {
+      const url = linkUrlMatch[1].trim();
+      if (!isExcluded(url)) {
+        console.log("✅ Found linkUrl in JSON:", url);
+        return url;
       }
     }
 
@@ -1288,71 +1368,69 @@ Deno.serve(async (req) => {
     let bestUrl = url;
     let maxEventContent = 0;
 
-    // Try each URL to find the one with the most event content
-    for (const tryUrl of urlsToTry) {
+    // Use universal scraper to fetch URLs with JavaScript rendering
+    console.log(`📄 Scraping ${urlsToTry.length} URLs with Puppeteer/Playwright...`);
+    const scrapeResults = await scrapeUrls(urlsToTry, {
+      waitTime: 5000,
+      timeout: 30000,
+    }, 2); // Scrape 2 at a time
+
+    // Try each result to find the one with the most event content
+    for (let i = 0; i < scrapeResults.length; i++) {
+      const result = scrapeResults[i];
+      const tryUrl = urlsToTry[i];
+      
       try {
-        console.log(`📄 Trying URL: ${tryUrl}`);
+        console.log(`📄 Processing result from: ${tryUrl}`);
 
-        const response = await fetch(tryUrl, {
-          headers: {
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            Accept:
-              "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            DNT: "1",
-            Connection: "keep-alive",
-            "Upgrade-Insecure-Requests": "1",
-          },
-        });
+        if (!result.success || !result.html) {
+          console.log(`❌ Failed to scrape ${tryUrl}: ${result.error}`);
+          continue;
+        }
 
-        if (response.ok) {
-          const html = await response.text();
+        const html = result.html;
+        console.log(`✅ Got ${html.length} chars from ${tryUrl} using ${result.backend} (took ${result.duration}ms)`);
 
-          // Enhanced scoring for CatchDesMoines-style content
-          const eventKeywords = (
-            html.match(
-              /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi
-            ) || []
-          ).length;
-          const venueKeywords = (
-            html.match(
-              /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi
-            ) || []
-          ).length;
-          const dateKeywords = (
-            html.match(
-              /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi
-            ) || []
-          ).length;
-          const titleKeywords = (
-            html.match(
-              /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
-            ) || []
-          ).length;
+        // Enhanced scoring for CatchDesMoines-style content
+        const eventKeywords = (
+          html.match(
+            /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi
+          ) || []
+        ).length;
+        const venueKeywords = (
+          html.match(
+            /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi
+          ) || []
+        ).length;
+        const dateKeywords = (
+          html.match(
+            /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi
+          ) || []
+        ).length;
+        const titleKeywords = (
+          html.match(
+            /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
+          ) || []
+        ).length;
 
-          const totalScore =
-            eventKeywords +
-            venueKeywords * 2 +
-            dateKeywords * 1.5 +
-            titleKeywords * 3;
+        const totalScore =
+          eventKeywords +
+          venueKeywords * 2 +
+          dateKeywords * 1.5 +
+          titleKeywords * 3;
 
-          console.log(
-            `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
-          );
+        console.log(
+          `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
+        );
 
-          if (totalScore > maxEventContent) {
-            maxEventContent = totalScore;
-            bestHtml = html;
-            bestUrl = tryUrl;
-            console.log(`✅ New best URL: ${tryUrl} (score: ${totalScore})`);
-          }
-        } else {
-          console.log(`❌ Failed to fetch ${tryUrl}: ${response.status}`);
+        if (totalScore > maxEventContent) {
+          maxEventContent = totalScore;
+          bestHtml = html;
+          bestUrl = tryUrl;
+          console.log(`✅ New best URL: ${tryUrl} (score: ${totalScore})`);
         }
       } catch (error) {
-        console.log(`⚠️ Error fetching ${tryUrl}:`, error.message);
+        console.log(`⚠️ Error processing ${tryUrl}:`, error.message);
       }
     }
 

@@ -200,8 +200,9 @@ export default function ShareDialog({
                 variant="outline"
                 size="sm"
                 className="flex-shrink-0 hover:bg-primary hover:text-primary-foreground transition-colors"
+                aria-label="Copy link to clipboard"
               >
-                <Copy className="h-4 w-4" />
+                <Copy className="h-4 w-4" aria-hidden="true" />
                 <span className="sr-only">Copy link</span>
               </Button>
             </div>

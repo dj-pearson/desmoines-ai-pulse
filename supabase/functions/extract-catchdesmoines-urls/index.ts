@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -109,7 +110,6 @@ async function extractVisitWebsiteUrl(
       signal: AbortSignal.timeout(12000), // 12 second timeout
     });
 
-    // Even if non-200, try to parse the body (some 410/404 pages still include useful HTML)
     if (!response.ok) {
       console.warn(
         `Non-2xx response for ${eventUrl}: ${response.status} ${response.statusText}`
@@ -118,7 +118,7 @@ async function extractVisitWebsiteUrl(
 
     const html = await response.text();
 
-    // Extract date/time information FIRST (needed for all returns)
+    // Extract date/time information
     let dateStr: string | null = null;
     let timeStr: string | null = null;
 
@@ -154,16 +154,16 @@ async function extractVisitWebsiteUrl(
       }
     }
 
-    // Define excluded domains (social, shorteners, host site & related CMS)
+    // Define excluded domains - URLs we don't want to extract
     const excludeDomains = [
       "catchdesmoines.com",
+      "visitdesmoines.com",
       "simpleview.com",
       "simpleviewinc.com",
       "assets.simpleviewinc.com",
       "simpleviewcrm.com",
       "simpleviewcms.com",
       "extranet.simpleview",
-      // ⭐ VIDEO PLAYERS AND EMBEDS (CRITICAL FIX)
       "vimeo.com/api",
       "vimeo.com/player",
       "player.vimeo.com",
@@ -180,7 +180,6 @@ async function extractVisitWebsiteUrl(
       ".js$",
       ".css",
       ".json",
-      // CDNs/assets/fonts
       "cloudflare.com",
       "cdnjs.cloudflare.com",
       "static.cloudflareinsights.com",
@@ -197,35 +196,22 @@ async function extractVisitWebsiteUrl(
       "ajax.googleapis.com",
       "typekit.net",
       "use.typekit.net",
-      // Social & misc
-      "facebook.com",
-      "fb.com",
-      "twitter.com",
-      "x.com",
-      "instagram.com",
-      "youtube.com",
-      "youtu.be",
-      "tiktok.com",
-      "linkedin.com",
-      "pinterest.com",
-      "reddit.com",
-      "snapchat.com",
-      "whatsapp.com",
-      "telegram.org",
-      "discord.com",
-      // Tracking, analytics, and ad networks
+      // Social media event pages are valid external URLs
+      // "facebook.com",
+      // "fb.com",
+      // "instagram.com",
+      // "linkedin.com",
       "googletagmanager.com",
       "google-analytics.com",
       "analytics.google.com",
-      "doubleclick.net", // ⭐ Google DoubleClick ads (securepubads.g.doubleclick.net)
-      "securepubads", // ⭐ Ad serving domain
-      "googlesyndication.com", // Google AdSense
+      "doubleclick.net",
+      "securepubads",
+      "googlesyndication.com",
       "adservice.google.com",
       "googleadservices.com",
-      "2mdn.net", // DoubleClick media
+      "2mdn.net",
       "googleads.g.doubleclick.net",
       "pagead2.googlesyndication.com",
-      // Misc
       "google.com",
       "maps.google.com",
       "goo.gl",
@@ -236,78 +222,212 @@ async function extractVisitWebsiteUrl(
       "#",
     ];
 
-    const candidatesSet = new Set<string>();
-
-    // Helper: normalize protocol-relative URLs
-    const normalizeUrl = (url: string) => {
-      if (url.startsWith("//")) return `https:${url}`;
-      return url;
+    const isExcluded = (url: string) => {
+      const lowerUrl = url.toLowerCase();
+      return excludeDomains.some((d) => lowerUrl.includes(d.toLowerCase()));
     };
 
-    // ⭐ STRATEGY: ONLY extract URLs explicitly marked as "Visit Website"
-    // Do NOT fall back to generic URL collection - if we can't find an explicit
-    // "Visit Website" link, return null. This prevents false positives.
+    // Use DOMParser from deno_dom to properly parse HTML
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+    
+    if (!doc) {
+      console.error("Failed to parse HTML");
+      return { visitUrl: null, dateStr, timeStr };
+    }
 
-    const isExcludedInline = (u: string) =>
-      excludeDomains.some((d) => u.toLowerCase().includes(d.toLowerCase()));
+    console.log("Successfully parsed HTML document");
 
-    // Method 1: Embedded JSON variable: linkUrl (most reliable)
-    const linkUrlMatch = html.match(
-      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
-    );
-    if (linkUrlMatch) {
-      const u = normalizeUrl(linkUrlMatch[1].trim());
-      if (
-        (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
-        !isExcludedInline(u)
-      ) {
-        console.log("✅ Found linkUrl in JSON:", u);
-        return { visitUrl: u, dateStr, timeStr };
+    // Strategy 1: Find anchors with "Visit Website" text
+    const allAnchors = doc.querySelectorAll("a") as NodeListOf<HTMLAnchorElement>;
+    console.log(`Found ${allAnchors.length} total anchor tags on page`);
+
+    // Helper function to check if text matches "visit website"
+    const isVisitWebsiteText = (text: string): boolean => {
+      const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
+      return (
+        normalized === 'visit website' ||
+        normalized === 'visit web site' ||
+        normalized.includes('visit website') ||
+        normalized.includes('visit web site') ||
+        (normalized.includes('visit') && normalized.includes('website'))
+      );
+    };
+
+    // Helper function to validate and normalize URL
+    const validateAndNormalizeUrl = (href: string | null, strategy: string): string | null => {
+      if (!href) {
+        console.log(`  [${strategy}] ⏭️ Skipped: no href attribute`);
+        return null;
+      }
+
+      let normalizedUrl = href.trim();
+      if (normalizedUrl.startsWith("//")) {
+        normalizedUrl = `https:${normalizedUrl}`;
+      } else if (normalizedUrl.startsWith("/")) {
+        const baseUrl = new URL(eventUrl);
+        normalizedUrl = `${baseUrl.origin}${normalizedUrl}`;
+      }
+
+      if (!normalizedUrl.match(/^https?:\/\//i)) {
+        console.log(`  [${strategy}] ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
+        return null;
+      }
+
+      if (isExcluded(normalizedUrl)) {
+        console.log(`  [${strategy}] ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
+        return null;
+      }
+
+      return normalizedUrl;
+    };
+
+    // Strategy 1: Direct anchor text match for "Visit Website"
+    let foundCount = 0;
+    let visitWebsiteAnchors: HTMLAnchorElement[] = [];
+    
+    for (const anchor of allAnchors) {
+      // Get both textContent and innerText to handle different parsing behaviors
+      const textContent = (anchor.textContent || "").trim();
+      const innerHTML = anchor.innerHTML || "";
+      
+      // Log first few anchors with external-link icon for debugging
+      if (innerHTML.includes('fa-external-link') && foundCount < 3) {
+        console.log(`[Debug] External link anchor: text="${textContent}", innerHTML="${innerHTML.substring(0, 200)}"`);
+      }
+      
+      if (isVisitWebsiteText(textContent)) {
+        foundCount++;
+        visitWebsiteAnchors.push(anchor);
+        console.log(`[Strategy 1] Found "Visit Website" link #${foundCount}: text="${textContent}"`);
       }
     }
 
-    // Method 2: Bottom actions "Visit Website" button (CatchDesMoines template)
-    const bottomActionsMatch = html.match(
-      /<div[^>]*class=["'][^"']*bottom-actions[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
-    );
-    if (bottomActionsMatch) {
-      const inner = bottomActionsMatch[1];
-      // Look for ALL links in bottom-actions with "Visit Website" text
-      const linkPattern = /<a[^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-      let match;
-      while ((match = linkPattern.exec(inner)) !== null) {
-        const u = normalizeUrl(match[1].trim());
-        const text = (match[2] || "").replace(/<[^>]*>/g, " ").trim();
-        if (
-          /visit\s*website/i.test(text) &&
-          (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
-          !isExcludedInline(u)
-        ) {
-          console.log("✅ Found 'Visit Website' button in bottom-actions:", u);
-          return { visitUrl: u, dateStr, timeStr };
+    console.log(`[Strategy 1] Found ${foundCount} "Visit Website" anchors out of ${allAnchors.length} total anchors`);
+
+    // Check each "Visit Website" anchor and its preceding sibling
+    for (const anchor of visitWebsiteAnchors) {
+      const href = anchor.getAttribute("href");
+      const textContent = anchor.textContent || "";
+      
+      console.log(`[Strategy 1a] Checking "Visit Website" anchor href="${href}"`);
+      
+      // First, try the href of the "Visit Website" anchor itself
+      const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 1a - Direct");
+      if (normalizedUrl) {
+        console.log(`  ✅ [Strategy 1a] Found valid URL in "Visit Website" anchor: ${normalizedUrl}`);
+        return { visitUrl: normalizedUrl, dateStr, timeStr };
+      }
+      
+      // If that didn't work, check the immediately preceding anchor
+      console.log(`[Strategy 1b] "Visit Website" anchor has no valid href, checking preceding anchor...`);
+      let previousSibling = anchor.previousElementSibling;
+      
+      while (previousSibling) {
+        if (previousSibling.tagName === "A") {
+          const prevHref = previousSibling.getAttribute("href");
+          const prevText = previousSibling.textContent || "";
+          console.log(`[Strategy 1b] Found preceding <a>: text="${prevText.trim()}", href="${prevHref}"`);
+          
+          const prevNormalizedUrl = validateAndNormalizeUrl(prevHref, "Strategy 1b - Preceding");
+          if (prevNormalizedUrl) {
+            console.log(`  ✅ [Strategy 1b] Found valid URL in preceding anchor: ${prevNormalizedUrl}`);
+            return { visitUrl: prevNormalizedUrl, dateStr, timeStr };
+          }
+          break; // Only check the immediate preceding anchor
+        }
+        previousSibling = previousSibling.previousElementSibling;
+      }
+    }
+
+    // Strategy 2: Check buttons that might contain or be near anchors
+    console.log(`[Strategy 2] Searching for buttons with "visit website" text...`);
+    const allButtons = doc.querySelectorAll("button, .button, .btn");
+    console.log(`Found ${allButtons.length} button elements`);
+    
+    for (const button of allButtons) {
+      const buttonText = button.textContent || "";
+      if (isVisitWebsiteText(buttonText)) {
+        console.log(`[Strategy 2] Found button with "visit website" text: "${buttonText.trim()}"`);
+        
+        // Check if button contains an anchor
+        const innerAnchor = button.querySelector("a");
+        if (innerAnchor) {
+          const href = innerAnchor.getAttribute("href");
+          const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 2 - Inner Anchor");
+          if (normalizedUrl) {
+            console.log(`  ✅ [Strategy 2] Found URL in button's inner anchor: ${normalizedUrl}`);
+            return { visitUrl: normalizedUrl, dateStr, timeStr };
+          }
+        }
+        
+        // Check if button has onclick with URL
+        const onclick = button.getAttribute("onclick");
+        if (onclick) {
+          const urlMatch = onclick.match(/(?:window\.location|location\.href)\s*=\s*['"]([^'"]+)['"]/);
+          if (urlMatch) {
+            const normalizedUrl = validateAndNormalizeUrl(urlMatch[1], "Strategy 2 - Onclick");
+            if (normalizedUrl) {
+              console.log(`  ✅ [Strategy 2] Found URL in button onclick: ${normalizedUrl}`);
+              return { visitUrl: normalizedUrl, dateStr, timeStr };
+            }
+          }
         }
       }
     }
 
-    // Method 3: Any anchor with exact "Visit Website" text anywhere on page
-    const visitWebsitePattern =
-      /<a[^>]*href=["']([^"']+)["'][^>]*>([^<]*)<\/a>/gi;
-    let anchorMatch;
-    while ((anchorMatch = visitWebsitePattern.exec(html)) !== null) {
-      const u = normalizeUrl(anchorMatch[1].trim());
-      const text = anchorMatch[2].trim();
-      if (
-        /visit\s*website/i.test(text) &&
-        (/^https?:\/\//i.test(u) || u.startsWith("//")) &&
-        !isExcludedInline(u)
-      ) {
-        console.log("✅ Found 'Visit Website' anchor:", u);
-        return { visitUrl: u, dateStr, timeStr };
+    // Strategy 3: Look for common class patterns and specific structures
+    console.log(`[Strategy 3] Searching for links with common "visit" or "website" classes...`);
+    const classSelectors = [
+      'a[class*="visit"]',
+      'a[class*="website"]',
+      'a[class*="external"]',
+      'a[class*="event-link"]',
+      'a[class*="action-item"]', // CatchDesMoines uses this for Visit Website links
+      '.visit-website a',
+      '.event-website a',
+      '.bottom-actions a' // CatchDesMoines structure
+    ];
+    
+    for (const selector of classSelectors) {
+      const links = doc.querySelectorAll(selector);
+      if (links.length > 0) {
+        console.log(`[Strategy 3] Found ${links.length} links matching selector: ${selector}`);
+        for (const link of links) {
+          const href = link.getAttribute("href");
+          const linkText = (link.textContent || "").trim();
+          const innerHTML = link.innerHTML || "";
+          
+          // Check if this looks like a "Visit Website" link
+          const hasExternalIcon = innerHTML.includes('fa-external-link') || innerHTML.includes('external-link');
+          const hasVisitText = isVisitWebsiteText(linkText);
+          
+          if (hasExternalIcon || hasVisitText) {
+            console.log(`[Strategy 3] Checking potential visit link: text="${linkText}", hasIcon=${hasExternalIcon}, href="${href}"`);
+            const normalizedUrl = validateAndNormalizeUrl(href, `Strategy 3 - ${selector}`);
+            if (normalizedUrl) {
+              console.log(`  ✅ [Strategy 3] Found URL via class selector: ${normalizedUrl}`);
+              return { visitUrl: normalizedUrl, dateStr, timeStr };
+            }
+          }
+        }
       }
     }
 
-    // ⚠️ No explicit "Visit Website" link found - return null
-    console.log("⚠️ No explicit 'Visit Website' link found on page");
+    console.log(`⚠️ No valid "Visit Website" link found after trying all strategies`);
+    
+    // Fallback: Check for linkUrl in JSON embedded in the page
+    const linkUrlMatch = html.match(
+      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
+    );
+    if (linkUrlMatch) {
+      const url = linkUrlMatch[1].trim();
+      if (!isExcluded(url)) {
+        console.log("✅ Found linkUrl in JSON:", url);
+        return { visitUrl: url, dateStr, timeStr };
+      }
+    }
+
     return { visitUrl: null, dateStr, timeStr };
   } catch (error) {
     console.error("Error extracting URL from", eventUrl, ":", error);
@@ -326,51 +446,6 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
-
-    // Get authorization header
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "No authorization header" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    // Verify user is admin
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseClient.auth.getUser(authHeader.replace("Bearer ", ""));
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check if user has admin role
-    const { data: profile } = await supabaseClient
-      .from("profiles")
-      .select("user_role")
-      .eq("user_id", user.id)
-      .single();
-
-    if (
-      !profile ||
-      !["admin", "root_admin", "moderator"].includes(profile.user_role)
-    ) {
-      return new Response(
-        JSON.stringify({ error: "Insufficient permissions" }),
-        {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
 
     if (req.method === "POST") {
       const body = await req.json().catch(() => ({}));
@@ -392,18 +467,19 @@ serve(async (req) => {
       }
 
       const totalEvents = totalCount || 0;
-      console.log(`Total catchdesmoines events: ${totalEvents}`);
+      console.log(`📊 Total catchdesmoines events in pool: ${totalEvents}`);
 
       // Generate random offset to get different events each time
       const maxOffset = Math.max(0, totalEvents - batchSize);
       const randomOffset = Math.floor(Math.random() * (maxOffset + 1));
-      console.log(`Using random offset: ${randomOffset}`);
+      console.log(`🎲 Using random offset: ${randomOffset} of max ${maxOffset}`);
 
       // Get random batch of events with catchdesmoines.com URLs
       const { data: events, error: fetchError } = await supabaseClient
         .from("events")
         .select("id, title, source_url")
         .ilike("source_url", "%catchdesmoines.com%")
+        .order('created_at', { ascending: false }) // Newest first to prioritize recent imports
         .range(randomOffset, randomOffset + batchSize - 1);
 
       if (fetchError) {
@@ -445,7 +521,7 @@ serve(async (req) => {
           const extractedData = await extractVisitWebsiteUrl(event.source_url);
 
           if (extractedData.visitUrl) {
-            // Prepare update data
+            // Prepare update data - replace source_url with extracted external URL
             const updateData: any = { source_url: extractedData.visitUrl };
 
             // If we extracted datetime info, parse and update event_start_utc
@@ -457,13 +533,13 @@ serve(async (req) => {
               if (parsedDate) {
                 updateData.event_start_utc = parsedDate.toISOString();
                 console.log(
-                  `Parsed event datetime for ${
+                  `📅 Parsed event datetime for ${
                     event.id
                   }: ${parsedDate.toISOString()}`
                 );
               } else {
                 console.warn(
-                  `Failed to parse datetime for event ${event.id}: ${extractedData.dateStr} ${extractedData.timeStr}`
+                  `⚠️ Failed to parse datetime for event ${event.id}: ${extractedData.dateStr} ${extractedData.timeStr}`
                 );
               }
             }
@@ -476,7 +552,7 @@ serve(async (req) => {
                 newUrl: extractedData.visitUrl,
               });
               console.log(
-                `[DRY RUN] Would update event ${event.id}: ${
+                `🔍 [DRY RUN] Would update event "${event.title}": ${
                   event.source_url
                 } -> ${extractedData.visitUrl}${
                   updateData.event_start_utc
@@ -503,7 +579,7 @@ serve(async (req) => {
                   newUrl: extractedData.visitUrl,
                 });
                 console.log(
-                  `Updated event ${event.id}: ${event.source_url} -> ${
+                  `✅ Updated event "${event.title}": ${event.source_url} -> ${
                     extractedData.visitUrl
                   }${
                     updateData.event_start_utc

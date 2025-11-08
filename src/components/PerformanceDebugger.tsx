@@ -10,8 +10,8 @@ interface PerformanceDebuggerProps {
  */
 export const PerformanceDebugger: React.FC<PerformanceDebuggerProps> = ({ enabled }) => {
   const vitals = useWebVitals();
-  
-  if (!enabled || process.env.NODE_ENV === 'production') {
+
+  if (!enabled || import.meta.env.PROD) {
     return null;
   }
 

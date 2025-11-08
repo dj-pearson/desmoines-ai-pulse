@@ -38,6 +38,7 @@ import ArticlesManager from "@/components/ArticlesManager";
 import AIArticleGenerator from "@/components/AIArticleGenerator";
 import AIEnhancementManager from "@/components/AIEnhancementManager";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
+import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard";
 import { useArticles } from "@/hooks/useArticles";
 import {
   Shield,
@@ -52,6 +53,7 @@ import {
   Calendar,
   Building,
   Utensils,
+  UtensilsCrossed,
   Camera,
   Play,
   Globe,
@@ -68,6 +70,7 @@ import {
   Target,
   Plus,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -865,6 +868,21 @@ export default function Admin() {
                    </button>
 
                    <button
+                     onClick={() => setActiveTab("search-traffic")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "search-traffic"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Search & Traffic Analytics" : ""}
+                   >
+                     <TrendingUp className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Search & Traffic</span>}
+                   </button>
+
+                   <button
                      onClick={() => setActiveTab("system")}
                      className={`w-full flex items-center ${
                        sidebarCollapsed ? "justify-center" : "gap-3"
@@ -1091,6 +1109,53 @@ export default function Admin() {
               <div className="space-y-6">
                 {/* Cron Monitor */}
                 <CronMonitorSimple />
+
+                {/* Restaurant Opening Scraper */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <UtensilsCrossed className="h-5 w-5 text-orange-600" />
+                      Restaurant Opening Scraper
+                    </CardTitle>
+                    <CardDescription>
+                      Automatically discover and add new restaurant openings to the database
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <Button
+                        onClick={async () => {
+                          try {
+                            const { data, error } = await supabase.functions.invoke(
+                              "restaurant-opening-scraper",
+                              { body: {} }
+                            );
+                            if (error) throw error;
+                            toast.success("Restaurant Scraper Complete", {
+                              description: `Found ${data.totalFound} restaurants, Inserted ${data.inserted}, Updated ${data.updated}`,
+                            });
+                          } catch (error: any) {
+                            toast.error("Scraper Error", {
+                              description: error.message,
+                            });
+                          }
+                        }}
+                        className="flex items-center gap-2"
+                      >
+                        <UtensilsCrossed className="h-4 w-4" />
+                        Run Restaurant Scraper
+                      </Button>
+                      <div className="text-sm text-muted-foreground">
+                        <p>This will scrape the following sources:</p>
+                        <ul className="list-disc list-inside mt-2 space-y-1">
+                          <li>Des Moines Register - Restaurant Openings</li>
+                          <li>Catch Des Moines - Restaurants</li>
+                          <li>Eater Des Moines - New Restaurants</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 {/* Original Scraping Management */}
                 <Card>
@@ -1361,7 +1426,9 @@ export default function Admin() {
             {canManageUsers() && activeTab === "security" && <AdminSecurityManager />}
             
             {canManageUsers() && activeTab === "analytics" && <AdminAnalyticsDashboard />}
-            
+
+            {canManageUsers() && activeTab === "search-traffic" && <SearchTrafficDashboard />}
+
             {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 
             {canManageContent() && activeTab === "settings" && <AdminApplicationSettings />}

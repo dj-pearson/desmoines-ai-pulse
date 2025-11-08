@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
+import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -10,7 +11,8 @@ const NO_TIME_MARKER = "19:31:58";
 interface ScrapRequest {
   url: string;
   category: string;
-  maxPages?: number; // New optional parameter for pagination
+  maxPages?: number; // Optional parameter for pagination
+  scraperBackend?: 'browserless' | 'puppeteer' | 'playwright' | 'firecrawl' | 'fetch'; // Allow backend override
 }
 
 const corsHeaders = {
@@ -21,7 +23,6 @@ const corsHeaders = {
 // Initialize Supabase client
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const firecrawlApiKey = Deno.env.get('FIRECRAWL_API_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -101,7 +102,7 @@ serve(async (req) => {
       });
     }
 
-    const { url, category, maxPages = 3 }: ScrapRequest = await req.json();
+    const { url, category, maxPages = 3, scraperBackend }: ScrapRequest = await req.json();
 
     if (!url || !category) {
       return new Response(
@@ -113,7 +114,7 @@ serve(async (req) => {
       );
     }
 
-    console.log(`🚀 Starting Firecrawl scrape of ${url} for ${category} (max ${maxPages} pages)`);
+    console.log(`🚀 Starting scrape of ${url} for ${category} (max ${maxPages} pages) using ${scraperBackend || 'default backend'}`);
 
     // Generate URLs for pagination if it's a Catch Des Moines events page
     const urlsToScrape = [];
@@ -136,45 +137,38 @@ serve(async (req) => {
       urlsToScrape.push(url);
     }
 
-    console.log(`📄 Will scrape ${urlsToScrape.length} pages: ${urlsToScrape.join(', ')}`);
+    console.log(`📄 Will scrape ${urlsToScrape.length} pages`);
 
     let allExtractedItems = [];
     let totalContentLength = 0;
 
-    // Process each URL for pagination support
-    for (const currentUrl of urlsToScrape) {
-      console.log(`🌐 Scraping page: ${currentUrl}`);
-      
-      // Use Firecrawl to get JavaScript-rendered content
-      const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${firecrawlApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          url: currentUrl,
-          formats: ['markdown', 'html'],
-          waitFor: 3000, // Reduced wait time for pagination
-          timeout: 20000, // Reduced timeout for pagination
-        }),
-      });
+    // Scrape URLs using universal scraper (supports Puppeteer/Playwright/Firecrawl)
+    const scrapeResults = await scrapeUrls(urlsToScrape, {
+      backend: scraperBackend,
+      waitTime: 5000,
+      timeout: 30000,
+    }, 2); // Scrape 2 URLs at a time
 
-      if (!firecrawlResponse.ok) {
-        const errorText = await firecrawlResponse.text();
-        console.error(`❌ Firecrawl API error for ${currentUrl}: ${firecrawlResponse.status} - ${errorText}`);
-        continue; // Skip this page and continue with others
+    // Process each result
+    for (let i = 0; i < scrapeResults.length; i++) {
+      const result = scrapeResults[i];
+      const currentUrl = urlsToScrape[i];
+      
+      console.log(`🌐 Processing: ${currentUrl}`);
+      
+      if (!result.success) {
+        console.error(`❌ Scraping error for ${currentUrl}: ${result.error}`);
+        continue;
       }
 
-      const firecrawlData = await firecrawlResponse.json();
-      const content = firecrawlData.data?.markdown || firecrawlData.data?.html || '';
+      const content = result.markdown || result.text || result.html || '';
       
-      console.log(`📄 Firecrawl returned ${content.length} characters from ${currentUrl}`);
+      console.log(`📄 ${result.backend} returned ${content.length} characters (took ${result.duration}ms)`);
       totalContentLength += content.length;
 
       if (!content || content.length < 100) {
         console.error(`❌ No usable content returned from ${currentUrl}`);
-        continue; // Skip this page
+        continue;
       }
 
       // Extract events using Claude AI for this page
@@ -233,13 +227,28 @@ EXAMPLES:
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
-🎯 PRIORITY URL EXTRACTION: Look specifically for "Visit Website" links or buttons that lead to external venue/event websites. These are usually found in:
-- HTML like: <a href="https://external-venue.com" class="action-item">Visit Website</a>
-- Links with text containing "Visit Website", "Official Website", "Venue Website"
-- External URLs that are NOT catchdesmoines.com URLs
-- Venue-specific website links (paintingwithatwist.com, etc.)
+🎯 CRITICAL URL EXTRACTION RULE FOR CATCHDESMOINES.COM EVENTS:
 
-If you find a "Visit Website" or venue-specific URL, use that as the source_url instead of the catchdesmoines.com page URL.
+When extracting events from CatchDesMoines pages, the source_url MUST be the external event website, NOT the catchdesmoines.com page.
+
+HOW TO FIND THE CORRECT URL:
+1. Look for anchor text "Visit Website" (case-insensitive) in the HTML
+2. Extract the href from that anchor tag
+3. If the "Visit Website" anchor has no href, check the immediately preceding <a> tag for an external URL
+4. The URL must be external (NOT catchdesmoines.com, NOT simpleview.com, NOT social media, NOT javascript/css files)
+5. Only use catchdesmoines.com URLs as a last resort fallback if no external URL exists
+
+VALIDATION:
+- URL must start with http:// or https://
+- URL must NOT contain: catchdesmoines.com, simpleview, facebook.com, twitter.com, instagram.com, youtube.com, vimeo.com, .js, .css, cdn, analytics
+- Prefer venue-specific websites (restaurant sites, theater sites, event organizer sites)
+
+EXAMPLE:
+If you see HTML like:
+<a href="https://statemint.com/west-des-moines">Visit Website</a>
+Use: "https://statemint.com/west-des-moines" as the source_url
+
+If the "Visit Website" link is missing or internal, you may use the catchdesmoines page URL as a fallback.
 
 🏢 VENUE EXTRACTION:
 - Look for venue names near event titles

@@ -3,7 +3,10 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
+import { WelcomeModal } from "@/components/WelcomeModal";
 
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
@@ -24,11 +27,18 @@ const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
 const AdminArticleEditor = lazy(() => import("./pages/AdminArticleEditor"));
 const Advertise = lazy(() => import("./pages/Advertise"));
+const AdvertiseSuccess = lazy(() => import("./pages/AdvertiseSuccess"));
+const AdvertiseCancel = lazy(() => import("./pages/AdvertiseCancel"));
 const WeekendPage = lazy(() => import("./pages/WeekendPage"));
 const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
 const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
 const IowaStateFairPage = lazy(() => import("./pages/IowaStateFairPage"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
+const UploadCreatives = lazy(() => import("./pages/UploadCreatives"));
+const AdminCampaigns = lazy(() => import("./pages/AdminCampaigns"));
+const AdminCampaignDetail = lazy(() => import("./pages/AdminCampaignDetail"));
+const CampaignAnalytics = lazy(() => import("./pages/CampaignAnalytics"));
+const TeamManagement = lazy(() => import("./pages/TeamManagement"));
 const Social = lazy(() => import("./pages/Social"));
 const SmartCalendarIntegration = lazy(
   () => import("./components/SmartCalendarIntegration")
@@ -55,14 +65,35 @@ const PageLoader = () => (
   </div>
 );
 
+const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) => {
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  useKeyboardShortcuts({
+    enabled: true,
+    onShowHelp: () => setShowShortcutsModal(true),
+  });
+
+  return (
+    <>
+      {children}
+      <KeyboardShortcutsModal
+        open={showShortcutsModal}
+        onOpenChange={setShowShortcutsModal}
+      />
+      <WelcomeModal />
+    </>
+  );
+};
+
 const App = () => (
   <TooltipProvider>
     <BrowserRouter>
       <ErrorBoundary>
-        <Toaster />
-        <Sonner />
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
+        <KeyboardShortcutsProvider>
+          <Toaster />
+          <Sonner />
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/profile" element={<Profile />} />
@@ -103,11 +134,18 @@ const App = () => (
               path="/admin/articles/edit/:id"
               element={<AdminArticleEditor />}
             />
+            <Route path="/admin/campaigns" element={<AdminCampaigns />} />
+            <Route path="/admin/campaigns/:campaignId" element={<AdminCampaignDetail />} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
             <Route path="/advertise" element={<Advertise />} />
+            <Route path="/advertise/success" element={<AdvertiseSuccess />} />
+            <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
             <Route path="/campaigns" element={<CampaignDashboard />} />
+            <Route path="/campaigns/:campaignId/creatives" element={<UploadCreatives />} />
+            <Route path="/campaigns/:campaignId/analytics" element={<CampaignAnalytics />} />
+            <Route path="/campaigns/team" element={<TeamManagement />} />
             <Route path="/weekend" element={<WeekendPage />} />
             <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
             <Route
@@ -130,6 +168,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        </KeyboardShortcutsProvider>
       </ErrorBoundary>
     </BrowserRouter>
   </TooltipProvider>

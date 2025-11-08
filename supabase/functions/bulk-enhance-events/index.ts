@@ -50,13 +50,32 @@ serve(async (req) => {
     console.log(`🚀 Starting bulk event enhancement - Batch size: ${batchSize}, Trigger: ${triggerSource}`);
 
     // Get events that need AI enhancement (no ai_writeup yet)
+    // Use random offset to rotate through different batches instead of always starting with the same events
+    const { data: totalCount } = await supabase
+      .from('events')
+      .select('id', { count: 'exact', head: true })
+      .gte('date', new Date().toISOString())
+      .is('ai_writeup', null);
+    
+    const availableCount = totalCount?.length || 0;
+    console.log(`📊 Total events needing enhancement: ${availableCount}`);
+    
+    // Calculate a rotating offset based on time to avoid always processing the same events
+    const hourOfDay = new Date().getHours();
+    const rotationSeed = Math.floor(hourOfDay / 2); // Changes every 2 hours
+    const randomOffset = availableCount > batchSize 
+      ? Math.floor((rotationSeed * 37) % Math.max(1, availableCount - batchSize)) 
+      : 0;
+    
+    console.log(`🔄 Using offset ${randomOffset} to rotate through events (seed: ${rotationSeed})`);
+    
     const { data: eventsToEnhance, error: fetchError } = await supabase
       .from('events')
       .select('id, title, original_description, enhanced_description, location, venue, category, date, source_url')
       .gte('date', new Date().toISOString()) // Only future events
       .is('ai_writeup', null) // Only events without AI writeup
       .order('date', { ascending: true })
-      .limit(batchSize);
+      .range(randomOffset, randomOffset + batchSize - 1);
 
     if (fetchError) {
       console.error('Error fetching events:', fetchError);

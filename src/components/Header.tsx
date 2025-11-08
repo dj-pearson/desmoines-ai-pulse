@@ -18,6 +18,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useAccessibility } from "@/hooks/useAccessibility";
+import { useSwipe } from "@/hooks/use-swipe";
 import { Link, useLocation } from "react-router-dom";
 import {
   User,
@@ -33,6 +34,7 @@ import {
   Trophy,
   Building2,
   FileText,
+  X,
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
@@ -64,11 +66,25 @@ export default function Header() {
   const handleMobileMenuToggle = (isOpen: boolean) => {
     if (isOpen) {
       saveFocus();
+      // Haptic feedback on open (if supported)
+      if ('vibrate' in navigator) {
+        navigator.vibrate(10);
+      }
     } else {
       restoreFocus();
     }
     setIsMobileMenuOpen(isOpen);
   };
+
+  // Swipe gesture to close mobile menu
+  const swipeRef = useSwipe<HTMLDivElement>({
+    onSwipeRight: () => {
+      if (isMobileMenuOpen) {
+        handleMobileMenuToggle(false);
+      }
+    },
+    threshold: 100,
+  });
 
   const getInitials = () => {
     if (profile?.first_name && profile?.last_name) {
@@ -105,6 +121,14 @@ export default function Header() {
 
   return (
     <header className="bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border sticky top-0 z-50 safe-area-top">
+      {/* Skip Navigation Link for Accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+      >
+        Skip to main content
+      </a>
+
       <div className="container mx-auto mobile-padding">
         <div className="flex items-center touch-target gap-2 lg:gap-4">
           {/* Logo - Mobile Optimized with Dark Mode Glow - Fixed Width */}
@@ -166,7 +190,7 @@ export default function Header() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="lg:hidden touch-target"
+                  className="lg:hidden touch-feedback min-h-[44px] min-w-[44px] rounded-lg"
                   aria-label={
                     isMobileMenuOpen
                       ? "Close navigation menu"
@@ -180,14 +204,27 @@ export default function Header() {
               </SheetTrigger>
               <SheetContent
                 side="right"
-                className="w-[300px] sm:w-[350px] flex flex-col max-h-screen"
+                className="w-[85vw] sm:w-[350px] flex flex-col max-h-screen safe-area-inset"
                 id="mobile-navigation"
                 aria-label="Mobile navigation menu"
               >
-                <SheetHeader className="flex-shrink-0">
-                  <SheetTitle>Navigation Menu</SheetTitle>
+                <SheetHeader className="flex-shrink-0 flex flex-row items-center justify-between">
+                  <SheetTitle className="text-xl">Menu</SheetTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleMobileMenuToggle(false)}
+                    className="touch-feedback rounded-full h-10 w-10 p-0"
+                    aria-label="Close menu"
+                  >
+                    <X className="h-5 w-5" />
+                  </Button>
                 </SheetHeader>
-                <div className="flex-1 overflow-y-auto py-6" role="none">
+                <div
+                  ref={swipeRef}
+                  className="flex-1 overflow-y-auto py-6 scroll-smooth-mobile"
+                  role="none"
+                >
                   <nav
                     className="space-y-2"
                     role="navigation"
@@ -197,12 +234,17 @@ export default function Header() {
                       <Link
                         key={link.href}
                         to={link.href}
-                        onClick={() => handleMobileMenuToggle(false)}
+                        onClick={() => {
+                          handleMobileMenuToggle(false);
+                          if ('vibrate' in navigator) {
+                            navigator.vibrate(10);
+                          }
+                        }}
                         className={cn(
-                          "flex items-center gap-3 p-4 rounded-lg smooth-transition touch-target",
+                          "flex items-center gap-3 p-4 rounded-xl touch-feedback min-h-[56px]",
                           isActivePath(link.href)
-                            ? "bg-primary/10 text-primary border border-primary/20"
-                            : "hover:bg-muted"
+                            ? "bg-primary/10 text-primary border-2 border-primary/30 font-semibold"
+                            : "hover:bg-muted border-2 border-transparent"
                         )}
                         onMouseEnter={() => prefetchRoute(link.href)}
                         onFocus={() => prefetchRoute(link.href)}
@@ -220,7 +262,7 @@ export default function Header() {
 
                   {/* Mobile Theme Toggle */}
                   <div className="border-t border-border pt-4 mt-6">
-                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-muted/50 rounded-xl min-h-[56px]">
                       <span className="text-base font-medium">Theme</span>
                       <ThemeToggle />
                     </div>
@@ -228,13 +270,23 @@ export default function Header() {
                   {/* Mobile Submit Event and Advertise Buttons */}
                   <div className="border-t border-border pt-4 mt-6 space-y-3">
                     <div
-                      onClick={() => handleMobileMenuToggle(false)}
+                      onClick={() => {
+                        handleMobileMenuToggle(false);
+                        if ('vibrate' in navigator) {
+                          navigator.vibrate(10);
+                        }
+                      }}
                       className="w-full"
                     >
                       <SubmitEventButton />
                     </div>
                     <div
-                      onClick={() => handleMobileMenuToggle(false)}
+                      onClick={() => {
+                        handleMobileMenuToggle(false);
+                        if ('vibrate' in navigator) {
+                          navigator.vibrate(10);
+                        }
+                      }}
                       className="w-full"
                     >
                       <AdvertiseButton />
