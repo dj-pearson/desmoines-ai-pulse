@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS search_performance (
   impressions INTEGER,
   clicks INTEGER,
   ctr NUMERIC(5,2), -- Click-through rate
-  position NUMERIC(5,2), -- Average position
+  "position" NUMERIC(5,2), -- Average position
   device TEXT, -- 'desktop', 'mobile', 'tablet'
   country TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS keyword_rankings (
   tracked_date DATE NOT NULL,
   keyword TEXT NOT NULL,
   url TEXT, -- Landing page
-  position INTEGER,
+  "position" INTEGER,
   search_volume INTEGER,
   competition TEXT, -- 'low', 'medium', 'high'
   cpc NUMERIC(10,2), -- Cost per click
@@ -263,7 +263,7 @@ BEGIN
     SUM(sp.impressions)::BIGINT as total_impressions,
     SUM(sp.clicks)::BIGINT as total_clicks,
     AVG(sp.ctr) as avg_ctr,
-    AVG(sp.position) as avg_position
+    AVG(sp."position") as avg_position
   FROM search_performance sp
   WHERE sp.user_id = p_user_id
     AND sp.metric_date BETWEEN p_start_date AND p_end_date
@@ -285,7 +285,7 @@ CREATE OR REPLACE FUNCTION get_seo_opportunities(
   impressions INTEGER,
   clicks INTEGER,
   ctr NUMERIC,
-  position NUMERIC,
+  "position" NUMERIC,
   potential_impact TEXT,
   recommendation TEXT
 ) AS $$
@@ -299,7 +299,7 @@ BEGIN
     AVG(sp.impressions)::INTEGER as impressions,
     AVG(sp.clicks)::INTEGER as clicks,
     AVG(sp.ctr) as ctr,
-    AVG(sp.position) as position,
+    AVG(sp."position") as "position",
     'High'::TEXT as potential_impact,
     'Improve title and meta description to increase CTR'::TEXT as recommendation
   FROM search_performance sp
@@ -307,7 +307,7 @@ BEGIN
     AND sp.metric_date >= CURRENT_DATE - p_days_back
     AND sp.impressions > 100
     AND sp.ctr < 2.0
-    AND sp.position <= 10
+    AND sp."position" <= 10
   GROUP BY sp.query, sp.page
 
   UNION ALL
@@ -320,13 +320,13 @@ BEGIN
     AVG(sp.impressions)::INTEGER as impressions,
     AVG(sp.clicks)::INTEGER as clicks,
     AVG(sp.ctr) as ctr,
-    AVG(sp.position) as position,
+    AVG(sp."position") as "position",
     'Medium'::TEXT as potential_impact,
     'Optimize content to reach first page'::TEXT as recommendation
   FROM search_performance sp
   WHERE sp.user_id = p_user_id
     AND sp.metric_date >= CURRENT_DATE - p_days_back
-    AND sp.position > 10 AND sp.position <= 20
+    AND sp."position" > 10 AND sp."position" <= 20
     AND sp.impressions > 50
   GROUP BY sp.query, sp.page
 
@@ -340,7 +340,7 @@ BEGIN
     NULL::INTEGER as impressions,
     NULL::INTEGER as clicks,
     NULL::NUMERIC as ctr,
-    AVG(kr.position) as position,
+    AVG(kr."position") as "position",
     'High'::TEXT as potential_impact,
     'Investigate why ranking is dropping'::TEXT as recommendation
   FROM keyword_rankings kr
