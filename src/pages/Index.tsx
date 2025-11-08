@@ -1,4 +1,4 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -7,7 +7,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ExternalLink, Sparkles } from "lucide-react";
+import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus } from "lucide-react";
+import { downloadICS } from "@/lib/calendar";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEventScraper } from "@/hooks/useSupabase";
@@ -27,6 +29,7 @@ import GEOContent from "@/components/GEOContent";
 import Newsletter from "@/components/Newsletter";
 import { EventSocialHub } from "@/components/EventSocialHub";
 import { FAQSection } from "@/components/FAQSection";
+import { OnboardingModal } from "@/components/OnboardingModal";
 
 // Lazy load Three.js component to reduce initial bundle size
 const Hero3DCityscape = lazy(() => import("@/components/Hero3DCityscape"));
@@ -37,8 +40,43 @@ export default function Index() {
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showSocialHub, setShowSocialHub] = useState(false);
   const [socialEventId, setSocialEventId] = useState<string | null>(null);
+  const [searchFilters, setSearchFilters] = useState<{
+    query?: string;
+    category?: string;
+    subcategory?: string;
+    dateFilter?: {
+      start?: Date;
+      end?: Date;
+      mode: "single" | "range" | "preset";
+      preset?: string;
+    } | null;
+    location?: string;
+    priceRange?: string;
+  } | undefined>(undefined);
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const { toast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+
+  // Check if user should see onboarding
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const hasSeenOnboarding = localStorage.getItem(`onboarding_complete_${user.id}`);
+      if (!hasSeenOnboarding) {
+        // Small delay to let page load before showing modal
+        const timer = setTimeout(() => {
+          setShowOnboarding(true);
+        }, 1000);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [isAuthenticated, user]);
+
+  const handleOnboardingComplete = () => {
+    if (user) {
+      localStorage.setItem(`onboarding_complete_${user.id}`, "true");
+    }
+    setShowOnboarding(false);
+  };
 
   const scrapeMutation = useEventScraper();
 
@@ -72,21 +110,43 @@ export default function Index() {
     ]
   };
 
-  const handleSearch = (filters: {
-    query: string;
-    category: string;
-    date?: string;
-    location?: string;
-    priceRange?: string;
-  }) => {
-    // Scroll to events section and apply filters
-    document.getElementById("events")?.scrollIntoView({ behavior: "smooth" });
+  const handleSearch = (
+    filters: {
+      query: string;
+      category: string;
+      subcategory?: string;
+      dateFilter?: {
+        start?: Date;
+        end?: Date;
+        mode: "single" | "range" | "preset";
+        preset?: string;
+      } | null;
+      location?: string;
+      priceRange?: string;
+    },
+    shouldScroll: boolean = true
+  ) => {
+    // Update search filters state
+    setSearchFilters(filters);
 
-    // TODO: Implement actual filtering logic with the enhanced filters
-    toast({
-      title: "Smart Search Applied",
-      description: `Found events matching your criteria`,
-    });
+    // Scroll to events section if explicitly requested (e.g., user clicked Search button)
+    if (shouldScroll) {
+      // Small delay to ensure content has rendered
+      setTimeout(() => {
+        const dashboardElement = document.querySelector('[data-dashboard="all-inclusive"]');
+        if (dashboardElement) {
+          dashboardElement.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 100);
+    }
+
+    // Show feedback for search queries
+    if (filters.query && filters.query.trim() !== "") {
+      toast({
+        title: "Search Applied",
+        description: `Searching for "${filters.query}"`,
+      });
+    }
   };
 
   const handleViewEventDetails = (event: Event) => {
@@ -186,7 +246,12 @@ export default function Index() {
         <SearchSection onSearch={handleSearch} />
 
         {/* All-Inclusive Dashboard */}
-        <AllInclusiveDashboard onViewEventDetails={handleViewEventDetails} />
+        <div data-dashboard="all-inclusive">
+          <AllInclusiveDashboard
+            onViewEventDetails={handleViewEventDetails}
+            filters={searchFilters}
+          />
+        </div>
 
         {!showAllEvents && !showSocialHub && (
           <>
@@ -389,8 +454,25 @@ export default function Index() {
                   )}
                 </div>
 
-                {selectedEvent.source_url && (
-                  <div className="pt-4 border-t">
+                <div className="pt-4 border-t space-y-3">
+                  <FavoriteButton
+                    eventId={selectedEvent.id}
+                    size="default"
+                    variant="outline"
+                    className="w-full"
+                    showText
+                  />
+
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => downloadICS(selectedEvent)}
+                  >
+                    <CalendarPlus className="h-4 w-4 mr-2" />
+                    Add to Calendar
+                  </Button>
+
+                  {selectedEvent.source_url && (
                     <Button asChild className="w-full">
                       <a
                         href={selectedEvent.source_url}
@@ -402,13 +484,16 @@ export default function Index() {
                         View Original Event
                       </a>
                     </Button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* First-time User Onboarding */}
+      {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
     </div>
   );
 }

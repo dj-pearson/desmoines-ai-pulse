@@ -94,26 +94,7 @@ export default function Advertise() {
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
 
-  if (!user) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Card className="max-w-md mx-auto">
-          <CardHeader>
-            <CardTitle>Login Required</CardTitle>
-            <CardDescription>
-              Please log in to create advertising campaigns.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button onClick={() => navigate("/auth")} className="w-full">
-              Go to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
+  // Allow viewing the page without login - only require login at checkout
   const handlePlacementToggle = (type: string, checked: boolean) => {
     if (checked) {
       setSelectedPlacements([...selectedPlacements, { type, days: 7 }]);
@@ -138,6 +119,18 @@ export default function Advertise() {
   };
 
   const handleCreateCampaign = async () => {
+    // Check if user is logged in first
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please log in or create an account to continue.",
+        variant: "destructive",
+      });
+      // Redirect to auth page with return URL
+      navigate("/auth?redirect=/advertise");
+      return;
+    }
+
     if (!campaignName || selectedPlacements.length === 0 || !startDate || !endDate) {
       toast({
         title: "Missing Information",
@@ -158,13 +151,14 @@ export default function Advertise() {
         end_date: format(endDate, "yyyy-MM-dd"),
       });
 
-      const checkoutUrl = await createCheckoutSession(campaign.id);
-      window.open(checkoutUrl, '_blank');
-      
       toast({
         title: "Campaign Created!",
-        description: "Redirecting to payment...",
+        description: "Redirecting to secure payment...",
       });
+
+      // Navigate to Stripe checkout in same tab (better UX, no popup blockers)
+      const checkoutUrl = await createCheckoutSession(campaign.id);
+      window.location.href = checkoutUrl;
     } catch (error) {
       toast({
         title: "Error",
@@ -454,17 +448,25 @@ export default function Advertise() {
                   </div>
                 </div>
 
+                {!user && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                    <p className="text-sm text-blue-900">
+                      <strong>Note:</strong> You'll need to log in or create a free account to complete your purchase.
+                    </p>
+                  </div>
+                )}
+
                 <Button
                   onClick={handleCreateCampaign}
                   disabled={isLoading || selectedPlacements.length === 0}
                   className="w-full"
                   size="lg"
                 >
-                  {isLoading ? "Creating..." : "Create Campaign & Pay"}
+                  {isLoading ? "Creating..." : user ? "Create Campaign & Pay" : "Continue to Login"}
                 </Button>
 
                 <p className="text-xs text-muted-foreground text-center">
-                  After payment, you'll be able to upload your creative assets and manage your campaign.
+                  {user ? "After payment, you'll be able to upload your creative assets and manage your campaign." : "Creating an account is free and takes less than 2 minutes."}
                 </p>
               </CardContent>
             </Card>

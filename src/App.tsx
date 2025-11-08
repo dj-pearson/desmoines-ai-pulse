@@ -11,6 +11,7 @@ import { WelcomeModal } from "@/components/WelcomeModal";
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
+const AuthVerified = lazy(() => import("./pages/AuthVerified"));
 const Profile = lazy(() => import("./pages/Profile"));
 const UserDashboard = lazy(() => import("./pages/UserDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -96,6 +97,7 @@ const App = () => (
             <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/verified" element={<AuthVerified />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/dashboard" element={<UserDashboard />} />
             <Route path="/admin" element={<Admin />} />
