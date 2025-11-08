@@ -42,12 +42,14 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Download,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useDomainHighlights } from "@/hooks/useDomainHighlights";
 import EventDataEnhancer from "./EventDataEnhancer";
 import { useWriteupGenerator } from "@/hooks/useWriteupGenerator";
+import { useContentExport } from "@/hooks/useDataExport";
 
 type ContentType =
   | "event"
@@ -311,6 +313,7 @@ export default function ContentTable({
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const { isHighlightedDomain } = useDomainHighlights();
   const { generateWriteup, isGeneratingId } = useWriteupGenerator();
+  const { isExporting, exportContent } = useContentExport(type);
 
   // Sync internal search term with external search value
   useEffect(() => {
@@ -318,6 +321,16 @@ export default function ContentTable({
   }, [searchValue]);
 
   const config = tableConfigs[type];
+
+  // Handle CSV export
+  const handleExport = async () => {
+    const columns = config.columns.filter((col: any) => {
+      // Exclude certain columns from export
+      return col.key !== 'actions';
+    });
+
+    await exportContent(processedItems, columns);
+  };
 
   // Helper function to toggle row expansion
   const toggleRowExpansion = (itemId: string) => {
@@ -713,6 +726,15 @@ export default function ContentTable({
               </Button>
             </>
           )}
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            disabled={isExporting || processedItems.length === 0}
+            className="touch-target"
+          >
+            <Download className="h-4 w-4 mr-2" />
+            {isExporting ? "Exporting..." : "Export CSV"}
+          </Button>
           {onCreate && (
             <Button onClick={onCreate} className="touch-target">
               <Plus className="h-4 w-4 mr-2" />
