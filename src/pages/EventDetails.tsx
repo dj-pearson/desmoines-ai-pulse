@@ -23,7 +23,9 @@ import {
   ArrowLeft,
   Sparkles,
   DollarSign,
+  CalendarPlus,
 } from "lucide-react";
+import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -427,6 +429,16 @@ export default function EventDetails() {
                     url={window.location.href}
                     className="w-full"
                   />
+
+                  {/* Add to Calendar */}
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => downloadICS(event)}
+                  >
+                    <CalendarPlus className="h-4 w-4 mr-2" />
+                    Add to Calendar
+                  </Button>
 
                   <Button variant="outline" asChild className="w-full">
                     <Link to="/">
