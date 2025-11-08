@@ -10,6 +10,7 @@ import SEOHead from "@/components/SEOHead";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AIWriteup from "@/components/AIWriteup";
+import RestaurantStatus from "@/components/RestaurantStatus";
 import {
   MapPin,
   Phone,
@@ -446,6 +447,16 @@ export default function RestaurantDetails() {
                   </div>
                   <div className="text-sm text-gray-600">Featured</div>
                 </div>
+              </div>
+
+              {/* Real-Time Status */}
+              <div className="my-8">
+                <RestaurantStatus restaurant={{
+                  name: restaurant.name,
+                  phone: restaurant.phone,
+                  website: restaurant.website,
+                  hours: restaurant.opening,
+                }} />
               </div>
 
               <Separator className="my-8" />
