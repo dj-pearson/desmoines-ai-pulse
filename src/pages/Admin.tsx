@@ -32,6 +32,7 @@ import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from '@/components/AdminApplicationSettings';
 import { DataQualityDashboard } from "@/components/DataQualityDashboard";
+import { ActivityLogViewer } from "@/components/ActivityLogViewer";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import { CompetitorAnalysisDashboard } from "@/components/CompetitorAnalysisDashboard";
@@ -73,6 +74,7 @@ import {
   Sparkles,
   TrendingUp,
   CheckCircle,
+  ScrollText,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -855,6 +857,21 @@ export default function Admin() {
                    </button>
 
                    <button
+                     onClick={() => setActiveTab("activity-logs")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "activity-logs"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Activity Logs" : ""}
+                   >
+                     <ScrollText className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Activity Logs</span>}
+                   </button>
+
+                   <button
                      onClick={() => setActiveTab("analytics")}
                      className={`w-full flex items-center ${
                        sidebarCollapsed ? "justify-center" : "gap-3"
@@ -1441,7 +1458,9 @@ export default function Admin() {
             {canManageUsers() && activeTab === "users" && <UserRoleManager />}
 
             {canManageUsers() && activeTab === "security" && <AdminSecurityManager />}
-            
+
+            {canManageUsers() && activeTab === "activity-logs" && <ActivityLogViewer />}
+
             {canManageUsers() && activeTab === "analytics" && <AdminAnalyticsDashboard />}
 
             {canManageUsers() && activeTab === "search-traffic" && <SearchTrafficDashboard />}
