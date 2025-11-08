@@ -12,6 +12,7 @@ import Footer from "@/components/Footer";
 import { GroupEventPlanner } from "@/components/GroupEventPlannerSimple";
 import { CommunityForums } from "@/components/CommunityForums";
 import { EnhancedGroupPlanner } from "@/components/EnhancedGroupPlanner";
+import TrendingContent from "@/components/TrendingContent";
 import {
   Users,
   UserPlus,
@@ -218,35 +219,188 @@ export default function Social() {
           </TabsContent>
 
           <TabsContent value="trending" className="space-y-6">
+            {/* Trending Events */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Coming Soon: Trending Events
+                  <TrendingUp className="h-5 w-5 text-blue-600" />
+                  Trending Events
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground text-center py-8">
-                  Trending events feature coming soon! This will show the most
-                  popular events based on user interest.
-                </p>
+                <TrendingContent
+                  contentType="event"
+                  timeWindow="24h"
+                  limit={6}
+                  showPersonalized={true}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Trending Restaurants */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Star className="h-5 w-5 text-yellow-600" />
+                  Hot Spots - Popular Restaurants
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TrendingContent
+                  contentType="restaurant"
+                  timeWindow="7d"
+                  limit={6}
+                  showPersonalized={true}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Trending Attractions */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Camera className="h-5 w-5 text-purple-600" />
+                  Most Visited Attractions
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <TrendingContent
+                  contentType="attraction"
+                  timeWindow="7d"
+                  limit={6}
+                  showPersonalized={true}
+                />
               </CardContent>
             </Card>
           </TabsContent>
 
           <TabsContent value="nearby" className="space-y-6">
+            {/* Friend Activity */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MapPin className="h-5 w-5" />
-                  Coming Soon: Friends Near Events
+                  <Heart className="h-5 w-5 text-red-500" />
+                  Friends' Recent Activity
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground text-center py-8">
-                  Friends near events feature coming soon! This will show when
-                  your friends are attending events near you.
-                </p>
+                {friends && friends.length > 0 ? (
+                  <div className="space-y-4">
+                    <div className="text-sm text-muted-foreground mb-4">
+                      See what your friends are interested in and attending
+                    </div>
+                    <div className="space-y-3">
+                      {friends.slice(0, 5).map((friend) => (
+                        <div
+                          key={friend.id}
+                          className="flex items-center gap-3 p-3 border rounded-lg bg-muted/50"
+                        >
+                          <Avatar>
+                            <AvatarFallback>
+                              {friend.friend_profile?.first_name?.[0] || "U"}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1">
+                            <p className="font-medium text-sm">
+                              {friend.friend_profile?.first_name}{" "}
+                              {friend.friend_profile?.last_name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Recently saved events in Des Moines
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-xs">
+                            Active
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                    <p className="text-muted-foreground">
+                      Add friends to see their activity and interests
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => {
+                        const friendsTab = document.querySelector('[value="friends"]') as HTMLElement;
+                        friendsTab?.click();
+                      }}
+                    >
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Add Friends
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Nearby Events */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MapPin className="h-5 w-5 text-green-600" />
+                  Events Near You
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <p className="text-sm text-muted-foreground">
+                    Discover events happening in your area that your friends might enjoy
+                  </p>
+                </div>
+                <TrendingContent
+                  contentType="event"
+                  timeWindow="7d"
+                  limit={6}
+                  showPersonalized={true}
+                />
+              </CardContent>
+            </Card>
+
+            {/* Location-Based Recommendations */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-blue-600" />
+                  Popular in Des Moines
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="p-4 border rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Calendar className="h-5 w-5 text-blue-600" />
+                      <h4 className="font-semibold">This Weekend</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Top events happening this weekend
+                    </p>
+                    <Button asChild variant="outline" size="sm" className="w-full">
+                      <a href="/events/this-weekend">
+                        View Weekend Events
+                      </a>
+                    </Button>
+                  </div>
+
+                  <div className="p-4 border rounded-lg bg-gradient-to-br from-green-50 to-emerald-50">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MapPin className="h-5 w-5 text-green-600" />
+                      <h4 className="font-semibold">Nearby Attractions</h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Popular places to visit in your area
+                    </p>
+                    <Button asChild variant="outline" size="sm" className="w-full">
+                      <a href="/attractions">
+                        Browse Attractions
+                      </a>
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
