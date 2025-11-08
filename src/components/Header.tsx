@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
+import { useGamification } from "@/hooks/useGamification";
 import { useAccessibility } from "@/hooks/useAccessibility";
 import { useSwipe } from "@/hooks/use-swipe";
 import { Link, useLocation } from "react-router-dom";
@@ -45,6 +46,7 @@ import { prefetchRoute } from "@/lib/prefetch";
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
   const { profile } = useProfile();
+  const { userLevel, userXP } = useGamification();
   const { announceToScreenReader, useFocusRestore } = useAccessibility();
   const { saveFocus, restoreFocus } = useFocusRestore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -313,6 +315,19 @@ export default function Header() {
                           <p className="text-sm text-muted-foreground truncate">
                             {profile?.email}
                           </p>
+                          {userLevel && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 rounded-full">
+                                <Trophy className="h-3 w-3 text-primary" />
+                                <span className="text-xs font-medium text-primary">
+                                  Lvl {userLevel}
+                                </span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {userXP || 0} XP
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -435,6 +450,19 @@ export default function Header() {
                           <p className="w-[200px] truncate text-sm text-muted-foreground">
                             {profile?.email}
                           </p>
+                          {userLevel && (
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 rounded-full">
+                                <Trophy className="h-3 w-3 text-primary" />
+                                <span className="text-xs font-medium text-primary">
+                                  Level {userLevel}
+                                </span>
+                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                {userXP || 0} XP
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                       <DropdownMenuSeparator />
