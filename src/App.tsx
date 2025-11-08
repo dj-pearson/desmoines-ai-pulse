@@ -46,6 +46,7 @@ const SmartCalendarIntegration = lazy(
 );
 const Gamification = lazy(() => import("./pages/Gamification"));
 const BusinessPartnership = lazy(() => import("./pages/BusinessPartnership"));
+const BusinessHub = lazy(() => import("./pages/BusinessHub"));
 const GuidesPage = lazy(() => import("./pages/GuidesPage"));
 const MonthlyEventsPage = lazy(() => import("./pages/MonthlyEventsPage"));
 const AdvancedSearchPage = lazy(() => import("./components/AdvancedSearchPage"));
@@ -162,6 +163,7 @@ const App = () => (
               path="/business-partnership"
               element={<BusinessPartnership />}
             />
+            <Route path="/business" element={<BusinessHub />} />
             <Route path="/search" element={<AdvancedSearchPage />} />
             <Route path="/guides" element={<GuidesPage />} />
             <Route path="/events/:monthYear" element={<MonthlyEventsPage />} />

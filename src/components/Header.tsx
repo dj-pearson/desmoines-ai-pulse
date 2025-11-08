@@ -526,10 +526,10 @@ export default function Header() {
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild role="none">
                         <Link
-                          to="/business-partnership"
+                          to="/business"
                           className="flex items-center"
                           role="menuitem"
-                          aria-label="Go to business partnership page"
+                          aria-label="Go to business hub"
                         >
                           <Building2
                             className="mr-2 h-4 w-4"
