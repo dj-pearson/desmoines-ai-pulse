@@ -42,6 +42,7 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
+  const [accountType, setAccountType] = useState<"personal" | "business">("personal");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -53,6 +54,11 @@ export default function Auth() {
     emailNotifications: true,
     smsNotifications: false,
     eventRecommendations: true,
+    // Business fields
+    businessName: "",
+    businessType: "",
+    businessAddress: "",
+    businessWebsite: "",
   });
 
   const { toast } = useToast();
@@ -205,17 +211,35 @@ export default function Auth() {
       return;
     }
 
+    // Business account validation
+    if (accountType === "business") {
+      if (!formData.businessName) {
+        toast({
+          title: "Business Name Required",
+          description: "Please enter your business name.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!formData.businessType) {
+        toast({
+          title: "Business Type Required",
+          description: "Please select your business type.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
       const redirectUrl = `${window.location.origin}/auth/verified`;
 
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
+      // Prepare metadata based on account type
+      const metadata = accountType === "personal"
+        ? {
+            account_type: "personal",
             first_name: formData.firstName,
             last_name: formData.lastName,
             phone: formData.phone,
@@ -227,6 +251,24 @@ export default function Auth() {
               event_recommendations: formData.eventRecommendations,
             }
           }
+        : {
+            account_type: "business",
+            business_name: formData.businessName,
+            business_type: formData.businessType,
+            business_address: formData.businessAddress,
+            business_website: formData.businessWebsite,
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            phone: formData.phone,
+            location: formData.location,
+          };
+
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: redirectUrl,
+          data: metadata
         }
       });
 
@@ -407,6 +449,101 @@ export default function Auth() {
 
             <TabsContent value="signup">
               <form onSubmit={handleSignup} className="space-y-4">
+                {/* Account Type Selector */}
+                <div className="space-y-2">
+                  <Label>Account Type</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setAccountType("personal")}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        accountType === "personal"
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <User className="h-5 w-5 mx-auto mb-1" />
+                      <p className="text-sm font-medium">Personal</p>
+                      <p className="text-xs text-muted-foreground">For individual use</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAccountType("business")}
+                      className={`p-3 rounded-lg border-2 transition-all ${
+                        accountType === "business"
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <Coffee className="h-5 w-5 mx-auto mb-1" />
+                      <p className="text-sm font-medium">Business</p>
+                      <p className="text-xs text-muted-foreground">For advertisers</p>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Business Fields */}
+                {accountType === "business" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="businessName">
+                        Business Name <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="businessName"
+                        placeholder="Your Business Name"
+                        value={formData.businessName}
+                        onChange={(e) => handleInputChange("businessName", e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="businessType">
+                        Business Type <span className="text-red-500">*</span>
+                      </Label>
+                      <Select
+                        value={formData.businessType}
+                        onValueChange={(value) => handleInputChange("businessType", value)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select business type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="restaurant">Restaurant</SelectItem>
+                          <SelectItem value="bar">Bar/Nightlife</SelectItem>
+                          <SelectItem value="venue">Event Venue</SelectItem>
+                          <SelectItem value="attraction">Attraction</SelectItem>
+                          <SelectItem value="retail">Retail</SelectItem>
+                          <SelectItem value="service">Service Provider</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="businessAddress">Business Address</Label>
+                      <Input
+                        id="businessAddress"
+                        placeholder="123 Main St, Des Moines, IA"
+                        value={formData.businessAddress}
+                        onChange={(e) => handleInputChange("businessAddress", e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="businessWebsite">Website (Optional)</Label>
+                      <Input
+                        id="businessWebsite"
+                        type="url"
+                        placeholder="https://yourbusiness.com"
+                        value={formData.businessWebsite}
+                        onChange={(e) => handleInputChange("businessWebsite", e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="firstName">First Name</Label>
@@ -494,35 +631,40 @@ export default function Auth() {
                   </Select>
                 </div>
 
-                <div className="space-y-3">
-                  <Label>What interests you? (Select all that apply)</Label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {INTERESTS.map((interest) => {
-                      const Icon = interest.icon;
-                      return (
-                        <div
-                          key={interest.id}
-                          className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
-                            formData.interests.includes(interest.id)
-                              ? "bg-primary/10 border-primary"
-                              : "border-border hover:bg-muted"
-                          }`}
-                          onClick={() => handleInterestToggle(interest.id)}
-                        >
-                          <Checkbox
-                            checked={formData.interests.includes(interest.id)}
-                            onChange={() => handleInterestToggle(interest.id)}
-                          />
-                          <Icon className="h-4 w-4" />
-                          <span className="text-sm">{interest.label}</span>
-                        </div>
-                      );
-                    })}
+                {/* Interests (Personal accounts only) */}
+                {accountType === "personal" && (
+                  <div className="space-y-3">
+                    <Label>What interests you? (Select all that apply)</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {INTERESTS.map((interest) => {
+                        const Icon = interest.icon;
+                        return (
+                          <div
+                            key={interest.id}
+                            className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors ${
+                              formData.interests.includes(interest.id)
+                                ? "bg-primary/10 border-primary"
+                                : "border-border hover:bg-muted"
+                            }`}
+                            onClick={() => handleInterestToggle(interest.id)}
+                          >
+                            <Checkbox
+                              checked={formData.interests.includes(interest.id)}
+                              onChange={() => handleInterestToggle(interest.id)}
+                            />
+                            <Icon className="h-4 w-4" />
+                            <span className="text-sm">{interest.label}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                <div className="space-y-3">
-                  <Label>Communication Preferences</Label>
+                {/* Communication Preferences (Personal accounts only) */}
+                {accountType === "personal" && (
+                  <div className="space-y-3">
+                    <Label>Communication Preferences</Label>
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
                       <Checkbox
@@ -556,6 +698,7 @@ export default function Auth() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? "Creating account..." : "Create Account"}
