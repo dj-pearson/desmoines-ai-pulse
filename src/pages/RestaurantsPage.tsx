@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,7 +11,7 @@ import {
   Search,
   Filter,
   Utensils,
-  List, 
+  List,
   Map
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -29,7 +29,10 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { useToast } from "@/hooks/use-toast";
-import RestaurantsMap from "@/components/RestaurantsMap";
+import { LoadingSpinner } from "@/components/ui/loading-skeleton";
+
+// Lazy load heavy map component (includes Leaflet library ~150KB)
+const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
 export default function RestaurantsPage() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -367,7 +370,9 @@ export default function RestaurantsPage() {
           </div>
 
           {viewMode === 'map' ? (
-            <RestaurantsMap restaurants={restaurants || []} />
+            <Suspense fallback={<LoadingSpinner />}>
+              <RestaurantsMap restaurants={restaurants || []} />
+            </Suspense>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {restaurants?.map((restaurant) => (

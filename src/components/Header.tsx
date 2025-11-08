@@ -41,6 +41,7 @@ import {
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
 import { ThemeToggle } from "./ThemeToggle";
+import { OptimizedLogo } from "./OptimizedLogo";
 import { cn } from "@/lib/utils";
 import { prefetchRoute } from "@/lib/prefetch";
 export default function Header() {
@@ -141,19 +142,11 @@ export default function Header() {
             className="flex items-center smooth-transition hover:opacity-80 flex-shrink-0"
             aria-label="Des Moines Insider Home"
           >
-            <img
-              src="/DMI-Logo2.png"
+            <OptimizedLogo
+              variant="logo2"
               alt="Des Moines Insider"
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-              width="auto"
-              height="40"
-              onError={(e) => {
-                console.error('Logo failed to load:', e);
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
+              height={40}
             />
           </Link>
 

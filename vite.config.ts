@@ -48,8 +48,37 @@ export default defineConfig(({ command, mode }) => ({
     target: "es2020",
     rollupOptions: {
       output: {
-        // Let Vite handle chunking automatically - no manual chunks to avoid circular deps
-        manualChunks: undefined,
+        // Manual code splitting for better performance
+        manualChunks: (id) => {
+          // Split heavy 3D libraries
+          if (id.includes('three') || id.includes('@react-three')) {
+            return 'vendor-3d';
+          }
+          // Split heavy map libraries
+          if (id.includes('leaflet') || id.includes('react-leaflet')) {
+            return 'vendor-maps';
+          }
+          // Split chart libraries
+          if (id.includes('recharts')) {
+            return 'vendor-charts';
+          }
+          // Split core React libraries
+          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+            return 'vendor-react';
+          }
+          // Split Supabase client
+          if (id.includes('@supabase')) {
+            return 'vendor-supabase';
+          }
+          // Split UI component libraries
+          if (id.includes('@radix-ui') || id.includes('framer-motion')) {
+            return 'vendor-ui';
+          }
+          // All other node_modules go into vendor chunk
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+        },
         assetFileNames: "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",

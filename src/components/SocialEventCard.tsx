@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useEventSocial } from '@/hooks/useEventSocial';
+import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
 import {
   Users,
@@ -24,15 +25,24 @@ interface SocialEventCardProps {
   onViewDetails: (event: Event) => void;
   onViewSocial?: (eventId: string) => void;
   showSocialPreview?: boolean;
+  socialData?: BatchEventSocialData; // Pre-fetched social data to avoid N+1 queries
 }
 
-export function SocialEventCard({ 
-  event, 
-  onViewDetails, 
+export function SocialEventCard({
+  event,
+  onViewDetails,
   onViewSocial,
-  showSocialPreview = true 
+  showSocialPreview = true,
+  socialData
 }: SocialEventCardProps) {
-  const { liveStats, attendees, discussions, isLoading } = useEventSocial(event.id);
+  // Always call the hook (React rules), but we'll use socialData if provided
+  const individualFetch = useEventSocial(socialData ? '' : event.id); // Pass empty string to skip fetch when we have socialData
+
+  // Use pre-fetched social data if available, otherwise fall back to individual fetch
+  const liveStats = socialData?.liveStats ?? individualFetch.liveStats;
+  const attendees = socialData?.attendees ?? individualFetch.attendees;
+  const discussions = socialData?.discussions ?? individualFetch.discussions;
+  const isLoading = socialData ? false : individualFetch.isLoading;
 
   const formatEventDate = (date: string | Date) => {
     try {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -41,7 +41,10 @@ import {
   createEventSlugWithCentralTime,
   formatInCentralTime,
 } from "@/lib/timezone";
-import EventsMap from "@/components/EventsMap";
+import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+
+// Lazy load heavy map component (includes Leaflet library ~150KB)
+const EventsMap = lazy(() => import("@/components/EventsMap"));
 
 export default function EventsPage() {
   const navigate = useNavigate();
@@ -181,6 +184,11 @@ export default function EventsPage() {
       return uniqueCategories.sort();
     },
   });
+
+  // Batch fetch social data for all events to prevent N+1 queries
+  // This reduces from N×5 queries to just 3 queries total
+  const eventIds = events?.map(e => e.id) || [];
+  const { data: batchSocialData } = useBatchEventSocial(eventIds);
 
   const handleClearFilters = () => {
     setSearchQuery("");
@@ -762,13 +770,16 @@ export default function EventsPage() {
           {isLoading && <CardsGridSkeleton count={6} />}
 
           {!isLoading && viewMode === "map" ? (
-            <EventsMap events={events || []} />
+            <Suspense fallback={<LoadingSpinner />}>
+              <EventsMap events={events || []} />
+            </Suspense>
           ) : !isLoading ? (
             <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'md:grid-cols-2 lg:grid-cols-3'} ${isMobile ? 'mobile-grid' : 'gap-6'}`}>
               {events?.map((event) => (
                 <SocialEventCard
                   key={event.id}
                   event={event}
+                  socialData={batchSocialData?.[event.id]}
                   onViewDetails={() => {
                     // Navigate to event details using React Router
                     navigate(
