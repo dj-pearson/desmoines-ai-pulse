@@ -308,11 +308,23 @@ export default function Restaurants() {
                             <CardTitle className="text-lg leading-tight line-clamp-2">
                               {restaurant.name}
                             </CardTitle>
-                            {restaurant.is_featured && (
-                              <Badge className="shrink-0 bg-[#DC143C] text-white hover:bg-[#DC143C]/90">
-                                Featured
-                              </Badge>
-                            )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {restaurant.status === "open" && (
+                                <Badge className="bg-green-500 text-white hover:bg-green-600">
+                                  Open Now
+                                </Badge>
+                              )}
+                              {restaurant.status === "closed" && (
+                                <Badge variant="secondary" className="text-muted-foreground">
+                                  Closed
+                                </Badge>
+                              )}
+                              {restaurant.is_featured && (
+                                <Badge className="bg-[#DC143C] text-white hover:bg-[#DC143C]/90">
+                                  Featured
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             {restaurant.cuisine && (

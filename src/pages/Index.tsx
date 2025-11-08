@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus } from "lucide-react";
 import { downloadICS } from "@/lib/calendar";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEventScraper } from "@/hooks/useSupabase";
@@ -431,6 +432,14 @@ export default function Index() {
                 </div>
 
                 <div className="pt-4 border-t space-y-3">
+                  <FavoriteButton
+                    eventId={selectedEvent.id}
+                    size="default"
+                    variant="outline"
+                    className="w-full"
+                    showText
+                  />
+
                   <Button
                     variant="outline"
                     className="w-full"

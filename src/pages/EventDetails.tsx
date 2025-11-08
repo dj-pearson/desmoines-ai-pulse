@@ -26,6 +26,7 @@ import {
   CalendarPlus,
 } from "lucide-react";
 import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -256,11 +257,14 @@ export default function EventDetails() {
                       </div>
                       <h1 className="text-3xl font-bold">{event.title}</h1>
                     </div>
-                    <ShareDialog
-                      title={event.title}
-                      description={event.enhanced_description || event.original_description || `Join us for ${event.title}`}
-                      url={window.location.href}
-                    />
+                    <div className="flex items-center gap-2">
+                      <FavoriteButton eventId={event.id} size="default" variant="outline" />
+                      <ShareDialog
+                        title={event.title}
+                        description={event.enhanced_description || event.original_description || `Join us for ${event.title}`}
+                        url={window.location.href}
+                      />
+                    </div>
                   </div>
                 </CardHeader>
 

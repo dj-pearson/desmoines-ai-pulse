@@ -41,6 +41,7 @@ import {
   endOfDay,
 } from "date-fns";
 import { useAnalytics } from "@/hooks/useAnalytics";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 // Type definitions for dashboard items
 type DashboardItem = {
@@ -634,6 +635,13 @@ export default function AllInclusiveDashboard({
               <Icon className="h-3 w-3 mr-1 flex-shrink-0" />
               <span className="truncate">{item.type}</span>
             </Badge>
+            {item.type === "event" && (
+              <FavoriteButton
+                eventId={item.id}
+                size="icon"
+                variant="ghost"
+              />
+            )}
           </div>
           <CardTitle className="text-mobile-title md:text-lg mobile-safe-text pr-2 leading-relaxed">
             {item.title || item.name}
