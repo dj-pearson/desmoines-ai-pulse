@@ -33,6 +33,7 @@ import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from '@/components/AdminApplicationSettings';
 import { DataQualityDashboard } from "@/components/DataQualityDashboard";
 import { ActivityLogViewer } from "@/components/ActivityLogViewer";
+import { ContentQueue } from "@/components/ContentQueue";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import { CompetitorAnalysisDashboard } from "@/components/CompetitorAnalysisDashboard";
@@ -75,6 +76,7 @@ import {
   TrendingUp,
   CheckCircle,
   ScrollText,
+  ClipboardCheck,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -872,6 +874,21 @@ export default function Admin() {
                    </button>
 
                    <button
+                     onClick={() => setActiveTab("content-queue")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "content-queue"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Content Queue" : ""}
+                   >
+                     <ClipboardCheck className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Content Queue</span>}
+                   </button>
+
+                   <button
                      onClick={() => setActiveTab("analytics")}
                      className={`w-full flex items-center ${
                        sidebarCollapsed ? "justify-center" : "gap-3"
@@ -1460,6 +1477,8 @@ export default function Admin() {
             {canManageUsers() && activeTab === "security" && <AdminSecurityManager />}
 
             {canManageUsers() && activeTab === "activity-logs" && <ActivityLogViewer />}
+
+            {canManageUsers() && activeTab === "content-queue" && <ContentQueue />}
 
             {canManageUsers() && activeTab === "analytics" && <AdminAnalyticsDashboard />}
 
