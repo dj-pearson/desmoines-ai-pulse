@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette } from "lucide-react";
+import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 
 const INTERESTS = [
   { id: "food", label: "Food & Dining", icon: Coffee },
@@ -207,7 +208,7 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      const redirectUrl = `${window.location.origin}/`;
+      const redirectUrl = `${window.location.origin}/auth/verified`;
 
       const { data, error } = await supabase.auth.signUp({
         email: formData.email,
@@ -451,6 +452,10 @@ export default function Auth() {
                     onChange={(e) => handleInputChange("password", e.target.value)}
                     required
                     minLength={6}
+                  />
+                  <PasswordStrengthMeter
+                    password={formData.password}
+                    showRequirements={true}
                   />
                 </div>
 
