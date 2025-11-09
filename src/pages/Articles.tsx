@@ -12,6 +12,7 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { FAQSection } from '@/components/FAQSection';
+import { BackToTop } from '@/components/BackToTop';
 
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
@@ -433,6 +434,7 @@ const Articles: React.FC = () => {
       </section>
 
       <Footer />
+      <BackToTop />
     </>
   );
 };

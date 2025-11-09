@@ -76,8 +76,9 @@ export function SocialEventCard({
           <div className="relative h-48 overflow-hidden rounded-t-lg">
             <img
               src={event.image_url}
-              alt={event.title}
+              alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}`}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              loading="lazy"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';

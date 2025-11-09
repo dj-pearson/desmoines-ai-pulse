@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
 import { MapPin, Star, Filter, List, Map } from "lucide-react";
 import { Link } from "react-router-dom";
 import AttractionsMap from "@/components/AttractionsMap";
@@ -254,19 +255,7 @@ export default function Attractions() {
         {viewMode === 'map' ? (
           <AttractionsMap attractions={filteredAttractions} />
         ) : isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i} className="animate-pulse">
-                <CardHeader>
-                  <div className="h-4 bg-muted rounded w-3/4"></div>
-                  <div className="h-3 bg-muted rounded w-1/2"></div>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-20 bg-muted rounded"></div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" />
         ) : error ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground">
