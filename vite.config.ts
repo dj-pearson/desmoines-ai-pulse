@@ -46,6 +46,12 @@ export default defineConfig(({ command, mode }) => ({
     cssCodeSplit: true,
     minify: "esbuild", // Use esbuild - faster and more reliable than terser
     target: "es2020",
+    // Drop console.* and debugger statements in production
+    ...(mode === 'production' && {
+      esbuild: {
+        drop: ['console', 'debugger'],
+      },
+    }),
     rollupOptions: {
       output: {
         // Manual code splitting for better performance

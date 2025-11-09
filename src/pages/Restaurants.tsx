@@ -40,6 +40,7 @@ import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FAQSection } from "@/components/FAQSection";
+import { BackToTop } from "@/components/BackToTop";
 
 const createSlug = (name: string): string => {
   return name
@@ -717,6 +718,7 @@ export default function Restaurants() {
         </section>
 
         <Footer />
+        <BackToTop />
       </div>
     </>
   );

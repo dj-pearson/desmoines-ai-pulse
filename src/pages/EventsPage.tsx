@@ -1,4 +1,3 @@
-// @ts-nocheck - Temporarily disabled pending database migrations
 import React, { useState, useEffect, lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -43,6 +42,9 @@ import {
   formatInCentralTime,
 } from "@/lib/timezone";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
+import { BackToTop } from "@/components/BackToTop";
+import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
+import { useRef } from "react";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -67,6 +69,21 @@ export default function EventsPage() {
   const [page, setPage] = useState(1);
   const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcuts for filters
+  useFilterKeyboardShortcuts({
+    enabled: !isMobile,
+    onFocusSearch: () => {
+      searchInputRef.current?.focus();
+      toast({
+        title: "Keyboard Shortcut",
+        description: "Press 'f' to focus search, 'Esc' to clear filters",
+        duration: 2000,
+      });
+    },
+    onClearFilters: handleClearFilters,
+  });
 
   // Debounce search query to prevent excessive API calls
   useEffect(() => {
@@ -471,12 +488,13 @@ export default function EventsPage() {
                 <div className="flex-1 relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground pointer-events-none" />
                   <Input
+                    ref={searchInputRef}
                     type="search"
                     placeholder={isMobile ? "Search events..." : "Search for events, venues, or keywords..."}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className={`${isMobile ? 'search-mobile pl-12' : 'text-base pl-12 bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12'}`}
-                    aria-label="Search events"
+                    aria-label="Search events (Press 'f' to focus)"
                     role="searchbox"
                     autoComplete="off"
                     autoCapitalize="off"
@@ -912,6 +930,7 @@ export default function EventsPage() {
         </section>
 
         <Footer />
+        <BackToTop />
       </div>
     </>
   );
