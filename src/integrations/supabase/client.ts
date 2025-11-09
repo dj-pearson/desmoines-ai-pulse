@@ -2,12 +2,23 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY =
+// SECURITY FIX: Load credentials from environment variables
+// Fallback values for development only - NEVER use in production
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://wtkhfqpmcegzcbngroui.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY ||
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE";
+
+// Validate environment variables in production
+if (import.meta.env.PROD && (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY)) {
+  throw new Error('Missing required environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set in production');
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
+
+// SECURITY FIX: Enhanced session configuration with timeout
+const SESSION_TIMEOUT_SECONDS = 3600; // 1 hour idle timeout
+const MAX_SESSION_DURATION_SECONDS = 28800; // 8 hours max session
 
 export const supabase = createClient<Database>(
   SUPABASE_URL,
@@ -17,6 +28,61 @@ export const supabase = createClient<Database>(
       storage: localStorage,
       persistSession: true,
       autoRefreshToken: true,
+      // Detect session timeout and force re-authentication
+      detectSessionInUrl: true,
+      flowType: 'pkce', // Use PKCE flow for enhanced security
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'desmoines-ai-pulse',
+      },
     },
   }
 );
+
+// SECURITY FIX: Session timeout monitoring
+let lastActivityTime = Date.now();
+let sessionStartTime = Date.now();
+
+// Track user activity
+const updateActivity = () => {
+  lastActivityTime = Date.now();
+};
+
+// Monitor for user activity
+if (typeof window !== 'undefined') {
+  ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
+    document.addEventListener(event, updateActivity, { passive: true });
+  });
+
+  // Check session timeout every minute
+  setInterval(async () => {
+    const now = Date.now();
+    const idleTime = now - lastActivityTime;
+    const sessionDuration = now - sessionStartTime;
+
+    // Check idle timeout (1 hour of inactivity)
+    if (idleTime > SESSION_TIMEOUT_SECONDS * 1000) {
+      console.warn('Session timeout due to inactivity');
+      await supabase.auth.signOut();
+      sessionStartTime = Date.now();
+      return;
+    }
+
+    // Check max session duration (8 hours total)
+    if (sessionDuration > MAX_SESSION_DURATION_SECONDS * 1000) {
+      console.warn('Session timeout due to maximum duration exceeded');
+      await supabase.auth.signOut();
+      sessionStartTime = Date.now();
+      return;
+    }
+  }, 60000); // Check every minute
+
+  // Reset session start time on login
+  supabase.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_IN') {
+      sessionStartTime = Date.now();
+      lastActivityTime = Date.now();
+    }
+  });
+}

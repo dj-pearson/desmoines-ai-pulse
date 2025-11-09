@@ -1,8 +1,24 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-rate-limit-identifier',
+// SECURITY FIX: Restrict CORS to known domains only
+const ALLOWED_ORIGINS = [
+  'https://desmoinesinsider.com',
+  'https://www.desmoinesinsider.com',
+  'http://localhost:5173', // Development
+  'http://localhost:8080', // Development
+];
+
+function getCorsHeaders(origin: string | null): HeadersInit {
+  // Check if origin is in allowed list
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-rate-limit-identifier, x-csrf-token',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400', // 24 hours
+  };
 }
 
 interface RateLimitEntry {

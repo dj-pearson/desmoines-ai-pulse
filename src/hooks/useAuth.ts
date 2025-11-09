@@ -108,10 +108,41 @@ export function useAuth() {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
+      // SECURITY FIX: Check if account is locked before attempting login
+      const { data: lockData, error: lockError } = await supabase.rpc(
+        'is_account_locked',
+        { p_email: email }
+      );
+
+      if (lockError) {
+        console.error("Account lockout check failed:", lockError);
+      } else if (lockData === true) {
+        console.warn("Account is locked due to too many failed attempts");
+        throw new Error("Account is temporarily locked. Please try again later.");
+      }
+
+      // Attempt login
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      // Record login attempt (success or failure)
+      try {
+        const ipAddress = await fetch('https://api.ipify.org?format=json')
+          .then(r => r.json())
+          .then(d => d.ip)
+          .catch(() => 'unknown');
+
+        await supabase.rpc('record_login_attempt', {
+          p_email: email,
+          p_ip_address: ipAddress,
+          p_user_agent: navigator.userAgent,
+          p_success: !error
+        });
+      } catch (recordError) {
+        console.error("Failed to record login attempt:", recordError);
+      }
 
       if (error) {
         console.error("Login error:", error);
