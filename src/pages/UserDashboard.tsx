@@ -30,21 +30,16 @@ export default function UserDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user, isLoading: authLoading } = useAuth();
+  const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
   const { data: events, isLoading, refetch } = useUserSubmittedEvents();
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      navigate("/auth");
-      return;
-    }
-
     // Check for tab parameter from URL
     const tabParam = searchParams.get("tab");
     if (tabParam) {
       setActiveTab(tabParam);
     }
-  }, [user, authLoading, navigate, searchParams]);
+  }, [searchParams]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -78,21 +73,7 @@ export default function UserDashboard() {
     toast.success("Event submitted successfully! We'll review it within 48 hours.");
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-          <p>Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
-
+  // No loading check needed - ProtectedRoute handles authentication
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}

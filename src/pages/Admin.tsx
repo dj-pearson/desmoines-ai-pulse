@@ -223,72 +223,7 @@ export default function Admin() {
   const scraping = useScraping();
   const articlesData = useArticles();
 
-  useEffect(() => {
-    console.log("Admin useEffect:", {
-      user: user?.id || "null",
-      userRole,
-      isLoading,
-      hasAdminAccess,
-      isRootAdmin,
-    });
-
-    // Wait for loading to complete
-    if (isLoading) {
-      return;
-    }
-
-    // Add a delay to prevent redirects during state updates
-    const timeoutId = setTimeout(() => {
-      if (!user) {
-        console.log("Redirecting to /auth - not authenticated");
-        navigate("/auth");
-      } else if (!hasAdminAccess && !isLoading) {
-        // Only redirect if we're certain the user doesn't have admin access
-        console.log("Redirecting to / - no admin access");
-        navigate("/");
-      }
-    }, 500); // 500ms delay to allow state to stabilize
-
-    return () => clearTimeout(timeoutId);
-  }, [user, userRole, isLoading, hasAdminAccess, isRootAdmin, navigate]);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <div className="text-center space-y-4">
-          <div className="animate-spin rounded-full h-8 w-8 md:h-12 md:w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-mobile-caption text-muted-foreground">
-            Loading admin dashboard...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!hasAdminAccess) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center mobile-padding">
-        <Card className="mobile-padding max-w-md w-full">
-          <div className="text-center">
-            <AlertTriangle className="h-8 w-8 md:h-12 md:w-12 text-destructive mx-auto mb-4" />
-            <h2 className="text-mobile-title md:text-xl font-semibold mb-2">
-              Access Denied
-            </h2>
-            <p className="text-muted-foreground mb-4 text-mobile-caption">
-              You don't have permission to access the admin dashboard.
-            </p>
-            <Button
-              onClick={() => navigate("/")}
-              variant="outline"
-              className="touch-target"
-            >
-              Go Home
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
-  }
+  // No manual auth check needed - ProtectedRoute with requireAdmin handles it
 
   const getRoleIcon = () => {
     if (isRootAdmin) return <Crown className="h-5 w-5" />;
