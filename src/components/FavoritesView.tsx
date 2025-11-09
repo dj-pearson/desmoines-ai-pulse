@@ -47,19 +47,23 @@ export function FavoritesView() {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from("user_restaurant_interactions")
-        .select("restaurant_id, restaurants(*)")
-        .eq("user_id", user.id)
-        .eq("interaction_type", "favorite");
+      try {
+        const { data, error } = await supabase
+          .from("user_restaurant_interactions" as any)
+          .select("restaurant_id, restaurants(*)")
+          .eq("user_id", user.id)
+          .eq("interaction_type", "favorite");
 
-      if (error) {
-        // Table might not exist yet
-        console.log("Restaurant favorites not available yet");
+        if (error) {
+          console.log("Restaurant favorites not available yet");
+          return [];
+        }
+
+        return (data || []).map((item: any) => item.restaurants).filter(Boolean);
+      } catch (err) {
+        console.log("Restaurant favorites table not available");
         return [];
       }
-
-      return data.map(item => item.restaurants).filter(Boolean);
     },
     enabled: !!user,
   });
@@ -70,18 +74,23 @@ export function FavoritesView() {
     queryFn: async () => {
       if (!user) return [];
 
-      const { data, error } = await supabase
-        .from("user_attraction_interactions")
-        .select("attraction_id, attractions(*)")
-        .eq("user_id", user.id)
-        .eq("interaction_type", "favorite");
+      try {
+        const { data, error } = await supabase
+          .from("user_attraction_interactions" as any)
+          .select("attraction_id, attractions(*)")
+          .eq("user_id", user.id)
+          .eq("interaction_type", "favorite");
 
-      if (error) {
-        console.log("Attraction favorites not available yet");
+        if (error) {
+          console.log("Attraction favorites not available yet");
+          return [];
+        }
+
+        return (data || []).map((item: any) => item.attractions).filter(Boolean);
+      } catch (err) {
+        console.log("Attraction favorites table not available");
         return [];
       }
-
-      return data.map(item => item.attractions).filter(Boolean);
     },
     enabled: !!user,
   });

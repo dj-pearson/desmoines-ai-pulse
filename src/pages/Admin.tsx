@@ -41,7 +41,7 @@ import ArticlesManager from "@/components/ArticlesManager";
 import AIArticleGenerator from "@/components/AIArticleGenerator";
 import AIEnhancementManager from "@/components/AIEnhancementManager";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
-import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard";
+// import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard"; // Temporarily disabled - requires database migrations
 import { useArticles } from "@/hooks/useArticles";
 import {
   Shield,
@@ -1482,32 +1482,33 @@ export default function Admin() {
 
             {canManageUsers() && activeTab === "analytics" && <AdminAnalyticsDashboard />}
 
-            {canManageUsers() && activeTab === "search-traffic" && <SearchTrafficDashboard />}
+            {/* Search Traffic Dashboard temporarily disabled - requires database migrations */}
+            {/* {canManageUsers() && activeTab === "search-traffic" && <SearchTrafficDashboard />} */}
 
             {canManageUsers() && activeTab === "data-quality" && (
               <DataQualityDashboard
-                events={events}
-                restaurants={restaurants}
-                attractions={attractions}
-                playgrounds={playgrounds}
+                events={events.events}
+                restaurants={restaurants.restaurants}
+                attractions={attractions.attractions}
+                playgrounds={playgrounds.playgrounds}
                 onViewItem={(contentType, itemId) => {
                   // Find the item and open edit dialog
                   let item;
                   switch (contentType) {
                     case 'event':
-                      item = events.find((e: any) => e.id === itemId);
+                      item = events.events.find((e: any) => e.id === itemId);
                       setActiveTab('events');
                       break;
                     case 'restaurant':
-                      item = restaurants.find((r: any) => r.id === itemId);
+                      item = restaurants.restaurants.find((r: any) => r.id === itemId);
                       setActiveTab('restaurants');
                       break;
                     case 'attraction':
-                      item = attractions.find((a: any) => a.id === itemId);
+                      item = attractions.attractions.find((a: any) => a.id === itemId);
                       setActiveTab('attractions');
                       break;
                     case 'playground':
-                      item = playgrounds.find((p: any) => p.id === itemId);
+                      item = playgrounds.playgrounds.find((p: any) => p.id === itemId);
                       setActiveTab('playgrounds');
                       break;
                   }

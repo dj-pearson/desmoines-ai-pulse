@@ -30,7 +30,7 @@ import {
 
 export default function BusinessHub() {
   const { user, isLoading: authLoading } = useAuth();
-  const { businessProfile, isLoading: profileLoading } = useBusinessPartnership();
+  const { businessProfile, loading: profileLoading } = useBusinessPartnership();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(searchParams.get("tab") || "dashboard");
