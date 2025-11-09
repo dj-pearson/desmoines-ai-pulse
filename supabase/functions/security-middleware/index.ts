@@ -1,8 +1,24 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-rate-limit-identifier',
+// SECURITY FIX: Restrict CORS to known domains only
+const ALLOWED_ORIGINS = [
+  'https://desmoinesinsider.com',
+  'https://www.desmoinesinsider.com',
+  'http://localhost:5173', // Development
+  'http://localhost:8080', // Development
+];
+
+function getCorsHeaders(origin: string | null): HeadersInit {
+  // Check if origin is in allowed list
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-rate-limit-identifier, x-csrf-token',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+    'Access-Control-Allow-Credentials': 'true',
+    'Access-Control-Max-Age': '86400', // 24 hours
+  };
 }
 
 interface RateLimitEntry {
@@ -128,13 +144,13 @@ function validateInput(data: any): { isValid: boolean; errors: string[] } {
   return { isValid: errors.length === 0, errors };
 }
 
-function generateSecurityHeaders(config: SecurityConfig) {
+function generateSecurityHeaders(config: SecurityConfig, origin: string | null) {
   return {
-    ...corsHeaders,
+    ...getCorsHeaders(origin),
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '1; mode=block',
-    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
     'Cache-Control': 'no-store, no-cache, must-revalidate',
     'Pragma': 'no-cache',
   };
@@ -162,6 +178,10 @@ async function logSecurityEvent(supabase: any, event: {
 }
 
 Deno.serve(async (req) => {
+  // Get origin for CORS
+  const origin = req.headers.get('origin');
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -182,8 +202,8 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const method = req.method;
     const userAgent = req.headers.get('user-agent') || '';
-    const clientIP = req.headers.get('x-forwarded-for') || 
-                     req.headers.get('x-real-ip') || 
+    const clientIP = req.headers.get('x-forwarded-for') ||
+                     req.headers.get('x-real-ip') ||
                      'unknown';
     
     // Get rate limit identifier (prefer user ID, fallback to IP)
@@ -222,7 +242,7 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({ error: 'Method not allowed' }), {
         status: 405,
-        headers: generateSecurityHeaders(securityConfig),
+        headers: generateSecurityHeaders(securityConfig, origin),
       });
     }
 
@@ -240,7 +260,7 @@ Deno.serve(async (req) => {
 
         return new Response(JSON.stringify({ error: 'Payload too large' }), {
           status: 413,
-          headers: generateSecurityHeaders(securityConfig),
+          headers: generateSecurityHeaders(securityConfig, origin),
         });
       }
     }
@@ -264,7 +284,7 @@ Deno.serve(async (req) => {
       });
 
       const headers = {
-        ...generateSecurityHeaders(securityConfig),
+        ...generateSecurityHeaders(securityConfig, origin),
         'X-RateLimit-Limit': securityConfig.maxRequests.toString(),
         'X-RateLimit-Remaining': '0',
         'X-RateLimit-Reset': Math.ceil(rateLimitResult.resetTime / 1000).toString(),
@@ -292,7 +312,7 @@ Deno.serve(async (req) => {
 
       return new Response(JSON.stringify({ error: 'Authentication required' }), {
         status: 401,
-        headers: generateSecurityHeaders(securityConfig),
+        headers: generateSecurityHeaders(securityConfig, origin),
       });
     }
 
@@ -314,26 +334,26 @@ Deno.serve(async (req) => {
               severity: 'high',
             });
 
-            return new Response(JSON.stringify({ 
+            return new Response(JSON.stringify({
               error: 'Invalid input detected',
               details: validation.errors,
             }), {
               status: 400,
-              headers: generateSecurityHeaders(securityConfig),
+              headers: generateSecurityHeaders(securityConfig, origin),
             });
           }
         }
       } catch (error) {
         return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
           status: 400,
-          headers: generateSecurityHeaders(securityConfig),
+          headers: generateSecurityHeaders(securityConfig, origin),
         });
       }
     }
 
     // Security validation passed
     const responseHeaders = {
-      ...generateSecurityHeaders(securityConfig),
+      ...generateSecurityHeaders(securityConfig, origin),
       'X-RateLimit-Limit': securityConfig.maxRequests.toString(),
       'X-RateLimit-Remaining': rateLimitResult.remaining.toString(),
       'X-RateLimit-Reset': Math.ceil(rateLimitResult.resetTime / 1000).toString(),
