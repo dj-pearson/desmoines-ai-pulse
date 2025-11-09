@@ -6,6 +6,7 @@
  * SECURITY FIX: Prevents Cross-Site Request Forgery attacks
  */
 
+import React from 'react';
 import { SecurityUtils } from './security';
 
 const CSRF_TOKEN_KEY = 'csrf_token';
