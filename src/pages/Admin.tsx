@@ -31,6 +31,9 @@ import AdminSecurityManager from "@/components/AdminSecurityManager";
 import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import AdminSystemControls from "@/components/AdminSystemControls";
 import AdminApplicationSettings from '@/components/AdminApplicationSettings';
+import { DataQualityDashboard } from "@/components/DataQualityDashboard";
+import { ActivityLogViewer } from "@/components/ActivityLogViewer";
+import { ContentQueue } from "@/components/ContentQueue";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
 import { CompetitorAnalysisDashboard } from "@/components/CompetitorAnalysisDashboard";
@@ -71,6 +74,9 @@ import {
   Plus,
   Sparkles,
   TrendingUp,
+  CheckCircle,
+  ScrollText,
+  ClipboardCheck,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -853,6 +859,36 @@ export default function Admin() {
                    </button>
 
                    <button
+                     onClick={() => setActiveTab("activity-logs")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "activity-logs"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Activity Logs" : ""}
+                   >
+                     <ScrollText className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Activity Logs</span>}
+                   </button>
+
+                   <button
+                     onClick={() => setActiveTab("content-queue")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "content-queue"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Content Queue" : ""}
+                   >
+                     <ClipboardCheck className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Content Queue</span>}
+                   </button>
+
+                   <button
                      onClick={() => setActiveTab("analytics")}
                      className={`w-full flex items-center ${
                        sidebarCollapsed ? "justify-center" : "gap-3"
@@ -880,6 +916,21 @@ export default function Admin() {
                    >
                      <TrendingUp className="h-4 w-4" />
                      {!sidebarCollapsed && <span>Search & Traffic</span>}
+                   </button>
+
+                   <button
+                     onClick={() => setActiveTab("data-quality")}
+                     className={`w-full flex items-center ${
+                       sidebarCollapsed ? "justify-center" : "gap-3"
+                     } px-3 py-2 rounded-lg text-left transition-colors ${
+                       activeTab === "data-quality"
+                         ? "bg-primary text-primary-foreground"
+                         : "hover:bg-accent hover:text-accent-foreground"
+                     }`}
+                     title={sidebarCollapsed ? "Data Quality" : ""}
+                   >
+                     <CheckCircle className="h-4 w-4" />
+                     {!sidebarCollapsed && <span>Data Quality</span>}
                    </button>
 
                    <button
@@ -1424,10 +1475,48 @@ export default function Admin() {
             {canManageUsers() && activeTab === "users" && <UserRoleManager />}
 
             {canManageUsers() && activeTab === "security" && <AdminSecurityManager />}
-            
+
+            {canManageUsers() && activeTab === "activity-logs" && <ActivityLogViewer />}
+
+            {canManageUsers() && activeTab === "content-queue" && <ContentQueue />}
+
             {canManageUsers() && activeTab === "analytics" && <AdminAnalyticsDashboard />}
 
             {canManageUsers() && activeTab === "search-traffic" && <SearchTrafficDashboard />}
+
+            {canManageUsers() && activeTab === "data-quality" && (
+              <DataQualityDashboard
+                events={events}
+                restaurants={restaurants}
+                attractions={attractions}
+                playgrounds={playgrounds}
+                onViewItem={(contentType, itemId) => {
+                  // Find the item and open edit dialog
+                  let item;
+                  switch (contentType) {
+                    case 'event':
+                      item = events.find((e: any) => e.id === itemId);
+                      setActiveTab('events');
+                      break;
+                    case 'restaurant':
+                      item = restaurants.find((r: any) => r.id === itemId);
+                      setActiveTab('restaurants');
+                      break;
+                    case 'attraction':
+                      item = attractions.find((a: any) => a.id === itemId);
+                      setActiveTab('attractions');
+                      break;
+                    case 'playground':
+                      item = playgrounds.find((p: any) => p.id === itemId);
+                      setActiveTab('playgrounds');
+                      break;
+                  }
+                  if (item) {
+                    handleEdit(contentType as ContentType, item);
+                  }
+                }}
+              />
+            )}
 
             {canManageUsers() && activeTab === "system" && <AdminSystemControls />}
 
