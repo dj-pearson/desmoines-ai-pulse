@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,13 +63,16 @@ export default function Auth() {
 
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate("/");
+      // Get the redirect parameter from URL or default to home
+      const redirectTo = searchParams.get("redirect") || "/";
+      navigate(redirectTo, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, searchParams]);
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -108,7 +111,9 @@ export default function Auth() {
         description: "You've been successfully logged in.",
       });
 
-      navigate("/");
+      // Redirect to intended destination or home
+      const redirectTo = searchParams.get("redirect") || "/";
+      navigate(redirectTo, { replace: true });
     } catch (error) {
       toast({
         title: "Login Error",

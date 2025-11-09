@@ -7,6 +7,7 @@ import { lazy, Suspense, useState } from "react";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { WelcomeModal } from "@/components/WelcomeModal";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
@@ -99,9 +100,9 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/verified" element={<AuthVerified />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/dashboard" element={<UserDashboard />} />
-            <Route path="/admin" element={<Admin />} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
             <Route path="/attractions" element={<Attractions />} />
             <Route path="/playgrounds" element={<Playgrounds />} />
@@ -131,24 +132,24 @@ const App = () => (
             <Route path="/articles/:slug" element={<ArticleDetails />} />
             <Route
               path="/admin/articles/new"
-              element={<AdminArticleEditor />}
+              element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}
             />
             <Route
               path="/admin/articles/edit/:id"
-              element={<AdminArticleEditor />}
+              element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}
             />
-            <Route path="/admin/campaigns" element={<AdminCampaigns />} />
-            <Route path="/admin/campaigns/:campaignId" element={<AdminCampaignDetail />} />
+            <Route path="/admin/campaigns" element={<ProtectedRoute requireAdmin><AdminCampaigns /></ProtectedRoute>} />
+            <Route path="/admin/campaigns/:campaignId" element={<ProtectedRoute requireAdmin><AdminCampaignDetail /></ProtectedRoute>} />
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
             <Route path="/advertise" element={<Advertise />} />
             <Route path="/advertise/success" element={<AdvertiseSuccess />} />
             <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
-            <Route path="/campaigns" element={<CampaignDashboard />} />
-            <Route path="/campaigns/:campaignId/creatives" element={<UploadCreatives />} />
-            <Route path="/campaigns/:campaignId/analytics" element={<CampaignAnalytics />} />
-            <Route path="/campaigns/team" element={<TeamManagement />} />
+            <Route path="/campaigns" element={<ProtectedRoute><CampaignDashboard /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/creatives" element={<ProtectedRoute><UploadCreatives /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId/analytics" element={<ProtectedRoute><CampaignAnalytics /></ProtectedRoute>} />
+            <Route path="/campaigns/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />
             <Route path="/weekend" element={<WeekendPage />} />
             <Route path="/neighborhoods" element={<NeighborhoodsPage />} />
             <Route
