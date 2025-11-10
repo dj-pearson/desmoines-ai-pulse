@@ -27,9 +27,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API');
+    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
     if (!claudeApiKey) {
-      throw new Error('CLAUDE_API key is required');
+      throw new Error('CLAUDE_API_KEY is required');
     }
 
     const { 
