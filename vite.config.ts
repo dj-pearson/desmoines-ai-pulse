@@ -68,12 +68,9 @@ export default defineConfig(({ command, mode }) => ({
           if (id.includes('recharts')) {
             return 'vendor-charts';
           }
-          // Split core React libraries - CRITICAL: Must include react/jsx-runtime
-          if (id.includes('node_modules/react/') || 
-              id.includes('node_modules/react-dom/') ||
-              id.includes('node_modules/scheduler/')) {
-            return 'vendor-react';
-          }
+          // DO NOT manually chunk React - let Vite handle it automatically
+          // to prevent breaking internal dependencies like createContext
+          
           // Split Supabase client
           if (id.includes('@supabase')) {
             return 'vendor-supabase';
