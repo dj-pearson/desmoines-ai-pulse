@@ -30,6 +30,7 @@ import Newsletter from "@/components/Newsletter";
 import { EventSocialHub } from "@/components/EventSocialHub";
 import { FAQSection } from "@/components/FAQSection";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { PersonalizedRecommendations } from "@/components/PersonalizedRecommendations";
 
 // Lazy load Three.js component to reduce initial bundle size
 // Temporarily disabled due to React Scheduler compatibility issue
@@ -257,6 +258,13 @@ export default function Index() {
 
         {!showAllEvents && !showSocialHub && (
           <>
+            {/* Personalized Recommendations Section */}
+            <section className="py-12 bg-muted/30">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <PersonalizedRecommendations limit={6} />
+              </div>
+            </section>
+
             {isAuthenticated ? (
               <PersonalizedDashboard
                 onViewEventDetails={handleViewEventDetails}
