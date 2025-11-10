@@ -151,9 +151,9 @@ export default function Header() {
             />
           </Link>
 
-          {/* Desktop Navigation - Grows to fill space */}
+          {/* Desktop Navigation - Scrollable if needed */}
           <nav
-            className="hidden lg:flex items-center space-x-3 xl:space-x-4 flex-1"
+            className="hidden lg:flex items-center gap-2 xl:gap-3 flex-1 overflow-x-auto min-w-0 scrollbar-width-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
             role="navigation"
             aria-label="Main navigation"
           >
@@ -162,7 +162,7 @@ export default function Header() {
                 key={link.href}
                 to={link.href}
                 className={cn(
-                  "flex items-center gap-1.5 smooth-transition touch-target relative text-sm xl:text-base",
+                  "flex items-center gap-1.5 smooth-transition touch-target relative text-sm xl:text-base flex-shrink-0",
                   isActivePath(link.href)
                     ? "text-primary font-medium after:absolute after:bottom-[-8px] after:left-0 after:right-0 after:h-0.5 after:bg-primary"
                     : "text-muted-foreground hover:text-primary"
@@ -171,7 +171,7 @@ export default function Header() {
                 onFocus={() => prefetchRoute(link.href)}
                 aria-current={isActivePath(link.href) ? "page" : undefined}
               >
-                <link.icon className="h-4 w-4" />
+                <link.icon className="h-4 w-4 flex-shrink-0" />
                 <span className="whitespace-nowrap">{link.label}</span>
               </Link>
             ))}
