@@ -43,6 +43,11 @@
     "validate:strict": "npm run type-check:strict && npm run lint"
   },
   "dependencies": {
+    "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/list": "^6.1.19",
+    "@fullcalendar/react": "^6.1.19",
+    "@fullcalendar/timegrid": "^6.1.19",
     "@hookform/resolvers": "^3.9.0",
     "@radix-ui/react-accordion": "^1.2.0",
     "@radix-ui/react-alert-dialog": "^1.1.1",
@@ -87,6 +92,7 @@
     "dompurify": "^3.2.6",
     "embla-carousel-react": "^8.3.0",
     "input-otp": "^1.2.4",
+    "jspdf": "^3.0.3",
     "leaflet": "^1.9.4",
     "lightningcss": "^1.30.2",
     "lucide-react": "^0.462.0",
