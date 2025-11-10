@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useEvents } from "@/hooks/useEvents";
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
@@ -12,6 +12,8 @@ import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
 import { EventPhotoUpload } from "@/components/EventPhotoUpload";
 import { EventCheckIn } from "@/components/EventCheckIn";
+import { EventCard } from "@/components/EventCard";
+import { EventReminderSettings } from "@/components/EventReminderSettings";
 import {
   createEventSlugWithCentralTime,
   formatEventDate,
@@ -30,12 +32,24 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const { events, isLoading } = useEvents();
 
   const event = events.find((e) => {
     const eventSlug = createEventSlugWithCentralTime(e.title, e);
     return eventSlug === slug;
   });
+
+  // Find related events (same category, upcoming, exclude current event)
+  const relatedEvents = event
+    ? events
+        .filter((e) =>
+          e.id !== event.id &&
+          e.category === event.category &&
+          new Date(e.date) >= new Date()
+        )
+        .slice(0, 3) // Show up to 3 related events
+    : [];
 
   if (isLoading) {
     return (
@@ -274,6 +288,8 @@ export default function EventDetails() {
                       src={event.image_url}
                       alt={event.title}
                       className="w-full h-64 object-cover rounded-lg"
+                      loading="lazy"
+                      decoding="async"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.style.display = "none";
@@ -452,8 +468,72 @@ export default function EventDetails() {
                   </Button>
                 </CardContent>
               </Card>
+
+              {/* Event Reminders */}
+              {isUpcoming && (
+                <EventReminderSettings eventId={event.id} />
+              )}
+
+              {/* Location & Map */}
+              {(event.latitude && event.longitude) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Location</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {/* Embedded Map */}
+                    <div className="h-48 rounded-lg overflow-hidden border">
+                      <iframe
+                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${event.longitude - 0.01},${event.latitude - 0.01},${event.longitude + 0.01},${event.latitude + 0.01}&marker=${event.latitude},${event.longitude}&layer=mapnik`}
+                        className="w-full h-full border-0"
+                        title={`Map showing ${event.venue || event.location}`}
+                        loading="lazy"
+                      />
+                    </div>
+
+                    {/* Get Directions Button */}
+                    <Button asChild variant="outline" className="w-full">
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <MapPin className="h-4 w-4 mr-2" />
+                        Get Directions
+                      </a>
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </div>
           </div>
+
+          {/* Related Events Section */}
+          {relatedEvents.length > 0 && (
+            <section className="mt-12 pt-12 border-t">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Related Events</h2>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigate(`/events?category=${encodeURIComponent(event.category)}`)}
+                >
+                  View All {event.category}
+                </Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {relatedEvents.map((relatedEvent) => (
+                  <EventCard
+                    key={relatedEvent.id}
+                    event={relatedEvent}
+                    onViewDetails={() => {
+                      navigate(`/events/${createEventSlugWithCentralTime(relatedEvent.title, relatedEvent)}`);
+                    }}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
         </main>
 
         <Footer />

@@ -23,6 +23,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
+import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
@@ -315,24 +316,28 @@ export default function UserDashboard() {
 
           {/* Settings Tab */}
           <TabsContent value="settings">
-            <Card>
-              <CardHeader>
-                <CardTitle>Account Settings</CardTitle>
-                <CardDescription>
-                  Manage your account preferences and notifications
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <Alert>
-                    <Settings className="h-4 w-4" />
-                    <AlertDescription>
-                      Settings panel coming soon. For now, you can manage your account through the main site.
-                    </AlertDescription>
-                  </Alert>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              <EmailPreferencesCard />
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Account Settings</CardTitle>
+                  <CardDescription>
+                    Additional account preferences
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <Alert>
+                      <Settings className="h-4 w-4" />
+                      <AlertDescription>
+                        More settings coming soon. For now, you can manage your account through the profile page.
+                      </AlertDescription>
+                    </Alert>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
         </Tabs>
       </div>

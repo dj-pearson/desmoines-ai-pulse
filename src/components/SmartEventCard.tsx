@@ -125,6 +125,7 @@ export function SmartEventCard({ event, className = '' }: SmartEventCardProps) {
                 alt={event.title}
                 className="w-full h-full object-cover img-mobile"
                 loading="lazy"
+                decoding="async"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}
@@ -272,6 +273,7 @@ export function SmartEventCard({ event, className = '' }: SmartEventCardProps) {
                   alt={event.title}
                   className="w-full h-full object-cover img-mobile"
                   loading="lazy"
+                  decoding="async"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
                   }}

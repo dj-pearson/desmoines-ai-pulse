@@ -3,7 +3,7 @@ import React, { useState, useEffect, lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal, SearchX, Sparkles } from "lucide-react";
+import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal, SearchX, Sparkles, Navigation } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -72,6 +72,11 @@ export default function EventsPage() {
   const { toast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Geolocation state for "Near Me" feature
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [isNearMeActive, setIsNearMeActive] = useState(false);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+
   // Keyboard shortcuts for filters
   useFilterKeyboardShortcuts({
     enabled: !isMobile,
@@ -104,8 +109,53 @@ export default function EventsPage() {
       location,
       priceRange,
       page,
+      isNearMeActive,
+      userLocation,
     ],
     queryFn: async () => {
+      // If "Near Me" is active and we have user location, use proximity search
+      if (isNearMeActive && userLocation) {
+        const { data, error } = await supabase.rpc('search_events_near_location', {
+          user_lat: userLocation.latitude,
+          user_lon: userLocation.longitude,
+          radius_meters: 48280, // 30 miles = 48.28 km
+          search_limit: EVENTS_PER_PAGE
+        });
+
+        if (error) throw error;
+
+        // Apply additional filters to proximity results
+        let filteredData = data || [];
+
+        if (selectedCategory && selectedCategory !== "all") {
+          filteredData = filteredData.filter((e: any) => e.category === selectedCategory);
+        }
+
+        if (debouncedSearchQuery) {
+          const searchLower = debouncedSearchQuery.toLowerCase();
+          filteredData = filteredData.filter((e: any) =>
+            e.title?.toLowerCase().includes(searchLower) ||
+            e.enhanced_description?.toLowerCase().includes(searchLower) ||
+            e.venue?.toLowerCase().includes(searchLower)
+          );
+        }
+
+        if (priceRange && priceRange !== "any-price") {
+          if (priceRange === "free") {
+            filteredData = filteredData.filter((e: any) =>
+              !e.price || e.price.toLowerCase().includes('free') || e.price.includes('$0')
+            );
+          } else {
+            filteredData = filteredData.filter((e: any) =>
+              e.price && !e.price.toLowerCase().includes('free')
+            );
+          }
+        }
+
+        return { events: filteredData, totalCount: filteredData.length };
+      }
+
+      // Standard query without proximity search
       let query = supabase
         .from("events")
         .select("id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description", { count: 'exact' })
@@ -187,6 +237,46 @@ export default function EventsPage() {
         }
       }
 
+      // Apply location filter
+      if (location && location !== "any-location") {
+        // Map filter values to city names used in database
+        const locationMap: Record<string, string> = {
+          'downtown': 'Des Moines',
+          'west-des-moines': 'West Des Moines',
+          'ankeny': 'Ankeny',
+          'urbandale': 'Urbandale',
+          'clive': 'Clive'
+        };
+        const cityName = locationMap[location];
+        if (cityName) {
+          query = query.or(`city.ilike.%${cityName}%,location.ilike.%${cityName}%`);
+        }
+      }
+
+      // Apply price filter
+      if (priceRange && priceRange !== "any-price") {
+        if (priceRange === "free") {
+          // Match free events (null price, "free", "$0", "0")
+          query = query.or("price.is.null,price.ilike.%free%,price.ilike.%$0%");
+        } else {
+          // For numeric price ranges, use text matching on common price formats
+          // Note: This is a simplified approach. For production, consider adding a price_numeric column
+          const pricePatterns: Record<string, string> = {
+            'under-25': 'price.not.is.null,price.not.ilike.%free%',
+            '25-50': 'price.ilike.%$2%,price.ilike.%$3%,price.ilike.%$4%',
+            '50-100': 'price.ilike.%$5%,price.ilike.%$6%,price.ilike.%$7%,price.ilike.%$8%,price.ilike.%$9%',
+            'over-100': 'price.ilike.%$1%'
+          };
+
+          // For now, just filter out free events for paid price ranges
+          // TODO: Add price_numeric column for accurate price filtering
+          if (priceRange === 'under-25' || priceRange === '25-50' || priceRange === '50-100' || priceRange === 'over-100') {
+            query = query.not('price', 'is', null)
+                         .not('price', 'ilike', '%free%');
+          }
+        }
+      }
+
       const { data, error, count } = await query;
       if (error) throw error;
       return { events: data || [], totalCount: count || 0 };
@@ -225,11 +315,72 @@ export default function EventsPage() {
     setDateFilter(null);
     setLocation("any-location");
     setPriceRange("any-price");
+    setIsNearMeActive(false);
     setShowMobileFilters(false);
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
+  };
+
+  // Handle "Near Me" geolocation
+  const handleNearMe = () => {
+    if (isNearMeActive) {
+      // Turn off Near Me mode
+      setIsNearMeActive(false);
+      setUserLocation(null);
+      toast({
+        title: "Location Filter Removed",
+        description: "Showing all events",
+      });
+      return;
+    }
+
+    // Check if geolocation is supported
+    if (!navigator.geolocation) {
+      toast({
+        title: "Geolocation Not Supported",
+        description: "Your browser doesn't support location services",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoadingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        setUserLocation({ latitude, longitude });
+        setIsNearMeActive(true);
+        setIsLoadingLocation(false);
+        toast({
+          title: "Location Found",
+          description: "Showing events near you (within 30 miles)",
+        });
+      },
+      (error) => {
+        setIsLoadingLocation(false);
+        let errorMessage = "Unable to get your location";
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMessage = "Location permission denied. Please enable location in your browser settings.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMessage = "Location information unavailable";
+        } else if (error.code === error.TIMEOUT) {
+          errorMessage = "Location request timed out";
+        }
+        toast({
+          title: "Location Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 300000 // Cache for 5 minutes
+      }
+    );
   };
 
   // Pull to refresh functionality
@@ -250,6 +401,7 @@ export default function EventsPage() {
     dateFilter !== null,
     location !== "any-location",
     priceRange !== "any-price",
+    isNearMeActive,
   ].filter(Boolean).length;
 
   // SEO data
@@ -514,6 +666,25 @@ export default function EventsPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-3">
+                  {/* Near Me Button */}
+                  <Button
+                    onClick={handleNearMe}
+                    variant="secondary"
+                    className={`${isMobile ? 'btn-mobile touch-feedback' : 'h-12'} ${
+                      isNearMeActive
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90"
+                        : "bg-white/20 hover:bg-white/30 text-white border-white/30"
+                    }`}
+                    disabled={isLoadingLocation}
+                  >
+                    {isLoadingLocation ? (
+                      <LoadingSpinner className="h-4 w-4 mr-2" />
+                    ) : (
+                      <Navigation className={`h-4 w-4 mr-2 ${isNearMeActive ? 'animate-pulse' : ''}`} />
+                    )}
+                    {isLoadingLocation ? 'Locating...' : isNearMeActive ? 'Near Me ✓' : 'Near Me'}
+                  </Button>
+
                   {isMobile ? (
                     <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
                       <SheetTrigger asChild>

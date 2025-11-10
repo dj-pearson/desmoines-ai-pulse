@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { FavoriteButton } from '@/components/FavoriteButton';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
@@ -79,6 +80,7 @@ export function SocialEventCard({
               alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}`}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
+              decoding="async"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';
@@ -96,10 +98,17 @@ export function SocialEventCard({
             )}
 
             {/* Category Badge */}
-            <div className="absolute top-3 left-3">
+            <div className="absolute top-3 left-3 flex flex-col gap-2">
               <Badge variant="secondary" className="bg-black/50 text-white">
                 {event.category}
               </Badge>
+              {/* Distance Badge (only shown in Near Me mode) */}
+              {(event as any).distance_meters && (
+                <Badge variant="secondary" className="bg-primary text-primary-foreground">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
+                </Badge>
+              )}
             </div>
           </div>
         )}
@@ -235,7 +244,7 @@ export function SocialEventCard({
 
           {/* Action Buttons */}
           <div className="flex gap-2 pt-2">
-            <Button 
+            <Button
               className="flex-1"
               onClick={(e) => {
                 e.stopPropagation();
@@ -244,10 +253,12 @@ export function SocialEventCard({
             >
               View Details
             </Button>
-            
+
+            <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
+
             {showSocialPreview && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleSocialClick}
                 className="flex items-center"
               >

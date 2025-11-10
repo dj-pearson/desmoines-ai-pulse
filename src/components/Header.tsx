@@ -29,6 +29,7 @@ import {
   Menu,
   Calendar,
   CalendarDays,
+  CalendarCheck,
   MapPin,
   Camera,
   Gamepad2,
@@ -339,6 +340,19 @@ export default function Header() {
                         </Link>
 
                         <Link
+                          to="/my-events"
+                          onClick={() => handleMobileMenuToggle(false)}
+                          className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
+                          aria-label="Go to my events page"
+                        >
+                          <CalendarCheck
+                            className="h-5 w-5 text-primary flex-shrink-0"
+                            aria-hidden="true"
+                          />
+                          <span className="text-base">My Events</span>
+                        </Link>
+
+                        <Link
                           to="/dashboard"
                           onClick={() => handleMobileMenuToggle(false)}
                           className="flex items-center gap-3 p-4 rounded-lg hover:bg-muted smooth-transition touch-target"
@@ -468,6 +482,17 @@ export default function Header() {
                         >
                           <User className="mr-2 h-4 w-4" aria-hidden="true" />
                           Profile
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild role="none">
+                        <Link
+                          to="/my-events"
+                          className="flex items-center"
+                          role="menuitem"
+                          aria-label="Go to my events page"
+                        >
+                          <CalendarCheck className="mr-2 h-4 w-4" aria-hidden="true" />
+                          My Events
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild role="none">
