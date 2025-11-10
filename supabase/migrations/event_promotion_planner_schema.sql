@@ -91,46 +91,6 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Create trigger for updated_at
-DROP TRIGGER IF EXISTS update_event_promotion_email_captures_updated_at ON event_promotion_email_captures;
-CREATE TRIGGER update_event_promotion_email_captures_updated_at
-    BEFORE UPDATE ON event_promotion_email_captures
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
-
--- Row Level Security (RLS) Policies
-ALTER TABLE event_promotion_email_captures ENABLE ROW LEVEL SECURITY;
-ALTER TABLE event_promotion_referrals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE event_promotion_analytics ENABLE ROW LEVEL SECURITY;
-ALTER TABLE event_promotion_task_completions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE event_promotion_email_sequences ENABLE ROW LEVEL SECURITY;
-
--- Allow public to insert email captures
-CREATE POLICY "Anyone can insert email captures" ON event_promotion_email_captures
-    FOR INSERT WITH CHECK (true);
-
--- Allow users to view their own data
-CREATE POLICY "Users can view own email captures" ON event_promotion_email_captures
-    FOR SELECT USING (email = current_user_email());
-
--- Allow public to insert referrals
-CREATE POLICY "Anyone can insert referrals" ON event_promotion_referrals
-    FOR INSERT WITH CHECK (true);
-
--- Allow public to insert analytics
-CREATE POLICY "Anyone can insert analytics" ON event_promotion_analytics
-    FOR INSERT WITH CHECK (true);
-
--- Allow admins to view all data
-CREATE POLICY "Admins can view all email captures" ON event_promotion_email_captures
-    FOR ALL USING (is_admin());
-
-CREATE POLICY "Admins can view all referrals" ON event_promotion_referrals
-    FOR ALL USING (is_admin());
-
-CREATE POLICY "Admins can view all analytics" ON event_promotion_analytics
-    FOR ALL USING (is_admin());
-
 -- Helper function to get current user email from JWT
 CREATE OR REPLACE FUNCTION current_user_email()
 RETURNS TEXT AS $$
@@ -148,6 +108,53 @@ RETURNS BOOLEAN AS $$
         false
     );
 $$ LANGUAGE SQL STABLE;
+
+-- Create trigger for updated_at
+DROP TRIGGER IF EXISTS update_event_promotion_email_captures_updated_at ON event_promotion_email_captures;
+CREATE TRIGGER update_event_promotion_email_captures_updated_at
+    BEFORE UPDATE ON event_promotion_email_captures
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Row Level Security (RLS) Policies
+ALTER TABLE event_promotion_email_captures ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_promotion_referrals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_promotion_analytics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_promotion_task_completions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_promotion_email_sequences ENABLE ROW LEVEL SECURITY;
+
+-- Allow public to insert email captures
+DROP POLICY IF EXISTS "Anyone can insert email captures" ON event_promotion_email_captures;
+CREATE POLICY "Anyone can insert email captures" ON event_promotion_email_captures
+    FOR INSERT WITH CHECK (true);
+
+-- Allow users to view their own data
+DROP POLICY IF EXISTS "Users can view own email captures" ON event_promotion_email_captures;
+CREATE POLICY "Users can view own email captures" ON event_promotion_email_captures
+    FOR SELECT USING (email = current_user_email());
+
+-- Allow public to insert referrals
+DROP POLICY IF EXISTS "Anyone can insert referrals" ON event_promotion_referrals;
+CREATE POLICY "Anyone can insert referrals" ON event_promotion_referrals
+    FOR INSERT WITH CHECK (true);
+
+-- Allow public to insert analytics
+DROP POLICY IF EXISTS "Anyone can insert analytics" ON event_promotion_analytics;
+CREATE POLICY "Anyone can insert analytics" ON event_promotion_analytics
+    FOR INSERT WITH CHECK (true);
+
+-- Allow admins to view all data
+DROP POLICY IF EXISTS "Admins can view all email captures" ON event_promotion_email_captures;
+CREATE POLICY "Admins can view all email captures" ON event_promotion_email_captures
+    FOR ALL USING (is_admin());
+
+DROP POLICY IF EXISTS "Admins can view all referrals" ON event_promotion_referrals;
+CREATE POLICY "Admins can view all referrals" ON event_promotion_referrals
+    FOR ALL USING (is_admin());
+
+DROP POLICY IF EXISTS "Admins can view all analytics" ON event_promotion_analytics;
+CREATE POLICY "Admins can view all analytics" ON event_promotion_analytics
+    FOR ALL USING (is_admin());
 
 -- Materialized view for analytics dashboard (refresh daily)
 CREATE MATERIALIZED VIEW IF NOT EXISTS event_promotion_analytics_summary AS

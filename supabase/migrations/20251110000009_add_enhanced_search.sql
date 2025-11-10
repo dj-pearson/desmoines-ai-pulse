@@ -1,9 +1,20 @@
 -- Add enhanced search with full-text search, fuzzy matching, and ranking
 -- Dramatically improves event discovery and search relevance
 
--- Enable required extensions
-CREATE EXTENSION IF NOT EXISTS pg_trgm; -- Fuzzy/similarity matching
-CREATE EXTENSION IF NOT EXISTS unaccent; -- Remove accents for better matching
+-- Enable required extensions (pg_trgm already enabled in most Supabase instances)
+DO $$ 
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS pg_trgm;
+EXCEPTION 
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ 
+BEGIN
+  CREATE EXTENSION IF NOT EXISTS unaccent;
+EXCEPTION 
+  WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Add full-text search column to events table
 ALTER TABLE public.events
@@ -43,40 +54,51 @@ CREATE TRIGGER trigger_update_event_search_vector
 -- Backfill search_vector for existing events
 UPDATE public.events SET updated_at = updated_at WHERE search_vector IS NULL;
 
+-- Drop existing search analytics table if it exists (clean slate)
+DROP TABLE IF EXISTS public.search_analytics CASCADE;
+
 -- Create search analytics table
-CREATE TABLE IF NOT EXISTS public.search_analytics (
+CREATE TABLE public.search_analytics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   search_query TEXT NOT NULL,
   results_count INTEGER NOT NULL DEFAULT 0,
-  clicked_event_id UUID REFERENCES events(id) ON DELETE SET NULL,
+  clicked_event_id UUID REFERENCES public.events(id) ON DELETE SET NULL,
   clicked_position INTEGER,
   search_filters JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Create indexes for analytics
-CREATE INDEX idx_search_analytics_query ON public.search_analytics(search_query);
-CREATE INDEX idx_search_analytics_created_at ON public.search_analytics(created_at DESC);
-CREATE INDEX idx_search_analytics_user_id ON public.search_analytics(user_id);
+-- Create indexes for analytics (only if they don't exist)
+CREATE INDEX IF NOT EXISTS idx_search_analytics_query ON public.search_analytics(search_query);
+CREATE INDEX IF NOT EXISTS idx_search_analytics_created_at ON public.search_analytics(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_search_analytics_user_id ON public.search_analytics(user_id);
 
 -- Enable RLS
 ALTER TABLE public.search_analytics ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy for search analytics (anyone can insert, only admins can view)
+DROP POLICY IF EXISTS "Anyone can log searches" ON public.search_analytics;
 CREATE POLICY "Anyone can log searches"
   ON public.search_analytics
   FOR INSERT
   WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Admins can view search analytics" ON public.search_analytics;
 CREATE POLICY "Admins can view search analytics"
   ON public.search_analytics
   FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM profiles
+      SELECT 1 FROM public.profiles
       WHERE profiles.id = auth.uid()
-        AND profiles.role = 'admin'
+        AND profiles.user_role IN ('admin', 'root_admin')
+    )
+    OR
+    EXISTS (
+      SELECT 1 FROM public.user_roles
+      WHERE user_roles.user_id = auth.uid()
+        AND user_roles.role IN ('admin', 'root_admin')
     )
   );
 
@@ -163,7 +185,7 @@ BEGIN
         ELSE 0
       END AS recency_boost
 
-    FROM events e
+    FROM public.events e
     WHERE e.date >= CURRENT_DATE
       -- Apply filters
       AND (p_category IS NULL OR e.category ILIKE '%' || p_category || '%')
@@ -230,45 +252,56 @@ BEGIN
   v_query_normalized := unaccent(lower(trim(p_query)));
 
   RETURN QUERY
-  -- Title suggestions
-  SELECT DISTINCT
-    e.title AS suggestion,
-    'event'::TEXT AS suggestion_type,
-    1::INTEGER AS event_count
-  FROM events e
-  WHERE e.date >= CURRENT_DATE
-    AND lower(e.title) LIKE '%' || v_query_normalized || '%'
-  ORDER BY similarity(lower(e.title), v_query_normalized) DESC
-  LIMIT p_limit / 2
-
-  UNION ALL
-
-  -- Category suggestions
-  SELECT DISTINCT
-    e.category AS suggestion,
-    'category'::TEXT AS suggestion_type,
-    COUNT(*)::INTEGER AS event_count
-  FROM events e
-  WHERE e.date >= CURRENT_DATE
-    AND lower(e.category) LIKE '%' || v_query_normalized || '%'
-  GROUP BY e.category
-  ORDER BY COUNT(*) DESC, similarity(lower(e.category), v_query_normalized) DESC
-  LIMIT p_limit / 4
-
-  UNION ALL
-
-  -- Venue suggestions
-  SELECT DISTINCT
-    e.venue AS suggestion,
-    'venue'::TEXT AS suggestion_type,
-    COUNT(*)::INTEGER AS event_count
-  FROM events e
-  WHERE e.date >= CURRENT_DATE
-    AND e.venue IS NOT NULL
-    AND lower(e.venue) LIKE '%' || v_query_normalized || '%'
-  GROUP BY e.venue
-  ORDER BY COUNT(*) DESC, similarity(lower(e.venue), v_query_normalized) DESC
-  LIMIT p_limit / 4;
+  WITH title_suggestions AS (
+    SELECT DISTINCT
+      e.title AS suggestion,
+      'event'::TEXT AS suggestion_type,
+      1::INTEGER AS event_count,
+      similarity(lower(e.title), v_query_normalized) AS sim_score
+    FROM public.events e
+    WHERE e.date >= CURRENT_DATE
+      AND e.title IS NOT NULL
+      AND lower(e.title) LIKE '%' || v_query_normalized || '%'
+    ORDER BY similarity(lower(e.title), v_query_normalized) DESC
+    LIMIT p_limit / 2
+  ),
+  category_suggestions AS (
+    SELECT DISTINCT
+      e.category AS suggestion,
+      'category'::TEXT AS suggestion_type,
+      COUNT(*)::INTEGER AS event_count,
+      similarity(lower(e.category), v_query_normalized) AS sim_score
+    FROM public.events e
+    WHERE e.date >= CURRENT_DATE
+      AND e.category IS NOT NULL
+      AND lower(e.category) LIKE '%' || v_query_normalized || '%'
+    GROUP BY e.category
+    ORDER BY COUNT(*) DESC, similarity(lower(e.category), v_query_normalized) DESC
+    LIMIT p_limit / 4
+  ),
+  venue_suggestions AS (
+    SELECT DISTINCT
+      e.venue AS suggestion,
+      'venue'::TEXT AS suggestion_type,
+      COUNT(*)::INTEGER AS event_count,
+      similarity(lower(e.venue), v_query_normalized) AS sim_score
+    FROM public.events e
+    WHERE e.date >= CURRENT_DATE
+      AND e.venue IS NOT NULL
+      AND lower(e.venue) LIKE '%' || v_query_normalized || '%'
+    GROUP BY e.venue
+    ORDER BY COUNT(*) DESC, similarity(lower(e.venue), v_query_normalized) DESC
+    LIMIT p_limit / 4
+  )
+  SELECT suggestion, suggestion_type, event_count
+  FROM (
+    SELECT * FROM title_suggestions
+    UNION ALL
+    SELECT * FROM category_suggestions
+    UNION ALL
+    SELECT * FROM venue_suggestions
+  ) combined
+  ORDER BY sim_score DESC;
 END;
 $$;
 
@@ -291,7 +324,7 @@ BEGIN
     sa.search_query,
     COUNT(*)::BIGINT AS search_count,
     AVG(sa.results_count)::INTEGER AS avg_results
-  FROM search_analytics sa
+  FROM public.search_analytics sa
   WHERE sa.created_at >= NOW() - (p_days || ' days')::INTERVAL
     AND sa.results_count > 0
   GROUP BY sa.search_query

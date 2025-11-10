@@ -1,12 +1,16 @@
 -- Add social features: discussions, photos, check-ins, and activity feed
 -- Creates community engagement and user-generated content
 
+-- Drop and recreate event_discussions table to ensure clean state
+DROP TABLE IF EXISTS public.discussion_likes CASCADE;
+DROP TABLE IF EXISTS public.event_discussions CASCADE;
+
 -- Event discussions/comments table
-CREATE TABLE IF NOT EXISTS public.event_discussions (
+CREATE TABLE public.event_discussions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  parent_id UUID REFERENCES event_discussions(id) ON DELETE CASCADE, -- For threaded replies
+  parent_id UUID REFERENCES public.event_discussions(id) ON DELETE CASCADE, -- For threaded replies
   message TEXT NOT NULL,
   likes_count INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -16,27 +20,31 @@ CREATE TABLE IF NOT EXISTS public.event_discussions (
 );
 
 -- Create indexes for discussions
-CREATE INDEX idx_event_discussions_event_id ON public.event_discussions(event_id);
-CREATE INDEX idx_event_discussions_user_id ON public.event_discussions(user_id);
-CREATE INDEX idx_event_discussions_parent_id ON public.event_discussions(parent_id);
-CREATE INDEX idx_event_discussions_created_at ON public.event_discussions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_event_discussions_event_id ON public.event_discussions(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_discussions_user_id ON public.event_discussions(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_discussions_parent_id ON public.event_discussions(parent_id);
+CREATE INDEX IF NOT EXISTS idx_event_discussions_created_at ON public.event_discussions(created_at DESC);
 
 -- Discussion likes table (to track who liked what)
-CREATE TABLE IF NOT EXISTS public.discussion_likes (
+CREATE TABLE public.discussion_likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  discussion_id UUID NOT NULL REFERENCES event_discussions(id) ON DELETE CASCADE,
+  discussion_id UUID NOT NULL REFERENCES public.event_discussions(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(discussion_id, user_id)
 );
 
-CREATE INDEX idx_discussion_likes_discussion_id ON public.discussion_likes(discussion_id);
-CREATE INDEX idx_discussion_likes_user_id ON public.discussion_likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_discussion_likes_discussion_id ON public.discussion_likes(discussion_id);
+CREATE INDEX IF NOT EXISTS idx_discussion_likes_user_id ON public.discussion_likes(user_id);
+
+-- Drop and recreate event_photos table to ensure clean state
+DROP TABLE IF EXISTS public.photo_likes CASCADE;
+DROP TABLE IF EXISTS public.event_photos CASCADE;
 
 -- Event photos table (user-submitted photos from events)
-CREATE TABLE IF NOT EXISTS public.event_photos (
+CREATE TABLE public.event_photos (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   photo_url TEXT NOT NULL,
   caption TEXT,
@@ -46,27 +54,30 @@ CREATE TABLE IF NOT EXISTS public.event_photos (
 );
 
 -- Create indexes for photos
-CREATE INDEX idx_event_photos_event_id ON public.event_photos(event_id);
-CREATE INDEX idx_event_photos_user_id ON public.event_photos(user_id);
-CREATE INDEX idx_event_photos_created_at ON public.event_photos(created_at DESC);
-CREATE INDEX idx_event_photos_is_featured ON public.event_photos(is_featured) WHERE is_featured = true;
+CREATE INDEX IF NOT EXISTS idx_event_photos_event_id ON public.event_photos(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_photos_user_id ON public.event_photos(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_photos_created_at ON public.event_photos(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_event_photos_is_featured ON public.event_photos(is_featured) WHERE (is_featured = true);
 
 -- Photo likes table
-CREATE TABLE IF NOT EXISTS public.photo_likes (
+CREATE TABLE public.photo_likes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  photo_id UUID NOT NULL REFERENCES event_photos(id) ON DELETE CASCADE,
+  photo_id UUID NOT NULL REFERENCES public.event_photos(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(photo_id, user_id)
 );
 
-CREATE INDEX idx_photo_likes_photo_id ON public.photo_likes(photo_id);
-CREATE INDEX idx_photo_likes_user_id ON public.photo_likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_photo_likes_photo_id ON public.photo_likes(photo_id);
+CREATE INDEX IF NOT EXISTS idx_photo_likes_user_id ON public.photo_likes(user_id);
+
+-- Drop and recreate event_checkins table to ensure clean state
+DROP TABLE IF EXISTS public.event_checkins CASCADE;
 
 -- Event check-ins table (location-verified attendance)
-CREATE TABLE IF NOT EXISTS public.event_checkins (
+CREATE TABLE public.event_checkins (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   checkin_latitude REAL,
   checkin_longitude REAL,
@@ -78,13 +89,16 @@ CREATE TABLE IF NOT EXISTS public.event_checkins (
 );
 
 -- Create indexes for check-ins
-CREATE INDEX idx_event_checkins_event_id ON public.event_checkins(event_id);
-CREATE INDEX idx_event_checkins_user_id ON public.event_checkins(user_id);
-CREATE INDEX idx_event_checkins_created_at ON public.event_checkins(created_at DESC);
-CREATE INDEX idx_event_checkins_is_verified ON public.event_checkins(is_verified) WHERE is_verified = true;
+CREATE INDEX IF NOT EXISTS idx_event_checkins_event_id ON public.event_checkins(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_checkins_user_id ON public.event_checkins(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_checkins_created_at ON public.event_checkins(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_event_checkins_is_verified ON public.event_checkins(is_verified) WHERE (is_verified = true);
+
+-- Drop and recreate activity_feed table to ensure clean state
+DROP TABLE IF EXISTS public.activity_feed CASCADE;
 
 -- Activity feed table (aggregated social activities)
-CREATE TABLE IF NOT EXISTS public.activity_feed (
+CREATE TABLE public.activity_feed (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   activity_type TEXT NOT NULL CHECK (activity_type IN (
@@ -96,20 +110,23 @@ CREATE TABLE IF NOT EXISTS public.activity_feed (
     'event_reminder',
     'follow_user'
   )),
-  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  event_id UUID REFERENCES public.events(id) ON DELETE CASCADE,
   target_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE, -- For follows
   metadata JSONB, -- Additional activity data
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Create indexes for activity feed
-CREATE INDEX idx_activity_feed_user_id ON public.activity_feed(user_id);
-CREATE INDEX idx_activity_feed_created_at ON public.activity_feed(created_at DESC);
-CREATE INDEX idx_activity_feed_activity_type ON public.activity_feed(activity_type);
-CREATE INDEX idx_activity_feed_event_id ON public.activity_feed(event_id);
+CREATE INDEX IF NOT EXISTS idx_activity_feed_user_id ON public.activity_feed(user_id);
+CREATE INDEX IF NOT EXISTS idx_activity_feed_created_at ON public.activity_feed(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_feed_activity_type ON public.activity_feed(activity_type);
+CREATE INDEX IF NOT EXISTS idx_activity_feed_event_id ON public.activity_feed(event_id);
+
+-- Drop and recreate user_follows table to ensure clean state
+DROP TABLE IF EXISTS public.user_follows CASCADE;
 
 -- User follows table (social connections)
-CREATE TABLE IF NOT EXISTS public.user_follows (
+CREATE TABLE public.user_follows (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   follower_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   following_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -119,8 +136,8 @@ CREATE TABLE IF NOT EXISTS public.user_follows (
 );
 
 -- Create indexes for follows
-CREATE INDEX idx_user_follows_follower_id ON public.user_follows(follower_id);
-CREATE INDEX idx_user_follows_following_id ON public.user_follows(following_id);
+CREATE INDEX IF NOT EXISTS idx_user_follows_follower_id ON public.user_follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_user_follows_following_id ON public.user_follows(following_id);
 
 -- Enable Row Level Security on all tables
 ALTER TABLE public.event_discussions ENABLE ROW LEVEL SECURITY;
@@ -132,91 +149,108 @@ ALTER TABLE public.activity_feed ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_follows ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for event_discussions
+DROP POLICY IF EXISTS "Anyone can view discussions" ON public.event_discussions;
 CREATE POLICY "Anyone can view discussions"
   ON public.event_discussions
   FOR SELECT
   USING (NOT is_deleted);
 
+DROP POLICY IF EXISTS "Authenticated users can create discussions" ON public.event_discussions;
 CREATE POLICY "Authenticated users can create discussions"
   ON public.event_discussions
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own discussions" ON public.event_discussions;
 CREATE POLICY "Users can update their own discussions"
   ON public.event_discussions
   FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own discussions" ON public.event_discussions;
 CREATE POLICY "Users can delete their own discussions"
   ON public.event_discussions
   FOR DELETE
   USING (auth.uid() = user_id);
 
 -- RLS Policies for discussion_likes
+DROP POLICY IF EXISTS "Anyone can view discussion likes" ON public.discussion_likes;
 CREATE POLICY "Anyone can view discussion likes"
   ON public.discussion_likes
   FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Authenticated users can like discussions" ON public.discussion_likes;
 CREATE POLICY "Authenticated users can like discussions"
   ON public.discussion_likes
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can unlike discussions" ON public.discussion_likes;
 CREATE POLICY "Users can unlike discussions"
   ON public.discussion_likes
   FOR DELETE
   USING (auth.uid() = user_id);
 
 -- RLS Policies for event_photos
+DROP POLICY IF EXISTS "Anyone can view event photos" ON public.event_photos;
 CREATE POLICY "Anyone can view event photos"
   ON public.event_photos
   FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Authenticated users can upload photos" ON public.event_photos;
 CREATE POLICY "Authenticated users can upload photos"
   ON public.event_photos
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can update their own photos" ON public.event_photos;
 CREATE POLICY "Users can update their own photos"
   ON public.event_photos
   FOR UPDATE
   USING (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can delete their own photos" ON public.event_photos;
 CREATE POLICY "Users can delete their own photos"
   ON public.event_photos
   FOR DELETE
   USING (auth.uid() = user_id);
 
 -- RLS Policies for photo_likes
+DROP POLICY IF EXISTS "Anyone can view photo likes" ON public.photo_likes;
 CREATE POLICY "Anyone can view photo likes"
   ON public.photo_likes
   FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Authenticated users can like photos" ON public.photo_likes;
 CREATE POLICY "Authenticated users can like photos"
   ON public.photo_likes
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+DROP POLICY IF EXISTS "Users can unlike photos" ON public.photo_likes;
 CREATE POLICY "Users can unlike photos"
   ON public.photo_likes
   FOR DELETE
   USING (auth.uid() = user_id);
 
 -- RLS Policies for event_checkins
+DROP POLICY IF EXISTS "Anyone can view check-ins" ON public.event_checkins;
 CREATE POLICY "Anyone can view check-ins"
   ON public.event_checkins
   FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Authenticated users can check in" ON public.event_checkins;
 CREATE POLICY "Authenticated users can check in"
   ON public.event_checkins
   FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
 -- RLS Policies for activity_feed
+DROP POLICY IF EXISTS "Users can view their own activity and followed users' activity" ON public.activity_feed;
 CREATE POLICY "Users can view their own activity and followed users' activity"
   ON public.activity_feed
   FOR SELECT
@@ -229,22 +263,26 @@ CREATE POLICY "Users can view their own activity and followed users' activity"
     )
   );
 
+DROP POLICY IF EXISTS "System can insert activity" ON public.activity_feed;
 CREATE POLICY "System can insert activity"
   ON public.activity_feed
   FOR INSERT
   WITH CHECK (true);
 
 -- RLS Policies for user_follows
+DROP POLICY IF EXISTS "Anyone can view follows" ON public.user_follows;
 CREATE POLICY "Anyone can view follows"
   ON public.user_follows
   FOR SELECT
   USING (true);
 
+DROP POLICY IF EXISTS "Users can follow others" ON public.user_follows;
 CREATE POLICY "Users can follow others"
   ON public.user_follows
   FOR INSERT
   WITH CHECK (auth.uid() = follower_id);
 
+DROP POLICY IF EXISTS "Users can unfollow" ON public.user_follows;
 CREATE POLICY "Users can unfollow"
   ON public.user_follows
   FOR DELETE
@@ -327,7 +365,7 @@ BEGIN
 
   -- Get event location
   SELECT latitude, longitude INTO v_event
-  FROM events
+  FROM public.events
   WHERE id = p_event_id;
 
   IF NOT FOUND THEN
@@ -426,14 +464,14 @@ BEGIN
     e.title AS event_title,
     af.metadata,
     af.created_at
-  FROM activity_feed af
-  JOIN profiles p ON p.id = af.user_id
-  LEFT JOIN events e ON e.id = af.event_id
+  FROM public.activity_feed af
+  JOIN public.profiles p ON p.id = af.user_id
+  LEFT JOIN public.events e ON e.id = af.event_id
   WHERE (p_user_id IS NULL OR af.user_id = p_user_id)
     OR (
       p_user_id IS NOT NULL AND
       EXISTS (
-        SELECT 1 FROM user_follows
+        SELECT 1 FROM public.user_follows
         WHERE follower_id = p_user_id
           AND following_id = af.user_id
       )

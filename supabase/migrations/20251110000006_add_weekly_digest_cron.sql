@@ -1,11 +1,12 @@
 -- Schedule weekly digest cron job
 -- Runs every Sunday at 8 AM Central Time (14:00 UTC)
+-- Note: pg_cron extension is already enabled in Supabase by default
 
--- Enable pg_cron extension if not already enabled
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-
--- Grant usage to postgres user
-GRANT USAGE ON SCHEMA cron TO postgres;
+-- First, unschedule any existing weekly digest job to avoid duplicates
+SELECT cron.unschedule('send-weekly-digest') 
+WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'send-weekly-digest'
+);
 
 -- Schedule the weekly digest job
 -- Cron format: minute hour day-of-month month day-of-week
@@ -29,9 +30,6 @@ SELECT cron.schedule(
     ) AS request_id;
   $$
 );
-
--- Add comment for documentation
-COMMENT ON EXTENSION pg_cron IS 'Job scheduler for PostgreSQL - Used for weekly digest emails';
 
 -- Log the cron job creation
 DO $$

@@ -1,8 +1,11 @@
 -- Add cron job to send event reminders hourly
--- Requires pg_cron extension
+-- Requires pg_cron extension (already enabled in Supabase by default)
 
--- Enable pg_cron extension if not already enabled
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- First, unschedule any existing reminder job to avoid duplicates
+SELECT cron.unschedule('send-event-reminders-hourly') 
+WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'send-event-reminders-hourly'
+);
 
 -- Create cron job to send event reminders every hour
 -- Runs at the top of every hour
