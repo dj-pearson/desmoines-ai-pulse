@@ -12,7 +12,7 @@ import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
 import { EventPhotoUpload } from "@/components/EventPhotoUpload";
 import { EventCheckIn } from "@/components/EventCheckIn";
-import { EventCard } from "@/components/EventCard";
+import EventCard from "@/components/EventCard";
 import { EventReminderSettings } from "@/components/EventReminderSettings";
 import {
   createEventSlugWithCentralTime,
