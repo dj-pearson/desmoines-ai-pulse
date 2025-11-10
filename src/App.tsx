@@ -59,6 +59,9 @@ const EventsToday = lazy(() => import("./pages/EventsToday"));
 const EventsThisWeekend = lazy(() => import("./pages/EventsThisWeekend"));
 const EventsByLocation = lazy(() => import("./pages/EventsByLocation"));
 
+// Lead magnet tools
+const EventPromotionPlanner = lazy(() => import("./pages/EventPromotionPlanner"));
+
 // Mobile-optimized loading component
 const PageLoader = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
@@ -171,6 +174,8 @@ const App = () => (
             <Route path="/guides" element={<GuidesPage />} />
             <Route path="/events/:monthYear" element={<MonthlyEventsPage />} />
             <Route path="/real-time" element={<RealTimePage />} />
+            {/* Lead magnet tools */}
+            <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
