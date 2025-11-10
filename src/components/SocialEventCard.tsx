@@ -97,10 +97,17 @@ export function SocialEventCard({
             )}
 
             {/* Category Badge */}
-            <div className="absolute top-3 left-3">
+            <div className="absolute top-3 left-3 flex flex-col gap-2">
               <Badge variant="secondary" className="bg-black/50 text-white">
                 {event.category}
               </Badge>
+              {/* Distance Badge (only shown in Near Me mode) */}
+              {(event as any).distance_meters && (
+                <Badge variant="secondary" className="bg-primary text-primary-foreground">
+                  <MapPin className="h-3 w-3 mr-1" />
+                  {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
+                </Badge>
+              )}
             </div>
           </div>
         )}

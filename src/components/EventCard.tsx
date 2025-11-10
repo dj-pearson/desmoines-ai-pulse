@@ -74,16 +74,25 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
       )}
 
       <CardHeader className="pb-2">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
           <Badge className={getCategoryColor(event.category)}>
             {event.category}
           </Badge>
-          {event.is_enhanced && (
-            <Badge variant="secondary" className="text-xs">
-              <Sparkles className="h-3 w-3 mr-1" />
-              Enhanced
-            </Badge>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Distance Badge (only shown in Near Me mode) */}
+            {(event as any).distance_meters && (
+              <Badge variant="secondary" className="text-xs bg-primary text-primary-foreground">
+                <MapPin className="h-3 w-3 mr-1" />
+                {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
+              </Badge>
+            )}
+            {event.is_enhanced && (
+              <Badge variant="secondary" className="text-xs">
+                <Sparkles className="h-3 w-3 mr-1" />
+                Enhanced
+              </Badge>
+            )}
+          </div>
         </div>
         <CardTitle className="text-lg line-clamp-2">{event.title}</CardTitle>
       </CardHeader>
