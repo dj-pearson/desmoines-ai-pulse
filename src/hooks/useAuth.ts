@@ -85,8 +85,11 @@ export function useAuth() {
     user: User | null | undefined
   ): Promise<boolean> => {
     if (!user) {
+      console.log("checkIsAdmin: No user provided");
       return false;
     }
+
+    console.log("checkIsAdmin: Checking admin status for user:", user.id);
 
     // Check user role from user_roles table first
     try {
@@ -96,8 +99,12 @@ export function useAuth() {
         .eq("user_id", user.id)
         .maybeSingle();
 
+      console.log("checkIsAdmin: user_roles query result:", { data, error });
+
       if (!error && data?.role) {
-        return data.role === 'admin' || data.role === 'root_admin';
+        const isAdmin = data.role === 'admin' || data.role === 'root_admin';
+        console.log("checkIsAdmin: Found role in user_roles:", data.role, "isAdmin:", isAdmin);
+        return isAdmin;
       }
     } catch (error) {
       console.error("Error checking user_roles:", error);
@@ -111,13 +118,18 @@ export function useAuth() {
         .eq("user_id", user.id)
         .maybeSingle();
 
+      console.log("checkIsAdmin: profiles query result:", { data, error });
+
       if (!error && data?.user_role) {
-        return data.user_role === 'admin' || data.user_role === 'root_admin';
+        const isAdmin = data.user_role === 'admin' || data.user_role === 'root_admin';
+        console.log("checkIsAdmin: Found role in profiles:", data.user_role, "isAdmin:", isAdmin);
+        return isAdmin;
       }
     } catch (error) {
       console.error("Error checking profiles:", error);
     }
 
+    console.log("checkIsAdmin: No admin role found, returning false");
     // Security Fix: No email fallback - all admin access must be through database roles
     return false;
   };
