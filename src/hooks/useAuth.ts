@@ -15,6 +15,9 @@ interface AuthState {
 const adminStatusCache = new Map<string, { isAdmin: boolean; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
+// Promise cache to prevent simultaneous duplicate calls
+const pendingChecks = new Map<string, Promise<boolean>>();
+
 export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
@@ -100,61 +103,81 @@ export function useAuth() {
       return cached.isAdmin;
     }
 
+    // Check if there's already a pending check for this user
+    const pending = pendingChecks.get(user.id);
+    if (pending) {
+      console.log("checkIsAdmin: Reusing pending check for user:", user.id);
+      return pending;
+    }
+
     console.log("checkIsAdmin: Checking admin status for user:", user.id);
 
-    // Check user role from user_roles table first
-    try {
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+    // Create the promise for this check
+    const checkPromise = (async () => {
+      try {
+        // Check user role from user_roles table first
+        try {
+          const { data, error } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", user.id)
+            .maybeSingle();
 
-      console.log("checkIsAdmin: user_roles query result:", { data, error });
+          console.log("checkIsAdmin: user_roles query result:", { data, error });
 
-      if (!error && data?.role) {
-        const isAdmin = data.role === 'admin' || data.role === 'root_admin';
-        console.log("checkIsAdmin: Found role in user_roles:", data.role, "isAdmin:", isAdmin);
+          if (!error && data?.role) {
+            const isAdmin = data.role === 'admin' || data.role === 'root_admin';
+            console.log("checkIsAdmin: Found role in user_roles:", data.role, "isAdmin:", isAdmin);
+            
+            // Cache the result
+            adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+            
+            return isAdmin;
+          }
+        } catch (error) {
+          console.error("Error checking user_roles:", error);
+        }
+
+        // Fallback: Check profiles table user_role column
+        try {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("user_role")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          console.log("checkIsAdmin: profiles query result:", { data, error });
+
+          if (!error && data?.user_role) {
+            const isAdmin = data.user_role === 'admin' || data.user_role === 'root_admin';
+            console.log("checkIsAdmin: Found role in profiles:", data.user_role, "isAdmin:", isAdmin);
+            
+            // Cache the result
+            adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+            
+            return isAdmin;
+          }
+        } catch (error) {
+          console.error("Error checking profiles:", error);
+        }
+
+        console.log("checkIsAdmin: No admin role found, returning false");
         
-        // Cache the result
-        adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+        // Cache the negative result too
+        adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
         
-        return isAdmin;
+        // Security Fix: No email fallback - all admin access must be through database roles
+        return false;
+      } finally {
+        // Remove from pending checks when done
+        pendingChecks.delete(user.id);
       }
-    } catch (error) {
-      console.error("Error checking user_roles:", error);
-    }
+    })();
 
-    // Fallback: Check profiles table user_role column
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("user_role")
-        .eq("user_id", user.id)
-        .maybeSingle();
+    // Store the promise in pending checks
+    pendingChecks.set(user.id, checkPromise);
 
-      console.log("checkIsAdmin: profiles query result:", { data, error });
-
-      if (!error && data?.user_role) {
-        const isAdmin = data.user_role === 'admin' || data.user_role === 'root_admin';
-        console.log("checkIsAdmin: Found role in profiles:", data.user_role, "isAdmin:", isAdmin);
-        
-        // Cache the result
-        adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-        
-        return isAdmin;
-      }
-    } catch (error) {
-      console.error("Error checking profiles:", error);
-    }
-
-    console.log("checkIsAdmin: No admin role found, returning false");
-    
-    // Cache the negative result too
-    adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
-    
-    // Security Fix: No email fallback - all admin access must be through database roles
-    return false;
+    return checkPromise;
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
