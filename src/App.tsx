@@ -14,6 +14,7 @@ const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
 const AuthVerified = lazy(() => import("./pages/AuthVerified"));
 const Profile = lazy(() => import("./pages/Profile"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const UserDashboard = lazy(() => import("./pages/UserDashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Admin = lazy(() => import("./pages/Admin"));
@@ -101,6 +102,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/auth/verified" element={<AuthVerified />} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/my-events" element={<ProfilePage />} />
             <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
