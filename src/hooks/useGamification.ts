@@ -68,7 +68,10 @@ export function useGamification() {
   const { toast } = useToast();
 
   const fetchUserReputation = async () => {
-    if (!user) return;
+    if (!user) {
+      setReputation(null);
+      return;
+    }
 
     try {
       const { data, error } = await supabase
@@ -76,6 +79,12 @@ export function useGamification() {
         .select("*")
         .eq("user_id", user.id)
         .maybeSingle();
+
+      // Silently handle 403 errors (RLS policy blocking unauthenticated access)
+      if (error && error.code === '42501') {
+        setReputation(null);
+        return;
+      }
 
       if (error) throw error;
 
@@ -95,13 +104,22 @@ export function useGamification() {
           .select()
           .single();
 
+        // Silently handle 403 errors on insert
+        if (createError && createError.code === '42501') {
+          setReputation(null);
+          return;
+        }
+
         if (createError) throw createError;
         setReputation(newRep as any);
       } else {
         setReputation(data as any);
       }
     } catch (error) {
-      console.error("Error fetching reputation:", error);
+      // Don't log RLS policy errors - they're expected for unauthenticated users
+      if (error && typeof error === 'object' && 'code' in error && error.code !== '42501') {
+        console.error("Error fetching reputation:", error);
+      }
       setError(error instanceof Error ? error.message : "Failed to fetch reputation");
     }
   };
@@ -229,6 +247,17 @@ export function useGamification() {
 
   useEffect(() => {
     const loadData = async () => {
+      // Only load gamification data for authenticated users
+      if (!user) {
+        setIsLoading(false);
+        setReputation(null);
+        setBadges([]);
+        setChallenges([]);
+        setActivities([]);
+        setLeaderboard([]);
+        return;
+      }
+
       setIsLoading(true);
       await Promise.all([
         fetchUserReputation(),
