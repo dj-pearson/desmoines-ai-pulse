@@ -11,6 +11,10 @@ interface AuthState {
   isAdmin: boolean;
 }
 
+// Cache for admin status to prevent excessive database queries
+const adminStatusCache = new Map<string, { isAdmin: boolean; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export function useAuth() {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
@@ -89,6 +93,13 @@ export function useAuth() {
       return false;
     }
 
+    // Check cache first
+    const cached = adminStatusCache.get(user.id);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      console.log("checkIsAdmin: Using cached result for user:", user.id, "isAdmin:", cached.isAdmin);
+      return cached.isAdmin;
+    }
+
     console.log("checkIsAdmin: Checking admin status for user:", user.id);
 
     // Check user role from user_roles table first
@@ -104,6 +115,10 @@ export function useAuth() {
       if (!error && data?.role) {
         const isAdmin = data.role === 'admin' || data.role === 'root_admin';
         console.log("checkIsAdmin: Found role in user_roles:", data.role, "isAdmin:", isAdmin);
+        
+        // Cache the result
+        adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+        
         return isAdmin;
       }
     } catch (error) {
@@ -123,6 +138,10 @@ export function useAuth() {
       if (!error && data?.user_role) {
         const isAdmin = data.user_role === 'admin' || data.user_role === 'root_admin';
         console.log("checkIsAdmin: Found role in profiles:", data.user_role, "isAdmin:", isAdmin);
+        
+        // Cache the result
+        adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+        
         return isAdmin;
       }
     } catch (error) {
@@ -130,6 +149,10 @@ export function useAuth() {
     }
 
     console.log("checkIsAdmin: No admin role found, returning false");
+    
+    // Cache the negative result too
+    adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
+    
     // Security Fix: No email fallback - all admin access must be through database roles
     return false;
   };
