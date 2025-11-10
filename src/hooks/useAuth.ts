@@ -88,7 +88,7 @@ export function useAuth() {
       return false;
     }
 
-    // Check user role from user_roles table
+    // Check user role from user_roles table first
     try {
       const { data, error } = await supabase
         .from("user_roles")
@@ -100,7 +100,22 @@ export function useAuth() {
         return data.role === 'admin' || data.role === 'root_admin';
       }
     } catch (error) {
-      console.error("Error checking admin status:", error);
+      console.error("Error checking user_roles:", error);
+    }
+
+    // Fallback: Check profiles table user_role column
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("user_role")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!error && data?.user_role) {
+        return data.user_role === 'admin' || data.user_role === 'root_admin';
+      }
+    } catch (error) {
+      console.error("Error checking profiles:", error);
     }
 
     // Security Fix: No email fallback - all admin access must be through database roles
