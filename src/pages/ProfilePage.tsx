@@ -65,17 +65,29 @@ export default function ProfilePage() {
     queryFn: async () => {
       if (!user?.id) return [];
 
-      // Assuming favorites are stored in user metadata or a favorites table
-      // This is a placeholder - adjust based on your actual implementation
+      // Fetch favorite event IDs from user_event_interactions
+      const { data: favoriteInteractions, error: favError } = await supabase
+        .from('user_event_interactions')
+        .select('event_id')
+        .eq('user_id', user.id)
+        .eq('interaction_type', 'favorite');
+
+      if (favError) throw favError;
+
+      const favoriteEventIds = favoriteInteractions?.map(item => item.event_id) || [];
+
+      // If no favorites, return empty array
+      if (favoriteEventIds.length === 0) return [];
+
+      // Fetch the actual event details for favorited events
       const { data, error } = await supabase
         .from('events')
         .select('id, title, date, location, category, image_url, price, venue, is_featured, event_start_utc, event_start_local, city, latitude, longitude, enhanced_description')
+        .in('id', favoriteEventIds)
         .gte('date', new Date().toISOString().split('T')[0])
-        .order('date', { ascending: true })
-        .limit(20);
+        .order('date', { ascending: true });
 
       if (error) throw error;
-      // TODO: Filter by actual favorites when implemented
       return data || [];
     },
     enabled: !!user?.id,

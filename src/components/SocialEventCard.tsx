@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { FavoriteButton } from '@/components/FavoriteButton';
 import { useEventSocial } from '@/hooks/useEventSocial';
 import { BatchEventSocialData } from '@/hooks/useBatchEventSocial';
 import { Event } from '@/lib/types';
@@ -243,7 +244,7 @@ export function SocialEventCard({
 
           {/* Action Buttons */}
           <div className="flex gap-2 pt-2">
-            <Button 
+            <Button
               className="flex-1"
               onClick={(e) => {
                 e.stopPropagation();
@@ -252,10 +253,12 @@ export function SocialEventCard({
             >
               View Details
             </Button>
-            
+
+            <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
+
             {showSocialPreview && (
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={handleSocialClick}
                 className="flex items-center"
               >

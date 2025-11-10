@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import EventFeedback from "@/components/EventFeedback";
 import ShareDialog from "@/components/ShareDialog";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { Event } from "@/lib/types";
@@ -122,7 +123,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
         </div>
 
         <div className="flex items-center justify-between pt-2">
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               onClick={handleViewDetails}
               className="bg-primary hover:bg-blue-700 text-white"
@@ -141,6 +142,8 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
                 Full Page
               </Button>
             </Link>
+
+            <FavoriteButton eventId={event.id} variant="ghost" size="icon" />
 
             <ShareDialog
               title={event.title}
