@@ -68,8 +68,10 @@ export default defineConfig(({ command, mode }) => ({
           if (id.includes('recharts')) {
             return 'vendor-charts';
           }
-          // Split core React libraries
-          if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) {
+          // Split core React libraries - CRITICAL: Must include react/jsx-runtime
+          if (id.includes('node_modules/react/') || 
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/scheduler/')) {
             return 'vendor-react';
           }
           // Split Supabase client
