@@ -79,6 +79,7 @@ export function SocialEventCard({
               alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}`}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
+              decoding="async"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';

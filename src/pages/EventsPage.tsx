@@ -187,6 +187,46 @@ export default function EventsPage() {
         }
       }
 
+      // Apply location filter
+      if (location && location !== "any-location") {
+        // Map filter values to city names used in database
+        const locationMap: Record<string, string> = {
+          'downtown': 'Des Moines',
+          'west-des-moines': 'West Des Moines',
+          'ankeny': 'Ankeny',
+          'urbandale': 'Urbandale',
+          'clive': 'Clive'
+        };
+        const cityName = locationMap[location];
+        if (cityName) {
+          query = query.or(`city.ilike.%${cityName}%,location.ilike.%${cityName}%`);
+        }
+      }
+
+      // Apply price filter
+      if (priceRange && priceRange !== "any-price") {
+        if (priceRange === "free") {
+          // Match free events (null price, "free", "$0", "0")
+          query = query.or("price.is.null,price.ilike.%free%,price.ilike.%$0%");
+        } else {
+          // For numeric price ranges, use text matching on common price formats
+          // Note: This is a simplified approach. For production, consider adding a price_numeric column
+          const pricePatterns: Record<string, string> = {
+            'under-25': 'price.not.is.null,price.not.ilike.%free%',
+            '25-50': 'price.ilike.%$2%,price.ilike.%$3%,price.ilike.%$4%',
+            '50-100': 'price.ilike.%$5%,price.ilike.%$6%,price.ilike.%$7%,price.ilike.%$8%,price.ilike.%$9%',
+            'over-100': 'price.ilike.%$1%'
+          };
+
+          // For now, just filter out free events for paid price ranges
+          // TODO: Add price_numeric column for accurate price filtering
+          if (priceRange === 'under-25' || priceRange === '25-50' || priceRange === '50-100' || priceRange === 'over-100') {
+            query = query.not('price', 'is', null)
+                         .not('price', 'ilike', '%free%');
+          }
+        }
+      }
+
       const { data, error, count } = await query;
       if (error) throw error;
       return { events: data || [], totalCount: count || 0 };
