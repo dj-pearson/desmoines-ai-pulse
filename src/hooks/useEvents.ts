@@ -85,6 +85,7 @@ export function useEvents(filters: EventFilters = {}) {
       let { data, error, count } = await query;
 
       if (error) {
+        console.error("useEvents: Database query error:", error);
         throw error;
       }
 
