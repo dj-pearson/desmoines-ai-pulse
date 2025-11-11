@@ -80,47 +80,29 @@ export function useGamification() {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      // Silently handle 403 errors (RLS policy blocking unauthenticated access)
-      if (error && error.code === '42501') {
+      // Silently handle all database access errors (403, 42501, etc.)
+      // These are expected when RLS policies block access or tables don't exist
+      if (error) {
+        // Only log unexpected errors
+        if (error.code !== '42501' && error.code !== 'PGRST301' && !error.message?.includes('permission denied')) {
+          console.error("Error fetching reputation:", error);
+        }
         setReputation(null);
         return;
       }
 
-      if (error) throw error;
-
       if (!data) {
-        // Create initial reputation record
-        const { data: newRep, error: createError } = await supabase
-          .from("user_reputation")
-          .insert({
-            user_id: user.id,
-            experience_points: 0,
-            current_level: 1,
-            current_level_progress: 0,
-            next_level_xp: 100,
-            total_badges: 0,
-            streak_days: 0
-          })
-          .select()
-          .single();
-
-        // Silently handle 403 errors on insert
-        if (createError && createError.code === '42501') {
-          setReputation(null);
-          return;
-        }
-
-        if (createError) throw createError;
-        setReputation(newRep as any);
-      } else {
-        setReputation(data as any);
+        // Don't attempt to create reputation record - let database triggers handle this
+        // Attempting INSERT operations can cause infinite loops with RLS policies
+        setReputation(null);
+        return;
       }
+
+      setReputation(data as any);
     } catch (error) {
-      // Don't log RLS policy errors - they're expected for unauthenticated users
-      if (error && typeof error === 'object' && 'code' in error && error.code !== '42501') {
-        console.error("Error fetching reputation:", error);
-      }
-      setError(error instanceof Error ? error.message : "Failed to fetch reputation");
+      // Silently handle all errors to prevent console spam
+      setReputation(null);
+      setError(null); // Don't set error state to avoid re-render loops
     }
   };
 

@@ -27,40 +27,60 @@ export function useEventRecommendations(options: UseEventRecommendationsOptions 
   const personalizedQuery = useQuery({
     queryKey: ['event-recommendations', 'personalized', user?.id, userLocation, limit],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_personalized_recommendations', {
-        p_user_lat: userLocation?.latitude || null,
-        p_user_lon: userLocation?.longitude || null,
-        p_limit: limit
-      });
+      try {
+        const { data, error } = await supabase.rpc('get_personalized_recommendations', {
+          p_user_lat: userLocation?.latitude || null,
+          p_user_lon: userLocation?.longitude || null,
+          p_limit: limit
+        });
 
-      if (error) {
-        console.error('Error fetching personalized recommendations:', error);
-        throw error;
+        // Silently handle errors - database function might not exist or have schema issues
+        if (error) {
+          // Only log unexpected errors (not function not found or schema errors)
+          if (error.code !== '42883' && error.code !== '42804' && !error.message?.includes('does not exist')) {
+            console.error('Error fetching personalized recommendations:', error);
+          }
+          return [] as RecommendedEvent[];
+        }
+
+        return (data || []) as RecommendedEvent[];
+      } catch (err) {
+        // Silently return empty array to prevent console spam
+        return [] as RecommendedEvent[];
       }
-
-      return (data || []) as RecommendedEvent[];
     },
     enabled: enabled && isAuthenticated,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: false, // Don't retry failed requests
   });
 
   // Fetch trending events for unauthenticated users or as fallback
   const trendingQuery = useQuery({
     queryKey: ['event-recommendations', 'trending', limit],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_trending_events', {
-        p_limit: limit
-      });
+      try {
+        const { data, error } = await supabase.rpc('get_trending_events', {
+          p_limit: limit
+        });
 
-      if (error) {
-        console.error('Error fetching trending events:', error);
-        throw error;
+        // Silently handle errors - database function might not exist or have schema issues
+        if (error) {
+          // Only log unexpected errors (not function not found or schema errors)
+          if (error.code !== '42883' && error.code !== '42804' && !error.message?.includes('does not exist')) {
+            console.error('Error fetching trending events:', error);
+          }
+          return [] as RecommendedEvent[];
+        }
+
+        return (data || []) as RecommendedEvent[];
+      } catch (err) {
+        // Silently return empty array to prevent console spam
+        return [] as RecommendedEvent[];
       }
-
-      return (data || []) as RecommendedEvent[];
     },
     enabled: enabled && !isAuthenticated,
     staleTime: 10 * 60 * 1000, // Cache for 10 minutes
+    retry: false, // Don't retry failed requests
   });
 
   // Use personalized for authenticated, trending for others

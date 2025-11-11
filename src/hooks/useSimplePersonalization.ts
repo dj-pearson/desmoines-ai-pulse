@@ -67,13 +67,15 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     if (!user?.id) return null;
 
     try {
-      const { data: searches } = await supabase
+      const { data: searches, error } = await supabase
         .from('search_analytics')
         .select('query, category, location, price_filter')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(20);
 
+      // Silently handle permission errors
+      if (error) return null;
       if (!searches || searches.length === 0) return null;
 
       // Analyze search patterns
@@ -88,7 +90,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
         searchCount: searches.length
       };
     } catch (error) {
-      console.log('Error getting user preferences:', error);
+      // Silently handle errors
       return null;
     }
   };
@@ -96,7 +98,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
   const getTrendingContent = async () => {
     try {
       const timeThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      
+
       let query = supabase
         .from('user_analytics')
         .select('content_type, content_id, event_type')
@@ -106,13 +108,15 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
         query = query.eq('content_type', contentType);
       }
 
-      const { data: analytics } = await query;
+      const { data: analytics, error } = await query;
 
+      // Silently handle permission errors
+      if (error) return [];
       if (!analytics) return [];
 
       // Calculate trending scores
       const contentScores: { [key: string]: any } = {};
-      
+
       analytics.forEach(item => {
         const key = `${item.content_type}:${item.content_id}`;
         if (!contentScores[key]) {
@@ -123,7 +127,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
             reason: 'trending'
           };
         }
-        
+
         switch (item.event_type) {
           case 'view': contentScores[key].score += 1; break;
           case 'click': contentScores[key].score += 2; break;
@@ -135,9 +139,9 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
       return Object.values(contentScores)
         .sort((a: any, b: any) => b.score - a.score)
         .slice(0, 20);
-        
+
     } catch (error) {
-      console.log('Error getting trending content:', error);
+      // Silently handle errors
       return [];
     }
   };
@@ -146,16 +150,18 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
     if (!user?.id) return [];
 
     try {
-      const { data: recentViews } = await supabase
+      const { data: recentViews, error } = await supabase
         .from('user_analytics')
         .select('content_type, content_id, event_type, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(10);
 
+      // Silently handle permission errors
+      if (error) return [];
       return recentViews || [];
     } catch (error) {
-      console.log('Error getting recent activity:', error);
+      // Silently handle errors
       return [];
     }
   };
@@ -279,7 +285,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
 
   const trackRecommendationClick = async (recommendation: SimpleRecommendation) => {
     try {
-      await supabase.from('user_analytics').insert({
+      const { error } = await supabase.from('user_analytics').insert({
         session_id: sessionId,
         user_id: user?.id,
         event_type: 'click',
@@ -289,8 +295,11 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
         user_agent: navigator.userAgent,
         page_url: window.location.href
       });
+
+      // Silently handle permission errors - analytics are optional
+      if (error) return;
     } catch (error) {
-      console.log('Error tracking recommendation click:', error);
+      // Silently handle all errors - analytics failures shouldn't affect user experience
     }
   };
 
