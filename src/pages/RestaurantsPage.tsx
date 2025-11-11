@@ -1,5 +1,3 @@
-// @ts-nocheck - Temporarily disabled pending database migrations
-
 import { useState, useEffect, lazy, Suspense } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";

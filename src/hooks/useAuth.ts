@@ -1,4 +1,3 @@
-// @ts-nocheck - Temporarily disabled pending database migrations
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
@@ -30,13 +29,36 @@ export function useAuth() {
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
-      const {
-        data: { session },
-        error,
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
 
-      if (error) {
-        console.error("Error getting session:", error);
+        if (error) {
+          console.error("Error getting session:", error);
+          setAuthState({
+            user: null,
+            session: null,
+            isLoading: false,
+            isAuthenticated: false,
+            isAdmin: false,
+          });
+          return;
+        }
+
+        // Wait for admin check to complete before setting final state
+        const isAdmin = await checkIsAdmin(session?.user);
+
+        setAuthState({
+          user: session?.user || null,
+          session,
+          isLoading: false,
+          isAuthenticated: !!session,
+          isAdmin,
+        });
+      } catch (error) {
+        console.error("Error initializing auth:", error);
         setAuthState({
           user: null,
           session: null,
@@ -44,18 +66,7 @@ export function useAuth() {
           isAuthenticated: false,
           isAdmin: false,
         });
-        return;
       }
-
-      const isAdmin = await checkIsAdmin(session?.user);
-
-      setAuthState({
-        user: session?.user || null,
-        session,
-        isLoading: false,
-        isAuthenticated: !!session,
-        isAdmin,
-      });
     };
 
     getInitialSession();
@@ -64,24 +75,26 @@ export function useAuth() {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Only synchronous state updates here to prevent deadlock
-      setAuthState({
-        user: session?.user || null,
-        session,
-        isLoading: false,
-        isAuthenticated: !!session,
-        isAdmin: false, // Will be updated after the timeout
-      });
+      try {
+        // Wait for admin check before updating state to prevent race conditions
+        const isAdmin = session?.user ? await checkIsAdmin(session.user) : false;
 
-      // Defer admin check to prevent Supabase deadlock
-      if (session?.user) {
-        setTimeout(async () => {
-          const isAdmin = await checkIsAdmin(session.user);
-          setAuthState(prev => ({
-            ...prev,
-            isAdmin
-          }));
-        }, 0);
+        setAuthState({
+          user: session?.user || null,
+          session,
+          isLoading: false,
+          isAuthenticated: !!session,
+          isAdmin,
+        });
+      } catch (error) {
+        console.error("Error handling auth state change:", error);
+        setAuthState({
+          user: session?.user || null,
+          session,
+          isLoading: false,
+          isAuthenticated: !!session,
+          isAdmin: false,
+        });
       }
     });
 
@@ -92,81 +105,56 @@ export function useAuth() {
     user: User | null | undefined
   ): Promise<boolean> => {
     if (!user) {
-      console.log("checkIsAdmin: No user provided");
       return false;
     }
 
     // Check cache first
     const cached = adminStatusCache.get(user.id);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-      console.log("checkIsAdmin: Using cached result for user:", user.id, "isAdmin:", cached.isAdmin);
       return cached.isAdmin;
     }
 
     // Check if there's already a pending check for this user
     const pending = pendingChecks.get(user.id);
     if (pending) {
-      console.log("checkIsAdmin: Reusing pending check for user:", user.id);
       return pending;
     }
-
-    console.log("checkIsAdmin: Checking admin status for user:", user.id);
 
     // Create the promise for this check
     const checkPromise = (async () => {
       try {
         // Check user role from user_roles table first
-        try {
-          const { data, error } = await supabase
-            .from("user_roles")
-            .select("role")
-            .eq("user_id", user.id)
-            .maybeSingle();
+        const { data: rolesData, error: rolesError } = await supabase
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
 
-          console.log("checkIsAdmin: user_roles query result:", { data, error });
-
-          if (!error && data?.role) {
-            const isAdmin = data.role === 'admin' || data.role === 'root_admin';
-            console.log("checkIsAdmin: Found role in user_roles:", data.role, "isAdmin:", isAdmin);
-            
-            // Cache the result
-            adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-            
-            return isAdmin;
-          }
-        } catch (error) {
-          console.error("Error checking user_roles:", error);
+        if (!rolesError && rolesData?.role) {
+          const isAdmin = rolesData.role === 'admin' || rolesData.role === 'root_admin';
+          adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+          return isAdmin;
         }
 
         // Fallback: Check profiles table user_role column
-        try {
-          const { data, error } = await supabase
-            .from("profiles")
-            .select("user_role")
-            .eq("user_id", user.id)
-            .maybeSingle();
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("user_role")
+          .eq("user_id", user.id)
+          .maybeSingle();
 
-          console.log("checkIsAdmin: profiles query result:", { data, error });
-
-          if (!error && data?.user_role) {
-            const isAdmin = data.user_role === 'admin' || data.user_role === 'root_admin';
-            console.log("checkIsAdmin: Found role in profiles:", data.user_role, "isAdmin:", isAdmin);
-            
-            // Cache the result
-            adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-            
-            return isAdmin;
-          }
-        } catch (error) {
-          console.error("Error checking profiles:", error);
+        if (!profileError && profileData?.user_role) {
+          const isAdmin = profileData.user_role === 'admin' || profileData.user_role === 'root_admin';
+          adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+          return isAdmin;
         }
 
-        console.log("checkIsAdmin: No admin role found, returning false");
-        
-        // Cache the negative result too
+        // Cache the negative result
         adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
-        
-        // Security Fix: No email fallback - all admin access must be through database roles
+        return false;
+      } catch (error) {
+        console.error("Error checking admin status:", error);
+        // Don't cache errors - allow retry on next check
         return false;
       } finally {
         // Remove from pending checks when done
