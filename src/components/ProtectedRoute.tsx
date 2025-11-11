@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -25,6 +25,17 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
   const { user, isLoading, isAdmin } = useAuth();
   const location = useLocation();
+
+  // Clear any stored errors on successful navigation to a protected route
+  useEffect(() => {
+    if (user && !isLoading) {
+      try {
+        sessionStorage.removeItem('app_errors');
+      } catch (e) {
+        // Ignore storage errors
+      }
+    }
+  }, [user, isLoading]);
 
   // CRITICAL: Show loading state while auth is initializing
   // This prevents premature redirects during session restoration

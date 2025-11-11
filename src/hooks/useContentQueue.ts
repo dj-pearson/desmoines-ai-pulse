@@ -1,4 +1,3 @@
-// @ts-nocheck - Temporarily disabled pending database migrations
 /**
  * Content Queue Hook
  * Manages content submissions awaiting approval

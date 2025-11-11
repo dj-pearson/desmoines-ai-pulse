@@ -16,10 +16,6 @@ if (import.meta.env.PROD && (!import.meta.env.VITE_SUPABASE_URL || !import.meta.
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// SECURITY FIX: Enhanced session configuration with timeout
-const SESSION_TIMEOUT_SECONDS = 3600; // 1 hour idle timeout
-const MAX_SESSION_DURATION_SECONDS = 28800; // 8 hours max session
-
 export const supabase = createClient<Database>(
   SUPABASE_URL,
   SUPABASE_PUBLISHABLE_KEY,
@@ -40,49 +36,6 @@ export const supabase = createClient<Database>(
   }
 );
 
-// SECURITY FIX: Session timeout monitoring
-let lastActivityTime = Date.now();
-let sessionStartTime = Date.now();
-
-// Track user activity
-const updateActivity = () => {
-  lastActivityTime = Date.now();
-};
-
-// Monitor for user activity
-if (typeof window !== 'undefined') {
-  ['mousedown', 'keydown', 'scroll', 'touchstart'].forEach(event => {
-    document.addEventListener(event, updateActivity, { passive: true });
-  });
-
-  // Check session timeout every minute
-  setInterval(async () => {
-    const now = Date.now();
-    const idleTime = now - lastActivityTime;
-    const sessionDuration = now - sessionStartTime;
-
-    // Check idle timeout (1 hour of inactivity)
-    if (idleTime > SESSION_TIMEOUT_SECONDS * 1000) {
-      console.warn('Session timeout due to inactivity');
-      await supabase.auth.signOut();
-      sessionStartTime = Date.now();
-      return;
-    }
-
-    // Check max session duration (8 hours total)
-    if (sessionDuration > MAX_SESSION_DURATION_SECONDS * 1000) {
-      console.warn('Session timeout due to maximum duration exceeded');
-      await supabase.auth.signOut();
-      sessionStartTime = Date.now();
-      return;
-    }
-  }, 60000); // Check every minute
-
-  // Reset session start time on login
-  supabase.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_IN') {
-      sessionStartTime = Date.now();
-      lastActivityTime = Date.now();
-    }
-  });
-}
+// Session timeout is now handled by Supabase's built-in token refresh mechanism
+// This prevents mid-navigation logouts and race conditions
+// Supabase automatically refreshes tokens before expiry and handles session management

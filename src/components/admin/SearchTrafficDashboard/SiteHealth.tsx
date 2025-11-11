@@ -1,4 +1,3 @@
-// @ts-nocheck - Temporarily disabled pending database migrations
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";

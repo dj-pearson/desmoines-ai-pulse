@@ -26,8 +26,34 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     // Don't log SES-related errors as they're from browser extensions
-    if (import.meta.env.DEV && !error.message.includes('SES') && !error.message.includes('lockdown')) {
-      console.error('Error Boundary caught an error:', error, errorInfo);
+    if (error.message.includes('SES') || error.message.includes('lockdown')) {
+      return;
+    }
+
+    // Comprehensive error logging for debugging navigation issues
+    const errorDetails = {
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+      timestamp: new Date().toISOString(),
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+    };
+
+    // Log detailed error information
+    console.error('🔴 Error Boundary caught an error:', errorDetails);
+
+    // In production, you would send this to an error tracking service
+    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
+
+    // Store error in sessionStorage for debugging (cleared on successful navigation)
+    try {
+      const recentErrors = JSON.parse(sessionStorage.getItem('app_errors') || '[]');
+      recentErrors.push(errorDetails);
+      // Keep only last 10 errors
+      sessionStorage.setItem('app_errors', JSON.stringify(recentErrors.slice(-10)));
+    } catch (storageError) {
+      console.error('Failed to store error details:', storageError);
     }
   }
 
