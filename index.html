@@ -8,7 +8,7 @@
     />
     <meta name="cache-version" content="3.0.0" />
 
-    <!-- SECURITY FIX: Content Security Policy -->
+    <!-- SECURITY FIX: Content Security Policy (Meta tag as fallback - HTTP headers take precedence) -->
     <meta
       http-equiv="Content-Security-Policy"
       content="
@@ -17,7 +17,7 @@
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com data:;
         img-src 'self' data: https: http:;
-        connect-src 'self' https://wtkhfqpmcegzcbngroui.supabase.co https://www.google-analytics.com https://api.ipify.org https://cloudflareinsights.com;
+        connect-src 'self' https://wtkhfqpmcegzcbngroui.supabase.co wss://wtkhfqpmcegzcbngroui.supabase.co https://www.google-analytics.com https://api.ipify.org https://cloudflareinsights.com https://static.cloudflareinsights.com;
         frame-ancestors 'none';
         base-uri 'self';
         form-action 'self';
