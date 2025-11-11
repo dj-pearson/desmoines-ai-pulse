@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus } from "lucide-react";
+import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, MessageSquare, Phone, Mic, Brain, Zap, TrendingUp } from "lucide-react";
 import { downloadICS } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
@@ -85,30 +85,51 @@ export default function Index() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": "Des Moines Insider",
-    "alternateName": "DSM Insider",
+    "name": "Des Moines AI Pulse",
+    "alternateName": "DSM AI Pulse",
     "url": "https://desmoinesinsider.com",
-    "description": "Your complete guide to Des Moines events, restaurants, and attractions. Discover what's happening in the Des Moines metro area.",
+    "description": "First truly conversational AI city guide for Des Moines. Context-aware recommendations via web, SMS, voice assistants, and ChatGPT. Semantic search, behavioral learning, and predictive analytics for intelligent event and restaurant discovery.",
+    "applicationCategory": "City Guide, AI Assistant, Event Discovery",
+    "keywords": "conversational AI, semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, Des Moines events",
     "publisher": {
       "@type": "Organization",
-      "name": "Des Moines Insider",
+      "name": "Des Moines AI Pulse",
+      "description": "AI-powered conversational city guide platform",
       "logo": {
         "@type": "ImageObject",
         "url": "https://desmoinesinsider.com/DMI-Logo.png"
       }
     },
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": {
-        "@type": "EntryPoint",
-        "urlTemplate": "https://desmoinesinsider.com/events?search={search_term_string}"
+    "potentialAction": [
+      {
+        "@type": "SearchAction",
+        "target": {
+          "@type": "EntryPoint",
+          "urlTemplate": "https://desmoinesinsider.com/events?search={search_term_string}",
+          "actionPlatform": [
+            "http://schema.org/DesktopWebPlatform",
+            "http://schema.org/MobileWebPlatform",
+            "http://schema.org/IOSPlatform",
+            "http://schema.org/AndroidPlatform"
+          ]
+        },
+        "query-input": "required name=search_term_string"
       },
-      "query-input": "required name=search_term_string"
-    },
+      {
+        "@type": "InteractAction",
+        "name": "SMS Concierge",
+        "description": "Text-based AI assistant for event recommendations"
+      },
+      {
+        "@type": "InteractAction",
+        "name": "Voice Assistant",
+        "description": "Alexa and Google Assistant integration for hands-free discovery"
+      }
+    ],
     "sameAs": [
-      "https://www.facebook.com/desmoinesinsider",
-      "https://www.twitter.com/desmoinesinsider",
-      "https://www.instagram.com/desmoinesinsider"
+      "https://www.facebook.com/desmoinespulse",
+      "https://www.twitter.com/desmoinespulse",
+      "https://www.instagram.com/desmoinespulse"
     ]
   };
 
@@ -194,9 +215,9 @@ export default function Index() {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
-      <SEOEnhancedHead 
-        title="Des Moines Insider - Your Complete Guide to DSM Events, Restaurants & Attractions"
-        description="Discover the best events, restaurants, and attractions in Des Moines, Iowa. Find upcoming concerts, festivals, dining spots, and things to do in the Des Moines metro area."
+      <SEOEnhancedHead
+        title="Des Moines AI Pulse - Conversational City Guide | AI-Powered Event & Restaurant Discovery"
+        description="First truly conversational AI city guide for Des Moines, Iowa. Get personalized recommendations via web, SMS, voice assistant, or ChatGPT. Semantic search understands intent. Context-aware intelligence learns your preferences. Proactive assistance across all channels. Beyond directories—your intelligent companion for discovering the best events, restaurants, and attractions in Des Moines."
         url="https://desmoinesinsider.com/"
         type="website"
         structuredData={structuredData}
@@ -216,37 +237,179 @@ export default function Index() {
             <Hero3DCityscape />
           </Suspense> */}
           <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div className="inline-flex items-center gap-2 bg-[#FFD700]/20 backdrop-blur-sm border border-[#FFD700]/30 rounded-full px-4 py-2 mb-6">
+              <Brain className="h-4 w-4 text-[#FFD700]" />
+              <span className="text-sm text-[#FFD700] font-semibold">First AI-Powered Conversational City Guide</span>
+            </div>
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 drop-shadow-lg">
-              Discover Des Moines Like Never Before
+              Your Intelligent Companion for<br />Des Moines Discovery
             </h1>
             <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto drop-shadow-md">
-              Your AI-powered guide to the best events, restaurants,
-              attractions, and family activities in Des Moines, Iowa. Real-time
-              updates, personalized recommendations, and comprehensive local
-              insights.
+              Beyond search. Beyond directories. Des Moines AI Pulse is the first truly conversational city guide that understands context, learns from your preferences, and proactively assists you—across web, SMS, voice, and ChatGPT.
             </p>
+
+            {/* Multi-channel access badges */}
+            <div className="flex flex-wrap items-center justify-center gap-3 mb-12">
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                <MessageSquare className="h-4 w-4 text-[#FFD700]" />
+                <span className="text-sm text-white/90">SMS Concierge</span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                <Mic className="h-4 w-4 text-[#FFD700]" />
+                <span className="text-sm text-white/90">Voice Assistant</span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                <Sparkles className="h-4 w-4 text-[#FFD700]" />
+                <span className="text-sm text-white/90">ChatGPT Plugin</span>
+              </div>
+              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                <Brain className="h-4 w-4 text-[#FFD700]" />
+                <span className="text-sm text-white/90">Web Intelligence</span>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 text-center">
               <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-3xl font-bold text-[#FFD700]">200+</div>
-                <p className="text-sm text-white/80">Events Monthly</p>
+                <div className="text-3xl font-bold text-[#FFD700]">1000+</div>
+                <p className="text-sm text-white/80">Events Tracked</p>
               </div>
               <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
                 <div className="text-3xl font-bold text-[#FFD700]">300+</div>
-                <p className="text-sm text-white/80">Restaurants</p>
+                <p className="text-sm text-white/80">Restaurants & Venues</p>
               </div>
               <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-3xl font-bold text-[#FFD700]">50+</div>
-                <p className="text-sm text-white/80">Attractions</p>
+                <div className="text-3xl font-bold text-[#FFD700]">AI</div>
+                <p className="text-sm text-white/80">Semantic Search</p>
               </div>
               <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-3xl font-bold text-[#FFD700]">100+</div>
-                <p className="text-sm text-white/80">Playgrounds</p>
+                <div className="text-3xl font-bold text-[#FFD700]">24/7</div>
+                <p className="text-sm text-white/80">Live Intelligence</p>
               </div>
             </div>
           </div>
         </section>
 
         <SearchSection onSearch={handleSearch} />
+
+        {/* AI Conversational Features Section */}
+        <section className="py-16 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-12">
+              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+                More Than a Directory—Your AI-Powered City Companion
+              </h2>
+              <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+                Des Moines AI Pulse goes beyond traditional event listings. We understand context, learn from your behavior, and proactively guide you to the best experiences across every channel.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {/* Conversational Intelligence */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full p-3">
+                    <Brain className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Conversational Intelligence</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Ask naturally, like you're talking to a local friend. "Find romantic dinner spots with live music tonight" or "Plan a family-friendly Saturday morning."
+                </p>
+                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                  <Sparkles className="h-4 w-4" />
+                  <span>Semantic search understands intent</span>
+                </div>
+              </div>
+
+              {/* Multi-Channel Access */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-3">
+                    <MessageSquare className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Access Anywhere</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Get recommendations via web, SMS, voice (Alexa/Google), or ChatGPT. Your city guide follows you everywhere you need it.
+                </p>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">Web</span>
+                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">SMS</span>
+                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">Voice</span>
+                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">ChatGPT</span>
+                </div>
+              </div>
+
+              {/* Context-Aware Recommendations */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-3">
+                    <Zap className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Context-Aware</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  We consider time, weather, location, your past preferences, and real-time availability to suggest the perfect experiences for you.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <Brain className="h-4 w-4" />
+                  <span>Learns from your behavior</span>
+                </div>
+              </div>
+
+              {/* Proactive Assistance */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-3">
+                    <TrendingUp className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Proactive Intelligence</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Get alerts for events you'll love, weather changes affecting your plans, and last-minute availability—before you even ask.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                  <Sparkles className="h-4 w-4" />
+                  <span>Smart notifications & alerts</span>
+                </div>
+              </div>
+
+              {/* Predictive Analytics */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-3">
+                    <TrendingUp className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Predictive Insights</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  See demand forecasts, optimal visit times, and sell-out predictions. Make smarter decisions with data-driven intelligence.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                  <TrendingUp className="h-4 w-4" />
+                  <span>Real-time demand analytics</span>
+                </div>
+              </div>
+
+              {/* Automated Trip Planning */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-indigo-100 dark:bg-indigo-900/30 rounded-full p-3">
+                    <Calendar className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">AI Trip Planner</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Generate complete day-by-day itineraries in seconds. Optimized for travel times, variety, and your unique interests.
+                </p>
+                <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+                  <Sparkles className="h-4 w-4" />
+                  <span>Automated itinerary generation</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* All-Inclusive Dashboard */}
         <div data-dashboard="all-inclusive">
@@ -352,20 +515,28 @@ export default function Index() {
         <section className="py-16 bg-background">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <FAQSection
-              title="Common Questions About Des Moines"
-              description="Get answers to frequently asked questions about events, restaurants, attractions, and things to do in Des Moines, Iowa."
+              title="Frequently Asked Questions About Des Moines AI Pulse"
+              description="Learn how our conversational AI technology transforms the way you discover and experience Des Moines."
               faqs={[
                 {
-                  question: "What are the best things to do in Des Moines this weekend?",
-                  answer: "Des Moines offers diverse weekend activities including live music at venues like Hoyt Sherman Place and Wooly's, family events at Science Center of Iowa, seasonal farmers markets in Downtown and East Village, outdoor activities at Gray's Lake and Raccoon River Park, and dining experiences in over 300 local restaurants. Check our Events page for real-time updates on concerts, festivals, sports events, and family activities happening this weekend."
+                  question: "What makes Des Moines AI Pulse different from other event directories?",
+                  answer: "Des Moines AI Pulse is the first truly conversational city guide powered by advanced AI. Unlike traditional directories that require manual searching, our platform understands natural language, learns from your behavior, and proactively recommends experiences across multiple channels (web, SMS, voice assistants, ChatGPT). We use semantic search to understand intent—ask 'romantic dinner with live music' and get context-aware results, not just keyword matches. Our behavioral intelligence and predictive analytics create a personalized experience that gets smarter the more you use it."
                 },
                 {
-                  question: "How do I find free events in Des Moines?",
-                  answer: "Des Moines Insider tracks over 200 monthly events with detailed price information. Use our advanced search filters to select 'Free' in the price range option. Popular free activities include Downtown Farmers Market (April-October), Sculpture Park at Western Gateway, public library events, outdoor concerts at Cowles Commons, and seasonal festivals. Our AI-powered system updates free events daily with verified information."
+                  question: "How can I access Des Moines AI Pulse recommendations?",
+                  answer: "Access recommendations your way: (1) Web - Browse our intelligent platform with semantic search, (2) SMS - Text your questions to our AI concierge for instant recommendations, (3) Voice - Ask Alexa or Google Assistant about Des Moines events and dining, (4) ChatGPT - Use our plugin for conversational planning. All channels sync your preferences and learn from your interactions to provide increasingly personalized suggestions. Your city guide follows you wherever you need it."
                 },
                 {
-                  question: "What neighborhoods should I explore in Des Moines?",
-                  answer: "Des Moines features seven distinct neighborhoods: Downtown (business district and entertainment), East Village (boutiques and trendy dining), Sherman Hill (historic architecture), Beaverdale (family-friendly community), Ingersoll (local shops and cafes), Valley Junction in West Des Moines (antiques and art galleries), and Drake (university area with student culture). Each neighborhood page on our site includes detailed guides with restaurant recommendations, attractions, and events specific to that area."
+                  question: "How does the AI understand what I'm looking for?",
+                  answer: "Our semantic search technology powered by advanced AI models understands the meaning and context of your queries, not just keywords. Ask naturally like 'romantic dinner with live jazz' or 'family activities for rainy Saturday,' and our AI analyzes intent, preferences, constraints, and real-time factors (weather, availability, time of day). The system learns from your interactions—the more you use it, the better it understands your unique preferences. We combine natural language processing, behavioral analytics, and predictive intelligence to deliver personalized, context-aware recommendations."
+                },
+                {
+                  question: "What is the AI Trip Planner and how does it work?",
+                  answer: "The AI Trip Planner generates complete day-by-day itineraries in seconds based on your interests, dates, budget, and party size. Simply input your preferences (food, arts, music, family, outdoors), and our AI optimizes a schedule considering: travel times between locations, activity variety, optimal timing (morning/afternoon/evening appropriateness), budget constraints, and real-time availability. The planner includes restaurants near events, backup options for weather changes, and reservation links. Export to PDF or add activities directly to your calendar."
+                },
+                {
+                  question: "How does behavioral learning improve my experience?",
+                  answer: "Our platform tracks your interactions (searches, favorites, bookings) to build an intelligent profile of your preferences—completely privacy-first and anonymized. Over time, the AI learns patterns: if you frequently search for outdoor events, we'll prioritize parks and festivals; if you favor Italian restaurants, similar venues appear higher in recommendations. The system also detects emerging preferences and proactively suggests new experiences you'll likely enjoy. Behavioral intelligence creates a progressively personalized experience unique to you."
                 },
                 {
                   question: "Where can I find the best restaurants in Des Moines?",
@@ -376,16 +547,20 @@ export default function Index() {
                   answer: "Des Moines offers 50+ family attractions including Blank Park Zoo (year-round animal exhibits), Science Center of Iowa (interactive STEM exhibits), Adventureland Park (amusement rides and water park), Living History Farms (interactive farm experience), and 100+ mapped playgrounds with safety and accessibility information. Popular indoor options include Prairie Meadows (family entertainment), and numerous museums. Our platform provides age appropriateness, accessibility details, and current hours for all attractions."
                 },
                 {
-                  question: "How often is event information updated on Des Moines Insider?",
-                  answer: "Events are updated daily through our AI-powered web scraping system that monitors over 50 official sources including venue websites, municipal calendars, and event organizers. We capture 98% of public events in the Des Moines metro area with an average 24-hour update cycle. Restaurant information updates weekly, and attraction details are verified monthly. All content includes timestamp information and real-time status updates for accuracy."
+                  question: "What are predictive insights and how do they help me?",
+                  answer: "Our predictive analytics engine analyzes historical data, current trends, and real-time signals to forecast demand and optimize your experience. See predictions like 'High demand—73% of similar events sold out' or 'Best time to visit: Tuesday 7pm (20% less busy).' For businesses, we provide demand forecasts, pricing recommendations, and optimal staffing insights. These data-driven predictions help you avoid crowds, secure tickets before events sell out, and discover hidden gems at ideal times."
+                },
+                {
+                  question: "How does Des Moines AI Pulse stay current with events and venues?",
+                  answer: "Our AI-powered web scraping and data aggregation system monitors 50+ official sources 24/7, capturing 98% of public events in the Des Moines metro area. Updates occur in real-time with an average 24-hour refresh cycle. The AI automatically detects new restaurants (within 48 hours of opening), venue changes, pricing updates, and schedule modifications. We combine automated scraping with human verification, AI-enhanced descriptions, and community contributions to ensure accuracy and freshness across 1000+ events, 300+ restaurants, and 50+ attractions."
                 },
                 {
                   question: "What areas does Des Moines Insider cover?",
                   answer: "We provide comprehensive coverage for the entire Des Moines metropolitan area including Des Moines (all neighborhoods), West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Windsor Heights. Our geographic radius extends 50 miles from downtown Des Moines (coordinates: 41.5868°N, 93.6250°W), covering 15+ suburban communities in Polk County and surrounding areas. Location-based filtering helps you find events and restaurants near your specific area."
                 },
                 {
-                  question: "Can I get personalized event recommendations?",
-                  answer: "Yes! Create a free Des Moines Insider account to receive AI-powered personalized recommendations based on your interests, location preferences, past activity, and favorite venues. Personalized users see 40% more relevant suggestions and can save favorite events, create custom alerts for new events matching their interests, and receive notifications for last-minute ticket availability. Our machine learning system improves recommendations as you engage with the platform."
+                  question: "How do I get started with personalized AI recommendations?",
+                  answer: "Create a free account to unlock the full power of our AI intelligence. Once registered, the system begins learning from your interactions—searches, favorites, bookings, and browsing patterns. Within days, you'll receive highly personalized recommendations tailored to your unique preferences. Enable notifications for proactive alerts about events you'll love, weather changes affecting saved plans, and last-minute availability. The AI continuously adapts, delivering 40% more relevant suggestions than generic searches. Access your personalized experience across all channels: web, SMS, voice, and ChatGPT."
                 }
               ]}
               showSchema={true}
