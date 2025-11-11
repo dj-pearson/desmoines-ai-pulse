@@ -76,6 +76,21 @@ export default function EventsPage() {
   const [isNearMeActive, setIsNearMeActive] = useState(false);
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
+  // Define handleClearFilters before it's used in keyboard shortcuts
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory("all");
+    setDateFilter(null);
+    setLocation("any-location");
+    setPriceRange("any-price");
+    setIsNearMeActive(false);
+    setShowMobileFilters(false);
+    toast({
+      title: "Filters Cleared",
+      description: "All filters have been reset",
+    });
+  };
+
   // Keyboard shortcuts for filters
   useFilterKeyboardShortcuts({
     enabled: !isMobile,
@@ -307,20 +322,6 @@ export default function EventsPage() {
   // This reduces from N×5 queries to just 3 queries total
   const eventIds = events?.map(e => e.id) || [];
   const { data: batchSocialData } = useBatchEventSocial(eventIds);
-
-  const handleClearFilters = () => {
-    setSearchQuery("");
-    setSelectedCategory("all");
-    setDateFilter(null);
-    setLocation("any-location");
-    setPriceRange("any-price");
-    setIsNearMeActive(false);
-    setShowMobileFilters(false);
-    toast({
-      title: "Filters Cleared",
-      description: "All filters have been reset",
-    });
-  };
 
   // Handle "Near Me" geolocation
   const handleNearMe = () => {
