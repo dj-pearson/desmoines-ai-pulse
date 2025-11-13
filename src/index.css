@@ -183,9 +183,14 @@ All colors MUST be HSL. Touch targets minimum 44px.
   .safe-area-top {
     padding-top: max(1rem, env(safe-area-inset-top));
   }
-  
+
   .safe-area-bottom {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+
+  /* Bottom navigation spacing - prevents content from being hidden behind bottom nav on mobile */
+  .pb-bottom-nav {
+    @apply pb-20 lg:pb-0;
   }
 
   /* Content-visibility for below-the-fold sections */

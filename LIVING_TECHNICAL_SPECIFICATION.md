@@ -1,8 +1,8 @@
 # Living Technical Specification (LTS)
 ## Des Moines AI Pulse Platform
 
-**Document Version:** 1.0
-**Last Updated:** 2025-11-11
+**Document Version:** 1.1
+**Last Updated:** 2025-11-13
 **Status:** Active
 **Purpose:** Single source of truth for the current state of the Des Moines AI Pulse platform
 
@@ -38,12 +38,15 @@ Des Moines AI Pulse is a modern, AI-powered web platform that serves as a compre
 - **Codebase Size:** ~53MB (excluding node_modules and .git)
 - **Documentation Files:** 110+ markdown documents
 - **Database Tables:** 20+ core tables
-- **Edge Functions:** 50+ Supabase Edge Functions
+- **Edge Functions:** 50+ Supabase Edge Functions (~19,372 lines of code)
 - **Frontend Pages:** 45+ React pages
-- **Frontend Components:** 100+ React components
+- **Frontend Components:** 218+ React components
+- **Custom Hooks:** 79+ React hooks
+- **UI Components:** 58+ shadcn/ui primitives
 - **Database Migrations:** 108 migration files
 - **Test Suites:** 10+ Playwright test suites
-- **Supported Devices:** Desktop, Mobile (iOS/Android), Tablet
+- **Content Items:** 1000+ events, 500+ restaurants, 100+ attractions, 75+ playgrounds
+- **Supported Devices:** Desktop, Mobile (iOS/Android via Capacitor), Tablet
 
 ### Project Information
 
@@ -2511,6 +2514,7 @@ npm run test:codegen
 6. Merge to main
 
 **Version History:**
+- v1.1 (2025-11-13) - Updated metrics, component counts, and current state
 - v1.0 (2025-11-11) - Initial creation
 
 ---
