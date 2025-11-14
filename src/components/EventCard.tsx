@@ -14,6 +14,7 @@ import { SocialProofBadge, ViewCountBadge } from "@/components/SocialProofBadge"
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
+import { useViewTracking } from "@/hooks/useViewTracking";
 import { Event } from "@/lib/types";
 import {
   createEventSlugWithCentralTime,
@@ -44,26 +45,20 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
   const { addToRecentlyViewed } = useRecentlyViewed();
-  const [viewCount, setViewCount] = useState(0);
+  const { viewData, trackView } = useViewTracking(event.id);
   const [isNew, setIsNew] = useState(false);
-  const [isTrending, setIsTrending] = useState(false);
 
+  // Check if event is new (created within last 7 days)
   useEffect(() => {
-    // Generate realistic view counts based on event popularity
-    // In production, this would come from actual analytics data
-    const baseViews = Math.floor(Math.random() * 200) + 50;
-    setViewCount(baseViews);
-
-    // Check if event is new (created within last 7 days)
     if (event.created_at) {
       const createdDate = new Date(event.created_at);
       const daysSinceCreated = (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
       setIsNew(daysSinceCreated <= 7);
     }
+  }, [event.created_at]);
 
-    // Determine if trending based on view count
-    setIsTrending(baseViews > 150);
-  }, [event.id, event.created_at]);
+  // Determine if trending based on view data
+  const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
   const handleViewDetails = () => {
     // Track interaction
@@ -73,6 +68,9 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
 
     // Add to recently viewed
     addToRecentlyViewed(event);
+
+    // Track view in analytics
+    trackView();
 
     onViewDetails(event);
   };
@@ -107,7 +105,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
         {/* Overlay badges for urgency/social proof */}
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-2">
-            {isTrending && <SocialProofBadge type="trending" count={viewCount} size="sm" />}
+            {isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
             {isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
           </div>
 
@@ -163,8 +161,8 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
         </div>
 
         {/* Social Proof - View Count */}
-        {viewCount > 20 && (
-          <ViewCountBadge viewCount={viewCount} timeframe="last hour" />
+        {viewData.recent_views > 20 && (
+          <ViewCountBadge viewCount={viewData.recent_views} timeframe="last hour" />
         )}
 
         <div className="flex items-center justify-between pt-2">

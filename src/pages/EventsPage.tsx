@@ -60,7 +60,12 @@ export default function EventsPage() {
     end?: Date;
     mode: "single" | "range" | "preset";
     preset?: string;
-  } | null>(null);
+  } | null>({
+    mode: "preset",
+    preset: "next_7_days",
+    start: new Date(),
+    end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+  });
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(!isMobile); // Hide filters by default on mobile
