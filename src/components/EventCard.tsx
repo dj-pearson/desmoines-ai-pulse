@@ -13,6 +13,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { SocialProofBadge, ViewCountBadge } from "@/components/SocialProofBadge";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
 import { Event } from "@/lib/types";
 import {
   createEventSlugWithCentralTime,
@@ -42,6 +43,7 @@ interface EventCardProps {
 export default function EventCard({ event, onViewDetails }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
+  const { addToRecentlyViewed } = useRecentlyViewed();
   const [viewCount, setViewCount] = useState(0);
   const [isNew, setIsNew] = useState(false);
   const [isTrending, setIsTrending] = useState(false);
@@ -68,6 +70,10 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
     if (isAuthenticated) {
       trackInteraction(event.id, "view");
     }
+
+    // Add to recently viewed
+    addToRecentlyViewed(event);
+
     onViewDetails(event);
   };
 
