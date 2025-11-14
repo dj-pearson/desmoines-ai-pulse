@@ -82,8 +82,13 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // Chart libraries - DO NOT bundle, let them load with their components
-          // Recharts has circular dependencies that break vendor bundles
-          if (id.includes('recharts')) {
+          // Recharts and its dependencies have circular dependencies that break vendor bundles
+          // victory-vendor includes D3 which has known circular dependency issues
+          if (id.includes('recharts') ||
+              id.includes('victory-vendor') ||
+              id.includes('react-smooth') ||
+              id.includes('recharts-scale') ||
+              id.includes('d3-')) {
             return undefined; // Load with component
           }
 
@@ -128,10 +133,14 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // All other node_modules go into vendor chunk
-          // EXCEPT: leaflet (circular dependency with maps), recharts (circular dependency)
+          // EXCEPT: leaflet (circular dependency with maps), recharts ecosystem (circular dependencies)
           if (id.includes('node_modules') &&
               !id.includes('leaflet') &&
-              !id.includes('recharts')) {
+              !id.includes('recharts') &&
+              !id.includes('victory-vendor') &&
+              !id.includes('react-smooth') &&
+              !id.includes('recharts-scale') &&
+              !id.includes('d3-')) {
             return 'vendor-misc';
           }
         },
