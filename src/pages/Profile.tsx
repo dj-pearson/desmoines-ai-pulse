@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import PreferencesManager from "@/components/PreferencesManager";
+import { PreferencesSettings } from "@/components/PreferencesSettings";
 import { FavoritesView } from "@/components/FavoritesView";
 import { User, Mail, Phone, MapPin, Settings, Save, Edit, Users, Heart, Calendar, Trophy } from "lucide-react";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
@@ -458,7 +458,7 @@ export default function Profile() {
 
           {/* Settings Tab */}
           <TabsContent value="settings" className="mt-6">
-            <PreferencesManager />
+            <PreferencesSettings />
           </TabsContent>
         </Tabs>
       </div>

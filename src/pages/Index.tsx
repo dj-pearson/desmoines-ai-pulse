@@ -30,9 +30,11 @@ import Newsletter from "@/components/Newsletter";
 import { EventSocialHub } from "@/components/EventSocialHub";
 import { FAQSection } from "@/components/FAQSection";
 import { OnboardingModal } from "@/components/OnboardingModal";
+import { PreferencesOnboarding } from "@/components/PreferencesOnboarding";
 import { PersonalizedRecommendations } from "@/components/PersonalizedRecommendations";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
+import { useUserPreferences } from "@/hooks/useUserPreferences";
 
 // Lazy load Three.js component to reduce initial bundle size
 // Temporarily disabled due to React Scheduler compatibility issue
@@ -60,12 +62,13 @@ export default function Index() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const { toast } = useToast();
   const { isAuthenticated, user } = useAuth();
+  const { preferences, isLoading: preferencesLoading } = useUserPreferences();
 
-  // Check if user should see onboarding
+  // Check if user should see preferences onboarding
   useEffect(() => {
-    if (isAuthenticated && user) {
-      const hasSeenOnboarding = localStorage.getItem(`onboarding_complete_${user.id}`);
-      if (!hasSeenOnboarding) {
+    if (isAuthenticated && user && !preferencesLoading) {
+      // Show preferences onboarding if not completed
+      if (!preferences?.onboardingCompleted) {
         // Small delay to let page load before showing modal
         const timer = setTimeout(() => {
           setShowOnboarding(true);
@@ -73,12 +76,9 @@ export default function Index() {
         return () => clearTimeout(timer);
       }
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, preferences, preferencesLoading]);
 
   const handleOnboardingComplete = () => {
-    if (user) {
-      localStorage.setItem(`onboarding_complete_${user.id}`, "true");
-    }
     setShowOnboarding(false);
   };
 
@@ -643,8 +643,13 @@ export default function Index() {
         </DialogContent>
       </Dialog>
 
-      {/* First-time User Onboarding */}
-      {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
+      {/* First-time User Preferences Onboarding */}
+      {showOnboarding && (
+        <PreferencesOnboarding
+          open={showOnboarding}
+          onComplete={handleOnboardingComplete}
+        />
+      )}
     </div>
   );
 }
