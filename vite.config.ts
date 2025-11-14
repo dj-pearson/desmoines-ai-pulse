@@ -81,15 +81,20 @@ export default defineConfig(({ command, mode }) => ({
             return undefined; // Let them stay with the map components
           }
 
-          // Chart libraries - exclude from manual chunking due to circular dependencies
-          // Let Vite handle recharts automatically
+          // Chart libraries - DO NOT bundle, let them load with their components
+          // Recharts has circular dependencies that break vendor bundles
           if (id.includes('recharts')) {
-            return undefined;
+            return undefined; // Load with component
           }
 
           // Calendar libraries - lazy load for calendar pages
-          if (id.includes('@fullcalendar') || id.includes('date-fns')) {
+          if (id.includes('@fullcalendar')) {
             return 'vendor-calendar';
+          }
+
+          // Date utilities - separate from fullcalendar to avoid conflicts
+          if (id.includes('date-fns')) {
+            return 'vendor-dates';
           }
 
           // Form libraries - used across multiple pages
@@ -123,8 +128,10 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // All other node_modules go into vendor chunk
-          // EXCEPT leaflet which should stay with map components
-          if (id.includes('node_modules') && !id.includes('leaflet')) {
+          // EXCEPT: leaflet (circular dependency with maps), recharts (circular dependency)
+          if (id.includes('node_modules') &&
+              !id.includes('leaflet') &&
+              !id.includes('recharts')) {
             return 'vendor-misc';
           }
         },
