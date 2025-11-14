@@ -38,6 +38,10 @@ import {
   Building2,
   FileText,
   X,
+  Gift,
+  Baby,
+  Clock,
+  Utensils,
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
@@ -118,8 +122,11 @@ export default function Header() {
       icon: Calendar,
       priority: true,
     },
+    { href: "/events/free", label: "Free Events", icon: Gift },
+    { href: "/events/kids", label: "Kids & Family", icon: Baby },
     { href: "/weekend", label: "Weekend Guide", icon: CalendarDays },
-    { href: "/restaurants", label: "Restaurants", icon: MapPin },
+    { href: "/restaurants", label: "Restaurants", icon: Utensils },
+    { href: "/restaurants/open-now", label: "Open Now", icon: Clock },
     { href: "/attractions", label: "Attractions", icon: Camera },
     { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
     { href: "/articles", label: "Articles", icon: FileText },
