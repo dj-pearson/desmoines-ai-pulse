@@ -58,7 +58,13 @@ export default defineConfig(({ command, mode }) => ({
         manualChunks: (id) => {
           // Critical dependencies - keep together for fastest initial load
           // INCLUDE react-leaflet here to ensure React context is available
-          if (id.includes('react/') || id.includes('react-dom/') || id.includes('scheduler') || id.includes('react-leaflet') || id.includes('@react-leaflet')) {
+          if (
+            id.includes('react/') || 
+            id.includes('react-dom/') || 
+            id.includes('scheduler') || 
+            id.includes('/react-leaflet') || 
+            id.includes('@react-leaflet')
+          ) {
             return 'vendor-react';
           }
 
@@ -73,7 +79,7 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // Map library (leaflet only - react-leaflet is in vendor-react)
-          if (id.includes('leaflet') && !id.includes('react-leaflet')) {
+          if (id.includes('/leaflet') && !id.includes('/react-leaflet') && !id.includes('@react-leaflet')) {
             return 'vendor-maps';
           }
 
@@ -142,13 +148,13 @@ export default defineConfig(({ command, mode }) => ({
       '@tanstack/react-query',
       '@supabase/supabase-js',
       'lucide-react', // Pre-bundle icons for faster dev
-      'react-leaflet', // Include to ensure proper React bundling
-      'leaflet',
     ],
     exclude: [
       '@react-three/fiber',
       '@react-three/drei',
       'three', // Lazy load heavy 3D libs
+      'react-leaflet', // Exclude to prevent pre-bundling issues
+      'leaflet', // Exclude to load with maps chunk
     ],
   },
 }));
