@@ -10,8 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import EventFeedback from "@/components/EventFeedback";
 import ShareDialog from "@/components/ShareDialog";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { SocialProofBadge, ViewCountBadge } from "@/components/SocialProofBadge";
 import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
+import { useRecentlyViewed } from "@/hooks/useRecentlyViewed";
+import { useViewTracking } from "@/hooks/useViewTracking";
 import { Event } from "@/lib/types";
 import {
   createEventSlugWithCentralTime,
@@ -25,6 +28,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 
 const createSlug = (name: string): string => {
   return name
@@ -40,12 +44,34 @@ interface EventCardProps {
 export default function EventCard({ event, onViewDetails }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
+  const { addToRecentlyViewed } = useRecentlyViewed();
+  const { viewData, trackView } = useViewTracking(event.id);
+  const [isNew, setIsNew] = useState(false);
+
+  // Check if event is new (created within last 7 days)
+  useEffect(() => {
+    if (event.created_at) {
+      const createdDate = new Date(event.created_at);
+      const daysSinceCreated = (Date.now() - createdDate.getTime()) / (1000 * 60 * 60 * 24);
+      setIsNew(daysSinceCreated <= 7);
+    }
+  }, [event.created_at]);
+
+  // Determine if trending based on view data
+  const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
   const handleViewDetails = () => {
     // Track interaction
     if (isAuthenticated) {
       trackInteraction(event.id, "view");
     }
+
+    // Add to recently viewed
+    addToRecentlyViewed(event);
+
+    // Track view in analytics
+    trackView();
+
     onViewDetails(event);
   };
 
@@ -59,20 +85,39 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
   };
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-shadow">
-      {event.image_url && (
-        <img
-          src={event.image_url}
-          alt={event.title}
-          className="w-full h-48 object-cover"
-          loading="lazy"
-          decoding="async"
-          onError={(e) => {
-            const target = e.target as HTMLImageElement;
-            target.style.display = "none";
-          }}
-        />
-      )}
+    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group">
+      {/* Image with overlay badges */}
+      <div className="relative">
+        {event.image_url && (
+          <img
+            src={event.image_url}
+            alt={event.title}
+            className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+            loading="lazy"
+            decoding="async"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement;
+              target.style.display = "none";
+            }}
+          />
+        )}
+
+        {/* Overlay badges for urgency/social proof */}
+        <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
+          <div className="flex flex-col gap-2">
+            {isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
+            {isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
+          </div>
+
+          {/* Distance Badge (only shown in Near Me mode) */}
+          {(event as any).distance_meters && (
+            <Badge variant="secondary" className="text-xs bg-primary text-primary-foreground shadow-lg">
+              <MapPin className="h-3 w-3 mr-1" />
+              {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
+            </Badge>
+          )}
+        </div>
+      </div>
 
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
@@ -80,17 +125,10 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
             {event.category}
           </Badge>
           <div className="flex items-center gap-2">
-            {/* Distance Badge (only shown in Near Me mode) */}
-            {(event as any).distance_meters && (
-              <Badge variant="secondary" className="text-xs bg-primary text-primary-foreground">
-                <MapPin className="h-3 w-3 mr-1" />
-                {((event as any).distance_meters * 0.000621371).toFixed(1)} mi
-              </Badge>
-            )}
             {event.is_enhanced && (
               <Badge variant="secondary" className="text-xs">
                 <Sparkles className="h-3 w-3 mr-1" />
-                Enhanced
+                AI Enhanced
               </Badge>
             )}
           </div>
@@ -121,6 +159,11 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
             </div>
           )}
         </div>
+
+        {/* Social Proof - View Count */}
+        {viewData.recent_views > 20 && (
+          <ViewCountBadge viewCount={viewData.recent_views} timeframe="last hour" />
+        )}
 
         <div className="flex items-center justify-between pt-2">
           <div className="flex gap-2 flex-wrap">

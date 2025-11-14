@@ -1,5 +1,7 @@
 import React from 'react';
 import { useEventRecommendations } from '@/hooks/useEventRecommendations';
+import { useEnhancedRecommendations } from '@/hooks/useEnhancedRecommendations';
+import { useUserPreferences } from '@/hooks/useUserPreferences';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +17,8 @@ import {
   MapPin,
   ChevronRight,
   Info,
+  Settings,
+  Zap,
 } from 'lucide-react';
 
 interface PersonalizedRecommendationsProps {
@@ -32,10 +36,38 @@ export function PersonalizedRecommendations({
 }: PersonalizedRecommendationsProps) {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const { recommendations, isLoading, isPersonalized } = useEventRecommendations({
+  const { preferences } = useUserPreferences();
+
+  // Use enhanced AI recommendations if user has completed onboarding
+  const hasPreferences = preferences?.onboardingCompleted || false;
+
+  const enhancedRecs = useEnhancedRecommendations({
+    limit,
+    enabled: hasPreferences,
+  });
+
+  const fallbackRecs = useEventRecommendations({
     userLocation,
     limit,
+    enabled: !hasPreferences,
   });
+
+  // Choose which recommendation system to use
+  const {
+    recommendations,
+    isLoading,
+    isPersonalized,
+  } = hasPreferences
+    ? {
+        recommendations: enhancedRecs.recommendations,
+        isLoading: enhancedRecs.isLoading,
+        isPersonalized: enhancedRecs.isPersonalized,
+      }
+    : {
+        recommendations: fallbackRecs.recommendations,
+        isLoading: fallbackRecs.isLoading,
+        isPersonalized: fallbackRecs.isPersonalized,
+      };
 
   if (isLoading) {
     return (
@@ -69,30 +101,63 @@ export function PersonalizedRecommendations({
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             {isPersonalized ? (
-              <Sparkles className="h-6 w-6 text-primary" />
+              <div className="relative">
+                <Sparkles className="h-6 w-6 text-primary" />
+                {hasPreferences && (
+                  <div className="absolute -top-1 -right-1">
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                    </span>
+                  </div>
+                )}
+              </div>
             ) : (
               <TrendingUp className="h-6 w-6 text-primary" />
             )}
             <div>
-              <h2 className="text-2xl md:text-3xl font-bold">
-                {isPersonalized ? 'Recommended for You' : 'Trending Events'}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl md:text-3xl font-bold">
+                  {isPersonalized ? 'Recommended for You' : 'Trending Events'}
+                </h2>
+                {hasPreferences && (
+                  <Badge variant="secondary" className="hidden md:flex items-center gap-1 bg-primary/10 text-primary">
+                    <Zap className="h-3 w-3" />
+                    AI Powered
+                  </Badge>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">
-                {isPersonalized
-                  ? 'Events picked based on your interests'
+                {isPersonalized && hasPreferences
+                  ? `Based on your ${preferences?.interests.categories.length || 0} interests & preferences`
+                  : isPersonalized
+                  ? 'Events picked based on your activity'
                   : 'Popular events in Des Moines'}
               </p>
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            onClick={() => navigate('/events')}
-            className="hidden md:flex"
-          >
-            View All
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAuthenticated && !hasPreferences && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/profile?tab=settings')}
+                className="hidden lg:flex"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Set Preferences
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={() => navigate('/events')}
+              className="hidden md:flex"
+            >
+              View All
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -222,12 +287,48 @@ export function PersonalizedRecommendations({
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <Sparkles className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-            <div className="space-y-1">
-              <h4 className="font-semibold text-sm">Smart Recommendations</h4>
-              <p className="text-xs text-muted-foreground">
-                We analyze your favorites, RSVPs, and browsing history to suggest events
-                you'll love. The more you interact, the better our recommendations become!
-              </p>
+            <div className="space-y-1 flex-1">
+              {hasPreferences ? (
+                <>
+                  <h4 className="font-semibold text-sm">AI-Powered Recommendations</h4>
+                  <p className="text-xs text-muted-foreground">
+                    These events are selected using advanced algorithms that consider your{' '}
+                    {preferences?.interests.categories.length || 0} interests, location preferences,
+                    time preferences, and browsing patterns. Each recommendation is scored based on
+                    multiple signals to find events you'll love.
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => navigate('/profile?tab=settings')}
+                      className="h-7 text-xs"
+                    >
+                      <Settings className="h-3 w-3 mr-1" />
+                      Update Preferences
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h4 className="font-semibold text-sm">Smart Recommendations</h4>
+                  <p className="text-xs text-muted-foreground">
+                    We analyze your favorites, RSVPs, and browsing history to suggest events
+                    you'll love. For even better recommendations, set your preferences!
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => navigate('/profile?tab=settings')}
+                      className="h-7 text-xs"
+                    >
+                      <Sparkles className="h-3 w-3 mr-1" />
+                      Set Your Preferences
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

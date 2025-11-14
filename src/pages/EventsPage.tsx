@@ -44,6 +44,7 @@ import {
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import { BackToTop } from "@/components/BackToTop";
 import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
+import { SmartFilterChips } from "@/components/SmartFilters";
 import { useRef } from "react";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
@@ -60,7 +61,12 @@ export default function EventsPage() {
     end?: Date;
     mode: "single" | "range" | "preset";
     preset?: string;
-  } | null>(null);
+  } | null>({
+    mode: "preset",
+    preset: "next_7_days",
+    start: new Date(),
+    end: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
+  });
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
   const [showFilters, setShowFilters] = useState(!isMobile); // Hide filters by default on mobile
@@ -859,6 +865,14 @@ export default function EventsPage() {
               </div>
             </div>
           )}
+
+          {/* Smart Filters Based on Preferences */}
+          <SmartFilterChips
+            onFilterSelect={(category) => setSelectedCategory(category)}
+            activeFilters={selectedCategory !== "all" ? [selectedCategory] : []}
+            className="mb-6"
+            limit={6}
+          />
 
           {/* Filters Section */}
           {showFilters && !isMobile && (
