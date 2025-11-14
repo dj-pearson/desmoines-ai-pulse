@@ -45,15 +45,24 @@ serve(async (req) => {
     <priority>1.0</priority>
   </url>`;
 
-    // Static pages
+    // Static pages - expanded per SEO strategy
     const staticPages = [
       { path: "/events", priority: 0.9, freq: "daily" },
+      { path: "/events/today", priority: 0.9, freq: "daily" },
+      { path: "/events/this-weekend", priority: 0.9, freq: "daily" },
+      { path: "/events/free", priority: 0.8, freq: "daily" },
+      { path: "/events/kids", priority: 0.8, freq: "daily" },
+      { path: "/events/date-night", priority: 0.8, freq: "daily" },
       { path: "/restaurants", priority: 0.8, freq: "weekly" },
+      { path: "/restaurants/open-now", priority: 0.8, freq: "hourly" },
+      { path: "/restaurants/dietary", priority: 0.7, freq: "weekly" },
       { path: "/attractions", priority: 0.7, freq: "weekly" },
+      { path: "/playgrounds", priority: 0.7, freq: "monthly" },
       { path: "/articles", priority: 0.8, freq: "daily" },
       { path: "/guides", priority: 0.7, freq: "weekly" },
       { path: "/neighborhoods", priority: 0.6, freq: "monthly" },
       { path: "/weekend", priority: 0.7, freq: "weekly" },
+      { path: "/iowa-state-fair", priority: 0.7, freq: "monthly" },
     ];
 
     for (const page of staticPages) {
@@ -187,6 +196,62 @@ serve(async (req) => {
       }
     }
 
+    // Playgrounds
+    const includePlaygrounds = include.length === 0 || include.includes("playgrounds");
+    if (includePlaygrounds) {
+      const { data: playgrounds } = await supabase
+        .from("playgrounds")
+        .select("name, slug, updated_at")
+        .order("name")
+        .limit(500);
+
+      if (playgrounds) {
+        console.log(`Adding ${playgrounds.length} playgrounds to sitemap`);
+        for (const playground of playgrounds) {
+          const slug = playground.slug || playground.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+          const lastmod = playground.updated_at
+            ? new Date(playground.updated_at).toISOString().split("T")[0]
+            : currentDate;
+
+          sitemap += `
+  <url>
+    <loc>${domain}/playgrounds/${slug}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>`;
+        }
+      }
+    }
+
+    // Neighborhoods
+    const includeNeighborhoods = include.length === 0 || include.includes("neighborhoods");
+    if (includeNeighborhoods) {
+      const { data: neighborhoods } = await supabase
+        .from("neighborhoods")
+        .select("name, slug, updated_at")
+        .order("name")
+        .limit(100);
+
+      if (neighborhoods) {
+        console.log(`Adding ${neighborhoods.length} neighborhoods to sitemap`);
+        for (const neighborhood of neighborhoods) {
+          const slug = neighborhood.slug || neighborhood.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+          const lastmod = neighborhood.updated_at
+            ? new Date(neighborhood.updated_at).toISOString().split("T")[0]
+            : currentDate;
+
+          sitemap += `
+  <url>
+    <loc>${domain}/neighborhoods/${slug}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>`;
+        }
+      }
+    }
+
     sitemap += `
 </urlset>`;
 
@@ -194,6 +259,7 @@ serve(async (req) => {
       headers: {
         ...corsHeaders,
         "Content-Type": "application/xml",
+        "Cache-Control": "public, max-age=3600", // Cache for 1 hour
       },
     });
   } catch (error) {

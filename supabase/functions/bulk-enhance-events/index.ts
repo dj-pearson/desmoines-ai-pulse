@@ -97,38 +97,55 @@ serve(async (req) => {
 
     console.log(`📋 Found ${eventsToEnhance.length} events needing enhancement`);
 
-    // Build comprehensive prompt for all events in one API call
-    const bulkPrompt = `You are an expert local SEO content writer specializing in Des Moines, Iowa events. Your task is to create AI-enhanced local SEO writeups for ${eventsToEnhance.length} events.
+    // Build comprehensive prompt for all events in one API call with GEO optimization
+    const bulkPrompt = `You are an expert local SEO and GEO (Generative Engine Optimization) content writer specializing in Des Moines, Iowa events. Your task is to create AI-enhanced writeups optimized for both traditional search engines AND AI assistants (ChatGPT, Perplexity, Claude).
 
-CURRENT DATE: ${new Date().toLocaleDateString('en-US', { 
+CURRENT DATE: ${new Date().toLocaleDateString('en-US', {
   timeZone: 'America/Chicago',
-  year: 'numeric', 
-  month: 'long', 
-  day: 'numeric' 
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric'
 })}
 
 LOCATION CONTEXT: Des Moines, Iowa and surrounding metro area (West Des Moines, Ankeny, Johnston, Urbandale, etc.)
 
-LOCAL SEO REQUIREMENTS:
-✅ Include "Des Moines" or specific neighborhood/suburb names
-✅ Reference local landmarks, venues, or attractions when relevant
-✅ Use geo-specific keywords naturally (Iowa, Central Iowa, Greater DSM)
-✅ Mention accessibility via local streets/highways when possible
-✅ Include seasonal/weather context for outdoor events
-✅ Connect to local culture, food scene, or community aspects
-✅ Write for both local residents and visitors to Des Moines
+🎯 GEO OPTIMIZATION METHODS (CRITICAL):
 
-AI SEARCH OPTIMIZATION:
-✅ Answer potential questions users might ask (What to expect? Cost? Duration?)
-✅ Include practical details (parking, family-friendly, accessibility)
-✅ Use conversational, helpful tone
-✅ Provide context that helps AI assistants recommend the event
+1. STATISTICS METHOD (Add Quantifiable Data):
+   - Include specific numbers: attendance figures, years running, awards won
+   - Example: "This festival has attracted over 5,000 attendees annually since 2015"
+   - Example: "One of only 3 authentic cultural celebrations in Des Moines"
+   - Add venue capacity, typical crowd size, historical data
+
+2. QUOTATION METHOD (Add Authority & Credibility):
+   - Include quotes from organizers, past attendees, or local experts when possible
+   - Example: "According to the Des Moines Register, this is 'the premier family event of the summer'"
+   - Use phrases like "Described by locals as...", "Event organizers note that..."
+
+3. CITE SOURCES METHOD (Build Trust):
+   - Reference authoritative sources when making claims
+   - Example: "According to the venue's official announcement..."
+   - Example: "As featured in the Des Moines Register..."
+   - Mention official website, social media following, media coverage
+
+4. EASY-TO-UNDERSTAND METHOD (Structure for AI Parsing):
+   - Start with the most important information first
+   - Use clear, scannable structure
+   - Include concrete details (dates, times, prices, locations)
+   - Answer: What? When? Where? Who? Why? How much?
+
+5. LOCAL AUTHORITY SIGNALS:
+   - Include "Des Moines" or specific neighborhood names
+   - Reference local landmarks, venues, or attractions
+   - Use geo-specific keywords naturally (Iowa, Central Iowa, Greater DSM)
+   - Connect to local culture, food scene, or community aspects
 
 CONTENT GUIDELINES:
-- Length: 200-300 words per event
-- Tone: Friendly, informative, locally-aware
-- Focus: Unique selling points, local connections, practical details
-- Avoid: Generic descriptions, overly promotional language
+- Length: 250-350 words per event (increased for GEO depth)
+- Tone: Authoritative yet friendly, factual, locally-aware
+- Focus: Statistics, quotes, sources, practical details, local connections
+- Structure: Answer-first format, clear sections
+- Avoid: Generic descriptions, unsupported claims, vague language
 
 EVENTS TO ENHANCE:
 
@@ -154,12 +171,17 @@ Source URL: ${event.source_url || 'Not provided'}
 `).join('\n')}
 
 INSTRUCTIONS:
-For each event, create a compelling local SEO writeup that:
-1. Starts with the event name and key details
-2. Explains what makes this event special in the Des Moines context
-3. Provides practical information for attendees
-4. Includes relevant local connections or recommendations
-5. Ends with a call-to-action encouraging attendance
+For each event, create a GEO-optimized writeup that:
+1. OPENS with key facts: What it is, when, where, cost (answer-first format for AI engines)
+2. ADDS STATISTICS: Include quantifiable data (attendance, years running, venue capacity)
+3. INCLUDES QUOTES/CITATIONS: Reference sources like "According to Des Moines Register..." or "Event organizers note..."
+4. EXPLAINS LOCAL CONTEXT: What makes this special in Des Moines
+5. PROVIDES PRACTICAL DETAILS: Parking, family-friendly, accessibility, duration
+6. ADDS LOCAL CONNECTIONS: Nearby restaurants, attractions, neighborhood info
+7. ENDS with a clear call-to-action
+
+EXAMPLE GEO-OPTIMIZED PARAGRAPH:
+"The Downtown Farmers Market returns every Saturday from 7 AM to 12 PM at Court Avenue (May through October). Established in 1975, this is Iowa's largest and oldest farmers market, attracting over 20,000 visitors weekly at peak season. According to Des Moines Tourism, the market features 300+ vendors selling local produce, artisan goods, and prepared foods. 'It's become a Des Moines tradition,' notes the market director. Located in the heart of downtown Des Moines, free parking is available in nearby ramps, and the event is family-friendly with stroller accessibility. Arrive early for the best selection and pair your visit with brunch at nearby Lucca or Zombie Burger."
 
 FORMAT YOUR RESPONSE AS JSON:
 {
