@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -254,7 +255,7 @@ export default function DateNightEvents() {
                 <h3 className="font-semibold mb-2">🍽️ Dinner + Show Combos</h3>
                 <p className="text-sm text-muted-foreground">
                   Popular pairings: Dinner at Centro + Civic Center show, East Village wine + live music at Django,
-                  Court Avenue bistro + comedy at Funny Bone. Book dinner 6-6:30 PM for 8 PM shows.
+                  Court Avenue bistro + comedy at Funny Bone. Book dinner 6-6:30 PM for 8 PM shows. Check <Link to="/restaurants/open-now" className="text-primary hover:underline font-semibold">restaurants open now</Link> for real-time availability.
                 </p>
               </div>
               <div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -265,7 +266,7 @@ export default function KidsEvents() {
                 <h3 className="font-semibold mb-2">💰 Budget-Friendly Options</h3>
                 <p className="text-sm text-muted-foreground">
                   Des Moines offers {freeKidsEvents.length}+ free kids events. Library programs are always free.
-                  Museums offer discount days. Pack snacks to save at festivals.
+                  Museums offer discount days. Pack snacks to save at festivals. See all <Link to="/events/free" className="text-primary hover:underline font-semibold">free events in Des Moines</Link>.
                 </p>
               </div>
             </div>

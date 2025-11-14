@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -148,7 +149,7 @@ export default function OpenNowRestaurants() {
           </div>
 
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-            <strong>Find {openRestaurants.length}+ restaurants currently open in Des Moines with real-time hour tracking.</strong> According to the Greater Des Moines Partnership, the metro area has 300+ restaurants with varying operating hours. Our system updates continuously to show which restaurants are accepting orders right now—whether you need breakfast, lunch, dinner, or late-night food.
+            <strong>Find {openRestaurants.length}+ restaurants currently open in Des Moines with real-time hour tracking.</strong> According to the Greater Des Moines Partnership, the metro area has 300+ restaurants with varying operating hours. Our system updates continuously to show which restaurants are accepting orders right now—whether you need breakfast, lunch, dinner, or late-night food. Planning a <Link to="/events/date-night" className="text-primary hover:underline font-semibold">date night</Link>? Check restaurant hours before your event.
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">
@@ -302,7 +303,7 @@ export default function OpenNowRestaurants() {
                 <h3 className="font-semibold mb-2">🚗 Pickup & Takeout</h3>
                 <p className="text-sm text-muted-foreground">
                   Call ahead for faster service. Many restaurants offer curbside pickup. Downtown parking free after
-                  6 PM weekdays and all day Sunday. Suburban locations have ample parking.
+                  6 PM weekdays and all day Sunday. Suburban locations have ample parking. Browse our <Link to="/restaurants/dietary" className="text-primary hover:underline font-semibold">dietary-friendly restaurants</Link> for specialized options.
                 </p>
               </div>
               <div>

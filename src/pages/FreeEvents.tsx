@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -265,7 +266,7 @@ export default function FreeEvents() {
               <div>
                 <h3 className="font-semibold mb-2">👨‍👩‍👧‍👦 Family-Friendly Features</h3>
                 <p className="text-sm text-muted-foreground">
-                  Look for "family-friendly" tags. Most library and park programs welcome all ages. Stroller accessibility varies—check individual event details.
+                  Look for "family-friendly" tags. Most library and park programs welcome all ages. Stroller accessibility varies—check individual event details. Browse our <Link to="/events/kids" className="text-primary hover:underline font-semibold">kids & family events</Link> page for age-appropriate activities.
                 </p>
               </div>
               <div>
