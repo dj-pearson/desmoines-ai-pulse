@@ -57,7 +57,8 @@ export default defineConfig(({ command, mode }) => ({
         // Advanced manual code splitting for optimal performance
         manualChunks: (id) => {
           // Critical dependencies - keep together for fastest initial load
-          if (id.includes('react/') || id.includes('react-dom/') || id.includes('scheduler')) {
+          // INCLUDE react-leaflet here to ensure React context is available
+          if (id.includes('react/') || id.includes('react-dom/') || id.includes('scheduler') || id.includes('react-leaflet') || id.includes('@react-leaflet')) {
             return 'vendor-react';
           }
 
@@ -71,9 +72,8 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-3d';
           }
 
-          // Heavy map libraries - INCLUDE react-leaflet dependencies with maps
-          // This ensures React context is available
-          if (id.includes('leaflet') || id.includes('react-leaflet') || id.includes('@react-leaflet')) {
+          // Map library (leaflet only - react-leaflet is in vendor-react)
+          if (id.includes('leaflet') && !id.includes('react-leaflet')) {
             return 'vendor-maps';
           }
 
