@@ -139,13 +139,13 @@ export default defineConfig(({ command, mode }) => ({
       '@tanstack/react-query',
       '@supabase/supabase-js',
       'lucide-react', // Pre-bundle icons for faster dev
+      'recharts', // Include recharts to avoid initialization errors
     ],
     exclude: [
       '@react-three/fiber',
       '@react-three/drei',
       'three', // Lazy load heavy 3D libs
       'leaflet', // Lazy load maps
-      'recharts', // Lazy load charts
     ],
   },
 }));
