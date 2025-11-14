@@ -76,7 +76,10 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // DO NOT manually chunk leaflet or react-leaflet
-          // Let Vite handle these automatically to prevent React context issues
+          // Exclude them entirely so they ONLY load with lazy-loaded map components
+          if (id.includes('leaflet') || id.includes('react-leaflet')) {
+            return undefined; // Let them stay with the map components
+          }
 
           // Chart libraries - exclude from manual chunking due to circular dependencies
           // Let Vite handle recharts automatically
@@ -120,7 +123,8 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // All other node_modules go into vendor chunk
-          if (id.includes('node_modules')) {
+          // EXCEPT leaflet which should stay with map components
+          if (id.includes('node_modules') && !id.includes('leaflet')) {
             return 'vendor-misc';
           }
         },
