@@ -64,6 +64,8 @@ const EventsByLocation = lazy(() => import("./pages/EventsByLocation"));
 const FreeEvents = lazy(() => import("./pages/FreeEvents"));
 const KidsEvents = lazy(() => import("./pages/KidsEvents"));
 const DateNightEvents = lazy(() => import("./pages/DateNightEvents"));
+const OpenNowRestaurants = lazy(() => import("./pages/OpenNowRestaurants"));
+const DietaryRestaurants = lazy(() => import("./pages/DietaryRestaurants"));
 
 // Lead magnet tools
 const EventPromotionPlanner = lazy(() => import("./pages/EventPromotionPlanner"));
@@ -115,6 +117,9 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
+            {/* Restaurant SEO hub pages */}
+            <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
+            <Route path="/restaurants/dietary" element={<DietaryRestaurants />} />
             <Route path="/attractions" element={<Attractions />} />
             <Route path="/playgrounds" element={<Playgrounds />} />
             <Route path="/events" element={<EventsPage />} />
