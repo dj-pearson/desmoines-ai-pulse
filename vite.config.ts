@@ -76,9 +76,10 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-maps';
           }
 
-          // Chart libraries - lazy load for analytics pages
+          // Chart libraries - exclude from manual chunking due to circular dependencies
+          // Let Vite handle recharts automatically
           if (id.includes('recharts')) {
-            return 'vendor-charts';
+            return undefined;
           }
 
           // Calendar libraries - lazy load for calendar pages
