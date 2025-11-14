@@ -237,28 +237,45 @@
       }
     </style>
 
-    <!-- DNS prefetch and preconnect for critical resources -->
+    <!-- Core Web Vitals optimization: DNS prefetch and preconnect for critical resources -->
+    <!-- Fonts: Critical for FCP and LCP -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- Database: Critical for interactivity -->
     <link rel="preconnect" href="https://wtkhfqpmcegzcbngroui.supabase.co" />
     <link rel="dns-prefetch" href="https://wtkhfqpmcegzcbngroui.supabase.co" />
+
+    <!-- Analytics: Non-critical, DNS prefetch only -->
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.google-analytics.com" />
 
-    <!-- Preconnect to CDN for assets -->
+    <!-- CDN for assets -->
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 
-    <!-- Prefetch DNS for commonly used external resources -->
+    <!-- External resources: DNS prefetch for better performance -->
     <link rel="dns-prefetch" href="https://images.unsplash.com" />
     <link rel="dns-prefetch" href="https://cdn.cloudflare.com" />
+    <link rel="dns-prefetch" href="https://places.googleapis.com" />
+    <link rel="dns-prefetch" href="https://maps.googleapis.com" />
 
     <!-- Critical resource preloading for LCP optimization -->
     <link
       rel="preload"
       as="image"
-      href="/DMI-Logo-Header.png"
+      href="/DMI-Logo-Header.webp"
+      type="image/webp"
       fetchpriority="high"
     />
+    <!-- Fallback to PNG for older browsers -->
+    <link
+      rel="preload"
+      as="image"
+      href="/DMI-Logo-Header.png"
+      fetchpriority="high"
+      media="(min-resolution: 0dppx)"
+    />
+    <!-- Font preloading with display=swap for better CLS -->
     <link
       rel="preload"
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
