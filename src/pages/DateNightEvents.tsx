@@ -12,7 +12,7 @@ export default function DateNightEvents() {
   const [events, setEvents] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect() => {
+  useEffect(() => {
     const fetchDateNightEvents = async () => {
       try {
         setIsLoading(true);
