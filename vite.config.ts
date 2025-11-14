@@ -57,7 +57,7 @@ export default defineConfig(({ command, mode }) => ({
         // Advanced manual code splitting for optimal performance
         manualChunks: (id) => {
           // Critical dependencies - keep together for fastest initial load
-          if (id.includes('react/') || id.includes('react-dom/')) {
+          if (id.includes('react/') || id.includes('react-dom/') || id.includes('scheduler')) {
             return 'vendor-react';
           }
 
@@ -71,8 +71,9 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-3d';
           }
 
-          // Heavy map libraries - lazy load for location pages
-          if (id.includes('leaflet') || id.includes('react-leaflet')) {
+          // Heavy map libraries - INCLUDE react-leaflet dependencies with maps
+          // This ensures React context is available
+          if (id.includes('leaflet') || id.includes('react-leaflet') || id.includes('@react-leaflet')) {
             return 'vendor-maps';
           }
 
@@ -136,17 +137,18 @@ export default defineConfig(({ command, mode }) => ({
     include: [
       'react',
       'react-dom',
+      'react/jsx-runtime',
       'react-router-dom',
       '@tanstack/react-query',
       '@supabase/supabase-js',
       'lucide-react', // Pre-bundle icons for faster dev
+      'react-leaflet', // Include to ensure proper React bundling
+      'leaflet',
     ],
     exclude: [
       '@react-three/fiber',
       '@react-three/drei',
       'three', // Lazy load heavy 3D libs
-      'leaflet', // Lazy load maps
-      'recharts', // Lazy load charts
     ],
   },
 }));
