@@ -220,6 +220,32 @@ export default {
 						transform: 'scale(4)',
 						opacity: '0'
 					}
+				},
+				'gradient': {
+					'0%, 100%': {
+						backgroundPosition: '0% 50%'
+					},
+					'50%': {
+						backgroundPosition: '100% 50%'
+					}
+				},
+				'slide-in': {
+					'0%': {
+						transform: 'translateY(30px)',
+						opacity: '0'
+					},
+					'100%': {
+						transform: 'translateY(0)',
+						opacity: '1'
+					}
+				},
+				'float': {
+					'0%, 100%': {
+						transform: 'translateY(0px)'
+					},
+					'50%': {
+						transform: 'translateY(-10px)'
+					}
 				}
 			},
 			animation: {
@@ -237,6 +263,9 @@ export default {
 				'gentle-bounce': 'gentle-bounce 2s ease-in-out infinite',
 				'shimmer': 'shimmer 2s linear infinite',
 				'ripple': 'ripple 0.6s ease-out',
+				'gradient': 'gradient 15s ease infinite',
+				'slide-in': 'slide-in 0.5s ease-out',
+				'float': 'float 3s ease-in-out infinite',
 				// Combined animations
 				'enter': 'fade-in 0.3s ease-out, scale-in 0.2s ease-out',
 				'exit': 'fade-out 0.3s ease-out, scale-out 0.2s ease-out'

@@ -31,6 +31,7 @@ import { EventSocialHub } from "@/components/EventSocialHub";
 import { FAQSection } from "@/components/FAQSection";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { PersonalizedRecommendations } from "@/components/PersonalizedRecommendations";
+import { EnhancedHero } from "@/components/EnhancedHero";
 
 // Lazy load Three.js component to reduce initial bundle size
 // Temporarily disabled due to React Scheduler compatibility issue
@@ -78,6 +79,15 @@ export default function Index() {
       localStorage.setItem(`onboarding_complete_${user.id}`, "true");
     }
     setShowOnboarding(false);
+  };
+
+  const handleAIPlanClick = () => {
+    // Placeholder for AI Trip Planner (Month 4 feature)
+    // For now, show a toast to indicate coming soon
+    toast({
+      title: "AI Trip Planner Coming Soon!",
+      description: "Our intelligent trip planning feature is currently in development. Stay tuned!",
+    });
   };
 
   const scrapeMutation = useEventScraper();
@@ -230,64 +240,12 @@ export default function Index() {
       <main role="main" itemScope itemType="https://schema.org/WebPage">
         <Header />
 
-        {/* Hero section with structured data */}
-        <section className="relative min-h-screen bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69] py-16 overflow-hidden">
-          {/* Temporarily disabled 3D cityscape due to React Scheduler compatibility issue */}
-          {/* <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
-            <Hero3DCityscape />
-          </Suspense> */}
-          <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div className="inline-flex items-center gap-2 bg-[#FFD700]/20 backdrop-blur-sm border border-[#FFD700]/30 rounded-full px-4 py-2 mb-6">
-              <Brain className="h-4 w-4 text-[#FFD700]" />
-              <span className="text-sm text-[#FFD700] font-semibold">First AI-Powered Conversational City Guide</span>
-            </div>
-            <h1 className="text-4xl md:text-6xl font-bold text-white mb-6 drop-shadow-lg">
-              Your Intelligent Companion for<br />Des Moines Discovery
-            </h1>
-            <p className="text-xl text-white/90 mb-8 max-w-3xl mx-auto drop-shadow-md">
-              Beyond search. Beyond directories. Des Moines AI Pulse is the first truly conversational city guide that understands context, learns from your preferences, and proactively assists you—across web, SMS, voice, and ChatGPT.
-            </p>
-
-            {/* Multi-channel access badges */}
-            <div className="flex flex-wrap items-center justify-center gap-3 mb-12">
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
-                <MessageSquare className="h-4 w-4 text-[#FFD700]" />
-                <span className="text-sm text-white/90">SMS Concierge</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
-                <Mic className="h-4 w-4 text-[#FFD700]" />
-                <span className="text-sm text-white/90">Voice Assistant</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
-                <Sparkles className="h-4 w-4 text-[#FFD700]" />
-                <span className="text-sm text-white/90">ChatGPT Plugin</span>
-              </div>
-              <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
-                <Brain className="h-4 w-4 text-[#FFD700]" />
-                <span className="text-sm text-white/90">Web Intelligence</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12 text-center">
-              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-3xl font-bold text-[#FFD700]">1000+</div>
-                <p className="text-sm text-white/80">Events Tracked</p>
-              </div>
-              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-3xl font-bold text-[#FFD700]">300+</div>
-                <p className="text-sm text-white/80">Restaurants & Venues</p>
-              </div>
-              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-3xl font-bold text-[#FFD700]">AI</div>
-                <p className="text-sm text-white/80">Semantic Search</p>
-              </div>
-              <div className="space-y-2 bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <div className="text-3xl font-bold text-[#FFD700]">24/7</div>
-                <p className="text-sm text-white/80">Live Intelligence</p>
-              </div>
-            </div>
-          </div>
-        </section>
+        {/* Enhanced Hero with dynamic content and quick actions */}
+        <EnhancedHero
+          eventCount={1000}
+          restaurantCount={300}
+          onAIPlanClick={handleAIPlanClick}
+        />
 
         <SearchSection onSearch={handleSearch} />
 
