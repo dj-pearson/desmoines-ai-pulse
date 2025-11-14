@@ -41,6 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
+import { OpenNowBanner } from "@/components/OpenNowBanner";
 
 const createSlug = (name: string): string => {
   return name
@@ -229,6 +230,16 @@ export default function Restaurants() {
           <div className="space-y-8">
             {/* Restaurant Openings Section */}
             <RestaurantOpenings />
+
+            {/* Open Now Banner - Prominent Feature */}
+            <OpenNowBanner
+              isActive={filters.openNow}
+              onToggle={() =>
+                setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))
+              }
+              openCount={filters.openNow ? restaurants.length : undefined}
+              totalCount={totalCount}
+            />
 
             {/* Advanced Filters */}
             {showFilters && (
