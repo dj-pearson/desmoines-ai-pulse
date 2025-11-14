@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, lazy } from "react";
 import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -24,7 +24,9 @@ import {
 } from "@/components/ui/select";
 import { MapPin, Star, Users, Filter, List, Map } from "lucide-react";
 import { Link } from "react-router-dom";
-import PlaygroundsMap from "@/components/PlaygroundsMap";
+
+// Lazy load map to prevent react-leaflet bundling issues
+const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
 
 const createSlug = (name: string): string => {
   return name
