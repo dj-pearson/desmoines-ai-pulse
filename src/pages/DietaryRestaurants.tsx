@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -180,7 +180,7 @@ export default function DietaryRestaurants() {
             </p>
           ) : (
             <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-              <strong>Discover 100+ dietary-friendly restaurants in Des Moines accommodating special diets and restrictions.</strong> Whether you're vegan, vegetarian, gluten-free, keto, halal, or kosher, Des Moines offers diverse dining options. According to Iowa Restaurant Association, 60% of local restaurants now train staff on allergen awareness—up from 30% in 2018.
+              <strong>Discover 100+ dietary-friendly restaurants in Des Moines accommodating special diets and restrictions.</strong> Whether you're vegan, vegetarian, gluten-free, keto, halal, or kosher, Des Moines offers diverse dining options. According to Iowa Restaurant Association, 60% of local restaurants now train staff on allergen awareness—up from 30% in 2018. Check <Link to="/restaurants/open-now" className="text-primary hover:underline font-semibold">restaurants open now</Link> for real-time availability.
             </p>
           )}
         </div>
@@ -358,7 +358,7 @@ export default function DietaryRestaurants() {
                 <h3 className="font-semibold mb-2">☎️ Call Ahead</h3>
                 <p className="text-sm text-muted-foreground">
                   For severe allergies or complex restrictions, call restaurants before visiting. Ask about prep areas,
-                  cross-contamination protocols, and ingredient sourcing. Most willing to accommodate with advance notice.
+                  cross-contamination protocols, and ingredient sourcing. Most willing to accommodate with advance notice. Browse <Link to="/restaurants" className="text-primary hover:underline font-semibold">all Des Moines restaurants</Link> to explore options.
                 </p>
               </div>
               <div>
