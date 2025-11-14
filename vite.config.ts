@@ -57,13 +57,10 @@ export default defineConfig(({ command, mode }) => ({
         // Advanced manual code splitting for optimal performance
         manualChunks: (id) => {
           // Critical dependencies - keep together for fastest initial load
-          // INCLUDE react-leaflet here to ensure React context is available
           if (
             id.includes('react/') || 
             id.includes('react-dom/') || 
-            id.includes('scheduler') || 
-            id.includes('/react-leaflet') || 
-            id.includes('@react-leaflet')
+            id.includes('scheduler')
           ) {
             return 'vendor-react';
           }
@@ -78,10 +75,8 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-3d';
           }
 
-          // Map library (leaflet only - react-leaflet is in vendor-react)
-          if (id.includes('/leaflet') && !id.includes('/react-leaflet') && !id.includes('@react-leaflet')) {
-            return 'vendor-maps';
-          }
+          // DO NOT manually chunk leaflet or react-leaflet
+          // Let Vite handle these automatically to prevent React context issues
 
           // Chart libraries - exclude from manual chunking due to circular dependencies
           // Let Vite handle recharts automatically
