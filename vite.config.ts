@@ -54,95 +54,16 @@ export default defineConfig(({ command, mode }) => ({
     }),
     rollupOptions: {
       output: {
-        // Advanced manual code splitting for optimal performance
+        // Simplified code splitting - only chunk the essentials
+        // Let Vite handle the rest automatically to avoid circular dependency issues
         manualChunks: (id) => {
-          // Critical dependencies - keep together for fastest initial load
-          if (
-            id.includes('react/') || 
-            id.includes('react-dom/') || 
-            id.includes('scheduler')
-          ) {
+          // Only chunk React core - most critical
+          if (id.includes('/react/') || id.includes('/react-dom/')) {
             return 'vendor-react';
           }
 
-          // React ecosystem - frequently used
-          if (id.includes('react-router-dom') || id.includes('@tanstack/react-query')) {
-            return 'vendor-routing';
-          }
-
-          // Heavy 3D libraries - lazy load only when needed
-          if (id.includes('three') || id.includes('@react-three')) {
-            return 'vendor-3d';
-          }
-
-          // DO NOT manually chunk leaflet or react-leaflet
-          // Exclude them entirely so they ONLY load with lazy-loaded map components
-          if (id.includes('leaflet') || id.includes('react-leaflet')) {
-            return undefined; // Let them stay with the map components
-          }
-
-          // Chart libraries - DO NOT bundle, let them load with their components
-          // Recharts and its dependencies have circular dependencies that break vendor bundles
-          // victory-vendor includes D3 which has known circular dependency issues
-          if (id.includes('recharts') ||
-              id.includes('victory-vendor') ||
-              id.includes('react-smooth') ||
-              id.includes('recharts-scale') ||
-              id.includes('d3-')) {
-            return undefined; // Load with component
-          }
-
-          // Calendar libraries - lazy load for calendar pages
-          if (id.includes('@fullcalendar')) {
-            return 'vendor-calendar';
-          }
-
-          // Date utilities - separate from fullcalendar to avoid conflicts
-          if (id.includes('date-fns')) {
-            return 'vendor-dates';
-          }
-
-          // Form libraries - used across multiple pages
-          if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform')) {
-            return 'vendor-forms';
-          }
-
-          // Supabase client - used throughout app
-          if (id.includes('@supabase')) {
-            return 'vendor-supabase';
-          }
-
-          // UI component libraries - used throughout but can be split
-          if (id.includes('@radix-ui')) {
-            return 'vendor-ui';
-          }
-
-          // Animation libraries
-          if (id.includes('framer-motion')) {
-            return 'vendor-animation';
-          }
-
-          // Markdown and rich text
-          if (id.includes('react-markdown') || id.includes('remark')) {
-            return 'vendor-markdown';
-          }
-
-          // Utility libraries
-          if (id.includes('lucide-react')) {
-            return 'vendor-icons';
-          }
-
-          // All other node_modules go into vendor chunk
-          // EXCEPT: leaflet (circular dependency with maps), recharts ecosystem (circular dependencies)
-          if (id.includes('node_modules') &&
-              !id.includes('leaflet') &&
-              !id.includes('recharts') &&
-              !id.includes('victory-vendor') &&
-              !id.includes('react-smooth') &&
-              !id.includes('recharts-scale') &&
-              !id.includes('d3-')) {
-            return 'vendor-misc';
-          }
+          // DO NOT manually chunk anything else - let Vite decide
+          // This avoids circular dependency issues from manual chunking
         },
         assetFileNames: "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
