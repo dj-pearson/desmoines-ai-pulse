@@ -337,7 +337,7 @@ BEGIN
       SUM(clicks) as total_clicks,
       AVG(ctr) as avg_ctr
     FROM gsc_keyword_performance
-    WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+     - INTERVAL '7 days'
     GROUP BY query, page_url
   )
   UPDATE seo_keywords k
@@ -389,26 +389,26 @@ BEGIN
       SELECT COALESCE(SUM(impressions), 0)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-        AND date >= CURRENT_DATE - INTERVAL '28 days'
+         - INTERVAL '28 days'
     ),
     total_clicks = (
       SELECT COALESCE(SUM(clicks), 0)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-        AND date >= CURRENT_DATE - INTERVAL '28 days'
+         - INTERVAL '28 days'
     ),
     average_ctr = (
       SELECT ROUND(AVG(ctr), 2)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-        AND date >= CURRENT_DATE - INTERVAL '28 days'
+         - INTERVAL '28 days'
         AND ctr IS NOT NULL
     ),
     average_position = (
       SELECT ROUND(AVG(position), 2)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-        AND date >= CURRENT_DATE - INTERVAL '28 days'
+         - INTERVAL '28 days'
         AND position IS NOT NULL
     ),
     updated_at = now()

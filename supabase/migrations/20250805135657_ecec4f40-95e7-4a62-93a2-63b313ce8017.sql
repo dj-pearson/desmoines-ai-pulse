@@ -1,9 +1,9 @@
 -- Performance optimization indexes for Des Moines Insider
 
 -- Events table indexes
-CREATE INDEX IF NOT EXISTS idx_events_date_featured ON events(date, is_featured) WHERE date >= CURRENT_DATE;
-CREATE INDEX IF NOT EXISTS idx_events_category_date ON events(category, date) WHERE date >= CURRENT_DATE;
-CREATE INDEX IF NOT EXISTS idx_events_location_date ON events(location, date) WHERE date >= CURRENT_DATE;
+CREATE INDEX IF NOT EXISTS idx_events_date_featured ON events(date, is_featured) ;
+CREATE INDEX IF NOT EXISTS idx_events_category_date ON events(category, date) ;
+CREATE INDEX IF NOT EXISTS idx_events_location_date ON events(location, date) ;
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_events_full_text ON events USING gin(to_tsvector('english', title || ' ' || COALESCE(original_description, '') || ' ' || COALESCE(enhanced_description, '')));
 

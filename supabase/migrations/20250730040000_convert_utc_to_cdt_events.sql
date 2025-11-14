@@ -18,17 +18,14 @@ SET
 WHERE 
     -- Only update events that are stored as midnight UTC (likely the problematic ones)
     EXTRACT(HOUR FROM date AT TIME ZONE 'UTC') = 0 
-    AND EXTRACT(MINUTE FROM date AT TIME ZONE 'UTC') = 0 
-    AND EXTRACT(SECOND FROM date AT TIME ZONE 'UTC') = 0;
+    ;
 
 -- Log the changes made
 INSERT INTO public.migration_logs (migration_name, description, affected_rows, created_at)
 SELECT 
     '20250730040000_convert_utc_to_cdt_events',
     'Converted UTC midnight events to CDT evening times (7:30 PM)',
-    (SELECT COUNT(*) FROM events WHERE EXTRACT(HOUR FROM date AT TIME ZONE 'UTC') = 0),
-    now()
-WHERE EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'migration_logs');
+    (SELECT COUNT(*) FROM events ;
 
 -- Create migration_logs table if it doesn't exist
 CREATE TABLE IF NOT EXISTS public.migration_logs (

@@ -232,7 +232,7 @@ CREATE TABLE IF NOT EXISTS seo_keyword_history (
   keyword_id UUID NOT NULL REFERENCES seo_keywords(id) ON DELETE CASCADE,
 
   -- Performance Snapshot
-  position INTEGER,
+  "position" INTEGER,
   impressions INTEGER DEFAULT 0,
   clicks INTEGER DEFAULT 0,
   ctr DECIMAL(5,2),

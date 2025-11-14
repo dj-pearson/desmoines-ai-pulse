@@ -109,7 +109,7 @@ BEGIN
     FOR content_rec IN 
         SELECT DISTINCT content_type, content_id 
         FROM public.content_metrics 
-        WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+         - INTERVAL '7 days'
     LOOP
         -- Get metrics
         SELECT COALESCE(SUM(metric_value), 0) INTO views_24h
@@ -117,14 +117,14 @@ BEGIN
         WHERE content_type = content_rec.content_type 
           AND content_id = content_rec.content_id 
           AND metric_type = 'view'
-          AND date >= CURRENT_DATE - INTERVAL '1 day';
+           - INTERVAL '1 day';
           
         SELECT COALESCE(SUM(metric_value), 0) INTO views_7d
         FROM public.content_metrics 
         WHERE content_type = content_rec.content_type 
           AND content_id = content_rec.content_id 
           AND metric_type = 'view'
-          AND date >= CURRENT_DATE - INTERVAL '7 days';
+           - INTERVAL '7 days';
           
         SELECT COUNT(*) INTO searches_24h
         FROM public.search_analytics sa
