@@ -14,6 +14,189 @@ export type Database = {
   }
   public: {
     Tables: {
+      activity_feed: {
+        Row: {
+          activity_type: string
+          created_at: string
+          event_id: string | null
+          id: string
+          metadata: Json | null
+          target_user_id: string | null
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          metadata?: Json | null
+          target_user_id?: string | null
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          metadata?: Json | null
+          target_user_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_feed_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_clicks: {
+        Row: {
+          campaign_id: string
+          creative_id: string
+          date: string
+          id: string
+          impression_id: string | null
+          timestamp: string
+        }
+        Insert: {
+          campaign_id: string
+          creative_id: string
+          date?: string
+          id?: string
+          impression_id?: string | null
+          timestamp?: string
+        }
+        Update: {
+          campaign_id?: string
+          creative_id?: string
+          date?: string
+          id?: string
+          impression_id?: string | null
+          timestamp?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_clicks_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_clicks_creative_id_fkey"
+            columns: ["creative_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_creatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_clicks_impression_id_fkey"
+            columns: ["impression_id"]
+            isOneToOne: false
+            referencedRelation: "ad_impressions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_impressions: {
+        Row: {
+          browser: string | null
+          campaign_id: string
+          creative_id: string
+          date: string
+          device_type: string | null
+          id: string
+          ip_address: string | null
+          page_url: string | null
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          referrer_url: string | null
+          session_id: string
+          timestamp: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          browser?: string | null
+          campaign_id: string
+          creative_id: string
+          date?: string
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          page_url?: string | null
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          referrer_url?: string | null
+          session_id: string
+          timestamp?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          browser?: string | null
+          campaign_id?: string
+          creative_id?: string
+          date?: string
+          device_type?: string | null
+          id?: string
+          ip_address?: string | null
+          page_url?: string | null
+          placement_type?: Database["public"]["Enums"]["placement_type"]
+          referrer_url?: string | null
+          session_id?: string
+          timestamp?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ad_impressions_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ad_impressions_creative_id_fkey"
+            columns: ["creative_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_creatives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ad_policies: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean | null
+          policy_description: string
+          policy_name: string
+          updated_at: string
+          violation_severity: Database["public"]["Enums"]["violation_severity"]
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          policy_description: string
+          policy_name: string
+          updated_at?: string
+          violation_severity?: Database["public"]["Enums"]["violation_severity"]
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          policy_description?: string
+          policy_name?: string
+          updated_at?: string
+          violation_severity?: Database["public"]["Enums"]["violation_severity"]
+        }
+        Relationships: []
+      }
       admin_action_logs: {
         Row: {
           action_description: string
@@ -164,6 +347,201 @@ export type Database = {
           provider?: string
           supports_vision?: boolean | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      analytics_properties: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          metadata: Json | null
+          property_id: string
+          property_name: string
+          property_url: string | null
+          provider_name: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          metadata?: Json | null
+          property_id: string
+          property_name: string
+          property_url?: string | null
+          provider_name: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          metadata?: Json | null
+          property_id?: string
+          property_name?: string
+          property_url?: string | null
+          provider_name?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      analytics_sync_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          end_date: string | null
+          error_message: string | null
+          id: string
+          job_type: string
+          property_id: string | null
+          provider_name: string
+          records_synced: number | null
+          start_date: string | null
+          started_at: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          error_message?: string | null
+          id?: string
+          job_type: string
+          property_id?: string | null
+          provider_name: string
+          records_synced?: number | null
+          start_date?: string | null
+          started_at?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string | null
+          end_date?: string | null
+          error_message?: string | null
+          id?: string
+          job_type?: string
+          property_id?: string | null
+          provider_name?: string
+          records_synced?: number | null
+          start_date?: string | null
+          started_at?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      archived_events: {
+        Row: {
+          ai_writeup: string | null
+          archived_at: string | null
+          category: string
+          city: string | null
+          created_at: string | null
+          date: string
+          enhanced_description: string | null
+          event_start_local: string | null
+          event_start_utc: string | null
+          event_timezone: string | null
+          geo_faq: Json | null
+          geo_key_facts: string[] | null
+          geo_summary: string | null
+          id: string
+          image_url: string | null
+          is_enhanced: boolean | null
+          is_featured: boolean | null
+          latitude: number | null
+          location: string
+          longitude: number | null
+          original_description: string | null
+          price: string | null
+          search_vector: unknown
+          seo_description: string | null
+          seo_h1: string | null
+          seo_keywords: string[] | null
+          seo_title: string | null
+          source_url: string | null
+          title: string
+          updated_at: string | null
+          venue: string | null
+          writeup_generated_at: string | null
+          writeup_prompt_used: string | null
+        }
+        Insert: {
+          ai_writeup?: string | null
+          archived_at?: string | null
+          category?: string
+          city?: string | null
+          created_at?: string | null
+          date: string
+          enhanced_description?: string | null
+          event_start_local?: string | null
+          event_start_utc?: string | null
+          event_timezone?: string | null
+          geo_faq?: Json | null
+          geo_key_facts?: string[] | null
+          geo_summary?: string | null
+          id?: string
+          image_url?: string | null
+          is_enhanced?: boolean | null
+          is_featured?: boolean | null
+          latitude?: number | null
+          location: string
+          longitude?: number | null
+          original_description?: string | null
+          price?: string | null
+          search_vector?: unknown
+          seo_description?: string | null
+          seo_h1?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
+          source_url?: string | null
+          title: string
+          updated_at?: string | null
+          venue?: string | null
+          writeup_generated_at?: string | null
+          writeup_prompt_used?: string | null
+        }
+        Update: {
+          ai_writeup?: string | null
+          archived_at?: string | null
+          category?: string
+          city?: string | null
+          created_at?: string | null
+          date?: string
+          enhanced_description?: string | null
+          event_start_local?: string | null
+          event_start_utc?: string | null
+          event_timezone?: string | null
+          geo_faq?: Json | null
+          geo_key_facts?: string[] | null
+          geo_summary?: string | null
+          id?: string
+          image_url?: string | null
+          is_enhanced?: boolean | null
+          is_featured?: boolean | null
+          latitude?: number | null
+          location?: string
+          longitude?: number | null
+          original_description?: string | null
+          price?: string | null
+          search_vector?: unknown
+          seo_description?: string | null
+          seo_h1?: string | null
+          seo_keywords?: string[] | null
+          seo_title?: string | null
+          source_url?: string | null
+          title?: string
+          updated_at?: string | null
+          venue?: string | null
+          writeup_generated_at?: string | null
+          writeup_prompt_used?: string | null
         }
         Relationships: []
       }
@@ -358,6 +736,54 @@ export type Database = {
         }
         Relationships: []
       }
+      auto_approval_rules: {
+        Row: {
+          application_count: number | null
+          conditions: Json
+          content_type: string
+          created_at: string | null
+          created_by: string | null
+          enabled: boolean | null
+          id: string
+          last_applied_at: string | null
+          min_confidence_score: number | null
+          priority: number | null
+          rule_description: string | null
+          rule_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          application_count?: number | null
+          conditions: Json
+          content_type: string
+          created_at?: string | null
+          created_by?: string | null
+          enabled?: boolean | null
+          id?: string
+          last_applied_at?: string | null
+          min_confidence_score?: number | null
+          priority?: number | null
+          rule_description?: string | null
+          rule_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          application_count?: number | null
+          conditions?: Json
+          content_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          enabled?: boolean | null
+          id?: string
+          last_applied_at?: string | null
+          min_confidence_score?: number | null
+          priority?: number | null
+          rule_description?: string | null
+          rule_name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       badges: {
         Row: {
           badge_type: string
@@ -394,6 +820,39 @@ export type Database = {
           points_value?: number
           rarity?: string
           requirements?: Json
+        }
+        Relationships: []
+      }
+      blocked_ips: {
+        Row: {
+          blocked_at: string | null
+          blocked_by: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          ip_address: string
+          is_permanent: boolean | null
+          reason: string | null
+        }
+        Insert: {
+          blocked_at?: string | null
+          blocked_by?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address: string
+          is_permanent?: boolean | null
+          reason?: string | null
+        }
+        Update: {
+          blocked_at?: string | null
+          blocked_by?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: string
+          is_permanent?: boolean | null
+          reason?: string | null
         }
         Relationships: []
       }
@@ -644,17 +1103,81 @@ export type Database = {
         }
         Relationships: []
       }
+      campaign_analytics_daily: {
+        Row: {
+          campaign_id: string
+          clicks: number | null
+          cost: number | null
+          created_at: string
+          creative_id: string
+          ctr: number | null
+          date: string
+          id: string
+          impressions: number | null
+          unique_viewers: number | null
+          updated_at: string
+        }
+        Insert: {
+          campaign_id: string
+          clicks?: number | null
+          cost?: number | null
+          created_at?: string
+          creative_id: string
+          ctr?: number | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          unique_viewers?: number | null
+          updated_at?: string
+        }
+        Update: {
+          campaign_id?: string
+          clicks?: number | null
+          cost?: number | null
+          created_at?: string
+          creative_id?: string
+          ctr?: number | null
+          date?: string
+          id?: string
+          impressions?: number | null
+          unique_viewers?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_analytics_daily_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_analytics_daily_creative_id_fkey"
+            columns: ["creative_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_creatives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_creatives: {
         Row: {
           campaign_id: string
           created_at: string
           cta_text: string | null
           description: string | null
+          dimensions_height: number | null
+          dimensions_width: number | null
+          file_size: number | null
+          file_type: string | null
           id: string
           image_url: string | null
           is_approved: boolean | null
           link_url: string | null
           placement_type: Database["public"]["Enums"]["placement_type"]
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           title: string | null
           updated_at: string
         }
@@ -663,11 +1186,18 @@ export type Database = {
           created_at?: string
           cta_text?: string | null
           description?: string | null
+          dimensions_height?: number | null
+          dimensions_width?: number | null
+          file_size?: number | null
+          file_type?: string | null
           id?: string
           image_url?: string | null
           is_approved?: boolean | null
           link_url?: string | null
           placement_type: Database["public"]["Enums"]["placement_type"]
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           title?: string | null
           updated_at?: string
         }
@@ -676,11 +1206,18 @@ export type Database = {
           created_at?: string
           cta_text?: string | null
           description?: string | null
+          dimensions_height?: number | null
+          dimensions_width?: number | null
+          file_size?: number | null
+          file_type?: string | null
           id?: string
           image_url?: string | null
           is_approved?: boolean | null
           link_url?: string | null
           placement_type?: Database["public"]["Enums"]["placement_type"]
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           title?: string | null
           updated_at?: string
         }
@@ -732,47 +1269,118 @@ export type Database = {
           },
         ]
       }
+      campaign_team_members: {
+        Row: {
+          accepted_at: string | null
+          campaign_owner_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          invitation_status: Database["public"]["Enums"]["invitation_status"]
+          invitation_token: string | null
+          invited_at: string
+          role: Database["public"]["Enums"]["team_role"]
+          team_member_email: string
+          team_member_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          campaign_owner_id: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitation_status?: Database["public"]["Enums"]["invitation_status"]
+          invitation_token?: string | null
+          invited_at?: string
+          role?: Database["public"]["Enums"]["team_role"]
+          team_member_email: string
+          team_member_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          campaign_owner_id?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invitation_status?: Database["public"]["Enums"]["invitation_status"]
+          invitation_token?: string | null
+          invited_at?: string
+          role?: Database["public"]["Enums"]["team_role"]
+          team_member_email?: string
+          team_member_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       campaigns: {
         Row: {
+          approval_notes: string | null
+          auto_renew: boolean | null
           created_at: string
           end_date: string | null
           id: string
           name: string
+          original_campaign_id: string | null
+          rejected_reason: string | null
+          renewal_eligible: boolean | null
           start_date: string | null
           status: Database["public"]["Enums"]["campaign_status"]
           stripe_payment_intent_id: string | null
           stripe_session_id: string | null
           total_cost: number | null
+          traffic_tier: Database["public"]["Enums"]["traffic_tier"] | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          approval_notes?: string | null
+          auto_renew?: boolean | null
           created_at?: string
           end_date?: string | null
           id?: string
           name: string
+          original_campaign_id?: string | null
+          rejected_reason?: string | null
+          renewal_eligible?: boolean | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["campaign_status"]
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           total_cost?: number | null
+          traffic_tier?: Database["public"]["Enums"]["traffic_tier"] | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          approval_notes?: string | null
+          auto_renew?: boolean | null
           created_at?: string
           end_date?: string | null
           id?: string
           name?: string
+          original_campaign_id?: string | null
+          rejected_reason?: string | null
+          renewal_eligible?: boolean | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["campaign_status"]
           stripe_payment_intent_id?: string | null
           stripe_session_id?: string | null
           total_cost?: number | null
+          traffic_tier?: Database["public"]["Enums"]["traffic_tier"] | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "campaigns_original_campaign_id_fkey"
+            columns: ["original_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       community_challenges: {
         Row: {
@@ -1081,6 +1689,57 @@ export type Database = {
         }
         Relationships: []
       }
+      content_queue: {
+        Row: {
+          confidence_score: number | null
+          content_data: Json
+          content_id: string | null
+          content_type: string
+          created_at: string | null
+          id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string | null
+          submitted_by: string | null
+          updated_at: string | null
+          validation_results: Json | null
+        }
+        Insert: {
+          confidence_score?: number | null
+          content_data: Json
+          content_id?: string | null
+          content_type: string
+          created_at?: string | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string | null
+          validation_results?: Json | null
+        }
+        Update: {
+          confidence_score?: number | null
+          content_data?: Json
+          content_id?: string | null
+          content_type?: string
+          created_at?: string | null
+          id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
+          updated_at?: string | null
+          validation_results?: Json | null
+        }
+        Relationships: []
+      }
       content_rating_aggregates: {
         Row: {
           average_rating: number
@@ -1247,6 +1906,39 @@ export type Database = {
         }
         Relationships: []
       }
+      data_quality_scans: {
+        Row: {
+          auto_fixed_count: number | null
+          content_type: string
+          id: string
+          issues_found: Json | null
+          manual_review_count: number | null
+          scan_date: string | null
+          scan_duration_ms: number | null
+          total_items_scanned: number | null
+        }
+        Insert: {
+          auto_fixed_count?: number | null
+          content_type: string
+          id?: string
+          issues_found?: Json | null
+          manual_review_count?: number | null
+          scan_date?: string | null
+          scan_duration_ms?: number | null
+          total_items_scanned?: number | null
+        }
+        Update: {
+          auto_fixed_count?: number | null
+          content_type?: string
+          id?: string
+          issues_found?: Json | null
+          manual_review_count?: number | null
+          scan_date?: string | null
+          scan_duration_ms?: number | null
+          total_items_scanned?: number | null
+        }
+        Relationships: []
+      }
       discussion_forums: {
         Row: {
           category: string
@@ -1279,6 +1971,35 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      discussion_likes: {
+        Row: {
+          created_at: string
+          discussion_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          discussion_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          discussion_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discussion_likes_discussion_id_fkey"
+            columns: ["discussion_id"]
+            isOneToOne: false
+            referencedRelation: "event_discussions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       discussion_replies: {
         Row: {
@@ -1463,39 +2184,47 @@ export type Database = {
       }
       event_checkins: {
         Row: {
-          check_in_method: string | null
-          checked_in_at: string
+          checkin_latitude: number | null
+          checkin_longitude: number | null
+          checkin_message: string | null
           created_at: string
+          distance_from_venue_meters: number | null
           event_id: string
           id: string
-          latitude: number | null
-          location_verified: boolean | null
-          longitude: number | null
+          is_verified: boolean | null
           user_id: string
         }
         Insert: {
-          check_in_method?: string | null
-          checked_in_at?: string
+          checkin_latitude?: number | null
+          checkin_longitude?: number | null
+          checkin_message?: string | null
           created_at?: string
+          distance_from_venue_meters?: number | null
           event_id: string
           id?: string
-          latitude?: number | null
-          location_verified?: boolean | null
-          longitude?: number | null
+          is_verified?: boolean | null
           user_id: string
         }
         Update: {
-          check_in_method?: string | null
-          checked_in_at?: string
+          checkin_latitude?: number | null
+          checkin_longitude?: number | null
+          checkin_message?: string | null
           created_at?: string
+          distance_from_venue_meters?: number | null
           event_id?: string
           id?: string
-          latitude?: number | null
-          location_verified?: boolean | null
-          longitude?: number | null
+          is_verified?: boolean | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "event_checkins_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       event_discussion_reactions: {
         Row: {
@@ -1519,26 +2248,17 @@ export type Database = {
           reaction_type?: string | null
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "event_discussion_reactions_discussion_id_fkey"
-            columns: ["discussion_id"]
-            isOneToOne: false
-            referencedRelation: "event_discussions"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       event_discussions: {
         Row: {
           created_at: string
           event_id: string
           id: string
-          is_live: boolean | null
-          likes_count: number | null
-          media_url: string | null
+          is_deleted: boolean | null
+          is_pinned: boolean | null
+          likes_count: number
           message: string
-          message_type: string | null
           parent_id: string | null
           updated_at: string
           user_id: string
@@ -1547,11 +2267,10 @@ export type Database = {
           created_at?: string
           event_id: string
           id?: string
-          is_live?: boolean | null
-          likes_count?: number | null
-          media_url?: string | null
+          is_deleted?: boolean | null
+          is_pinned?: boolean | null
+          likes_count?: number
           message: string
-          message_type?: string | null
           parent_id?: string | null
           updated_at?: string
           user_id: string
@@ -1560,16 +2279,22 @@ export type Database = {
           created_at?: string
           event_id?: string
           id?: string
-          is_live?: boolean | null
-          likes_count?: number | null
-          media_url?: string | null
+          is_deleted?: boolean | null
+          is_pinned?: boolean | null
+          likes_count?: number
           message?: string
-          message_type?: string | null
           parent_id?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "event_discussions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "event_discussions_parent_id_fkey"
             columns: ["parent_id"]
@@ -1659,9 +2384,9 @@ export type Database = {
           caption: string | null
           created_at: string
           event_id: string
-          helpful_votes: number | null
           id: string
-          is_approved: boolean | null
+          is_featured: boolean | null
+          likes_count: number
           photo_url: string
           user_id: string
         }
@@ -1669,9 +2394,9 @@ export type Database = {
           caption?: string | null
           created_at?: string
           event_id: string
-          helpful_votes?: number | null
           id?: string
-          is_approved?: boolean | null
+          is_featured?: boolean | null
+          likes_count?: number
           photo_url: string
           user_id: string
         }
@@ -1679,9 +2404,9 @@ export type Database = {
           caption?: string | null
           created_at?: string
           event_id?: string
-          helpful_votes?: number | null
           id?: string
-          is_approved?: boolean | null
+          is_featured?: boolean | null
+          likes_count?: number
           photo_url?: string
           user_id?: string
         }
@@ -1694,6 +2419,171 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      event_promotion_analytics: {
+        Row: {
+          created_at: string | null
+          data: Json | null
+          event_type: string
+          id: string
+          session_id: string | null
+          user_email: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          data?: Json | null
+          event_type: string
+          id?: string
+          session_id?: string | null
+          user_email?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          data?: Json | null
+          event_type?: string
+          id?: string
+          session_id?: string | null
+          user_email?: string | null
+        }
+        Relationships: []
+      }
+      event_promotion_email_captures: {
+        Row: {
+          created_at: string | null
+          email: string
+          event_date: string
+          event_name: string | null
+          event_type: string
+          id: string
+          organization_name: string | null
+          referral_code: string | null
+          send_reminders: boolean | null
+          unlocked_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          event_date: string
+          event_name?: string | null
+          event_type: string
+          id?: string
+          organization_name?: string | null
+          referral_code?: string | null
+          send_reminders?: boolean | null
+          unlocked_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          event_date?: string
+          event_name?: string | null
+          event_type?: string
+          id?: string
+          organization_name?: string | null
+          referral_code?: string | null
+          send_reminders?: boolean | null
+          unlocked_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      event_promotion_email_sequences: {
+        Row: {
+          clicked_at: string | null
+          created_at: string | null
+          email: string
+          email_type: string
+          id: string
+          opened_at: string | null
+          sent_at: string | null
+          sequence_day: number
+          status: string | null
+        }
+        Insert: {
+          clicked_at?: string | null
+          created_at?: string | null
+          email: string
+          email_type: string
+          id?: string
+          opened_at?: string | null
+          sent_at?: string | null
+          sequence_day: number
+          status?: string | null
+        }
+        Update: {
+          clicked_at?: string | null
+          created_at?: string | null
+          email?: string
+          email_type?: string
+          id?: string
+          opened_at?: string | null
+          sent_at?: string | null
+          sequence_day?: number
+          status?: string | null
+        }
+        Relationships: []
+      }
+      event_promotion_referrals: {
+        Row: {
+          created_at: string | null
+          id: string
+          referral_code: string
+          referred_email: string | null
+          referrer_email: string
+          reward_claimed: boolean | null
+          used: boolean | null
+          used_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          referral_code: string
+          referred_email?: string | null
+          referrer_email: string
+          reward_claimed?: boolean | null
+          used?: boolean | null
+          used_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          referral_code?: string
+          referred_email?: string | null
+          referrer_email?: string
+          reward_claimed?: boolean | null
+          used?: boolean | null
+          used_at?: string | null
+        }
+        Relationships: []
+      }
+      event_promotion_task_completions: {
+        Row: {
+          completed: boolean | null
+          completed_at: string | null
+          created_at: string | null
+          email: string
+          id: string
+          task_id: string
+        }
+        Insert: {
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          task_id: string
+        }
+        Update: {
+          completed?: boolean | null
+          completed_at?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          task_id?: string
+        }
+        Relationships: []
       }
       event_reviews: {
         Row: {
@@ -1838,15 +2728,24 @@ export type Database = {
           geo_faq: Json | null
           geo_key_facts: string[] | null
           geo_summary: string | null
+          geom: unknown
           id: string
           image_url: string | null
+          instance_date: string | null
           is_enhanced: boolean | null
           is_featured: boolean | null
+          is_recurring: boolean | null
+          is_recurring_instance: boolean | null
           latitude: number | null
           location: string
           longitude: number | null
           original_description: string | null
           price: string | null
+          recurrence_end_date: string | null
+          recurrence_parent_id: string | null
+          recurrence_rule: string | null
+          recurrence_start_date: string | null
+          search_vector: unknown
           seo_description: string | null
           seo_h1: string | null
           seo_keywords: string[] | null
@@ -1871,15 +2770,24 @@ export type Database = {
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
+          geom?: unknown
           id?: string
           image_url?: string | null
+          instance_date?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_recurring?: boolean | null
+          is_recurring_instance?: boolean | null
           latitude?: number | null
           location: string
           longitude?: number | null
           original_description?: string | null
           price?: string | null
+          recurrence_end_date?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_rule?: string | null
+          recurrence_start_date?: string | null
+          search_vector?: unknown
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
@@ -1904,15 +2812,24 @@ export type Database = {
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
+          geom?: unknown
           id?: string
           image_url?: string | null
+          instance_date?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_recurring?: boolean | null
+          is_recurring_instance?: boolean | null
           latitude?: number | null
           location?: string
           longitude?: number | null
           original_description?: string | null
           price?: string | null
+          recurrence_end_date?: string | null
+          recurrence_parent_id?: string | null
+          recurrence_rule?: string | null
+          recurrence_start_date?: string | null
+          search_vector?: unknown
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
@@ -1924,7 +2841,15 @@ export type Database = {
           writeup_generated_at?: string | null
           writeup_prompt_used?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "events_recurrence_parent_id_fkey"
+            columns: ["recurrence_parent_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       failed_auth_attempts: {
         Row: {
@@ -1953,6 +2878,42 @@ export type Database = {
           id?: string
           ip_address?: string | null
           user_agent?: string | null
+        }
+        Relationships: []
+      }
+      failed_login_attempts: {
+        Row: {
+          attempt_time: string | null
+          created_at: string | null
+          email: string
+          id: string
+          ip_address: string
+          lockout_until: string | null
+          success: boolean | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          attempt_time?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          ip_address: string
+          lockout_until?: string | null
+          success?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          attempt_time?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          ip_address?: string
+          lockout_until?: string | null
+          success?: boolean | null
+          user_agent?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -2064,6 +3025,150 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      import_jobs: {
+        Row: {
+          completed_at: string | null
+          content_type: string
+          created_at: string | null
+          created_by: string | null
+          error_log: Json | null
+          failed_rows: number | null
+          file_name: string | null
+          id: string
+          imported_rows: number | null
+          skipped_rows: number | null
+          started_at: string | null
+          status: string | null
+          total_rows: number | null
+          validation_summary: Json | null
+        }
+        Insert: {
+          completed_at?: string | null
+          content_type: string
+          created_at?: string | null
+          created_by?: string | null
+          error_log?: Json | null
+          failed_rows?: number | null
+          file_name?: string | null
+          id?: string
+          imported_rows?: number | null
+          skipped_rows?: number | null
+          started_at?: string | null
+          status?: string | null
+          total_rows?: number | null
+          validation_summary?: Json | null
+        }
+        Update: {
+          completed_at?: string | null
+          content_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          error_log?: Json | null
+          failed_rows?: number | null
+          file_name?: string | null
+          id?: string
+          imported_rows?: number | null
+          skipped_rows?: number | null
+          started_at?: string | null
+          status?: string | null
+          total_rows?: number | null
+          validation_summary?: Json | null
+        }
+        Relationships: []
+      }
+      keyword_rankings: {
+        Row: {
+          competition: string | null
+          cpc: number | null
+          created_at: string | null
+          id: string
+          keyword: string
+          metadata: Json | null
+          position: number | null
+          property_id: string
+          provider_name: string
+          search_volume: number | null
+          tracked_date: string
+          trend: string | null
+          updated_at: string | null
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          competition?: string | null
+          cpc?: number | null
+          created_at?: string | null
+          id?: string
+          keyword: string
+          metadata?: Json | null
+          position?: number | null
+          property_id: string
+          provider_name: string
+          search_volume?: number | null
+          tracked_date: string
+          trend?: string | null
+          updated_at?: string | null
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          competition?: string | null
+          cpc?: number | null
+          created_at?: string | null
+          id?: string
+          keyword?: string
+          metadata?: Json | null
+          position?: number | null
+          property_id?: string
+          provider_name?: string
+          search_volume?: number | null
+          tracked_date?: string
+          trend?: string | null
+          updated_at?: string | null
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      oauth_providers: {
+        Row: {
+          authorization_url: string
+          client_id: string | null
+          client_secret: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          provider_name: string
+          scopes: string[]
+          token_url: string
+          updated_at: string | null
+        }
+        Insert: {
+          authorization_url: string
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          provider_name: string
+          scopes: string[]
+          token_url: string
+          updated_at?: string | null
+        }
+        Update: {
+          authorization_url?: string
+          client_id?: string | null
+          client_secret?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          provider_name?: string
+          scopes?: string[]
+          token_url?: string
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       partnership_applications: {
         Row: {
@@ -2203,6 +3308,35 @@ export type Database = {
         }
         Relationships: []
       }
+      photo_likes: {
+        Row: {
+          created_at: string
+          id: string
+          photo_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          photo_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          photo_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photo_likes_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: false
+            referencedRelation: "event_photos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       playgrounds: {
         Row: {
           age_range: string | null
@@ -2248,6 +3382,144 @@ export type Database = {
           name?: string
           rating?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      policy_violations: {
+        Row: {
+          action_taken: string | null
+          campaign_id: string
+          created_at: string
+          creative_id: string | null
+          id: string
+          policy_id: string | null
+          reported_by: string | null
+          violation_details: string
+        }
+        Insert: {
+          action_taken?: string | null
+          campaign_id: string
+          created_at?: string
+          creative_id?: string | null
+          id?: string
+          policy_id?: string | null
+          reported_by?: string | null
+          violation_details: string
+        }
+        Update: {
+          action_taken?: string | null
+          campaign_id?: string
+          created_at?: string
+          creative_id?: string | null
+          id?: string
+          policy_id?: string | null
+          reported_by?: string | null
+          violation_details?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_violations_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_violations_creative_id_fkey"
+            columns: ["creative_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_creatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_violations_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "ad_policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_overrides: {
+        Row: {
+          admin_user_id: string | null
+          campaign_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          notes: string | null
+          original_price: number
+          override_price: number
+          reason: string
+        }
+        Insert: {
+          admin_user_id?: string | null
+          campaign_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          original_price: number
+          override_price: number
+          reason: string
+        }
+        Update: {
+          admin_user_id?: string | null
+          campaign_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          notes?: string | null
+          original_price?: number
+          override_price?: number
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pricing_overrides_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: true
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pricing_rules: {
+        Row: {
+          base_price: number
+          created_at: string
+          demand_multiplier: number | null
+          id: string
+          is_active: boolean | null
+          max_price: number
+          min_price: number
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          traffic_multiplier: number | null
+          updated_at: string
+        }
+        Insert: {
+          base_price: number
+          created_at?: string
+          demand_multiplier?: number | null
+          id?: string
+          is_active?: boolean | null
+          max_price: number
+          min_price: number
+          placement_type: Database["public"]["Enums"]["placement_type"]
+          traffic_multiplier?: number | null
+          updated_at?: string
+        }
+        Update: {
+          base_price?: number
+          created_at?: string
+          demand_multiplier?: number | null
+          id?: string
+          is_active?: boolean | null
+          max_price?: number
+          min_price?: number
+          placement_type?: Database["public"]["Enums"]["placement_type"]
+          traffic_multiplier?: number | null
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2369,6 +3641,53 @@ export type Database = {
           },
         ]
       }
+      refunds: {
+        Row: {
+          admin_user_id: string | null
+          amount: number
+          campaign_id: string
+          created_at: string
+          id: string
+          policy_violation: string | null
+          processed_at: string | null
+          reason: string
+          status: Database["public"]["Enums"]["refund_status"]
+          stripe_refund_id: string | null
+        }
+        Insert: {
+          admin_user_id?: string | null
+          amount: number
+          campaign_id: string
+          created_at?: string
+          id?: string
+          policy_violation?: string | null
+          processed_at?: string | null
+          reason: string
+          status?: Database["public"]["Enums"]["refund_status"]
+          stripe_refund_id?: string | null
+        }
+        Update: {
+          admin_user_id?: string | null
+          amount?: number
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          policy_violation?: string | null
+          processed_at?: string | null
+          reason?: string
+          status?: Database["public"]["Enums"]["refund_status"]
+          stripe_refund_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "refunds_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       restaurant_openings: {
         Row: {
           created_at: string | null
@@ -2417,11 +3736,13 @@ export type Database = {
           city: string | null
           created_at: string | null
           cuisine: string | null
+          data_quality_score: number | null
           description: string | null
           enhanced: string | null
           geo_faq: Json | null
           geo_key_facts: string[] | null
           geo_summary: string | null
+          geom: unknown
           google_place_id: string | null
           id: string
           image_url: string | null
@@ -2437,6 +3758,7 @@ export type Database = {
           popularity_score: number | null
           price_range: string | null
           rating: number | null
+          search_vector: unknown
           seo_description: string | null
           seo_h1: string | null
           seo_keywords: string[] | null
@@ -2454,11 +3776,13 @@ export type Database = {
           city?: string | null
           created_at?: string | null
           cuisine?: string | null
+          data_quality_score?: number | null
           description?: string | null
           enhanced?: string | null
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
+          geom?: unknown
           google_place_id?: string | null
           id?: string
           image_url?: string | null
@@ -2474,6 +3798,7 @@ export type Database = {
           popularity_score?: number | null
           price_range?: string | null
           rating?: number | null
+          search_vector?: unknown
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
@@ -2491,11 +3816,13 @@ export type Database = {
           city?: string | null
           created_at?: string | null
           cuisine?: string | null
+          data_quality_score?: number | null
           description?: string | null
           enhanced?: string | null
           geo_faq?: Json | null
           geo_key_facts?: string[] | null
           geo_summary?: string | null
+          geom?: unknown
           google_place_id?: string | null
           id?: string
           image_url?: string | null
@@ -2511,6 +3838,7 @@ export type Database = {
           popularity_score?: number | null
           price_range?: string | null
           rating?: number | null
+          search_vector?: unknown
           seo_description?: string | null
           seo_h1?: string | null
           seo_keywords?: string[] | null
@@ -2596,43 +3924,96 @@ export type Database = {
       }
       search_analytics: {
         Row: {
-          category: string | null
-          clicked_result_id: string | null
+          clicked_event_id: string | null
+          clicked_position: number | null
           created_at: string
-          date_filter: Json | null
           id: string
-          location: string | null
-          price_filter: string | null
-          query: string
-          results_count: number | null
-          session_id: string
+          results_count: number
+          search_filters: Json | null
+          search_query: string
           user_id: string | null
         }
         Insert: {
-          category?: string | null
-          clicked_result_id?: string | null
+          clicked_event_id?: string | null
+          clicked_position?: number | null
           created_at?: string
-          date_filter?: Json | null
           id?: string
-          location?: string | null
-          price_filter?: string | null
-          query: string
-          results_count?: number | null
-          session_id: string
+          results_count?: number
+          search_filters?: Json | null
+          search_query: string
           user_id?: string | null
         }
         Update: {
-          category?: string | null
-          clicked_result_id?: string | null
+          clicked_event_id?: string | null
+          clicked_position?: number | null
           created_at?: string
-          date_filter?: Json | null
           id?: string
-          location?: string | null
-          price_filter?: string | null
-          query?: string
-          results_count?: number | null
-          session_id?: string
+          results_count?: number
+          search_filters?: Json | null
+          search_query?: string
           user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_analytics_clicked_event_id_fkey"
+            columns: ["clicked_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_performance: {
+        Row: {
+          clicks: number | null
+          country: string | null
+          created_at: string | null
+          ctr: number | null
+          device: string | null
+          id: string
+          impressions: number | null
+          metric_date: string
+          page: string | null
+          position: number | null
+          property_id: string
+          provider_name: string
+          query: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          clicks?: number | null
+          country?: string | null
+          created_at?: string | null
+          ctr?: number | null
+          device?: string | null
+          id?: string
+          impressions?: number | null
+          metric_date: string
+          page?: string | null
+          position?: number | null
+          property_id: string
+          provider_name: string
+          query?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          clicks?: number | null
+          country?: string | null
+          created_at?: string | null
+          ctr?: number | null
+          device?: string | null
+          id?: string
+          impressions?: number | null
+          metric_date?: string
+          page?: string | null
+          position?: number | null
+          property_id?: string
+          provider_name?: string
+          query?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -2711,6 +4092,81 @@ export type Database = {
           resolution_notes?: string | null
           resolved_at?: string | null
           status?: string
+        }
+        Relationships: []
+      }
+      security_settings: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          setting_key: string
+          setting_value: Json
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      site_health_metrics: {
+        Row: {
+          affected_urls: number | null
+          check_date: string
+          created_at: string | null
+          id: string
+          issue_description: string | null
+          metadata: Json | null
+          metric_type: string
+          property_id: string
+          provider_name: string
+          severity: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          affected_urls?: number | null
+          check_date: string
+          created_at?: string | null
+          id?: string
+          issue_description?: string | null
+          metadata?: Json | null
+          metric_type: string
+          property_id: string
+          provider_name: string
+          severity?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          affected_urls?: number | null
+          check_date?: string
+          created_at?: string | null
+          id?: string
+          issue_description?: string | null
+          metadata?: Json | null
+          metric_type?: string
+          property_id?: string
+          provider_name?: string
+          severity?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -2926,6 +4382,72 @@ export type Database = {
         }
         Relationships: []
       }
+      spatial_ref_sys: {
+        Row: {
+          auth_name: string | null
+          auth_srid: number | null
+          proj4text: string | null
+          srid: number
+          srtext: string | null
+        }
+        Insert: {
+          auth_name?: string | null
+          auth_srid?: number | null
+          proj4text?: string | null
+          srid: number
+          srtext?: string | null
+        }
+        Update: {
+          auth_name?: string | null
+          auth_srid?: number | null
+          proj4text?: string | null
+          srid?: number
+          srtext?: string | null
+        }
+        Relationships: []
+      }
+      system_events: {
+        Row: {
+          event_type: string
+          id: string
+          message: string
+          metadata: Json | null
+          resolved: boolean | null
+          resolved_at: string | null
+          resolved_by: string | null
+          severity: number | null
+          source: string
+          timestamp: string | null
+          user_id: string | null
+        }
+        Insert: {
+          event_type: string
+          id?: string
+          message: string
+          metadata?: Json | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: number | null
+          source: string
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          event_type?: string
+          id?: string
+          message?: string
+          metadata?: Json | null
+          resolved?: boolean | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          severity?: number | null
+          source?: string
+          timestamp?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       system_settings: {
         Row: {
           created_at: string
@@ -2947,6 +4469,63 @@ export type Database = {
           setting_type?: string
           settings?: Json
           updated_at?: string
+        }
+        Relationships: []
+      }
+      traffic_metrics: {
+        Row: {
+          avg_session_duration: number | null
+          bounce_rate: number | null
+          country: string | null
+          created_at: string | null
+          device_category: string | null
+          id: string
+          metadata: Json | null
+          metric_date: string
+          new_users: number | null
+          pageviews: number | null
+          property_id: string
+          provider_name: string
+          sessions: number | null
+          updated_at: string | null
+          user_id: string
+          users: number | null
+        }
+        Insert: {
+          avg_session_duration?: number | null
+          bounce_rate?: number | null
+          country?: string | null
+          created_at?: string | null
+          device_category?: string | null
+          id?: string
+          metadata?: Json | null
+          metric_date: string
+          new_users?: number | null
+          pageviews?: number | null
+          property_id: string
+          provider_name: string
+          sessions?: number | null
+          updated_at?: string | null
+          user_id: string
+          users?: number | null
+        }
+        Update: {
+          avg_session_duration?: number | null
+          bounce_rate?: number | null
+          country?: string | null
+          created_at?: string | null
+          device_category?: string | null
+          id?: string
+          metadata?: Json | null
+          metric_date?: string
+          new_users?: number | null
+          pageviews?: number | null
+          property_id?: string
+          provider_name?: string
+          sessions?: number | null
+          updated_at?: string | null
+          user_id?: string
+          users?: number | null
         }
         Relationships: []
       }
@@ -3332,6 +4911,42 @@ export type Database = {
           },
         ]
       }
+      user_email_preferences: {
+        Row: {
+          categories_filter: string[] | null
+          created_at: string
+          digest_day_of_week: number | null
+          digest_time_hour: number | null
+          id: string
+          max_distance_miles: number | null
+          updated_at: string
+          user_id: string
+          weekly_digest_enabled: boolean | null
+        }
+        Insert: {
+          categories_filter?: string[] | null
+          created_at?: string
+          digest_day_of_week?: number | null
+          digest_time_hour?: number | null
+          id?: string
+          max_distance_miles?: number | null
+          updated_at?: string
+          user_id: string
+          weekly_digest_enabled?: boolean | null
+        }
+        Update: {
+          categories_filter?: string[] | null
+          created_at?: string
+          digest_day_of_week?: number | null
+          digest_time_hour?: number | null
+          id?: string
+          max_distance_miles?: number | null
+          updated_at?: string
+          user_id?: string
+          weekly_digest_enabled?: boolean | null
+        }
+        Relationships: []
+      }
       user_event_feedback: {
         Row: {
           created_at: string
@@ -3398,6 +5013,74 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_event_reminders: {
+        Row: {
+          created_at: string | null
+          delivery_method: string | null
+          delivery_status: string | null
+          error_message: string | null
+          event_id: string
+          id: string
+          reminder_type: string
+          sent_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          delivery_method?: string | null
+          delivery_status?: string | null
+          error_message?: string | null
+          event_id: string
+          id?: string
+          reminder_type: string
+          sent_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          delivery_method?: string | null
+          delivery_status?: string | null
+          error_message?: string | null
+          event_id?: string
+          id?: string
+          reminder_type?: string
+          sent_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_event_reminders_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_follows: {
+        Row: {
+          created_at: string
+          follower_id: string
+          following_id: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          follower_id: string
+          following_id: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          follower_id?: string
+          following_id?: string
+          id?: string
+        }
+        Relationships: []
       }
       user_friends: {
         Row: {
@@ -3605,6 +5288,56 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      user_oauth_tokens: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          property_id: string | null
+          provider_name: string
+          refresh_token: string | null
+          scope: string | null
+          token_type: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          property_id?: string | null
+          provider_name: string
+          refresh_token?: string | null
+          scope?: string | null
+          token_type?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          property_id?: string | null
+          provider_name?: string
+          refresh_token?: string | null
+          scope?: string | null
+          token_type?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_oauth_tokens_provider_name_fkey"
+            columns: ["provider_name"]
+            isOneToOne: false
+            referencedRelation: "oauth_providers"
+            referencedColumns: ["provider_name"]
+          },
+        ]
       }
       user_preference_profiles: {
         Row: {
@@ -3873,6 +5606,51 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_logs: {
+        Row: {
+          attempt: number | null
+          created_at: string | null
+          error_message: string | null
+          execution_time_ms: number | null
+          id: string
+          request_payload: Json | null
+          response_body: Json | null
+          response_code: number | null
+          retry_scheduled: string | null
+          status: string
+          triggered_at: string | null
+          webhook_name: string
+        }
+        Insert: {
+          attempt?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          request_payload?: Json | null
+          response_body?: Json | null
+          response_code?: number | null
+          retry_scheduled?: string | null
+          status: string
+          triggered_at?: string | null
+          webhook_name: string
+        }
+        Update: {
+          attempt?: number | null
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          id?: string
+          request_payload?: Json | null
+          response_body?: Json | null
+          response_code?: number | null
+          retry_scheduled?: string | null
+          status?: string
+          triggered_at?: string | null
+          webhook_name?: string
+        }
+        Relationships: []
+      }
       weekend_guides: {
         Row: {
           content: string
@@ -3903,6 +5681,60 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_digest_log: {
+        Row: {
+          created_at: string
+          email_status: string
+          error_message: string | null
+          events_included: number
+          id: string
+          sent_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email_status?: string
+          error_message?: string | null
+          events_included?: number
+          id?: string
+          sent_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email_status?: string
+          error_message?: string | null
+          events_included?: number
+          id?: string
+          sent_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      whitelisted_ips: {
+        Row: {
+          added_by: string | null
+          created_at: string | null
+          description: string | null
+          id: string
+          ip_address: string
+        }
+        Insert: {
+          added_by?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          ip_address: string
+        }
+        Update: {
+          added_by?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          ip_address?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       analytics_dashboard_summary: {
@@ -3915,8 +5747,213 @@ export type Database = {
         }
         Relationships: []
       }
+      event_promotion_analytics_summary: {
+        Row: {
+          date: string | null
+          event_count: number | null
+          event_type: string | null
+          unique_sessions: number | null
+          unique_users: number | null
+        }
+        Relationships: []
+      }
+      geography_columns: {
+        Row: {
+          coord_dimension: number | null
+          f_geography_column: unknown
+          f_table_catalog: unknown
+          f_table_name: unknown
+          f_table_schema: unknown
+          srid: number | null
+          type: string | null
+        }
+        Relationships: []
+      }
+      geometry_columns: {
+        Row: {
+          coord_dimension: number | null
+          f_geometry_column: unknown
+          f_table_catalog: string | null
+          f_table_name: unknown
+          f_table_schema: unknown
+          srid: number | null
+          type: string | null
+        }
+        Insert: {
+          coord_dimension?: number | null
+          f_geometry_column?: unknown
+          f_table_catalog?: string | null
+          f_table_name?: unknown
+          f_table_schema?: unknown
+          srid?: number | null
+          type?: string | null
+        }
+        Update: {
+          coord_dimension?: number | null
+          f_geometry_column?: unknown
+          f_table_catalog?: string | null
+          f_table_name?: unknown
+          f_table_schema?: unknown
+          srid?: number | null
+          type?: string | null
+        }
+        Relationships: []
+      }
+      restaurant_quality_stats: {
+        Row: {
+          avg_quality_score: number | null
+          excellent_quality: number | null
+          fair_quality: number | null
+          good_quality: number | null
+          missing_coordinates: number | null
+          missing_description: number | null
+          missing_image: number | null
+          missing_phone: number | null
+          missing_rating: number | null
+          missing_website: number | null
+          poor_quality: number | null
+          total_restaurants: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
+      _postgis_deprecate: {
+        Args: { newname: string; oldname: string; version: string }
+        Returns: undefined
+      }
+      _postgis_index_extent: {
+        Args: { col: string; tbl: unknown }
+        Returns: unknown
+      }
+      _postgis_pgsql_version: { Args: never; Returns: string }
+      _postgis_scripts_pgsql_version: { Args: never; Returns: string }
+      _postgis_selectivity: {
+        Args: { att_name: string; geom: unknown; mode?: string; tbl: unknown }
+        Returns: number
+      }
+      _postgis_stats: {
+        Args: { ""?: string; att_name: string; tbl: unknown }
+        Returns: string
+      }
+      _st_3dintersects: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_contains: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_containsproperly: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_coveredby:
+        | { Args: { geog1: unknown; geog2: unknown }; Returns: boolean }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      _st_covers:
+        | { Args: { geog1: unknown; geog2: unknown }; Returns: boolean }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      _st_crosses: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_dwithin: {
+        Args: {
+          geog1: unknown
+          geog2: unknown
+          tolerance: number
+          use_spheroid?: boolean
+        }
+        Returns: boolean
+      }
+      _st_equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      _st_intersects: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_linecrossingdirection: {
+        Args: { line1: unknown; line2: unknown }
+        Returns: number
+      }
+      _st_longestline: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      _st_maxdistance: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      _st_orderingequals: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_overlaps: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_sortablehash: { Args: { geom: unknown }; Returns: number }
+      _st_touches: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      _st_voronoi: {
+        Args: {
+          clip?: unknown
+          g1: unknown
+          return_polygons?: boolean
+          tolerance?: number
+        }
+        Returns: unknown
+      }
+      _st_within: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      addauth: { Args: { "": string }; Returns: boolean }
+      addgeometrycolumn:
+        | {
+            Args: {
+              column_name: string
+              new_dim: number
+              new_srid: number
+              new_type: string
+              schema_name: string
+              table_name: string
+              use_typmod?: boolean
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              column_name: string
+              new_dim: number
+              new_srid: number
+              new_type: string
+              table_name: string
+              use_typmod?: boolean
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              catalog_name: string
+              column_name: string
+              new_dim: number
+              new_srid_in: number
+              new_type: string
+              schema_name: string
+              table_name: string
+              use_typmod?: boolean
+            }
+            Returns: string
+          }
+      aggregate_ad_analytics_for_date: {
+        Args: { p_date: string }
+        Returns: {
+          message: string
+          rows_affected: number
+          success: boolean
+        }[]
+      }
+      aggregate_daily_ad_analytics: { Args: never; Returns: undefined }
       award_user_xp: {
         Args: {
           p_activity_type: string
@@ -3927,6 +5964,27 @@ export type Database = {
           p_user_id: string
         }
         Returns: undefined
+      }
+      backfill_ad_analytics: {
+        Args: { p_end_date: string; p_start_date: string }
+        Returns: {
+          date: string
+          rows_affected: number
+          success: boolean
+        }[]
+      }
+      calculate_campaign_pricing: {
+        Args: {
+          p_days_count: number
+          p_placement_type: Database["public"]["Enums"]["placement_type"]
+        }
+        Returns: {
+          base_price: number
+          daily_price: number
+          demand_multiplier: number
+          total_price: number
+          traffic_multiplier: number
+        }[]
       }
       calculate_level_xp: { Args: { level: number }; Returns: number }
       calculate_reputation_level: {
@@ -3939,6 +5997,12 @@ export type Database = {
           is_featured: boolean
           restaurant_rating: number
           review_count?: number
+        }
+        Returns: number
+      }
+      calculate_restaurant_quality_score: {
+        Args: {
+          restaurant_row: Database["public"]["Tables"]["restaurants"]["Row"]
         }
         Returns: number
       }
@@ -3964,53 +6028,216 @@ export type Database = {
           conflicting_events: Json
         }[]
       }
-      check_vault_security_status: { Args: never; Returns: Json }
-      cleanup_old_security_logs: { Args: never; Returns: undefined }
-      cleanup_security_logs: { Args: never; Returns: undefined }
-      fuzzy_search_events: {
-        Args: { search_limit?: number; search_query: string }
+      check_campaign_access: {
+        Args: {
+          p_campaign_id: string
+          p_required_role?: Database["public"]["Enums"]["team_role"]
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      check_reminder_cron_status: {
+        Args: never
         Returns: {
-          ai_writeup: string
+          active: boolean
+          command: string
+          database: string
+          jobid: number
+          jobname: string
+          nodename: string
+          nodeport: number
+          schedule: string
+          username: string
+        }[]
+      }
+      check_vault_security_status: { Args: never; Returns: Json }
+      checkin_to_event: {
+        Args: {
+          p_event_id: string
+          p_latitude: number
+          p_longitude: number
+          p_message?: string
+        }
+        Returns: Json
+      }
+      cleanup_old_events: {
+        Args: { archive_before_delete?: boolean; days_old?: number }
+        Returns: {
+          events_archived: number
+          events_deleted: number
+        }[]
+      }
+      cleanup_old_security_logs: { Args: never; Returns: undefined }
+      cleanup_old_system_events: { Args: never; Returns: undefined }
+      cleanup_old_webhook_logs: { Args: never; Returns: undefined }
+      cleanup_security_logs: { Args: never; Returns: undefined }
+      clone_event: {
+        Args: { p_event_id: string; p_new_date?: string; p_new_title?: string }
+        Returns: string
+      }
+      current_user_email: { Args: never; Returns: string }
+      disablelongtransactions: { Args: never; Returns: string }
+      dropgeometrycolumn:
+        | {
+            Args: {
+              column_name: string
+              schema_name: string
+              table_name: string
+            }
+            Returns: string
+          }
+        | { Args: { column_name: string; table_name: string }; Returns: string }
+        | {
+            Args: {
+              catalog_name: string
+              column_name: string
+              schema_name: string
+              table_name: string
+            }
+            Returns: string
+          }
+      dropgeometrytable:
+        | { Args: { schema_name: string; table_name: string }; Returns: string }
+        | { Args: { table_name: string }; Returns: string }
+        | {
+            Args: {
+              catalog_name: string
+              schema_name: string
+              table_name: string
+            }
+            Returns: string
+          }
+      enablelongtransactions: { Args: never; Returns: string }
+      enhanced_event_search: {
+        Args: {
+          p_category?: string
+          p_date_end?: string
+          p_date_start?: string
+          p_limit?: number
+          p_location?: string
+          p_offset?: number
+          p_price_range?: string
+          p_query: string
+        }
+        Returns: {
           category: string
           city: string
           date: string
-          description: string
           enhanced_description: string
+          event_start_local: string
+          event_start_utc: string
           id: string
           image_url: string
+          is_featured: boolean
           latitude: number
           location: string
           longitude: number
-          original_description: string
           price: string
-          relevance_score: number
-          source_url: string
+          search_rank: number
+          similarity_score: number
           title: string
           venue: string
         }[]
       }
-      fuzzy_search_restaurants: {
-        Args: { search_limit?: number; search_query: string }
+      equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      events_within_radius: {
+        Args: {
+          center_lat: number
+          center_lng: number
+          limit_count?: number
+          radius_miles: number
+        }
         Returns: {
-          city: string
-          cuisine: string
-          description: string
+          date: string
+          distance_miles: number
           id: string
-          image_url: string
           latitude: number
           location: string
           longitude: number
-          name: string
-          phone: string
-          price_range: string
-          rating: number
-          relevance_score: number
-          website: string
+          title: string
+          venue: string
         }[]
       }
+      fuzzy_search_events:
+        | {
+            Args: {
+              limit_count?: number
+              search_query: string
+              similarity_threshold?: number
+            }
+            Returns: {
+              date: string
+              id: string
+              location: string
+              similarity_score: number
+              title: string
+              venue: string
+            }[]
+          }
+        | {
+            Args: { search_limit?: number; search_query: string }
+            Returns: {
+              ai_writeup: string
+              category: string
+              city: string
+              date: string
+              description: string
+              enhanced_description: string
+              id: string
+              image_url: string
+              latitude: number
+              location: string
+              longitude: number
+              original_description: string
+              price: string
+              relevance_score: number
+              source_url: string
+              title: string
+              venue: string
+            }[]
+          }
+      fuzzy_search_restaurants:
+        | {
+            Args: {
+              limit_count?: number
+              search_query: string
+              similarity_threshold?: number
+            }
+            Returns: {
+              city: string
+              cuisine: string
+              id: string
+              location: string
+              name: string
+              similarity_score: number
+            }[]
+          }
+        | {
+            Args: { search_limit?: number; search_query: string }
+            Returns: {
+              city: string
+              cuisine: string
+              description: string
+              id: string
+              image_url: string
+              latitude: number
+              location: string
+              longitude: number
+              name: string
+              phone: string
+              price_range: string
+              rating: number
+              relevance_score: number
+              website: string
+            }[]
+          }
       generate_article_slug: {
         Args: { article_title: string }
         Returns: string
+      }
+      generate_recurring_event_instances: {
+        Args: { p_lookforward_days?: number; p_parent_event_id: string }
+        Returns: number
       }
       generate_restaurant_slug: {
         Args: { restaurant_name: string }
@@ -4020,20 +6247,163 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      geometry: { Args: { "": string }; Returns: unknown }
+      geometry_above: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_below: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_cmp: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      geometry_contained_3d: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_contains: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_contains_3d: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_distance_box: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      geometry_distance_centroid: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      geometry_eq: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_ge: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_gt: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_le: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_left: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_lt: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_overabove: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_overbelow: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_overlaps: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_overlaps_3d: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_overleft: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_overright: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_right: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_same: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_same_3d: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geometry_within: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      geomfromewkt: { Args: { "": string }; Returns: unknown }
       get_active_ads: {
         Args: {
           p_placement_type: Database["public"]["Enums"]["placement_type"]
+          p_session_id?: string
+          p_user_id?: string
         }
         Returns: {
+          campaign_id: string
+          creative_id: string
           cta_text: string
           description: string
-          id: string
           image_url: string
           link_url: string
           title: string
         }[]
       }
+      get_activity_feed: {
+        Args: { p_limit?: number; p_user_id?: string }
+        Returns: {
+          activity_type: string
+          created_at: string
+          event_id: string
+          event_title: string
+          id: string
+          metadata: Json
+          user_id: string
+          user_name: string
+        }[]
+      }
+      get_campaign_analytics_summary: {
+        Args: {
+          p_campaign_id: string
+          p_end_date?: string
+          p_start_date?: string
+        }
+        Returns: {
+          avg_ctr: number
+          days_active: number
+          total_clicks: number
+          total_cost: number
+          total_impressions: number
+          unique_viewers: number
+        }[]
+      }
       get_database_metrics: { Args: never; Returns: Json }
+      get_event_categories: {
+        Args: never
+        Returns: {
+          category: string
+        }[]
+      }
+      get_event_suggestions: {
+        Args: { limit_count?: number; search_query: string }
+        Returns: {
+          similarity_score: number
+          suggestion: string
+          suggestion_type: string
+        }[]
+      }
       get_friends_near_event: {
         Args: {
           p_event_latitude: number
@@ -4052,7 +6422,143 @@ export type Database = {
         Args: { base_time?: string }
         Returns: string
       }
+      get_pending_reminders: {
+        Args: { reminder_window?: string }
+        Returns: {
+          event_date: string
+          event_id: string
+          event_location: string
+          event_start_utc: string
+          event_title: string
+          event_venue: string
+          reminder_id: string
+          reminder_type: string
+          time_until_event: unknown
+          user_email: string
+          user_id: string
+        }[]
+      }
+      get_personalized_recommendations: {
+        Args: { p_limit?: number; p_user_lat?: number; p_user_lon?: number }
+        Returns: {
+          category: string
+          city: string
+          date: string
+          enhanced_description: string
+          event_start_local: string
+          event_start_utc: string
+          id: string
+          image_url: string
+          is_featured: boolean
+          latitude: number
+          location: string
+          longitude: number
+          price: string
+          recommendation_reason: string
+          recommendation_score: number
+          title: string
+          venue: string
+        }[]
+      }
+      get_popular_searches: {
+        Args: { p_days?: number; p_limit?: number }
+        Returns: {
+          avg_results: number
+          search_count: number
+          search_query: string
+        }[]
+      }
+      get_restaurant_cuisines: {
+        Args: never
+        Returns: {
+          cuisine: string
+        }[]
+      }
+      get_restaurant_locations: {
+        Args: never
+        Returns: {
+          location: string
+        }[]
+      }
+      get_restaurants_needing_enrichment: {
+        Args: { limit_count?: number; max_score?: number }
+        Returns: {
+          data_quality_score: number
+          id: string
+          missing_fields: string[]
+          name: string
+        }[]
+      }
+      get_search_suggestions: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          event_count: number
+          suggestion: string
+          suggestion_type: string
+        }[]
+      }
       get_security_recommendations: { Args: never; Returns: Json }
+      get_seo_opportunities: {
+        Args: { p_days_back?: number; p_user_id: string }
+        Returns: {
+          clicks: number
+          ctr: number
+          impressions: number
+          opportunity_type: string
+          page: string
+          position: number
+          potential_impact: string
+          query: string
+          recommendation: string
+        }[]
+      }
+      get_top_keywords: {
+        Args: {
+          p_end_date: string
+          p_limit?: number
+          p_start_date: string
+          p_user_id: string
+        }
+        Returns: {
+          avg_ctr: number
+          avg_position: number
+          query: string
+          total_clicks: number
+          total_impressions: number
+        }[]
+      }
+      get_traffic_summary: {
+        Args: { p_end_date: string; p_start_date: string; p_user_id: string }
+        Returns: {
+          avg_bounce_rate: number
+          avg_session_duration: number
+          metric_date: string
+          total_pageviews: number
+          total_sessions: number
+          total_users: number
+        }[]
+      }
+      get_trending_events: {
+        Args: { p_limit?: number }
+        Returns: {
+          category: string
+          city: string
+          date: string
+          enhanced_description: string
+          event_start_local: string
+          event_start_utc: string
+          id: string
+          image_url: string
+          interaction_count: number
+          is_featured: boolean
+          latitude: number
+          location: string
+          longitude: number
+          price: string
+          title: string
+          venue: string
+        }[]
+      }
       get_user_profile_safe: {
         Args: { target_user_id: string }
         Returns: {
@@ -4070,6 +6576,10 @@ export type Database = {
           user_role: Database["public"]["Enums"]["user_role"]
         }[]
       }
+      get_user_reminders_for_event: {
+        Args: { p_event_id: string }
+        Returns: Json
+      }
       get_user_reputation_weight: { Args: { user_id: string }; Returns: number }
       get_user_role: {
         Args: { user_uuid: string }
@@ -4079,6 +6589,28 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      get_user_weekly_digest_content: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      get_weekly_digest_recipients: {
+        Args: never
+        Returns: {
+          categories_filter: string[]
+          email: string
+          first_name: string
+          home_latitude: number
+          home_longitude: number
+          last_name: string
+          max_distance_miles: number
+          user_id: string
+        }[]
+      }
+      gettransactionid: { Args: never; Returns: unknown }
+      is_account_locked: { Args: { p_email: string }; Returns: boolean }
+      is_admin: { Args: never; Returns: boolean }
+      is_admin_or_root: { Args: never; Returns: boolean }
+      is_ip_blocked: { Args: { p_ip_address: string }; Returns: boolean }
       log_admin_action: {
         Args: {
           p_action_description: string
@@ -4091,14 +6623,767 @@ export type Database = {
         }
         Returns: string
       }
+      longtransactionsenabled: { Args: never; Returns: boolean }
+      mark_reminder_sent: {
+        Args: {
+          p_error_message?: string
+          p_reminder_id: string
+          p_status?: string
+        }
+        Returns: undefined
+      }
+      meters_to_miles: { Args: { meters: number }; Returns: number }
       optimize_database_performance: { Args: never; Returns: Json }
+      parse_recurrence_pattern: {
+        Args: {
+          p_end_date?: string
+          p_max_instances?: number
+          p_rule: string
+          p_start_date: string
+        }
+        Returns: {
+          occurrence_date: string
+        }[]
+      }
       populate_event_live_stats: { Args: never; Returns: undefined }
+      populate_geometry_columns:
+        | { Args: { use_typmod?: boolean }; Returns: string }
+        | { Args: { tbl_oid: unknown; use_typmod?: boolean }; Returns: number }
+      postgis_constraint_dims: {
+        Args: { geomcolumn: string; geomschema: string; geomtable: string }
+        Returns: number
+      }
+      postgis_constraint_srid: {
+        Args: { geomcolumn: string; geomschema: string; geomtable: string }
+        Returns: number
+      }
+      postgis_constraint_type: {
+        Args: { geomcolumn: string; geomschema: string; geomtable: string }
+        Returns: string
+      }
+      postgis_extensions_upgrade: { Args: never; Returns: string }
+      postgis_full_version: { Args: never; Returns: string }
+      postgis_geos_version: { Args: never; Returns: string }
+      postgis_lib_build_date: { Args: never; Returns: string }
+      postgis_lib_revision: { Args: never; Returns: string }
+      postgis_lib_version: { Args: never; Returns: string }
+      postgis_libjson_version: { Args: never; Returns: string }
+      postgis_liblwgeom_version: { Args: never; Returns: string }
+      postgis_libprotobuf_version: { Args: never; Returns: string }
+      postgis_libxml_version: { Args: never; Returns: string }
+      postgis_proj_version: { Args: never; Returns: string }
+      postgis_scripts_build_date: { Args: never; Returns: string }
+      postgis_scripts_installed: { Args: never; Returns: string }
+      postgis_scripts_released: { Args: never; Returns: string }
+      postgis_svn_version: { Args: never; Returns: string }
+      postgis_type_name: {
+        Args: {
+          coord_dimension: number
+          geomname: string
+          use_new_name?: boolean
+        }
+        Returns: string
+      }
+      postgis_version: { Args: never; Returns: string }
+      postgis_wagyu_version: { Args: never; Returns: string }
       purge_old_events: { Args: { retention_months?: number }; Returns: Json }
+      record_login_attempt: {
+        Args: {
+          p_email: string
+          p_ip_address: string
+          p_success: boolean
+          p_user_agent: string
+        }
+        Returns: undefined
+      }
+      refresh_event_promotion_analytics: { Args: never; Returns: undefined }
+      refresh_oauth_token: {
+        Args: { p_provider_name: string; p_user_id: string }
+        Returns: Json
+      }
+      regenerate_all_recurring_instances: {
+        Args: never
+        Returns: {
+          instances_created: number
+          parent_event_id: string
+          parent_title: string
+        }[]
+      }
+      restaurants_within_radius: {
+        Args: {
+          center_lat: number
+          center_lng: number
+          limit_count?: number
+          radius_miles: number
+        }
+        Returns: {
+          city: string
+          cuisine: string
+          distance_miles: number
+          id: string
+          latitude: number
+          location: string
+          longitude: number
+          name: string
+          rating: number
+        }[]
+      }
       run_scraping_jobs: { Args: never; Returns: undefined }
       run_scraping_jobs_simple: { Args: never; Returns: undefined }
       run_social_media_automation: { Args: never; Returns: undefined }
       run_social_media_publishing: { Args: never; Returns: undefined }
+      search_events: {
+        Args: {
+          limit_count?: number
+          search_query: string
+          start_date?: string
+        }
+        Returns: {
+          category: string
+          date: string
+          id: string
+          location: string
+          rank: number
+          title: string
+          venue: string
+        }[]
+      }
+      search_events_near_location: {
+        Args: {
+          radius_meters?: number
+          search_limit?: number
+          user_lat: number
+          user_lon: number
+        }
+        Returns: {
+          category: string
+          city: string
+          date: string
+          distance_meters: number
+          enhanced_description: string
+          event_start_local: string
+          event_start_utc: string
+          id: string
+          image_url: string
+          is_featured: boolean
+          latitude: number
+          location: string
+          longitude: number
+          price: string
+          title: string
+          venue: string
+        }[]
+      }
+      search_restaurants: {
+        Args: { limit_count?: number; search_query: string }
+        Returns: {
+          city: string
+          cuisine: string
+          id: string
+          location: string
+          name: string
+          rank: number
+          rating: number
+        }[]
+      }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      st_3dclosestpoint: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_3ddistance: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      st_3dintersects: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      st_3dlongestline: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_3dmakebox: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_3dmaxdistance: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      st_3dshortestline: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_addpoint: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_angle:
+        | { Args: { line1: unknown; line2: unknown }; Returns: number }
+        | {
+            Args: { pt1: unknown; pt2: unknown; pt3: unknown; pt4?: unknown }
+            Returns: number
+          }
+      st_area:
+        | { Args: { geog: unknown; use_spheroid?: boolean }; Returns: number }
+        | { Args: { "": string }; Returns: number }
+      st_asencodedpolyline: {
+        Args: { geom: unknown; nprecision?: number }
+        Returns: string
+      }
+      st_asewkt: { Args: { "": string }; Returns: string }
+      st_asgeojson:
+        | {
+            Args: {
+              geom_column?: string
+              maxdecimaldigits?: number
+              pretty_bool?: boolean
+              r: Record<string, unknown>
+            }
+            Returns: string
+          }
+        | {
+            Args: { geom: unknown; maxdecimaldigits?: number; options?: number }
+            Returns: string
+          }
+        | {
+            Args: { geog: unknown; maxdecimaldigits?: number; options?: number }
+            Returns: string
+          }
+        | { Args: { "": string }; Returns: string }
+      st_asgml:
+        | {
+            Args: {
+              geom: unknown
+              id?: string
+              maxdecimaldigits?: number
+              nprefix?: string
+              options?: number
+              version: number
+            }
+            Returns: string
+          }
+        | {
+            Args: { geom: unknown; maxdecimaldigits?: number; options?: number }
+            Returns: string
+          }
+        | {
+            Args: {
+              geog: unknown
+              id?: string
+              maxdecimaldigits?: number
+              nprefix?: string
+              options?: number
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              geog: unknown
+              id?: string
+              maxdecimaldigits?: number
+              nprefix?: string
+              options?: number
+              version: number
+            }
+            Returns: string
+          }
+        | { Args: { "": string }; Returns: string }
+      st_askml:
+        | {
+            Args: { geom: unknown; maxdecimaldigits?: number; nprefix?: string }
+            Returns: string
+          }
+        | {
+            Args: { geog: unknown; maxdecimaldigits?: number; nprefix?: string }
+            Returns: string
+          }
+        | { Args: { "": string }; Returns: string }
+      st_aslatlontext: {
+        Args: { geom: unknown; tmpl?: string }
+        Returns: string
+      }
+      st_asmarc21: { Args: { format?: string; geom: unknown }; Returns: string }
+      st_asmvtgeom: {
+        Args: {
+          bounds: unknown
+          buffer?: number
+          clip_geom?: boolean
+          extent?: number
+          geom: unknown
+        }
+        Returns: unknown
+      }
+      st_assvg:
+        | {
+            Args: { geom: unknown; maxdecimaldigits?: number; rel?: number }
+            Returns: string
+          }
+        | {
+            Args: { geog: unknown; maxdecimaldigits?: number; rel?: number }
+            Returns: string
+          }
+        | { Args: { "": string }; Returns: string }
+      st_astext: { Args: { "": string }; Returns: string }
+      st_astwkb:
+        | {
+            Args: {
+              geom: unknown[]
+              ids: number[]
+              prec?: number
+              prec_m?: number
+              prec_z?: number
+              with_boxes?: boolean
+              with_sizes?: boolean
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              geom: unknown
+              prec?: number
+              prec_m?: number
+              prec_z?: number
+              with_boxes?: boolean
+              with_sizes?: boolean
+            }
+            Returns: string
+          }
+      st_asx3d: {
+        Args: { geom: unknown; maxdecimaldigits?: number; options?: number }
+        Returns: string
+      }
+      st_azimuth:
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
+        | { Args: { geog1: unknown; geog2: unknown }; Returns: number }
+      st_boundingdiagonal: {
+        Args: { fits?: boolean; geom: unknown }
+        Returns: unknown
+      }
+      st_buffer:
+        | {
+            Args: { geom: unknown; options?: string; radius: number }
+            Returns: unknown
+          }
+        | {
+            Args: { geom: unknown; quadsegs: number; radius: number }
+            Returns: unknown
+          }
+      st_centroid: { Args: { "": string }; Returns: unknown }
+      st_clipbybox2d: {
+        Args: { box: unknown; geom: unknown }
+        Returns: unknown
+      }
+      st_closestpoint: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_collect: { Args: { geom1: unknown; geom2: unknown }; Returns: unknown }
+      st_concavehull: {
+        Args: {
+          param_allow_holes?: boolean
+          param_geom: unknown
+          param_pctconvex: number
+        }
+        Returns: unknown
+      }
+      st_contains: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      st_containsproperly: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      st_coorddim: { Args: { geometry: unknown }; Returns: number }
+      st_coveredby:
+        | { Args: { geog1: unknown; geog2: unknown }; Returns: boolean }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      st_covers:
+        | { Args: { geog1: unknown; geog2: unknown }; Returns: boolean }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      st_crosses: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      st_curvetoline: {
+        Args: { flags?: number; geom: unknown; tol?: number; toltype?: number }
+        Returns: unknown
+      }
+      st_delaunaytriangles: {
+        Args: { flags?: number; g1: unknown; tolerance?: number }
+        Returns: unknown
+      }
+      st_difference: {
+        Args: { geom1: unknown; geom2: unknown; gridsize?: number }
+        Returns: unknown
+      }
+      st_disjoint: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      st_distance:
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
+        | {
+            Args: { geog1: unknown; geog2: unknown; use_spheroid?: boolean }
+            Returns: number
+          }
+      st_distancesphere:
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: number }
+        | {
+            Args: { geom1: unknown; geom2: unknown; radius: number }
+            Returns: number
+          }
+      st_distancespheroid: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      st_dwithin: {
+        Args: {
+          geog1: unknown
+          geog2: unknown
+          tolerance: number
+          use_spheroid?: boolean
+        }
+        Returns: boolean
+      }
+      st_equals: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      st_expand:
+        | {
+            Args: {
+              dm?: number
+              dx: number
+              dy: number
+              dz?: number
+              geom: unknown
+            }
+            Returns: unknown
+          }
+        | {
+            Args: { box: unknown; dx: number; dy: number; dz?: number }
+            Returns: unknown
+          }
+        | { Args: { box: unknown; dx: number; dy: number }; Returns: unknown }
+      st_force3d: { Args: { geom: unknown; zvalue?: number }; Returns: unknown }
+      st_force3dm: {
+        Args: { geom: unknown; mvalue?: number }
+        Returns: unknown
+      }
+      st_force3dz: {
+        Args: { geom: unknown; zvalue?: number }
+        Returns: unknown
+      }
+      st_force4d: {
+        Args: { geom: unknown; mvalue?: number; zvalue?: number }
+        Returns: unknown
+      }
+      st_generatepoints:
+        | {
+            Args: { area: unknown; npoints: number; seed: number }
+            Returns: unknown
+          }
+        | { Args: { area: unknown; npoints: number }; Returns: unknown }
+      st_geogfromtext: { Args: { "": string }; Returns: unknown }
+      st_geographyfromtext: { Args: { "": string }; Returns: unknown }
+      st_geohash:
+        | { Args: { geom: unknown; maxchars?: number }; Returns: string }
+        | { Args: { geog: unknown; maxchars?: number }; Returns: string }
+      st_geomcollfromtext: { Args: { "": string }; Returns: unknown }
+      st_geometricmedian: {
+        Args: {
+          fail_if_not_converged?: boolean
+          g: unknown
+          max_iter?: number
+          tolerance?: number
+        }
+        Returns: unknown
+      }
+      st_geometryfromtext: { Args: { "": string }; Returns: unknown }
+      st_geomfromewkt: { Args: { "": string }; Returns: unknown }
+      st_geomfromgeojson:
+        | { Args: { "": Json }; Returns: unknown }
+        | { Args: { "": Json }; Returns: unknown }
+        | { Args: { "": string }; Returns: unknown }
+      st_geomfromgml: { Args: { "": string }; Returns: unknown }
+      st_geomfromkml: { Args: { "": string }; Returns: unknown }
+      st_geomfrommarc21: { Args: { marc21xml: string }; Returns: unknown }
+      st_geomfromtext: { Args: { "": string }; Returns: unknown }
+      st_gmltosql: { Args: { "": string }; Returns: unknown }
+      st_hasarc: { Args: { geometry: unknown }; Returns: boolean }
+      st_hausdorffdistance: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      st_hexagon: {
+        Args: { cell_i: number; cell_j: number; origin?: unknown; size: number }
+        Returns: unknown
+      }
+      st_hexagongrid: {
+        Args: { bounds: unknown; size: number }
+        Returns: Record<string, unknown>[]
+      }
+      st_interpolatepoint: {
+        Args: { line: unknown; point: unknown }
+        Returns: number
+      }
+      st_intersection: {
+        Args: { geom1: unknown; geom2: unknown; gridsize?: number }
+        Returns: unknown
+      }
+      st_intersects:
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+        | { Args: { geog1: unknown; geog2: unknown }; Returns: boolean }
+      st_isvaliddetail: {
+        Args: { flags?: number; geom: unknown }
+        Returns: Database["public"]["CompositeTypes"]["valid_detail"]
+        SetofOptions: {
+          from: "*"
+          to: "valid_detail"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      st_length:
+        | { Args: { geog: unknown; use_spheroid?: boolean }; Returns: number }
+        | { Args: { "": string }; Returns: number }
+      st_letters: { Args: { font?: Json; letters: string }; Returns: unknown }
+      st_linecrossingdirection: {
+        Args: { line1: unknown; line2: unknown }
+        Returns: number
+      }
+      st_linefromencodedpolyline: {
+        Args: { nprecision?: number; txtin: string }
+        Returns: unknown
+      }
+      st_linefromtext: { Args: { "": string }; Returns: unknown }
+      st_linelocatepoint: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      st_linetocurve: { Args: { geometry: unknown }; Returns: unknown }
+      st_locatealong: {
+        Args: { geometry: unknown; leftrightoffset?: number; measure: number }
+        Returns: unknown
+      }
+      st_locatebetween: {
+        Args: {
+          frommeasure: number
+          geometry: unknown
+          leftrightoffset?: number
+          tomeasure: number
+        }
+        Returns: unknown
+      }
+      st_locatebetweenelevations: {
+        Args: { fromelevation: number; geometry: unknown; toelevation: number }
+        Returns: unknown
+      }
+      st_longestline: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_makebox2d: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_makeline: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_makevalid: {
+        Args: { geom: unknown; params: string }
+        Returns: unknown
+      }
+      st_maxdistance: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: number
+      }
+      st_minimumboundingcircle: {
+        Args: { inputgeom: unknown; segs_per_quarter?: number }
+        Returns: unknown
+      }
+      st_mlinefromtext: { Args: { "": string }; Returns: unknown }
+      st_mpointfromtext: { Args: { "": string }; Returns: unknown }
+      st_mpolyfromtext: { Args: { "": string }; Returns: unknown }
+      st_multilinestringfromtext: { Args: { "": string }; Returns: unknown }
+      st_multipointfromtext: { Args: { "": string }; Returns: unknown }
+      st_multipolygonfromtext: { Args: { "": string }; Returns: unknown }
+      st_node: { Args: { g: unknown }; Returns: unknown }
+      st_normalize: { Args: { geom: unknown }; Returns: unknown }
+      st_offsetcurve: {
+        Args: { distance: number; line: unknown; params?: string }
+        Returns: unknown
+      }
+      st_orderingequals: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      st_overlaps: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: boolean
+      }
+      st_perimeter: {
+        Args: { geog: unknown; use_spheroid?: boolean }
+        Returns: number
+      }
+      st_pointfromtext: { Args: { "": string }; Returns: unknown }
+      st_pointm: {
+        Args: {
+          mcoordinate: number
+          srid?: number
+          xcoordinate: number
+          ycoordinate: number
+        }
+        Returns: unknown
+      }
+      st_pointz: {
+        Args: {
+          srid?: number
+          xcoordinate: number
+          ycoordinate: number
+          zcoordinate: number
+        }
+        Returns: unknown
+      }
+      st_pointzm: {
+        Args: {
+          mcoordinate: number
+          srid?: number
+          xcoordinate: number
+          ycoordinate: number
+          zcoordinate: number
+        }
+        Returns: unknown
+      }
+      st_polyfromtext: { Args: { "": string }; Returns: unknown }
+      st_polygonfromtext: { Args: { "": string }; Returns: unknown }
+      st_project: {
+        Args: { azimuth: number; distance: number; geog: unknown }
+        Returns: unknown
+      }
+      st_quantizecoordinates: {
+        Args: {
+          g: unknown
+          prec_m?: number
+          prec_x: number
+          prec_y?: number
+          prec_z?: number
+        }
+        Returns: unknown
+      }
+      st_reduceprecision: {
+        Args: { geom: unknown; gridsize: number }
+        Returns: unknown
+      }
+      st_relate: { Args: { geom1: unknown; geom2: unknown }; Returns: string }
+      st_removerepeatedpoints: {
+        Args: { geom: unknown; tolerance?: number }
+        Returns: unknown
+      }
+      st_segmentize: {
+        Args: { geog: unknown; max_segment_length: number }
+        Returns: unknown
+      }
+      st_setsrid:
+        | { Args: { geom: unknown; srid: number }; Returns: unknown }
+        | { Args: { geog: unknown; srid: number }; Returns: unknown }
+      st_sharedpaths: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_shortestline: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_simplifypolygonhull: {
+        Args: { geom: unknown; is_outer?: boolean; vertex_fraction: number }
+        Returns: unknown
+      }
+      st_split: { Args: { geom1: unknown; geom2: unknown }; Returns: unknown }
+      st_square: {
+        Args: { cell_i: number; cell_j: number; origin?: unknown; size: number }
+        Returns: unknown
+      }
+      st_squaregrid: {
+        Args: { bounds: unknown; size: number }
+        Returns: Record<string, unknown>[]
+      }
+      st_srid:
+        | { Args: { geom: unknown }; Returns: number }
+        | { Args: { geog: unknown }; Returns: number }
+      st_subdivide: {
+        Args: { geom: unknown; gridsize?: number; maxvertices?: number }
+        Returns: unknown[]
+      }
+      st_swapordinates: {
+        Args: { geom: unknown; ords: unknown }
+        Returns: unknown
+      }
+      st_symdifference: {
+        Args: { geom1: unknown; geom2: unknown; gridsize?: number }
+        Returns: unknown
+      }
+      st_symmetricdifference: {
+        Args: { geom1: unknown; geom2: unknown }
+        Returns: unknown
+      }
+      st_tileenvelope: {
+        Args: {
+          bounds?: unknown
+          margin?: number
+          x: number
+          y: number
+          zoom: number
+        }
+        Returns: unknown
+      }
+      st_touches: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      st_transform:
+        | { Args: { geom: unknown; to_proj: string }; Returns: unknown }
+        | {
+            Args: { from_proj: string; geom: unknown; to_srid: number }
+            Returns: unknown
+          }
+        | {
+            Args: { from_proj: string; geom: unknown; to_proj: string }
+            Returns: unknown
+          }
+      st_triangulatepolygon: { Args: { g1: unknown }; Returns: unknown }
+      st_union:
+        | {
+            Args: { geom1: unknown; geom2: unknown; gridsize: number }
+            Returns: unknown
+          }
+        | { Args: { geom1: unknown; geom2: unknown }; Returns: unknown }
+      st_voronoilines: {
+        Args: { extend_to?: unknown; g1: unknown; tolerance?: number }
+        Returns: unknown
+      }
+      st_voronoipolygons: {
+        Args: { extend_to?: unknown; g1: unknown; tolerance?: number }
+        Returns: unknown
+      }
+      st_within: { Args: { geom1: unknown; geom2: unknown }; Returns: boolean }
+      st_wkbtosql: { Args: { wkb: string }; Returns: unknown }
+      st_wkttosql: { Args: { "": string }; Returns: unknown }
+      st_wrapx: {
+        Args: { geom: unknown; move: number; wrap: number }
+        Returns: unknown
+      }
+      toggle_discussion_like: {
+        Args: { p_discussion_id: string }
+        Returns: Json
+      }
+      toggle_event_reminder: {
+        Args: {
+          p_enabled?: boolean
+          p_event_id: string
+          p_reminder_type: string
+        }
+        Returns: Json
+      }
       trigger_due_scraping_jobs: { Args: never; Returns: undefined }
+      unaccent: { Args: { "": string }; Returns: string }
+      unlockrows: { Args: { "": string }; Returns: number }
       update_content_rating_aggregate: {
         Args: {
           p_content_id: string
@@ -4115,12 +7400,37 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      updategeometrysrid: {
+        Args: {
+          catalogn_name: string
+          column_name: string
+          new_srid_in: number
+          schema_name: string
+          table_name: string
+        }
+        Returns: string
+      }
       user_has_role_or_higher: {
         Args: {
           required_role: Database["public"]["Enums"]["user_role"]
           user_uuid: string
         }
         Returns: boolean
+      }
+      validate_ad_creative_upload: {
+        Args: {
+          p_campaign_id: string
+          p_file_name: string
+          p_file_size: number
+          p_file_type: string
+          p_height: number
+          p_placement_type: Database["public"]["Enums"]["placement_type"]
+          p_width: number
+        }
+        Returns: {
+          error_message: string
+          is_valid: boolean
+        }[]
       }
     }
     Enums: {
@@ -4131,6 +7441,8 @@ export type Database = {
         | "active"
         | "completed"
         | "cancelled"
+        | "rejected"
+        | "refunded"
       content_type: "event" | "attraction" | "restaurant" | "playground"
       csp_violation_type:
         | "script_src"
@@ -4143,8 +7455,10 @@ export type Database = {
         | "frame_src"
         | "base_uri"
         | "form_action"
+      invitation_status: "pending" | "accepted" | "declined" | "expired"
       placement_type: "top_banner" | "featured_spot" | "below_fold"
       rating_value: "1" | "2" | "3" | "4" | "5"
+      refund_status: "pending" | "completed" | "failed"
       reputation_level:
         | "new"
         | "bronze"
@@ -4153,10 +7467,21 @@ export type Database = {
         | "platinum"
         | "moderator"
         | "admin"
+      team_role: "owner" | "admin" | "editor" | "viewer"
+      traffic_tier: "low" | "medium" | "high" | "peak"
       user_role: "user" | "moderator" | "admin" | "root_admin"
+      violation_severity: "minor" | "major" | "critical"
     }
     CompositeTypes: {
-      [_ in never]: never
+      geometry_dump: {
+        path: number[] | null
+        geom: unknown
+      }
+      valid_detail: {
+        valid: boolean | null
+        reason: string | null
+        location: unknown
+      }
     }
   }
 }
@@ -4288,6 +7613,8 @@ export const Constants = {
         "active",
         "completed",
         "cancelled",
+        "rejected",
+        "refunded",
       ],
       content_type: ["event", "attraction", "restaurant", "playground"],
       csp_violation_type: [
@@ -4302,8 +7629,10 @@ export const Constants = {
         "base_uri",
         "form_action",
       ],
+      invitation_status: ["pending", "accepted", "declined", "expired"],
       placement_type: ["top_banner", "featured_spot", "below_fold"],
       rating_value: ["1", "2", "3", "4", "5"],
+      refund_status: ["pending", "completed", "failed"],
       reputation_level: [
         "new",
         "bronze",
@@ -4313,7 +7642,10 @@ export const Constants = {
         "moderator",
         "admin",
       ],
+      team_role: ["owner", "admin", "editor", "viewer"],
+      traffic_tier: ["low", "medium", "high", "peak"],
       user_role: ["user", "moderator", "admin", "root_admin"],
+      violation_severity: ["minor", "major", "critical"],
     },
   },
 } as const
