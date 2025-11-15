@@ -9,6 +9,14 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+} from "@/components/ui/navigation-menu";
+import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -42,6 +50,8 @@ import {
   Baby,
   Clock,
   Utensils,
+  ChevronRight,
+  Compass,
 } from "lucide-react";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
@@ -108,6 +118,48 @@ export default function Header() {
     );
   };
 
+  // Organized navigation structure for desktop dropdowns
+  const navigationGroups = {
+    events: {
+      label: "Events",
+      icon: Calendar,
+      href: "/events",
+      items: [
+        { href: "/events", label: "All Events", icon: Calendar, featured: true },
+        { href: "/events/today", label: "Today's Events", icon: Calendar },
+        { href: "/events/this-weekend", label: "This Weekend", icon: CalendarDays },
+        { href: "/events/free", label: "Free Events", icon: Gift },
+        { href: "/events/kids", label: "Kids & Family", icon: Baby },
+      ],
+    },
+    dining: {
+      label: "Dining",
+      icon: Utensils,
+      href: "/restaurants",
+      items: [
+        { href: "/restaurants", label: "All Restaurants", icon: Utensils, featured: true },
+        { href: "/restaurants/open-now", label: "Open Now", icon: Clock },
+      ],
+    },
+    explore: {
+      label: "Explore",
+      icon: Compass,
+      items: [
+        { href: "/weekend", label: "Weekend Guide", icon: CalendarDays, featured: true },
+        { href: "/attractions", label: "Attractions", icon: Camera },
+        { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
+      ],
+    },
+    resources: {
+      label: "Resources",
+      icon: FileText,
+      items: [
+        { href: "/articles", label: "Articles & Guides", icon: FileText },
+      ],
+    },
+  };
+
+  // Flat list for mobile menu (with sections)
   const navigationLinks = [
     { href: "/events", label: "Events", icon: Calendar },
     {
@@ -158,31 +210,126 @@ export default function Header() {
             />
           </Link>
 
-          {/* Desktop Navigation - Scrollable if needed */}
-          <nav
-            className="hidden lg:flex items-center gap-2 xl:gap-3 flex-1 overflow-x-auto min-w-0 scrollbar-width-none [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-            role="navigation"
-            aria-label="Main navigation"
-          >
-            {navigationLinks.map((link) => (
-              <Link
-                key={link.href}
-                to={link.href}
-                className={cn(
-                  "flex items-center gap-1.5 smooth-transition touch-target relative text-sm xl:text-base flex-shrink-0",
-                  isActivePath(link.href)
-                    ? "text-primary font-medium after:absolute after:bottom-[-8px] after:left-0 after:right-0 after:h-0.5 after:bg-primary"
-                    : "text-muted-foreground hover:text-primary"
-                )}
-                onMouseEnter={() => prefetchRoute(link.href)}
-                onFocus={() => prefetchRoute(link.href)}
-                aria-current={isActivePath(link.href) ? "page" : undefined}
-              >
-                <link.icon className="h-4 w-4 flex-shrink-0" />
-                <span className="whitespace-nowrap">{link.label}</span>
-              </Link>
-            ))}
-          </nav>
+          {/* Desktop Navigation - Grouped with Dropdowns */}
+          <NavigationMenu className="hidden lg:flex flex-1 min-w-0">
+            <NavigationMenuList className="gap-1">
+              {/* Events */}
+              <NavigationMenuItem>
+                <NavigationMenuTrigger className="h-9 text-sm">
+                  <Calendar className="h-4 w-4 mr-1.5" />
+                  Events
+                </NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid w-[400px] gap-3 p-4 md:w-[500px] md:grid-cols-2">
+                    {navigationGroups.events.items.map((item) => (
+                      <li key={item.href}>
+                        <NavigationMenuLink asChild>
+                          <Link
+                            to={item.href}
+                            className={cn(
+                              "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                              item.featured && "bg-primary/5 border-l-2 border-primary"
+                            )}
+                            onMouseEnter={() => prefetchRoute(item.href)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <item.icon className="h-4 w-4" />
+                              <div className="text-sm font-medium leading-none">
+                                {item.label}
+                              </div>
+                            </div>
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
+                    ))}
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+
+              {/* Dining */}
+              <NavigationMenuItem>
+                <NavigationMenuTrigger className="h-9 text-sm">
+                  <Utensils className="h-4 w-4 mr-1.5" />
+                  Dining
+                </NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid w-[300px] gap-3 p-4">
+                    {navigationGroups.dining.items.map((item) => (
+                      <li key={item.href}>
+                        <NavigationMenuLink asChild>
+                          <Link
+                            to={item.href}
+                            className={cn(
+                              "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                              item.featured && "bg-primary/5 border-l-2 border-primary"
+                            )}
+                            onMouseEnter={() => prefetchRoute(item.href)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <item.icon className="h-4 w-4" />
+                              <div className="text-sm font-medium leading-none">
+                                {item.label}
+                              </div>
+                            </div>
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
+                    ))}
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+
+              {/* Explore */}
+              <NavigationMenuItem>
+                <NavigationMenuTrigger className="h-9 text-sm">
+                  <Compass className="h-4 w-4 mr-1.5" />
+                  Explore
+                </NavigationMenuTrigger>
+                <NavigationMenuContent>
+                  <ul className="grid w-[300px] gap-3 p-4">
+                    {navigationGroups.explore.items.map((item) => (
+                      <li key={item.href}>
+                        <NavigationMenuLink asChild>
+                          <Link
+                            to={item.href}
+                            className={cn(
+                              "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                              item.featured && "bg-primary/5 border-l-2 border-primary"
+                            )}
+                            onMouseEnter={() => prefetchRoute(item.href)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <item.icon className="h-4 w-4" />
+                              <div className="text-sm font-medium leading-none">
+                                {item.label}
+                              </div>
+                            </div>
+                          </Link>
+                        </NavigationMenuLink>
+                      </li>
+                    ))}
+                  </ul>
+                </NavigationMenuContent>
+              </NavigationMenuItem>
+
+              {/* Resources */}
+              <NavigationMenuItem>
+                <NavigationMenuLink asChild>
+                  <Link
+                    to="/articles"
+                    className={cn(
+                      "group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50",
+                      isActivePath("/articles") && "bg-accent/50"
+                    )}
+                    onMouseEnter={() => prefetchRoute("/articles")}
+                  >
+                    <FileText className="h-4 w-4 mr-1.5" />
+                    Articles
+                  </Link>
+                </NavigationMenuLink>
+              </NavigationMenuItem>
+            </NavigationMenuList>
+          </NavigationMenu>
 
           {/* Mobile Menu + User Actions */}
           <div className="flex items-center gap-2">
@@ -231,38 +378,173 @@ export default function Header() {
                   role="none"
                 >
                   <nav
-                    className="space-y-2"
+                    className="space-y-6"
                     role="navigation"
                     aria-label="Mobile navigation"
                   >
-                    {navigationLinks.map((link) => (
-                      <Link
-                        key={link.href}
-                        to={link.href}
-                        onClick={() => {
-                          handleMobileMenuToggle(false);
-                          if ('vibrate' in navigator) {
-                            navigator.vibrate(10);
+                    {/* Events Section */}
+                    <div className="space-y-1">
+                      <div className="px-4 py-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                          <Calendar className="h-3 w-3" />
+                          Events
+                        </h3>
+                      </div>
+                      {navigationGroups.events.items.map((link) => (
+                        <Link
+                          key={link.href}
+                          to={link.href}
+                          onClick={() => {
+                            handleMobileMenuToggle(false);
+                            if ('vibrate' in navigator) {
+                              navigator.vibrate(10);
+                            }
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 p-4 rounded-xl touch-feedback min-h-[56px]",
+                            isActivePath(link.href)
+                              ? "bg-primary/10 text-primary border-2 border-primary/30 font-semibold"
+                              : "hover:bg-muted border-2 border-transparent",
+                            link.featured && "bg-primary/5"
+                          )}
+                          onMouseEnter={() => prefetchRoute(link.href)}
+                          onFocus={() => prefetchRoute(link.href)}
+                          aria-current={
+                            isActivePath(link.href) ? "page" : undefined
                           }
-                        }}
-                        className={cn(
-                          "flex items-center gap-3 p-4 rounded-xl touch-feedback min-h-[56px]",
-                          isActivePath(link.href)
-                            ? "bg-primary/10 text-primary border-2 border-primary/30 font-semibold"
-                            : "hover:bg-muted border-2 border-transparent"
-                        )}
-                        onMouseEnter={() => prefetchRoute(link.href)}
-                        onFocus={() => prefetchRoute(link.href)}
-                        aria-current={
-                          isActivePath(link.href) ? "page" : undefined
-                        }
-                      >
-                        <link.icon className="h-5 w-5 flex-shrink-0" />
-                        <span className="text-base font-medium">
-                          {link.label}
-                        </span>
-                      </Link>
-                    ))}
+                        >
+                          <link.icon className="h-5 w-5 flex-shrink-0" />
+                          <span className="text-base font-medium">
+                            {link.label}
+                          </span>
+                          {link.featured && (
+                            <ChevronRight className="h-4 w-4 ml-auto text-primary" />
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+
+                    {/* Dining Section */}
+                    <div className="space-y-1">
+                      <div className="px-4 py-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                          <Utensils className="h-3 w-3" />
+                          Dining
+                        </h3>
+                      </div>
+                      {navigationGroups.dining.items.map((link) => (
+                        <Link
+                          key={link.href}
+                          to={link.href}
+                          onClick={() => {
+                            handleMobileMenuToggle(false);
+                            if ('vibrate' in navigator) {
+                              navigator.vibrate(10);
+                            }
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 p-4 rounded-xl touch-feedback min-h-[56px]",
+                            isActivePath(link.href)
+                              ? "bg-primary/10 text-primary border-2 border-primary/30 font-semibold"
+                              : "hover:bg-muted border-2 border-transparent",
+                            link.featured && "bg-primary/5"
+                          )}
+                          onMouseEnter={() => prefetchRoute(link.href)}
+                          onFocus={() => prefetchRoute(link.href)}
+                          aria-current={
+                            isActivePath(link.href) ? "page" : undefined
+                          }
+                        >
+                          <link.icon className="h-5 w-5 flex-shrink-0" />
+                          <span className="text-base font-medium">
+                            {link.label}
+                          </span>
+                          {link.featured && (
+                            <ChevronRight className="h-4 w-4 ml-auto text-primary" />
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+
+                    {/* Explore Section */}
+                    <div className="space-y-1">
+                      <div className="px-4 py-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                          <Compass className="h-3 w-3" />
+                          Explore
+                        </h3>
+                      </div>
+                      {navigationGroups.explore.items.map((link) => (
+                        <Link
+                          key={link.href}
+                          to={link.href}
+                          onClick={() => {
+                            handleMobileMenuToggle(false);
+                            if ('vibrate' in navigator) {
+                              navigator.vibrate(10);
+                            }
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 p-4 rounded-xl touch-feedback min-h-[56px]",
+                            isActivePath(link.href)
+                              ? "bg-primary/10 text-primary border-2 border-primary/30 font-semibold"
+                              : "hover:bg-muted border-2 border-transparent",
+                            link.featured && "bg-primary/5"
+                          )}
+                          onMouseEnter={() => prefetchRoute(link.href)}
+                          onFocus={() => prefetchRoute(link.href)}
+                          aria-current={
+                            isActivePath(link.href) ? "page" : undefined
+                          }
+                        >
+                          <link.icon className="h-5 w-5 flex-shrink-0" />
+                          <span className="text-base font-medium">
+                            {link.label}
+                          </span>
+                          {link.featured && (
+                            <ChevronRight className="h-4 w-4 ml-auto text-primary" />
+                          )}
+                        </Link>
+                      ))}
+                    </div>
+
+                    {/* Resources Section */}
+                    <div className="space-y-1">
+                      <div className="px-4 py-2">
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                          <FileText className="h-3 w-3" />
+                          Resources
+                        </h3>
+                      </div>
+                      {navigationGroups.resources.items.map((link) => (
+                        <Link
+                          key={link.href}
+                          to={link.href}
+                          onClick={() => {
+                            handleMobileMenuToggle(false);
+                            if ('vibrate' in navigator) {
+                              navigator.vibrate(10);
+                            }
+                          }}
+                          className={cn(
+                            "flex items-center gap-3 p-4 rounded-xl touch-feedback min-h-[56px]",
+                            isActivePath(link.href)
+                              ? "bg-primary/10 text-primary border-2 border-primary/30 font-semibold"
+                              : "hover:bg-muted border-2 border-transparent"
+                          )}
+                          onMouseEnter={() => prefetchRoute(link.href)}
+                          onFocus={() => prefetchRoute(link.href)}
+                          aria-current={
+                            isActivePath(link.href) ? "page" : undefined
+                          }
+                        >
+                          <link.icon className="h-5 w-5 flex-shrink-0" />
+                          <span className="text-base font-medium">
+                            {link.label}
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
                   </nav>
 
                   {/* Mobile Theme Toggle */}

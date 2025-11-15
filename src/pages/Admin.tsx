@@ -10,6 +10,11 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useNavigate } from "react-router-dom";
 import ContentEditDialog from "@/components/ContentEditDialog";
 import UserRoleManager from "@/components/UserRoleManager";
@@ -77,6 +82,9 @@ import {
   CheckCircle,
   ScrollText,
   ClipboardCheck,
+  ChevronDown,
+  Layers,
+  Wrench,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -100,6 +108,19 @@ export default function Admin() {
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Collapsible sections state
+  const [openSections, setOpenSections] = useState({
+    aiTools: true,
+    contentTypes: true,
+    contentTools: false,
+    security: false,
+    system: false,
+  });
+
+  const toggleSection = (section: keyof typeof openSections) => {
+    setOpenSections((prev) => ({ ...prev, [section]: !prev[section] }));
+  };
 
   // Search state for each content type
   const [searchTerms, setSearchTerms] = useState({
@@ -456,515 +477,485 @@ export default function Admin() {
                 {!sidebarCollapsed && <span>Overview</span>}
               </button>
 
-              {canManageContent() && (
+              {canManageContent() && !sidebarCollapsed && (
                 <>
-                  {!sidebarCollapsed && (
-                    <div className="pt-4 pb-2">
-                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Content Management
-                      </h3>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => setActiveTab("ai-crawler")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "ai-crawler"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "AI Crawler" : ""}
+                  {/* AI Tools Section */}
+                  <Collapsible
+                    open={openSections.aiTools}
+                    onOpenChange={() => toggleSection("aiTools")}
+                    className="mt-4"
                   >
-                    <Bot className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>AI Crawler</span>}
-                  </button>
+                    <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors">
+                      <div className="flex items-center gap-2">
+                        <Bot className="h-4 w-4" />
+                        <span className="text-sm font-medium">AI & Automation</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          openSections.aiTools ? "rotate-180" : ""
+                        }`}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-1 pl-2">
+                      <button
+                        onClick={() => setActiveTab("ai-crawler")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "ai-crawler"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Bot className="h-4 w-4" />
+                        <span>AI Crawler</span>
+                      </button>
 
-                  <button
-                    onClick={() => setActiveTab("ai-configuration")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "ai-configuration"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "AI Configuration" : ""}
+                      <button
+                        onClick={() => setActiveTab("ai-configuration")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "ai-configuration"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        <span>AI Configuration</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("ai-enhancement")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "ai-enhancement"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Sparkles className="h-4 w-4" />
+                        <span>AI Event Enhancement</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("ai-article-generator")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "ai-article-generator"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Bot className="h-4 w-4" />
+                        <span>AI Article Generator</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("scraping")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "scraping"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Zap className="h-4 w-4" />
+                        <span>Scraping</span>
+                      </button>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  {/* Content Types Section */}
+                  <Collapsible
+                    open={openSections.contentTypes}
+                    onOpenChange={() => toggleSection("contentTypes")}
                   >
-                    <Sparkles className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>AI Configuration</span>}
-                  </button>
+                    <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors">
+                      <div className="flex items-center gap-2">
+                        <Layers className="h-4 w-4" />
+                        <span className="text-sm font-medium">Content Types</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          openSections.contentTypes ? "rotate-180" : ""
+                        }`}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-1 pl-2">
+                      <button
+                        onClick={() => setActiveTab("events")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "events"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Calendar className="h-4 w-4" />
+                        <span>Events</span>
+                      </button>
 
-                  <button
-                    onClick={() => setActiveTab("scraping")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "scraping"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Scraping" : ""}
+                      <button
+                        onClick={() => setActiveTab("restaurants")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "restaurants"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Utensils className="h-4 w-4" />
+                        <span>Restaurants</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("restaurant-openings")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "restaurant-openings"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Building className="h-4 w-4" />
+                        <span>Restaurant Openings</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("attractions")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "attractions"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Camera className="h-4 w-4" />
+                        <span>Attractions</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("playgrounds")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "playgrounds"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Play className="h-4 w-4" />
+                        <span>Playgrounds</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("articles")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "articles"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <FileText className="h-4 w-4" />
+                        <span>Articles</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("article-editor")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "article-editor"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span>New Article</span>
+                      </button>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  {/* Content Tools Section */}
+                  <Collapsible
+                    open={openSections.contentTools}
+                    onOpenChange={() => toggleSection("contentTools")}
                   >
-                    <Zap className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Scraping</span>}
-                  </button>
+                    <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors">
+                      <div className="flex items-center gap-2">
+                        <Wrench className="h-4 w-4" />
+                        <span className="text-sm font-medium">Content Tools</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          openSections.contentTools ? "rotate-180" : ""
+                        }`}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-1 pl-2">
+                      <button
+                        onClick={() => setActiveTab("event-submissions")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "event-submissions"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <UserCheck className="h-4 w-4" />
+                        <span>Event Submissions</span>
+                      </button>
 
+                      <button
+                        onClick={() => setActiveTab("seo")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "seo"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Globe className="h-4 w-4" />
+                        <span>SEO Tools</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("weekend-guide")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "weekend-guide"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <CalendarDays className="h-4 w-4" />
+                        <span>Weekend Guide</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("affiliate-manager")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "affiliate-manager"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <DollarSign className="h-4 w-4" />
+                        <span>Affiliate Links</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("social-media")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "social-media"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Share2 className="h-4 w-4" />
+                        <span>Social Media</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("coordinates")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "coordinates"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Settings className="h-4 w-4" />
+                        <span>Coordinates</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("competitor-analysis")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "competitor-analysis"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Target className="h-4 w-4" />
+                        <span>Competitor Analysis</span>
+                      </button>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </>
+              )}
+
+              {canManageUsers() && !sidebarCollapsed && (
+                <>
+                  {/* Security & Monitoring Section */}
+                  <Collapsible
+                    open={openSections.security}
+                    onOpenChange={() => toggleSection("security")}
+                    className="mt-4"
+                  >
+                    <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4" />
+                        <span className="text-sm font-medium">Security & Analytics</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          openSections.security ? "rotate-180" : ""
+                        }`}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-1 pl-2">
+                      <button
+                        onClick={() => setActiveTab("security")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "security"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <ShieldCheck className="h-4 w-4" />
+                        <span>Security Manager</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("activity-logs")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "activity-logs"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <ScrollText className="h-4 w-4" />
+                        <span>Activity Logs</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("content-queue")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "content-queue"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <ClipboardCheck className="h-4 w-4" />
+                        <span>Content Queue</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("analytics")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "analytics"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                        <span>Advanced Analytics</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("data-quality")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "data-quality"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        <span>Data Quality</span>
+                      </button>
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  {/* System Administration Section */}
+                  <Collapsible
+                    open={openSections.system}
+                    onOpenChange={() => toggleSection("system")}
+                  >
+                    <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors">
+                      <div className="flex items-center gap-2">
+                        <Server className="h-4 w-4" />
+                        <span className="text-sm font-medium">System Admin</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          openSections.system ? "rotate-180" : ""
+                        }`}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-1 pl-2">
+                      <button
+                        onClick={() => setActiveTab("users")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "users"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Users className="h-4 w-4" />
+                        <span>User Management</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("system")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "system"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Server className="h-4 w-4" />
+                        <span>System Controls</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("settings")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "settings"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Cog className="h-4 w-4" />
+                        <span>Settings</span>
+                      </button>
+                    </CollapsibleContent>
+                  </Collapsible>
+                </>
+              )}
+
+              {/* Collapsed Sidebar - Show Key Icon Buttons */}
+              {sidebarCollapsed && canManageContent() && (
+                <>
+                  <div className="pt-4 border-t border-border" />
                   <button
                     onClick={() => setActiveTab("events")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                    className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-left transition-colors ${
                       activeTab === "events"
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-accent hover:text-accent-foreground"
                     }`}
-                    title={sidebarCollapsed ? "Events" : ""}
+                    title="Events"
                   >
                     <Calendar className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Events</span>}
                   </button>
 
                   <button
                     onClick={() => setActiveTab("restaurants")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                    className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-left transition-colors ${
                       activeTab === "restaurants"
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-accent hover:text-accent-foreground"
                     }`}
-                    title={sidebarCollapsed ? "Restaurants" : ""}
+                    title="Restaurants"
                   >
                     <Utensils className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Restaurants</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("attractions")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "attractions"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Attractions" : ""}
-                  >
-                    <Camera className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Attractions</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("playgrounds")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "playgrounds"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Playgrounds" : ""}
-                  >
-                    <Play className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Playgrounds</span>}
                   </button>
 
                   <button
                     onClick={() => setActiveTab("articles")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                    className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-left transition-colors ${
                       activeTab === "articles"
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-accent hover:text-accent-foreground"
                     }`}
-                    title={sidebarCollapsed ? "Articles" : ""}
+                    title="Articles"
                   >
                     <FileText className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Articles</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("ai-article-generator")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "ai-article-generator"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "AI Article Generator" : ""}
-                  >
-                    <Bot className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>AI Article Generator</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("ai-enhancement")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "ai-enhancement"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "AI Event Enhancement" : ""}
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>AI Event Enhancement</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("article-editor")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "article-editor"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Article Editor" : ""}
-                  >
-                    <Plus className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>New Article</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("restaurant-openings")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "restaurant-openings"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Restaurant Openings" : ""}
-                  >
-                    <Building className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Restaurant Openings</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("event-submissions")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "event-submissions"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Event Submissions" : ""}
-                  >
-                    <UserCheck className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Event Submissions</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("affiliate-manager")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "affiliate-manager"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Affiliate Links" : ""}
-                  >
-                    <DollarSign className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Affiliate Links</span>}
-                  </button>
-
-                   <button
-                     onClick={() => setActiveTab("social-media")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "social-media"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Social Media" : ""}
-                   >
-                     <Share2 className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Social Media</span>}
-                   </button>
-
-                    <button
-                      onClick={() => setActiveTab("coordinates")}
-                      className={`w-full flex items-center ${
-                        sidebarCollapsed ? "justify-center" : "gap-3"
-                      } px-3 py-2 rounded-lg text-left transition-colors ${
-                        activeTab === "coordinates"
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent hover:text-accent-foreground"
-                      }`}
-                      title={sidebarCollapsed ? "Coordinates" : ""}
-                    >
-                      <Settings className="h-4 w-4" />
-                      {!sidebarCollapsed && <span>Coordinates</span>}
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("competitor-analysis")}
-                      className={`w-full flex items-center ${
-                        sidebarCollapsed ? "justify-center" : "gap-3"
-                      } px-3 py-2 rounded-lg text-left transition-colors ${
-                        activeTab === "competitor-analysis"
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent hover:text-accent-foreground"
-                      }`}
-                      title={sidebarCollapsed ? "Competitor Analysis" : ""}
-                    >
-                      <Target className="h-4 w-4" />
-                      {!sidebarCollapsed && <span>Competitor Analysis</span>}
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("coordinates")}
-                      className={`w-full flex items-center ${
-                        sidebarCollapsed ? "justify-center" : "gap-3"
-                      } px-3 py-2 rounded-lg text-left transition-colors ${
-                        activeTab === "coordinates"
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent hover:text-accent-foreground"
-                      }`}
-                      title={sidebarCollapsed ? "Coordinates" : ""}
-                    >
-                      <Settings className="h-4 w-4" />
-                      {!sidebarCollapsed && <span>Coordinates</span>}
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("event-submission")}
-                      className={`w-full flex items-center ${
-                        sidebarCollapsed ? "justify-center" : "gap-3"
-                      } px-3 py-2 rounded-lg text-left transition-colors ${
-                        activeTab === "event-submission"
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent hover:text-accent-foreground"
-                      }`}
-                      title={sidebarCollapsed ? "Event Submission" : ""}
-                    >
-                      <Globe className="h-4 w-4" />
-                      {!sidebarCollapsed && <span>Event Submission</span>}
-                    </button>
-
-                    <button
-                      onClick={() => setActiveTab("distribution-stats")}
-                      className={`w-full flex items-center ${
-                        sidebarCollapsed ? "justify-center" : "gap-3"
-                      } px-3 py-2 rounded-lg text-left transition-colors ${
-                        activeTab === "distribution-stats"
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-accent hover:text-accent-foreground"
-                      }`}
-                      title={sidebarCollapsed ? "Distribution Stats" : ""}
-                    >
-                      <BarChart3 className="h-4 w-4" />
-                      {!sidebarCollapsed && <span>Distribution Stats</span>}
-                    </button>
-                  </>
-                )}
-
-               {canManageUsers() && (
-                 <>
-                   {!sidebarCollapsed && (
-                     <div className="pt-4 pb-2">
-                       <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                         Enterprise Security
-                       </h3>
-                     </div>
-                   )}
-
-                   <button
-                     onClick={() => setActiveTab("security")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "security"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Security Manager" : ""}
-                   >
-                     <ShieldCheck className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Security Manager</span>}
-                   </button>
-
-                   <button
-                     onClick={() => setActiveTab("activity-logs")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "activity-logs"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Activity Logs" : ""}
-                   >
-                     <ScrollText className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Activity Logs</span>}
-                   </button>
-
-                   <button
-                     onClick={() => setActiveTab("content-queue")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "content-queue"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Content Queue" : ""}
-                   >
-                     <ClipboardCheck className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Content Queue</span>}
-                   </button>
-
-                   <button
-                     onClick={() => setActiveTab("analytics")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "analytics"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Advanced Analytics" : ""}
-                   >
-                     <BarChart3 className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Advanced Analytics</span>}
-                   </button>
-
-                   <button
-                     onClick={() => setActiveTab("search-traffic")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "search-traffic"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Search & Traffic Analytics" : ""}
-                   >
-                     <TrendingUp className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Search & Traffic</span>}
-                   </button>
-
-                   <button
-                     onClick={() => setActiveTab("data-quality")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "data-quality"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "Data Quality" : ""}
-                   >
-                     <CheckCircle className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>Data Quality</span>}
-                   </button>
-
-                   <button
-                     onClick={() => setActiveTab("system")}
-                     className={`w-full flex items-center ${
-                       sidebarCollapsed ? "justify-center" : "gap-3"
-                     } px-3 py-2 rounded-lg text-left transition-colors ${
-                       activeTab === "system"
-                         ? "bg-primary text-primary-foreground"
-                         : "hover:bg-accent hover:text-accent-foreground"
-                     }`}
-                     title={sidebarCollapsed ? "System Controls" : ""}
-                   >
-                     <Server className="h-4 w-4" />
-                     {!sidebarCollapsed && <span>System Controls</span>}
-                   </button>
-                </>
-              )}
-
-              {canManageUsers() && (
-                <>
-                  {!sidebarCollapsed && (
-                    <div className="pt-4 pb-2">
-                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        User Management
-                      </h3>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => setActiveTab("users")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "users"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "User Management" : ""}
-                  >
-                    <Users className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>User Management</span>}
-                  </button>
-                </>
-              )}
-
-              {canManageContent() && (
-                <>
-                  {!sidebarCollapsed && (
-                    <div className="pt-4 pb-2">
-                      <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        System Tools
-                      </h3>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => setActiveTab("settings")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "settings"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Settings" : ""}
-                  >
-                    <Cog className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Settings</span>}
                   </button>
 
                   <button
                     onClick={() => setActiveTab("seo")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
+                    className={`w-full flex items-center justify-center px-3 py-2 rounded-lg text-left transition-colors ${
                       activeTab === "seo"
                         ? "bg-primary text-primary-foreground"
                         : "hover:bg-accent hover:text-accent-foreground"
                     }`}
-                    title={sidebarCollapsed ? "SEO Tools" : ""}
+                    title="SEO Tools"
                   >
                     <Globe className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>SEO Tools</span>}
-                  </button>
-
-                  <button
-                    onClick={() => setActiveTab("weekend-guide")}
-                    className={`w-full flex items-center ${
-                      sidebarCollapsed ? "justify-center" : "gap-3"
-                    } px-3 py-2 rounded-lg text-left transition-colors ${
-                      activeTab === "weekend-guide"
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                    title={sidebarCollapsed ? "Weekend Guide" : ""}
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                    {!sidebarCollapsed && <span>Weekend Guide</span>}
                   </button>
                 </>
               )}
