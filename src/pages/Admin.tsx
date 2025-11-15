@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/collapsible";
 import { useNavigate } from "react-router-dom";
 import ContentEditDialog from "@/components/ContentEditDialog";
+import ContentTemplateSelector from "@/components/ContentTemplateSelector";
 import UserRoleManager from "@/components/UserRoleManager";
 import ContentTable from "@/components/ContentTable";
 import AICrawler from "@/components/AICrawler";
@@ -46,6 +47,7 @@ import ArticlesManager from "@/components/ArticlesManager";
 import AIArticleGenerator from "@/components/AIArticleGenerator";
 import AIEnhancementManager from "@/components/AIEnhancementManager";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
+import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 // import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard"; // Temporarily disabled - requires database migrations
 import { useArticles } from "@/hooks/useArticles";
 import {
@@ -233,6 +235,15 @@ export default function Admin() {
     item: null,
   });
 
+  // Template selector state
+  const [templateSelector, setTemplateSelector] = useState<{
+    open: boolean;
+    contentType: 'event' | 'article' | null;
+  }>({
+    open: false,
+    contentType: null,
+  });
+
   // Data hooks with search filters
   const events = useEvents({ search: searchTerms.events });
   const restaurants = useRestaurants({ search: searchTerms.restaurants });
@@ -279,7 +290,16 @@ export default function Admin() {
   };
 
   const handleCreate = (contentType: ContentType) => {
-    // Create an empty item with default values based on content type
+    // For events, show template selector first
+    if (contentType === "event") {
+      setTemplateSelector({
+        open: true,
+        contentType: 'event',
+      });
+      return;
+    }
+
+    // For other content types, create with default values
     let emptyItem: Partial<ContentItem> = {};
 
     if (contentType === "restaurant") {
@@ -297,19 +317,6 @@ export default function Admin() {
         openingDate: null,
         openingTimeframe: "",
         isFeatured: false,
-      };
-    } else if (contentType === "event") {
-      emptyItem = {
-        title: "",
-        original_description: "",
-        date: new Date(),
-        location: "",
-        venue: "",
-        category: "General",
-        price: "",
-        source_url: "",
-        is_featured: false,
-        is_enhanced: false,
       };
     } else if (contentType === "attraction") {
       emptyItem = {
@@ -339,6 +346,80 @@ export default function Admin() {
       open: true,
       contentType,
       item: { ...emptyItem, isNew: true } as unknown as ContentItem, // Mark as new for the dialog
+    });
+  };
+
+  const handleTemplateSelect = (template: any) => {
+    // Get the content type from template selector
+    const contentType = templateSelector.contentType;
+    if (!contentType) return;
+
+    // Close template selector
+    setTemplateSelector({ open: false, contentType: null });
+
+    // Create item with defaults
+    let emptyItem: Partial<ContentItem> = {};
+
+    if (contentType === 'event') {
+      emptyItem = {
+        title: "",
+        original_description: "",
+        date: new Date(),
+        location: "",
+        venue: "",
+        category: "General",
+        price: "",
+        source_url: "",
+        is_featured: false,
+        is_enhanced: false,
+      };
+
+      // Apply template defaults if a template was selected
+      if (template) {
+        emptyItem = {
+          ...emptyItem,
+          ...template.defaultValues,
+        };
+      }
+    }
+
+    // Open edit dialog with the item
+    setEditDialog({
+      open: true,
+      contentType: contentType as ContentType,
+      item: { ...emptyItem, isNew: true } as unknown as ContentItem,
+    });
+  };
+
+  const handleQuickCreate = (templateId: string, contentType: 'event' | 'article') => {
+    // Import the template function
+    import('@/lib/contentTemplates').then(({ getTemplateById }) => {
+      const template = getTemplateById(templateId);
+      if (!template) return;
+
+      // For events, create directly with template
+      if (contentType === 'event') {
+        const emptyItem: Partial<ContentItem> = {
+          title: "",
+          original_description: "",
+          date: new Date(),
+          location: "",
+          venue: "",
+          category: "General",
+          price: "",
+          source_url: "",
+          is_featured: false,
+          is_enhanced: false,
+          ...template.defaultValues,
+        };
+
+        setEditDialog({
+          open: true,
+          contentType: 'event',
+          item: { ...emptyItem, isNew: true } as unknown as ContentItem,
+        });
+      }
+      // Add article handling here when ArticlesManager supports it
     });
   };
 
@@ -1076,6 +1157,12 @@ export default function Admin() {
               </div>
             )}
 
+            {activeTab === "overview" && canManageContent() && (
+              <div className="mt-6">
+                <QuickCreatePanel onCreateFromTemplate={handleQuickCreate} />
+              </div>
+            )}
+
             {canManageContent() && activeTab === "ai-crawler" && <AICrawler />}
 
             {canManageContent() && activeTab === "ai-configuration" && (
@@ -1472,6 +1559,20 @@ export default function Admin() {
         <ScrapingJobManager
           isOpen={showJobManager}
           onClose={() => setShowJobManager(false)}
+        />
+      )}
+
+      {/* Content Template Selector */}
+      {templateSelector.open && templateSelector.contentType && (
+        <ContentTemplateSelector
+          open={templateSelector.open}
+          onOpenChange={(open) => {
+            if (!open) {
+              setTemplateSelector({ open: false, contentType: null });
+            }
+          }}
+          contentType={templateSelector.contentType}
+          onSelectTemplate={handleTemplateSelect}
         />
       )}
 
