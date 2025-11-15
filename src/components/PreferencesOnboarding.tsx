@@ -11,6 +11,9 @@ import {
   Heart,
   MapPin,
   Bell,
+  Calendar,
+  DollarSign,
+  ExternalLink,
 } from 'lucide-react';
 import { useUserPreferences } from '@/hooks/useUserPreferences';
 import {
@@ -40,20 +43,27 @@ export function PreferencesOnboarding({
   const [selectedDietary, setSelectedDietary] = useState<DietaryRestriction[]>(
     preferences?.cuisine.dietary || []
   );
+  const [selectedPriceRange, setSelectedPriceRange] = useState<'$' | '$$' | '$$$' | '$$$$' | 'any'>(
+    preferences?.cuisine.priceRange || 'any'
+  );
   const [selectedNeighborhoods, setSelectedNeighborhoods] = useState<string[]>(
     preferences?.location.neighborhoods || []
   );
+  const [calendarConnected, setCalendarConnected] = useState(false);
 
   const handleNext = async () => {
     if (currentStep === 1) {
       // Save interests
       await updateInterests(selectedInterests);
     } else if (currentStep === 2) {
-      // Save cuisine preferences
-      await updateCuisine({ dietary: selectedDietary });
+      // Save cuisine preferences (including price range)
+      await updateCuisine({ dietary: selectedDietary, priceRange: selectedPriceRange });
     } else if (currentStep === 3) {
       // Save location preferences
       // TODO: Implement location save
+    } else if (currentStep === 4) {
+      // Calendar integration step - just move forward
+      // User can set this up later if they skip
     }
 
     if (currentStep < onboardingSteps.length - 1) {
@@ -206,8 +216,20 @@ export function PreferencesOnboarding({
           { id: 'kosher', label: 'Kosher', icon: '✡️' },
         ];
 
+        const priceRangeOptions: Array<{
+          id: '$' | '$$' | '$$$' | '$$$$' | 'any';
+          label: string;
+          description: string;
+        }> = [
+          { id: 'any', label: 'Any Price', description: 'Show all restaurants' },
+          { id: '$', label: '$', description: 'Budget-friendly' },
+          { id: '$$', label: '$$', description: 'Moderate' },
+          { id: '$$$', label: '$$$', description: 'Upscale' },
+          { id: '$$$$', label: '$$$$', description: 'Fine dining' },
+        ];
+
         return (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="text-center space-y-2">
               <div className="text-4xl mx-auto">🍽️</div>
               <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
@@ -232,6 +254,32 @@ export function PreferencesOnboarding({
                       <span className="mr-2 text-lg">{option.icon}</span>
                       <span className="text-sm">{option.label}</span>
                       {isSelected && <Check className="h-4 w-4 ml-auto" />}
+                    </Button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <DollarSign className="h-4 w-4" />
+                Price Range Preference
+              </h3>
+              <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                {priceRangeOptions.map((option) => {
+                  const isSelected = selectedPriceRange === option.id;
+                  return (
+                    <Button
+                      key={option.id}
+                      variant={isSelected ? 'default' : 'outline'}
+                      className={cn(
+                        'flex-col h-auto py-3 gap-1',
+                        isSelected && 'bg-primary text-white border-2 border-primary'
+                      )}
+                      onClick={() => setSelectedPriceRange(option.id)}
+                    >
+                      <span className="text-lg font-bold">{option.label}</span>
+                      <span className="text-xs opacity-80">{option.description}</span>
                     </Button>
                   );
                 })}
@@ -276,6 +324,112 @@ export function PreferencesOnboarding({
                   </Button>
                 );
               })}
+            </div>
+          </div>
+        );
+
+      case 'calendar':
+        return (
+          <div className="space-y-6 py-4">
+            <div className="text-center space-y-2">
+              <div className="flex justify-center">
+                <div className="rounded-full bg-primary/10 p-4">
+                  <Calendar className="h-12 w-12 text-primary" />
+                </div>
+              </div>
+              <h2 className="text-2xl font-bold">{currentStepData.title}</h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                {currentStepData.description}
+              </p>
+            </div>
+
+            <div className="space-y-3 max-w-md mx-auto">
+              <Card className="p-4 bg-gradient-to-br from-primary/5 to-accent/5 border-2 border-primary/20">
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Sparkles className="h-5 w-5 text-primary mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm mb-1">Smart Suggestions</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Get event recommendations that fit your schedule and avoid conflicts
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Bell className="h-5 w-5 text-primary mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm mb-1">Never Double-Book</h3>
+                      <p className="text-xs text-muted-foreground">
+                        We'll only suggest events when you're free
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Check className="h-5 w-5 text-primary mt-0.5" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm mb-1">One-Click Add</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Add events directly to your calendar with one tap
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <div className="space-y-2 pt-2">
+                <Button
+                  className="w-full justify-start gap-3 h-auto py-4"
+                  variant={calendarConnected ? 'default' : 'outline'}
+                  onClick={() => setCalendarConnected(!calendarConnected)}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="text-2xl">📅</div>
+                    <div className="text-left flex-1">
+                      <div className="font-semibold">Google Calendar</div>
+                      <div className="text-xs opacity-80">
+                        {calendarConnected ? 'Connected' : 'Connect your Google Calendar'}
+                      </div>
+                    </div>
+                    {calendarConnected ? (
+                      <Check className="h-5 w-5" />
+                    ) : (
+                      <ExternalLink className="h-4 w-4" />
+                    )}
+                  </div>
+                </Button>
+
+                <Button
+                  className="w-full justify-start gap-3 h-auto py-4"
+                  variant="outline"
+                  disabled
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="text-2xl">📆</div>
+                    <div className="text-left flex-1">
+                      <div className="font-semibold">Outlook Calendar</div>
+                      <div className="text-xs opacity-80">Coming soon</div>
+                    </div>
+                  </div>
+                </Button>
+
+                <Button
+                  className="w-full justify-start gap-3 h-auto py-4"
+                  variant="outline"
+                  disabled
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="text-2xl">🍎</div>
+                    <div className="text-left flex-1">
+                      <div className="font-semibold">Apple Calendar</div>
+                      <div className="text-xs opacity-80">Coming soon</div>
+                    </div>
+                  </div>
+                </Button>
+              </div>
+
+              <p className="text-xs text-center text-muted-foreground pt-2">
+                You can connect your calendar later from settings
+              </p>
             </div>
           </div>
         );
@@ -340,18 +494,44 @@ export function PreferencesOnboarding({
             </div>
             <div className="space-y-2 max-w-md mx-auto">
               <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                <Check className="h-5 w-5 text-primary" />
-                <span className="text-sm">
-                  {selectedInterests.length} interests selected
+                <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="text-sm text-left">
+                  {selectedInterests.length} interest{selectedInterests.length !== 1 ? 's' : ''} selected
                 </span>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                <Check className="h-5 w-5 text-primary" />
-                <span className="text-sm">Preferences saved</span>
-              </div>
-              <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
-                <Check className="h-5 w-5 text-primary" />
-                <span className="text-sm">Ready to explore!</span>
+              {selectedDietary.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
+                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                  <span className="text-sm text-left">
+                    {selectedDietary.length} dietary preference{selectedDietary.length !== 1 ? 's' : ''} set
+                  </span>
+                </div>
+              )}
+              {selectedPriceRange !== 'any' && (
+                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
+                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                  <span className="text-sm text-left">
+                    Price range: {selectedPriceRange}
+                  </span>
+                </div>
+              )}
+              {selectedNeighborhoods.length > 0 && (
+                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
+                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                  <span className="text-sm text-left">
+                    {selectedNeighborhoods.length} neighborhood{selectedNeighborhoods.length !== 1 ? 's' : ''} selected
+                  </span>
+                </div>
+              )}
+              {calendarConnected && (
+                <div className="flex items-center gap-3 p-3 bg-primary/5 rounded-lg">
+                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
+                  <span className="text-sm text-left">Calendar connected</span>
+                </div>
+              )}
+              <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-primary/10 to-accent/10 rounded-lg border-2 border-primary/20">
+                <Sparkles className="h-5 w-5 text-primary flex-shrink-0" />
+                <span className="text-sm font-semibold text-left">Ready to explore!</span>
               </div>
             </div>
           </div>

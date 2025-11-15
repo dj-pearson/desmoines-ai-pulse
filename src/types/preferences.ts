@@ -201,6 +201,11 @@ export const onboardingSteps = [
     description: 'Tell us about your favorite areas',
   },
   {
+    id: 'calendar',
+    title: 'Connect your calendar',
+    description: 'Get smart event suggestions based on your schedule',
+  },
+  {
     id: 'notifications',
     title: 'Stay updated',
     description: 'Choose how you want to hear from us',
