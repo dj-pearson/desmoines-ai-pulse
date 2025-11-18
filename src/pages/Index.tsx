@@ -35,6 +35,7 @@ import { PersonalizedRecommendations } from "@/components/PersonalizedRecommenda
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { BackToTop } from "@/components/BackToTop";
 
 // Lazy load Three.js component to reduce initial bundle size
 // Temporarily disabled due to React Scheduler compatibility issue
@@ -650,6 +651,9 @@ export default function Index() {
           onComplete={handleOnboardingComplete}
         />
       )}
+
+      {/* Back to Top Button */}
+      <BackToTop />
     </div>
   );
 }
