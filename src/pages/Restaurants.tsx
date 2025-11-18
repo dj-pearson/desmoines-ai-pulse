@@ -20,7 +20,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CardsGridSkeleton, StatsGridSkeleton } from "@/components/ui/loading-skeleton";
+import { CardsGridSkeleton, StatsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
 import {
   MapPin,
   Star,
@@ -34,14 +34,19 @@ import {
   Sparkles,
   AlertCircle,
   Clock,
+  List,
+  Map,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { OpenNowBanner } from "@/components/OpenNowBanner";
+
+// Lazy load map component to prevent react-leaflet bundling issues
+const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
 const createSlug = (name: string): string => {
   return name
@@ -63,6 +68,7 @@ export default function Restaurants() {
     tags: [],
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState("list");
   const { toast } = useToast();
 
   const { restaurants, isLoading, error, totalCount } = useRestaurants(filters);
@@ -220,6 +226,38 @@ export default function Restaurants() {
                   <Filter className="h-4 w-4 mr-2" />
                   Filters
                 </Button>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center rounded-md bg-white/20 p-0.5">
+                  <Button
+                    onClick={() => setViewMode("list")}
+                    variant={viewMode === "list" ? "secondary" : "ghost"}
+                    size="icon"
+                    className={
+                      viewMode === "list"
+                        ? "bg-white/30 text-white h-11"
+                        : "text-white/70 hover:bg-white/30 hover:text-white h-11"
+                    }
+                    aria-label="Switch to list view"
+                    title="Switch to list view"
+                  >
+                    <List className="h-5 w-5" />
+                  </Button>
+                  <Button
+                    onClick={() => setViewMode("map")}
+                    variant={viewMode === "map" ? "secondary" : "ghost"}
+                    size="icon"
+                    className={
+                      viewMode === "map"
+                        ? "bg-white/30 text-white h-11"
+                        : "text-white/70 hover:bg-white/30 hover:text-white h-11"
+                    }
+                    aria-label="Switch to map view"
+                    title="Switch to map view"
+                  >
+                    <Map className="h-5 w-5" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -479,6 +517,10 @@ export default function Restaurants() {
                       : undefined
                   }
                 />
+              ) : viewMode === "map" ? (
+                <Suspense fallback={<LoadingSpinner />}>
+                  <RestaurantsMap restaurants={restaurants || []} />
+                </Suspense>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {restaurants.map((restaurant) => (

@@ -4,6 +4,7 @@ import Footer from "@/components/Footer";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
 import { useToast } from "@/hooks/use-toast";
+import { BackToTop } from "@/components/BackToTop";
 import {
   Card,
   CardContent,
@@ -372,6 +373,9 @@ export default function Attractions() {
       </section>
 
       <Footer />
+
+      {/* Back to Top Button */}
+      <BackToTop />
     </div>
   );
 }
