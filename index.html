@@ -13,11 +13,13 @@
       http-equiv="Content-Security-Policy"
       content="
         default-src 'self';
-        script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://api.ipify.org https://static.cloudflareinsights.com;
+        script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.googletagmanager.com https://www.google-analytics.com https://api.ipify.org https://static.cloudflareinsights.com;
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
         font-src 'self' https://fonts.gstatic.com data:;
         img-src 'self' data: https: http:;
         connect-src 'self' https://wtkhfqpmcegzcbngroui.supabase.co wss://wtkhfqpmcegzcbngroui.supabase.co https://www.google-analytics.com https://api.ipify.org https://cloudflareinsights.com https://static.cloudflareinsights.com;
+        worker-src 'self' blob:;
+        child-src 'self' blob:;
         frame-ancestors 'none';
         base-uri 'self';
         form-action 'self';

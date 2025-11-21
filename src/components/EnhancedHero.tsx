@@ -1,8 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { Brain, MessageSquare, Mic, Sparkles } from "lucide-react";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
+
+// Lazy load the 3D component
+const HeroCityLite = lazy(() => import("./HeroCityLite"));
 
 interface EnhancedHeroProps {
   eventCount?: number;
@@ -70,12 +73,17 @@ export function EnhancedHero({
   return (
     <section
       className={cn(
-        "relative min-h-screen bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69] py-16 overflow-hidden",
+        "relative min-h-screen bg-[#0a0a1a] py-16 overflow-hidden",
         className
       )}
     >
-      {/* Animated background gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69]/20 via-transparent to-[#8B0000]/20 animate-gradient" />
+      {/* 3D City Background */}
+      <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
+        <HeroCityLite />
+      </Suspense>
+
+      {/* Animated background gradient overlay for extra depth */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69]/10 via-transparent to-[#8B0000]/10 pointer-events-none" />
 
       {/* Content */}
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

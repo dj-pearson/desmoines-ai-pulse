@@ -84,11 +84,9 @@ export default defineConfig(({ command, mode }) => ({
       '@tanstack/react-query',
       '@supabase/supabase-js',
       'lucide-react', // Pre-bundle icons for faster dev
+      'react-reconciler',
     ],
     exclude: [
-      '@react-three/fiber',
-      '@react-three/drei',
-      'three', // Lazy load heavy 3D libs
       'react-leaflet', // Exclude to prevent pre-bundling issues
       'leaflet', // Exclude to load with maps chunk
     ],
