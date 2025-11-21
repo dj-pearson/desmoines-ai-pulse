@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import ShareDialog from "@/components/ShareDialog";
 import {
   MapPin,
   Star,
@@ -70,29 +71,6 @@ export default function AttractionDetails() {
     },
     enabled: !!attraction?.type,
   });
-
-  const handleShare = async () => {
-    const url = window.location.href;
-    const text = `Check out ${attraction?.name} - ${attraction?.description}`;
-
-    if (navigator.share) {
-      try {
-        await navigator.share({ title: attraction?.name, text, url });
-      } catch (error) {
-        console.error("Error sharing:", error);
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(url);
-        toast({
-          title: "Link copied!",
-          description: "Attraction link copied to clipboard",
-        });
-      } catch (error) {
-        console.error("Error copying to clipboard:", error);
-      }
-    }
-  };
 
   if (isLoading) {
     return (
@@ -228,10 +206,11 @@ export default function AttractionDetails() {
                   )}
                 </div>
               </div>
-              <Button onClick={handleShare} variant="outline" size="sm">
-                <Share2 className="h-4 w-4 mr-2" />
-                Share
-              </Button>
+              <ShareDialog
+                title={attraction.name}
+                description={attraction.description || `Discover ${attraction.name}, a ${attraction.type} in Des Moines, Iowa`}
+                url={window.location.href}
+              />
             </div>
 
             {/* Image */}

@@ -23,8 +23,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { MapPin, Star, Filter, List, Map } from "lucide-react";
+import { MapPin, Star, Filter, List, Map, SlidersHorizontal } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const AttractionsMap = lazy(() => import("@/components/AttractionsMap"));
@@ -38,12 +46,14 @@ const createSlug = (name: string): string => {
 
 export default function Attractions() {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("all");
   const [minRating, setMinRating] = useState("any-rating");
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [featuredOnly, setFeaturedOnly] = useState("all");
   const [viewMode, setViewMode] = useState('list');
 
@@ -94,6 +104,17 @@ export default function Attractions() {
     });
   }, [allAttractions, searchQuery, selectedType, minRating, featuredOnly]);
 
+  const getActiveFiltersCount = () => {
+    let count = 0;
+    if (searchQuery) count++;
+    if (selectedType !== "all") count++;
+    if (minRating !== "any-rating") count++;
+    if (featuredOnly !== "all") count++;
+    return count;
+  };
+
+  const hasActiveFilters = getActiveFiltersCount() > 0;
+
   const handleClearFilters = () => {
     setSearchQuery("");
     setSelectedType("all");
@@ -136,14 +157,108 @@ export default function Attractions() {
                 />
               </div>
               <div className="flex items-center gap-3">
-                <Button
-                  onClick={() => setShowFilters(!showFilters)}
-                  variant="secondary"
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                </Button>
+                {/* Filter Button - Mobile Sheet or Desktop Toggle */}
+                {isMobile ? (
+                  <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
+                    <SheetTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12 relative"
+                      >
+                        <SlidersHorizontal className="h-4 w-4 mr-2" />
+                        Filters
+                        {hasActiveFilters && (
+                          <Badge className="ml-2 bg-primary text-primary-foreground h-5 w-5 p-0 flex items-center justify-center text-xs">
+                            {getActiveFiltersCount()}
+                          </Badge>
+                        )}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="h-[85vh]">
+                      <SheetHeader>
+                        <SheetTitle className="text-xl">Filter Attractions</SheetTitle>
+                      </SheetHeader>
+                      <div className="mt-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                        {/* Mobile Filter Content */}
+                        <div className="space-y-6">
+                          {/* Type Filter */}
+                          <div className="space-y-2">
+                            <label className="text-base font-medium">
+                              Attraction Type
+                            </label>
+                            <Select value={selectedType} onValueChange={setSelectedType}>
+                              <SelectTrigger className="input-mobile">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                {attractionTypes?.map((type) => (
+                                  <SelectItem key={type} value={type}>
+                                    {type}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Rating Filter */}
+                          <div className="space-y-2">
+                            <label className="text-base font-medium">
+                              Minimum Rating
+                            </label>
+                            <Select value={minRating} onValueChange={setMinRating}>
+                              <SelectTrigger className="input-mobile">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="any-rating">Any Rating</SelectItem>
+                                <SelectItem value="4.5">4.5+ Stars</SelectItem>
+                                <SelectItem value="4.0">4.0+ Stars</SelectItem>
+                                <SelectItem value="3.5">3.5+ Stars</SelectItem>
+                                <SelectItem value="3.0">3.0+ Stars</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Featured Filter */}
+                          <div className="space-y-2">
+                            <label className="text-base font-medium">
+                              Featured
+                            </label>
+                            <Select value={featuredOnly} onValueChange={setFeaturedOnly}>
+                              <SelectTrigger className="input-mobile">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Attractions</SelectItem>
+                                <SelectItem value="featured">Featured Only</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+
+                        {/* Mobile Filter Actions */}
+                        <div className="flex gap-3 pt-4">
+                          <Button variant="outline" onClick={handleClearFilters} className="flex-1">
+                            Clear All
+                          </Button>
+                          <Button onClick={() => setShowMobileFilters(false)} className="flex-1">
+                            Show {filteredAttractions?.length || 0} Results
+                          </Button>
+                        </div>
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                ) : (
+                  <Button
+                    onClick={() => setShowFilters(!showFilters)}
+                    variant="secondary"
+                    className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filters
+                  </Button>
+                )}
                 <div className="flex items-center rounded-md bg-white/20 p-0.5">
                   <Button
                     onClick={() => setViewMode('list')}

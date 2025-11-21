@@ -11,6 +11,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import AIWriteup from "@/components/AIWriteup";
 import RestaurantStatus from "@/components/RestaurantStatus";
+import ShareDialog from "@/components/ShareDialog";
 import {
   MapPin,
   Phone,
@@ -105,25 +106,6 @@ export default function RestaurantDetails() {
     },
     enabled: !!restaurant,
   });
-
-  const handleShare = async () => {
-    if (navigator.share && restaurant) {
-      try {
-        await navigator.share({
-          title: restaurant.name,
-          text: `Check out ${restaurant.name} - ${restaurant.cuisine} cuisine in Des Moines`,
-          url: window.location.href,
-        });
-      } catch (error) {
-        // Fallback to clipboard
-        navigator.clipboard.writeText(window.location.href);
-        toast.success("Link copied to clipboard!");
-      }
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("Link copied to clipboard!");
-    }
-  };
 
   const formatPrice = (price: string) => {
     const count = price?.length || 1;
@@ -301,14 +283,20 @@ export default function RestaurantDetails() {
             </Link>
 
             <div className="flex gap-2">
-              <Button
-                onClick={handleShare}
-                variant="outline"
-                size="sm"
-                className="bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white shadow-lg"
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
+              <ShareDialog
+                title={restaurant.name}
+                description={restaurant.description || `Check out ${restaurant.name} - ${restaurant.cuisine} cuisine in Des Moines`}
+                url={window.location.href}
+                trigger={
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-white border-2 border-gray-800 text-gray-800 hover:bg-gray-800 hover:text-white shadow-lg"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </Button>
+                }
+              />
               <Button
                 variant="outline"
                 size="sm"
