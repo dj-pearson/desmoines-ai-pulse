@@ -36,6 +36,7 @@ import {
   Clock,
   List,
   Map,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, lazy, Suspense } from "react";
@@ -44,6 +45,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { OpenNowBanner } from "@/components/OpenNowBanner";
+import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
@@ -56,6 +65,7 @@ const createSlug = (name: string): string => {
 };
 
 export default function Restaurants() {
+  const isMobile = useIsMobile();
   const [filters, setFilters] = useState<RestaurantFilterOptions>({
     search: "",
     cuisine: [],
@@ -68,6 +78,7 @@ export default function Restaurants() {
     tags: [],
   });
   const [showFilters, setShowFilters] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const { toast } = useToast();
 
@@ -218,14 +229,62 @@ export default function Restaurants() {
                     className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
                   />
                 </div>
-                <Button
-                  onClick={() => setShowFilters(!showFilters)}
-                  variant="secondary"
-                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  Filters
-                </Button>
+
+                {/* Filter Button - Mobile Sheet or Desktop Toggle */}
+                {isMobile ? (
+                  <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
+                    <SheetTrigger asChild>
+                      <Button
+                        variant="secondary"
+                        className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12 relative"
+                      >
+                        <SlidersHorizontal className="h-4 w-4 mr-2" />
+                        Filters
+                        {hasActiveFilters && (
+                          <Badge className="ml-2 bg-primary text-primary-foreground h-5 w-5 p-0 flex items-center justify-center text-xs">
+                            {getActiveFiltersCount()}
+                          </Badge>
+                        )}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="bottom" className="h-[85vh]">
+                      <SheetHeader>
+                        <SheetTitle className="text-xl">Filter Restaurants</SheetTitle>
+                      </SheetHeader>
+                      <div className="mt-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
+                        {/* Mobile Filter Content */}
+                        <RestaurantFilters
+                          filters={filters}
+                          onFiltersChange={setFilters}
+                          availableCuisines={filterOptions.cuisines}
+                          availableLocations={filterOptions.locations}
+                          availableTags={filterOptions.tags}
+                          totalResults={totalCount}
+                          isLoading={isLoading}
+                        />
+
+                        {/* Mobile Filter Actions */}
+                        <div className="flex gap-3 pt-4">
+                          <Button variant="outline" onClick={handleClearFilters} className="flex-1">
+                            Clear All
+                          </Button>
+                          <Button onClick={() => setShowMobileFilters(false)} className="flex-1">
+                            Show {restaurants?.length || 0} Results
+                          </Button>
+                        </div>
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+                ) : (
+                  <Button
+                    onClick={() => setShowFilters(!showFilters)}
+                    variant="secondary"
+                    className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
+                  >
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filters
+                  </Button>
+                )}
 
                 {/* View Mode Toggle */}
                 <div className="flex items-center rounded-md bg-white/20 p-0.5">
