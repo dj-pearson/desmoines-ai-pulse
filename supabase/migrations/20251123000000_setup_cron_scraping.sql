@@ -1,5 +1,6 @@
 -- Enable pg_cron extension for scheduled jobs
-CREATE EXTENSION IF NOT EXISTS pg_cron;
+-- Extension already exists, skipping creation
+-- CREATE EXTENSION IF NOT EXISTS pg_cron;
 
 -- Grant necessary permissions for cron jobs
 GRANT USAGE ON SCHEMA cron TO postgres;
@@ -108,13 +109,20 @@ CREATE TABLE IF NOT EXISTS public.cron_logs (
 ALTER TABLE public.cron_logs ENABLE ROW LEVEL SECURITY;
 
 -- Create policy for cron_logs (admin access only)
+DROP POLICY IF EXISTS "Admin access for cron_logs" ON public.cron_logs;
 CREATE POLICY "Admin access for cron_logs" ON public.cron_logs 
 FOR ALL USING (auth.role() = 'authenticated' OR auth.role() = 'service_role');
 
 -- Create index for better performance
-CREATE INDEX idx_cron_logs_created_at ON public.cron_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cron_logs_created_at ON public.cron_logs(created_at DESC);
 
 -- Schedule the cron job to run every 30 minutes
+-- Unschedule if it already exists
+SELECT cron.unschedule('scraping-jobs-runner') WHERE EXISTS (
+  SELECT 1 FROM cron.job WHERE jobname = 'scraping-jobs-runner'
+);
+
+-- Schedule the cron job
 SELECT cron.schedule(
   'scraping-jobs-runner',
   '*/30 * * * *', -- Every 30 minutes
