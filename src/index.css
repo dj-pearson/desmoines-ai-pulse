@@ -2,77 +2,226 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  :root {
+    /* Des Moines Pulse - Global Palette */
+    /* Des Moines Blue: #071e62 -> HSL(225, 87%, 21%) */
+    /* Des Moines Red: #c30e31 -> HSL(348, 87%, 41%) */
+
+    --background: 0 0% 100%;
+    --foreground: 225 87% 10%;
+    /* Deep blue-black for text */
+
+    --card: 0 0% 100%;
+    --card-foreground: 225 87% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 87% 10%;
+
+    /* Primary: Des Moines Blue */
+    --primary: 225 87% 21%;
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 225 87% 16%;
+    --primary-light: 225 87% 90%;
+
+    /* Secondary: Des Moines Red */
+    --secondary: 348 87% 41%;
+    --secondary-foreground: 0 0% 100%;
+    --secondary-hover: 348 87% 36%;
+
+    /* Neutral grays - Cool toned to match blue */
+    --muted: 225 20% 96%;
+    --muted-foreground: 225 20% 40%;
+
+    --accent: 225 20% 96%;
+    --accent-foreground: 225 87% 21%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 225 87% 10%;
+
+    --border: 225 20% 90%;
+    --input: 225 20% 90%;
+    --ring: 225 87% 21%;
+
+    --radius: 0.75rem;
+
+    /* Mobile spacing system */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+
+    /* Mobile touch targets */
+    --touch-target: 44px;
+
+    /* Performance-optimized shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(225 50% 10% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(225 50% 10% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(225 50% 10% / 0.1);
+
+    /* Accessibility utilities */
+    --focus-ring: 2px solid hsl(var(--primary));
+    --focus-ring-offset: 2px;
+
+    --sidebar-background: 225 30% 98%;
+    --sidebar-foreground: 225 87% 10%;
+    --sidebar-primary: 225 87% 21%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 225 20% 94%;
+    --sidebar-accent-foreground: 225 87% 21%;
+    --sidebar-border: 225 20% 90%;
+    --sidebar-ring: 225 87% 21%;
+  }
+
+  .dark {
+    /* Dark Mode - Deep Rich Blue Theme */
+    --background: 225 50% 5%;
+    /* Very dark blue, almost black */
+    --foreground: 225 20% 98%;
+
+    --card: 225 50% 8%;
+    --card-foreground: 225 20% 98%;
+
+    --popover: 225 50% 8%;
+    --popover-foreground: 225 20% 98%;
+
+    /* Primary: Des Moines Blue (Lightened slightly for dark mode visibility) */
+    --primary: 225 87% 60%;
+    --primary-foreground: 225 87% 10%;
+    --primary-hover: 225 87% 65%;
+    --primary-light: 225 87% 20%;
+
+    /* Secondary: Des Moines Red */
+    --secondary: 348 87% 55%;
+    /* Slightly brighter for dark mode */
+    --secondary-foreground: 0 0% 100%;
+    --secondary-hover: 348 87% 60%;
+
+    --muted: 225 30% 15%;
+    --muted-foreground: 225 20% 70%;
+
+    --accent: 225 30% 15%;
+    --accent-foreground: 225 20% 98%;
+
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 225 20% 98%;
+
+    --warning: 38 92% 60%;
+    --warning-foreground: 225 87% 10%;
+
+    --border: 225 30% 15%;
+    --input: 225 30% 15%;
+    --ring: 225 87% 60%;
+
+    --sidebar-background: 225 50% 6%;
+    --sidebar-foreground: 225 20% 98%;
+    --sidebar-primary: 225 87% 60%;
+    --sidebar-primary-foreground: 225 87% 10%;
+    --sidebar-accent: 225 30% 15%;
+    --sidebar-accent-foreground: 225 20% 98%;
+    --sidebar-border: 225 30% 15%;
+    --sidebar-ring: 225 87% 60%;
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-lg border border-white/20 shadow-lg;
+  }
+
+  .glass-dark {
+    @apply bg-black/40 backdrop-blur-lg border border-white/10 shadow-lg;
+  }
+
+  .glass-card {
+    @apply bg-white/80 dark:bg-black/40 backdrop-blur-md border border-white/20 dark:border-white/10 shadow-sm hover:shadow-md transition-all duration-300;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary to-secondary;
+  }
+
+  .text-gradient-blue {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-[#071e62] to-[#0a2a8a] dark:from-[#4d7cfe] dark:to-[#071e62];
+  }
+}
+
 /* Mobile-First Design System - Optimized for GEO and Performance
 All colors MUST be HSL. Touch targets minimum 44px.
 */
 
 /* Critical CSS for mobile performance */
 @layer utilities {
+
   /* Mobile-first touch targets */
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
-  
+
   /* Mobile-optimized spacing */
   .mobile-padding {
     @apply px-4 py-3;
   }
-  
+
   .mobile-margin {
     @apply mx-4 my-3;
   }
-  
+
   /* Performance-optimized animations and micro-interactions */
   .smooth-transition {
     @apply transition-all duration-200 ease-out;
   }
-  
+
   /* Micro-interaction utilities */
   .interactive-scale {
     @apply transition-transform duration-200 ease-out hover:scale-105 active:scale-95;
   }
-  
+
   .interactive-lift {
     @apply transition-all duration-200 ease-out hover:shadow-lg hover:-translate-y-1;
   }
-  
+
   .interactive-glow {
     @apply transition-all duration-300 ease-out hover:shadow-primary/20 hover:shadow-lg;
   }
-  
+
   .interactive-shimmer {
     @apply relative overflow-hidden before:absolute before:inset-0 before:-translate-x-full before:animate-shimmer before:bg-gradient-to-r before:from-transparent before:via-white/10 before:to-transparent;
   }
-  
+
   .interactive-pulse {
     @apply transition-all duration-200 ease-out hover:animate-pulse;
   }
-  
+
   .interactive-bounce {
     @apply transition-all duration-200 ease-out hover:animate-gentle-bounce;
   }
-  
+
   .interactive-fade {
     @apply transition-opacity duration-200 ease-out hover:opacity-80;
   }
-  
+
   .interactive-blur {
     @apply transition-all duration-200 ease-out hover:backdrop-blur-sm;
   }
-  
+
   .interactive-rotate {
     @apply transition-transform duration-200 ease-out hover:rotate-1;
   }
-  
+
   .interactive-slide {
     @apply transition-transform duration-200 ease-out hover:translate-x-1;
   }
-  
+
   /* Button micro-interactions */
   .btn-ripple {
     @apply relative overflow-hidden;
   }
-  
+
   .btn-ripple::before {
     content: '';
     position: absolute;
@@ -86,49 +235,49 @@ All colors MUST be HSL. Touch targets minimum 44px.
     transform: translate(-50%, -50%);
     transition: width 0.3s, height 0.3s;
   }
-  
+
   .btn-ripple:active::before {
     width: 300px;
     height: 300px;
   }
-  
+
   /* Card micro-interactions */
   .card-interactive {
     @apply transition-all duration-300 ease-out hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-2;
   }
-  
+
   .card-tilt {
     @apply transition-transform duration-200 ease-out hover:rotate-1 hover:scale-105;
   }
-  
+
   /* Input micro-interactions */
   .input-focus {
     @apply transition-all duration-200 ease-out focus:ring-2 focus:ring-primary/20 focus:border-primary focus:scale-105;
   }
-  
+
   /* Loading states */
   .loading-shimmer {
     @apply bg-gradient-to-r from-muted via-muted/50 to-muted bg-[length:200%_100%] animate-shimmer;
   }
-  
+
   /* Staggered animations */
-  .stagger-children > * {
+  .stagger-children>* {
     animation-delay: calc(var(--stagger-delay, 100ms) * var(--index, 0));
   }
-  
+
   /* Mobile-first text sizes with improved spacing */
   .text-mobile-hero {
     @apply text-2xl font-bold leading-tight;
   }
-  
+
   .text-mobile-lg {
     @apply text-lg font-semibold leading-tight;
   }
-  
+
   .text-mobile-sm {
     @apply text-sm leading-relaxed;
   }
-  
+
   /* Text truncation utilities */
   .line-clamp-2 {
     display: -webkit-box;
@@ -136,49 +285,49 @@ All colors MUST be HSL. Touch targets minimum 44px.
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  
+
   .line-clamp-3 {
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
-  
+
   /* Hover scale animation */
   .hover-scale {
     transition: transform 0.2s ease-in-out;
   }
-  
+
   .hover-scale:hover {
     transform: scale(1.02);
   }
-  
+
   .text-mobile-title {
     @apply text-lg font-semibold leading-relaxed;
   }
-  
+
   .text-mobile-body {
     @apply text-base leading-relaxed;
   }
-  
+
   .text-mobile-caption {
     @apply text-sm leading-relaxed;
   }
-  
+
   /* Mobile-optimized grid with better spacing */
   .mobile-grid {
     @apply grid grid-cols-1 gap-3;
   }
-  
+
   /* Text wrapping utilities for mobile */
   .mobile-text-wrap {
     @apply break-words hyphens-auto;
   }
-  
+
   .mobile-safe-text {
     @apply break-words overflow-hidden;
   }
-  
+
   /* Safe area support - use CSS properties directly */
   .safe-area-top {
     padding-top: max(1rem, env(safe-area-inset-top));
@@ -277,7 +426,8 @@ All colors MUST be HSL. Touch targets minimum 44px.
     @apply min-h-[48px] px-4 text-base rounded-lg border-2 transition-all;
     @apply focus:border-primary focus:ring-4 focus:ring-primary/10;
     -webkit-appearance: none;
-    font-size: 16px; /* Prevents iOS zoom on focus */
+    font-size: 16px;
+    /* Prevents iOS zoom on focus */
   }
 
   .textarea-mobile {
@@ -486,24 +636,27 @@ All colors MUST be HSL. Touch targets minimum 44px.
     -webkit-text-size-adjust: 100%;
     -ms-text-size-adjust: 100%;
   }
-  
+
   /* Mobile-first responsive typography */
   html {
-    font-size: 16px; /* Mobile base */
+    font-size: 16px;
+    /* Mobile base */
   }
-  
+
   @media (min-width: 768px) {
     html {
-      font-size: 18px; /* Tablet */
+      font-size: 18px;
+      /* Tablet */
     }
   }
-  
+
   @media (min-width: 1024px) {
     html {
-      font-size: 20px; /* Desktop */
+      font-size: 20px;
+      /* Desktop */
     }
   }
-  
+
   /* Enhanced safe area support for mobile devices */
   @supports (padding: max(0px)) {
     .safe-area-inset {
@@ -544,6 +697,7 @@ All colors MUST be HSL. Touch targets minimum 44px.
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
+
   *,
   *::before,
   *::after {
