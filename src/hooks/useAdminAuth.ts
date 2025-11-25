@@ -44,13 +44,26 @@ export function useAdminAuth() {
         }
 
         // Fetch user role
-        const { data: roleData } = await supabase
+        let { data: roleData } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
+
+        // OAuth User Handling: If no role found, try to sync with existing account by email
+        // This handles OAuth users whose email matches an existing account with a role
+        if (!roleData?.role && user.email) {
+          const { data: syncedRole, error: syncError } = await supabase.rpc(
+            'sync_oauth_user_role',
+            { p_user_id: user.id }
+          );
+
+          if (!syncError && syncedRole && syncedRole !== 'user') {
+            roleData = { role: syncedRole };
+          }
+        }
 
         const userRole = roleData?.role as UserRole || 'user';
         const hasAdminAccess = ['moderator', 'admin', 'root_admin'].includes(userRole);

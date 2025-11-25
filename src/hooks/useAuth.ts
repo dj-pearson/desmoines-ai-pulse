@@ -136,6 +136,21 @@ export function useAuth() {
           return isAdmin;
         }
 
+        // OAuth User Handling: If no role found, try to sync with existing account by email
+        // This handles the case where user signed up with email/password and later uses OAuth
+        if (user.email) {
+          const { data: syncedRole, error: syncError } = await supabase.rpc(
+            'sync_oauth_user_role',
+            { p_user_id: user.id }
+          );
+
+          if (!syncError && syncedRole && syncedRole !== 'user') {
+            const isAdmin = syncedRole === 'admin' || syncedRole === 'root_admin';
+            adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+            return isAdmin;
+          }
+        }
+
         // Fallback: Check profiles table user_role column
         const { data: profileData, error: profileError } = await supabase
           .from("profiles")
