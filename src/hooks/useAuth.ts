@@ -31,17 +31,28 @@ export function useAuth() {
 
     // Initialize auth - check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (isMounted) {
-        checkIsAdmin(session?.user).then((isAdmin) => {
+      if (!isMounted) return;
+      
+      // ALWAYS update state immediately
+      setAuthState({
+        user: session?.user || null,
+        session,
+        isLoading: false,
+        isAuthenticated: !!session,
+        isAdmin: false,
+      });
+      
+      // Then check admin status
+      if (session?.user) {
+        checkIsAdmin(session.user).then((isAdmin) => {
           if (isMounted) {
-            setAuthState({
-              user: session?.user || null,
-              session,
-              isLoading: false,
-              isAuthenticated: !!session,
+            setAuthState(prev => ({
+              ...prev,
               isAdmin,
-            });
+            }));
           }
+        }).catch((error) => {
+          console.error('[Auth] Initial admin check failed:', error);
         });
       }
     });
@@ -52,17 +63,33 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log(`[Auth] Event: ${event}, User: ${session?.user?.email || 'none'}`);
       
-      if (isMounted) {
-        const isAdmin = session?.user ? await checkIsAdmin(session.user) : false;
-        
-        if (isMounted) {
-          setAuthState({
-            user: session?.user || null,
-            session,
-            isLoading: false,
-            isAuthenticated: !!session,
-            isAdmin,
-          });
+      if (!isMounted) return;
+      
+      // ALWAYS update state immediately with session, then check admin status
+      // This ensures UI updates even if admin check takes time
+      setAuthState({
+        user: session?.user || null,
+        session,
+        isLoading: false,
+        isAuthenticated: !!session,
+        isAdmin: false, // Will be updated below if user is admin
+      });
+      
+      // Then check admin status asynchronously
+      if (session?.user) {
+        try {
+          const isAdmin = await checkIsAdmin(session.user);
+          console.log(`[Auth] Admin check result: ${isAdmin}`);
+          
+          if (isMounted) {
+            setAuthState(prev => ({
+              ...prev,
+              isAdmin,
+            }));
+          }
+        } catch (error) {
+          console.error('[Auth] Error checking admin status:', error);
+          // User is still logged in, just not admin
         }
       }
     });
