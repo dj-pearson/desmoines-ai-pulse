@@ -63,7 +63,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!isMounted) return;
-      console.log('[AuthContext] Auth event:', event, session?.user?.email);
+      console.log('[AuthContext] Auth event:', event, session?.user?.email || 'none');
+      
+      if (event === 'SIGNED_OUT') {
+        console.log('[AuthContext] User signed out, clearing state');
+        adminStatusCache.clear();
+      }
       
       setAuthState({
         user: session?.user || null,
@@ -169,10 +174,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     try {
+      console.log("[AuthContext] Logging out...");
       adminStatusCache.clear();
       await supabase.auth.signOut();
+      console.log("[AuthContext] Logout successful");
     } catch (error) {
       console.error("[AuthContext] Logout error:", error);
+      throw error;
     }
   };
 
