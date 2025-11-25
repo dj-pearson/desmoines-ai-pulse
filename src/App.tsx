@@ -9,6 +9,7 @@ import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
+import { AuthProvider } from "@/contexts/AuthContext";
 
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
@@ -107,11 +108,12 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
 const App = () => (
   <TooltipProvider>
     <BrowserRouter>
-      <ErrorBoundary>
-        <KeyboardShortcutsProvider>
-          <Toaster />
-          <Sonner />
-          <Suspense fallback={<PageLoader />}>
+      <AuthProvider>
+        <ErrorBoundary>
+          <KeyboardShortcutsProvider>
+            <Toaster />
+            <Sonner />
+            <Suspense fallback={<PageLoader />}>
             <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
@@ -201,10 +203,11 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </Suspense>
+          </Suspense>
           <BottomNav />
         </KeyboardShortcutsProvider>
       </ErrorBoundary>
+      </AuthProvider>
     </BrowserRouter>
   </TooltipProvider>
 );
