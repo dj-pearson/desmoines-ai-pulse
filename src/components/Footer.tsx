@@ -1,4 +1,5 @@
 import { Heart } from "lucide-react";
+import { Link } from "react-router-dom";
 
 export default function Footer() {
   return (
@@ -50,18 +51,19 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* About */}
+          {/* Legal */}
           <div>
-            <h4 className="text-lg font-semibold mb-4">About</h4>
+            <h4 className="text-lg font-semibold mb-4">Legal</h4>
             <ul className="space-y-2">
               <li>
-                <span className="text-neutral-400">How It Works</span>
+                <Link to="/privacy-policy" className="text-neutral-400 hover:text-white transition-colors">
+                  Privacy Policy
+                </Link>
               </li>
               <li>
-                <span className="text-neutral-400">AI Enhancement</span>
-              </li>
-              <li>
-                <span className="text-neutral-400">Data Sources</span>
+                <Link to="/terms" className="text-neutral-400 hover:text-white transition-colors">
+                  Terms of Service
+                </Link>
               </li>
               <li>
                 <span className="text-neutral-400">Contact Us</span>
@@ -72,7 +74,7 @@ export default function Footer() {
 
         <div className="border-t border-neutral-800 mt-8 pt-8 text-center">
           <p className="text-neutral-400 text-sm">
-            © 2024 Des Moines Insider. All rights reserved.
+            © 2025 Des Moines Insider. All rights reserved.
           </p>
         </div>
       </div>
