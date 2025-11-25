@@ -14,6 +14,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
 const Auth = lazy(() => import("./pages/Auth"));
+const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const AuthVerified = lazy(() => import("./pages/AuthVerified"));
 const Profile = lazy(() => import("./pages/Profile"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
@@ -117,6 +118,7 @@ const App = () => (
             <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route path="/auth/verified" element={<AuthVerified />} />
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
             <Route path="/my-events" element={<ProfilePage />} />

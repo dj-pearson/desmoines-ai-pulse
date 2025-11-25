@@ -104,20 +104,19 @@ export default function Auth() {
     }));
   };
 
+  const { login } = useAuth();
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password,
-      });
+      const result = await login(formData.email, formData.password);
 
-      if (error) {
+      if (!result.success) {
         toast({
           title: "Login Failed",
-          description: error.message,
+          description: result.error || "Invalid email or password",
           variant: "destructive",
         });
         return;
@@ -131,10 +130,10 @@ export default function Auth() {
       // Redirect to intended destination or home
       const redirectTo = searchParams.get("redirect") || "/";
       navigate(redirectTo, { replace: true });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Login Error",
-        description: "An unexpected error occurred. Please try again.",
+        description: error.message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -320,10 +319,17 @@ export default function Auth() {
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
     try {
+      // Build the redirect URL with any intended destination
+      const redirectTo = searchParams.get("redirect");
+      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+      if (redirectTo) {
+        callbackUrl.searchParams.set("redirect", redirectTo);
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: callbackUrl.toString(),
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -340,10 +346,10 @@ export default function Auth() {
         setIsLoading(false);
       }
       // Don't set isLoading to false here - let the redirect happen
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to sign in with Google. Please try again.",
+        description: error.message || "Failed to sign in with Google. Please try again.",
         variant: "destructive",
       });
       setIsLoading(false);
@@ -353,10 +359,17 @@ export default function Auth() {
   const handleAppleSignIn = async () => {
     setIsLoading(true);
     try {
+      // Build the redirect URL with any intended destination
+      const redirectTo = searchParams.get("redirect");
+      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+      if (redirectTo) {
+        callbackUrl.searchParams.set("redirect", redirectTo);
+      }
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: callbackUrl.toString(),
         }
       });
 
@@ -369,10 +382,10 @@ export default function Auth() {
         setIsLoading(false);
       }
       // Don't set isLoading to false here - let the redirect happen
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to sign in with Apple. Please try again.",
+        description: error.message || "Failed to sign in with Apple. Please try again.",
         variant: "destructive",
       });
       setIsLoading(false);
