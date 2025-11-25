@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { User, Session } from "@supabase/supabase-js";
+import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 
 interface AuthState {
   user: User | null;
@@ -11,10 +11,11 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<boolean>;
-  signup: (email: string, password: string, metadata?: any) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signup: (email: string, password: string, metadata?: any) => Promise<{ success: boolean; error?: string; needsVerification?: boolean }>;
   logout: () => Promise<void>;
   requireAdmin: () => void;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -33,68 +34,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAdmin: false,
   });
 
-  useEffect(() => {
-    console.log('[AuthContext] Initializing...');
-    let isMounted = true;
+  // Track if we're in the middle of a logout to prevent race conditions
+  const isLoggingOutRef = useRef(false);
+  // Track subscription for cleanup
+  const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted) return;
-      console.log('[AuthContext] Initial session:', !!session, session?.user?.email);
-      
-      setAuthState({
-        user: session?.user || null,
-        session,
-        isLoading: false,
-        isAuthenticated: !!session,
-        isAdmin: false,
-      });
-
-      if (session?.user) {
-        checkIsAdmin(session.user).then((isAdmin) => {
-          if (isMounted) {
-            console.log('[AuthContext] Initial admin check:', isAdmin);
-            setAuthState(prev => ({ ...prev, isAdmin }));
-          }
-        });
-      }
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-      console.log('[AuthContext] Auth event:', event, session?.user?.email || 'none');
-      
-      if (event === 'SIGNED_OUT') {
-        console.log('[AuthContext] User signed out, clearing state');
-        adminStatusCache.clear();
-      }
-      
-      setAuthState({
-        user: session?.user || null,
-        session,
-        isLoading: false,
-        isAuthenticated: !!session,
-        isAdmin: false,
-      });
-
-      if (session?.user) {
-        const isAdmin = await checkIsAdmin(session.user);
-        console.log('[AuthContext] Admin check result:', isAdmin);
-        if (isMounted) {
-          setAuthState(prev => ({ ...prev, isAdmin }));
-        }
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-      console.log('[AuthContext] Cleanup');
-    };
-  }, []);
-
-  const checkIsAdmin = async (user: User): Promise<boolean> => {
+  // Check admin status with caching
+  const checkIsAdmin = useCallback(async (user: User): Promise<boolean> => {
     const cached = adminStatusCache.get(user.id);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
       return cached.isAdmin;
@@ -141,68 +87,191 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     pendingChecks.set(user.id, checkPromise);
     return checkPromise;
-  };
+  }, []);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      return !!data.session;
-    } catch (error) {
-      console.error("[AuthContext] Login error:", error);
-      return false;
+  // Handle auth state changes
+  const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null, isMounted: boolean) => {
+    // Skip processing if we're logging out
+    if (isLoggingOutRef.current) {
+      console.log('[AuthContext] Skipping auth event during logout:', event);
+      return;
     }
-  };
 
-  const signup = async (email: string, password: string, metadata?: any): Promise<boolean> => {
+    if (!isMounted) return;
+
+    console.log('[AuthContext] Auth event:', event, session?.user?.email || 'none');
+
+    // Handle specific events
+    if (event === 'SIGNED_OUT') {
+      console.log('[AuthContext] User signed out via event');
+      adminStatusCache.clear();
+      setAuthState({
+        user: null,
+        session: null,
+        isLoading: false,
+        isAuthenticated: false,
+        isAdmin: false,
+      });
+      return;
+    }
+
+    if (event === 'TOKEN_REFRESHED') {
+      console.log('[AuthContext] Token refreshed');
+      // Just update the session, don't re-check admin
+      if (session) {
+        setAuthState(prev => ({
+          ...prev,
+          session,
+          user: session.user,
+        }));
+      }
+      return;
+    }
+
+    // For SIGNED_IN, INITIAL_SESSION, or USER_UPDATED events
+    setAuthState(prev => ({
+      ...prev,
+      user: session?.user || null,
+      session,
+      isLoading: false,
+      isAuthenticated: !!session,
+      isAdmin: prev.isAdmin, // Keep previous admin status while checking
+    }));
+
+    // Check admin status for new sessions
+    if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+      const isAdmin = await checkIsAdmin(session.user);
+      if (isMounted && !isLoggingOutRef.current) {
+        console.log('[AuthContext] Admin check result:', isAdmin);
+        setAuthState(prev => ({ ...prev, isAdmin }));
+      }
+    }
+  }, [checkIsAdmin]);
+
+  useEffect(() => {
+    console.log('[AuthContext] Initializing...');
+    let isMounted = true;
+
+    // Get initial session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error) {
+          console.error('[AuthContext] Error getting session:', error);
+          if (isMounted) {
+            setAuthState(prev => ({ ...prev, isLoading: false }));
+          }
+          return;
+        }
+
+        if (!isMounted) return;
+        console.log('[AuthContext] Initial session:', !!session, session?.user?.email);
+
+        setAuthState({
+          user: session?.user || null,
+          session,
+          isLoading: false,
+          isAuthenticated: !!session,
+          isAdmin: false,
+        });
+
+        if (session?.user) {
+          const isAdmin = await checkIsAdmin(session.user);
+          if (isMounted) {
+            console.log('[AuthContext] Initial admin check:', isAdmin);
+            setAuthState(prev => ({ ...prev, isAdmin }));
+          }
+        }
+      } catch (error) {
+        console.error('[AuthContext] Init error:', error);
+        if (isMounted) {
+          setAuthState(prev => ({ ...prev, isLoading: false }));
+        }
+      }
+    };
+
+    initializeAuth();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      handleAuthChange(event, session, isMounted);
+    });
+
+    subscriptionRef.current = subscription;
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+      subscriptionRef.current = null;
+      console.log('[AuthContext] Cleanup');
+    };
+  }, [checkIsAdmin, handleAuthChange]);
+
+  // Login with email/password
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
+      console.log("[AuthContext] Attempting login for:", email);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+      if (error) {
+        console.error("[AuthContext] Login error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      console.log("[AuthContext] Login successful");
+      return { success: !!data.session };
+    } catch (error: any) {
+      console.error("[AuthContext] Login exception:", error);
+      return { success: false, error: error.message || "An unexpected error occurred" };
+    }
+  }, []);
+
+  // Signup with email/password
+  const signup = useCallback(async (email: string, password: string, metadata?: any): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
+    try {
+      console.log("[AuthContext] Attempting signup for:", email);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/auth/verified`,
           data: metadata
         }
       });
-      if (error) throw error;
-      return !!data.user;
-    } catch (error) {
-      console.error("[AuthContext] Signup error:", error);
-      return false;
-    }
-  };
 
-  const logout = async () => {
-    console.log("[AuthContext] Logging out...");
-    adminStatusCache.clear();
-    
-    // Try to call signOut with a timeout
-    try {
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('signOut timeout after 2s')), 2000)
-      );
-      
-      await Promise.race([
-        supabase.auth.signOut(),
-        timeoutPromise
-      ]);
-      console.log("[AuthContext] signOut completed");
+      if (error) {
+        console.error("[AuthContext] Signup error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      // Check if email confirmation is required
+      const needsVerification = data.user && !data.session;
+      console.log("[AuthContext] Signup successful, needs verification:", needsVerification);
+
+      return { success: true, needsVerification };
     } catch (error: any) {
-      console.warn("[AuthContext] signOut failed or timed out:", error.message);
-      // Continue with logout anyway
+      console.error("[AuthContext] Signup exception:", error);
+      return { success: false, error: error.message || "An unexpected error occurred" };
     }
-    
-    // Manually clear all Supabase storage to ensure complete logout
-    try {
-      const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase'));
-      console.log("[AuthContext] Clearing localStorage keys:", storageKeys);
-      storageKeys.forEach(key => localStorage.removeItem(key));
-      console.log("[AuthContext] LocalStorage cleared");
-    } catch (error) {
-      console.error("[AuthContext] Error clearing localStorage:", error);
+  }, []);
+
+  // Logout - robust implementation with race condition prevention
+  const logout = useCallback(async () => {
+    // Prevent race conditions - set flag before any async operations
+    if (isLoggingOutRef.current) {
+      console.log("[AuthContext] Logout already in progress, skipping");
+      return;
     }
-    
-    // Clear state
+
+    console.log("[AuthContext] Starting logout...");
+    isLoggingOutRef.current = true;
+
+    // Clear admin cache first
+    adminStatusCache.clear();
+    pendingChecks.clear();
+
+    // Clear state immediately to update UI
     setAuthState({
       user: null,
       session: null,
@@ -210,18 +279,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: false,
       isAdmin: false,
     });
-    
-    console.log("[AuthContext] Logout complete - state cleared");
-  };
 
-  const requireAdmin = () => {
+    // Call signOut with global scope and timeout
+    try {
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('signOut timeout after 3s')), 3000)
+      );
+
+      await Promise.race([
+        supabase.auth.signOut({ scope: 'global' }),
+        timeoutPromise
+      ]);
+      console.log("[AuthContext] signOut completed successfully");
+    } catch (error: any) {
+      console.warn("[AuthContext] signOut failed or timed out:", error.message);
+      // Continue with cleanup anyway
+    }
+
+    // Clear all Supabase-related localStorage items
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('supabase') || key.includes('sb-'))) {
+          keysToRemove.push(key);
+        }
+      }
+      console.log("[AuthContext] Clearing localStorage keys:", keysToRemove);
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+    } catch (error) {
+      console.error("[AuthContext] Error clearing localStorage:", error);
+    }
+
+    // Clear sessionStorage as well
+    try {
+      const sessionKeysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (key.includes('supabase') || key.includes('sb-'))) {
+          sessionKeysToRemove.push(key);
+        }
+      }
+      sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+    } catch (error) {
+      // Ignore sessionStorage errors
+    }
+
+    console.log("[AuthContext] Logout complete");
+
+    // Reset the flag after a short delay to allow any pending events to be ignored
+    setTimeout(() => {
+      isLoggingOutRef.current = false;
+    }, 500);
+  }, []);
+
+  // Refresh session manually
+  const refreshSession = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        console.error("[AuthContext] Session refresh error:", error);
+        return;
+      }
+      if (data.session) {
+        setAuthState(prev => ({
+          ...prev,
+          session: data.session,
+          user: data.session?.user || null,
+        }));
+      }
+    } catch (error) {
+      console.error("[AuthContext] Session refresh exception:", error);
+    }
+  }, []);
+
+  const requireAdmin = useCallback(() => {
     if (!authState.isAdmin) {
       throw new Error("Admin access required");
     }
-  };
+  }, [authState.isAdmin]);
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, signup, logout, requireAdmin }}>
+    <AuthContext.Provider value={{ ...authState, login, signup, logout, requireAdmin, refreshSession }}>
       {children}
     </AuthContext.Provider>
   );
