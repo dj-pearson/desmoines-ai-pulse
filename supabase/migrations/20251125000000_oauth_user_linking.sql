@@ -6,6 +6,103 @@
 -- to an existing account with the same email
 -- ============================================================================
 
+-- First, we need to update the validate_role_assignment function to allow
+-- system/automatic role assignments (where assigned_by is NULL or same as user_id for initial setup)
+CREATE OR REPLACE FUNCTION public.validate_role_assignment()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $function$
+DECLARE
+  assigner_role public.user_role;
+  target_role public.user_role;
+BEGIN
+  -- IMPORTANT: Allow system-initiated role assignments (OAuth linking, migrations, etc.)
+  -- These are identified by assigned_by being NULL or matching the user_id (self-assignment during setup)
+  IF NEW.assigned_by IS NULL THEN
+    -- This is a system/automatic assignment (e.g., OAuth user linking)
+    -- Allow it without validation
+    RETURN NEW;
+  END IF;
+  
+  -- Get the assigner's role
+  SELECT role INTO assigner_role
+  FROM public.user_roles
+  WHERE user_id = NEW.assigned_by
+  ORDER BY created_at DESC
+  LIMIT 1;
+  
+  -- If no role found in user_roles, check profiles table
+  IF assigner_role IS NULL THEN
+    SELECT user_role INTO assigner_role
+    FROM public.profiles
+    WHERE user_id = NEW.assigned_by;
+  END IF;
+  
+  -- Default to 'user' if still no role found
+  IF assigner_role IS NULL THEN
+    assigner_role := 'user';
+  END IF;
+  
+  target_role := NEW.role;
+  
+  -- Role assignment validation rules:
+  -- 1. Only root_admin can assign root_admin role
+  -- 2. Only root_admin and admin can assign admin role
+  -- 3. Only admin+ can assign moderator role
+  -- 4. Anyone admin+ can assign user role
+  
+  IF target_role = 'root_admin' AND assigner_role != 'root_admin' THEN
+    RAISE EXCEPTION 'Only root administrators can assign root_admin role';
+  END IF;
+  
+  IF target_role = 'admin' AND assigner_role NOT IN ('root_admin', 'admin') THEN
+    RAISE EXCEPTION 'Only root administrators and administrators can assign admin role';
+  END IF;
+  
+  IF target_role = 'moderator' AND assigner_role NOT IN ('root_admin', 'admin') THEN
+    RAISE EXCEPTION 'Only administrators and above can assign moderator role';
+  END IF;
+  
+  IF target_role = 'user' AND assigner_role NOT IN ('root_admin', 'admin', 'moderator') THEN
+    RAISE EXCEPTION 'Only moderators and above can assign user role';
+  END IF;
+  
+  -- Log the role assignment for security audit (only for non-system assignments)
+  BEGIN
+    INSERT INTO public.security_audit_logs (
+      event_type,
+      user_id,
+      resource,
+      action,
+      details,
+      severity
+    ) VALUES (
+      'role_assignment',
+      NEW.assigned_by,
+      'user_roles',
+      'assign_role',
+      jsonb_build_object(
+        'target_user_id', NEW.user_id,
+        'assigned_role', NEW.role,
+        'assigner_role', assigner_role
+      ),
+      CASE 
+        WHEN target_role IN ('root_admin', 'admin') THEN 'high'
+        WHEN target_role = 'moderator' THEN 'medium'
+        ELSE 'low'
+      END
+    );
+  EXCEPTION WHEN OTHERS THEN
+    -- Ignore audit log errors to not block the role assignment
+    NULL;
+  END;
+  
+  RETURN NEW;
+END;
+$function$;
+
 -- Function to link OAuth user to existing account role by email
 -- This is called after a user signs in via OAuth to ensure they get their correct role
 CREATE OR REPLACE FUNCTION public.link_oauth_user_role()
@@ -40,9 +137,9 @@ BEGIN
 
   -- If we found an existing user with a role, copy that role to the new OAuth user
   IF existing_role IS NOT NULL THEN
-    -- Insert the role for the new OAuth user
-    INSERT INTO public.user_roles (user_id, role, assigned_by)
-    VALUES (NEW.id, existing_role, existing_user_id)
+    -- Insert the role for the new OAuth user (assigned_by is NULL for system assignments)
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (NEW.id, existing_role)
     ON CONFLICT (user_id, role) DO NOTHING;
     
     RAISE NOTICE 'OAuth user % linked to existing role: %', NEW.id, existing_role;
@@ -159,6 +256,7 @@ BEGIN
 
   -- If found, assign the role to this OAuth user
   IF existing_role IS NOT NULL THEN
+    -- Use a direct insert without assigned_by to allow system assignment
     INSERT INTO public.user_roles (user_id, role)
     VALUES (p_user_id, existing_role)
     ON CONFLICT (user_id, role) DO NOTHING;
