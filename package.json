@@ -92,6 +92,7 @@
     "dompurify": "^3.2.6",
     "embla-carousel-react": "^8.3.0",
     "input-otp": "^1.2.4",
+    "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.3",
     "leaflet": "^1.9.4",
     "lightningcss": "^1.30.2",
