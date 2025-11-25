@@ -29,101 +29,43 @@ export function useAuth() {
   useEffect(() => {
     let isMounted = true;
 
-    // Helper to update auth state safely
-    const updateAuthState = async (session: Session | null, eventName?: string) => {
-      if (!isMounted) return;
+    // Initialize auth - check for existing session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (isMounted) {
+        checkIsAdmin(session?.user).then((isAdmin) => {
+          if (isMounted) {
+            setAuthState({
+              user: session?.user || null,
+              session,
+              isLoading: false,
+              isAuthenticated: !!session,
+              isAdmin,
+            });
+          }
+        });
+      }
+    });
+
+    // Listen for auth changes (handles OAuth redirects, login, logout)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[Auth] Event: ${event}, User: ${session?.user?.email || 'none'}`);
       
-      console.log(`[Auth] ${eventName || 'update'}: session=${!!session}, user=${session?.user?.email || 'none'}`);
-      
-      try {
+      if (isMounted) {
         const isAdmin = session?.user ? await checkIsAdmin(session.user) : false;
         
-        if (!isMounted) return;
-        
-        console.log(`[Auth] Setting state: authenticated=${!!session}, isAdmin=${isAdmin}`);
-        setAuthState({
-          user: session?.user || null,
-          session,
-          isLoading: false,
-          isAuthenticated: !!session,
-          isAdmin,
-        });
-      } catch (error) {
-        console.error("[Auth] Error in updateAuthState:", error);
         if (isMounted) {
           setAuthState({
             user: session?.user || null,
             session,
             isLoading: false,
             isAuthenticated: !!session,
-            isAdmin: false,
+            isAdmin,
           });
         }
       }
-    };
-
-    // Set up auth state change listener FIRST
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`[Auth] onAuthStateChange fired: event=${event}, hasSession=${!!session}`);
-      await updateAuthState(session, event);
     });
-
-    // Then get initial session
-    const getInitialSession = async () => {
-      try {
-        // Log the current URL for debugging OAuth redirects
-        console.log(`[Auth] Init: URL=${window.location.href}`);
-        
-        // CRITICAL: Check if there are OAuth tokens in the URL hash
-        // If so, wait for onAuthStateChange to handle them, don't call getSession yet
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const hasOAuthTokens = hashParams.has('access_token') || hashParams.has('error');
-        
-        if (hasOAuthTokens) {
-          console.log('[Auth] OAuth tokens detected in URL hash - waiting for onAuthStateChange to process them...');
-          // Don't call getSession - let the Supabase client process the tokens
-          // and trigger the onAuthStateChange event
-          return;
-        }
-        
-        const {
-          data: { session },
-          error,
-        } = await supabase.auth.getSession();
-
-        if (error) {
-          console.error("[Auth] getSession error:", error);
-          if (isMounted) {
-            setAuthState({
-              user: null,
-              session: null,
-              isLoading: false,
-              isAuthenticated: false,
-              isAdmin: false,
-            });
-          }
-          return;
-        }
-
-        console.log(`[Auth] getSession: hasSession=${!!session}`);
-        await updateAuthState(session, 'getInitialSession');
-      } catch (error) {
-        console.error("[Auth] Init error:", error);
-        if (isMounted) {
-          setAuthState({
-            user: null,
-            session: null,
-            isLoading: false,
-            isAuthenticated: false,
-            isAdmin: false,
-          });
-        }
-      }
-    };
-
-    getInitialSession();
 
     return () => {
       isMounted = false;
@@ -167,17 +109,21 @@ export function useAuth() {
         }
 
         // OAuth User Handling: If no role found, try to sync with existing account by email
-        // This handles the case where user signed up with email/password and later uses OAuth
         if (user.email) {
-          const { data: syncedRole, error: syncError } = await supabase.rpc(
-            'sync_oauth_user_role',
-            { p_user_id: user.id }
-          );
+          try {
+            const { data: syncedRole, error: syncError } = await supabase.rpc(
+              'sync_oauth_user_role',
+              { p_user_id: user.id }
+            );
 
-          if (!syncError && syncedRole && syncedRole !== 'user') {
-            const isAdmin = syncedRole === 'admin' || syncedRole === 'root_admin';
-            adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
-            return isAdmin;
+            if (!syncError && syncedRole && syncedRole !== 'user') {
+              const isAdmin = syncedRole === 'admin' || syncedRole === 'root_admin';
+              adminStatusCache.set(user.id, { isAdmin, timestamp: Date.now() });
+              return isAdmin;
+            }
+          } catch (syncRpcError) {
+            // Function might not exist yet - that's OK, continue to fallback
+            console.log("[Auth] sync_oauth_user_role not available yet");
           }
         }
 
@@ -198,34 +144,36 @@ export function useAuth() {
         adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
         return false;
       } catch (error) {
-        console.error("Error checking admin status:", error);
-        // Don't cache errors - allow retry on next check
+        console.error("[Auth] Error checking admin status:", error);
         return false;
       } finally {
-        // Remove from pending checks when done
         pendingChecks.delete(user.id);
       }
     })();
 
-    // Store the promise in pending checks
     pendingChecks.set(user.id, checkPromise);
-
     return checkPromise;
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       // SECURITY FIX: Check if account is locked before attempting login
-      const { data: lockData, error: lockError } = await supabase.rpc(
-        'is_account_locked',
-        { p_email: email }
-      );
+      try {
+        const { data: lockData, error: lockError } = await supabase.rpc(
+          'is_account_locked',
+          { p_email: email }
+        );
 
-      if (lockError) {
-        console.error("Account lockout check failed:", lockError);
-      } else if (lockData === true) {
-        console.warn("Account is locked due to too many failed attempts");
-        throw new Error("Account is temporarily locked. Please try again later.");
+        if (!lockError && lockData === true) {
+          throw new Error("Account is temporarily locked. Please try again later.");
+        }
+      } catch (lockCheckError: any) {
+        // If the RPC doesn't exist, that's OK - continue with login
+        if (!lockCheckError.message?.includes('temporarily locked')) {
+          console.log("[Auth] Account lock check not available");
+        } else {
+          throw lockCheckError;
+        }
       }
 
       // Attempt login
@@ -234,32 +182,35 @@ export function useAuth() {
         password,
       });
 
-      // Record login attempt (success or failure)
+      // Record login attempt (success or failure) - non-blocking
       try {
         const ipAddress = await fetch('https://api.ipify.org?format=json')
           .then(r => r.json())
           .then(d => d.ip)
           .catch(() => 'unknown');
 
-        await supabase.rpc('record_login_attempt', {
+        supabase.rpc('record_login_attempt', {
           p_email: email,
           p_ip_address: ipAddress,
           p_user_agent: navigator.userAgent,
           p_success: !error
+        }).catch(() => {
+          // Ignore errors in recording - don't block login
         });
       } catch (recordError) {
-        console.error("Failed to record login attempt:", recordError);
+        // Ignore - don't block login
       }
 
       if (error) {
-        console.error("Login error:", error);
+        console.error("[Auth] Login error:", error);
         return false;
       }
 
+      // onAuthStateChange will update the state automatically
       return !!data.session;
-    } catch (error) {
-      console.error("Login failed:", error);
-      return false;
+    } catch (error: any) {
+      console.error("[Auth] Login failed:", error);
+      throw error;
     }
   };
 
@@ -277,22 +228,23 @@ export function useAuth() {
       });
 
       if (error) {
-        console.error("Signup error:", error);
+        console.error("[Auth] Signup error:", error);
         return false;
       }
 
       return !!data.user;
     } catch (error) {
-      console.error("Signup failed:", error);
+      console.error("[Auth] Signup failed:", error);
       return false;
     }
   };
 
   const logout = async () => {
     try {
+      adminStatusCache.clear();
       await supabase.auth.signOut();
     } catch (error) {
-      console.error("Logout error:", error);
+      console.error("[Auth] Logout error:", error);
     }
   };
 
