@@ -27,16 +27,91 @@ export function useAuth() {
   });
 
   useEffect(() => {
-    // Get initial session
+    let isMounted = true;
+
+    // Helper to update auth state safely
+    const updateAuthState = async (session: Session | null, eventName?: string) => {
+      if (!isMounted) return;
+      
+      console.log(`[Auth] ${eventName || 'update'}: session=${!!session}, user=${session?.user?.email || 'none'}`);
+      
+      try {
+        const isAdmin = session?.user ? await checkIsAdmin(session.user) : false;
+        
+        if (!isMounted) return;
+        
+        console.log(`[Auth] Setting state: authenticated=${!!session}, isAdmin=${isAdmin}`);
+        setAuthState({
+          user: session?.user || null,
+          session,
+          isLoading: false,
+          isAuthenticated: !!session,
+          isAdmin,
+        });
+      } catch (error) {
+        console.error("[Auth] Error in updateAuthState:", error);
+        if (isMounted) {
+          setAuthState({
+            user: session?.user || null,
+            session,
+            isLoading: false,
+            isAuthenticated: !!session,
+            isAdmin: false,
+          });
+        }
+      }
+    };
+
+    // Set up auth state change listener FIRST
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[Auth] onAuthStateChange fired: event=${event}, hasSession=${!!session}`);
+      await updateAuthState(session, event);
+    });
+
+    // Then get initial session
     const getInitialSession = async () => {
       try {
+        // Log the current URL for debugging OAuth redirects
+        console.log(`[Auth] Init: URL=${window.location.href}`);
+        
+        // CRITICAL: Check if there are OAuth tokens in the URL hash
+        // If so, wait for onAuthStateChange to handle them, don't call getSession yet
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const hasOAuthTokens = hashParams.has('access_token') || hashParams.has('error');
+        
+        if (hasOAuthTokens) {
+          console.log('[Auth] OAuth tokens detected in URL hash - waiting for onAuthStateChange to process them...');
+          // Don't call getSession - let the Supabase client process the tokens
+          // and trigger the onAuthStateChange event
+          return;
+        }
+        
         const {
           data: { session },
           error,
         } = await supabase.auth.getSession();
 
         if (error) {
-          console.error("Error getting session:", error);
+          console.error("[Auth] getSession error:", error);
+          if (isMounted) {
+            setAuthState({
+              user: null,
+              session: null,
+              isLoading: false,
+              isAuthenticated: false,
+              isAdmin: false,
+            });
+          }
+          return;
+        }
+
+        console.log(`[Auth] getSession: hasSession=${!!session}`);
+        await updateAuthState(session, 'getInitialSession');
+      } catch (error) {
+        console.error("[Auth] Init error:", error);
+        if (isMounted) {
           setAuthState({
             user: null,
             session: null,
@@ -44,61 +119,16 @@ export function useAuth() {
             isAuthenticated: false,
             isAdmin: false,
           });
-          return;
         }
-
-        // Wait for admin check to complete before setting final state
-        const isAdmin = await checkIsAdmin(session?.user);
-
-        setAuthState({
-          user: session?.user || null,
-          session,
-          isLoading: false,
-          isAuthenticated: !!session,
-          isAdmin,
-        });
-      } catch (error) {
-        console.error("Error initializing auth:", error);
-        setAuthState({
-          user: null,
-          session: null,
-          isLoading: false,
-          isAuthenticated: false,
-          isAdmin: false,
-        });
       }
     };
 
     getInitialSession();
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, session) => {
-      try {
-        // Wait for admin check before updating state to prevent race conditions
-        const isAdmin = session?.user ? await checkIsAdmin(session.user) : false;
-
-        setAuthState({
-          user: session?.user || null,
-          session,
-          isLoading: false,
-          isAuthenticated: !!session,
-          isAdmin,
-        });
-      } catch (error) {
-        console.error("Error handling auth state change:", error);
-        setAuthState({
-          user: session?.user || null,
-          session,
-          isLoading: false,
-          isAuthenticated: !!session,
-          isAdmin: false,
-        });
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkIsAdmin = async (
