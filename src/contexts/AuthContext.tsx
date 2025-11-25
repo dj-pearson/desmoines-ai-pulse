@@ -173,32 +173,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    console.log("[AuthContext] Logging out...");
+    adminStatusCache.clear();
+    
     try {
-      console.log("[AuthContext] Logging out...");
-      adminStatusCache.clear();
-      
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Logout timeout')), 5000)
-      );
-      
-      await Promise.race([
-        supabase.auth.signOut(),
-        timeoutPromise
-      ]);
-      
-      console.log("[AuthContext] Logout successful");
+      // Call signOut to notify Supabase
+      await supabase.auth.signOut();
+      console.log("[AuthContext] signOut completed");
     } catch (error) {
-      console.error("[AuthContext] Logout error:", error);
-      // Even if signOut fails, clear local state
-      setAuthState({
-        user: null,
-        session: null,
-        isLoading: false,
-        isAuthenticated: false,
-        isAdmin: false,
-      });
+      console.error("[AuthContext] signOut error:", error);
     }
+    
+    // Manually clear all Supabase storage to ensure complete logout
+    try {
+      const storageKeys = Object.keys(localStorage).filter(k => k.includes('supabase'));
+      console.log("[AuthContext] Clearing localStorage keys:", storageKeys);
+      storageKeys.forEach(key => localStorage.removeItem(key));
+      console.log("[AuthContext] LocalStorage cleared");
+    } catch (error) {
+      console.error("[AuthContext] Error clearing localStorage:", error);
+    }
+    
+    // Clear state
+    setAuthState({
+      user: null,
+      session: null,
+      isLoading: false,
+      isAuthenticated: false,
+      isAdmin: false,
+    });
+    
+    console.log("[AuthContext] Logout complete");
   };
 
   const requireAdmin = () => {
