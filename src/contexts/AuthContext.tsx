@@ -176,11 +176,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("[AuthContext] Logging out...");
       adminStatusCache.clear();
-      await supabase.auth.signOut();
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Logout timeout')), 5000)
+      );
+      
+      await Promise.race([
+        supabase.auth.signOut(),
+        timeoutPromise
+      ]);
+      
       console.log("[AuthContext] Logout successful");
     } catch (error) {
       console.error("[AuthContext] Logout error:", error);
-      throw error;
+      // Even if signOut fails, clear local state
+      setAuthState({
+        user: null,
+        session: null,
+        isLoading: false,
+        isAuthenticated: false,
+        isAdmin: false,
+      });
     }
   };
 

@@ -77,9 +77,16 @@ export default function Header() {
   }, [location.pathname, announceToScreenReader]);
 
   const handleLogout = async () => {
-    announceToScreenReader("Signing out...", "polite");
-    await logout();
-    announceToScreenReader("Successfully signed out", "polite");
+    try {
+      announceToScreenReader("Signing out...", "polite");
+      await logout();
+      announceToScreenReader("Successfully signed out", "polite");
+      // Navigate to home page after logout
+      window.location.href = "/";
+    } catch (error) {
+      console.error("[Header] Logout failed:", error);
+      announceToScreenReader("Logout failed", "assertive");
+    }
   };
 
   const handleMobileMenuToggle = (isOpen: boolean) => {
