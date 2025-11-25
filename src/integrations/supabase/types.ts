@@ -4125,6 +4125,1107 @@ export type Database = {
         }
         Relationships: []
       }
+      seo_content_optimization: {
+        Row: {
+          ai_analysis_date: string | null
+          ai_model_used: string | null
+          ai_recommendations: Json | null
+          analyzed_at: string | null
+          average_time_on_page_seconds: number | null
+          average_words_per_sentence: number | null
+          bounce_rate_percentage: number | null
+          character_count: number | null
+          competitor_average_score: number | null
+          competitor_average_word_count: number | null
+          content_age_days: number | null
+          content_gap_topics: string[] | null
+          content_intent: string | null
+          content_type: string | null
+          conversion_rate_percentage: number | null
+          engagement_score: number | null
+          external_links_count: number | null
+          h1: string | null
+          has_call_to_action: boolean | null
+          has_conclusion: boolean | null
+          has_featured_image: boolean | null
+          has_images: boolean | null
+          has_introduction: boolean | null
+          has_lists: boolean | null
+          has_table_of_contents: boolean | null
+          has_videos: boolean | null
+          heading_hierarchy_issues: string[] | null
+          heading_structure_valid: boolean | null
+          id: string
+          images_count: number | null
+          implementation_progress_percentage: number | null
+          improvement_percentage: number | null
+          internal_links_count: number | null
+          is_evergreen: boolean | null
+          issues: Json | null
+          issues_count: number | null
+          keyword_density: number | null
+          keyword_frequency: number | null
+          keyword_in_description: boolean | null
+          keyword_in_first_paragraph: boolean | null
+          keyword_in_h1: boolean | null
+          keyword_in_title: boolean | null
+          keyword_optimization_score: number | null
+          last_optimized_at: string | null
+          last_updated_date: string | null
+          lsi_keywords: string[] | null
+          lsi_keywords_count: number | null
+          meta_description: string | null
+          missing_lsi_keywords: string[] | null
+          next_review_date: string | null
+          optimization_priority: string | null
+          optimization_status: string | null
+          optimized_by: string | null
+          overall_content_score: number | null
+          paragraph_count: number | null
+          readability_grade_level: string | null
+          readability_score: number | null
+          readability_score_rating: number | null
+          reading_time_minutes: number | null
+          recommendations_implemented: number | null
+          recommendations_total: number | null
+          score_after_optimization: number | null
+          score_before_optimization: number | null
+          sentence_count: number | null
+          structure_score: number | null
+          suggested_content_additions: string[] | null
+          suggested_content_length_words: number | null
+          suggested_h1: string | null
+          suggested_meta_description: string | null
+          suggested_title: string | null
+          target_keyword: string | null
+          title: string | null
+          update_frequency: string | null
+          url: string
+          word_count: number | null
+        }
+        Insert: {
+          ai_analysis_date?: string | null
+          ai_model_used?: string | null
+          ai_recommendations?: Json | null
+          analyzed_at?: string | null
+          average_time_on_page_seconds?: number | null
+          average_words_per_sentence?: number | null
+          bounce_rate_percentage?: number | null
+          character_count?: number | null
+          competitor_average_score?: number | null
+          competitor_average_word_count?: number | null
+          content_age_days?: number | null
+          content_gap_topics?: string[] | null
+          content_intent?: string | null
+          content_type?: string | null
+          conversion_rate_percentage?: number | null
+          engagement_score?: number | null
+          external_links_count?: number | null
+          h1?: string | null
+          has_call_to_action?: boolean | null
+          has_conclusion?: boolean | null
+          has_featured_image?: boolean | null
+          has_images?: boolean | null
+          has_introduction?: boolean | null
+          has_lists?: boolean | null
+          has_table_of_contents?: boolean | null
+          has_videos?: boolean | null
+          heading_hierarchy_issues?: string[] | null
+          heading_structure_valid?: boolean | null
+          id?: string
+          images_count?: number | null
+          implementation_progress_percentage?: number | null
+          improvement_percentage?: number | null
+          internal_links_count?: number | null
+          is_evergreen?: boolean | null
+          issues?: Json | null
+          issues_count?: number | null
+          keyword_density?: number | null
+          keyword_frequency?: number | null
+          keyword_in_description?: boolean | null
+          keyword_in_first_paragraph?: boolean | null
+          keyword_in_h1?: boolean | null
+          keyword_in_title?: boolean | null
+          keyword_optimization_score?: number | null
+          last_optimized_at?: string | null
+          last_updated_date?: string | null
+          lsi_keywords?: string[] | null
+          lsi_keywords_count?: number | null
+          meta_description?: string | null
+          missing_lsi_keywords?: string[] | null
+          next_review_date?: string | null
+          optimization_priority?: string | null
+          optimization_status?: string | null
+          optimized_by?: string | null
+          overall_content_score?: number | null
+          paragraph_count?: number | null
+          readability_grade_level?: string | null
+          readability_score?: number | null
+          readability_score_rating?: number | null
+          reading_time_minutes?: number | null
+          recommendations_implemented?: number | null
+          recommendations_total?: number | null
+          score_after_optimization?: number | null
+          score_before_optimization?: number | null
+          sentence_count?: number | null
+          structure_score?: number | null
+          suggested_content_additions?: string[] | null
+          suggested_content_length_words?: number | null
+          suggested_h1?: string | null
+          suggested_meta_description?: string | null
+          suggested_title?: string | null
+          target_keyword?: string | null
+          title?: string | null
+          update_frequency?: string | null
+          url: string
+          word_count?: number | null
+        }
+        Update: {
+          ai_analysis_date?: string | null
+          ai_model_used?: string | null
+          ai_recommendations?: Json | null
+          analyzed_at?: string | null
+          average_time_on_page_seconds?: number | null
+          average_words_per_sentence?: number | null
+          bounce_rate_percentage?: number | null
+          character_count?: number | null
+          competitor_average_score?: number | null
+          competitor_average_word_count?: number | null
+          content_age_days?: number | null
+          content_gap_topics?: string[] | null
+          content_intent?: string | null
+          content_type?: string | null
+          conversion_rate_percentage?: number | null
+          engagement_score?: number | null
+          external_links_count?: number | null
+          h1?: string | null
+          has_call_to_action?: boolean | null
+          has_conclusion?: boolean | null
+          has_featured_image?: boolean | null
+          has_images?: boolean | null
+          has_introduction?: boolean | null
+          has_lists?: boolean | null
+          has_table_of_contents?: boolean | null
+          has_videos?: boolean | null
+          heading_hierarchy_issues?: string[] | null
+          heading_structure_valid?: boolean | null
+          id?: string
+          images_count?: number | null
+          implementation_progress_percentage?: number | null
+          improvement_percentage?: number | null
+          internal_links_count?: number | null
+          is_evergreen?: boolean | null
+          issues?: Json | null
+          issues_count?: number | null
+          keyword_density?: number | null
+          keyword_frequency?: number | null
+          keyword_in_description?: boolean | null
+          keyword_in_first_paragraph?: boolean | null
+          keyword_in_h1?: boolean | null
+          keyword_in_title?: boolean | null
+          keyword_optimization_score?: number | null
+          last_optimized_at?: string | null
+          last_updated_date?: string | null
+          lsi_keywords?: string[] | null
+          lsi_keywords_count?: number | null
+          meta_description?: string | null
+          missing_lsi_keywords?: string[] | null
+          next_review_date?: string | null
+          optimization_priority?: string | null
+          optimization_status?: string | null
+          optimized_by?: string | null
+          overall_content_score?: number | null
+          paragraph_count?: number | null
+          readability_grade_level?: string | null
+          readability_score?: number | null
+          readability_score_rating?: number | null
+          reading_time_minutes?: number | null
+          recommendations_implemented?: number | null
+          recommendations_total?: number | null
+          score_after_optimization?: number | null
+          score_before_optimization?: number | null
+          sentence_count?: number | null
+          structure_score?: number | null
+          suggested_content_additions?: string[] | null
+          suggested_content_length_words?: number | null
+          suggested_h1?: string | null
+          suggested_meta_description?: string | null
+          suggested_title?: string | null
+          target_keyword?: string | null
+          title?: string | null
+          update_frequency?: string | null
+          url?: string
+          word_count?: number | null
+        }
+        Relationships: []
+      }
+      seo_duplicate_content: {
+        Row: {
+          canonical_relationship: string | null
+          common_text: string | null
+          common_word_count: number | null
+          content_hash_1: string | null
+          content_hash_2: string | null
+          description_similarity_percentage: number | null
+          detected_at: string | null
+          detection_method: string | null
+          headings_similarity_percentage: number | null
+          id: string
+          impact_severity: string | null
+          last_checked_at: string | null
+          reason: string | null
+          recommended_canonical: string | null
+          resolution_action: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          similarity_percentage: number | null
+          similarity_type: string | null
+          status: string | null
+          title_similarity_percentage: number | null
+          total_words_url_1: number | null
+          total_words_url_2: number | null
+          url_1: string
+          url_2: string
+        }
+        Insert: {
+          canonical_relationship?: string | null
+          common_text?: string | null
+          common_word_count?: number | null
+          content_hash_1?: string | null
+          content_hash_2?: string | null
+          description_similarity_percentage?: number | null
+          detected_at?: string | null
+          detection_method?: string | null
+          headings_similarity_percentage?: number | null
+          id?: string
+          impact_severity?: string | null
+          last_checked_at?: string | null
+          reason?: string | null
+          recommended_canonical?: string | null
+          resolution_action?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          similarity_percentage?: number | null
+          similarity_type?: string | null
+          status?: string | null
+          title_similarity_percentage?: number | null
+          total_words_url_1?: number | null
+          total_words_url_2?: number | null
+          url_1: string
+          url_2: string
+        }
+        Update: {
+          canonical_relationship?: string | null
+          common_text?: string | null
+          common_word_count?: number | null
+          content_hash_1?: string | null
+          content_hash_2?: string | null
+          description_similarity_percentage?: number | null
+          detected_at?: string | null
+          detection_method?: string | null
+          headings_similarity_percentage?: number | null
+          id?: string
+          impact_severity?: string | null
+          last_checked_at?: string | null
+          reason?: string | null
+          recommended_canonical?: string | null
+          resolution_action?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          similarity_percentage?: number | null
+          similarity_type?: string | null
+          status?: string | null
+          title_similarity_percentage?: number | null
+          total_words_url_1?: number | null
+          total_words_url_2?: number | null
+          url_1?: string
+          url_2?: string
+        }
+        Relationships: []
+      }
+      seo_link_analysis: {
+        Row: {
+          anchor_text_length: number | null
+          checked_at: string | null
+          crawl_session_id: string | null
+          domain_authority: number | null
+          final_url: string | null
+          id: string
+          is_branded: boolean | null
+          is_broken: boolean | null
+          is_exact_match: boolean | null
+          is_follow: boolean | null
+          is_generic: boolean | null
+          is_in_content: boolean | null
+          is_in_footer: boolean | null
+          is_in_navigation: boolean | null
+          is_nofollow: boolean | null
+          is_partial_match: boolean | null
+          is_reputable_domain: boolean | null
+          is_spam: boolean | null
+          issues: string[] | null
+          link_text: string | null
+          link_type: string | null
+          link_url: string
+          passes_link_equity: boolean | null
+          position_on_page: number | null
+          redirect_count: number | null
+          rel_attributes: string[] | null
+          response_time_ms: number | null
+          seo_value: string | null
+          source_url: string
+          status_code: number | null
+          surrounding_text: string | null
+          target_attribute: string | null
+        }
+        Insert: {
+          anchor_text_length?: number | null
+          checked_at?: string | null
+          crawl_session_id?: string | null
+          domain_authority?: number | null
+          final_url?: string | null
+          id?: string
+          is_branded?: boolean | null
+          is_broken?: boolean | null
+          is_exact_match?: boolean | null
+          is_follow?: boolean | null
+          is_generic?: boolean | null
+          is_in_content?: boolean | null
+          is_in_footer?: boolean | null
+          is_in_navigation?: boolean | null
+          is_nofollow?: boolean | null
+          is_partial_match?: boolean | null
+          is_reputable_domain?: boolean | null
+          is_spam?: boolean | null
+          issues?: string[] | null
+          link_text?: string | null
+          link_type?: string | null
+          link_url: string
+          passes_link_equity?: boolean | null
+          position_on_page?: number | null
+          redirect_count?: number | null
+          rel_attributes?: string[] | null
+          response_time_ms?: number | null
+          seo_value?: string | null
+          source_url: string
+          status_code?: number | null
+          surrounding_text?: string | null
+          target_attribute?: string | null
+        }
+        Update: {
+          anchor_text_length?: number | null
+          checked_at?: string | null
+          crawl_session_id?: string | null
+          domain_authority?: number | null
+          final_url?: string | null
+          id?: string
+          is_branded?: boolean | null
+          is_broken?: boolean | null
+          is_exact_match?: boolean | null
+          is_follow?: boolean | null
+          is_generic?: boolean | null
+          is_in_content?: boolean | null
+          is_in_footer?: boolean | null
+          is_in_navigation?: boolean | null
+          is_nofollow?: boolean | null
+          is_partial_match?: boolean | null
+          is_reputable_domain?: boolean | null
+          is_spam?: boolean | null
+          issues?: string[] | null
+          link_text?: string | null
+          link_type?: string | null
+          link_url?: string
+          passes_link_equity?: boolean | null
+          position_on_page?: number | null
+          redirect_count?: number | null
+          rel_attributes?: string[] | null
+          response_time_ms?: number | null
+          seo_value?: string | null
+          source_url?: string
+          status_code?: number | null
+          surrounding_text?: string | null
+          target_attribute?: string | null
+        }
+        Relationships: []
+      }
+      seo_mobile_analysis: {
+        Row: {
+          amp_validation_errors: string[] | null
+          analyzed_at: string | null
+          assessment: string | null
+          blocking_resources: string[] | null
+          blocks_mobile_rendering: boolean | null
+          content_parity_with_desktop: boolean | null
+          content_wider_than_screen: boolean | null
+          content_width_px: number | null
+          crawl_session_id: string | null
+          critical_issues_count: number | null
+          has_accelerated_mobile_pages: boolean | null
+          has_app_links: boolean | null
+          has_intrusive_interstitials: boolean | null
+          has_viewport_meta: boolean | null
+          id: string
+          interstitial_types: string[] | null
+          is_mobile_friendly: boolean | null
+          is_responsive: boolean | null
+          min_font_size: number | null
+          min_touch_target_size: number | null
+          missing_content_on_mobile: string[] | null
+          mobile_first_contentful_paint_ms: number | null
+          mobile_first_issues: string[] | null
+          mobile_first_ready: boolean | null
+          mobile_friendly_score: number | null
+          mobile_page_load_time_ms: number | null
+          mobile_time_to_interactive_ms: number | null
+          mobile_usability_issues: Json | null
+          overall_mobile_score: number | null
+          readable_font_size_percentage: number | null
+          recommendations: string[] | null
+          recommended_touch_target_size: number | null
+          requires_horizontal_scroll: boolean | null
+          responsive_method: string | null
+          text_size_issues: string[] | null
+          text_too_small: boolean | null
+          touch_elements_too_close: boolean | null
+          touch_target_issues: string[] | null
+          url: string
+          viewport_content: string | null
+          viewport_initial_scale: number | null
+          viewport_width: string | null
+          viewport_width_px: number | null
+          warning_issues_count: number | null
+        }
+        Insert: {
+          amp_validation_errors?: string[] | null
+          analyzed_at?: string | null
+          assessment?: string | null
+          blocking_resources?: string[] | null
+          blocks_mobile_rendering?: boolean | null
+          content_parity_with_desktop?: boolean | null
+          content_wider_than_screen?: boolean | null
+          content_width_px?: number | null
+          crawl_session_id?: string | null
+          critical_issues_count?: number | null
+          has_accelerated_mobile_pages?: boolean | null
+          has_app_links?: boolean | null
+          has_intrusive_interstitials?: boolean | null
+          has_viewport_meta?: boolean | null
+          id?: string
+          interstitial_types?: string[] | null
+          is_mobile_friendly?: boolean | null
+          is_responsive?: boolean | null
+          min_font_size?: number | null
+          min_touch_target_size?: number | null
+          missing_content_on_mobile?: string[] | null
+          mobile_first_contentful_paint_ms?: number | null
+          mobile_first_issues?: string[] | null
+          mobile_first_ready?: boolean | null
+          mobile_friendly_score?: number | null
+          mobile_page_load_time_ms?: number | null
+          mobile_time_to_interactive_ms?: number | null
+          mobile_usability_issues?: Json | null
+          overall_mobile_score?: number | null
+          readable_font_size_percentage?: number | null
+          recommendations?: string[] | null
+          recommended_touch_target_size?: number | null
+          requires_horizontal_scroll?: boolean | null
+          responsive_method?: string | null
+          text_size_issues?: string[] | null
+          text_too_small?: boolean | null
+          touch_elements_too_close?: boolean | null
+          touch_target_issues?: string[] | null
+          url: string
+          viewport_content?: string | null
+          viewport_initial_scale?: number | null
+          viewport_width?: string | null
+          viewport_width_px?: number | null
+          warning_issues_count?: number | null
+        }
+        Update: {
+          amp_validation_errors?: string[] | null
+          analyzed_at?: string | null
+          assessment?: string | null
+          blocking_resources?: string[] | null
+          blocks_mobile_rendering?: boolean | null
+          content_parity_with_desktop?: boolean | null
+          content_wider_than_screen?: boolean | null
+          content_width_px?: number | null
+          crawl_session_id?: string | null
+          critical_issues_count?: number | null
+          has_accelerated_mobile_pages?: boolean | null
+          has_app_links?: boolean | null
+          has_intrusive_interstitials?: boolean | null
+          has_viewport_meta?: boolean | null
+          id?: string
+          interstitial_types?: string[] | null
+          is_mobile_friendly?: boolean | null
+          is_responsive?: boolean | null
+          min_font_size?: number | null
+          min_touch_target_size?: number | null
+          missing_content_on_mobile?: string[] | null
+          mobile_first_contentful_paint_ms?: number | null
+          mobile_first_issues?: string[] | null
+          mobile_first_ready?: boolean | null
+          mobile_friendly_score?: number | null
+          mobile_page_load_time_ms?: number | null
+          mobile_time_to_interactive_ms?: number | null
+          mobile_usability_issues?: Json | null
+          overall_mobile_score?: number | null
+          readable_font_size_percentage?: number | null
+          recommendations?: string[] | null
+          recommended_touch_target_size?: number | null
+          requires_horizontal_scroll?: boolean | null
+          responsive_method?: string | null
+          text_size_issues?: string[] | null
+          text_too_small?: boolean | null
+          touch_elements_too_close?: boolean | null
+          touch_target_issues?: string[] | null
+          url?: string
+          viewport_content?: string | null
+          viewport_initial_scale?: number | null
+          viewport_width?: string | null
+          viewport_width_px?: number | null
+          warning_issues_count?: number | null
+        }
+        Relationships: []
+      }
+      seo_performance_budget: {
+        Row: {
+          alert_on_violation: boolean | null
+          alert_threshold_percentage: number | null
+          applies_to: string | null
+          budget_name: string
+          budget_type: string | null
+          consecutive_failures: number | null
+          created_at: string | null
+          created_by: string | null
+          custom_metrics: Json | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          is_passing: boolean | null
+          last_check_results: Json | null
+          last_checked_at: string | null
+          last_failed_at: string | null
+          last_passed_at: string | null
+          max_cls: number | null
+          max_css_requests: number | null
+          max_css_size_bytes: number | null
+          max_fid_ms: number | null
+          max_first_contentful_paint_ms: number | null
+          max_font_size_bytes: number | null
+          max_html_size_bytes: number | null
+          max_image_requests: number | null
+          max_image_size_bytes: number | null
+          max_js_requests: number | null
+          max_js_size_bytes: number | null
+          max_largest_contentful_paint_ms: number | null
+          max_lcp_ms: number | null
+          max_load_time_ms: number | null
+          max_time_to_interactive_ms: number | null
+          max_total_blocking_time_ms: number | null
+          max_total_requests: number | null
+          max_total_size_bytes: number | null
+          updated_at: string | null
+          url: string | null
+          url_pattern: string | null
+          violations: string[] | null
+          violations_count: number | null
+        }
+        Insert: {
+          alert_on_violation?: boolean | null
+          alert_threshold_percentage?: number | null
+          applies_to?: string | null
+          budget_name: string
+          budget_type?: string | null
+          consecutive_failures?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          custom_metrics?: Json | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_passing?: boolean | null
+          last_check_results?: Json | null
+          last_checked_at?: string | null
+          last_failed_at?: string | null
+          last_passed_at?: string | null
+          max_cls?: number | null
+          max_css_requests?: number | null
+          max_css_size_bytes?: number | null
+          max_fid_ms?: number | null
+          max_first_contentful_paint_ms?: number | null
+          max_font_size_bytes?: number | null
+          max_html_size_bytes?: number | null
+          max_image_requests?: number | null
+          max_image_size_bytes?: number | null
+          max_js_requests?: number | null
+          max_js_size_bytes?: number | null
+          max_largest_contentful_paint_ms?: number | null
+          max_lcp_ms?: number | null
+          max_load_time_ms?: number | null
+          max_time_to_interactive_ms?: number | null
+          max_total_blocking_time_ms?: number | null
+          max_total_requests?: number | null
+          max_total_size_bytes?: number | null
+          updated_at?: string | null
+          url?: string | null
+          url_pattern?: string | null
+          violations?: string[] | null
+          violations_count?: number | null
+        }
+        Update: {
+          alert_on_violation?: boolean | null
+          alert_threshold_percentage?: number | null
+          applies_to?: string | null
+          budget_name?: string
+          budget_type?: string | null
+          consecutive_failures?: number | null
+          created_at?: string | null
+          created_by?: string | null
+          custom_metrics?: Json | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          is_passing?: boolean | null
+          last_check_results?: Json | null
+          last_checked_at?: string | null
+          last_failed_at?: string | null
+          last_passed_at?: string | null
+          max_cls?: number | null
+          max_css_requests?: number | null
+          max_css_size_bytes?: number | null
+          max_fid_ms?: number | null
+          max_first_contentful_paint_ms?: number | null
+          max_font_size_bytes?: number | null
+          max_html_size_bytes?: number | null
+          max_image_requests?: number | null
+          max_image_size_bytes?: number | null
+          max_js_requests?: number | null
+          max_js_size_bytes?: number | null
+          max_largest_contentful_paint_ms?: number | null
+          max_lcp_ms?: number | null
+          max_load_time_ms?: number | null
+          max_time_to_interactive_ms?: number | null
+          max_total_blocking_time_ms?: number | null
+          max_total_requests?: number | null
+          max_total_size_bytes?: number | null
+          updated_at?: string | null
+          url?: string | null
+          url_pattern?: string | null
+          violations?: string[] | null
+          violations_count?: number | null
+        }
+        Relationships: []
+      }
+      seo_security_analysis: {
+        Row: {
+          checked_at: string | null
+          cookies: Json | null
+          crawl_session_id: string | null
+          critical_issues: string[] | null
+          csp_directives: Json | null
+          csp_violations: string[] | null
+          has_csp: boolean | null
+          has_hsts: boolean | null
+          has_known_vulnerabilities: boolean | null
+          has_mixed_content: boolean | null
+          has_permissions_policy: boolean | null
+          has_referrer_policy: boolean | null
+          has_x_content_type_options: boolean | null
+          has_x_frame_options: boolean | null
+          hsts_include_subdomains: boolean | null
+          hsts_max_age: number | null
+          hsts_preload: boolean | null
+          id: string
+          insecure_cookies_count: number | null
+          insecure_third_party_count: number | null
+          is_https: boolean | null
+          mixed_content_urls: string[] | null
+          overall_assessment: string | null
+          permissions_policy_value: string | null
+          recommendations: string[] | null
+          referrer_policy_value: string | null
+          security_score: number | null
+          ssl_days_until_expiry: number | null
+          ssl_expiry_date: string | null
+          ssl_issuer: string | null
+          ssl_valid: boolean | null
+          third_party_scripts: Json | null
+          url: string
+          vulnerabilities: Json | null
+          warnings: string[] | null
+          x_content_type_options_value: string | null
+          x_frame_options_value: string | null
+        }
+        Insert: {
+          checked_at?: string | null
+          cookies?: Json | null
+          crawl_session_id?: string | null
+          critical_issues?: string[] | null
+          csp_directives?: Json | null
+          csp_violations?: string[] | null
+          has_csp?: boolean | null
+          has_hsts?: boolean | null
+          has_known_vulnerabilities?: boolean | null
+          has_mixed_content?: boolean | null
+          has_permissions_policy?: boolean | null
+          has_referrer_policy?: boolean | null
+          has_x_content_type_options?: boolean | null
+          has_x_frame_options?: boolean | null
+          hsts_include_subdomains?: boolean | null
+          hsts_max_age?: number | null
+          hsts_preload?: boolean | null
+          id?: string
+          insecure_cookies_count?: number | null
+          insecure_third_party_count?: number | null
+          is_https?: boolean | null
+          mixed_content_urls?: string[] | null
+          overall_assessment?: string | null
+          permissions_policy_value?: string | null
+          recommendations?: string[] | null
+          referrer_policy_value?: string | null
+          security_score?: number | null
+          ssl_days_until_expiry?: number | null
+          ssl_expiry_date?: string | null
+          ssl_issuer?: string | null
+          ssl_valid?: boolean | null
+          third_party_scripts?: Json | null
+          url: string
+          vulnerabilities?: Json | null
+          warnings?: string[] | null
+          x_content_type_options_value?: string | null
+          x_frame_options_value?: string | null
+        }
+        Update: {
+          checked_at?: string | null
+          cookies?: Json | null
+          crawl_session_id?: string | null
+          critical_issues?: string[] | null
+          csp_directives?: Json | null
+          csp_violations?: string[] | null
+          has_csp?: boolean | null
+          has_hsts?: boolean | null
+          has_known_vulnerabilities?: boolean | null
+          has_mixed_content?: boolean | null
+          has_permissions_policy?: boolean | null
+          has_referrer_policy?: boolean | null
+          has_x_content_type_options?: boolean | null
+          has_x_frame_options?: boolean | null
+          hsts_include_subdomains?: boolean | null
+          hsts_max_age?: number | null
+          hsts_preload?: boolean | null
+          id?: string
+          insecure_cookies_count?: number | null
+          insecure_third_party_count?: number | null
+          is_https?: boolean | null
+          mixed_content_urls?: string[] | null
+          overall_assessment?: string | null
+          permissions_policy_value?: string | null
+          recommendations?: string[] | null
+          referrer_policy_value?: string | null
+          security_score?: number | null
+          ssl_days_until_expiry?: number | null
+          ssl_expiry_date?: string | null
+          ssl_issuer?: string | null
+          ssl_valid?: boolean | null
+          third_party_scripts?: Json | null
+          url?: string
+          vulnerabilities?: Json | null
+          warnings?: string[] | null
+          x_content_type_options_value?: string | null
+          x_frame_options_value?: string | null
+        }
+        Relationships: []
+      }
+      seo_semantic_analysis: {
+        Row: {
+          ai_content_angle_suggestions: string[] | null
+          ai_keyword_suggestions: string[] | null
+          ai_model_used: string | null
+          ai_topic_suggestions: string[] | null
+          analyzed_at: string | null
+          auto_suggest_queries: string[] | null
+          competitor_semantic_keywords: string[] | null
+          competitor_semantic_overlap_percentage: number | null
+          complexity_level: string | null
+          content_comprehensiveness_score: number | null
+          detected_intent: string | null
+          entities: Json | null
+          entities_count: number | null
+          featured_snippet_opportunity: boolean | null
+          featured_snippet_type: string | null
+          id: string
+          intent_confidence: number | null
+          keyword_co_occurrences: Json | null
+          last_updated_at: string | null
+          long_tail_keywords: string[] | null
+          main_topics: string[] | null
+          missing_keywords: string[] | null
+          missing_topics: string[] | null
+          next_analysis_date: string | null
+          paa_opportunity: boolean | null
+          paa_questions: string[] | null
+          primary_keyword: string
+          priority_keywords_to_add: string[] | null
+          priority_topics_to_cover: string[] | null
+          query_variations: string[] | null
+          question_keywords: string[] | null
+          questions_people_ask: string[] | null
+          ranking_improvement: number | null
+          recommended_content_additions: string[] | null
+          related_searches: string[] | null
+          semantic_keywords: Json | null
+          semantic_keywords_count: number | null
+          semantic_optimization_recommendations: string[] | null
+          semantic_richness_score: number | null
+          semantic_score_after: number | null
+          semantic_score_before: number | null
+          sentiment_score: number | null
+          serp_avg_word_count: number | null
+          serp_common_topics: string[] | null
+          serp_keyword_density_competitors: number | null
+          subtopics: string[] | null
+          tfidf_top_terms: Json | null
+          tone: string | null
+          topic_clusters: Json | null
+          topic_depth_score: number | null
+          unique_semantic_keywords: string[] | null
+          url: string
+        }
+        Insert: {
+          ai_content_angle_suggestions?: string[] | null
+          ai_keyword_suggestions?: string[] | null
+          ai_model_used?: string | null
+          ai_topic_suggestions?: string[] | null
+          analyzed_at?: string | null
+          auto_suggest_queries?: string[] | null
+          competitor_semantic_keywords?: string[] | null
+          competitor_semantic_overlap_percentage?: number | null
+          complexity_level?: string | null
+          content_comprehensiveness_score?: number | null
+          detected_intent?: string | null
+          entities?: Json | null
+          entities_count?: number | null
+          featured_snippet_opportunity?: boolean | null
+          featured_snippet_type?: string | null
+          id?: string
+          intent_confidence?: number | null
+          keyword_co_occurrences?: Json | null
+          last_updated_at?: string | null
+          long_tail_keywords?: string[] | null
+          main_topics?: string[] | null
+          missing_keywords?: string[] | null
+          missing_topics?: string[] | null
+          next_analysis_date?: string | null
+          paa_opportunity?: boolean | null
+          paa_questions?: string[] | null
+          primary_keyword: string
+          priority_keywords_to_add?: string[] | null
+          priority_topics_to_cover?: string[] | null
+          query_variations?: string[] | null
+          question_keywords?: string[] | null
+          questions_people_ask?: string[] | null
+          ranking_improvement?: number | null
+          recommended_content_additions?: string[] | null
+          related_searches?: string[] | null
+          semantic_keywords?: Json | null
+          semantic_keywords_count?: number | null
+          semantic_optimization_recommendations?: string[] | null
+          semantic_richness_score?: number | null
+          semantic_score_after?: number | null
+          semantic_score_before?: number | null
+          sentiment_score?: number | null
+          serp_avg_word_count?: number | null
+          serp_common_topics?: string[] | null
+          serp_keyword_density_competitors?: number | null
+          subtopics?: string[] | null
+          tfidf_top_terms?: Json | null
+          tone?: string | null
+          topic_clusters?: Json | null
+          topic_depth_score?: number | null
+          unique_semantic_keywords?: string[] | null
+          url: string
+        }
+        Update: {
+          ai_content_angle_suggestions?: string[] | null
+          ai_keyword_suggestions?: string[] | null
+          ai_model_used?: string | null
+          ai_topic_suggestions?: string[] | null
+          analyzed_at?: string | null
+          auto_suggest_queries?: string[] | null
+          competitor_semantic_keywords?: string[] | null
+          competitor_semantic_overlap_percentage?: number | null
+          complexity_level?: string | null
+          content_comprehensiveness_score?: number | null
+          detected_intent?: string | null
+          entities?: Json | null
+          entities_count?: number | null
+          featured_snippet_opportunity?: boolean | null
+          featured_snippet_type?: string | null
+          id?: string
+          intent_confidence?: number | null
+          keyword_co_occurrences?: Json | null
+          last_updated_at?: string | null
+          long_tail_keywords?: string[] | null
+          main_topics?: string[] | null
+          missing_keywords?: string[] | null
+          missing_topics?: string[] | null
+          next_analysis_date?: string | null
+          paa_opportunity?: boolean | null
+          paa_questions?: string[] | null
+          primary_keyword?: string
+          priority_keywords_to_add?: string[] | null
+          priority_topics_to_cover?: string[] | null
+          query_variations?: string[] | null
+          question_keywords?: string[] | null
+          questions_people_ask?: string[] | null
+          ranking_improvement?: number | null
+          recommended_content_additions?: string[] | null
+          related_searches?: string[] | null
+          semantic_keywords?: Json | null
+          semantic_keywords_count?: number | null
+          semantic_optimization_recommendations?: string[] | null
+          semantic_richness_score?: number | null
+          semantic_score_after?: number | null
+          semantic_score_before?: number | null
+          sentiment_score?: number | null
+          serp_avg_word_count?: number | null
+          serp_common_topics?: string[] | null
+          serp_keyword_density_competitors?: number | null
+          subtopics?: string[] | null
+          tfidf_top_terms?: Json | null
+          tone?: string | null
+          topic_clusters?: Json | null
+          topic_depth_score?: number | null
+          unique_semantic_keywords?: string[] | null
+          url?: string
+        }
+        Relationships: []
+      }
+      seo_structured_data: {
+        Row: {
+          crawl_session_id: string | null
+          eligible_for_rich_results: boolean | null
+          google_testing_url: string | null
+          has_address: boolean | null
+          has_author: boolean | null
+          has_availability: boolean | null
+          has_headline: boolean | null
+          has_image: boolean | null
+          has_location: boolean | null
+          has_logo: boolean | null
+          has_name: boolean | null
+          has_offer: boolean | null
+          has_opening_hours: boolean | null
+          has_phone: boolean | null
+          has_price: boolean | null
+          has_publish_date: boolean | null
+          has_recommended_properties: boolean | null
+          has_required_properties: boolean | null
+          has_review: boolean | null
+          has_start_date: boolean | null
+          id: string
+          is_valid: boolean | null
+          last_modified_at: string | null
+          missing_recommended_properties: string[] | null
+          missing_required_properties: string[] | null
+          nested_depth: number | null
+          property_count: number | null
+          raw_data: Json
+          rich_result_types: string[] | null
+          rich_results_issues: string[] | null
+          schema_format: string | null
+          schema_type: string
+          testing_results: Json | null
+          url: string
+          validated_at: string | null
+          validation_errors: string[] | null
+          validation_warnings: string[] | null
+        }
+        Insert: {
+          crawl_session_id?: string | null
+          eligible_for_rich_results?: boolean | null
+          google_testing_url?: string | null
+          has_address?: boolean | null
+          has_author?: boolean | null
+          has_availability?: boolean | null
+          has_headline?: boolean | null
+          has_image?: boolean | null
+          has_location?: boolean | null
+          has_logo?: boolean | null
+          has_name?: boolean | null
+          has_offer?: boolean | null
+          has_opening_hours?: boolean | null
+          has_phone?: boolean | null
+          has_price?: boolean | null
+          has_publish_date?: boolean | null
+          has_recommended_properties?: boolean | null
+          has_required_properties?: boolean | null
+          has_review?: boolean | null
+          has_start_date?: boolean | null
+          id?: string
+          is_valid?: boolean | null
+          last_modified_at?: string | null
+          missing_recommended_properties?: string[] | null
+          missing_required_properties?: string[] | null
+          nested_depth?: number | null
+          property_count?: number | null
+          raw_data: Json
+          rich_result_types?: string[] | null
+          rich_results_issues?: string[] | null
+          schema_format?: string | null
+          schema_type: string
+          testing_results?: Json | null
+          url: string
+          validated_at?: string | null
+          validation_errors?: string[] | null
+          validation_warnings?: string[] | null
+        }
+        Update: {
+          crawl_session_id?: string | null
+          eligible_for_rich_results?: boolean | null
+          google_testing_url?: string | null
+          has_address?: boolean | null
+          has_author?: boolean | null
+          has_availability?: boolean | null
+          has_headline?: boolean | null
+          has_image?: boolean | null
+          has_location?: boolean | null
+          has_logo?: boolean | null
+          has_name?: boolean | null
+          has_offer?: boolean | null
+          has_opening_hours?: boolean | null
+          has_phone?: boolean | null
+          has_price?: boolean | null
+          has_publish_date?: boolean | null
+          has_recommended_properties?: boolean | null
+          has_required_properties?: boolean | null
+          has_review?: boolean | null
+          has_start_date?: boolean | null
+          id?: string
+          is_valid?: boolean | null
+          last_modified_at?: string | null
+          missing_recommended_properties?: string[] | null
+          missing_required_properties?: string[] | null
+          nested_depth?: number | null
+          property_count?: number | null
+          raw_data?: Json
+          rich_result_types?: string[] | null
+          rich_results_issues?: string[] | null
+          schema_format?: string | null
+          schema_type?: string
+          testing_results?: Json | null
+          url?: string
+          validated_at?: string | null
+          validation_errors?: string[] | null
+          validation_warnings?: string[] | null
+        }
+        Relationships: []
+      }
       site_health_metrics: {
         Row: {
           affected_urls: number | null
@@ -5816,6 +6917,148 @@ export type Database = {
         }
         Relationships: []
       }
+      v_broken_links_summary: {
+        Row: {
+          broken_links_count: number | null
+          broken_urls: string[] | null
+          last_checked: string | null
+          source_url: string | null
+        }
+        Relationships: []
+      }
+      v_content_optimization_dashboard: {
+        Row: {
+          analyzed_at: string | null
+          implementation_progress_percentage: number | null
+          improvement_percentage: number | null
+          issues_count: number | null
+          last_optimized_at: string | null
+          optimization_priority: string | null
+          optimization_status: string | null
+          overall_content_score: number | null
+          readability_grade_level: string | null
+          recommendations_implemented: number | null
+          recommendations_total: number | null
+          title: string | null
+          url: string | null
+          word_count: number | null
+        }
+        Insert: {
+          analyzed_at?: string | null
+          implementation_progress_percentage?: number | null
+          improvement_percentage?: number | null
+          issues_count?: number | null
+          last_optimized_at?: string | null
+          optimization_priority?: string | null
+          optimization_status?: string | null
+          overall_content_score?: number | null
+          readability_grade_level?: string | null
+          recommendations_implemented?: number | null
+          recommendations_total?: number | null
+          title?: string | null
+          url?: string | null
+          word_count?: number | null
+        }
+        Update: {
+          analyzed_at?: string | null
+          implementation_progress_percentage?: number | null
+          improvement_percentage?: number | null
+          issues_count?: number | null
+          last_optimized_at?: string | null
+          optimization_priority?: string | null
+          optimization_status?: string | null
+          overall_content_score?: number | null
+          readability_grade_level?: string | null
+          recommendations_implemented?: number | null
+          recommendations_total?: number | null
+          title?: string | null
+          url?: string | null
+          word_count?: number | null
+        }
+        Relationships: []
+      }
+      v_duplicate_content_summary: {
+        Row: {
+          avg_similarity: number | null
+          duplicate_count: number | null
+          last_detected: string | null
+          max_similarity: number | null
+          url_1: string | null
+        }
+        Relationships: []
+      }
+      v_high_priority_content_issues: {
+        Row: {
+          analyzed_at: string | null
+          issues_count: number | null
+          keyword_optimization_score: number | null
+          optimization_priority: string | null
+          overall_content_score: number | null
+          readability_score_rating: number | null
+          target_keyword: string | null
+          title: string | null
+          url: string | null
+        }
+        Insert: {
+          analyzed_at?: string | null
+          issues_count?: number | null
+          keyword_optimization_score?: number | null
+          optimization_priority?: string | null
+          overall_content_score?: number | null
+          readability_score_rating?: number | null
+          target_keyword?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Update: {
+          analyzed_at?: string | null
+          issues_count?: number | null
+          keyword_optimization_score?: number | null
+          optimization_priority?: string | null
+          overall_content_score?: number | null
+          readability_score_rating?: number | null
+          target_keyword?: string | null
+          title?: string | null
+          url?: string | null
+        }
+        Relationships: []
+      }
+      v_semantic_opportunities: {
+        Row: {
+          analyzed_at: string | null
+          content_comprehensiveness_score: number | null
+          featured_snippet_opportunity: boolean | null
+          missing_keywords_count: number | null
+          paa_opportunity: boolean | null
+          primary_keyword: string | null
+          priority_topics_count: number | null
+          semantic_richness_score: number | null
+          url: string | null
+        }
+        Insert: {
+          analyzed_at?: string | null
+          content_comprehensiveness_score?: number | null
+          featured_snippet_opportunity?: boolean | null
+          missing_keywords_count?: never
+          paa_opportunity?: boolean | null
+          primary_keyword?: string | null
+          priority_topics_count?: never
+          semantic_richness_score?: number | null
+          url?: string | null
+        }
+        Update: {
+          analyzed_at?: string | null
+          content_comprehensiveness_score?: number | null
+          featured_snippet_opportunity?: boolean | null
+          missing_keywords_count?: never
+          paa_opportunity?: boolean | null
+          primary_keyword?: string | null
+          priority_topics_count?: never
+          semantic_richness_score?: number | null
+          url?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       _postgis_deprecate: {
@@ -5986,6 +7229,18 @@ export type Database = {
           traffic_multiplier: number
         }[]
       }
+      calculate_flesch_reading_ease: {
+        Args: {
+          p_total_sentences: number
+          p_total_syllables: number
+          p_total_words: number
+        }
+        Returns: number
+      }
+      calculate_keyword_density: {
+        Args: { p_keyword_frequency: number; p_total_words: number }
+        Returns: number
+      }
       calculate_level_xp: { Args: { level: number }; Returns: number }
       calculate_reputation_level: {
         Args: { points: number }
@@ -6036,6 +7291,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      check_performance_budget: {
+        Args: { p_actual_metrics: Json; p_budget_id: string }
+        Returns: Json
+      }
       check_reminder_cron_status: {
         Args: never
         Returns: {
@@ -6076,6 +7335,14 @@ export type Database = {
         Returns: string
       }
       current_user_email: { Args: never; Returns: string }
+      determine_optimization_priority: {
+        Args: {
+          p_current_score: number
+          p_keyword_position: number
+          p_traffic_potential: string
+        }
+        Returns: string
+      }
       disablelongtransactions: { Args: never; Returns: string }
       dropgeometrycolumn:
         | {
@@ -6234,6 +7501,19 @@ export type Database = {
       generate_article_slug: {
         Args: { article_title: string }
         Returns: string
+      }
+      generate_content_optimization_report: {
+        Args: never
+        Returns: {
+          avg_content_score: number
+          avg_readability_score: number
+          avg_word_count: number
+          high_priority_pages: number
+          pages_need_optimization: number
+          pages_optimized: number
+          total_issues: number
+          total_pages: number
+        }[]
       }
       generate_recurring_event_instances: {
         Args: { p_lookforward_days?: number; p_parent_event_id: string }
@@ -6467,6 +7747,10 @@ export type Database = {
           search_count: number
           search_query: string
         }[]
+      }
+      get_readability_grade: {
+        Args: { p_flesch_score: number }
+        Returns: string
       }
       get_restaurant_cuisines: {
         Args: never
