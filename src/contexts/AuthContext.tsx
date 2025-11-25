@@ -176,12 +176,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log("[AuthContext] Logging out...");
     adminStatusCache.clear();
     
+    // Try to call signOut with a timeout
     try {
-      // Call signOut to notify Supabase
-      await supabase.auth.signOut();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('signOut timeout after 2s')), 2000)
+      );
+      
+      await Promise.race([
+        supabase.auth.signOut(),
+        timeoutPromise
+      ]);
       console.log("[AuthContext] signOut completed");
-    } catch (error) {
-      console.error("[AuthContext] signOut error:", error);
+    } catch (error: any) {
+      console.warn("[AuthContext] signOut failed or timed out:", error.message);
+      // Continue with logout anyway
     }
     
     // Manually clear all Supabase storage to ensure complete logout
@@ -203,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAdmin: false,
     });
     
-    console.log("[AuthContext] Logout complete");
+    console.log("[AuthContext] Logout complete - state cleared");
   };
 
   const requireAdmin = () => {
