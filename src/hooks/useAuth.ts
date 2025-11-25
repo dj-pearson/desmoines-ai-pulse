@@ -26,6 +26,16 @@ export function useAuth() {
     isAdmin: false,
   });
 
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('[Auth] State changed:', { 
+      isAuthenticated: authState.isAuthenticated,
+      user: authState.user?.email,
+      isLoading: authState.isLoading,
+      isAdmin: authState.isAdmin 
+    });
+  }, [authState]);
+
   useEffect(() => {
     let isMounted = true;
 
