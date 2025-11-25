@@ -70,6 +70,10 @@ const DietaryRestaurants = lazy(() => import("./pages/DietaryRestaurants"));
 // Lead magnet tools
 const EventPromotionPlanner = lazy(() => import("./pages/EventPromotionPlanner"));
 
+// Legal pages
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const Terms = lazy(() => import("./pages/Terms"));
+
 // Mobile-optimized loading component
 const PageLoader = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
@@ -191,6 +195,9 @@ const App = () => (
             <Route path="/real-time" element={<RealTimePage />} />
             {/* Lead magnet tools */}
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
+            {/* Legal pages */}
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<Terms />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
