@@ -50,6 +50,7 @@ const SmartCalendarIntegration = lazy(
   () => import("./components/SmartCalendarIntegration")
 );
 const Gamification = lazy(() => import("./pages/Gamification"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 const BusinessPartnership = lazy(() => import("./pages/BusinessPartnership"));
 const BusinessHub = lazy(() => import("./pages/BusinessHub"));
 const GuidesPage = lazy(() => import("./pages/GuidesPage"));
@@ -188,6 +189,7 @@ const App = () => (
             <Route path="/social" element={<Social />} />
             <Route path="/calendar" element={<SmartCalendarIntegration />} />
             <Route path="/gamification" element={<Gamification />} />
+            <Route path="/pricing" element={<Pricing />} />
             <Route
               path="/business-partnership"
               element={<BusinessPartnership />}

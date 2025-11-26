@@ -4,12 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 import { useGamification } from "./useGamification";
+import { useSubscription } from "./useSubscription";
 
 export function useFavorites() {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { awardPoints } = useGamification();
+  const { canPerformAction, getRemainingQuota, isPremium, limits } = useSubscription();
 
   // Fetch user's favorited events
   const { data: favoritedEvents = [], isLoading } = useQuery({
@@ -98,23 +100,45 @@ export function useFavorites() {
     },
   });
 
+  // Check if user can add more favorites
+  const canAddFavorite = (): boolean => {
+    return canPerformAction("favorite", favoritedEvents.length);
+  };
+
+  // Get remaining favorites quota
+  const remainingFavorites = getRemainingQuota("favorite", favoritedEvents.length);
+
   // Toggle favorite
-  const toggleFavorite = (eventId: string) => {
+  const toggleFavorite = (eventId: string): { success: boolean; needsUpgrade: boolean } => {
     if (!user) {
       toast({
         title: "Login Required",
         description: "Please log in to save favorites",
         variant: "destructive",
       });
-      return;
+      return { success: false, needsUpgrade: false };
     }
 
     const isFavorited = favoritedEvents.includes(eventId);
+
+    // If removing, always allow
     if (isFavorited) {
       removeFavoriteMutation.mutate(eventId);
-    } else {
-      addFavoriteMutation.mutate(eventId);
+      return { success: true, needsUpgrade: false };
     }
+
+    // If adding, check limits
+    if (!canAddFavorite()) {
+      toast({
+        title: "Favorites Limit Reached",
+        description: `Free accounts can save up to ${limits.favorites} favorites. Upgrade to Insider for unlimited favorites!`,
+        variant: "destructive",
+      });
+      return { success: false, needsUpgrade: true };
+    }
+
+    addFavoriteMutation.mutate(eventId);
+    return { success: true, needsUpgrade: false };
   };
 
   // Check if an event is favorited
@@ -128,5 +152,10 @@ export function useFavorites() {
     toggleFavorite,
     isFavorited,
     isToggling: addFavoriteMutation.isPending || removeFavoriteMutation.isPending,
+    // Subscription-aware fields
+    canAddFavorite: canAddFavorite(),
+    remainingFavorites,
+    isPremium,
+    favoritesLimit: limits.favorites,
   };
 }

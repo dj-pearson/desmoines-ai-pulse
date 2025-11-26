@@ -1,27 +1,36 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { 
-  Calendar, 
-  Plus, 
-  User, 
-  Settings, 
-  Eye, 
-  Edit, 
-  Trash2, 
-  Clock, 
-  CheckCircle, 
-  XCircle, 
+import { Progress } from "@/components/ui/progress";
+import {
+  Calendar,
+  Plus,
+  User,
+  Settings,
+  Eye,
+  Edit,
+  Trash2,
+  Clock,
+  CheckCircle,
+  XCircle,
   AlertTriangle,
   ArrowLeft,
-  Megaphone
+  Megaphone,
+  Crown,
+  Sparkles,
+  Heart,
+  Bell,
+  Zap
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useFavorites } from "@/hooks/useFavorites";
+import { PremiumBadge } from "@/components/PremiumBadge";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
 import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
 import { format } from "date-fns";
@@ -33,6 +42,8 @@ export default function UserDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
   const { data: events, isLoading, refetch } = useUserSubmittedEvents();
+  const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
+  const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();
 
   useEffect(() => {
     // Check for tab parameter from URL
@@ -95,6 +106,7 @@ export default function UserDashboard() {
             <div className="flex items-center gap-2">
               <User className="h-5 w-5 text-primary" />
               <h1 className="text-xl font-bold">My Dashboard</h1>
+              <PremiumBadge showTier={true} size="sm" />
             </div>
           </div>
         </div>
@@ -130,6 +142,72 @@ export default function UserDashboard() {
 
           {/* Overview Tab */}
           <TabsContent value="overview">
+            {/* Subscription Status Card */}
+            <Card className={`mb-6 ${isPremium ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border-amber-200 dark:border-amber-800' : 'bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800'}`}>
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-full ${isPremium ? 'bg-amber-100 dark:bg-amber-900' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                      {isPremium ? (
+                        tier === 'vip' ? <Crown className="h-6 w-6 text-purple-500" /> : <Sparkles className="h-6 w-6 text-amber-500" />
+                      ) : (
+                        <User className="h-6 w-6 text-slate-500" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg flex items-center gap-2">
+                        {isPremium ? `${tier === 'vip' ? 'VIP' : 'Insider'} Member` : 'Free Plan'}
+                        {isExpiringSoon && (
+                          <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                            Expiring Soon
+                          </Badge>
+                        )}
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {isPremium
+                          ? `Your subscription renews ${subscription?.current_period_end ? format(new Date(subscription.current_period_end), 'MMM d, yyyy') : 'soon'}`
+                          : 'Upgrade to unlock premium features and unlimited favorites'}
+                      </p>
+                    </div>
+                  </div>
+                  {!isPremium && (
+                    <Button asChild className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600">
+                      <Link to="/pricing">
+                        <Zap className="h-4 w-4 mr-2" />
+                        Upgrade Now
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+
+                {/* Favorites Usage for Free Users */}
+                {!isPremium && favoritesLimit > 0 && (
+                  <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="flex items-center gap-2">
+                        <Heart className="h-4 w-4 text-red-500" />
+                        Favorites Used
+                      </span>
+                      <span className="font-medium">
+                        {favoritedEvents.length} / {favoritesLimit}
+                      </span>
+                    </div>
+                    <Progress
+                      value={(favoritedEvents.length / favoritesLimit) * 100}
+                      className="h-2"
+                    />
+                    {remainingFavorites !== 'unlimited' && remainingFavorites <= 2 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                        {remainingFavorites === 0
+                          ? 'Limit reached! Upgrade for unlimited favorites.'
+                          : `Only ${remainingFavorites} favorite${remainingFavorites === 1 ? '' : 's'} remaining`}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -170,6 +248,20 @@ export default function UserDashboard() {
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Awaiting approval
+                  </p>
+                </CardContent>
+              </Card>
+
+              {/* Saved Favorites Card */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Saved Favorites</CardTitle>
+                  <Heart className="h-4 w-4 text-red-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{favoritedEvents.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    {isPremium ? 'Unlimited' : `${remainingFavorites} remaining`}
                   </p>
                 </CardContent>
               </Card>
