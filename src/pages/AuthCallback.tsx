@@ -35,61 +35,45 @@ export default function AuthCallback() {
           return;
         }
 
-        // Check for auth code in URL (PKCE flow)
-        const code = searchParams.get("code");
+        console.log("[AuthCallback] Waiting for session...");
 
-        if (code) {
-          console.log("[AuthCallback] Processing auth code...");
+        // Don't manually exchange code - Supabase client handles this automatically via onAuthStateChange
+        // Just wait for the session to be established
+        let attempts = 0;
+        const maxAttempts = 10; // 5 seconds total (10 * 500ms)
 
-          // Exchange code for session
-          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        const checkSession = async (): Promise<boolean> => {
+          const { data: { session } } = await supabase.auth.getSession();
+          return !!session;
+        };
 
-          if (exchangeError) {
-            console.error("[AuthCallback] Code exchange error:", exchangeError);
-            setStatus("error");
-            setErrorMessage(exchangeError.message);
-            return;
+        // Poll for session
+        const pollSession = async () => {
+          while (attempts < maxAttempts) {
+            const hasSession = await checkSession();
+            
+            if (hasSession) {
+              console.log("[AuthCallback] Session established");
+              setStatus("success");
+
+              const redirectTo = searchParams.get("redirect") || "/";
+              setTimeout(() => {
+                navigate(redirectTo, { replace: true });
+              }, 500);
+              return;
+            }
+
+            attempts++;
+            await new Promise(resolve => setTimeout(resolve, 500));
           }
 
-          if (data.session) {
-            console.log("[AuthCallback] Session established successfully");
-            setStatus("success");
-
-            // Get redirect destination
-            const redirectTo = searchParams.get("redirect") || "/";
-
-            // Small delay to show success state
-            setTimeout(() => {
-              navigate(redirectTo, { replace: true });
-            }, 500);
-            return;
-          }
-        }
-
-        // If no code, check if session already exists (hash-based flow)
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error("[AuthCallback] Session check error:", sessionError);
+          // Timeout - no session found
+          console.error("[AuthCallback] Session timeout");
           setStatus("error");
-          setErrorMessage(sessionError.message);
-          return;
-        }
+          setErrorMessage("Authentication is taking longer than expected. Please try again.");
+        };
 
-        if (session) {
-          console.log("[AuthCallback] Session found");
-          setStatus("success");
-
-          const redirectTo = searchParams.get("redirect") || "/";
-          setTimeout(() => {
-            navigate(redirectTo, { replace: true });
-          }, 500);
-        } else {
-          // No session and no code - something went wrong
-          console.error("[AuthCallback] No session or code found");
-          setStatus("error");
-          setErrorMessage("Authentication failed. Please try again.");
-        }
+        await pollSession();
       } catch (error: any) {
         console.error("[AuthCallback] Exception:", error);
         setStatus("error");
