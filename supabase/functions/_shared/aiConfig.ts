@@ -1,18 +1,24 @@
 /**
  * Centralized AI Configuration Utility
- * 
+ *
  * This module provides a unified way to fetch AI settings from the database
  * for all edge functions. Update settings in the Admin Dashboard AI Configuration
  * section and all modules will automatically use the new values.
+ *
+ * Supports two model modes:
+ * - default_model: Full-powered model (Claude Sonnet) for complex tasks
+ * - lightweight_model: Fast, cheap model (Claude Haiku) for simple queries like NLP search
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 interface AIConfig {
   default_model: string;
+  lightweight_model: string;
   api_endpoint: string;
   max_tokens_standard: number;
   max_tokens_large: number;
+  max_tokens_lightweight: number;
   temperature_precise: number;
   temperature_creative: number;
   anthropic_version: string;
@@ -77,9 +83,11 @@ export async function getAIConfig(
     // Fallback to default values if database fetch fails
     const fallbackConfig: AIConfig = {
       default_model: "claude-sonnet-4-20250514",
+      lightweight_model: "claude-haiku-4-5-20251001",
       api_endpoint: "https://api.anthropic.com/v1/messages",
       max_tokens_standard: 2000,
       max_tokens_large: 8000,
+      max_tokens_lightweight: 1000,
       temperature_precise: 0.1,
       temperature_creative: 0.7,
       anthropic_version: "2023-06-01",
@@ -87,6 +95,32 @@ export async function getAIConfig(
 
     return fallbackConfig;
   }
+}
+
+/**
+ * Build Claude API request body for lightweight/fast queries
+ * Uses the lightweight model (Haiku) for quick, cheap operations like NLP parsing
+ */
+export async function buildLightweightClaudeRequest(
+  messages: any[],
+  options: {
+    supabaseUrl: string;
+    supabaseKey: string;
+    customMaxTokens?: number;
+    customTemperature?: number;
+  }
+): Promise<any> {
+  const config = await getAIConfig(options.supabaseUrl, options.supabaseKey);
+
+  const maxTokens = options.customMaxTokens ?? config.max_tokens_lightweight;
+  const temperature = options.customTemperature ?? config.temperature_precise;
+
+  return {
+    model: config.lightweight_model,
+    max_tokens: maxTokens,
+    temperature,
+    messages,
+  };
 }
 
 /**
