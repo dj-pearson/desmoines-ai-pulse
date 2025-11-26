@@ -36,6 +36,7 @@ import { EnhancedHero } from "@/components/EnhancedHero";
 import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { BackToTop } from "@/components/BackToTop";
+import { SocialProof } from "@/components/SocialProof";
 
 // Lazy load Three.js component to reduce initial bundle size
 // Temporarily disabled due to React Scheduler compatibility issue
@@ -477,6 +478,9 @@ export default function Index() {
         <section className="py-16 bg-muted/30">
           <GEOContent />
         </section>
+
+        {/* Social Proof Section */}
+        <SocialProof />
 
         {/* FAQ Section for Featured Snippets */}
         <section className="py-16 bg-background">

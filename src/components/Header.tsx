@@ -52,7 +52,10 @@ import {
   Utensils,
   ChevronRight,
   Compass,
+  Crown,
+  Sparkles,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { AdvertiseButton } from "./AdvertiseButton";
 import SubmitEventButton from "./SubmitEventButton";
 import { ThemeToggle } from "./ThemeToggle";
@@ -563,6 +566,25 @@ export default function Header() {
                   </div>
                   {/* Mobile Submit Event and Advertise Buttons */}
                   <div className="border-t border-border pt-4 mt-6 space-y-3">
+                    {/* Upgrade CTA for mobile */}
+                    <Link
+                      to="/pricing"
+                      onClick={() => handleMobileMenuToggle(false)}
+                      className="block"
+                    >
+                      <div className="flex items-center justify-between p-4 bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 rounded-xl">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
+                            <Crown className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div>
+                            <p className="font-semibold text-amber-700 dark:text-amber-400">Upgrade to Premium</p>
+                            <p className="text-xs text-muted-foreground">Unlock all features</p>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                      </div>
+                    </Link>
                     <div
                       onClick={() => {
                         handleMobileMenuToggle(false);
@@ -717,6 +739,17 @@ export default function Header() {
               <AdvertiseButton />
               {isAuthenticated ? (
                 <>
+                  {/* Upgrade CTA for logged-in users */}
+                  <Link to="/pricing" className="hidden xl:block">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30 hover:border-amber-500/50 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20"
+                    >
+                      <Crown className="h-3.5 w-3.5 mr-1.5" />
+                      Upgrade
+                    </Button>
+                  </Link>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -822,6 +855,19 @@ export default function Header() {
                         >
                           <Users className="mr-2 h-4 w-4" aria-hidden="true" />
                           Social
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild role="none">
+                        <Link
+                          to="/pricing"
+                          className="flex items-center text-amber-600 dark:text-amber-400"
+                          role="menuitem"
+                          aria-label="View premium plans"
+                        >
+                          <Crown className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Upgrade to Premium
+                          <Sparkles className="ml-auto h-3 w-3" aria-hidden="true" />
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild role="none">
