@@ -155,6 +155,7 @@ export default function Header() {
       label: "Explore",
       icon: Compass,
       items: [
+        { href: "/trip-planner", label: "AI Trip Planner", icon: Sparkles, featured: true },
         { href: "/weekend", label: "Weekend Guide", icon: CalendarDays, featured: true },
         { href: "/attractions", label: "Attractions", icon: Camera },
         { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
@@ -186,6 +187,7 @@ export default function Header() {
     },
     { href: "/events/free", label: "Free Events", icon: Gift },
     { href: "/events/kids", label: "Kids & Family", icon: Baby },
+    { href: "/trip-planner", label: "AI Trip Planner", icon: Sparkles, priority: true },
     { href: "/weekend", label: "Weekend Guide", icon: CalendarDays },
     { href: "/restaurants", label: "Restaurants", icon: Utensils },
     { href: "/restaurants/open-now", label: "Open Now", icon: Clock },

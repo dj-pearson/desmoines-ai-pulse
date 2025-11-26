@@ -73,6 +73,9 @@ const DietaryRestaurants = lazy(() => import("./pages/DietaryRestaurants"));
 // Lead magnet tools
 const EventPromotionPlanner = lazy(() => import("./pages/EventPromotionPlanner"));
 
+// AI-powered features
+const TripPlanner = lazy(() => import("./pages/TripPlanner"));
+
 // Legal pages
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -201,6 +204,8 @@ const App = () => (
             <Route path="/real-time" element={<RealTimePage />} />
             {/* Lead magnet tools */}
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
+            {/* AI-powered features */}
+            <Route path="/trip-planner" element={<TripPlanner />} />
             {/* Legal pages */}
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />
