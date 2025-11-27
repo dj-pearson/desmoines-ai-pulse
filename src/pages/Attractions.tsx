@@ -1,8 +1,10 @@
 import React, { useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
 import { BackToTop } from "@/components/BackToTop";
 import {
@@ -126,8 +128,55 @@ export default function Attractions() {
     });
   };
 
+  const pageTitle = searchQuery
+    ? `"${searchQuery}" Attractions in Des Moines`
+    : selectedType !== "all"
+    ? `${selectedType} Attractions in Des Moines`
+    : "Des Moines Attractions - Museums, Parks & Things to Do";
+
+  const pageDescription = `Discover ${filteredAttractions.length}+ attractions in Des Moines, Iowa. Explore museums, parks, entertainment venues, and cultural destinations. Find visitor information, hours, and directions for the best things to do in Des Moines.`;
+
+  const breadcrumbs = [
+    { name: "Home", url: "/" },
+    { name: "Attractions", url: "/attractions" },
+  ];
+
+  const faqData = [
+    {
+      question: "What are the top attractions in Des Moines?",
+      answer: `Des Moines features ${filteredAttractions.length}+ attractions including Science Center of Iowa (interactive STEM exhibits), Blank Park Zoo (year-round animal exhibits), Pappajohn Sculpture Park (free outdoor art), Iowa State Capitol (free guided tours), and the Des Moines Art Center (free admission).`,
+    },
+    {
+      question: "Are there free attractions in Des Moines?",
+      answer: "Yes! Many Des Moines attractions offer free admission including Pappajohn Sculpture Park, Des Moines Art Center, Iowa State Capitol tours, State Historical Museum of Iowa, and various neighborhood parks.",
+    },
+    {
+      question: "What are the best family attractions in Des Moines?",
+      answer: "Top family-friendly attractions include Science Center of Iowa (hands-on exhibits), Blank Park Zoo, Adventureland Park (amusement rides), Living History Farms (interactive farm activities), and various splash pads and playgrounds.",
+    },
+  ];
+
   return (
     <div className="min-h-screen bg-background">
+      <EnhancedLocalSEO
+        pageTitle={pageTitle}
+        pageDescription={pageDescription}
+        canonicalUrl={getCanonicalUrl("/attractions")}
+        pageType="website"
+        breadcrumbs={breadcrumbs}
+        faqData={faqData}
+        keywords={[
+          "Des Moines attractions",
+          "things to do Des Moines",
+          "Des Moines museums",
+          "Des Moines parks",
+          "Iowa attractions",
+          "Des Moines tourism",
+          "family attractions Des Moines",
+          "Des Moines sightseeing",
+        ]}
+      />
+
       <Header />
 
       {/* Hero Section with DMI Brand Colors */}
