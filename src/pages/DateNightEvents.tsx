@@ -5,8 +5,10 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Heart, MapPin, Calendar, Sparkles } from "lucide-react";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 export default function DateNightEvents() {
   const [events, setEvents] = useState<any[]>([]);
@@ -88,7 +90,7 @@ export default function DateNightEvents() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/events/date-night"
+        canonicalUrl={getCanonicalUrl("/events/date-night")}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -275,6 +277,12 @@ export default function DateNightEvents() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Related Content for Internal Linking */}
+        <RelatedContent
+          currentPath="/events/date-night"
+          title="More Des Moines Experiences"
+        />
       </main>
 
       <Footer />

@@ -5,8 +5,10 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Baby, MapPin, Calendar, Users } from "lucide-react";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 export default function KidsEvents() {
   const [events, setEvents] = useState<any[]>([]);
@@ -85,7 +87,7 @@ export default function KidsEvents() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/events/kids"
+        canonicalUrl={getCanonicalUrl("/events/kids")}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -272,6 +274,12 @@ export default function KidsEvents() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Related Content for Internal Linking */}
+        <RelatedContent
+          currentPath="/events/kids"
+          title="More Des Moines Activities"
+        />
       </main>
 
       <Footer />

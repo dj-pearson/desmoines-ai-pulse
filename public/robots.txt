@@ -1,4 +1,4 @@
-# Des Moines Insider - Robots.txt
+# Des Moines AI Pulse - Robots.txt
 # Optimized for search engine indexing and AI crawlers
 
 User-agent: *
@@ -81,13 +81,13 @@ Disallow: /profile
 Disallow: /dashboard
 
 # Sitemap locations
-Sitemap: https://desmoinesinsider.com/sitemap.xml
-Sitemap: https://desmoinesinsider.com/sitemap-events.xml
-Sitemap: https://desmoinesinsider.com/sitemap-restaurants.xml
-Sitemap: https://desmoinesinsider.com/sitemap-attractions.xml
-Sitemap: https://desmoinesinsider.com/sitemap-playgrounds.xml
-Sitemap: https://desmoinesinsider.com/sitemap-articles.xml
-Sitemap: https://desmoinesinsider.com/sitemap-guides.xml
+Sitemap: https://desmoinesaipulse.com/sitemap.xml
+Sitemap: https://desmoinesaipulse.com/sitemap-events.xml
+Sitemap: https://desmoinesaipulse.com/sitemap-restaurants.xml
+Sitemap: https://desmoinesaipulse.com/sitemap-attractions.xml
+Sitemap: https://desmoinesaipulse.com/sitemap-playgrounds.xml
+Sitemap: https://desmoinesaipulse.com/sitemap-articles.xml
+Sitemap: https://desmoinesaipulse.com/sitemap-guides.xml
 
 # Crawl delay for respectful crawling
 Crawl-delay: 1

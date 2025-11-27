@@ -1,7 +1,7 @@
 {
-  "name": "Des Moines Insider",
-  "short_name": "DMI",
-  "description": "Your guide to Des Moines events, restaurants, attractions, and more",
+  "name": "Des Moines AI Pulse",
+  "short_name": "DM AI Pulse",
+  "description": "Your AI-powered guide to Des Moines events, restaurants, and local discoveries",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

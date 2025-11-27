@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import { BRAND } from "./brandConfig";
 
 interface SitemapURL {
   loc: string;
@@ -27,7 +28,7 @@ interface SitemapData {
   articles: Array<{ slug: string; updated_at?: string }>;
 }
 
-const BASE_URL = "https://desmoinesinsider.com";
+const BASE_URL = BRAND.baseUrl;
 
 // Suburbs for location-based pages
 const SUBURBS = [
@@ -262,7 +263,7 @@ ${urls
 
 // Generate robots.txt content
 export function generateRobotsTxt(): string {
-  return `# Des Moines Insider - Robots.txt
+  return `# ${BRAND.name} - Robots.txt
 # Optimized for search engine indexing and AI crawlers
 
 User-agent: *
