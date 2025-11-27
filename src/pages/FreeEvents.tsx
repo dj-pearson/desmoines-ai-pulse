@@ -5,9 +5,11 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, MapPin, Calendar, Gift } from "lucide-react";
 import { format } from "date-fns";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 export default function FreeEvents() {
   const [events, setEvents] = useState<any[]>([]);
@@ -91,7 +93,7 @@ export default function FreeEvents() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/events/free"
+        canonicalUrl={getCanonicalUrl("/events/free")}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -278,6 +280,12 @@ export default function FreeEvents() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Related Content for Internal Linking */}
+        <RelatedContent
+          currentPath="/events/free"
+          title="Discover More Des Moines Activities"
+        />
       </main>
 
       <Footer />

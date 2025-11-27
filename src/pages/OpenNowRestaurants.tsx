@@ -5,9 +5,11 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Clock, MapPin, Calendar, Utensils } from "lucide-react";
 import { format } from "date-fns";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 export default function OpenNowRestaurants() {
   const [restaurants, setRestaurants] = useState<any[]>([]);
@@ -106,7 +108,7 @@ export default function OpenNowRestaurants() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/restaurants/open-now"
+        canonicalUrl={getCanonicalUrl("/restaurants/open-now")}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -316,6 +318,12 @@ export default function OpenNowRestaurants() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Related Content for Internal Linking */}
+        <RelatedContent
+          currentPath="/restaurants/open-now"
+          title="More Des Moines Dining & Activities"
+        />
       </main>
 
       <Footer />

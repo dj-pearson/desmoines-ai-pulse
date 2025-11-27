@@ -1,4 +1,5 @@
 import { format, parseISO } from "date-fns";
+import { BRAND, getCanonicalUrl } from "./brandConfig";
 
 export interface SEOData {
   title: string;
@@ -55,11 +56,11 @@ export interface RestaurantSEOInput {
 }
 
 export class SEOGenerator {
-  private static readonly BASE_URL = 'https://desmoinesinsider.com';
-  private static readonly SITE_NAME = 'Des Moines Insider';
-  private static readonly CITY = 'Des Moines';
-  private static readonly STATE = 'Iowa';
-  private static readonly REGION = 'Greater Des Moines Area';
+  private static readonly BASE_URL = BRAND.baseUrl;
+  private static readonly SITE_NAME = BRAND.name;
+  private static readonly CITY = BRAND.city;
+  private static readonly STATE = BRAND.state;
+  private static readonly REGION = BRAND.region;
 
   static generateEventSEO(event: EventSEOInput): SEOData {
     const eventDate = event.date ? format(parseISO(event.date), 'MMMM d, yyyy') : '';

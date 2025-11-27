@@ -5,9 +5,11 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import RestaurantCard from "@/components/RestaurantCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 const dietaryOptions = [
   { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
@@ -129,7 +131,7 @@ export default function DietaryRestaurants() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`https://desmoinesinsider.com/restaurants/dietary${selectedDiet ? `?diet=${selectedDiet}` : ''}`}
+        canonicalUrl={getCanonicalUrl(`/restaurants/dietary${selectedDiet ? `?diet=${selectedDiet}` : ''}`)}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -378,6 +380,12 @@ export default function DietaryRestaurants() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Related Content for Internal Linking */}
+        <RelatedContent
+          currentPath="/restaurants/dietary"
+          title="Explore More Des Moines Dining"
+        />
       </main>
 
       <Footer />
