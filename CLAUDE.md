@@ -1,6 +1,6 @@
 # CLAUDE.md - AI Assistant Development Guide
 
-**Last Updated**: 2025-11-16
+**Last Updated**: 2025-11-28
 **Project**: Des Moines AI Pulse
 **Purpose**: Comprehensive guide for AI assistants working on this codebase
 
@@ -32,6 +32,8 @@
 - Restaurant listings with SEO optimization
 - Attraction discovery with geolocation
 - AI-powered content generation and enhancement
+- **AI Trip Planner** with natural language itinerary building
+- **Subscription system** (Free/Insider/VIP tiers) with premium gates
 - Social features (favorites, ratings, reviews)
 - Business partnership and advertising platform
 - Admin dashboard with analytics
@@ -106,7 +108,8 @@ desmoines-ai-pulse/
 │   │   ├── advertising/   # Advertising components
 │   │   ├── schema/        # Schema.org structured data
 │   │   └── [feature]/     # Feature-specific components
-│   ├── hooks/             # Custom React hooks (80+ hooks)
+│   ├── hooks/             # Custom React hooks (85+ hooks)
+│   ├── contexts/          # React contexts (AuthContext, etc.)
 │   ├── integrations/
 │   │   └── supabase/      # Supabase client & types
 │   ├── lib/               # Utility libraries
@@ -116,10 +119,10 @@ desmoines-ai-pulse/
 │   ├── main.tsx           # Entry point
 │   └── index.css          # Global styles + Tailwind
 ├── supabase/
-│   ├── functions/         # Edge Functions (47 functions)
+│   ├── functions/         # Edge Functions (68 functions)
 │   │   ├── _shared/       # Shared utilities (CORS, rate limiting, validation)
 │   │   └── [function]/    # Individual edge functions
-│   ├── migrations/        # SQL migration files (108 migrations)
+│   ├── migrations/        # SQL migration files (128 migrations)
 │   └── config.toml        # Supabase configuration
 ├── tests/                 # Playwright tests (7 test suites)
 ├── docs/                  # Additional documentation
@@ -156,14 +159,51 @@ const { data, isLoading, error } = useQuery({
 });
 ```
 
-#### 3. **Routing Structure**
+#### 3. **Authentication Architecture**
+- **AuthContext**: Centralized auth state management via `AuthProvider`
+- **Session Handling**: Automatic session refresh and admin role caching
+- **Protected Routes**: `ProtectedRoute` component wraps admin pages
+- **OAuth Support**: Google Sign-In with proper callback handling
+
+```typescript
+// AuthProvider wraps the entire app
+import { AuthProvider } from "@/contexts/AuthContext";
+
+<AuthProvider>
+  <App />
+</AuthProvider>
+
+// Access auth state anywhere
+const { user, isAuthenticated, isAdmin, login, logout } = useAuth();
+```
+
+#### 4. **Subscription & Premium Features**
+- **Tiers**: Free, Insider, VIP with different feature limits
+- **Premium Gate**: `PremiumGate` component controls access to premium features
+- **Feature Limits**: Favorites, alerts, saved searches per tier
+
+```typescript
+// Gate premium content
+import { PremiumGate } from "@/components/PremiumGate";
+
+<PremiumGate feature="advanced_search" requiredTier="insider">
+  <AdvancedSearchPanel />
+</PremiumGate>
+
+// Check subscription status
+const { tier, isPremium, hasFeature } = useSubscription();
+```
+
+#### 5. **Routing Structure**
 - **Public Routes**: /, /events, /restaurants, /attractions
 - **Auth Routes**: /auth, /profile, /dashboard
 - **Protected Routes**: /admin/* (requires admin role)
 - **SEO Routes**: /events/today, /events/this-weekend, /restaurants/open-now
+- **AI Features**: /trip-planner (AI-powered itinerary builder)
+- **Legal Routes**: /privacy-policy, /terms
 - **Dynamic Routes**: /events/:id, /restaurants/:id
 
-#### 4. **Edge Functions Pattern**
+#### 6. **Edge Functions Pattern**
 - **Shared Middleware**: CORS, rate limiting, validation in `_shared/`
 - **Environment-aware CORS**: Different origins for dev/staging/production
 - **Rate Limiting**: 100 requests per 15 minutes per IP
@@ -826,13 +866,17 @@ seo-audit                   # Run SEO audits
 | `src/main.tsx` | Application entry point |
 | `src/App.tsx` | Main app component with routing |
 | `src/index.css` | Global styles + Tailwind directives |
+| `src/contexts/AuthContext.tsx` | Centralized auth state management |
 | `src/integrations/supabase/client.ts` | Supabase client setup |
 | `src/integrations/supabase/types.ts` | Generated database types |
 | `src/lib/errorHandler.ts` | Centralized error handling |
 | `src/lib/safeStorage.ts` | Safe localStorage wrapper |
 | `src/lib/utils.ts` | General utility functions |
 | `src/components/ui/` | shadcn/ui base components |
-| `src/hooks/` | Custom React hooks (80+ hooks) |
+| `src/components/PremiumGate.tsx` | Premium feature gating |
+| `src/hooks/` | Custom React hooks (85+ hooks) |
+| `src/hooks/useSubscription.ts` | Subscription tier management |
+| `src/hooks/useTripPlanner.ts` | AI trip planning logic |
 
 ### Documentation Files
 
@@ -848,14 +892,20 @@ seo-audit                   # Run SEO audits
 | `SUPABASE_DATABASE_STRUCTURE.md` | Database schema overview |
 | `SEO_IMPLEMENTATION_GUIDE.md` | SEO features guide |
 
-### CI/CD Workflows
+### CI/CD & Deployment
 
-| File | Purpose |
-|------|---------|
-| `.github/workflows/ci.yml` | Main CI/CD pipeline |
-| `.github/workflows/playwright.yml` | Playwright test runs |
-| `.github/workflows/pr-checks.yml` | PR validation checks |
-| `.github/workflows/dependency-review.yml` | Dependency security |
+This project uses **Cloudflare Pages** for automated deployment:
+- Automatic builds on push to main branch
+- Preview deployments for pull requests
+- Build command: `npm run build`
+- Output directory: `dist`
+
+For local CI-like validation, run:
+```bash
+npm run validate  # Lint + type check
+npm test          # All Playwright tests
+npm run build     # Production build
+```
 
 ---
 
@@ -1048,12 +1098,16 @@ function FeatureMain() {
 | Data Fetching | TanStack Query with custom hooks |
 | Form Handling | React Hook Form + Zod |
 | State Management | React hooks + Context (avoid Redux) |
+| Authentication | `useAuth()` from `@/contexts/AuthContext` |
+| Premium Features | `PremiumGate` + `useSubscription()` |
 | Styling | Tailwind CSS (utility classes) |
 | Icons | Lucide React |
 | Date/Time | date-fns or date-fns-tz |
 | API Calls | Supabase client or Edge Functions |
 | Error Handling | `@/lib/errorHandler` |
 | Storage | `@/lib/safeStorage` |
+| Sharing | `ShareDialog` component |
+| Navigation UX | `BackToTop` component |
 | Routing | React Router DOM |
 | Testing | Playwright (E2E, a11y, performance) |
 
@@ -1138,7 +1192,9 @@ vite.config.ts           # Build config
 ```typescript
 useEvents()              # Fetch events
 useRestaurants()         # Fetch restaurants
-useAuth()                # Authentication
+useAuth()                # Authentication (from AuthContext)
+useSubscription()        # Subscription tier & premium checks
+useTripPlanner()         # AI-powered trip planning
 useFavorites()           # User favorites
 useQuery()               # TanStack Query
 ```
@@ -1157,6 +1213,7 @@ VITE_SITE_URL            # Site URL (for SEO, redirects)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2025-11-28 | Added AuthContext, subscription system, AI Trip Planner docs; updated counts (85+ hooks, 68 edge functions, 128 migrations) |
 | 1.0 | 2025-11-16 | Initial comprehensive documentation |
 
 ---
