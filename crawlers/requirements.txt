@@ -1,3 +1,6 @@
+# CatchDesMoines Event Crawler Dependencies
+# Requires Python 3.10 or 3.11 (NOT 3.13 - compatibility issues)
+
 # Crawl4AI - LLM-friendly web crawler
 crawl4ai>=0.7.7
 
@@ -15,3 +18,6 @@ python-dotenv>=1.0.0
 
 # Anthropic Claude API
 anthropic>=0.39.0
+
+# NumPy (pinned for stability)
+numpy>=1.26.0,<2.0
