@@ -919,11 +919,9 @@ Return empty array [] if no competitive content found.`
       }
 
       // Only process the batched events for database insertion
-      // This prevents re-inserting already processed events on subsequent batches
-      if (skipEvents > 0) {
-        console.log(`📦 Adjusting filteredItems to only include this batch (${eventsToProcess.length} events)`);
-        filteredItems = eventsToProcess;
-      }
+      // This prevents inserting events we didn't process Visit Website URLs for
+      console.log(`📦 Adjusting filteredItems to only include this batch (${eventsToProcess.length} events)`);
+      filteredItems = filteredItems.slice(startIndex, endIndex);
 
       if (batchInfo.remainingEvents > 0) {
         console.log(`⏭️ ${batchInfo.remainingEvents} events remaining. Call again with skipEvents=${endIndex} to continue.`);
