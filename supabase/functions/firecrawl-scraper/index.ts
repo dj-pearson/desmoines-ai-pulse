@@ -9,6 +9,109 @@ import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/ai
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
 
+// Domains to exclude from Visit Website URLs
+const EXCLUDED_DOMAINS = [
+  "catchdesmoines.com",
+  "simpleview",
+  "facebook.com",
+  "twitter.com",
+  "instagram.com",
+  "youtube.com",
+  "vimeo.com",
+  "google.com",
+  "googleapis.com",
+  "cloudflare",
+  "doubleclick",
+  "mailto:",
+  "tel:",
+  "#",
+];
+
+/**
+ * Extract the "Visit Website" URL from a CatchDesMoines event detail page
+ * This is the ACTUAL external URL where users can find more info about the event
+ */
+async function extractVisitWebsiteUrl(eventDetailUrl: string): Promise<string | null> {
+  try {
+    console.log(`🔗 Fetching event detail page: ${eventDetailUrl}`);
+
+    const result = await scrapeUrl(eventDetailUrl, {
+      waitTime: 3000,
+      timeout: 15000,
+    });
+
+    if (!result.success || !result.html) {
+      console.log(`❌ Failed to fetch event detail: ${result.error}`);
+      return null;
+    }
+
+    const html = result.html;
+    console.log(`✅ Fetched ${html.length} chars from event detail page`);
+
+    // Check if URL is excluded
+    const isExcluded = (url: string) =>
+      EXCLUDED_DOMAINS.some(d => url.toLowerCase().includes(d.toLowerCase()));
+
+    // Multiple regex patterns to find the Visit Website link
+    // Pattern matches: <a href="URL" ... class="action-item" ...>...<i>...</i>Visit Website...</a>
+    const patterns = [
+      // Pattern 1: action-item class with Visit Website text (handles icon and whitespace)
+      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+      // Pattern 2: Reverse order (class before href)
+      /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+      // Pattern 3: Any link with Visit Website text
+      /<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+      // Pattern 4: Target blank with external link
+      /<a[^>]*href=["']([^"']+)["'][^>]*target=["']_blank["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+    ];
+
+    for (const pattern of patterns) {
+      // Reset lastIndex for global regex
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(html)) !== null) {
+        let url = match[1]?.trim();
+        if (!url) continue;
+
+        // Normalize URL
+        if (url.startsWith("//")) {
+          url = `https:${url}`;
+        } else if (url.startsWith("/")) {
+          url = `https://www.catchdesmoines.com${url}`;
+        }
+
+        // Must be http/https
+        if (!url.startsWith("http")) continue;
+
+        // Skip excluded domains
+        if (isExcluded(url)) {
+          console.log(`⏭️ Skipping excluded URL: ${url}`);
+          continue;
+        }
+
+        console.log(`✅ Found Visit Website URL: ${url}`);
+        return url;
+      }
+    }
+
+    // Fallback: Check for linkUrl in embedded JSON
+    const linkUrlMatch = html.match(/["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+    if (linkUrlMatch) {
+      const url = linkUrlMatch[1].trim();
+      if (!isExcluded(url)) {
+        console.log(`✅ Found linkUrl in JSON: ${url}`);
+        return url;
+      }
+    }
+
+    console.log(`⚠️ No Visit Website URL found for: ${eventDetailUrl}`);
+    return null;
+  } catch (error) {
+    console.error(`❌ Error extracting Visit Website URL: ${error.message}`);
+    return null;
+  }
+}
+
 interface ScrapRequest {
   url: string;
   category: string;
@@ -228,28 +331,13 @@ EXAMPLES:
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
-🎯 CRITICAL URL EXTRACTION RULE FOR CATCHDESMOINES.COM EVENTS:
+🔗 IMPORTANT - EVENT DETAIL URLs:
+On listing pages, the "Visit Website" link is NOT shown - it's only on individual event detail pages.
+Your job is to extract the detail_url (link to the event's detail page) so we can fetch the actual source URL.
 
-When extracting events from CatchDesMoines pages, the source_url MUST be the external event website, NOT the catchdesmoines.com page.
-
-HOW TO FIND THE CORRECT URL:
-1. Look for anchor text "Visit Website" (case-insensitive) in the HTML
-2. Extract the href from that anchor tag
-3. If the "Visit Website" anchor has no href, check the immediately preceding <a> tag for an external URL
-4. The URL must be external (NOT catchdesmoines.com, NOT simpleview.com, NOT social media, NOT javascript/css files)
-5. Only use catchdesmoines.com URLs as a last resort fallback if no external URL exists
-
-VALIDATION:
-- URL must start with http:// or https://
-- URL must NOT contain: catchdesmoines.com, simpleview, facebook.com, twitter.com, instagram.com, youtube.com, vimeo.com, .js, .css, cdn, analytics
-- Prefer venue-specific websites (restaurant sites, theater sites, event organizer sites)
-
-EXAMPLE:
-If you see HTML like:
-<a href="https://statemint.com/west-des-moines">Visit Website</a>
-Use: "https://statemint.com/west-des-moines" as the source_url
-
-If the "Visit Website" link is missing or internal, you may use the catchdesmoines page URL as a fallback.
+Look for anchor tags that link to event detail pages:
+- Pattern: /event/event-slug/event-id/
+- Example: <a href="/event/chef-georges-steak-bar-classics/53924/">Event Title</a>
 
 🏢 VENUE EXTRACTION:
 - Look for venue names near event titles
@@ -265,13 +353,20 @@ For EVERY event you find, extract:
 - description: Any details about the event
 - category: Music/Sports/Arts/Community/Entertainment/Festival
 - price: If mentioned, or "See website"
-- source_url: Venue-specific URL if available, otherwise page URL
+- detail_url: The link to the individual event page (e.g., "/event/event-name/12345/" for CatchDesMoines)
+
+🔗 CRITICAL - EXTRACTING detail_url:
+When crawling event listing pages, look for links to individual event detail pages.
+For CatchDesMoines.com, these links usually follow the pattern: /event/event-slug/event-id/
+Example: /event/chef-georges-steak-bar-classics/53924/
+This URL is REQUIRED for fetching the actual "Visit Website" URL from the detail page.
 
 CRITICAL SUCCESS FACTORS:
 ✅ Extract events even with incomplete info
 ✅ Use logical defaults for missing details
 ✅ Convert all date formats consistently to Central Time
 ✅ Include recurring events as separate entries
+✅ ALWAYS extract the detail_url for each event
 ✅ Scan the ENTIRE content thoroughly
 
 FORMAT AS JSON ARRAY ONLY - no other text:
@@ -279,16 +374,16 @@ FORMAT AS JSON ARRAY ONLY - no other text:
   {
     "title": "Event Name",
     "date": "2025-MM-DD HH:MM:SS",
-    "location": "Des Moines, IA", 
+    "location": "Des Moines, IA",
     "venue": "Venue Name",
     "description": "Event description",
     "category": "Concert",
     "price": "$25",
-    "source_url": "https://specific-venue-website.com"
+    "detail_url": "/event/event-name/12345/"
   }
 ]
 
-🚨 ABSOLUTE REQUIREMENT: Extract EVERY event mentioned in the content. Return empty array [] ONLY if literally no events are found anywhere in the content.`,
+🚨 ABSOLUTE REQUIREMENT: Extract EVERY event mentioned in the content. The detail_url is CRITICAL - always include it. Return empty array [] ONLY if literally no events are found anywhere in the content.`,
 
         restaurants: `You are an expert at extracting restaurant information from websites like Eater.com, Des Moines Register, and restaurant listing sites. Your task is to find EVERY SINGLE RESTAURANT mentioned in this content from ${currentUrl}.
 
@@ -566,6 +661,54 @@ Return empty array [] if no competitive content found.`
     }
 
     console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
+
+    // CRITICAL: For CatchDesMoines events, fetch each event's detail page to get the REAL source URL
+    // The "Visit Website" URL is the external link to the actual event organizer's site
+    if (category === 'events' && url.includes('catchdesmoines.com') && filteredItems.length > 0) {
+      console.log(`🔗 Fetching Visit Website URLs for ${filteredItems.length} CatchDesMoines events...`);
+
+      for (let i = 0; i < filteredItems.length; i++) {
+        const item = filteredItems[i];
+
+        // Build the event detail URL from the detail_url extracted by Claude
+        let eventDetailUrl: string | null = null;
+
+        if (item.detail_url) {
+          if (item.detail_url.startsWith('http')) {
+            eventDetailUrl = item.detail_url;
+          } else if (item.detail_url.startsWith('/')) {
+            eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
+          }
+        }
+
+        if (eventDetailUrl) {
+          console.log(`📄 [${i + 1}/${filteredItems.length}] Processing: ${item.title}`);
+
+          // Fetch the Visit Website URL from the event detail page
+          const visitWebsiteUrl = await extractVisitWebsiteUrl(eventDetailUrl);
+
+          if (visitWebsiteUrl) {
+            // Use the Visit Website URL as the source_url (the REAL event URL)
+            filteredItems[i].source_url = visitWebsiteUrl;
+            console.log(`✅ Set source_url to: ${visitWebsiteUrl}`);
+          } else {
+            // Fallback to the event detail page URL (still better than the list page)
+            filteredItems[i].source_url = eventDetailUrl;
+            console.log(`⚠️ Using event detail URL as fallback: ${eventDetailUrl}`);
+          }
+
+          // Rate limit: wait between requests to avoid overwhelming the server
+          if (i < filteredItems.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        } else {
+          console.log(`⚠️ No detail_url for event: ${item.title}`);
+          // Keep whatever source_url Claude may have extracted
+        }
+      }
+
+      console.log(`✅ Finished fetching Visit Website URLs`);
+    }
 
     // Get appropriate table name and process items
     const tableMapping = {
