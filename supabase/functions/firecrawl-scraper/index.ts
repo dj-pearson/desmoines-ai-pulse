@@ -28,6 +28,71 @@ const EXCLUDED_DOMAINS = [
 ];
 
 /**
+ * Check if a URL is a valid CatchDesMoines event detail page URL
+ * Valid: /event/event-name/12345/
+ * Invalid: /events/ (list page), /events/?filter=... (filtered list)
+ */
+function isValidEventDetailUrl(url: string): boolean {
+  if (!url) return false;
+
+  // Must contain /event/ (singular) not just /events/ (plural/list)
+  // Pattern: /event/slug/id/ where id is numeric
+  const eventDetailPattern = /\/event\/[^\/]+\/\d+\/?$/i;
+
+  // Also accept pattern without trailing ID: /event/slug/
+  const eventSlugPattern = /\/event\/[^\/]+\/?$/i;
+
+  return eventDetailPattern.test(url) || eventSlugPattern.test(url);
+}
+
+/**
+ * Extract event detail URLs from HTML content as a fallback
+ * when Claude doesn't properly extract detail_url
+ */
+function extractEventDetailUrlsFromHtml(html: string): Map<string, string> {
+  const eventUrls = new Map<string, string>();
+
+  // Pattern to match event links with their titles
+  // CatchDesMoines typically has: <a href="/event/event-slug/12345/">Event Title</a>
+  const patterns = [
+    // Pattern 1: Standard event link
+    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*>([^<]+)<\/a>/gi,
+    // Pattern 2: Event link with nested elements (handles whitespace and icons)
+    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*>[\s\S]*?<[^>]*class[^>]*title[^>]*>([^<]+)<[\s\S]*?<\/a>/gi,
+    // Pattern 3: Data attribute based
+    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*data-[^>]*>[\s\S]*?([A-Z][^<]{5,100}?)[\s\S]*?<\/a>/gi,
+  ];
+
+  for (const pattern of patterns) {
+    pattern.lastIndex = 0;
+    let match;
+    while ((match = pattern.exec(html)) !== null) {
+      const url = match[1]?.trim();
+      let title = match[2]?.trim();
+
+      if (!url || !title) continue;
+      if (!isValidEventDetailUrl(url)) continue;
+
+      // Clean up the title
+      title = title.replace(/\s+/g, ' ').trim();
+
+      // Skip if title is too short or looks like a button/action
+      if (title.length < 3 || title.length > 200) continue;
+      if (/^(view|read|more|click|here|details?)$/i.test(title)) continue;
+
+      // Store with normalized title as key for matching
+      const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (normalizedTitle.length > 2) {
+        eventUrls.set(normalizedTitle, url);
+        console.log(`📌 Found event URL from HTML: "${title}" -> ${url}`);
+      }
+    }
+  }
+
+  return eventUrls;
+}
+
+/**
  * Extract the "Visit Website" URL from a CatchDesMoines event detail page
  * This is the ACTUAL external URL where users can find more info about the event
  */
@@ -667,22 +732,84 @@ Return empty array [] if no competitive content found.`
     if (category === 'events' && url.includes('catchdesmoines.com') && filteredItems.length > 0) {
       console.log(`🔗 Fetching Visit Website URLs for ${filteredItems.length} CatchDesMoines events...`);
 
+      // Build a map of event URLs extracted directly from the HTML content
+      // This is more reliable than Claude's extraction
+      let eventUrlsFromHtml = new Map<string, string>();
+
+      // Combine all raw HTML from scrape results for fallback URL extraction
+      const allRawHtml = scrapeResults
+        .filter(r => r.success && r.html)
+        .map(r => r.html)
+        .join('\n');
+
+      if (allRawHtml.length > 0) {
+        console.log(`📄 Extracting event URLs from ${allRawHtml.length} chars of raw HTML...`);
+        eventUrlsFromHtml = extractEventDetailUrlsFromHtml(allRawHtml);
+        console.log(`📌 Found ${eventUrlsFromHtml.size} event detail URLs from HTML`);
+      }
+
       for (let i = 0; i < filteredItems.length; i++) {
         const item = filteredItems[i];
+        const eventTitle = item.title || '';
 
-        // Build the event detail URL from the detail_url extracted by Claude
+        // Try to build the event detail URL from multiple sources
         let eventDetailUrl: string | null = null;
 
+        // Source 1: Check if Claude extracted a valid detail_url
         if (item.detail_url) {
-          if (item.detail_url.startsWith('http')) {
-            eventDetailUrl = item.detail_url;
-          } else if (item.detail_url.startsWith('/')) {
-            eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
+          let candidateUrl = item.detail_url;
+          if (candidateUrl.startsWith('/')) {
+            candidateUrl = `https://www.catchdesmoines.com${candidateUrl}`;
+          }
+          if (isValidEventDetailUrl(candidateUrl)) {
+            eventDetailUrl = candidateUrl;
+            console.log(`✅ Claude provided valid detail_url: ${eventDetailUrl}`);
+          } else {
+            console.log(`⚠️ Claude's detail_url is invalid (list page?): ${item.detail_url}`);
           }
         }
 
-        if (eventDetailUrl) {
-          console.log(`📄 [${i + 1}/${filteredItems.length}] Processing: ${item.title}`);
+        // Source 2: Fallback - try to find URL from HTML extraction by matching title
+        if (!eventDetailUrl && eventTitle) {
+          const normalizedTitle = eventTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+          // Try exact match first
+          if (eventUrlsFromHtml.has(normalizedTitle)) {
+            const htmlUrl = eventUrlsFromHtml.get(normalizedTitle)!;
+            eventDetailUrl = htmlUrl.startsWith('http') ? htmlUrl : `https://www.catchdesmoines.com${htmlUrl}`;
+            console.log(`✅ Found URL from HTML (exact match): ${eventDetailUrl}`);
+          } else {
+            // Try partial match - find URLs containing parts of the title
+            for (const [htmlTitle, htmlUrl] of eventUrlsFromHtml) {
+              if (normalizedTitle.includes(htmlTitle) || htmlTitle.includes(normalizedTitle)) {
+                eventDetailUrl = htmlUrl.startsWith('http') ? htmlUrl : `https://www.catchdesmoines.com${htmlUrl}`;
+                console.log(`✅ Found URL from HTML (partial match): ${eventDetailUrl}`);
+                break;
+              }
+            }
+          }
+        }
+
+        // Source 3: Last resort - try to construct URL from event title slug
+        if (!eventDetailUrl && eventTitle) {
+          // Try searching the raw HTML for a URL containing the event title as a slug
+          const slugifiedTitle = eventTitle
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .substring(0, 50);
+
+          const urlPattern = new RegExp(`/event/${slugifiedTitle.substring(0, 20)}[^"']*/(\\d+)/`, 'i');
+          const slugMatch = allRawHtml.match(urlPattern);
+          if (slugMatch) {
+            eventDetailUrl = `https://www.catchdesmoines.com${slugMatch[0]}`;
+            console.log(`✅ Found URL from slug search: ${eventDetailUrl}`);
+          }
+        }
+
+        // Now fetch the Visit Website URL from the event detail page
+        if (eventDetailUrl && isValidEventDetailUrl(eventDetailUrl)) {
+          console.log(`📄 [${i + 1}/${filteredItems.length}] Fetching Visit Website for: ${eventTitle}`);
 
           // Fetch the Visit Website URL from the event detail page
           const visitWebsiteUrl = await extractVisitWebsiteUrl(eventDetailUrl);
@@ -690,11 +817,11 @@ Return empty array [] if no competitive content found.`
           if (visitWebsiteUrl) {
             // Use the Visit Website URL as the source_url (the REAL event URL)
             filteredItems[i].source_url = visitWebsiteUrl;
-            console.log(`✅ Set source_url to: ${visitWebsiteUrl}`);
+            console.log(`✅ Set source_url to external site: ${visitWebsiteUrl}`);
           } else {
             // Fallback to the event detail page URL (still better than the list page)
             filteredItems[i].source_url = eventDetailUrl;
-            console.log(`⚠️ Using event detail URL as fallback: ${eventDetailUrl}`);
+            console.log(`⚠️ No Visit Website found, using detail page: ${eventDetailUrl}`);
           }
 
           // Rate limit: wait between requests to avoid overwhelming the server
@@ -702,8 +829,8 @@ Return empty array [] if no competitive content found.`
             await new Promise(resolve => setTimeout(resolve, 500));
           }
         } else {
-          console.log(`⚠️ No detail_url for event: ${item.title}`);
-          // Keep whatever source_url Claude may have extracted
+          console.log(`⚠️ [${i + 1}/${filteredItems.length}] Could not find valid detail URL for: ${eventTitle}`);
+          // Keep whatever source_url Claude may have extracted, or it will default to the list page URL
         }
       }
 
