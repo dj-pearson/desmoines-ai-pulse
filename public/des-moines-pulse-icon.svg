@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#160057;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a0029;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background: Gradient Navy Blue -->
+  <rect width="500" height="500" rx="100" ry="100" fill="url(#bgGradient)"/>
+  
+  <!-- Red Accent: Bottom Wave -->
+  <path d="M0 400 Q250 350 500 400 L500 500 L0 500 Z" fill="#C70100"/>
+  
+  <!-- Pulse Line (White) -->
+  <!-- Starts left, small bump, big spike, settle -->
+  <path d="M50 250 L150 250 L180 200 L210 300 L240 100 L270 400 L300 250 L450 250" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="30" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+        
+  <!-- Subtle Bridge Echo behind (Opacity) -->
+  <path d="M100 250 Q250 100 400 250" 
+        fill="none" 
+        stroke="#FFFFFF" 
+        stroke-width="10" 
+        stroke-opacity="0.3"
+        stroke-dasharray="20,10"/>
+
+</svg>

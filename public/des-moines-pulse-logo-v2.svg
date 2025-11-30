@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400">
+  <defs>
+    <style>
+      .pulse-line {
+        stroke-dasharray: 1000;
+        stroke-dashoffset: 1000;
+        animation: pulseDraw 3s linear infinite;
+      }
+      
+      @keyframes pulseDraw {
+        0% {
+          stroke-dashoffset: 1000;
+          opacity: 0;
+        }
+        10% {
+          opacity: 1;
+        }
+        90% {
+          opacity: 1;
+        }
+        100% {
+          stroke-dashoffset: 0;
+          opacity: 0;
+        }
+      }
+
+      .bridge-arch {
+        stroke-dasharray: 600;
+        stroke-dashoffset: 0;
+      }
+    </style>
+    <linearGradient id="archGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#160057;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a0029;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Text -->
+  <text x="300" y="320" font-family="Arial, sans-serif" font-weight="bold" font-size="48" text-anchor="middle" letter-spacing="2">
+    <tspan fill="#160057">DES MOINES</tspan>
+    <tspan fill="#C70100"> PULSE</tspan>
+  </text>
+
+  <!-- Bridge Structure (Static) -->
+  <!-- A stylized arch representing the bridge -->
+  <path d="M50 250 Q300 50 550 250" 
+        fill="none" 
+        stroke="url(#archGradient)" 
+        stroke-width="12" 
+        stroke-linecap="round"
+        class="bridge-arch"/>
+        
+  <!-- Vertical supports for the bridge (Subtle) -->
+  <path d="M150 250 L150 165 M225 250 L225 125 M300 250 L300 110 M375 250 L375 125 M450 250 L450 165" 
+        fill="none" 
+        stroke="#160057" 
+        stroke-width="4" 
+        opacity="0.3"/>
+
+  <!-- The Pulse (Animated) -->
+  <!-- It runs along the bottom, spikes up like a heartbeat, then follows the arch curve slightly or cuts through -->
+  <!-- Path: Start left, flat, heartbeat spike, flat, then arches over -->
+  <path d="M50 250 L180 250 L210 180 L240 300 L270 250 L550 250" 
+        fill="none" 
+        stroke="#C70100" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        class="pulse-line"/>
+        
+  <!-- Secondary Pulse Echo (faint, delayed) -->
+   <path d="M50 250 L180 250 L210 180 L240 300 L270 250 L550 250" 
+        fill="none" 
+        stroke="#C70100" 
+        stroke-width="2" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        opacity="0.3"
+        style="animation: pulseDraw 3s linear infinite; animation-delay: 0.2s;"/>
+
+</svg>

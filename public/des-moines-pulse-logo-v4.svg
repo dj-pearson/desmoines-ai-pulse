@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;700;900&display=swap');
+      .text-main { font-family: 'Montserrat', sans-serif; font-weight: 900; }
+      .text-sub { font-family: 'Montserrat', sans-serif; font-weight: 300; letter-spacing: 0.2em; }
+      
+      .pulse-reflection {
+        animation: ripple 3s infinite linear;
+      }
+      
+      @keyframes ripple {
+        0% { opacity: 0.6; transform: scaleY(1); }
+        50% { opacity: 1; transform: scaleY(1.1); }
+        100% { opacity: 0.6; transform: scaleY(1); }
+      }
+    </style>
+    <linearGradient id="water-gradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#C70100;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8a0000;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background Circle (Optional, for badge feel) -->
+  <!-- <circle cx="250" cy="250" r="240" fill="#f8f9fa" /> -->
+
+  <!-- The Bridge (Physical City) - Navy Blue -->
+  <!-- A clean, solid arch representing the bridge -->
+  <path d="M50 240 Q250 40 450 240" 
+        fill="none" 
+        stroke="#160057" 
+        stroke-width="25" 
+        stroke-linecap="round"/>
+        
+  <!-- Bridge Supports (Minimalist) -->
+  <path d="M130 240 L130 150 M200 240 L200 105 M250 240 L250 90 M300 240 L300 105 M370 240 L370 150" 
+        fill="none" 
+        stroke="#160057" 
+        stroke-width="8" 
+        stroke-linecap="round"/>
+
+  <!-- The Pulse (Digital Reflection) - Red -->
+  <!-- This mirrors the bridge but as a digital waveform/EKG -->
+  <g class="pulse-reflection" transform-origin="center">
+    <path d="M50 260 
+             Q100 260 120 290 
+             T180 320 
+             L210 260 
+             L230 380 
+             L250 280 
+             L270 350 
+             L290 290 
+             T350 310 
+             Q400 260 450 260" 
+          fill="none" 
+          stroke="url(#water-gradient)" 
+          stroke-width="12" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+  </g>
+
+  <!-- Text -->
+  <text x="250" y="430" text-anchor="middle" fill="#160057" class="text-main" font-size="48">DES MOINES</text>
+  <text x="250" y="470" text-anchor="middle" fill="#C70100" class="text-sub" font-size="24">PULSE</text>
+
+</svg>

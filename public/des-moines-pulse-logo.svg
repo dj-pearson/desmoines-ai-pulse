@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <!-- Background: Deep Navy Blue -->
+  <rect width="500" height="500" fill="#160057"/>
+  
+  <!-- Red Accent: Stylized Trapezoid/Base at the bottom -->
+  <path d="M0 350 L500 350 L500 500 L0 500 Z" fill="#C70100"/>
+  
+  <!-- White Bridges transitioning into Pulse -->
+  <!-- Bridge 1 (Left) -->
+  <path d="M50 350 Q125 200 200 350" fill="none" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round"/>
+  
+  <!-- Bridge 2 (Center - turning into Pulse) -->
+  <!-- Starts as arch, breaks into pulse -->
+  <path d="M200 350 Q230 280 250 280 L270 350 L300 150 L330 400 L360 300 L380 350" fill="none" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Bridge 3 (Right - Partial/Echo) -->
+  <path d="M380 350 Q415 280 450 350" fill="none" stroke="#FFFFFF" stroke-width="25" stroke-linecap="round" opacity="0.6"/>
+
+  <!-- Text: Des Moines Pulse -->
+  <text x="250" y="450" font-family="Arial, sans-serif" font-weight="bold" font-size="40" fill="#FFFFFF" text-anchor="middle" letter-spacing="2">DES MOINES PULSE</text>
+</svg>

@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300">
+  <defs>
+    <!-- Font: Using system-ui for a modern look on most devices -->
+    <style>
+      text {
+        font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+      .pulse-anim {
+        stroke-dasharray: 1000;
+        stroke-dashoffset: 1000;
+        animation: dash 3s ease-in-out infinite;
+      }
+      @keyframes dash {
+        0% { stroke-dashoffset: 1000; opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { stroke-dashoffset: 0; opacity: 0; }
+      }
+    </style>
+    
+    <!-- Clip path for the bridge supports to ensure they stay inside -->
+    <clipPath id="arch-clip">
+      <path d="M50 200 Q300 20 550 200 L550 200 L50 200 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- Background (Optional, transparent for logo) -->
+  <!-- <rect width="600" height="300" fill="#f8f9fa"/> -->
+
+  <!-- Bridge Structure -->
+  <g transform="translate(0, -20)">
+    <!-- Supports (Clipped) -->
+    <g clip-path="url(#arch-clip)" stroke="#160057" stroke-width="3" opacity="0.4">
+      <line x1="150" y1="50" x2="150" y2="200" />
+      <line x1="200" y1="50" x2="200" y2="200" />
+      <line x1="250" y1="50" x2="250" y2="200" />
+      <line x1="300" y1="50" x2="300" y2="200" />
+      <line x1="350" y1="50" x2="350" y2="200" />
+      <line x1="400" y1="50" x2="400" y2="200" />
+      <line x1="450" y1="50" x2="450" y2="200" />
+    </g>
+
+    <!-- Main Arch -->
+    <path d="M50 200 Q300 20 550 200" 
+          fill="none" 
+          stroke="#160057" 
+          stroke-width="12" 
+          stroke-linecap="round"/>
+  </g>
+
+  <!-- The Pulse Line -->
+  <!-- Dynamic red line that represents energy/heartbeat -->
+  <path class="pulse-anim" 
+        d="M40 220 L180 220 L210 160 L240 260 L270 220 L560 220" 
+        fill="none" 
+        stroke="#C70100" 
+        stroke-width="6" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+
+  <!-- Text -->
+  <text x="300" y="280" text-anchor="middle" font-size="36" letter-spacing="1">
+    <tspan fill="#160057" font-weight="800">DES MOINES</tspan>
+    <tspan fill="#C70100" font-weight="300"> PULSE</tspan>
+  </text>
+</svg>

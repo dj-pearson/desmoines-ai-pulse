@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logo Preview</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            gap: 2rem;
+            margin: 0;
+        }
+
+        .container {
+            display: flex;
+            gap: 2rem;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .card.dark {
+            background: #0f172a;
+            color: white;
+        }
+
+        img {
+            max-width: 300px;
+            height: auto;
+        }
+
+        h2 {
+            margin-top: 0;
+            margin-bottom: 1rem;
+            font-size: 1.2rem;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Des Moines Pulse - Logo Concepts</h1>
+    <div class="container">
+
+        <!-- Concept 3 (Refined Previous) -->
+        <div class="card" style="flex-basis: 100%; max-width: 500px;">
+            <h2>Concept 3: Refined Modern</h2>
+            <img src="des-moines-pulse-logo-v3.svg" alt="Concept 3">
+        </div>
+
+        <!-- Concept 4 (Bridge Reflection) -->
+        <div class="card" style="flex-basis: 100%; max-width: 500px;">
+            <h2>Concept 4: Bridge Reflection</h2>
+            <p style="font-size: 0.9rem; color: #666;">"The Physical City meets the Digital Pulse"</p>
+            <img src="des-moines-pulse-logo-v4.svg" alt="Concept 4">
+        </div>
+
+        <!-- Concept 5 (Three Bridges Flag) -->
+        <div class="card dark" style="flex-basis: 100%; max-width: 500px;">
+            <h2>Concept 5: Flag Symbolism</h2>
+            <p style="font-size: 0.9rem; color: #ccc;">"Three Bridges & The Red Pulse"</p>
+            <img src="des-moines-pulse-logo-v5.svg" alt="Concept 5">
+        </div>
+
+    </div>
+</body>
+
+</html>

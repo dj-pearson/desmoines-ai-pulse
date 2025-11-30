@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <defs>
+    <style>
+      .pulse-anim {
+        stroke-dasharray: 1000;
+        stroke-dashoffset: 1000;
+        animation: dash 3s ease-in-out infinite;
+      }
+      @keyframes dash {
+        0% { stroke-dashoffset: 1000; opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { stroke-dashoffset: 0; opacity: 0; }
+      }
+    </style>
+    <clipPath id="icon-arch-clip">
+      <path d="M50 350 Q250 100 450 350 L450 350 L50 350 Z" />
+    </clipPath>
+  </defs>
+
+  <!-- Background Container -->
+  <rect width="500" height="500" rx="100" fill="#160057"/>
+
+  <!-- Bridge Structure (White for contrast on Navy) -->
+  <g>
+    <!-- Supports -->
+    <g clip-path="url(#icon-arch-clip)" stroke="#FFFFFF" stroke-width="4" opacity="0.3">
+      <line x1="125" y1="100" x2="125" y2="350" />
+      <line x1="175" y1="100" x2="175" y2="350" />
+      <line x1="225" y1="100" x2="225" y2="350" />
+      <line x1="275" y1="100" x2="275" y2="350" />
+      <line x1="325" y1="100" x2="325" y2="350" />
+      <line x1="375" y1="100" x2="375" y2="350" />
+    </g>
+
+    <!-- Arch -->
+    <path d="M50 350 Q250 100 450 350" 
+          fill="none" 
+          stroke="#FFFFFF" 
+          stroke-width="20" 
+          stroke-linecap="round"/>
+  </g>
+
+  <!-- Pulse Line (Red) -->
+  <path class="pulse-anim" 
+        d="M20 380 L150 380 L190 280 L230 420 L270 380 L480 380" 
+        fill="none" 
+        stroke="#C70100" 
+        stroke-width="12" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"/>
+
+</svg>
