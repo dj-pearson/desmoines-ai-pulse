@@ -25,6 +25,8 @@ import {
   Utensils,
   Palette,
   TreePine,
+  Search,
+  X,
 } from "lucide-react";
 import {
   format,
@@ -112,17 +114,34 @@ interface AllInclusiveDashboardProps {
     location?: string;
     priceRange?: string;
   };
+  onClearFilters?: () => void;
 }
 
 export default function AllInclusiveDashboard({
   onViewEventDetails,
   filters,
+  onClearFilters,
 }: AllInclusiveDashboardProps) {
   const [activeTab, setActiveTab] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
   const { trackEvent } = useAnalytics();
   const sectionRef = useRef<HTMLDivElement>(null);
+
+  // Reset pagination when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters?.query, filters?.category, filters?.subcategory, filters?.location, filters?.priceRange, filters?.dateFilter]);
+
+  // Check if any filters are active
+  const hasActiveFilters = Boolean(
+    filters?.query?.trim() ||
+    (filters?.category && filters.category !== "All") ||
+    filters?.subcategory?.trim() ||
+    (filters?.location && filters.location !== "any-location") ||
+    (filters?.priceRange && filters.priceRange !== "any-price") ||
+    filters?.dateFilter
+  );
 
   // Load events first (critical for homepage)
   const { events: allEvents, isLoading: eventsLoading } = useEvents({
@@ -586,6 +605,114 @@ export default function AllInclusiveDashboard({
     }
   };
 
+  // Generate filter description for display
+  const getFilterDescription = () => {
+    const parts: string[] = [];
+    if (filters?.query?.trim()) {
+      parts.push(`"${filters.query}"`);
+    }
+    if (filters?.subcategory?.trim()) {
+      parts.push(filters.subcategory);
+    }
+    if (filters?.location && filters.location !== "any-location") {
+      const locationLabels: Record<string, string> = {
+        downtown: "Downtown",
+        "west-des-moines": "West Des Moines",
+        ankeny: "Ankeny",
+        urbandale: "Urbandale",
+        clive: "Clive",
+      };
+      parts.push(locationLabels[filters.location] || filters.location);
+    }
+    if (filters?.dateFilter?.preset) {
+      const presetLabels: Record<string, string> = {
+        today: "Today",
+        tomorrow: "Tomorrow",
+        "this-week": "This Week",
+        "this-weekend": "This Weekend",
+        "next-week": "Next Week",
+      };
+      parts.push(presetLabels[filters.dateFilter.preset] || filters.dateFilter.preset);
+    }
+    if (filters?.priceRange && filters.priceRange !== "any-price") {
+      const priceLabels: Record<string, string> = {
+        free: "Free",
+        "under-25": "Under $25",
+        "25-50": "$25-$50",
+        "50-100": "$50-$100",
+        "over-100": "Over $100",
+      };
+      parts.push(priceLabels[filters.priceRange] || filters.priceRange);
+    }
+    return parts.join(" • ");
+  };
+
+  // Render search results summary
+  const renderSearchSummary = () => {
+    if (!hasActiveFilters) return null;
+
+    const totalResults = currentTabItems.length;
+    const filterDesc = getFilterDescription();
+
+    return (
+      <div className="mb-6 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <Search className="h-5 w-5 text-primary" />
+            <div>
+              <span className="font-medium text-foreground">
+                {totalResults} result{totalResults !== 1 ? 's' : ''} found
+              </span>
+              {filterDesc && (
+                <span className="text-muted-foreground ml-2">
+                  for {filterDesc}
+                </span>
+              )}
+            </div>
+          </div>
+          {onClearFilters && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onClearFilters}
+              className="flex items-center gap-1"
+            >
+              <X className="h-4 w-4" />
+              Clear Filters
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Render empty state when no results
+  const renderEmptyState = () => {
+    if (currentTabItems.length > 0) return null;
+
+    return (
+      <div className="text-center py-12 px-4">
+        <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+          <Search className="h-8 w-8 text-muted-foreground" />
+        </div>
+        <h3 className="text-lg font-semibold text-foreground mb-2">
+          No results found
+        </h3>
+        <p className="text-muted-foreground mb-4 max-w-md mx-auto">
+          {hasActiveFilters
+            ? `We couldn't find anything matching your search. Try adjusting your filters or search terms.`
+            : `No items available in this category right now.`}
+        </p>
+        {hasActiveFilters && onClearFilters && (
+          <Button onClick={onClearFilters} variant="outline">
+            <X className="h-4 w-4 mr-2" />
+            Clear All Filters
+          </Button>
+        )}
+      </div>
+    );
+  };
+
   const renderCard = (item: DashboardItem) => {
     // Ensure icon exists, provide default based on type if missing
     const Icon =
@@ -772,51 +899,84 @@ export default function AllInclusiveDashboard({
             </TabsList>
           </div>
 
+          {/* Search results summary */}
+          {renderSearchSummary()}
+
           <TabsContent value="all">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedItems.map(renderCard)}
-            </div>
-            {renderPagination()}
+            {paginatedItems.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedItems.map(renderCard)}
+                </div>
+                {renderPagination()}
+              </>
+            ) : (
+              renderEmptyState()
+            )}
           </TabsContent>
 
           <TabsContent value="event">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedItems.map((event) =>
-                renderCard({ ...event, type: "event", icon: Calendar })
-              )}
-            </div>
-            {renderPagination()}
+            {paginatedItems.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedItems.map((event) =>
+                    renderCard({ ...event, type: "event", icon: Calendar })
+                  )}
+                </div>
+                {renderPagination()}
+              </>
+            ) : (
+              renderEmptyState()
+            )}
           </TabsContent>
 
           <TabsContent value="restaurant">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedItems.map((opening) =>
-                renderCard({ ...opening, type: "restaurant", icon: Utensils })
-              )}
-            </div>
-            {renderPagination()}
+            {paginatedItems.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedItems.map((opening) =>
+                    renderCard({ ...opening, type: "restaurant", icon: Utensils })
+                  )}
+                </div>
+                {renderPagination()}
+              </>
+            ) : (
+              renderEmptyState()
+            )}
           </TabsContent>
 
           <TabsContent value="attraction">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedItems.map((attraction) =>
-                renderCard({ ...attraction, type: "attraction", icon: Palette })
-              )}
-            </div>
-            {renderPagination()}
+            {paginatedItems.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedItems.map((attraction) =>
+                    renderCard({ ...attraction, type: "attraction", icon: Palette })
+                  )}
+                </div>
+                {renderPagination()}
+              </>
+            ) : (
+              renderEmptyState()
+            )}
           </TabsContent>
 
           <TabsContent value="playground">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {paginatedItems.map((playground) =>
-                renderCard({
-                  ...playground,
-                  type: "playground",
-                  icon: TreePine,
-                })
-              )}
-            </div>
-            {renderPagination()}
+            {paginatedItems.length > 0 ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {paginatedItems.map((playground) =>
+                    renderCard({
+                      ...playground,
+                      type: "playground",
+                      icon: TreePine,
+                    })
+                  )}
+                </div>
+                {renderPagination()}
+              </>
+            ) : (
+              renderEmptyState()
+            )}
           </TabsContent>
         </Tabs>
       </div>

@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, MessageSquare, Phone, Mic, Brain, Zap, TrendingUp } from "lucide-react";
+import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, MessageSquare, Phone, Mic, Brain, Zap, TrendingUp, Share2 } from "lucide-react";
 import { downloadICS } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
@@ -82,6 +82,46 @@ export default function Index() {
 
   const handleOnboardingComplete = () => {
     setShowOnboarding(false);
+  };
+
+  const handleClearFilters = () => {
+    setSearchFilters(undefined);
+    toast({
+      title: "Filters Cleared",
+      description: "Showing all results",
+    });
+  };
+
+  const handleShareEvent = async (event: Event) => {
+    const shareUrl = `${window.location.origin}/events/${event.id}`;
+    const shareData = {
+      title: event.title,
+      text: `Check out ${event.title} in Des Moines!`,
+      url: shareUrl,
+    };
+
+    if (navigator.share && navigator.canShare(shareData)) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // User cancelled or error
+        if ((err as Error).name !== 'AbortError') {
+          // Fallback to clipboard
+          await navigator.clipboard.writeText(shareUrl);
+          toast({
+            title: "Link Copied!",
+            description: "Event link copied to clipboard",
+          });
+        }
+      }
+    } else {
+      // Fallback: copy to clipboard
+      await navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: "Link Copied!",
+        description: "Event link copied to clipboard",
+      });
+    }
   };
 
   const handleAIPlanClick = () => {
@@ -377,6 +417,7 @@ export default function Index() {
           <AllInclusiveDashboard
             onViewEventDetails={handleViewEventDetails}
             filters={searchFilters}
+            onClearFilters={handleClearFilters}
           />
         </div>
 
@@ -611,13 +652,24 @@ export default function Index() {
                 </div>
 
                 <div className="pt-4 border-t space-y-3">
-                  <FavoriteButton
-                    eventId={selectedEvent.id}
-                    size="default"
-                    variant="outline"
-                    className="w-full"
-                    showText
-                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <FavoriteButton
+                      eventId={selectedEvent.id}
+                      size="default"
+                      variant="outline"
+                      className="w-full"
+                      showText
+                    />
+
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => handleShareEvent(selectedEvent)}
+                    >
+                      <Share2 className="h-4 w-4 mr-2" />
+                      Share
+                    </Button>
+                  </div>
 
                   <Button
                     variant="outline"
