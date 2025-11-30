@@ -4,7 +4,7 @@
 
 -- Update the default_model setting if it exists
 UPDATE ai_configuration
-SET setting_value = 'claude-sonnet-4-5-20250929',
+SET setting_value = '"claude-sonnet-4-5-20250929"'::jsonb,
     updated_at = NOW()
 WHERE setting_key = 'default_model';
 
@@ -12,7 +12,7 @@ WHERE setting_key = 'default_model';
 INSERT INTO ai_configuration (setting_key, setting_value, description, created_at, updated_at)
 VALUES (
     'default_model',
-    'claude-sonnet-4-5-20250929',
+    '"claude-sonnet-4-5-20250929"'::jsonb,
     'Default AI model for content extraction and generation (Claude 4.5 Sonnet)',
     NOW(),
     NOW()
@@ -25,7 +25,7 @@ ON CONFLICT (setting_key) DO UPDATE SET
 INSERT INTO ai_configuration (setting_key, setting_value, description, created_at, updated_at)
 VALUES (
     'lightweight_model',
-    'claude-haiku-4-5-20251001',
+    '"claude-haiku-4-5-20251001"'::jsonb,
     'Lightweight AI model for quick queries and NLP search (Claude Haiku 4.5)',
     NOW(),
     NOW()
