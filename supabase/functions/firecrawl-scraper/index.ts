@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -318,6 +318,119 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
   } 
  
   return null;
+}
+
+/**
+ * Generate SEO content for an event using the lightweight AI model (Haiku)
+ * This generates seo_title, seo_description, seo_keywords, seo_h1, and GEO content
+ */
+async function generateEventSEO(
+  eventId: string,
+  event: { title: string; venue?: string; location?: string; date?: string; category?: string },
+  supabaseClient: any,
+  claudeApiKey: string,
+  supabaseUrl: string,
+  supabaseKey: string
+): Promise<boolean> {
+  try {
+    console.log(`🔍 Generating SEO content for event: ${event.title}`);
+
+    const prompt = `Generate comprehensive SEO and GEO optimization content for this Des Moines event. Return ONLY a JSON object with these exact fields:
+
+{
+  "title": "SEO title (under 60 chars, include event name + Des Moines + date)",
+  "description": "Meta description (150-155 chars, compelling with local keywords)",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "h1": "H1 tag matching primary search intent",
+  "summary": "2-3 sentence GEO summary for AI engines, location-focused",
+  "keyFacts": ["Fact 1", "Fact 2", "Fact 3", "Fact 4"],
+  "faq": [
+    {"question": "When is ${event.title}?", "answer": "Answer with date and time"},
+    {"question": "Where is ${event.title} located?", "answer": "Answer with venue and Des Moines"},
+    {"question": "What type of event is ${event.title}?", "answer": "Answer with category"}
+  ]
+}
+
+Event Details:
+- Title: ${event.title}
+- Venue: ${event.venue || 'N/A'}
+- Location: ${event.location || 'Des Moines, IA'}
+- Date: ${event.date || 'N/A'}
+- Category: ${event.category || 'General'}
+
+Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
+
+    const config = await getAIConfig(supabaseUrl, supabaseKey);
+    const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
+    // Use lightweight model (Haiku) for SEO - fast and cost-effective
+    const requestBody = await buildLightweightClaudeRequest(
+      [{ role: 'user', content: prompt }],
+      {
+        supabaseUrl,
+        supabaseKey,
+        customMaxTokens: 1000,
+        customTemperature: 0.1
+      }
+    );
+
+    const claudeResponse = await fetch(config.api_endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!claudeResponse.ok) {
+      console.error(`❌ SEO generation API error: ${claudeResponse.status}`);
+      return false;
+    }
+
+    const claudeData = await claudeResponse.json();
+    const generatedContent = claudeData.content?.[0]?.text;
+
+    if (!generatedContent) {
+      console.error(`❌ No SEO content generated for: ${event.title}`);
+      return false;
+    }
+
+    // Parse the JSON response
+    let seoData;
+    try {
+      const jsonMatch = generatedContent.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No JSON found in response');
+      }
+      seoData = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.error(`❌ Failed to parse SEO response for: ${event.title}`, parseError);
+      return false;
+    }
+
+    // Update the event with SEO content
+    const { error: updateError } = await supabaseClient
+      .from('events')
+      .update({
+        seo_title: seoData.title,
+        seo_description: seoData.description,
+        seo_keywords: seoData.keywords,
+        seo_h1: seoData.h1,
+        geo_summary: seoData.summary,
+        geo_key_facts: seoData.keyFacts,
+        geo_faq: seoData.faq,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', eventId);
+
+    if (updateError) {
+      console.error(`❌ Failed to save SEO content for: ${event.title}`, updateError);
+      return false;
+    }
+
+    console.log(`✅ SEO content generated for: ${event.title}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error generating SEO for event: ${event.title}`, error);
+    return false;
+  }
 }
 
 serve(async (req) => {
@@ -1128,9 +1241,11 @@ Return empty array [] if no competitive content found.`
                 transformedData.created_at = new Date().toISOString();
               }
 
-              const { error: insertError } = await supabase
+              // For events, get the inserted ID for SEO generation
+              const { data: insertedData, error: insertError } = await supabase
                 .from(tableName)
-                .insert([transformedData]);
+                .insert([transformedData])
+                .select('id');
 
               if (insertError) {
                 console.error(`❌ Error inserting ${category} item:`, insertError);
@@ -1138,6 +1253,28 @@ Return empty array [] if no competitive content found.`
               } else {
                 insertedCount++;
                 console.log(`✅ Inserted new ${category}: ${transformedData.title || transformedData.name}`);
+
+                // Generate SEO content for newly inserted events using lightweight AI (Haiku)
+                if (category === 'events' && insertedData?.[0]?.id) {
+                  const claudeApiKey = Deno.env.get('CLAUDE_API');
+                  if (claudeApiKey) {
+                    // Run SEO generation asynchronously (don't wait, don't block)
+                    generateEventSEO(
+                      insertedData[0].id,
+                      {
+                        title: transformedData.title,
+                        venue: transformedData.venue,
+                        location: transformedData.location,
+                        date: transformedData.event_start_local,
+                        category: transformedData.category
+                      },
+                      supabase,
+                      claudeApiKey,
+                      supabaseUrl,
+                      supabaseKey
+                    ).catch(err => console.error(`SEO generation failed: ${err.message}`));
+                  }
+                }
               }
             }
           } catch (error) {
