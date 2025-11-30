@@ -1076,17 +1076,26 @@ Return empty array [] if no competitive content found.`
             if (existingItems.length > 0) {
               const existingItem = existingItems[0];
 
-              // For events: Update source_url if we have a better one (external URL or detail page vs list page)
+              // For events: Update source_url if we have a better one (external URL replacing catchdesmoines)
               if (category === 'events' && transformedData.source_url) {
                 const oldUrl = existingItem.source_url || '';
                 const newUrl = transformedData.source_url || '';
 
-                // Update if: old URL is a list page (/events/) OR new URL is external (not catchdesmoines.com)
+                // Skip if URLs are identical - no update needed
+                if (oldUrl === newUrl) {
+                  console.log(`⏭️ Duplicate found (same URL): ${transformedData.title}`);
+                  continue;
+                }
+
+                // Only update if:
+                // 1. Old URL is a catchdesmoines list page (/events/) and new is a detail page
+                // 2. Old URL contains catchdesmoines.com and new is external
+                const oldIsCatchDesMoines = oldUrl.includes('catchdesmoines.com');
                 const oldIsListPage = oldUrl.includes('/events/') || oldUrl.includes('/events?');
                 const newIsDetailPage = newUrl.includes('/event/') && !newUrl.includes('/events/');
                 const newIsExternal = newUrl && !newUrl.includes('catchdesmoines.com');
 
-                if ((oldIsListPage && newIsDetailPage) || newIsExternal) {
+                if ((oldIsListPage && newIsDetailPage) || (oldIsCatchDesMoines && newIsExternal)) {
                   console.log(`🔄 Updating source_url for: ${transformedData.title}`);
                   console.log(`   Old: ${oldUrl}`);
                   console.log(`   New: ${newUrl}`);
