@@ -81,8 +81,9 @@ export async function getAIConfig(
     console.error("Failed to fetch AI config, using fallback:", error);
 
     // Fallback to default values if database fetch fails
+    // Using Claude 4.5 Sonnet as the default model (most capable)
     const fallbackConfig: AIConfig = {
-      default_model: "claude-sonnet-4-20250514",
+      default_model: "claude-sonnet-4-5-20250929",
       lightweight_model: "claude-haiku-4-5-20251001",
       api_endpoint: "https://api.anthropic.com/v1/messages",
       max_tokens_standard: 2000,

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -422,25 +423,26 @@ TIMEZONE CONVERSION EXAMPLES:
 
 Only include actual events, not navigation items, headers, or generic text. If no events are found, return an empty array [].`;
 
+    // Use centralized AI configuration
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
+    const claudeHeaders = await getClaudeHeaders(claudeApiKey!, supabaseUrl, supabaseKey);
+    const claudeRequestBody = await buildClaudeRequest(
+      [{ role: "user", content: prompt }],
+      {
+        supabaseUrl,
+        supabaseKey,
+        customMaxTokens: 2000,
+      }
+    );
+
     const claudeResponse = await fetch(
-      "https://api.anthropic.com/v1/messages",
+      aiConfig.api_endpoint,
       {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-0",
-          max_tokens: 2000,
-          messages: [
-            {
-              role: "user",
-              content: prompt,
-            },
-          ],
-        }),
+        headers: claudeHeaders,
+        body: JSON.stringify(claudeRequestBody),
       }
     );
 
@@ -1620,25 +1622,22 @@ Format your response as JSON:
     try {
       console.log(`🔍 Using Claude for website structure analysis`);
 
+      // Use centralized AI configuration for structure analysis
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
+      const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
+      const requestBody = await buildClaudeRequest(
+        [{ role: "user", content: prompt }],
+        { supabaseUrl, supabaseKey, customMaxTokens: 1000 }
+      );
+
       const claudeResponse = await fetch(
-        "https://api.anthropic.com/v1/messages",
+        aiConfig.api_endpoint,
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": claudeApiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-0",
-            max_tokens: 1000,
-            messages: [
-              {
-                role: "user",
-                content: prompt,
-              },
-            ],
-          }),
+          headers,
+          body: JSON.stringify(requestBody),
         }
       );
 
@@ -1688,27 +1687,19 @@ async function enhanceEventWithAI(
   event: ScrapedEvent,
   claudeApiKey?: string
 ): Promise<ScrapedEvent> {
-  // Try Claude API
+  // Try Claude API with centralized configuration
   if (claudeApiKey) {
     try {
       console.log(`Attempting to enhance event ${event.title} with Claude API`);
 
-      const claudeResponse = await fetch(
-        "https://api.anthropic.com/v1/messages",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-api-key": claudeApiKey,
-            "anthropic-version": "2023-06-01",
-          },
-          body: JSON.stringify({
-            model: "claude-sonnet-4-0", // Updated to latest Claude Sonnet model
-            max_tokens: 200,
-            messages: [
-              {
-                role: "user",
-                content: `Enhance this event description to be more engaging and informative. Keep it under 150 words and maintain all key details:
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+      const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
+      const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
+      const requestBody = await buildClaudeRequest(
+        [{
+          role: "user",
+          content: `Enhance this event description to be more engaging and informative. Keep it under 150 words and maintain all key details:
 
 Event: ${event.title}
 Description: ${event.original_description}
@@ -1716,9 +1707,16 @@ Location: ${event.location}
 Category: ${event.category}
 
 Enhanced description:`,
-              },
-            ],
-          }),
+        }],
+        { supabaseUrl, supabaseKey, customMaxTokens: 200 }
+      );
+
+      const claudeResponse = await fetch(
+        aiConfig.api_endpoint,
+        {
+          method: "POST",
+          headers,
+          body: JSON.stringify(requestBody),
         }
       );
 

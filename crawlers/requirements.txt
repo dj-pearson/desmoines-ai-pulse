@@ -1,0 +1,17 @@
+# Crawl4AI - LLM-friendly web crawler
+crawl4ai>=0.7.7
+
+# HTTP client for Supabase
+httpx>=0.25.0
+
+# Supabase Python client
+supabase>=2.0.0
+
+# Date parsing
+python-dateutil>=2.8.2
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Anthropic Claude API
+anthropic>=0.39.0

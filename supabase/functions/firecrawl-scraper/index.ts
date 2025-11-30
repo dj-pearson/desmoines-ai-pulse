@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { parseISO } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -475,24 +476,23 @@ Return empty array [] if no competitive content found.`
 
       console.log(`🤖 Sending ${content.length} characters to Claude AI for ${currentUrl}`);
 
-      const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      // Use centralized AI configuration
+      const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
+      const claudeHeaders = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
+      const claudeRequestBody = await buildClaudeRequest(
+        [{ role: "user", content: selectedPrompt }],
+        {
+          supabaseUrl,
+          supabaseKey,
+          customMaxTokens: 6000,
+          customTemperature: 0.1,
+        }
+      );
+
+      const claudeResponse = await fetch(aiConfig.api_endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": claudeApiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "claude-3-5-sonnet-20241022",
-          max_tokens: 6000,
-          temperature: 0.1,
-          messages: [
-            {
-              role: "user",
-              content: selectedPrompt,
-            },
-          ],
-        }),
+        headers: claudeHeaders,
+        body: JSON.stringify(claudeRequestBody),
       });
 
       if (!claudeResponse.ok) {
