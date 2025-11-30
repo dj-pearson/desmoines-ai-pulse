@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -96,10 +96,11 @@ serve(async (req) => {
 
         const config = await getAIConfig(supabaseUrl, supabaseKey);
         const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
-        const requestBody = await buildClaudeRequest(
+        // Use lightweight model (Haiku) for SEO generation - faster and cheaper
+        const requestBody = await buildLightweightClaudeRequest(
           [{ role: 'user', content: prompt }],
-          { 
-            supabaseUrl, 
+          {
+            supabaseUrl,
             supabaseKey,
             customMaxTokens: 1000,
             customTemperature: 0.1

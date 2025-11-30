@@ -359,7 +359,7 @@ export function AIConfigurationManager() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {setting.setting_key === 'default_model' ? (
+                        {(setting.setting_key === 'default_model' || setting.setting_key === 'lightweight_model') ? (
                           <Select
                             value={getDisplayValue(setting.setting_key, setting.setting_value)}
                             onValueChange={(value) =>
@@ -403,17 +403,18 @@ export function AIConfigurationManager() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {setting.setting_key === 'default_model' && (
+                        {(setting.setting_key === 'default_model' || setting.setting_key === 'lightweight_model') && (
                           <Button
                             onClick={() =>
                               testAIModel(
-                                editedValues['default_model'] ?? getDisplayValue(setting.setting_key, setting.setting_value)
+                                editedValues[setting.setting_key] ?? getDisplayValue(setting.setting_key, setting.setting_value)
                               )
                             }
                             disabled={isTesting}
                             size="sm"
                             variant="outline"
                             className="mr-2"
+                            title={`Test ${setting.setting_key === 'lightweight_model' ? 'lightweight' : 'default'} model`}
                           >
                             <TestTube className="h-4 w-4" />
                           </Button>
@@ -449,9 +450,13 @@ export function AIConfigurationManager() {
                 <p className="font-medium text-amber-900 dark:text-amber-100 mb-1">
                   Model Configuration Guide
                 </p>
-                <p className="text-amber-800 dark:text-amber-200">
-                  Manage your AI model bank above. Add new models as they're released, test them individually, then select your default model in the settings below. All modules will use the configured default model. Current default: <strong>{currentModel}</strong>
+                <p className="text-amber-800 dark:text-amber-200 mb-2">
+                  Manage your AI model bank above. Add new models as they're released, test them individually, then select your models in the settings below.
                 </p>
+                <ul className="text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
+                  <li><strong>Default Model</strong>: Used for complex tasks like event extraction, article generation, and content crawling. Current: <strong>{currentModel}</strong></li>
+                  <li><strong>Lightweight Model</strong>: Used for fast, cost-effective tasks like SEO generation and NLP parsing. Current: <strong>{getSetting('lightweight_model', 'claude-haiku-4-5-20251001')}</strong></li>
+                </ul>
               </div>
             </div>
           </div>
