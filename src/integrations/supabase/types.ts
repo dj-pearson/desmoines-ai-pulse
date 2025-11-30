@@ -8653,6 +8653,7 @@ export type Database = {
         Args: { geom: unknown; move: number; wrap: number }
         Returns: unknown
       }
+      sync_oauth_user_role: { Args: { p_user_id: string }; Returns: string }
       toggle_discussion_like: {
         Args: { p_discussion_id: string }
         Returns: Json
