@@ -29,20 +29,18 @@ const EXCLUDED_DOMAINS = [
 
 /**
  * Check if a URL is a valid CatchDesMoines event detail page URL
- * Valid: /event/event-name/12345/
- * Invalid: /events/ (list page), /events/?filter=... (filtered list)
+ * Valid: /event/event-name/12345/ (must have numeric ID)
+ * Invalid: /events/ (list page), /event/event-name/ (missing ID)
  */
 function isValidEventDetailUrl(url: string): boolean {
   if (!url) return false;
 
   // Must contain /event/ (singular) not just /events/ (plural/list)
-  // Pattern: /event/slug/id/ where id is numeric
+  // Pattern: /event/slug/id/ where id is numeric - ID IS REQUIRED
+  // Without the numeric ID, CatchDesMoines shows a different page without "Visit Website"
   const eventDetailPattern = /\/event\/[^\/]+\/\d+\/?$/i;
 
-  // Also accept pattern without trailing ID: /event/slug/
-  const eventSlugPattern = /\/event\/[^\/]+\/?$/i;
-
-  return eventDetailPattern.test(url) || eventSlugPattern.test(url);
+  return eventDetailPattern.test(url);
 }
 
 /**
