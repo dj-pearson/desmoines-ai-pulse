@@ -48,48 +48,106 @@ function isValidEventDetailUrl(url: string): boolean {
 /**
  * Extract event detail URLs from HTML content as a fallback
  * when Claude doesn't properly extract detail_url
+ *
+ * Returns a Map with TWO types of keys for flexible matching:
+ * 1. Normalized title (lowercase, alphanumeric only)
+ * 2. URL slug (extracted from the event URL path)
  */
 function extractEventDetailUrlsFromHtml(html: string): Map<string, string> {
   const eventUrls = new Map<string, string>();
 
-  // Pattern to match event links with their titles
-  // CatchDesMoines typically has: <a href="/event/event-slug/12345/">Event Title</a>
-  const patterns = [
-    // Pattern 1: Standard event link
-    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*>([^<]+)<\/a>/gi,
-    // Pattern 2: Event link with nested elements (handles whitespace and icons)
-    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*>[\s\S]*?<[^>]*class[^>]*title[^>]*>([^<]+)<[\s\S]*?<\/a>/gi,
-    // Pattern 3: Data attribute based
-    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*data-[^>]*>[\s\S]*?([A-Z][^<]{5,100}?)[\s\S]*?<\/a>/gi,
-  ];
+  // Simple pattern: find all /event/slug/id/ URLs in the HTML
+  // This is more reliable than trying to extract titles
+  const urlPattern = /href=["']([^"']*\/event\/([^\/]+)\/(\d+)\/?["'])/gi;
 
-  for (const pattern of patterns) {
-    pattern.lastIndex = 0;
-    let match;
-    while ((match = pattern.exec(html)) !== null) {
-      const url = match[1]?.trim();
-      let title = match[2]?.trim();
+  let match;
+  while ((match = urlPattern.exec(html)) !== null) {
+    const fullUrl = match[1]?.replace(/["']$/, '').trim();
+    const slug = match[2];
+    const eventId = match[3];
 
-      if (!url || !title) continue;
-      if (!isValidEventDetailUrl(url)) continue;
+    if (!fullUrl || !slug || !eventId) continue;
+    if (!isValidEventDetailUrl(fullUrl)) continue;
 
-      // Clean up the title
-      title = title.replace(/\s+/g, ' ').trim();
+    // Normalize the slug for matching (remove special chars, decode URL encoding)
+    const normalizedSlug = decodeURIComponent(slug)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
 
-      // Skip if title is too short or looks like a button/action
-      if (title.length < 3 || title.length > 200) continue;
-      if (/^(view|read|more|click|here|details?)$/i.test(title)) continue;
-
-      // Store with normalized title as key for matching
-      const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (normalizedTitle.length > 2) {
-        eventUrls.set(normalizedTitle, url);
-        console.log(`📌 Found event URL from HTML: "${title}" -> ${url}`);
-      }
+    if (normalizedSlug.length > 2) {
+      // Store with slug as key (primary matching method)
+      eventUrls.set(`slug:${normalizedSlug}`, fullUrl);
+      // Also store the event ID for direct matching
+      eventUrls.set(`id:${eventId}`, fullUrl);
+      console.log(`📌 Found event URL from HTML: slug="${slug}" id=${eventId} -> ${fullUrl}`);
     }
   }
 
+  console.log(`📊 Extracted ${eventUrls.size / 2} unique event URLs from HTML`);
   return eventUrls;
+}
+
+/**
+ * Find the best matching event detail URL for a given event title
+ */
+function findEventDetailUrl(
+  eventTitle: string,
+  eventUrlsFromHtml: Map<string, string>,
+  allRawHtml: string
+): string | null {
+  if (!eventTitle) return null;
+
+  // Normalize the event title for matching
+  const normalizedTitle = eventTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Method 1: Try to match by URL slug similarity
+  // Event titles often match their URL slugs closely
+  for (const [key, url] of eventUrlsFromHtml) {
+    if (!key.startsWith('slug:')) continue;
+    const slug = key.replace('slug:', '');
+
+    // Check if slug contains most of the title words or vice versa
+    const titleWords = normalizedTitle.match(/.{3,}/g) || [];
+    const slugWords = slug.match(/.{3,}/g) || [];
+
+    // Calculate overlap
+    let matchingChars = 0;
+    for (let i = 0; i < Math.min(normalizedTitle.length, slug.length); i++) {
+      if (normalizedTitle[i] === slug[i]) matchingChars++;
+    }
+
+    // If first 10+ characters match, likely the same event
+    if (matchingChars >= 10 || (matchingChars >= 5 && matchingChars >= normalizedTitle.length * 0.5)) {
+      console.log(`✅ Matched by slug similarity: "${eventTitle}" -> ${url} (${matchingChars} chars match)`);
+      return url;
+    }
+
+    // Check if the slug is a significant substring of the title or vice versa
+    if (slug.length > 8 && normalizedTitle.includes(slug.substring(0, 8))) {
+      console.log(`✅ Matched by slug substring: "${eventTitle}" -> ${url}`);
+      return url;
+    }
+    if (normalizedTitle.length > 8 && slug.includes(normalizedTitle.substring(0, 8))) {
+      console.log(`✅ Matched by title substring: "${eventTitle}" -> ${url}`);
+      return url;
+    }
+  }
+
+  // Method 2: Search for the event title directly in the HTML and find nearby URLs
+  // Create a regex that searches for the title near an event URL
+  const escapedTitle = eventTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nearbyPattern = new RegExp(
+    `href=["']([^"']*\\/event\\/[^"']+)["'][^>]*>[^<]*${escapedTitle.substring(0, 20)}`,
+    'i'
+  );
+  const nearbyMatch = allRawHtml.match(nearbyPattern);
+  if (nearbyMatch && isValidEventDetailUrl(nearbyMatch[1])) {
+    console.log(`✅ Found URL near title in HTML: "${eventTitle}" -> ${nearbyMatch[1]}`);
+    return nearbyMatch[1];
+  }
+
+  console.log(`⚠️ No matching URL found for: "${eventTitle}"`);
+  return null;
 }
 
 /**
@@ -769,41 +827,11 @@ Return empty array [] if no competitive content found.`
           }
         }
 
-        // Source 2: Fallback - try to find URL from HTML extraction by matching title
+        // Source 2: Fallback - use smart matching to find URL from HTML
         if (!eventDetailUrl && eventTitle) {
-          const normalizedTitle = eventTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-          // Try exact match first
-          if (eventUrlsFromHtml.has(normalizedTitle)) {
-            const htmlUrl = eventUrlsFromHtml.get(normalizedTitle)!;
-            eventDetailUrl = htmlUrl.startsWith('http') ? htmlUrl : `https://www.catchdesmoines.com${htmlUrl}`;
-            console.log(`✅ Found URL from HTML (exact match): ${eventDetailUrl}`);
-          } else {
-            // Try partial match - find URLs containing parts of the title
-            for (const [htmlTitle, htmlUrl] of eventUrlsFromHtml) {
-              if (normalizedTitle.includes(htmlTitle) || htmlTitle.includes(normalizedTitle)) {
-                eventDetailUrl = htmlUrl.startsWith('http') ? htmlUrl : `https://www.catchdesmoines.com${htmlUrl}`;
-                console.log(`✅ Found URL from HTML (partial match): ${eventDetailUrl}`);
-                break;
-              }
-            }
-          }
-        }
-
-        // Source 3: Last resort - try to construct URL from event title slug
-        if (!eventDetailUrl && eventTitle) {
-          // Try searching the raw HTML for a URL containing the event title as a slug
-          const slugifiedTitle = eventTitle
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .substring(0, 50);
-
-          const urlPattern = new RegExp(`/event/${slugifiedTitle.substring(0, 20)}[^"']*/(\\d+)/`, 'i');
-          const slugMatch = allRawHtml.match(urlPattern);
-          if (slugMatch) {
-            eventDetailUrl = `https://www.catchdesmoines.com${slugMatch[0]}`;
-            console.log(`✅ Found URL from slug search: ${eventDetailUrl}`);
+          const foundUrl = findEventDetailUrl(eventTitle, eventUrlsFromHtml, allRawHtml);
+          if (foundUrl) {
+            eventDetailUrl = foundUrl.startsWith('http') ? foundUrl : `https://www.catchdesmoines.com${foundUrl}`;
           }
         }
 
