@@ -240,7 +240,14 @@ interface ScrapRequest {
   category: string;
   maxPages?: number; // Optional parameter for pagination
   scraperBackend?: 'browserless' | 'puppeteer' | 'playwright' | 'firecrawl' | 'fetch'; // Allow backend override
+  // Batching parameters for processing events in smaller chunks
+  batchSize?: number; // Max events to process per request (default: 5)
+  skipEvents?: number; // Number of events to skip (for pagination through large result sets)
+  skipVisitWebsite?: boolean; // Skip fetching Visit Website URLs (faster, uses catchdesmoines URLs)
 }
+
+// Default batch size - keep small to avoid timeouts
+const DEFAULT_BATCH_SIZE = 5;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -329,7 +336,17 @@ serve(async (req) => {
       });
     }
 
-    const { url, category, maxPages = 3, scraperBackend }: ScrapRequest = await req.json();
+    const {
+      url,
+      category,
+      maxPages = 3,
+      scraperBackend,
+      batchSize = DEFAULT_BATCH_SIZE,
+      skipEvents = 0,
+      skipVisitWebsite = false
+    }: ScrapRequest = await req.json();
+
+    console.log(`📦 Batch settings: size=${batchSize}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
 
     if (!url || !category) {
       return new Response(
@@ -785,84 +802,132 @@ Return empty array [] if no competitive content found.`
 
     console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
 
+    // Track batch processing info for response
+    let batchInfo = {
+      totalEvents: filteredItems.length,
+      processedStart: 0,
+      processedEnd: 0,
+      remainingEvents: 0,
+      visitWebsiteExtracted: 0,
+      skippedVisitWebsite: skipVisitWebsite,
+    };
+
     // CRITICAL: For CatchDesMoines events, fetch each event's detail page to get the REAL source URL
     // The "Visit Website" URL is the external link to the actual event organizer's site
     if (category === 'events' && url.includes('catchdesmoines.com') && filteredItems.length > 0) {
-      console.log(`🔗 Fetching Visit Website URLs for ${filteredItems.length} CatchDesMoines events...`);
+      // Apply skip and batch size to limit processing
+      const startIndex = Math.min(skipEvents, filteredItems.length);
+      const endIndex = Math.min(startIndex + batchSize, filteredItems.length);
+      const eventsToProcess = filteredItems.slice(startIndex, endIndex);
 
-      // Build a map of event URLs extracted directly from the HTML content
-      // This is more reliable than Claude's extraction
-      let eventUrlsFromHtml = new Map<string, string>();
+      batchInfo.processedStart = startIndex;
+      batchInfo.processedEnd = endIndex;
+      batchInfo.remainingEvents = filteredItems.length - endIndex;
 
-      // Combine all raw HTML from scrape results for fallback URL extraction
-      const allRawHtml = scrapeResults
-        .filter(r => r.success && r.html)
-        .map(r => r.html)
-        .join('\n');
+      console.log(`📦 BATCHING: Processing events ${startIndex + 1} to ${endIndex} of ${filteredItems.length} (batch size: ${batchSize})`);
 
-      if (allRawHtml.length > 0) {
-        console.log(`📄 Extracting event URLs from ${allRawHtml.length} chars of raw HTML...`);
-        eventUrlsFromHtml = extractEventDetailUrlsFromHtml(allRawHtml);
-        console.log(`📌 Found ${eventUrlsFromHtml.size} event detail URLs from HTML`);
+      if (skipVisitWebsite) {
+        // Fast mode: Skip Visit Website extraction, use CatchDesMoines URLs
+        console.log(`⚡ Fast mode: Skipping Visit Website extraction`);
+        for (let i = startIndex; i < endIndex; i++) {
+          const item = filteredItems[i];
+          // Just use the catchdesmoines event URL as source
+          if (!item.source_url || item.source_url.includes('/events/')) {
+            item.source_url = url; // Use the list page URL as fallback
+          }
+        }
+      } else {
+        // Full mode: Extract Visit Website URLs from detail pages
+        console.log(`🔗 Fetching Visit Website URLs for ${eventsToProcess.length} events (batch ${startIndex + 1}-${endIndex})...`);
+
+        // Build a map of event URLs extracted directly from the HTML content
+        let eventUrlsFromHtml = new Map<string, string>();
+
+        // Combine all raw HTML from scrape results for fallback URL extraction
+        const allRawHtml = scrapeResults
+          .filter(r => r.success && r.html)
+          .map(r => r.html)
+          .join('\n');
+
+        if (allRawHtml.length > 0) {
+          console.log(`📄 Extracting event URLs from ${allRawHtml.length} chars of raw HTML...`);
+          eventUrlsFromHtml = extractEventDetailUrlsFromHtml(allRawHtml);
+          console.log(`📌 Found ${eventUrlsFromHtml.size} event detail URLs from HTML`);
+        }
+
+        // Process only the events in this batch
+        for (let i = startIndex; i < endIndex; i++) {
+          const item = filteredItems[i];
+          const eventTitle = item.title || '';
+          const batchPosition = i - startIndex + 1;
+          const totalInBatch = endIndex - startIndex;
+
+          // Try to build the event detail URL from multiple sources
+          let eventDetailUrl: string | null = null;
+
+          // Source 1: Check if Claude extracted a valid detail_url
+          if (item.detail_url) {
+            let candidateUrl = item.detail_url;
+            if (candidateUrl.startsWith('/')) {
+              candidateUrl = `https://www.catchdesmoines.com${candidateUrl}`;
+            }
+            if (isValidEventDetailUrl(candidateUrl)) {
+              eventDetailUrl = candidateUrl;
+              console.log(`✅ Claude provided valid detail_url: ${eventDetailUrl}`);
+            } else {
+              console.log(`⚠️ Claude's detail_url is invalid (list page?): ${item.detail_url}`);
+            }
+          }
+
+          // Source 2: Fallback - use smart matching to find URL from HTML
+          if (!eventDetailUrl && eventTitle) {
+            const foundUrl = findEventDetailUrl(eventTitle, eventUrlsFromHtml, allRawHtml);
+            if (foundUrl) {
+              eventDetailUrl = foundUrl.startsWith('http') ? foundUrl : `https://www.catchdesmoines.com${foundUrl}`;
+            }
+          }
+
+          // Now fetch the Visit Website URL from the event detail page
+          if (eventDetailUrl && isValidEventDetailUrl(eventDetailUrl)) {
+            console.log(`📄 [${batchPosition}/${totalInBatch}] Fetching Visit Website for: ${eventTitle}`);
+
+            // Fetch the Visit Website URL from the event detail page
+            const visitWebsiteUrl = await extractVisitWebsiteUrl(eventDetailUrl);
+
+            if (visitWebsiteUrl) {
+              // Use the Visit Website URL as the source_url (the REAL event URL)
+              filteredItems[i].source_url = visitWebsiteUrl;
+              batchInfo.visitWebsiteExtracted++;
+              console.log(`✅ Set source_url to external site: ${visitWebsiteUrl}`);
+            } else {
+              // Fallback to the event detail page URL (still better than the list page)
+              filteredItems[i].source_url = eventDetailUrl;
+              console.log(`⚠️ No Visit Website found, using detail page: ${eventDetailUrl}`);
+            }
+
+            // Rate limit: wait between requests to avoid overwhelming the server
+            if (batchPosition < totalInBatch) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
+          } else {
+            console.log(`⚠️ [${batchPosition}/${totalInBatch}] Could not find valid detail URL for: ${eventTitle}`);
+            // Keep whatever source_url Claude may have extracted, or it will default to the list page URL
+          }
+        }
+
+        console.log(`✅ Batch complete: Extracted ${batchInfo.visitWebsiteExtracted} Visit Website URLs`);
       }
 
-      for (let i = 0; i < filteredItems.length; i++) {
-        const item = filteredItems[i];
-        const eventTitle = item.title || '';
-
-        // Try to build the event detail URL from multiple sources
-        let eventDetailUrl: string | null = null;
-
-        // Source 1: Check if Claude extracted a valid detail_url
-        if (item.detail_url) {
-          let candidateUrl = item.detail_url;
-          if (candidateUrl.startsWith('/')) {
-            candidateUrl = `https://www.catchdesmoines.com${candidateUrl}`;
-          }
-          if (isValidEventDetailUrl(candidateUrl)) {
-            eventDetailUrl = candidateUrl;
-            console.log(`✅ Claude provided valid detail_url: ${eventDetailUrl}`);
-          } else {
-            console.log(`⚠️ Claude's detail_url is invalid (list page?): ${item.detail_url}`);
-          }
-        }
-
-        // Source 2: Fallback - use smart matching to find URL from HTML
-        if (!eventDetailUrl && eventTitle) {
-          const foundUrl = findEventDetailUrl(eventTitle, eventUrlsFromHtml, allRawHtml);
-          if (foundUrl) {
-            eventDetailUrl = foundUrl.startsWith('http') ? foundUrl : `https://www.catchdesmoines.com${foundUrl}`;
-          }
-        }
-
-        // Now fetch the Visit Website URL from the event detail page
-        if (eventDetailUrl && isValidEventDetailUrl(eventDetailUrl)) {
-          console.log(`📄 [${i + 1}/${filteredItems.length}] Fetching Visit Website for: ${eventTitle}`);
-
-          // Fetch the Visit Website URL from the event detail page
-          const visitWebsiteUrl = await extractVisitWebsiteUrl(eventDetailUrl);
-
-          if (visitWebsiteUrl) {
-            // Use the Visit Website URL as the source_url (the REAL event URL)
-            filteredItems[i].source_url = visitWebsiteUrl;
-            console.log(`✅ Set source_url to external site: ${visitWebsiteUrl}`);
-          } else {
-            // Fallback to the event detail page URL (still better than the list page)
-            filteredItems[i].source_url = eventDetailUrl;
-            console.log(`⚠️ No Visit Website found, using detail page: ${eventDetailUrl}`);
-          }
-
-          // Rate limit: wait between requests to avoid overwhelming the server
-          if (i < filteredItems.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        } else {
-          console.log(`⚠️ [${i + 1}/${filteredItems.length}] Could not find valid detail URL for: ${eventTitle}`);
-          // Keep whatever source_url Claude may have extracted, or it will default to the list page URL
-        }
+      // Only process the batched events for database insertion
+      // This prevents re-inserting already processed events on subsequent batches
+      if (skipEvents > 0) {
+        console.log(`📦 Adjusting filteredItems to only include this batch (${eventsToProcess.length} events)`);
+        filteredItems = eventsToProcess;
       }
 
-      console.log(`✅ Finished fetching Visit Website URLs`);
+      if (batchInfo.remainingEvents > 0) {
+        console.log(`⏭️ ${batchInfo.remainingEvents} events remaining. Call again with skipEvents=${endIndex} to continue.`);
+      }
     }
 
     // Get appropriate table name and process items
@@ -1045,11 +1110,23 @@ Return empty array [] if no competitive content found.`
     const result = {
       success: true,
       totalFound: allExtractedItems.length,
-      futureEvents: filteredItems.length,
+      futureEvents: batchInfo.totalEvents,
       inserted: insertedCount,
       updated: updatedCount,
       errors: errors.length,
-      url: url
+      url: url,
+      // Batch processing info
+      batch: {
+        size: batchSize,
+        processedStart: batchInfo.processedStart,
+        processedEnd: batchInfo.processedEnd,
+        processedCount: batchInfo.processedEnd - batchInfo.processedStart,
+        remainingEvents: batchInfo.remainingEvents,
+        visitWebsiteExtracted: batchInfo.visitWebsiteExtracted,
+        skippedVisitWebsite: batchInfo.skippedVisitWebsite,
+        // Helper for next batch call
+        nextSkipEvents: batchInfo.remainingEvents > 0 ? batchInfo.processedEnd : null,
+      }
     };
 
     console.log(`✅ Scrape completed: ${JSON.stringify(result)}`);
