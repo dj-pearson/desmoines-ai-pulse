@@ -48,48 +48,106 @@ function isValidEventDetailUrl(url: string): boolean {
 /**
  * Extract event detail URLs from HTML content as a fallback
  * when Claude doesn't properly extract detail_url
+ *
+ * Returns a Map with TWO types of keys for flexible matching:
+ * 1. Normalized title (lowercase, alphanumeric only)
+ * 2. URL slug (extracted from the event URL path)
  */
 function extractEventDetailUrlsFromHtml(html: string): Map<string, string> {
   const eventUrls = new Map<string, string>();
 
-  // Pattern to match event links with their titles
-  // CatchDesMoines typically has: <a href="/event/event-slug/12345/">Event Title</a>
-  const patterns = [
-    // Pattern 1: Standard event link
-    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*>([^<]+)<\/a>/gi,
-    // Pattern 2: Event link with nested elements (handles whitespace and icons)
-    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*>[\s\S]*?<[^>]*class[^>]*title[^>]*>([^<]+)<[\s\S]*?<\/a>/gi,
-    // Pattern 3: Data attribute based
-    /<a[^>]*href=["']([^"']*\/event\/[^"']+)["'][^>]*data-[^>]*>[\s\S]*?([A-Z][^<]{5,100}?)[\s\S]*?<\/a>/gi,
-  ];
+  // Simple pattern: find all /event/slug/id/ URLs in the HTML
+  // This is more reliable than trying to extract titles
+  const urlPattern = /href=["']([^"']*\/event\/([^\/]+)\/(\d+)\/?["'])/gi;
 
-  for (const pattern of patterns) {
-    pattern.lastIndex = 0;
-    let match;
-    while ((match = pattern.exec(html)) !== null) {
-      const url = match[1]?.trim();
-      let title = match[2]?.trim();
+  let match;
+  while ((match = urlPattern.exec(html)) !== null) {
+    const fullUrl = match[1]?.replace(/["']$/, '').trim();
+    const slug = match[2];
+    const eventId = match[3];
 
-      if (!url || !title) continue;
-      if (!isValidEventDetailUrl(url)) continue;
+    if (!fullUrl || !slug || !eventId) continue;
+    if (!isValidEventDetailUrl(fullUrl)) continue;
 
-      // Clean up the title
-      title = title.replace(/\s+/g, ' ').trim();
+    // Normalize the slug for matching (remove special chars, decode URL encoding)
+    const normalizedSlug = decodeURIComponent(slug)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
 
-      // Skip if title is too short or looks like a button/action
-      if (title.length < 3 || title.length > 200) continue;
-      if (/^(view|read|more|click|here|details?)$/i.test(title)) continue;
-
-      // Store with normalized title as key for matching
-      const normalizedTitle = title.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (normalizedTitle.length > 2) {
-        eventUrls.set(normalizedTitle, url);
-        console.log(`📌 Found event URL from HTML: "${title}" -> ${url}`);
-      }
+    if (normalizedSlug.length > 2) {
+      // Store with slug as key (primary matching method)
+      eventUrls.set(`slug:${normalizedSlug}`, fullUrl);
+      // Also store the event ID for direct matching
+      eventUrls.set(`id:${eventId}`, fullUrl);
+      console.log(`📌 Found event URL from HTML: slug="${slug}" id=${eventId} -> ${fullUrl}`);
     }
   }
 
+  console.log(`📊 Extracted ${eventUrls.size / 2} unique event URLs from HTML`);
   return eventUrls;
+}
+
+/**
+ * Find the best matching event detail URL for a given event title
+ */
+function findEventDetailUrl(
+  eventTitle: string,
+  eventUrlsFromHtml: Map<string, string>,
+  allRawHtml: string
+): string | null {
+  if (!eventTitle) return null;
+
+  // Normalize the event title for matching
+  const normalizedTitle = eventTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Method 1: Try to match by URL slug similarity
+  // Event titles often match their URL slugs closely
+  for (const [key, url] of eventUrlsFromHtml) {
+    if (!key.startsWith('slug:')) continue;
+    const slug = key.replace('slug:', '');
+
+    // Check if slug contains most of the title words or vice versa
+    const titleWords = normalizedTitle.match(/.{3,}/g) || [];
+    const slugWords = slug.match(/.{3,}/g) || [];
+
+    // Calculate overlap
+    let matchingChars = 0;
+    for (let i = 0; i < Math.min(normalizedTitle.length, slug.length); i++) {
+      if (normalizedTitle[i] === slug[i]) matchingChars++;
+    }
+
+    // If first 10+ characters match, likely the same event
+    if (matchingChars >= 10 || (matchingChars >= 5 && matchingChars >= normalizedTitle.length * 0.5)) {
+      console.log(`✅ Matched by slug similarity: "${eventTitle}" -> ${url} (${matchingChars} chars match)`);
+      return url;
+    }
+
+    // Check if the slug is a significant substring of the title or vice versa
+    if (slug.length > 8 && normalizedTitle.includes(slug.substring(0, 8))) {
+      console.log(`✅ Matched by slug substring: "${eventTitle}" -> ${url}`);
+      return url;
+    }
+    if (normalizedTitle.length > 8 && slug.includes(normalizedTitle.substring(0, 8))) {
+      console.log(`✅ Matched by title substring: "${eventTitle}" -> ${url}`);
+      return url;
+    }
+  }
+
+  // Method 2: Search for the event title directly in the HTML and find nearby URLs
+  // Create a regex that searches for the title near an event URL
+  const escapedTitle = eventTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nearbyPattern = new RegExp(
+    `href=["']([^"']*\\/event\\/[^"']+)["'][^>]*>[^<]*${escapedTitle.substring(0, 20)}`,
+    'i'
+  );
+  const nearbyMatch = allRawHtml.match(nearbyPattern);
+  if (nearbyMatch && isValidEventDetailUrl(nearbyMatch[1])) {
+    console.log(`✅ Found URL near title in HTML: "${eventTitle}" -> ${nearbyMatch[1]}`);
+    return nearbyMatch[1];
+  }
+
+  console.log(`⚠️ No matching URL found for: "${eventTitle}"`);
+  return null;
 }
 
 /**
@@ -182,7 +240,14 @@ interface ScrapRequest {
   category: string;
   maxPages?: number; // Optional parameter for pagination
   scraperBackend?: 'browserless' | 'puppeteer' | 'playwright' | 'firecrawl' | 'fetch'; // Allow backend override
+  // Batching parameters for processing events in smaller chunks
+  batchSize?: number; // Max events to process per request (default: 5)
+  skipEvents?: number; // Number of events to skip (for pagination through large result sets)
+  skipVisitWebsite?: boolean; // Skip fetching Visit Website URLs (faster, uses catchdesmoines URLs)
 }
+
+// Default batch size - keep small to avoid timeouts
+const DEFAULT_BATCH_SIZE = 5;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -271,7 +336,17 @@ serve(async (req) => {
       });
     }
 
-    const { url, category, maxPages = 3, scraperBackend }: ScrapRequest = await req.json();
+    const {
+      url,
+      category,
+      maxPages = 3,
+      scraperBackend,
+      batchSize = DEFAULT_BATCH_SIZE,
+      skipEvents = 0,
+      skipVisitWebsite = false
+    }: ScrapRequest = await req.json();
+
+    console.log(`📦 Batch settings: size=${batchSize}, skip=${skipEvents}, skipVisitWebsite=${skipVisitWebsite}`);
 
     if (!url || !category) {
       return new Response(
@@ -727,114 +802,132 @@ Return empty array [] if no competitive content found.`
 
     console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
 
+    // Track batch processing info for response
+    let batchInfo = {
+      totalEvents: filteredItems.length,
+      processedStart: 0,
+      processedEnd: 0,
+      remainingEvents: 0,
+      visitWebsiteExtracted: 0,
+      skippedVisitWebsite: skipVisitWebsite,
+    };
+
     // CRITICAL: For CatchDesMoines events, fetch each event's detail page to get the REAL source URL
     // The "Visit Website" URL is the external link to the actual event organizer's site
     if (category === 'events' && url.includes('catchdesmoines.com') && filteredItems.length > 0) {
-      console.log(`🔗 Fetching Visit Website URLs for ${filteredItems.length} CatchDesMoines events...`);
+      // Apply skip and batch size to limit processing
+      const startIndex = Math.min(skipEvents, filteredItems.length);
+      const endIndex = Math.min(startIndex + batchSize, filteredItems.length);
+      const eventsToProcess = filteredItems.slice(startIndex, endIndex);
 
-      // Build a map of event URLs extracted directly from the HTML content
-      // This is more reliable than Claude's extraction
-      let eventUrlsFromHtml = new Map<string, string>();
+      batchInfo.processedStart = startIndex;
+      batchInfo.processedEnd = endIndex;
+      batchInfo.remainingEvents = filteredItems.length - endIndex;
 
-      // Combine all raw HTML from scrape results for fallback URL extraction
-      const allRawHtml = scrapeResults
-        .filter(r => r.success && r.html)
-        .map(r => r.html)
-        .join('\n');
+      console.log(`📦 BATCHING: Processing events ${startIndex + 1} to ${endIndex} of ${filteredItems.length} (batch size: ${batchSize})`);
 
-      if (allRawHtml.length > 0) {
-        console.log(`📄 Extracting event URLs from ${allRawHtml.length} chars of raw HTML...`);
-        eventUrlsFromHtml = extractEventDetailUrlsFromHtml(allRawHtml);
-        console.log(`📌 Found ${eventUrlsFromHtml.size} event detail URLs from HTML`);
-      }
-
-      for (let i = 0; i < filteredItems.length; i++) {
-        const item = filteredItems[i];
-        const eventTitle = item.title || '';
-
-        // Try to build the event detail URL from multiple sources
-        let eventDetailUrl: string | null = null;
-
-        // Source 1: Check if Claude extracted a valid detail_url
-        if (item.detail_url) {
-          let candidateUrl = item.detail_url;
-          if (candidateUrl.startsWith('/')) {
-            candidateUrl = `https://www.catchdesmoines.com${candidateUrl}`;
-          }
-          if (isValidEventDetailUrl(candidateUrl)) {
-            eventDetailUrl = candidateUrl;
-            console.log(`✅ Claude provided valid detail_url: ${eventDetailUrl}`);
-          } else {
-            console.log(`⚠️ Claude's detail_url is invalid (list page?): ${item.detail_url}`);
+      if (skipVisitWebsite) {
+        // Fast mode: Skip Visit Website extraction, use CatchDesMoines URLs
+        console.log(`⚡ Fast mode: Skipping Visit Website extraction`);
+        for (let i = startIndex; i < endIndex; i++) {
+          const item = filteredItems[i];
+          // Just use the catchdesmoines event URL as source
+          if (!item.source_url || item.source_url.includes('/events/')) {
+            item.source_url = url; // Use the list page URL as fallback
           }
         }
+      } else {
+        // Full mode: Extract Visit Website URLs from detail pages
+        console.log(`🔗 Fetching Visit Website URLs for ${eventsToProcess.length} events (batch ${startIndex + 1}-${endIndex})...`);
 
-        // Source 2: Fallback - try to find URL from HTML extraction by matching title
-        if (!eventDetailUrl && eventTitle) {
-          const normalizedTitle = eventTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+        // Build a map of event URLs extracted directly from the HTML content
+        let eventUrlsFromHtml = new Map<string, string>();
 
-          // Try exact match first
-          if (eventUrlsFromHtml.has(normalizedTitle)) {
-            const htmlUrl = eventUrlsFromHtml.get(normalizedTitle)!;
-            eventDetailUrl = htmlUrl.startsWith('http') ? htmlUrl : `https://www.catchdesmoines.com${htmlUrl}`;
-            console.log(`✅ Found URL from HTML (exact match): ${eventDetailUrl}`);
-          } else {
-            // Try partial match - find URLs containing parts of the title
-            for (const [htmlTitle, htmlUrl] of eventUrlsFromHtml) {
-              if (normalizedTitle.includes(htmlTitle) || htmlTitle.includes(normalizedTitle)) {
-                eventDetailUrl = htmlUrl.startsWith('http') ? htmlUrl : `https://www.catchdesmoines.com${htmlUrl}`;
-                console.log(`✅ Found URL from HTML (partial match): ${eventDetailUrl}`);
-                break;
-              }
+        // Combine all raw HTML from scrape results for fallback URL extraction
+        const allRawHtml = scrapeResults
+          .filter(r => r.success && r.html)
+          .map(r => r.html)
+          .join('\n');
+
+        if (allRawHtml.length > 0) {
+          console.log(`📄 Extracting event URLs from ${allRawHtml.length} chars of raw HTML...`);
+          eventUrlsFromHtml = extractEventDetailUrlsFromHtml(allRawHtml);
+          console.log(`📌 Found ${eventUrlsFromHtml.size} event detail URLs from HTML`);
+        }
+
+        // Process only the events in this batch
+        for (let i = startIndex; i < endIndex; i++) {
+          const item = filteredItems[i];
+          const eventTitle = item.title || '';
+          const batchPosition = i - startIndex + 1;
+          const totalInBatch = endIndex - startIndex;
+
+          // Try to build the event detail URL from multiple sources
+          let eventDetailUrl: string | null = null;
+
+          // Source 1: Check if Claude extracted a valid detail_url
+          if (item.detail_url) {
+            let candidateUrl = item.detail_url;
+            if (candidateUrl.startsWith('/')) {
+              candidateUrl = `https://www.catchdesmoines.com${candidateUrl}`;
+            }
+            if (isValidEventDetailUrl(candidateUrl)) {
+              eventDetailUrl = candidateUrl;
+              console.log(`✅ Claude provided valid detail_url: ${eventDetailUrl}`);
+            } else {
+              console.log(`⚠️ Claude's detail_url is invalid (list page?): ${item.detail_url}`);
             }
           }
-        }
 
-        // Source 3: Last resort - try to construct URL from event title slug
-        if (!eventDetailUrl && eventTitle) {
-          // Try searching the raw HTML for a URL containing the event title as a slug
-          const slugifiedTitle = eventTitle
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, '')
-            .replace(/\s+/g, '-')
-            .substring(0, 50);
-
-          const urlPattern = new RegExp(`/event/${slugifiedTitle.substring(0, 20)}[^"']*/(\\d+)/`, 'i');
-          const slugMatch = allRawHtml.match(urlPattern);
-          if (slugMatch) {
-            eventDetailUrl = `https://www.catchdesmoines.com${slugMatch[0]}`;
-            console.log(`✅ Found URL from slug search: ${eventDetailUrl}`);
+          // Source 2: Fallback - use smart matching to find URL from HTML
+          if (!eventDetailUrl && eventTitle) {
+            const foundUrl = findEventDetailUrl(eventTitle, eventUrlsFromHtml, allRawHtml);
+            if (foundUrl) {
+              eventDetailUrl = foundUrl.startsWith('http') ? foundUrl : `https://www.catchdesmoines.com${foundUrl}`;
+            }
           }
-        }
 
-        // Now fetch the Visit Website URL from the event detail page
-        if (eventDetailUrl && isValidEventDetailUrl(eventDetailUrl)) {
-          console.log(`📄 [${i + 1}/${filteredItems.length}] Fetching Visit Website for: ${eventTitle}`);
+          // Now fetch the Visit Website URL from the event detail page
+          if (eventDetailUrl && isValidEventDetailUrl(eventDetailUrl)) {
+            console.log(`📄 [${batchPosition}/${totalInBatch}] Fetching Visit Website for: ${eventTitle}`);
 
-          // Fetch the Visit Website URL from the event detail page
-          const visitWebsiteUrl = await extractVisitWebsiteUrl(eventDetailUrl);
+            // Fetch the Visit Website URL from the event detail page
+            const visitWebsiteUrl = await extractVisitWebsiteUrl(eventDetailUrl);
 
-          if (visitWebsiteUrl) {
-            // Use the Visit Website URL as the source_url (the REAL event URL)
-            filteredItems[i].source_url = visitWebsiteUrl;
-            console.log(`✅ Set source_url to external site: ${visitWebsiteUrl}`);
+            if (visitWebsiteUrl) {
+              // Use the Visit Website URL as the source_url (the REAL event URL)
+              filteredItems[i].source_url = visitWebsiteUrl;
+              batchInfo.visitWebsiteExtracted++;
+              console.log(`✅ Set source_url to external site: ${visitWebsiteUrl}`);
+            } else {
+              // Fallback to the event detail page URL (still better than the list page)
+              filteredItems[i].source_url = eventDetailUrl;
+              console.log(`⚠️ No Visit Website found, using detail page: ${eventDetailUrl}`);
+            }
+
+            // Rate limit: wait between requests to avoid overwhelming the server
+            if (batchPosition < totalInBatch) {
+              await new Promise(resolve => setTimeout(resolve, 500));
+            }
           } else {
-            // Fallback to the event detail page URL (still better than the list page)
-            filteredItems[i].source_url = eventDetailUrl;
-            console.log(`⚠️ No Visit Website found, using detail page: ${eventDetailUrl}`);
+            console.log(`⚠️ [${batchPosition}/${totalInBatch}] Could not find valid detail URL for: ${eventTitle}`);
+            // Keep whatever source_url Claude may have extracted, or it will default to the list page URL
           }
-
-          // Rate limit: wait between requests to avoid overwhelming the server
-          if (i < filteredItems.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-          }
-        } else {
-          console.log(`⚠️ [${i + 1}/${filteredItems.length}] Could not find valid detail URL for: ${eventTitle}`);
-          // Keep whatever source_url Claude may have extracted, or it will default to the list page URL
         }
+
+        console.log(`✅ Batch complete: Extracted ${batchInfo.visitWebsiteExtracted} Visit Website URLs`);
       }
 
-      console.log(`✅ Finished fetching Visit Website URLs`);
+      // Only process the batched events for database insertion
+      // This prevents re-inserting already processed events on subsequent batches
+      if (skipEvents > 0) {
+        console.log(`📦 Adjusting filteredItems to only include this batch (${eventsToProcess.length} events)`);
+        filteredItems = eventsToProcess;
+      }
+
+      if (batchInfo.remainingEvents > 0) {
+        console.log(`⏭️ ${batchInfo.remainingEvents} events remaining. Call again with skipEvents=${endIndex} to continue.`);
+      }
     }
 
     // Get appropriate table name and process items
@@ -1017,11 +1110,23 @@ Return empty array [] if no competitive content found.`
     const result = {
       success: true,
       totalFound: allExtractedItems.length,
-      futureEvents: filteredItems.length,
+      futureEvents: batchInfo.totalEvents,
       inserted: insertedCount,
       updated: updatedCount,
       errors: errors.length,
-      url: url
+      url: url,
+      // Batch processing info
+      batch: {
+        size: batchSize,
+        processedStart: batchInfo.processedStart,
+        processedEnd: batchInfo.processedEnd,
+        processedCount: batchInfo.processedEnd - batchInfo.processedStart,
+        remainingEvents: batchInfo.remainingEvents,
+        visitWebsiteExtracted: batchInfo.visitWebsiteExtracted,
+        skippedVisitWebsite: batchInfo.skippedVisitWebsite,
+        // Helper for next batch call
+        nextSkipEvents: batchInfo.remainingEvents > 0 ? batchInfo.processedEnd : null,
+      }
     };
 
     console.log(`✅ Scrape completed: ${JSON.stringify(result)}`);
