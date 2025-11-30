@@ -1076,8 +1076,44 @@ Return empty array [] if no competitive content found.`
             }
 
             if (existingItems.length > 0) {
-              console.log(`⚠️ Duplicate found: ${transformedData.title || transformedData.name}`);
-              // Could implement update logic here if needed
+              const existingItem = existingItems[0];
+
+              // For events: Update source_url if we have a better one (external URL or detail page vs list page)
+              if (category === 'events' && transformedData.source_url) {
+                const oldUrl = existingItem.source_url || '';
+                const newUrl = transformedData.source_url || '';
+
+                // Update if: old URL is a list page (/events/) OR new URL is external (not catchdesmoines.com)
+                const oldIsListPage = oldUrl.includes('/events/') || oldUrl.includes('/events?');
+                const newIsDetailPage = newUrl.includes('/event/') && !newUrl.includes('/events/');
+                const newIsExternal = newUrl && !newUrl.includes('catchdesmoines.com');
+
+                if ((oldIsListPage && newIsDetailPage) || newIsExternal) {
+                  console.log(`🔄 Updating source_url for: ${transformedData.title}`);
+                  console.log(`   Old: ${oldUrl}`);
+                  console.log(`   New: ${newUrl}`);
+
+                  const { error: updateError } = await supabase
+                    .from(tableName)
+                    .update({
+                      source_url: newUrl,
+                      updated_at: new Date().toISOString()
+                    })
+                    .eq('id', existingItem.id);
+
+                  if (updateError) {
+                    console.error(`❌ Error updating source_url:`, updateError);
+                    errors.push(updateError);
+                  } else {
+                    updatedCount++;
+                    console.log(`✅ Updated source_url for: ${transformedData.title}`);
+                  }
+                } else {
+                  console.log(`⚠️ Duplicate found (no update needed): ${transformedData.title}`);
+                }
+              } else {
+                console.log(`⚠️ Duplicate found: ${transformedData.title || transformedData.name}`);
+              }
             } else {
               // Insert new item
               if (category === 'events') {
