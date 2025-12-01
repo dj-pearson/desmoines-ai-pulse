@@ -13,75 +13,7 @@ interface ExtractResponse {
   processed: number;
   errors: Array<{ eventId: string; error: string }>;
   updated: Array<{ eventId: string; oldUrl: string; newUrl: string }>;
-}
-
-/**
- * Parse event date/time string and convert from Central Time to UTC
- * Uses proper timezone offset detection for CST/CDT
- */
-function parseEventDateTime(dateStr: string, timeStr?: string): Date | null {
-  try {
-    console.log("Parsing datetime:", { dateStr, timeStr });
-
-    // Parse date components
-    const dateMatch = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (!dateMatch) {
-      console.error("Invalid date format:", dateStr);
-      return null;
-    }
-
-    const [, year, month, day] = dateMatch;
-    let hours = 0;
-    let minutes = 0;
-    let seconds = 0;
-
-    // Parse time if provided
-    if (timeStr) {
-      const timeMatch = timeStr.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
-      if (timeMatch) {
-        hours = parseInt(timeMatch[1], 10);
-        minutes = parseInt(timeMatch[2], 10);
-        seconds = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
-      }
-    }
-
-    // Determine Central Time offset (CST = -06:00, CDT = -05:00)
-    const monthNum = parseInt(month, 10);
-    const dayNum = parseInt(day, 10);
-
-    // Rough DST check: March 2nd Sunday through November 1st Sunday
-    const isDST =
-      (monthNum > 3 && monthNum < 11) ||
-      (monthNum === 3 && dayNum >= 8) ||
-      (monthNum === 11 && dayNum < 7);
-
-    const offset = isDST ? "-05:00" : "-06:00";
-
-    // Build ISO string with Central timezone
-    const isoWithTimezone = `${year}-${month}-${day}T${String(hours).padStart(
-      2,
-      "0"
-    )}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
-      2,
-      "0"
-    )}${offset}`;
-
-    console.log("Built ISO string:", isoWithTimezone);
-
-    // Parse to Date (browser will convert to UTC internally)
-    const date = new Date(isoWithTimezone);
-
-    if (isNaN(date.getTime())) {
-      console.error("Invalid date result:", isoWithTimezone);
-      return null;
-    }
-
-    console.log("Parsed to UTC:", date.toISOString());
-    return date;
-  } catch (error) {
-    console.error("Error parsing datetime:", error);
-    return null;
-  }
+  skipped: Array<{ eventId: string; reason: string }>;
 }
 
 // Domains to exclude from Visit Website URLs - matches firecrawl-scraper
@@ -102,71 +34,181 @@ const EXCLUDED_DOMAINS = [
   "#",
 ];
 
-interface ExtractedEventData {
-  visitUrl: string | null;
-  dateStr: string | null;
-  timeStr: string | null;
+/**
+ * Check if a URL is a valid CatchDesMoines event detail page URL
+ * Valid: /event/event-name/12345/ (must have numeric ID)
+ * Invalid: /events/ (list page), /event/event-name/ (missing ID)
+ *
+ * Same logic as firecrawl-scraper for consistency
+ */
+function isValidEventDetailUrl(url: string): boolean {
+  if (!url) return false;
+
+  // Must contain /event/ (singular) not just /events/ (plural/list)
+  // Pattern: /event/slug/id/ where id is numeric - ID IS REQUIRED
+  // Without the numeric ID, CatchDesMoines shows a different page without "Visit Website"
+  const eventDetailPattern = /\/event\/[^\/]+\/\d+\/?$/i;
+
+  return eventDetailPattern.test(url);
 }
 
 /**
- * Extract Visit Website URL using the same logic as firecrawl-scraper
- * Uses the shared scraper module for JS-rendered content
+ * Check if a URL is a CatchDesMoines list page (not a detail page)
  */
-async function extractVisitWebsiteUrl(
-  eventUrl: string
-): Promise<ExtractedEventData> {
-  try {
-    console.log("🔗 Processing URL with scrapeUrl:", eventUrl);
+function isListPageUrl(url: string): boolean {
+  if (!url) return false;
 
-    // Use the shared scraper (supports Browserless/Firecrawl for JS rendering)
-    const result = await scrapeUrl(eventUrl, {
+  // List pages contain /events/ (plural) with query params
+  // Or /events without a specific event slug and ID
+  const listPagePatterns = [
+    /\/events\/?(\?|$)/i,  // /events/ or /events?...
+    /\/events\/\?/i,       // /events/?...
+  ];
+
+  return listPagePatterns.some(pattern => pattern.test(url));
+}
+
+/**
+ * Extract event detail URLs from HTML content
+ * Used when we have a list page and need to find detail page URLs
+ *
+ * Returns a Map with TWO types of keys for flexible matching:
+ * 1. Normalized title (lowercase, alphanumeric only)
+ * 2. URL slug (extracted from the event URL path)
+ *
+ * Same logic as firecrawl-scraper
+ */
+function extractEventDetailUrlsFromHtml(html: string): Map<string, string> {
+  const eventUrls = new Map<string, string>();
+
+  // Pattern to find all /event/slug/id/ URLs in the HTML
+  const urlPattern = /href=["']([^"']*\/event\/([^\/]+)\/(\d+)\/?["'])/gi;
+
+  let match;
+  while ((match = urlPattern.exec(html)) !== null) {
+    const fullUrl = match[1]?.replace(/["']$/, '').trim();
+    const slug = match[2];
+    const eventId = match[3];
+
+    if (!fullUrl || !slug || !eventId) continue;
+
+    // Make sure the extracted URL is valid
+    const cleanUrl = fullUrl.startsWith('/')
+      ? `https://www.catchdesmoines.com${fullUrl}`
+      : fullUrl;
+
+    if (!isValidEventDetailUrl(cleanUrl)) continue;
+
+    // Normalize the slug for matching (remove special chars, decode URL encoding)
+    const normalizedSlug = decodeURIComponent(slug)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '');
+
+    if (normalizedSlug.length > 2) {
+      // Store with slug as key (primary matching method)
+      eventUrls.set(`slug:${normalizedSlug}`, cleanUrl);
+      // Also store the event ID for direct matching
+      eventUrls.set(`id:${eventId}`, cleanUrl);
+      console.log(`📌 Found event URL from HTML: slug="${slug}" id=${eventId} -> ${cleanUrl}`);
+    }
+  }
+
+  console.log(`📊 Extracted ${eventUrls.size / 2} unique event URLs from HTML`);
+  return eventUrls;
+}
+
+/**
+ * Find the best matching event detail URL for a given event title
+ * Same logic as firecrawl-scraper
+ */
+function findEventDetailUrl(
+  eventTitle: string,
+  eventUrlsFromHtml: Map<string, string>,
+  allRawHtml: string
+): string | null {
+  if (!eventTitle) return null;
+
+  // Normalize the event title for matching
+  const normalizedTitle = eventTitle.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  // Method 1: Try to match by URL slug similarity
+  // Event titles often match their URL slugs closely
+  for (const [key, url] of eventUrlsFromHtml) {
+    if (!key.startsWith('slug:')) continue;
+    const slug = key.replace('slug:', '');
+
+    // Calculate overlap - character by character comparison
+    let matchingChars = 0;
+    for (let i = 0; i < Math.min(normalizedTitle.length, slug.length); i++) {
+      if (normalizedTitle[i] === slug[i]) matchingChars++;
+    }
+
+    // If first 10+ characters match, likely the same event
+    if (matchingChars >= 10 || (matchingChars >= 5 && matchingChars >= normalizedTitle.length * 0.5)) {
+      console.log(`✅ Matched by slug similarity: "${eventTitle}" -> ${url} (${matchingChars} chars match)`);
+      return url;
+    }
+
+    // Check if the slug is a significant substring of the title or vice versa
+    if (slug.length > 8 && normalizedTitle.includes(slug.substring(0, 8))) {
+      console.log(`✅ Matched by slug substring: "${eventTitle}" -> ${url}`);
+      return url;
+    }
+    if (normalizedTitle.length > 8 && slug.includes(normalizedTitle.substring(0, 8))) {
+      console.log(`✅ Matched by title substring: "${eventTitle}" -> ${url}`);
+      return url;
+    }
+  }
+
+  // Method 2: Search for the event title directly in the HTML and find nearby URLs
+  // Create a regex that searches for the title near an event URL
+  const escapedTitle = eventTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const nearbyPattern = new RegExp(
+    `href=["']([^"']*\\/event\\/[^"']+)["'][^>]*>[^<]*${escapedTitle.substring(0, 20)}`,
+    'i'
+  );
+  const nearbyMatch = allRawHtml.match(nearbyPattern);
+  if (nearbyMatch && nearbyMatch[1]) {
+    const candidateUrl = nearbyMatch[1].startsWith('/')
+      ? `https://www.catchdesmoines.com${nearbyMatch[1]}`
+      : nearbyMatch[1];
+    if (isValidEventDetailUrl(candidateUrl)) {
+      console.log(`✅ Found URL near title in HTML: "${eventTitle}" -> ${candidateUrl}`);
+      return candidateUrl;
+    }
+  }
+
+  console.log(`⚠️ No matching URL found for: "${eventTitle}"`);
+  return null;
+}
+
+interface ExtractedEventData {
+  visitUrl: string | null;
+  detailPageUrl: string | null;
+}
+
+/**
+ * Extract Visit Website URL from a CatchDesMoines event detail page
+ * Uses the same logic as firecrawl-scraper for consistency
+ */
+async function extractVisitWebsiteFromDetailPage(
+  detailPageUrl: string
+): Promise<string | null> {
+  try {
+    console.log(`🔗 Fetching event detail page: ${detailPageUrl}`);
+
+    const result = await scrapeUrl(detailPageUrl, {
       waitTime: 3000,
       timeout: 15000,
     });
 
     if (!result.success || !result.html) {
       console.log(`❌ Failed to fetch page: ${result.error}`);
-      return { visitUrl: null, dateStr: null, timeStr: null };
+      return null;
     }
 
     const html = result.html;
-    console.log(`✅ Scraped ${html.length} chars from page`);
-
-    // Extract date/time information
-    let dateStr: string | null = null;
-    let timeStr: string | null = null;
-
-    const datePatterns = [
-      /<time[^>]*datetime=["']([^"']+)["']/i,
-      /<meta[^>]*property=["']event:start_date["'][^>]*content=["']([^"']+)["']/i,
-      /<span[^>]*class=["'][^"']*date[^"']*["'][^>]*>([^<]+)</i,
-      /Date:\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i,
-      /(\d{4}-\d{2}-\d{2})/,
-    ];
-
-    for (const pattern of datePatterns) {
-      const match = html.match(pattern);
-      if (match && match[1]) {
-        dateStr = match[1];
-        console.log("📅 Found date:", dateStr);
-        break;
-      }
-    }
-
-    const timePatterns = [
-      /<time[^>]*>([^<]*\d{1,2}:\d{2}[^<]*)<\/time>/i,
-      /Time:\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)/i,
-      /(\d{1,2}:\d{2}\s*(?:AM|PM))/i,
-    ];
-
-    for (const pattern of timePatterns) {
-      const match = html.match(pattern);
-      if (match && match[1]) {
-        timeStr = match[1];
-        console.log("🕐 Found time:", timeStr);
-        break;
-      }
-    }
+    console.log(`✅ Scraped ${html.length} chars from detail page`);
 
     // Check if URL is excluded
     const isExcluded = (url: string) =>
@@ -210,7 +252,7 @@ async function extractVisitWebsiteUrl(
         }
 
         console.log(`✅ Found Visit Website URL: ${url}`);
-        return { visitUrl: url, dateStr, timeStr };
+        return url;
       }
     }
 
@@ -220,16 +262,75 @@ async function extractVisitWebsiteUrl(
       const url = linkUrlMatch[1].trim();
       if (!isExcluded(url)) {
         console.log(`✅ Found linkUrl in JSON: ${url}`);
-        return { visitUrl: url, dateStr, timeStr };
+        return url;
       }
     }
 
-    console.log(`⚠️ No Visit Website URL found for: ${eventUrl}`);
-    return { visitUrl: null, dateStr, timeStr };
+    console.log(`⚠️ No Visit Website URL found on detail page: ${detailPageUrl}`);
+    return null;
   } catch (error) {
-    console.error("❌ Error extracting URL from", eventUrl, ":", error);
-    return { visitUrl: null, dateStr: null, timeStr: null };
+    console.error("❌ Error extracting URL from detail page:", detailPageUrl, ":", error);
+    return null;
   }
+}
+
+/**
+ * Process an event URL - handles both detail pages and list pages
+ * For list pages, attempts to find the detail page URL using the event title
+ */
+async function processEventUrl(
+  eventSourceUrl: string,
+  eventTitle: string
+): Promise<ExtractedEventData> {
+  console.log(`🔍 Processing event: "${eventTitle}"`);
+  console.log(`   Source URL: ${eventSourceUrl}`);
+
+  // Case 1: URL is already a valid detail page - extract Visit Website directly
+  if (isValidEventDetailUrl(eventSourceUrl)) {
+    console.log(`   ✅ URL is a valid detail page`);
+    const visitUrl = await extractVisitWebsiteFromDetailPage(eventSourceUrl);
+    return { visitUrl, detailPageUrl: eventSourceUrl };
+  }
+
+  // Case 2: URL is a list page - need to find the detail page first
+  if (isListPageUrl(eventSourceUrl)) {
+    console.log(`   📋 URL is a list page, searching for detail page...`);
+
+    // Scrape the list page to find event detail URLs
+    const result = await scrapeUrl(eventSourceUrl, {
+      waitTime: 3000,
+      timeout: 15000,
+    });
+
+    if (!result.success || !result.html) {
+      console.log(`   ❌ Failed to scrape list page: ${result.error}`);
+      return { visitUrl: null, detailPageUrl: null };
+    }
+
+    const html = result.html;
+    console.log(`   ✅ Scraped ${html.length} chars from list page`);
+
+    // Extract event URLs from the list page
+    const eventUrlsFromHtml = extractEventDetailUrlsFromHtml(html);
+
+    // Try to find the detail page URL for this event
+    const detailPageUrl = findEventDetailUrl(eventTitle, eventUrlsFromHtml, html);
+
+    if (detailPageUrl) {
+      console.log(`   ✅ Found detail page: ${detailPageUrl}`);
+      // Now extract Visit Website from the detail page
+      const visitUrl = await extractVisitWebsiteFromDetailPage(detailPageUrl);
+      return { visitUrl, detailPageUrl };
+    } else {
+      console.log(`   ⚠️ Could not find detail page for event title`);
+      return { visitUrl: null, detailPageUrl: null };
+    }
+  }
+
+  // Case 3: Unknown URL format - try to extract anyway
+  console.log(`   ❓ Unknown URL format, attempting extraction...`);
+  const visitUrl = await extractVisitWebsiteFromDetailPage(eventSourceUrl);
+  return { visitUrl, detailPageUrl: eventSourceUrl };
 }
 
 serve(async (req) => {
@@ -290,6 +391,7 @@ serve(async (req) => {
             processed: 0,
             errors: [],
             updated: [],
+            skipped: [],
             message: "No events with catchdesmoines.com URLs found",
           }),
           {
@@ -304,6 +406,7 @@ serve(async (req) => {
         processed: events.length,
         errors: [],
         updated: [],
+        skipped: [],
       };
 
       console.log(
@@ -315,32 +418,14 @@ serve(async (req) => {
       // Process each event
       for (const event of events) {
         try {
-          const extractedData = await extractVisitWebsiteUrl(event.source_url);
+          // Process the event URL (handles both detail and list pages)
+          const extractedData = await processEventUrl(
+            event.source_url,
+            event.title || ""
+          );
 
           if (extractedData.visitUrl) {
-            // Prepare update data - replace source_url with extracted external URL
-            const updateData: any = { source_url: extractedData.visitUrl };
-
-            // If we extracted datetime info, parse and update event_start_utc
-            if (extractedData.dateStr) {
-              const parsedDate = parseEventDateTime(
-                extractedData.dateStr,
-                extractedData.timeStr || undefined
-              );
-              if (parsedDate) {
-                updateData.event_start_utc = parsedDate.toISOString();
-                console.log(
-                  `📅 Parsed event datetime for ${
-                    event.id
-                  }: ${parsedDate.toISOString()}`
-                );
-              } else {
-                console.warn(
-                  `⚠️ Failed to parse datetime for event ${event.id}: ${extractedData.dateStr} ${extractedData.timeStr}`
-                );
-              }
-            }
-
+            // Successfully extracted an external Visit Website URL
             if (dryRun) {
               // Dry run mode - don't update database, just report what would be changed
               result.updated.push({
@@ -349,19 +434,13 @@ serve(async (req) => {
                 newUrl: extractedData.visitUrl,
               });
               console.log(
-                `🔍 [DRY RUN] Would update event "${event.title}": ${
-                  event.source_url
-                } -> ${extractedData.visitUrl}${
-                  updateData.event_start_utc
-                    ? ` (datetime: ${updateData.event_start_utc})`
-                    : ""
-                }`
+                `🔍 [DRY RUN] Would update event "${event.title}": ${event.source_url} -> ${extractedData.visitUrl}`
               );
             } else {
-              // Real mode - update the event with the new URL and potentially datetime
+              // Real mode - update the event with the new URL
               const { error: updateError } = await supabaseClient
                 .from("events")
-                .update(updateData)
+                .update({ source_url: extractedData.visitUrl })
                 .eq("id", event.id);
 
               if (updateError) {
@@ -376,20 +455,49 @@ serve(async (req) => {
                   newUrl: extractedData.visitUrl,
                 });
                 console.log(
-                  `✅ Updated event "${event.title}": ${event.source_url} -> ${
-                    extractedData.visitUrl
-                  }${
-                    updateData.event_start_utc
-                      ? ` (datetime: ${updateData.event_start_utc})`
-                      : ""
-                  }`
+                  `✅ Updated event "${event.title}": ${event.source_url} -> ${extractedData.visitUrl}`
+                );
+              }
+            }
+          } else if (extractedData.detailPageUrl && extractedData.detailPageUrl !== event.source_url) {
+            // No external URL found, but we found a better CatchDesMoines detail page URL
+            // Update to the detail page instead of keeping the list page
+            if (dryRun) {
+              result.updated.push({
+                eventId: event.id,
+                oldUrl: event.source_url,
+                newUrl: extractedData.detailPageUrl,
+              });
+              console.log(
+                `🔍 [DRY RUN] Would update to detail page "${event.title}": ${event.source_url} -> ${extractedData.detailPageUrl}`
+              );
+            } else {
+              const { error: updateError } = await supabaseClient
+                .from("events")
+                .update({ source_url: extractedData.detailPageUrl })
+                .eq("id", event.id);
+
+              if (updateError) {
+                result.errors.push({
+                  eventId: event.id,
+                  error: `Failed to update to detail page: ${updateError.message}`,
+                });
+              } else {
+                result.updated.push({
+                  eventId: event.id,
+                  oldUrl: event.source_url,
+                  newUrl: extractedData.detailPageUrl,
+                });
+                console.log(
+                  `✅ Updated to detail page "${event.title}": ${event.source_url} -> ${extractedData.detailPageUrl}`
                 );
               }
             }
           } else {
-            result.errors.push({
+            // Could not find any better URL
+            result.skipped.push({
               eventId: event.id,
-              error: "No external URL found on page",
+              reason: "No external URL or detail page found",
             });
           }
 
