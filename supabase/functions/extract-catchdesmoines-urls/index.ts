@@ -475,37 +475,24 @@ serve(async (req) => {
         `Processing batch of ${batchSize} events (dry run: ${dryRun})`
       );
 
-      // Get total count of catchdesmoines URLs for randomization
-      const { count: totalCount, error: countError } = await supabaseClient
+      // Get current date for filtering future events only
+      const now = new Date().toISOString();
+      console.log(`📅 Filtering for events with date >= ${now}`);
+
+      // Get all catchdesmoines URLs for future events
+      // We fetch more than needed to allow filtering and randomization
+      const { data: allEvents, error: fetchError } = await supabaseClient
         .from("events")
-        .select("id", { count: "exact", head: true })
-        .ilike("source_url", "%catchdesmoines.com%");
-
-      if (countError) {
-        throw new Error(`Failed to count events: ${countError.message}`);
-      }
-
-      const totalEvents = totalCount || 0;
-      console.log(`📊 Total catchdesmoines events in pool: ${totalEvents}`);
-
-      // Generate random offset to get different events each time
-      const maxOffset = Math.max(0, totalEvents - batchSize);
-      const randomOffset = Math.floor(Math.random() * (maxOffset + 1));
-      console.log(`🎲 Using random offset: ${randomOffset} of max ${maxOffset}`);
-
-      // Get random batch of events with catchdesmoines.com URLs
-      const { data: events, error: fetchError } = await supabaseClient
-        .from("events")
-        .select("id, title, source_url")
+        .select("id, title, source_url, date")
         .ilike("source_url", "%catchdesmoines.com%")
-        .order('created_at', { ascending: false }) // Newest first to prioritize recent imports
-        .range(randomOffset, randomOffset + batchSize - 1);
+        .gte("date", now) // Only future events
+        .order('date', { ascending: true }); // Soonest events first
 
       if (fetchError) {
         throw new Error(`Failed to fetch events: ${fetchError.message}`);
       }
 
-      if (!events || events.length === 0) {
+      if (!allEvents || allEvents.length === 0) {
         return new Response(
           JSON.stringify({
             success: true,
@@ -513,7 +500,7 @@ serve(async (req) => {
             errors: [],
             updated: [],
             skipped: [],
-            message: "No events with catchdesmoines.com URLs found",
+            message: "No future events with catchdesmoines.com URLs found",
           }),
           {
             status: 200,
@@ -521,6 +508,59 @@ serve(async (req) => {
           }
         );
       }
+
+      console.log(`📊 Found ${allEvents.length} future events with catchdesmoines URLs`);
+
+      // Filter out list page URLs (can't extract Visit Website from list pages)
+      // Valid detail pages have pattern: /event/slug/id/ (singular with numeric ID)
+      // List pages are: /events/ or /events? (plural)
+      const detailPageEvents = allEvents.filter(event => {
+        const url = event.source_url?.toLowerCase() || '';
+
+        // Must contain /event/ (singular) with a numeric ID segment
+        // Pattern: /event/something/12345/
+        const isDetailPage = /\/event\/[^\/]+\/\d+\/?(\?|$)/i.test(url);
+
+        // Exclude pure list pages like /events/ or /events?
+        const isListPage = /\/events\/?(\?|#|$)/i.test(url) && !isDetailPage;
+
+        if (isListPage) {
+          console.log(`⏭️ Skipping list page URL: ${event.source_url}`);
+        }
+
+        return isDetailPage;
+      });
+
+      console.log(`📊 After filtering: ${detailPageEvents.length} valid detail page events`);
+
+      if (detailPageEvents.length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            processed: 0,
+            errors: [],
+            updated: [],
+            skipped: allEvents.map(e => ({ eventId: e.id, reason: "URL is a list page, not a detail page" })),
+            message: "All catchdesmoines URLs are list pages (not detail pages with Visit Website links)",
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Shuffle the events array for true randomization
+      // Fisher-Yates shuffle algorithm
+      const shuffledEvents = [...detailPageEvents];
+      for (let i = shuffledEvents.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledEvents[i], shuffledEvents[j]] = [shuffledEvents[j], shuffledEvents[i]];
+      }
+
+      // Take the first batchSize events from the shuffled array
+      const events = shuffledEvents.slice(0, batchSize);
+      console.log(`🎲 Randomly selected ${events.length} events from ${detailPageEvents.length} valid events`);
 
       const result: ExtractResponse = {
         success: true,
@@ -639,20 +679,44 @@ serve(async (req) => {
     }
 
     if (req.method === "GET") {
-      // Return count of remaining catchdesmoines URLs
-      const { count, error: countError } = await supabaseClient
-        .from("events")
-        .select("id", { count: "exact", head: true })
-        .ilike("source_url", "%catchdesmoines.com%");
+      const now = new Date().toISOString();
 
-      if (countError) {
-        throw new Error(`Failed to count events: ${countError.message}`);
+      // Get all catchdesmoines URLs for future events to provide detailed stats
+      const { data: allEvents, error: fetchError } = await supabaseClient
+        .from("events")
+        .select("id, source_url")
+        .ilike("source_url", "%catchdesmoines.com%")
+        .gte("date", now);
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch events: ${fetchError.message}`);
       }
+
+      const futureEvents = allEvents || [];
+
+      // Filter to count only valid detail page URLs
+      const detailPageEvents = futureEvents.filter(event => {
+        const url = event.source_url?.toLowerCase() || '';
+        return /\/event\/[^\/]+\/\d+\/?(\?|$)/i.test(url);
+      });
+
+      // Count list page URLs
+      const listPageEvents = futureEvents.filter(event => {
+        const url = event.source_url?.toLowerCase() || '';
+        const isDetailPage = /\/event\/[^\/]+\/\d+\/?(\?|$)/i.test(url);
+        return /\/events\/?(\?|#|$)/i.test(url) && !isDetailPage;
+      });
 
       return new Response(
         JSON.stringify({
           success: true,
-          remaining: count || 0,
+          stats: {
+            futureEventsTotal: futureEvents.length,
+            validDetailPages: detailPageEvents.length,
+            listPagesSkipped: listPageEvents.length,
+            readyToProcess: detailPageEvents.length,
+          },
+          message: `${detailPageEvents.length} future events with valid detail page URLs ready for processing`,
         }),
         {
           status: 200,
