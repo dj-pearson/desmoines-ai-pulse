@@ -290,17 +290,7 @@ async function extractVisitWebsiteFromDetailPage(
       }
     }
 
-    // Fallback 1: Check for linkUrl in embedded JSON
-    const linkUrlMatch = html.match(/["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i);
-    if (linkUrlMatch) {
-      const url = linkUrlMatch[1].trim();
-      if (!isExcluded(url)) {
-        console.log(`✅ Found linkUrl in JSON: ${url}`);
-        return url;
-      }
-    }
-
-    // Fallback 2: Look for any external URL in the page that's not catchdesmoines
+    // Fallback 1: Look for any external URL in anchor tags on the page
     // Find all anchor hrefs and look for external ones
     const allLinksPattern = /<a[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
     const externalUrls: string[] = [];
@@ -312,15 +302,21 @@ async function extractVisitWebsiteFromDetailPage(
       }
     }
 
+    // Priority domains for event-specific URLs (tickets, registration, etc.)
+    const priorityDomains = [
+      'eventbrite', 'ticketmaster', 'tickets', 'register', 'signup', 'rsvp',
+      'axs.com', 'ticketfly', 'seetickets', 'stubhub', 'vivid', 'seatgeek',
+      'etix', 'showclix', 'eventeny', 'universe.com', 'dice.fm', 'goelevent',
+      'godrakebulldogs', 'iowaeventscenter', 'wellsfargoarena', 'prairimeadows'
+    ];
+
     if (externalUrls.length > 0) {
       console.log(`🔍 DEBUG: Found ${externalUrls.length} external URLs on page:`);
       externalUrls.slice(0, 10).forEach((url, i) => {
         console.log(`   ${i + 1}. ${url}`);
       });
 
-      // If we found external URLs but none matched our patterns,
-      // return the first non-social-media external URL as a best guess
-      const priorityDomains = ['eventbrite', 'ticketmaster', 'tickets', 'register', 'signup'];
+      // First priority: Look for event/ticket-specific URLs
       for (const url of externalUrls) {
         const urlLower = url.toLowerCase();
         if (priorityDomains.some(d => urlLower.includes(d))) {
@@ -329,7 +325,67 @@ async function extractVisitWebsiteFromDetailPage(
         }
       }
     } else {
-      console.log(`🔍 DEBUG: No external URLs found on page`);
+      console.log(`🔍 DEBUG: No external URLs in anchor tags`);
+    }
+
+    // Fallback 2: Check for weburl/ticketUrl in embedded JSON
+    // Note: weburl often contains venue website (like drake.edu), not event-specific URLs
+    // So we prioritize ticketUrl, eventUrl, linkUrl first
+    const weburlPatterns = [
+      // High priority: Event-specific URL fields
+      { pattern: /["']ticketUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/gi, name: 'ticketUrl' },
+      { pattern: /["']eventUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/gi, name: 'eventUrl' },
+      { pattern: /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/gi, name: 'linkUrl' },
+      { pattern: /["']externalUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/gi, name: 'externalUrl' },
+      // Lower priority: General website fields (might be venue website, not event-specific)
+      { pattern: /["']weburl["']\s*:\s*["'](https?:\/\/[^"']+)["']/gi, name: 'weburl' },
+      { pattern: /["']web_url["']\s*:\s*["'](https?:\/\/[^"']+)["']/gi, name: 'web_url' },
+      { pattern: /["']website_url["']\s*:\s*["'](https?:\/\/[^"']+)["']/gi, name: 'website_url' },
+    ];
+
+    // Collect all JSON URLs
+    const jsonUrls: { url: string; field: string }[] = [];
+    for (const { pattern, name } of weburlPatterns) {
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(html)) !== null) {
+        const url = match[1]?.trim();
+        if (url && !isExcluded(url)) {
+          jsonUrls.push({ url, field: name });
+        }
+      }
+    }
+
+    if (jsonUrls.length > 0) {
+      console.log(`🔍 DEBUG: Found ${jsonUrls.length} URLs in JSON data:`);
+      jsonUrls.slice(0, 5).forEach(({ url, field }, i) => {
+        console.log(`   ${i + 1}. ${field}: ${url}`);
+      });
+
+      // First: Return high-priority fields (ticketUrl, eventUrl, linkUrl, externalUrl)
+      for (const { url, field } of jsonUrls) {
+        if (['ticketUrl', 'eventUrl', 'linkUrl', 'externalUrl'].includes(field)) {
+          console.log(`✅ Found ${field} in JSON: ${url}`);
+          return url;
+        }
+      }
+
+      // Second: Return weburl if it looks event-specific (contains ticket, event, etc.)
+      for (const { url, field } of jsonUrls) {
+        const urlLower = url.toLowerCase();
+        if (priorityDomains.some(d => urlLower.includes(d))) {
+          console.log(`✅ Found priority ${field} in JSON: ${url}`);
+          return url;
+        }
+      }
+
+      // Last resort: Return the first weburl (might be venue website)
+      // Only if there are NO external anchor URLs at all
+      if (externalUrls.length === 0) {
+        const firstUrl = jsonUrls[0];
+        console.log(`✅ Using ${firstUrl.field} as fallback: ${firstUrl.url}`);
+        return firstUrl.url;
+      }
     }
 
     console.log(`⚠️ No Visit Website URL found on detail page: ${detailPageUrl}`);
