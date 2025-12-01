@@ -197,9 +197,12 @@ async function extractVisitWebsiteFromDetailPage(
   try {
     console.log(`🔗 Fetching event detail page: ${detailPageUrl}`);
 
+    // Use longer wait time and wait for action items to load
+    // CatchDesMoines uses dynamic JS rendering for the "Visit Website" button
     const result = await scrapeUrl(detailPageUrl, {
-      waitTime: 3000,
-      timeout: 15000,
+      waitTime: 5000,  // Wait 5 seconds for dynamic content
+      timeout: 30000,  // 30 second total timeout
+      waitForSelector: '.action-item, .detail-actions, .event-actions', // Wait for action buttons
     });
 
     if (!result.success || !result.html) {
@@ -361,8 +364,8 @@ async function processEventUrl(
 
     // Scrape the list page to find event detail URLs
     const result = await scrapeUrl(eventSourceUrl, {
-      waitTime: 3000,
-      timeout: 15000,
+      waitTime: 5000,  // Wait 5 seconds for dynamic content
+      timeout: 30000,  // 30 second total timeout
     });
 
     if (!result.success || !result.html) {

@@ -55,16 +55,42 @@ async function scrapeWithBrowserless(
   config: ScraperConfig
 ): Promise<ScraperResult> {
   const startTime = Date.now();
-  
+
   try {
     console.log(`🌐 Using Browserless to scrape: ${url}`);
-    
+
     if (!config.browserlessApiKey) {
       throw new Error('Browserless API key not configured');
     }
-    
-    const browserlessUrl = `${config.browserlessUrl}/content?token=${config.browserlessApiKey}`;
-    
+
+    // Use the /scrape endpoint for more control over JavaScript execution
+    // This allows us to wait for dynamic content to load
+    const browserlessUrl = `${config.browserlessUrl}/scrape?token=${config.browserlessApiKey}`;
+
+    // Build the scrape request with proper waiting for dynamic content
+    const scrapeRequest = {
+      url,
+      gotoOptions: {
+        waitUntil: 'networkidle2',
+        timeout: config.timeout || 30000,
+      },
+      // Wait for dynamic content to fully render
+      waitForTimeout: config.waitTime || 5000,
+      // Optional: wait for specific selector if provided
+      ...(config.waitForSelector && {
+        waitForSelector: {
+          selector: config.waitForSelector,
+          timeout: 10000,
+        },
+      }),
+      // Try to wait for common event detail page elements
+      elements: [
+        { selector: 'body' }
+      ],
+    };
+
+    console.log(`⏳ Browserless will wait ${config.waitTime || 5000}ms for dynamic content`);
+
     let response: Response;
     for (let attempt = 1; ; attempt++) {
       response = await fetch(browserlessUrl, {
@@ -73,26 +99,30 @@ async function scrapeWithBrowserless(
           'Content-Type': 'application/json',
           'User-Agent': config.userAgent || '',
         },
-        body: JSON.stringify({
-          url,
-          gotoOptions: {
-            waitUntil: 'networkidle2',
-            timeout: config.timeout,
-          },
-        }),
+        body: JSON.stringify(scrapeRequest),
       });
       if (response.status !== 429 || attempt >= 3) break;
       console.log(`⏳ Browserless rate limited (429). Retry #${attempt}...`);
       await new Promise((r) => setTimeout(r, attempt * 1000));
     }
-    
+
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Browserless API error: ${response.status} - ${errorText}`);
+      // If /scrape endpoint fails, fall back to /content endpoint
+      console.log(`⚠️ Browserless /scrape failed (${response.status}), trying /content endpoint...`);
+      return await scrapeWithBrowserlessContent(url, config, startTime);
     }
-    
-    const html = await response.text();
-    
+
+    const data = await response.json();
+
+    // The /scrape endpoint returns JSON with data property
+    const html = data.data?.[0]?.results?.[0]?.html || data.data || '';
+
+    if (!html || typeof html !== 'string') {
+      console.log(`⚠️ Browserless /scrape returned unexpected format, trying /content endpoint...`);
+      return await scrapeWithBrowserlessContent(url, config, startTime);
+    }
+
     // Extract text content from HTML
     const text = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -100,9 +130,9 @@ async function scrapeWithBrowserless(
       .replace(/<[^>]+>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    
+
     console.log(`✅ Browserless scraped ${html.length} chars HTML, ${text.length} chars text`);
-    
+
     return {
       success: true,
       html,
@@ -110,9 +140,71 @@ async function scrapeWithBrowserless(
       backend: 'browserless',
       duration: Date.now() - startTime,
     };
-    
+
   } catch (error) {
     console.error(`❌ Browserless error:`, error);
+    return {
+      success: false,
+      error: error.message,
+      backend: 'browserless',
+      duration: Date.now() - startTime,
+    };
+  }
+}
+
+/**
+ * Fallback: Scrape using Browserless /content endpoint (simpler, less features)
+ */
+async function scrapeWithBrowserlessContent(
+  url: string,
+  config: ScraperConfig,
+  startTime: number
+): Promise<ScraperResult> {
+  try {
+    const browserlessUrl = `${config.browserlessUrl}/content?token=${config.browserlessApiKey}`;
+
+    const response = await fetch(browserlessUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': config.userAgent || '',
+      },
+      body: JSON.stringify({
+        url,
+        gotoOptions: {
+          waitUntil: 'networkidle2',
+          timeout: config.timeout || 30000,
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Browserless /content error: ${response.status} - ${errorText}`);
+    }
+
+    const html = await response.text();
+
+    // Extract text content from HTML
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    console.log(`✅ Browserless /content scraped ${html.length} chars HTML, ${text.length} chars text`);
+
+    return {
+      success: true,
+      html,
+      text,
+      backend: 'browserless',
+      duration: Date.now() - startTime,
+    };
+
+  } catch (error) {
+    console.error(`❌ Browserless /content error:`, error);
     return {
       success: false,
       error: error.message,
