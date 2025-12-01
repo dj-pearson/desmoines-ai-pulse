@@ -197,9 +197,12 @@ async function extractVisitWebsiteFromDetailPage(
   try {
     console.log(`🔗 Fetching event detail page: ${detailPageUrl}`);
 
+    // Use longer wait time and wait for action items to load
+    // CatchDesMoines uses dynamic JS rendering for the "Visit Website" button
     const result = await scrapeUrl(detailPageUrl, {
-      waitTime: 3000,
-      timeout: 15000,
+      waitTime: 5000,  // Wait 5 seconds for dynamic content
+      timeout: 30000,  // 30 second total timeout
+      waitForSelector: '.action-item, .detail-actions, .event-actions', // Wait for action buttons
     });
 
     if (!result.success || !result.html) {
@@ -214,8 +217,26 @@ async function extractVisitWebsiteFromDetailPage(
     const isExcluded = (url: string) =>
       EXCLUDED_DOMAINS.some(d => url.toLowerCase().includes(d.toLowerCase()));
 
-    // Multiple regex patterns to find the Visit Website link - SAME AS firecrawl-scraper
-    // Pattern matches: <a href="URL" ... class="action-item" ...>...<i>...</i>Visit Website...</a>
+    // Debug: Log a sample of the HTML around "Website" text to understand structure
+    const websiteTextIndex = html.indexOf('Website');
+    if (websiteTextIndex > -1) {
+      const contextStart = Math.max(0, websiteTextIndex - 200);
+      const contextEnd = Math.min(html.length, websiteTextIndex + 200);
+      console.log(`🔍 DEBUG: HTML around "Website" text:\n${html.substring(contextStart, contextEnd)}`);
+    } else {
+      console.log(`🔍 DEBUG: No "Website" text found in HTML`);
+    }
+
+    // Also check for "website" lowercase
+    const websiteLowerIndex = html.toLowerCase().indexOf('website');
+    if (websiteLowerIndex > -1 && websiteLowerIndex !== websiteTextIndex) {
+      const contextStart = Math.max(0, websiteLowerIndex - 200);
+      const contextEnd = Math.min(html.length, websiteLowerIndex + 200);
+      console.log(`🔍 DEBUG: HTML around "website" (lowercase):\n${html.substring(contextStart, contextEnd)}`);
+    }
+
+    // Multiple regex patterns to find the Visit Website link
+    // Updated with more flexible patterns
     const patterns = [
       // Pattern 1: action-item class with Visit Website text (handles icon and whitespace)
       /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
@@ -223,11 +244,24 @@ async function extractVisitWebsiteFromDetailPage(
       /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
       // Pattern 3: Any link with Visit Website text
       /<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
-      // Pattern 4: Target blank with external link
+      // Pattern 4: Target blank with external link and Visit Website
       /<a[^>]*href=["']([^"']+)["'][^>]*target=["']_blank["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+      // Pattern 5: Just "Website" text (not "Visit Website") - some pages might abbreviate
+      /<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?>\s*Website\s*<[\s\S]*?<\/a>/gi,
+      // Pattern 6: Button or link with class containing "website"
+      /<a[^>]*class=["'][^"']*website[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
+      // Pattern 7: href before class, class containing website
+      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*website[^"']*["'][^>]*>/gi,
+      // Pattern 8: data-url or data-href attributes
+      /<[^>]*data-(?:url|href)=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?Website[\s\S]*?</gi,
+      // Pattern 9: Link with title="Visit Website" or title="Website"
+      /<a[^>]*href=["']([^"']+)["'][^>]*title=["'][^"']*Website[^"']*["'][^>]*>/gi,
+      // Pattern 10: Simpleview CMS pattern - primary link with external URL
+      /<a[^>]*class=["'][^"']*(?:primary|external|outbound)[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
     ];
 
-    for (const pattern of patterns) {
+    for (let i = 0; i < patterns.length; i++) {
+      const pattern = patterns[i];
       // Reset lastIndex for global regex
       pattern.lastIndex = 0;
       let match;
@@ -247,16 +281,16 @@ async function extractVisitWebsiteFromDetailPage(
 
         // Skip excluded domains
         if (isExcluded(url)) {
-          console.log(`⏭️ Skipping excluded URL: ${url}`);
+          console.log(`⏭️ Skipping excluded URL (pattern ${i + 1}): ${url}`);
           continue;
         }
 
-        console.log(`✅ Found Visit Website URL: ${url}`);
+        console.log(`✅ Found Visit Website URL (pattern ${i + 1}): ${url}`);
         return url;
       }
     }
 
-    // Fallback: Check for linkUrl in embedded JSON
+    // Fallback 1: Check for linkUrl in embedded JSON
     const linkUrlMatch = html.match(/["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i);
     if (linkUrlMatch) {
       const url = linkUrlMatch[1].trim();
@@ -264,6 +298,38 @@ async function extractVisitWebsiteFromDetailPage(
         console.log(`✅ Found linkUrl in JSON: ${url}`);
         return url;
       }
+    }
+
+    // Fallback 2: Look for any external URL in the page that's not catchdesmoines
+    // Find all anchor hrefs and look for external ones
+    const allLinksPattern = /<a[^>]*href=["'](https?:\/\/[^"']+)["'][^>]*>/gi;
+    const externalUrls: string[] = [];
+    let linkMatch;
+    while ((linkMatch = allLinksPattern.exec(html)) !== null) {
+      const url = linkMatch[1]?.trim();
+      if (url && !isExcluded(url)) {
+        externalUrls.push(url);
+      }
+    }
+
+    if (externalUrls.length > 0) {
+      console.log(`🔍 DEBUG: Found ${externalUrls.length} external URLs on page:`);
+      externalUrls.slice(0, 10).forEach((url, i) => {
+        console.log(`   ${i + 1}. ${url}`);
+      });
+
+      // If we found external URLs but none matched our patterns,
+      // return the first non-social-media external URL as a best guess
+      const priorityDomains = ['eventbrite', 'ticketmaster', 'tickets', 'register', 'signup'];
+      for (const url of externalUrls) {
+        const urlLower = url.toLowerCase();
+        if (priorityDomains.some(d => urlLower.includes(d))) {
+          console.log(`✅ Found priority external URL: ${url}`);
+          return url;
+        }
+      }
+    } else {
+      console.log(`🔍 DEBUG: No external URLs found on page`);
     }
 
     console.log(`⚠️ No Visit Website URL found on detail page: ${detailPageUrl}`);
@@ -298,8 +364,8 @@ async function processEventUrl(
 
     // Scrape the list page to find event detail URLs
     const result = await scrapeUrl(eventSourceUrl, {
-      waitTime: 3000,
-      timeout: 15000,
+      waitTime: 5000,  // Wait 5 seconds for dynamic content
+      timeout: 30000,  // 30 second total timeout
     });
 
     if (!result.success || !result.html) {
