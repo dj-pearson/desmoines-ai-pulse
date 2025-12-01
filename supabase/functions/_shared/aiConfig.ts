@@ -116,6 +116,8 @@ export async function buildLightweightClaudeRequest(
   const maxTokens = options.customMaxTokens ?? config.max_tokens_lightweight;
   const temperature = options.customTemperature ?? config.temperature_precise;
 
+  console.log("Building LIGHTWEIGHT request with model:", config.lightweight_model);
+
   return {
     model: config.lightweight_model,
     max_tokens: maxTokens,
