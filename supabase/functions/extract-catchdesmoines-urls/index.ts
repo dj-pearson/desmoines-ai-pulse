@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
+import { scrapeUrl } from "../_shared/scraper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -84,39 +84,53 @@ function parseEventDateTime(dateStr: string, timeStr?: string): Date | null {
   }
 }
 
+// Domains to exclude from Visit Website URLs - matches firecrawl-scraper
+const EXCLUDED_DOMAINS = [
+  "catchdesmoines.com",
+  "simpleview",
+  "facebook.com",
+  "twitter.com",
+  "instagram.com",
+  "youtube.com",
+  "vimeo.com",
+  "google.com",
+  "googleapis.com",
+  "cloudflare",
+  "doubleclick",
+  "mailto:",
+  "tel:",
+  "#",
+];
+
 interface ExtractedEventData {
   visitUrl: string | null;
   dateStr: string | null;
   timeStr: string | null;
 }
 
+/**
+ * Extract Visit Website URL using the same logic as firecrawl-scraper
+ * Uses the shared scraper module for JS-rendered content
+ */
 async function extractVisitWebsiteUrl(
   eventUrl: string
 ): Promise<ExtractedEventData> {
   try {
-    console.log("Processing URL:", eventUrl);
+    console.log("🔗 Processing URL with scrapeUrl:", eventUrl);
 
-    // Use fetch with user agent to simulate browser request
-    const response = await fetch(eventUrl, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "gzip, deflate",
-        Connection: "keep-alive",
-      },
-      signal: AbortSignal.timeout(12000), // 12 second timeout
+    // Use the shared scraper (supports Browserless/Firecrawl for JS rendering)
+    const result = await scrapeUrl(eventUrl, {
+      waitTime: 3000,
+      timeout: 15000,
     });
 
-    if (!response.ok) {
-      console.warn(
-        `Non-2xx response for ${eventUrl}: ${response.status} ${response.statusText}`
-      );
+    if (!result.success || !result.html) {
+      console.log(`❌ Failed to fetch page: ${result.error}`);
+      return { visitUrl: null, dateStr: null, timeStr: null };
     }
 
-    const html = await response.text();
+    const html = result.html;
+    console.log(`✅ Scraped ${html.length} chars from page`);
 
     // Extract date/time information
     let dateStr: string | null = null;
@@ -134,7 +148,7 @@ async function extractVisitWebsiteUrl(
       const match = html.match(pattern);
       if (match && match[1]) {
         dateStr = match[1];
-        console.log("Found date:", dateStr);
+        console.log("📅 Found date:", dateStr);
         break;
       }
     }
@@ -149,288 +163,71 @@ async function extractVisitWebsiteUrl(
       const match = html.match(pattern);
       if (match && match[1]) {
         timeStr = match[1];
-        console.log("Found time:", timeStr);
+        console.log("🕐 Found time:", timeStr);
         break;
       }
     }
 
-    // Define excluded domains - URLs we don't want to extract
-    const excludeDomains = [
-      "catchdesmoines.com",
-      "visitdesmoines.com",
-      "simpleview.com",
-      "simpleviewinc.com",
-      "assets.simpleviewinc.com",
-      "simpleviewcrm.com",
-      "simpleviewcms.com",
-      "extranet.simpleview",
-      "vimeo.com/api",
-      "vimeo.com/player",
-      "player.vimeo.com",
-      "player.vimeo",
-      "youtube.com/embed",
-      "youtube.com/player",
-      "youtube.com/watch",
-      "youtu.be/player",
-      "/player.js",
-      "/embed.js",
-      "/api/",
-      ".js?",
-      ".js#",
-      ".js$",
-      ".css",
-      ".json",
-      "cloudflare.com",
-      "cdnjs.cloudflare.com",
-      "static.cloudflareinsights.com",
-      "unpkg.com",
-      "jsdelivr.net",
-      "cdn.jsdelivr.net",
-      "bootstrapcdn.com",
-      "stackpath.bootstrapcdn.com",
-      "fontawesome.com",
-      "kit.fontawesome.com",
-      "fonts.googleapis.com",
-      "fonts.gstatic.com",
-      "gstatic.com",
-      "ajax.googleapis.com",
-      "typekit.net",
-      "use.typekit.net",
-      // Social media event pages are valid external URLs
-      // "facebook.com",
-      // "fb.com",
-      // "instagram.com",
-      // "linkedin.com",
-      "googletagmanager.com",
-      "google-analytics.com",
-      "analytics.google.com",
-      "doubleclick.net",
-      "securepubads",
-      "googlesyndication.com",
-      "adservice.google.com",
-      "googleadservices.com",
-      "2mdn.net",
-      "googleads.g.doubleclick.net",
-      "pagead2.googlesyndication.com",
-      "google.com",
-      "maps.google.com",
-      "goo.gl",
-      "bit.ly",
-      "ow.ly",
-      "mailto:",
-      "tel:",
-      "#",
+    // Check if URL is excluded
+    const isExcluded = (url: string) =>
+      EXCLUDED_DOMAINS.some(d => url.toLowerCase().includes(d.toLowerCase()));
+
+    // Multiple regex patterns to find the Visit Website link - SAME AS firecrawl-scraper
+    // Pattern matches: <a href="URL" ... class="action-item" ...>...<i>...</i>Visit Website...</a>
+    const patterns = [
+      // Pattern 1: action-item class with Visit Website text (handles icon and whitespace)
+      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+      // Pattern 2: Reverse order (class before href)
+      /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+      // Pattern 3: Any link with Visit Website text
+      /<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+      // Pattern 4: Target blank with external link
+      /<a[^>]*href=["']([^"']+)["'][^>]*target=["']_blank["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
     ];
 
-    const isExcluded = (url: string) => {
-      const lowerUrl = url.toLowerCase();
-      return excludeDomains.some((d) => lowerUrl.includes(d.toLowerCase()));
-    };
+    for (const pattern of patterns) {
+      // Reset lastIndex for global regex
+      pattern.lastIndex = 0;
+      let match;
+      while ((match = pattern.exec(html)) !== null) {
+        let url = match[1]?.trim();
+        if (!url) continue;
 
-    // Use DOMParser from deno_dom to properly parse HTML
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-    
-    if (!doc) {
-      console.error("Failed to parse HTML");
-      return { visitUrl: null, dateStr, timeStr };
-    }
-
-    console.log("Successfully parsed HTML document");
-
-    // Strategy 1: Find anchors with "Visit Website" text
-    const allAnchors = doc.querySelectorAll("a") as NodeListOf<HTMLAnchorElement>;
-    console.log(`Found ${allAnchors.length} total anchor tags on page`);
-
-    // Helper function to check if text matches "visit website"
-    const isVisitWebsiteText = (text: string): boolean => {
-      const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
-      return (
-        normalized === 'visit website' ||
-        normalized === 'visit web site' ||
-        normalized.includes('visit website') ||
-        normalized.includes('visit web site') ||
-        (normalized.includes('visit') && normalized.includes('website'))
-      );
-    };
-
-    // Helper function to validate and normalize URL
-    const validateAndNormalizeUrl = (href: string | null, strategy: string): string | null => {
-      if (!href) {
-        console.log(`  [${strategy}] ⏭️ Skipped: no href attribute`);
-        return null;
-      }
-
-      let normalizedUrl = href.trim();
-      if (normalizedUrl.startsWith("//")) {
-        normalizedUrl = `https:${normalizedUrl}`;
-      } else if (normalizedUrl.startsWith("/")) {
-        const baseUrl = new URL(eventUrl);
-        normalizedUrl = `${baseUrl.origin}${normalizedUrl}`;
-      }
-
-      if (!normalizedUrl.match(/^https?:\/\//i)) {
-        console.log(`  [${strategy}] ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
-        return null;
-      }
-
-      if (isExcluded(normalizedUrl)) {
-        console.log(`  [${strategy}] ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
-        return null;
-      }
-
-      return normalizedUrl;
-    };
-
-    // Strategy 1: Direct anchor text match for "Visit Website"
-    let foundCount = 0;
-    let visitWebsiteAnchors: HTMLAnchorElement[] = [];
-    
-    for (const anchor of allAnchors) {
-      // Get both textContent and innerText to handle different parsing behaviors
-      const textContent = (anchor.textContent || "").trim();
-      const innerHTML = anchor.innerHTML || "";
-      
-      // Log first few anchors with external-link icon for debugging
-      if (innerHTML.includes('fa-external-link') && foundCount < 3) {
-        console.log(`[Debug] External link anchor: text="${textContent}", innerHTML="${innerHTML.substring(0, 200)}"`);
-      }
-      
-      if (isVisitWebsiteText(textContent)) {
-        foundCount++;
-        visitWebsiteAnchors.push(anchor);
-        console.log(`[Strategy 1] Found "Visit Website" link #${foundCount}: text="${textContent}"`);
-      }
-    }
-
-    console.log(`[Strategy 1] Found ${foundCount} "Visit Website" anchors out of ${allAnchors.length} total anchors`);
-
-    // Check each "Visit Website" anchor and its preceding sibling
-    for (const anchor of visitWebsiteAnchors) {
-      const href = anchor.getAttribute("href");
-      const textContent = anchor.textContent || "";
-      
-      console.log(`[Strategy 1a] Checking "Visit Website" anchor href="${href}"`);
-      
-      // First, try the href of the "Visit Website" anchor itself
-      const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 1a - Direct");
-      if (normalizedUrl) {
-        console.log(`  ✅ [Strategy 1a] Found valid URL in "Visit Website" anchor: ${normalizedUrl}`);
-        return { visitUrl: normalizedUrl, dateStr, timeStr };
-      }
-      
-      // If that didn't work, check the immediately preceding anchor
-      console.log(`[Strategy 1b] "Visit Website" anchor has no valid href, checking preceding anchor...`);
-      let previousSibling = anchor.previousElementSibling;
-      
-      while (previousSibling) {
-        if (previousSibling.tagName === "A") {
-          const prevHref = previousSibling.getAttribute("href");
-          const prevText = previousSibling.textContent || "";
-          console.log(`[Strategy 1b] Found preceding <a>: text="${prevText.trim()}", href="${prevHref}"`);
-          
-          const prevNormalizedUrl = validateAndNormalizeUrl(prevHref, "Strategy 1b - Preceding");
-          if (prevNormalizedUrl) {
-            console.log(`  ✅ [Strategy 1b] Found valid URL in preceding anchor: ${prevNormalizedUrl}`);
-            return { visitUrl: prevNormalizedUrl, dateStr, timeStr };
-          }
-          break; // Only check the immediate preceding anchor
+        // Normalize URL
+        if (url.startsWith("//")) {
+          url = `https:${url}`;
+        } else if (url.startsWith("/")) {
+          url = `https://www.catchdesmoines.com${url}`;
         }
-        previousSibling = previousSibling.previousElementSibling;
-      }
-    }
 
-    // Strategy 2: Check buttons that might contain or be near anchors
-    console.log(`[Strategy 2] Searching for buttons with "visit website" text...`);
-    const allButtons = doc.querySelectorAll("button, .button, .btn");
-    console.log(`Found ${allButtons.length} button elements`);
-    
-    for (const button of allButtons) {
-      const buttonText = button.textContent || "";
-      if (isVisitWebsiteText(buttonText)) {
-        console.log(`[Strategy 2] Found button with "visit website" text: "${buttonText.trim()}"`);
-        
-        // Check if button contains an anchor
-        const innerAnchor = button.querySelector("a");
-        if (innerAnchor) {
-          const href = innerAnchor.getAttribute("href");
-          const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 2 - Inner Anchor");
-          if (normalizedUrl) {
-            console.log(`  ✅ [Strategy 2] Found URL in button's inner anchor: ${normalizedUrl}`);
-            return { visitUrl: normalizedUrl, dateStr, timeStr };
-          }
-        }
-        
-        // Check if button has onclick with URL
-        const onclick = button.getAttribute("onclick");
-        if (onclick) {
-          const urlMatch = onclick.match(/(?:window\.location|location\.href)\s*=\s*['"]([^'"]+)['"]/);
-          if (urlMatch) {
-            const normalizedUrl = validateAndNormalizeUrl(urlMatch[1], "Strategy 2 - Onclick");
-            if (normalizedUrl) {
-              console.log(`  ✅ [Strategy 2] Found URL in button onclick: ${normalizedUrl}`);
-              return { visitUrl: normalizedUrl, dateStr, timeStr };
-            }
-          }
-        }
-      }
-    }
+        // Must be http/https
+        if (!url.startsWith("http")) continue;
 
-    // Strategy 3: Look for common class patterns and specific structures
-    console.log(`[Strategy 3] Searching for links with common "visit" or "website" classes...`);
-    const classSelectors = [
-      'a[class*="visit"]',
-      'a[class*="website"]',
-      'a[class*="external"]',
-      'a[class*="event-link"]',
-      'a[class*="action-item"]', // CatchDesMoines uses this for Visit Website links
-      '.visit-website a',
-      '.event-website a',
-      '.bottom-actions a' // CatchDesMoines structure
-    ];
-    
-    for (const selector of classSelectors) {
-      const links = doc.querySelectorAll(selector);
-      if (links.length > 0) {
-        console.log(`[Strategy 3] Found ${links.length} links matching selector: ${selector}`);
-        for (const link of links) {
-          const href = link.getAttribute("href");
-          const linkText = (link.textContent || "").trim();
-          const innerHTML = link.innerHTML || "";
-          
-          // Check if this looks like a "Visit Website" link
-          const hasExternalIcon = innerHTML.includes('fa-external-link') || innerHTML.includes('external-link');
-          const hasVisitText = isVisitWebsiteText(linkText);
-          
-          if (hasExternalIcon || hasVisitText) {
-            console.log(`[Strategy 3] Checking potential visit link: text="${linkText}", hasIcon=${hasExternalIcon}, href="${href}"`);
-            const normalizedUrl = validateAndNormalizeUrl(href, `Strategy 3 - ${selector}`);
-            if (normalizedUrl) {
-              console.log(`  ✅ [Strategy 3] Found URL via class selector: ${normalizedUrl}`);
-              return { visitUrl: normalizedUrl, dateStr, timeStr };
-            }
-          }
+        // Skip excluded domains
+        if (isExcluded(url)) {
+          console.log(`⏭️ Skipping excluded URL: ${url}`);
+          continue;
         }
-      }
-    }
 
-    console.log(`⚠️ No valid "Visit Website" link found after trying all strategies`);
-    
-    // Fallback: Check for linkUrl in JSON embedded in the page
-    const linkUrlMatch = html.match(
-      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
-    );
-    if (linkUrlMatch) {
-      const url = linkUrlMatch[1].trim();
-      if (!isExcluded(url)) {
-        console.log("✅ Found linkUrl in JSON:", url);
+        console.log(`✅ Found Visit Website URL: ${url}`);
         return { visitUrl: url, dateStr, timeStr };
       }
     }
 
+    // Fallback: Check for linkUrl in embedded JSON
+    const linkUrlMatch = html.match(/["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i);
+    if (linkUrlMatch) {
+      const url = linkUrlMatch[1].trim();
+      if (!isExcluded(url)) {
+        console.log(`✅ Found linkUrl in JSON: ${url}`);
+        return { visitUrl: url, dateStr, timeStr };
+      }
+    }
+
+    console.log(`⚠️ No Visit Website URL found for: ${eventUrl}`);
     return { visitUrl: null, dateStr, timeStr };
   } catch (error) {
-    console.error("Error extracting URL from", eventUrl, ":", error);
+    console.error("❌ Error extracting URL from", eventUrl, ":", error);
     return { visitUrl: null, dateStr: null, timeStr: null };
   }
 }
