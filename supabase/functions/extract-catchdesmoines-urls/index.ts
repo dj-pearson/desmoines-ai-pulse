@@ -236,28 +236,27 @@ async function extractVisitWebsiteFromDetailPage(
     }
 
     // Multiple regex patterns to find the Visit Website link
-    // Updated with more flexible patterns
+    // The actual HTML structure is:
+    // <a href="URL" target="_blank" class="action-item"><i ...></i>Visit Website</a>
     const patterns = [
-      // Pattern 1: action-item class with Visit Website text (handles icon and whitespace)
-      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*action-item[^"']*["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
-      // Pattern 2: Reverse order (class before href)
-      /<a[^>]*class=["'][^"']*action-item[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
-      // Pattern 3: Any link with Visit Website text
-      /<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
-      // Pattern 4: Target blank with external link and Visit Website
-      /<a[^>]*href=["']([^"']+)["'][^>]*target=["']_blank["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
-      // Pattern 5: Just "Website" text (not "Visit Website") - some pages might abbreviate
-      /<a[^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?>\s*Website\s*<[\s\S]*?<\/a>/gi,
-      // Pattern 6: Button or link with class containing "website"
-      /<a[^>]*class=["'][^"']*website[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
-      // Pattern 7: href before class, class containing website
-      /<a[^>]*href=["']([^"']+)["'][^>]*class=["'][^"']*website[^"']*["'][^>]*>/gi,
-      // Pattern 8: data-url or data-href attributes
-      /<[^>]*data-(?:url|href)=["'](https?:\/\/[^"']+)["'][^>]*>[\s\S]*?Website[\s\S]*?</gi,
-      // Pattern 9: Link with title="Visit Website" or title="Website"
-      /<a[^>]*href=["']([^"']+)["'][^>]*title=["'][^"']*Website[^"']*["'][^>]*>/gi,
-      // Pattern 10: Simpleview CMS pattern - primary link with external URL
-      /<a[^>]*class=["'][^"']*(?:primary|external|outbound)[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi,
+      // Pattern 1: EXACT match for CatchDesMoines structure (href before class)
+      // <a href="URL" target="_blank" class="action-item">...Visit Website...</a>
+      /<a\s+href=["']([^"']+)["'][^>]*class=["']action-item["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+
+      // Pattern 2: Class before href variant
+      /<a\s+class=["']action-item["'][^>]*href=["']([^"']+)["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+
+      // Pattern 3: Simple - any link with "Visit Website" text (most permissive)
+      /<a\s[^>]*href=["']([^"']+)["'][^>]*>(?:[^<]*<[^>]*>)*[^<]*Visit\s*Website[^<]*(?:<[^>]*>[^<]*)*<\/a>/gi,
+
+      // Pattern 4: href with target="_blank" (external links)
+      /<a\s+href=["']([^"']+)["']\s+target=["']_blank["'][^>]*>[\s\S]*?Visit\s*Website[\s\S]*?<\/a>/gi,
+
+      // Pattern 5: Look for action-item class and extract href (two-step approach)
+      /<a[^>]+class=["'][^"']*action-item[^"']*["'][^>]+href=["']([^"']+)["'][^>]*>/gi,
+
+      // Pattern 6: Reverse - href then action-item class
+      /<a[^>]+href=["']([^"']+)["'][^>]+class=["'][^"']*action-item[^"']*["'][^>]*>/gi,
     ];
 
     for (let i = 0; i < patterns.length; i++) {
