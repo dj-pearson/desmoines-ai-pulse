@@ -281,6 +281,8 @@ async function scrapeWithPuppeteer(
 
 /**
  * Scrape a URL using Playwright
+ * NOTE: Playwright is NOT supported in Deno edge functions (requires browser binaries)
+ * This function returns an error and suggests using 'firecrawl' or 'browserless' instead
  */
 async function scrapeWithPlaywright(
   url: string,
@@ -288,80 +290,14 @@ async function scrapeWithPlaywright(
 ): Promise<ScraperResult> {
   const startTime = Date.now();
   
-  try {
-    console.log(`🎭 Using Playwright to scrape: ${url}`);
-    
-    // Dynamic import for Playwright
-    const { chromium } = await import('npm:playwright@1.40.0');
-    
-    const browser = await chromium.launch({
-      headless: true,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-      ],
-    });
-
-    try {
-      const context = await browser.newContext({
-        userAgent: config.userAgent,
-        viewport: { width: 1920, height: 1080 },
-      });
-      
-      const page = await context.newPage();
-      
-      // Navigate to URL
-      console.log(`🌐 Navigating to ${url}...`);
-      await page.goto(url, {
-        waitUntil: 'networkidle',
-        timeout: config.timeout,
-      });
-      
-      // Wait for additional time for JS to render
-      if (config.waitTime) {
-        console.log(`⏳ Waiting ${config.waitTime}ms for JS rendering...`);
-        await page.waitForTimeout(config.waitTime);
-      }
-      
-      // Wait for specific selector if provided
-      if (config.waitForSelector) {
-        try {
-          await page.waitForSelector(config.waitForSelector, { timeout: 5000 });
-        } catch (e) {
-          console.log(`⚠️ Selector ${config.waitForSelector} not found, continuing anyway`);
-        }
-      }
-      
-      // Get page content
-      const html = await page.content();
-      const text = await page.textContent('body') || '';
-      
-      console.log(`✅ Playwright scraped ${html.length} chars HTML, ${text.length} chars text`);
-      
-      await context.close();
-      
-      return {
-        success: true,
-        html,
-        text,
-        backend: 'playwright',
-        duration: Date.now() - startTime,
-      };
-      
-    } finally {
-      await browser.close();
-    }
-    
-  } catch (error) {
-    console.error(`❌ Playwright error:`, error);
-    return {
-      success: false,
-      error: error.message,
-      backend: 'playwright',
-      duration: Date.now() - startTime,
-    };
-  }
+  console.error(`❌ Playwright is not supported in Deno edge functions. Use 'firecrawl' or 'browserless' backend instead.`);
+  
+  return {
+    success: false,
+    error: 'Playwright is not supported in Deno edge functions. Use firecrawl or browserless backend instead.',
+    backend: 'playwright',
+    duration: Date.now() - startTime,
+  };
 }
 
 /**
