@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
@@ -81,7 +80,15 @@ export default function Auth() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { isAuthenticated } = useAuth();
+  const {
+    isAuthenticated,
+    login,
+    signup,
+    signInWithGoogle,
+    signInWithApple,
+    resetPassword: resetPasswordContext,
+    resendVerification: resendVerificationContext,
+  } = useAuth();
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -103,8 +110,6 @@ export default function Auth() {
         : [...prev.interests, interestId]
     }));
   };
-
-  const { login } = useAuth();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,34 +148,22 @@ export default function Auth() {
 
   const handleResendVerification = async () => {
     setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: signupEmail,
+    const result = await resendVerificationContext(signupEmail);
+
+    if (!result.success) {
+      toast({
+        title: "Resend Failed",
+        description: result.error || "Failed to resend verification email",
+        variant: "destructive",
       });
-
-      if (error) {
-        toast({
-          title: "Resend Failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
+    } else {
       toast({
         title: "Email Sent!",
         description: "Please check your inbox for the verification link.",
       });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to resend verification email.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
@@ -185,38 +178,24 @@ export default function Auth() {
     }
 
     setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(
-        forgotPasswordEmail,
-        {
-          redirectTo: `${window.location.origin}/auth?reset=true`,
-        }
-      );
+    const result = await resetPasswordContext(forgotPasswordEmail);
 
-      if (error) {
-        toast({
-          title: "Reset Failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
+    if (!result.success) {
+      toast({
+        title: "Reset Failed",
+        description: result.error || "Failed to send reset email",
+        variant: "destructive",
+      });
+    } else {
       toast({
         title: "Reset Email Sent!",
         description: "Check your email for a password reset link.",
       });
       setShowForgotPassword(false);
       setForgotPasswordEmail("");
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to send reset email. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
     }
+
+    setIsLoading(false);
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -254,142 +233,87 @@ export default function Auth() {
 
     setIsLoading(true);
 
-    try {
-      const redirectUrl = `${window.location.origin}/auth/verified`;
-
-      // Prepare metadata based on account type
-      const metadata = accountType === "personal"
-        ? {
-            account_type: "personal",
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            phone: formData.phone,
-            location: formData.location,
-            interests: formData.interests,
-            communication_preferences: {
-              email_notifications: formData.emailNotifications,
-              sms_notifications: formData.smsNotifications,
-              event_recommendations: formData.eventRecommendations,
-            }
+    // Prepare metadata based on account type
+    const metadata = accountType === "personal"
+      ? {
+          account_type: "personal",
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: formData.phone,
+          location: formData.location,
+          interests: formData.interests,
+          communication_preferences: {
+            email_notifications: formData.emailNotifications,
+            sms_notifications: formData.smsNotifications,
+            event_recommendations: formData.eventRecommendations,
           }
-        : {
-            account_type: "business",
-            business_name: formData.businessName,
-            business_type: formData.businessType,
-            business_address: formData.businessAddress,
-            business_website: formData.businessWebsite,
-            first_name: formData.firstName,
-            last_name: formData.lastName,
-            phone: formData.phone,
-            location: formData.location,
-          };
-
-      const { data, error } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: metadata
         }
+      : {
+          account_type: "business",
+          business_name: formData.businessName,
+          business_type: formData.businessType,
+          business_address: formData.businessAddress,
+          business_website: formData.businessWebsite,
+          first_name: formData.firstName,
+          last_name: formData.lastName,
+          phone: formData.phone,
+          location: formData.location,
+        };
+
+    const result = await signup(formData.email, formData.password, metadata);
+
+    if (!result.success) {
+      toast({
+        title: "Signup Failed",
+        description: result.error || "Failed to create account",
+        variant: "destructive",
       });
-
-      if (error) {
-        toast({
-          title: "Signup Failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        return;
-      }
-
+    } else if (result.needsVerification) {
       // Show email confirmation screen
       setSignupEmail(formData.email);
       setShowEmailConfirmation(true);
-    } catch (error) {
+    } else {
+      // Signup successful and no verification needed (rare case)
       toast({
-        title: "Signup Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
+        title: "Account Created!",
+        description: "Welcome to Des Moines Insider!",
       });
-    } finally {
-      setIsLoading(false);
+      navigate("/", { replace: true });
     }
+
+    setIsLoading(false);
   };
 
   const handleGoogleSignIn = async () => {
     setIsLoading(true);
-    try {
-      // Build the redirect URL with any intended destination
-      const redirectTo = searchParams.get("redirect");
-      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
-      if (redirectTo) {
-        callbackUrl.searchParams.set("redirect", redirectTo);
-      }
+    const redirectTo = searchParams.get("redirect") || undefined;
+    const result = await signInWithGoogle(redirectTo);
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: callbackUrl.toString(),
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          }
-        }
-      });
-
-      if (error) {
-        toast({
-          title: "Google Sign In Failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        setIsLoading(false);
-      }
-      // Don't set isLoading to false here - let the redirect happen
-    } catch (error: any) {
+    if (!result.success) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to sign in with Google. Please try again.",
+        title: "Google Sign In Failed",
+        description: result.error || "Failed to sign in with Google",
         variant: "destructive",
       });
       setIsLoading(false);
     }
+    // Don't set isLoading to false on success - let the redirect happen
   };
 
   const handleAppleSignIn = async () => {
     setIsLoading(true);
-    try {
-      // Build the redirect URL with any intended destination
-      const redirectTo = searchParams.get("redirect");
-      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
-      if (redirectTo) {
-        callbackUrl.searchParams.set("redirect", redirectTo);
-      }
+    const redirectTo = searchParams.get("redirect") || undefined;
+    const result = await signInWithApple(redirectTo);
 
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'apple',
-        options: {
-          redirectTo: callbackUrl.toString(),
-        }
-      });
-
-      if (error) {
-        toast({
-          title: "Apple Sign In Failed",
-          description: error.message,
-          variant: "destructive",
-        });
-        setIsLoading(false);
-      }
-      // Don't set isLoading to false here - let the redirect happen
-    } catch (error: any) {
+    if (!result.success) {
       toast({
-        title: "Error",
-        description: error.message || "Failed to sign in with Apple. Please try again.",
+        title: "Apple Sign In Failed",
+        description: result.error || "Failed to sign in with Apple",
         variant: "destructive",
       });
       setIsLoading(false);
     }
+    // Don't set isLoading to false on success - let the redirect happen
   };
 
   return (
