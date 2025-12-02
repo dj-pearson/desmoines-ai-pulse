@@ -208,6 +208,11 @@ export default function Footer() {
                     Terms of Service
                   </Link>
                 </li>
+                <li>
+                  <Link to="/contact" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    Contact Us
+                  </Link>
+                </li>
               </ul>
             </div>
           </div>
