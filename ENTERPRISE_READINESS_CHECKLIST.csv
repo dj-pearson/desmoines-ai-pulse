@@ -1,0 +1,218 @@
+Section,Item,Status,Priority,Complexity,Description,Implementation Notes
+Core Auth,Email/Password Authentication,Exists,N/A,N/A,Basic email/password login via Supabase Auth,Fully implemented in AuthContext.tsx
+Core Auth,OAuth Integration (Google),Exists,N/A,N/A,Google Sign-In with OAuth callback handling,oauth-callback edge function handles redirects
+Core Auth,Session Management,Exists,N/A,N/A,Automatic session refresh and token handling,5-minute admin role caching implemented
+Core Auth,Role-Based Access Control,Exists,N/A,N/A,User/admin/root_admin role hierarchy,ProtectedRoute component gates admin pages
+Core Auth,Multi-Factor Authentication (MFA),Missing,Critical,High,2FA/TOTP/Authenticator app support for enhanced security,Required for enterprise compliance - use Supabase MFA features
+Core Auth,Password Complexity Policies,Missing,High,Low,Enforce minimum length/special chars/numbers/uppercase,Add Zod schema validation on registration
+Core Auth,Session Timeout Configuration,Missing,High,Medium,Configurable idle timeout for sessions,Add idle timer with automatic logout
+Core Auth,Passwordless Authentication,Missing,Medium,Medium,Magic link or biometric login options,Supabase supports magic links out-of-box
+Core Auth,API Key Management,Missing,Medium,High,Personal access tokens for API access,Create api_keys table with hashed tokens
+Core Auth,Account Lockout Policy,Missing,High,Medium,Lock accounts after failed login attempts,Track attempts in database with lockout duration
+Core Auth,Password Reset Security,Partial,Medium,Low,Secure password reset flow with rate limiting,Add rate limiting to reset endpoint
+Core Auth,Login Activity Logging,Missing,High,Medium,Log all login attempts with IP/device/timestamp,Create auth_activity_log table
+Core Auth,Single Sign-On (SSO) - SAML,Missing,Low,High,Enterprise SAML SSO integration,For B2B enterprise customers
+Core Auth,Device Management,Missing,Medium,Medium,View and revoke authorized devices,Track sessions by device fingerprint
+Media,Image Upload & Storage,Exists,N/A,N/A,Supabase Storage for event/profile images,EventPhotoUpload.tsx handles uploads
+Media,Image Optimization,Exists,N/A,N/A,OptimizedImage component with lazy loading,Uses sharp for build-time optimization
+Media,Image Proxy Service,Exists,N/A,N/A,Edge function for proxying external images,image-proxy/index.ts handles caching
+Media,Video Upload Support,Missing,Medium,High,Video upload/streaming/transcoding infrastructure,Consider Cloudflare Stream or Mux integration
+Media,CDN Configuration,Partial,Medium,Low,Cloudflare Pages provides CDN - needs explicit caching headers,Add Cache-Control headers to responses
+Media,WebP/AVIF Auto-Conversion,Missing,Low,Medium,Serve modern formats based on browser support,Use Cloudflare Image Resizing or sharp
+Media,Batch Image Processing,Missing,Low,Medium,Bulk upload and optimization tools,Create admin batch upload component
+Media,Image Transformation API,Missing,Low,High,On-the-fly resizing with URL parameters,Cloudflare Images or custom edge function
+Media,Media Library Management,Missing,Medium,Medium,Centralized media browser for admins,Create MediaLibrary component with filtering
+Media,Image Alt Text Generation,Missing,Low,Medium,AI-generated alt text for accessibility,Use Claude Vision API for descriptions
+CRM,User Profiles,Exists,N/A,N/A,profiles table with preferences/settings,Linked to auth.users via FK
+CRM,Favorites & Ratings System,Exists,N/A,N/A,Users can favorite events/restaurants,favorites and ratings tables implemented
+CRM,Newsletter Subscriptions,Exists,N/A,N/A,Email subscription management,Recent migration adds subscription preferences
+CRM,Email Preferences,Exists,N/A,N/A,Users control notification settings,EmailPreferencesCard component
+CRM,Business Partnership Applications,Exists,N/A,N/A,Business owner application form,BusinessPartnershipApplication.tsx
+CRM,Contact Form System,Missing,High,Low,Centralized lead capture form,Create contact_submissions table + form
+CRM,CRM Dashboard,Missing,High,High,Customer management interface for admins,Build admin/CRMDashboard.tsx with user list
+CRM,Communication History,Missing,Medium,High,Unified message/email history per user,Create communications table with threading
+CRM,Customer Segmentation,Missing,Medium,High,Audience grouping by behavior/preferences,Add segments table + assignment logic
+CRM,Lead Scoring,Missing,Low,High,Automated lead qualification scoring,Create scoring algorithm based on activity
+CRM,Sales Pipeline,Missing,Low,High,Deal tracking with stages,For B2B features - create deals table
+CRM,Customer Support Tickets,Missing,Medium,High,Help desk ticket system,Create tickets table + support dashboard
+CRM,Customer Tags & Notes,Missing,Medium,Low,Admin notes and tags on users,Add tags array and notes field to profiles
+CRM,Activity Timeline,Missing,Medium,Medium,Visual timeline of user interactions,Create activity component using existing logs
+GPS,Geocoding Service,Exists,N/A,N/A,Address to coordinates conversion,geocode-location edge function
+GPS,PostGIS Geospatial Support,Exists,N/A,N/A,PostgreSQL geospatial extensions,add_postgis_geospatial.sql migration
+GPS,Proximity Search,Exists,N/A,N/A,Find nearby events/restaurants by distance,ST_DWithin queries implemented
+GPS,Interactive Maps,Exists,N/A,N/A,Leaflet/React Leaflet integration,EventsMap and AttractionsMap components
+GPS,Coordinate Auto-Backfill,Exists,N/A,N/A,Automated lat/lng population for locations,Scheduled cron job
+GPS,Address Validation API,Missing,Medium,Medium,Standardize and validate addresses,Integrate with Google Places or Smarty
+GPS,Geofencing,Missing,Low,High,Location-based notifications/boundaries,PostGIS supports - need trigger logic
+GPS,Turn-by-Turn Directions,Missing,Low,High,Navigation routing integration,MapBox or Google Directions API
+GPS,Real-Time Location,Missing,Low,High,Live position tracking for mobile app,Future mobile app consideration
+GPS,Location Autocomplete,Partial,Low,Low,Address suggestions while typing,Google Places autocomplete partially used
+Billing,Stripe Integration,Exists,N/A,N/A,Payment processing for campaigns,create-campaign-checkout edge function
+Billing,Subscription Tiers,Exists,N/A,N/A,Free/Insider/VIP tier system,useSubscription hook + PremiumGate
+Billing,Campaign Checkout,Exists,N/A,N/A,One-time payment for ad campaigns,Full checkout flow implemented
+Billing,Payment Status Tracking,Exists,N/A,N/A,Track pending/completed payments,campaigns table with payment_status
+Billing,Customer Subscription Portal,Missing,High,Medium,Self-service plan management,Stripe Customer Portal integration
+Billing,Invoice Generation,Missing,High,Medium,PDF invoice creation for payments,Extend jsPDF for invoices
+Billing,Refund Management UI,Missing,Medium,Medium,Admin interface for processing refunds,Stripe Refunds API + admin page
+Billing,Usage-Based Billing,Missing,Low,High,Metered/event-based charges,Stripe Usage Records API
+Billing,Multi-Currency Support,Missing,Low,Medium,Support currencies beyond USD,Stripe multi-currency setup
+Billing,Dunning Management,Missing,Medium,Medium,Retry logic for failed payments,Stripe webhooks + retry queue
+Billing,Promo Codes & Discounts,Missing,Medium,Low,Coupon system for subscriptions,Stripe Coupons/Promo Codes API
+Billing,Payment Method Management,Missing,Medium,Low,Add/remove payment methods,Stripe SetupIntent flow
+Billing,Billing History,Missing,Medium,Low,View past transactions,Query Stripe charges + display
+Billing,Tax Calculation,Missing,Low,High,Automatic tax based on location,Stripe Tax or TaxJar integration
+Templates,Email Templates,Exists,N/A,N/A,HTML email templates for notifications,email-integration.ts with templates
+Templates,Email Sequence System,Exists,N/A,N/A,7-day event promotion sequences,Automated drip campaigns
+Templates,Email Personalization,Exists,N/A,N/A,Dynamic variables in emails,Template interpolation implemented
+Templates,Email Template Builder UI,Missing,Medium,High,Drag-and-drop template editor,MJML or Unlayer integration
+Templates,A/B Email Testing,Missing,Low,High,Split testing for email variants,Create variants table + tracking
+Templates,SMS Templates,Missing,Low,Medium,Text message notifications,Twilio integration needed
+Templates,Push Notification Templates,Missing,Low,Medium,Web push message templates,Service Worker + push API
+Templates,PDF Report Templates,Missing,Medium,Medium,Customizable report layouts,Extend jsPDF with template system
+Templates,Social Media Post Templates,Missing,Low,Low,Pre-designed social media content,Create template selection UI
+Templates,Template Preview Mode,Missing,Medium,Low,Before/after preview of templates,Add preview modal to template editor
+Storage,Supabase Storage Integration,Exists,N/A,N/A,File uploads to Supabase buckets,Multiple buckets configured
+Storage,Event Photo Storage,Exists,N/A,N/A,Event image uploads,Public bucket with RLS
+Storage,Creative Asset Storage,Exists,N/A,N/A,Advertising creative uploads,UploadCreatives.tsx component
+Storage,File Size Validation,Exists,N/A,N/A,Validate upload file sizes,Client-side validation
+Storage,File Versioning,Missing,Medium,High,Track file revision history,Create file_versions table
+Storage,Backup Automation,Missing,Critical,High,Automated database/storage backups,Supabase Pro plan + verify restoration
+Storage,Storage Quotas,Missing,Medium,Medium,Per-user storage limits,Track usage in profiles table
+Storage,Temporary/Expiring Links,Missing,Low,Medium,Time-limited file access URLs,Supabase signed URLs support this
+Storage,Virus Scanning,Missing,High,High,Scan uploaded files for malware,ClamAV or cloud scanning service
+Storage,File Organization (Folders),Missing,Low,Medium,Folder hierarchy for files,Add folder_path to file metadata
+Storage,Large File Upload (Chunked),Missing,Low,High,Resumable uploads for large files,TUS protocol or multipart upload
+Documents,PDF Generation,Exists,N/A,N/A,jsPDF for document creation,pdf-generator.ts for playbooks
+Documents,Event Promotion Playbook,Exists,N/A,N/A,Professional PDF marketing guides,Multi-page formatted documents
+Documents,Budget Visualization,Exists,N/A,N/A,Charts and tables in PDFs,Recharts integration for visuals
+Documents,Document Preview Mode,Exists,N/A,N/A,Preview before download (free tier),PremiumGate controls full access
+Documents,Report Generation,Missing,Medium,Medium,Analytics/performance reports,Extend PDF generator for reports
+Documents,Excel/CSV Export,Missing,Medium,Low,Data export to spreadsheet formats,xlsx library for Excel export
+Documents,Word Document Export,Missing,Low,Medium,Export to .docx format,docx library integration
+Documents,Digital Signatures,Missing,Low,High,Sign documents electronically,DocuSign or HelloSign API
+Documents,Bulk Document Generation,Missing,Low,Medium,Generate multiple docs at once,Queue-based processing
+Documents,Document Templates,Missing,Medium,Medium,Customizable doc layouts,Template selection system
+AI,Claude API Integration,Exists,N/A,N/A,Anthropic Claude for content generation,aiConfig.ts with model selection
+AI,Article Generation,Exists,N/A,N/A,AI-written SEO articles,generate-article edge function
+AI,SEO Content Generation,Exists,N/A,N/A,Meta descriptions and keywords,generate-seo-content function
+AI,NLP-Powered Search,Exists,N/A,N/A,Natural language search queries,nlp-search edge function
+AI,Competitor Analysis,Exists,N/A,N/A,AI competitor content analysis,analyze-competitor function
+AI,Event Content Enhancement,Exists,N/A,N/A,Enhance event descriptions,Multiple enhancement functions
+AI,AI Configuration Dashboard,Exists,N/A,N/A,Admin controls for AI settings,Model/temperature/token config
+AI,Trip Planner AI,Exists,N/A,N/A,AI-powered itinerary builder,useTripPlanner hook
+AI,Customer Support Chatbot,Missing,High,High,AI-powered help/Q&A chatbot,Claude API + chat UI component
+AI,AI Image Generation,Missing,Low,High,DALL-E/Stable Diffusion integration,For marketing asset creation
+AI,Voice/Speech Processing,Missing,Low,High,Speech-to-text transcription,Whisper or Google Speech API
+AI,AI Content Moderation,Missing,Medium,Medium,Auto-flag inappropriate content,Claude for content review
+AI,Prompt Version Control,Missing,Medium,Medium,Track and version AI prompts,Create prompts table with versions
+AI,AI Usage Analytics,Missing,Medium,Low,Track token usage and costs,Log API calls with token counts
+AI,Personalized Recommendations,Missing,Medium,High,AI-driven user recommendations,Collaborative filtering + AI
+Blog,Articles Database,Exists,N/A,N/A,articles table in database,Basic schema implemented
+Blog,Article Editor Component,Exists,N/A,N/A,Admin article editing,AdminArticleEditor.tsx (basic)
+Blog,Content Queue,Exists,N/A,N/A,Queue articles for review,ContentQueue.tsx component
+Blog,Article Webhooks,Exists,N/A,N/A,Publish article notifications,publish-article-webhook function
+Blog,Full CMS Dashboard,Missing,High,High,Complete article management UI,Build articles admin page
+Blog,Rich Text Editor (WYSIWYG),Missing,High,Medium,Visual content editing,TipTap or Slate.js integration
+Blog,Draft/Publish Workflow,Missing,High,Medium,Save drafts before publishing,Add status field + workflow
+Blog,Author Management,Missing,Medium,Low,Author profiles and attribution,Create authors table + FK
+Blog,Article Categories/Tags,Missing,Medium,Low,Taxonomy for articles,Create categories/tags tables
+Blog,Scheduled Publishing,Missing,Medium,Medium,Publish at future date/time,Add publish_at timestamp + cron
+Blog,Article Revisions,Missing,Medium,Medium,Version history for edits,Create article_revisions table
+Blog,Comments System,Missing,Low,High,Reader comments on articles,Create comments table + moderation
+Blog,Related Articles,Missing,Low,Medium,Show related content,AI or tag-based suggestions
+Blog,Article Analytics,Missing,Medium,Low,View counts and engagement,Track page views per article
+SEO,Meta Tags Management,Exists,N/A,N/A,Dynamic title/description/keywords,Per-page meta tag components
+SEO,Sitemap Generation,Exists,N/A,N/A,XML sitemaps for search engines,generate-sitemap edge function
+SEO,Structured Data (Schema.org),Exists,N/A,N/A,Event/Restaurant/LocalBusiness schema,Schema components implemented
+SEO,Open Graph Tags,Exists,N/A,N/A,Social media sharing metadata,og:title/description/image tags
+SEO,Google Search Console Integration,Exists,N/A,N/A,GSC OAuth and data sync,gsc-* edge functions
+SEO,PageSpeed Insights,Exists,N/A,N/A,Performance scoring integration,PageSpeed API integration
+SEO,Core Web Vitals Monitoring,Exists,N/A,N/A,LCP/FID/CLS tracking,useWebVitals hook
+SEO,SEO Audit System,Exists,N/A,N/A,Automated SEO checks,seo-audit edge function
+SEO,Canonical URLs,Exists,N/A,N/A,Prevent duplicate content,Canonical link tags
+SEO,SEO Monitoring Dashboard,Missing,Medium,Medium,Unified SEO metrics view,Build admin SEO dashboard
+SEO,Keyword Position Tracking,Missing,Low,High,Track rankings over time,GSC data + historical tracking
+SEO,Backlink Monitoring,Missing,Low,High,Track inbound links,Ahrefs or Moz API
+SEO,301 Redirect Management,Missing,Medium,Medium,Manage URL redirects,Create redirects table + middleware
+SEO,Schema Markup Validator,Missing,Low,Low,Validate structured data,Google Rich Results Test API
+SEO,Hreflang Tags,Missing,Low,Low,Multi-language support,For internationalization
+Automation,Scheduled Jobs (pg_cron),Exists,N/A,N/A,Database-level cron jobs,Multiple cron migrations
+Automation,Event Scraping Automation,Exists,N/A,N/A,Auto-scrape event sources,schedule_event_scraping.sql
+Automation,Event Reminders,Exists,N/A,N/A,Automated reminder emails,Hourly cron job
+Automation,Weekly Digest,Exists,N/A,N/A,Automated weekly emails,add_weekly_digest_cron.sql
+Automation,Content Auto-Enrichment,Exists,N/A,N/A,AI content enhancement,schedule_auto_enrichment.sql
+Automation,URL Validation,Exists,N/A,N/A,Check broken links,schedule_url_validation.sql
+Automation,Data Cleanup Jobs,Exists,N/A,N/A,Remove old/stale data,auto_cleanup_old_events.sql
+Automation,GitHub Actions CI/CD,Exists,N/A,N/A,Automated testing/deployment,ci.yml and playwright.yml
+Automation,Workflow Builder UI,Missing,Medium,High,Visual automation designer,No-code workflow editor
+Automation,Conditional Logic,Missing,Medium,High,If/then automation branching,Create workflow engine
+Automation,Webhook Triggers,Partial,Medium,Medium,Trigger automations from external events,Expand webhook handling
+Automation,Automation Monitoring,Missing,Medium,Medium,View automation run history,Create automation_logs table
+Automation,Pause/Resume Automations,Missing,Medium,Medium,Disable automations without code,Add is_active flag to crons
+Automation,Error Retry Logic,Missing,High,Medium,Auto-retry failed jobs,Implement exponential backoff
+Automation,Zapier/Make Integration,Missing,Low,High,Connect to external automation tools,REST API for triggers/actions
+Security,CORS Protection,Exists,N/A,N/A,Environment-aware CORS headers,_shared/cors.ts configuration
+Security,Rate Limiting,Exists,N/A,N/A,100 req/15 min per IP,_shared/rateLimit.ts
+Security,Input Validation,Exists,N/A,N/A,Schema-based request validation,_shared/validation.ts
+Security,SQL Injection Prevention,Exists,N/A,N/A,Parameterized queries,Supabase client handles
+Security,XSS Protection,Exists,N/A,N/A,DOMPurify for user content,Content sanitization
+Security,Row Level Security (RLS),Exists,N/A,N/A,Database access policies,All tables have RLS enabled
+Security,Security Headers,Missing,Critical,Low,CSP/HSTS/X-Frame-Options headers,Add to Cloudflare Pages headers
+Security,WAF Rules,Missing,Medium,Medium,Web Application Firewall,Cloudflare WAF configuration
+Security,API Key Rotation,Missing,Medium,Medium,Automatic secret rotation,Implement rotation schedule
+Security,Security Audit Logging,Missing,High,Medium,Log security events,Create security_audit_log table
+Security,Penetration Testing,Missing,High,High,Professional security assessment,Schedule external audit
+Security,Encryption at Rest Documentation,Missing,Medium,Low,Document data encryption,Supabase encrypts - document it
+Security,DDOS Protection,Partial,Medium,Low,Cloudflare provides baseline,Document and configure rules
+Security,Vulnerability Scanning,Missing,High,Medium,Automated security scanning,Snyk or npm audit integration
+Security,Content Security Policy,Missing,High,Low,Restrict resource loading,Add CSP header configuration
+Monitoring,Error Handler,Exists,N/A,N/A,Centralized error handling,errorHandler.ts with context
+Monitoring,Web Vitals Tracking,Exists,N/A,N/A,Core Web Vitals metrics,useWebVitals hook
+Monitoring,Analytics Tracking,Exists,N/A,N/A,User behavior analytics,analytics-tracker.ts
+Monitoring,Activity Logging,Exists,N/A,N/A,User activity tracking,Activity log viewer component
+Monitoring,Data Quality Dashboard,Exists,N/A,N/A,Monitor data completeness,DataQualityDashboard component
+Monitoring,Error Tracking Service,Missing,Critical,Medium,Sentry/LogRocket integration,Essential for production
+Monitoring,Real-Time Alerting,Missing,High,Medium,Instant error notifications,PagerDuty/Slack integration
+Monitoring,Uptime Monitoring,Missing,High,Low,Service availability checks,UptimeRobot or Pingdom
+Monitoring,APM (Application Performance),Missing,Medium,High,Performance profiling,Datadog or New Relic
+Monitoring,Custom Metrics Dashboard,Missing,Medium,High,Business KPI tracking,Build admin metrics page
+Monitoring,Log Aggregation,Missing,Medium,High,Centralized log storage,Elasticsearch or Loki
+Monitoring,Distributed Tracing,Missing,Low,High,Request correlation,OpenTelemetry integration
+Monitoring,Incident Response Playbook,Missing,High,Low,Documented procedures,Create INCIDENT_RESPONSE.md
+Testing,E2E Tests (Playwright),Exists,N/A,N/A,Comprehensive browser tests,7 test suites implemented
+Testing,Accessibility Tests,Exists,N/A,N/A,WCAG 2.1 Level AA,axe-core integration
+Testing,Mobile Responsive Tests,Exists,N/A,N/A,Multiple device viewports,Mobile Chrome/Safari tested
+Testing,Performance Tests,Exists,N/A,N/A,Lighthouse scoring,Performance benchmarks
+Testing,Visual Regression Tests,Exists,N/A,N/A,Screenshot comparisons,Detects layout changes
+Testing,Unit Tests,Missing,High,Medium,Component/function tests,Add Vitest + React Testing Library
+Testing,Integration Tests,Missing,Medium,Medium,API endpoint tests,Test Supabase interactions
+Testing,Load/Stress Testing,Missing,Medium,High,Performance under load,k6 or Artillery setup
+Testing,Security Testing,Missing,High,High,OWASP vulnerability scans,OWASP ZAP integration
+Testing,Test Coverage Reports,Missing,Medium,Low,Coverage metrics,Istanbul/c8 configuration
+Testing,API Contract Tests,Missing,Low,Medium,API schema validation,OpenAPI validation
+Testing,Mutation Testing,Missing,Low,High,Test quality verification,Stryker mutator
+DevOps,Cloudflare Pages Deployment,Exists,N/A,N/A,Automated production deploys,On push to main branch
+DevOps,GitHub Actions CI/CD,Exists,N/A,N/A,Automated testing pipeline,ci.yml workflow
+DevOps,Environment Variables,Exists,N/A,N/A,.env configuration,Supabase keys documented
+DevOps,Database Migrations,Exists,N/A,N/A,Supabase migrations,130+ migration files
+DevOps,Edge Functions Deployment,Exists,N/A,N/A,Serverless function deploys,supabase functions deploy
+DevOps,Infrastructure as Code,Missing,High,High,Terraform/Pulumi for infra,Reproducible deployments
+DevOps,Staging Environment,Missing,High,High,Pre-production testing,Separate Supabase project
+DevOps,Blue-Green Deployments,Missing,Medium,High,Zero-downtime deploys,Cloudflare Workers routing
+DevOps,Rollback Automation,Missing,High,Medium,One-click rollback,Cloudflare Pages supports
+DevOps,Database Backup Verification,Missing,Critical,Medium,Test backup restoration,Schedule restore tests
+DevOps,Disaster Recovery Plan,Missing,Critical,Low,Documented DR procedures,Create DR_PLAN.md
+DevOps,Secret Rotation,Missing,Medium,Medium,Automated credential rotation,Implement rotation policy
+DevOps,Feature Flags,Missing,Medium,High,Toggle features without deploy,LaunchDarkly or custom system
+DevOps,Container Support,Missing,Low,Medium,Docker configuration,Add Dockerfile if needed
+DevOps,Multi-Region Deployment,Missing,Low,High,Geographic redundancy,Cloudflare Workers regions
+Compliance,Privacy Policy,Exists,N/A,N/A,Privacy policy page,/privacy-policy route
+Compliance,Terms of Service,Exists,N/A,N/A,Terms page,/terms route
+Compliance,Cookie Consent,Missing,High,Low,GDPR cookie banner,Add consent management
+Compliance,Data Export (GDPR),Missing,High,Medium,User data portability,Export user data to JSON
+Compliance,Account Deletion,Missing,High,Medium,Right to be forgotten,Delete user data flow
+Compliance,Data Processing Agreement,Missing,Medium,Low,DPA documentation,Legal document needed
+Compliance,SOC 2 Preparation,Missing,Low,High,Security certification,For enterprise customers
+Compliance,HIPAA Compliance,Missing,Low,High,Health data compliance,If health data is stored
+Compliance,Accessibility Statement,Missing,Medium,Low,A11y compliance statement,Document WCAG compliance
+Compliance,Security.txt,Exists,N/A,N/A,Security contact info,/.well-known/security.txt
