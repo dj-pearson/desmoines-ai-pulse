@@ -1,0 +1,140 @@
+{
+    "name": "DMI Restaurant Social Monitor",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [{"field": "hours", "hoursInterval": 4}]
+          }
+        },
+        "name": "Every 4 Hours",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [250, 300]
+      },
+      {
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "tweet",
+          "operation": "search",
+          "searchText": "Des Moines restaurant opening OR \"new restaurant\" OR \"now open\" -filter:retweets",
+          "returnAll": false,
+          "limit": 50,
+          "additionalFields": {}
+        },
+        "name": "Search Twitter",
+        "type": "n8n-nodes-base.twitter",
+        "typeVersion": 1,
+        "position": [450, 300]
+      },
+      {
+        "parameters": {
+          "authentication": "oAuth2",
+          "resource": "post",
+          "operation": "search",
+          "searchQuery": "Des Moines restaurant",
+          "additionalFields": {}
+        },
+        "name": "Search Facebook",
+        "type": "n8n-nodes-base.facebook",
+        "typeVersion": 1,
+        "position": [450, 400]
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combinationMode": "mergeByPosition"
+        },
+        "name": "Merge Social Posts",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 2,
+        "position": [650, 350]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Filter and deduplicate posts\nconst items = [];\nconst seen = new Set();\n\nfor (const item of $input.all()) {\n  const text = item.json.text || item.json.message || '';\n  const url = item.json.url || item.json.permalink_url;\n  \n  // Skip if already processed\n  if (seen.has(url)) continue;\n  seen.add(url);\n  \n  // Filter for restaurant keywords\n  const keywords = ['restaurant', 'dining', 'food', 'opening', 'new menu'];\n  const hasKeyword = keywords.some(kw => text.toLowerCase().includes(kw));\n  \n  if (hasKeyword && text.length > 50) {\n    items.push({\n      json: {\n        text: text,\n        url: url,\n        platform: item.json.platform || 'unknown',\n        posted_at: item.json.created_at || new Date().toISOString()\n      }\n    });\n  }\n}\n\nreturn items;"
+        },
+        "name": "Filter Posts",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [850, 350]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "url": "https://api.anthropic.com/v1/messages",
+          "method": "POST",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Analyze this social media post about a Des Moines restaurant. Post: {{ $json.text }}\\n\\nDetermine:\\n1. Is this about a NEW restaurant or announcement? (yes/no)\\n2. If yes, extract: restaurant name, location, type of cuisine\\n3. Opening status: announced, opening soon, or newly opened\\n\\nReturn JSON: {isNew: boolean, name: string, location: string, cuisine: string, status: string}\"\n  }]\n}"
+        },
+        "name": "AI Analyze Post",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [1050, 350]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "boolean": [
+              {
+                "value1": "={{ JSON.parse($json.body).content[0].text.isNew }}",
+                "value2": true
+              }
+            ]
+          }
+        },
+        "name": "If New Restaurant",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [1250, 350]
+      },
+      {
+        "parameters": {
+          "operation": "insert",
+          "tableId": "restaurant_openings",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "name": "={{ $json.name }}",
+              "location": "={{ $json.location }}",
+              "cuisine": "={{ $json.cuisine }}",
+              "status": "={{ $json.status }}",
+              "source_url": "={{ $json.source_url }}",
+              "source_type": "social_media"
+            }
+          }
+        },
+        "name": "Insert to Database",
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [1450, 300]
+      }
+    ],
+    "connections": {
+      "Every 4 Hours": {
+        "main": [[
+          {"node": "Search Twitter", "type": "main", "index": 0},
+          {"node": "Search Facebook", "type": "main", "index": 0}
+        ]]
+      },
+      "Search Twitter": {
+        "main": [[{"node": "Merge Social Posts", "type": "main", "index": 0}]]
+      },
+      "Search Facebook": {
+        "main": [[{"node": "Merge Social Posts", "type": "main", "index": 1}]]
+      },
+      "Merge Social Posts": {
+        "main": [[{"node": "Filter Posts", "type": "main", "index": 0}]]
+      },
+      "Filter Posts": {
+        "main": [[{"node": "AI Analyze Post", "type": "main", "index": 0}]]
+      },
+      "AI Analyze Post": {
+        "main": [[{"node": "If New Restaurant", "type": "main", "index": 0}]]
+      },
+      "If New Restaurant": {
+        "main": [[{"node": "Insert to Database", "type": "main", "index": 0}]]
+      }
+    }
+  }

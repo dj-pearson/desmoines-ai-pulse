@@ -1,0 +1,468 @@
+{
+    "name": "DMI Restaurant Discovery Scanner",
+    "nodes": [
+      {
+        "parameters": {
+          "rule": {
+            "interval": [
+              {
+                "field": "cronExpression",
+                "expression": "0 6 * * *"
+              }
+            ]
+          }
+        },
+        "name": "Schedule Daily 6 AM",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1,
+        "position": [250, 300]
+      },
+      {
+        "parameters": {
+          "url": "https://www.desmoinesregister.com/search/?q=restaurant+opening",
+          "options": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 10
+            },
+            "ignoreResponseCode": true,
+            "response": {
+              "response": {
+                "fullResponse": true
+              }
+            }
+          }
+        },
+        "name": "Scrape Des Moines Register",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [450, 200]
+      },
+      {
+        "parameters": {
+          "url": "https://www.businessrecord.com/section/news/",
+          "options": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 10
+            },
+            "ignoreResponseCode": true,
+            "response": {
+              "response": {
+                "fullResponse": true
+              }
+            }
+          }
+        },
+        "name": "Scrape Business Record",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [450, 300]
+      },
+      {
+        "parameters": {
+          "url": "https://www.littlevillagemag.com/?s=restaurant+opening",
+          "options": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 10
+            },
+            "ignoreResponseCode": true,
+            "response": {
+              "response": {
+                "fullResponse": true
+              }
+            }
+          }
+        },
+        "name": "Scrape CITYVIEW",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [450, 400]
+      },
+      {
+        "parameters": {
+          "mode": "combine",
+          "combinationMode": "mergeByPosition"
+        },
+        "name": "Merge Sources",
+        "type": "n8n-nodes-base.merge",
+        "typeVersion": 2,
+        "position": [650, 300]
+      },
+      {
+        "parameters": {
+          "jsCode": "// Extract restaurant mentions from scraped HTML\nconst items = [];\n\nfor (const item of $input.all()) {\n  // Try different possible locations for the HTML body\n  let html = item.json.body || item.json.data || item.json || '';\n  \n  // Handle case where body might be an object\n  if (typeof html === 'object' && html !== null) {\n    html = JSON.stringify(html);\n  }\n  \n  // Skip if no HTML content\n  if (!html || typeof html !== 'string' || html.length < 100) {\n    console.log('Skipping item - no HTML content found. Keys:', Object.keys(item.json));\n    console.log('HTML type:', typeof html, 'Length:', html?.length || 0);\n    continue;\n  }\n  \n  // Multiple regex patterns to catch different HTML structures\n  const patterns = [\n    // Standard anchor tags with restaurant in href\n    /<a[^>]*href=[\"']([^\"']*restaurant[^\"']*)[\"'][^>]*>(.*?)<\\/a>/gi,\n    // Anchor tags with restaurant in text\n    /<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>([^<]*restaurant[^<]*)<\\/a>/gi,\n    // Links in article/post containers\n    /<article[^>]*>.*?<a[^>]*href=[\"']([^\"']*restaurant[^\"']*)[\"'][^>]*>(.*?)<\\/a>.*?<\\/article>/gis,\n    // Links in div containers with restaurant class\n    /<div[^>]*class=[^>]*restaurant[^>]*>.*?<a[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)<\\/a>/gis\n  ];\n  \n  const foundUrls = new Set(); // Prevent duplicates\n  \n  for (const pattern of patterns) {\n    try {\n      const matches = [...html.matchAll(pattern)];\n      \n      for (const match of matches) {\n        let url = match[1];\n        let title = (match[2] || '').replace(/<[^>]*>/g, '').trim();\n        \n        // Normalize URL\n        if (url && !url.startsWith('http')) {\n          // Handle relative URLs\n          if (url.startsWith('//')) {\n            url = 'https:' + url;\n          } else if (url.startsWith('/')) {\n            // Try to determine base URL from source\n            const baseUrl = item.json.url || 'https://www.littlevillagemag.com';\n            const urlObj = new URL(baseUrl);\n            url = urlObj.origin + url;\n          }\n        }\n        \n        // Skip if URL is invalid or duplicate\n        if (!url || !url.startsWith('http') || foundUrls.has(url)) {\n          continue;\n        }\n        \n        // Filter for relevant keywords (broader search)\n        const keywords = ['opening', 'new restaurant', 'announced', 'coming soon', 'now open', 'restaurant', 'dining', 'food', 'eatery'];\n        const searchText = (title + ' ' + url).toLowerCase();\n        const isRelevant = keywords.some(kw => searchText.includes(kw));\n        \n        if (isRelevant) {\n          foundUrls.add(url);\n          items.push({\n            json: {\n              url: url,\n              title: title || url,\n              source: item.json.source || item.json.url || 'unknown',\n              discovered_at: new Date().toISOString()\n            }\n          });\n        }\n      }\n    } catch (e) {\n      console.error('Error matching pattern:', e.message);\n      continue;\n    }\n  }\n}\n\nconsole.log(`Extracted ${items.length} article URLs`);\nreturn items;"
+        },
+        "name": "Extract Article URLs",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [850, 300]
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "options": {
+              "caseSensitive": true,
+              "leftValue": "",
+              "typeValidation": "strict"
+            },
+            "conditions": [
+              {
+                "id": "has-urls",
+                "leftValue": "={{ $input.all().length }}",
+                "rightValue": 0,
+                "operator": {
+                  "type": "number",
+                  "operation": "larger",
+                  "singleValue": true
+                }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        },
+        "name": "If Has URLs",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [1050, 300]
+      },
+      {
+        "parameters": {
+          "url": "={{ $json.url }}",
+          "options": {
+            "redirect": {
+              "followRedirects": true,
+              "maxRedirects": 10
+            },
+            "ignoreResponseCode": true,
+            "response": {
+              "response": {
+                "fullResponse": true
+              }
+            }
+          }
+        },
+        "name": "Fetch Full Articles",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [1250, 300]
+      },
+      {
+        "parameters": {
+          "authentication": "headerAuth",
+          "url": "https://api.anthropic.com/v1/messages",
+          "method": "POST",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 2000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Analyze this article and extract restaurant information if present. Article: {{ $json.body }}\\n\\nExtract:\\n1. Restaurant name\\n2. Full address (street, city, state, zip)\\n3. Cuisine type\\n4. Opening date or status (announced/opening_soon/newly_opened)\\n5. Brief description (2-3 sentences)\\n6. Phone number (if mentioned)\\n7. Website (if mentioned)\\n\\nReturn as JSON with keys: name, address, city, cuisine, opening_date, status, description, phone, website. If no restaurant found, return {found: false}\"\n  }]\n}",
+          "options": {}
+        },
+        "name": "AI Extract Restaurant Info",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [1450, 300],
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "1",
+            "name": "Anthropic API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "jsCode": "// Parse Claude's response and clean data\nconst items = [];\n\nfor (const item of $input.all()) {\n  try {\n    const response = JSON.parse(item.json.body);\n    const content = response.content[0].text;\n    const data = JSON.parse(content);\n    \n    if (data.found !== false && data.name) {\n      items.push({\n        json: {\n          ...data,\n          source_url: item.json.url,\n          source_title: item.json.title,\n          discovered_at: item.json.discovered_at\n        }\n      });\n    }\n  } catch (e) {\n    console.error('Failed to parse:', e);\n  }\n}\n\nreturn items;"
+        },
+        "name": "Parse AI Response",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [1650, 300]
+      },
+      {
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "=SELECT id FROM restaurants WHERE LOWER(name) = LOWER('{{ $json.name }}') AND city = '{{ $json.city }}' LIMIT 1",
+          "options": {}
+        },
+        "name": "Check Existing Restaurant",
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [1850, 300],
+        "credentials": {
+          "supabaseApi": {
+            "id": "2",
+            "name": "Supabase DMI"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "conditions": {
+            "string": [
+              {
+                "value1": "={{ $json.data.length }}",
+                "operation": "equal",
+                "value2": "0"
+              }
+            ]
+          }
+        },
+        "name": "If New Restaurant",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 1,
+        "position": [2050, 300]
+      },
+      {
+        "parameters": {
+          "url": "=https://maps.googleapis.com/maps/api/geocode/json?address={{ encodeURIComponent($json.address + ' ' + $json.city + ' Iowa') }}&key={{ $credentials.googleMapsApi.apiKey }}",
+          "options": {}
+        },
+        "name": "Geocode Address",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [2250, 250],
+        "credentials": {
+          "googleMapsApi": {
+            "id": "3",
+            "name": "Google Maps API"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "operation": "insert",
+          "tableId": "restaurant_openings",
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "name": "={{ $json.name }}",
+              "description": "={{ $json.description }}",
+              "location": "={{ $json.address }}",
+              "city": "={{ $json.city }}",
+              "cuisine": "={{ $json.cuisine }}",
+              "opening_date": "={{ $json.opening_date }}",
+              "status": "={{ $json.status }}",
+              "phone": "={{ $json.phone }}",
+              "website": "={{ $json.website }}",
+              "source_url": "={{ $json.source_url }}",
+              "latitude": "={{ $json.coordinates.lat }}",
+              "longitude": "={{ $json.coordinates.lng }}"
+            }
+          }
+        },
+        "name": "Insert Restaurant Opening",
+        "type": "n8n-nodes-base.supabase",
+        "typeVersion": 1,
+        "position": [2450, 250]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.SUPABASE_URL }}/functions/v1/generate-seo-content",
+          "method": "POST",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"contentType\": \"restaurant_opening\",\n  \"contentId\": \"{{ $json.id }}\"\n}",
+          "options": {}
+        },
+        "name": "Trigger SEO Generation",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [2650, 250]
+      },
+      {
+        "parameters": {
+          "url": "={{ $env.ADMIN_WEBHOOK_URL }}",
+          "method": "POST",
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={\n  \"message\": \"New restaurant discovered: {{ $json.name }}\",\n  \"restaurant\": {{ $json }},\n  \"count\": {{ $items().length }}\n}",
+          "options": {}
+        },
+        "name": "Notify Admin",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 3,
+        "position": [2850, 250]
+      }
+    ],
+    "connections": {
+      "Schedule Daily 6 AM": {
+        "main": [
+          [
+            {
+              "node": "Scrape Des Moines Register",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Scrape Business Record",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Scrape CITYVIEW",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Scrape Des Moines Register": {
+        "main": [
+          [
+            {
+              "node": "Merge Sources",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Scrape Business Record": {
+        "main": [
+          [
+            {
+              "node": "Merge Sources",
+              "type": "main",
+              "index": 1
+            }
+          ]
+        ]
+      },
+      "Scrape CITYVIEW": {
+        "main": [
+          [
+            {
+              "node": "Merge Sources",
+              "type": "main",
+              "index": 2
+            }
+          ]
+        ]
+      },
+      "Merge Sources": {
+        "main": [
+          [
+            {
+              "node": "Extract Article URLs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Extract Article URLs": {
+        "main": [
+          [
+            {
+              "node": "If Has URLs",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If Has URLs": {
+        "main": [
+          [
+            {
+              "node": "Fetch Full Articles",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Fetch Full Articles": {
+        "main": [
+          [
+            {
+              "node": "AI Extract Restaurant Info",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "AI Extract Restaurant Info": {
+        "main": [
+          [
+            {
+              "node": "Parse AI Response",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Parse AI Response": {
+        "main": [
+          [
+            {
+              "node": "Check Existing Restaurant",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Check Existing Restaurant": {
+        "main": [
+          [
+            {
+              "node": "If New Restaurant",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "If New Restaurant": {
+        "main": [
+          [
+            {
+              "node": "Geocode Address",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Geocode Address": {
+        "main": [
+          [
+            {
+              "node": "Insert Restaurant Opening",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Insert Restaurant Opening": {
+        "main": [
+          [
+            {
+              "node": "Trigger SEO Generation",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Trigger SEO Generation": {
+        "main": [
+          [
+            {
+              "node": "Notify Admin",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "settings": {
+      "executionOrder": "v1"
+    }
+  }
