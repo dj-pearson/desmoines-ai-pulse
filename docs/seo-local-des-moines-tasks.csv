@@ -1,0 +1,70 @@
+Priority,Section,Task ID,Task,Description,Current Status,Complexity,Dependencies
+P0-Critical,Google Business,GMB-001,Implement Google My Business OAuth Integration,Create OAuth flow for GMB API authentication to enable profile management and updates,Not Started,High,None
+P0-Critical,Google Business,GMB-002,Create GMB Data Sync Edge Function,Sync business information (hours/photos/posts) between platform and GMB profile,Not Started,High,GMB-001
+P0-Critical,Google Business,GMB-003,Build GMB Post Publishing System,Auto-publish weekly event roundups and restaurant features to GMB posts,Not Started,Medium,GMB-001 GMB-002
+P0-Critical,Google Business,GMB-004,Implement GMB Reviews Aggregation,Pull and display GMB reviews with proper Review schema markup,Not Started,Medium,GMB-001
+P0-Critical,Schema Markup,SCH-001,Create ReviewSchema Component,Build Review schema component for individual user reviews on events/restaurants,Not Started,Medium,None
+P0-Critical,Schema Markup,SCH-002,Add Review Schema to Event Details,Implement user review collection and schema on event detail pages,Not Started,Medium,SCH-001
+P0-Critical,Schema Markup,SCH-003,Enhance Restaurant Review Schema,Add individual Review schema markup to RestaurantDetails beyond AggregateRating,Partial,Medium,SCH-001
+P0-Critical,NAP Management,NAP-001,Create NAP Profile Database Table,Establish canonical Name/Address/Phone storage with validation rules,Not Started,Low,None
+P0-Critical,NAP Management,NAP-002,Build Citation Tracking System,Track all local directory listings (Yelp/Apple Maps/Bing/etc) with verification status,Not Started,Medium,NAP-001
+P0-Critical,NAP Management,NAP-003,Implement Citation Consistency Checker,Edge function to verify NAP consistency across all citation sources,Not Started,Medium,NAP-001 NAP-002
+P0-Critical,Citations,CIT-001,Yelp Business Integration,API integration to sync business data and pull reviews from Yelp,Not Started,High,NAP-001
+P0-Critical,Citations,CIT-002,Apple Maps Submission System,Submit and manage listings on Apple Maps Connect,Not Started,Medium,NAP-001
+P0-Critical,Citations,CIT-003,Bing Places Integration,Sync business profiles to Bing Places for Business,Not Started,Medium,NAP-001
+P0-Critical,Citations,CIT-004,TripAdvisor Integration,Connect to TripAdvisor for attraction/restaurant visibility,Not Started,Medium,NAP-001
+P1-High,Schema Markup,SCH-004,Create VenueSchema Component,Build Place/Venue schema for individual venues with hours/parking/accessibility,Not Started,Medium,None
+P1-High,Schema Markup,SCH-005,Add HowToEventSchema Component,Create HowTo schema for event attendance guides (parking/directions/what to bring),Not Started,Medium,None
+P1-High,Schema Markup,SCH-006,Enhance Restaurant Schema Fields,Add paymentAccepted/alcoholLicense/petsAllowed/wheelchairAccessible/diningOption,Partial,Medium,None
+P1-High,Schema Markup,SCH-007,Add Event Accessibility Schema,Include accessibility/parking/transportation schema fields on events,Not Started,Medium,None
+P1-High,Neighborhood Pages,NBH-001,Create Downtown Des Moines Neighborhood Page,Dedicated page with local events/restaurants/schema for Downtown area,Not Started,Medium,None
+P1-High,Neighborhood Pages,NBH-002,Create East Village Neighborhood Page,Dedicated page for East Village events/dining/attractions,Not Started,Medium,None
+P1-High,Neighborhood Pages,NBH-003,Create Drake Area Neighborhood Page,Dedicated page for Drake neighborhood content,Not Started,Medium,None
+P1-High,Neighborhood Pages,NBH-004,Create Beaverdale Neighborhood Page,Dedicated page for Beaverdale area content,Not Started,Medium,None
+P1-High,Neighborhood Pages,NBH-005,Create Sherman Hill Neighborhood Page,Dedicated page for Sherman Hill content,Not Started,Medium,None
+P1-High,Neighborhood Pages,NBH-006,Create Ingersoll Neighborhood Page,Dedicated page for Ingersoll corridor content,Not Started,Medium,None
+P1-High,Neighborhood Pages,NBH-007,Create Capitol Hill Neighborhood Page,Dedicated page for Capitol Hill/Capitol Complex area,Not Started,Medium,None
+P1-High,Hub Pages,HUB-001,Create /events/free Hub Page,Dedicated page for free events with proper schema and internal linking,Not Started,Medium,None
+P1-High,Hub Pages,HUB-002,Create /events/kids Hub Page,Kids-friendly events hub with family-focused schema markup,Not Started,Medium,None
+P1-High,Hub Pages,HUB-003,Create /events/date-night Hub Page,Date night events hub with romantic dining suggestions,Not Started,Medium,None
+P1-High,Hub Pages,HUB-004,Create /restaurants/open-now Page,Real-time restaurant availability based on current hours,Not Started,High,None
+P1-High,Hub Pages,HUB-005,Create /restaurants/dietary/* Pages,Hub pages for vegan/gluten-free/vegetarian/keto dining options,Not Started,Medium,None
+P1-High,Internal Linking,LNK-001,Add Related Events Component,Show related events on event detail pages for hub-spoke linking,Not Started,Medium,None
+P1-High,Internal Linking,LNK-002,Add Similar Restaurants Component,Show similar restaurants on restaurant detail pages,Not Started,Medium,None
+P1-High,Internal Linking,LNK-003,Add People Also Viewed Section,Cross-content recommendations on all detail pages,Not Started,Medium,LNK-001 LNK-002
+P1-High,Content Guides,GDE-001,Create 47 Things to Do with Kids Guide,Comprehensive family activities guide with proper schema,Not Started,High,None
+P1-High,Content Guides,GDE-002,Create Ultimate Restaurant Guide,500+ venue comprehensive Des Moines dining guide,Not Started,High,None
+P1-High,Content Guides,GDE-003,Create Best Brunch Guide,30+ ranked brunch spots with schema markup,Not Started,Medium,None
+P1-High,Content Guides,GDE-004,Create Dog-Friendly Des Moines Guide,Pet-friendly venues/parks/events guide,Not Started,Medium,None
+P1-High,Content Guides,GDE-005,Create Gluten-Free Dining Guide,Comprehensive dietary restriction restaurant guide,Not Started,Medium,None
+P1-High,Content Guides,GDE-006,Create Des Moines Nightlife Guide,Nightlife by age group/vibe with venue schema,Not Started,Medium,None
+P1-High,Keywords,KWD-001,Target Family Long-Tail Keywords,Create content for toddler/kids birthday/indoor playground keywords,Not Started,Medium,HUB-002
+P1-High,Keywords,KWD-002,Target Food Long-Tail Keywords,Content for late night food/authentic cuisine/food trucks keywords,Not Started,Medium,None
+P1-High,Keywords,KWD-003,Target Time-Sensitive Keywords,Optimize for this weekend/tonight/happening now queries,Partial,Medium,None
+P2-Medium,Automated Content,AUT-001,Create Weekly This Week in Des Moines Post,Automated weekly event roundup content generation,Not Started,Medium,None
+P2-Medium,Automated Content,AUT-002,Create Weekend Preview Content,Automated Friday weekend preview post generation,Not Started,Medium,None
+P2-Medium,Automated Content,AUT-003,Create Monthly Best Events Roundup,Automated monthly event highlights content,Not Started,Medium,None
+P2-Medium,Automated Content,AUT-004,Create Monthly Cuisine Roundups,Rotating cuisine spotlight (Mexican/Italian/Asian monthly),Not Started,Medium,None
+P2-Medium,Seasonal Content,SEA-001,Create Summer Activities Guide,Outdoor events/patios/festivals summer content hub,Not Started,Medium,None
+P2-Medium,Seasonal Content,SEA-002,Create Fall Events Guide,Fall festivals/Halloween/harvest event guide,Not Started,Medium,None
+P2-Medium,Seasonal Content,SEA-003,Create Winter Indoor Guide,Indoor activities/holiday events winter guide,Not Started,Medium,None
+P2-Medium,Seasonal Content,SEA-004,Create Spring Break Guide,Family spring break activities guide,Not Started,Medium,None
+P2-Medium,Data Enrichment,DAT-001,Complete Restaurant Data Fields,Backfill paymentAccepted/smoking/parking for all restaurants,Partial,High,None
+P2-Medium,Data Enrichment,DAT-002,Complete Event Accessibility Data,Add accessibility/parking/transportation to event records,Partial,Medium,None
+P2-Medium,Data Enrichment,DAT-003,Add Attraction Reviews & Ratings,Implement user review collection for attractions,Not Started,Medium,SCH-001
+P2-Medium,Data Enrichment,DAT-004,Complete Venue Coordinates,Ensure all venues have accurate lat/lng for proximity search,Partial,Medium,None
+P2-Medium,Technical SEO,TEC-001,Build CWV Performance Dashboard,Admin dashboard showing Core Web Vitals trends and alerts,Not Started,Medium,None
+P2-Medium,Technical SEO,TEC-002,Implement Geo-Proximity Search,Find events/restaurants within X miles of user location,Partial,High,None
+P2-Medium,Technical SEO,TEC-003,Add GeoCoordinates Schema to All Location Pages,Ensure all venue/location pages have geo schema,Partial,Low,None
+P2-Medium,Social Signals,SOC-001,Implement Facebook Business Integration,Cross-post events to Facebook business page,Not Started,Medium,None
+P2-Medium,Social Signals,SOC-002,Add Social Share Tracking,Track social shares for content performance signals,Not Started,Medium,None
+P3-Low,Authority Building,AUTH-001,Create Des Moines Register Partnership Content,Data sharing agreement with local newspaper,Not Started,High,None
+P3-Low,Authority Building,AUTH-002,Develop HARO Response Program,Monitor and respond to Help A Reporter Out queries,Not Started,Medium,None
+P3-Low,Authority Building,AUTH-003,Create State of DSM Restaurant Report,Annual data journalism piece on restaurant industry,Not Started,High,DAT-001
+P3-Low,Authority Building,AUTH-004,Build Local Media Pitch Templates,Press release templates for milestone announcements,Not Started,Low,None
+P3-Low,Backlinks,BKL-001,Create Backlink Tracking System,Track local backlinks from Des Moines sources,Not Started,Medium,None
+P3-Low,Backlinks,BKL-002,Build Guest Post Tracking,Manage content partnerships and guest contributions,Not Started,Low,None
+P3-Low,Documentation,DOC-001,Create Local Business Integration Guide,Documentation for GMB/citations/reviews integration,Not Started,Low,GMB-001 CIT-001
+P3-Low,Documentation,DOC-002,Create Neighborhood SEO Strategy Doc,Per-neighborhood keyword targets and content plans,Not Started,Low,NBH-001
+P3-Low,Documentation,DOC-003,Create Content Calendar Template,Editorial calendar for guides and recurring content,Not Started,Low,None
+P3-Low,Documentation,DOC-004,Create Citation Management Guide,How to manage and verify local citations,Not Started,Low,NAP-002
