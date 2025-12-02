@@ -80,6 +80,9 @@ const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Terms = lazy(() => import("./pages/Terms"));
 
+// Contact page
+const Contact = lazy(() => import("./pages/Contact"));
+
 // Mobile-optimized loading component
 const PageLoader = () => (
   <div className="min-h-screen bg-background flex items-center justify-center">
@@ -209,6 +212,8 @@ const App = () => (
             {/* Legal pages */}
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />
+            {/* Contact page */}
+            <Route path="/contact" element={<Contact />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
