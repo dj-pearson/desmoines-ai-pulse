@@ -15,7 +15,13 @@ interface AuthContextType extends AuthState {
   signup: (email: string, password: string, metadata?: any) => Promise<{ success: boolean; error?: string; needsVerification?: boolean }>;
   logout: () => Promise<void>;
   requireAdmin: () => void;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<boolean>;
+  signInWithGoogle: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithApple: (redirectTo?: string) => Promise<{ success: boolean; error?: string }>;
+  resetPassword: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  resendVerification: (email: string) => Promise<{ success: boolean; error?: string }>;
+  getSessionExpiresAt: () => number | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -333,13 +339,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 500);
   }, []);
 
-  // Refresh session manually
-  const refreshSession = useCallback(async () => {
+  // Refresh session manually - returns true if successful
+  const refreshSession = useCallback(async (): Promise<boolean> => {
     try {
       const { data, error } = await supabase.auth.refreshSession();
       if (error) {
         console.error("[AuthContext] Session refresh error:", error);
-        return;
+        return false;
       }
       if (data.session) {
         setAuthState(prev => ({
@@ -347,11 +353,133 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           session: data.session,
           user: data.session?.user || null,
         }));
+        return true;
       }
+      return false;
     } catch (error) {
       console.error("[AuthContext] Session refresh exception:", error);
+      return false;
     }
   }, []);
+
+  // Sign in with Google OAuth
+  const signInWithGoogle = useCallback(async (redirectTo?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+      if (redirectTo) {
+        callbackUrl.searchParams.set("redirect", redirectTo);
+      }
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: callbackUrl.toString(),
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          }
+        }
+      });
+
+      if (error) {
+        console.error("[AuthContext] Google sign-in error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[AuthContext] Google sign-in exception:", error);
+      return { success: false, error: error.message || "Failed to sign in with Google" };
+    }
+  }, []);
+
+  // Sign in with Apple OAuth
+  const signInWithApple = useCallback(async (redirectTo?: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
+      if (redirectTo) {
+        callbackUrl.searchParams.set("redirect", redirectTo);
+      }
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'apple',
+        options: {
+          redirectTo: callbackUrl.toString(),
+        }
+      });
+
+      if (error) {
+        console.error("[AuthContext] Apple sign-in error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[AuthContext] Apple sign-in exception:", error);
+      return { success: false, error: error.message || "Failed to sign in with Apple" };
+    }
+  }, []);
+
+  // Reset password via email
+  const resetPassword = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?reset=true`,
+      });
+
+      if (error) {
+        console.error("[AuthContext] Password reset error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[AuthContext] Password reset exception:", error);
+      return { success: false, error: error.message || "Failed to send reset email" };
+    }
+  }, []);
+
+  // Update password (for logged-in users or after reset)
+  const updatePassword = useCallback(async (newPassword: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+      if (error) {
+        console.error("[AuthContext] Password update error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[AuthContext] Password update exception:", error);
+      return { success: false, error: error.message || "Failed to update password" };
+    }
+  }, []);
+
+  // Resend verification email
+  const resendVerification = useCallback(async (email: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+      });
+
+      if (error) {
+        console.error("[AuthContext] Resend verification error:", error.message);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (error: any) {
+      console.error("[AuthContext] Resend verification exception:", error);
+      return { success: false, error: error.message || "Failed to resend verification email" };
+    }
+  }, []);
+
+  // Get session expiry timestamp (in seconds since epoch)
+  const getSessionExpiresAt = useCallback((): number | null => {
+    return authState.session?.expires_at || null;
+  }, [authState.session]);
 
   const requireAdmin = useCallback(() => {
     if (!authState.isAdmin) {
@@ -360,7 +488,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [authState.isAdmin]);
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, signup, logout, requireAdmin, refreshSession }}>
+    <AuthContext.Provider value={{
+      ...authState,
+      login,
+      signup,
+      logout,
+      requireAdmin,
+      refreshSession,
+      signInWithGoogle,
+      signInWithApple,
+      resetPassword,
+      updatePassword,
+      resendVerification,
+      getSessionExpiresAt,
+    }}>
       {children}
     </AuthContext.Provider>
   );
