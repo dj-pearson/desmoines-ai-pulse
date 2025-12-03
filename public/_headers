@@ -65,21 +65,40 @@
 # Images - Long cache (30 days)
 /*.png
   Cache-Control: public, max-age=2592000, immutable
-  
+
 /*.jpg
   Cache-Control: public, max-age=2592000, immutable
-  
+
 /*.jpeg
   Cache-Control: public, max-age=2592000, immutable
-  
+
 /*.webp
   Cache-Control: public, max-age=2592000, immutable
+  Content-Type: image/webp
+
+/*.avif
+  Cache-Control: public, max-age=2592000, immutable
+  Content-Type: image/avif
 
 /*.svg
   Cache-Control: public, max-age=2592000, immutable
+  Content-Type: image/svg+xml
 
 /*.ico
   Cache-Control: public, max-age=31536000, immutable
+
+# Video files - Long cache with streaming support
+/*.mp4
+  Cache-Control: public, max-age=2592000
+  Accept-Ranges: bytes
+
+/*.webm
+  Cache-Control: public, max-age=2592000
+  Accept-Ranges: bytes
+
+/*.ogg
+  Cache-Control: public, max-age=2592000
+  Accept-Ranges: bytes
 
 # Manifest and other meta files
 /manifest.json
