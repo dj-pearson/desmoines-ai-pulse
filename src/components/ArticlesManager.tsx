@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search, Send } from "lucide-react";
+import { FileText, Plus, Edit, Trash2, Eye, Calendar, User, Search, Send, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
@@ -155,12 +155,20 @@ export default function ArticlesManager() {
                 Manage blog articles and content posts
               </CardDescription>
             </div>
-            <Button asChild>
-              <a href="/admin/articles/new" target="_blank" rel="noopener noreferrer">
-                <Plus className="h-4 w-4 mr-2" />
-                Create New Article
-              </a>
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button asChild variant="outline">
+                <Link to="/admin/cms">
+                  <LayoutDashboard className="h-4 w-4 mr-2" />
+                  Full CMS Dashboard
+                </Link>
+              </Button>
+              <Button asChild>
+                <a href="/admin/articles/new" target="_blank" rel="noopener noreferrer">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create New Article
+                </a>
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
