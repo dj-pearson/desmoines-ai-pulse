@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
+import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -59,6 +60,8 @@ export default function Auth() {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [accountType, setAccountType] = useState<"personal" | "business">("personal");
+  const [showMFAVerification, setShowMFAVerification] = useState(false);
+  const [mfaFactorId, setMfaFactorId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -118,6 +121,14 @@ export default function Auth() {
     try {
       const result = await login(formData.email, formData.password);
 
+      // Check if MFA verification is required
+      if (result.requiresMFA && result.factorId) {
+        setMfaFactorId(result.factorId);
+        setShowMFAVerification(true);
+        setIsLoading(false);
+        return;
+      }
+
       if (!result.success) {
         toast({
           title: "Login Failed",
@@ -144,6 +155,27 @@ export default function Auth() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleMFASuccess = () => {
+    toast({
+      title: "Welcome back!",
+      description: "You've been successfully logged in.",
+    });
+
+    // Redirect to intended destination or home
+    const redirectTo = searchParams.get("redirect") || "/";
+    navigate(redirectTo, { replace: true });
+  };
+
+  const handleMFACancel = () => {
+    setShowMFAVerification(false);
+    setMfaFactorId(null);
+    toast({
+      title: "Login Cancelled",
+      description: "MFA verification was cancelled. Please try again.",
+      variant: "default",
+    });
   };
 
   const handleResendVerification = async () => {
@@ -764,6 +796,17 @@ export default function Auth() {
           )}
         </CardContent>
       </Card>
+
+      {/* MFA Verification Dialog */}
+      {mfaFactorId && (
+        <MFAVerificationDialog
+          open={showMFAVerification}
+          onOpenChange={setShowMFAVerification}
+          factorId={mfaFactorId}
+          onSuccess={handleMFASuccess}
+          onCancel={handleMFACancel}
+        />
+      )}
     </div>
   );
 }
