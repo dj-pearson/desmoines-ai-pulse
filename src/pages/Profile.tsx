@@ -9,6 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { PreferencesSettings } from "@/components/PreferencesSettings";
 import { FavoritesView } from "@/components/FavoritesView";
+import { MFAManagement } from "@/components/auth/MFAManagement";
+import { SessionManagementDashboard } from "@/components/auth/SessionManagementDashboard";
 import { User, Mail, Phone, MapPin, Settings, Save, Edit, Users, Heart, Calendar, Trophy } from "lucide-react";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
@@ -457,7 +459,9 @@ export default function Profile() {
           </TabsContent>
 
           {/* Settings Tab */}
-          <TabsContent value="settings" className="mt-6">
+          <TabsContent value="settings" className="mt-6 space-y-6">
+            <MFAManagement />
+            <SessionManagementDashboard />
             <PreferencesSettings />
           </TabsContent>
         </Tabs>

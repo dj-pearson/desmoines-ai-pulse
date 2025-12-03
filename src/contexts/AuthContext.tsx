@@ -8,10 +8,12 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  requiresMFA: boolean;
+  mfaFactorId: string | null;
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }>;
   signup: (email: string, password: string, metadata?: any) => Promise<{ success: boolean; error?: string; needsVerification?: boolean }>;
   logout: () => Promise<void>;
   requireAdmin: () => void;
@@ -38,6 +40,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
     isAuthenticated: false,
     isAdmin: false,
+    requiresMFA: false,
+    mfaFactorId: null,
   });
 
   // Track if we're in the middle of a logout to prevent race conditions
@@ -117,6 +121,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
         isAuthenticated: false,
         isAdmin: false,
+        requiresMFA: false,
+        mfaFactorId: null,
       });
       return;
     }
@@ -180,6 +186,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isLoading: false,
           isAuthenticated: !!session,
           isAdmin: false,
+          requiresMFA: false,
+          mfaFactorId: null,
         });
 
         if (session?.user) {
@@ -215,7 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [checkIsAdmin, handleAuthChange]);
 
   // Login with email/password
-  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }> => {
     try {
       console.log("[AuthContext] Attempting login for:", email);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -223,6 +231,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (error) {
         console.error("[AuthContext] Login error:", error.message);
         return { success: false, error: error.message };
+      }
+
+      // Check if MFA is required (AAL1 but user has MFA factors)
+      const { data: mfaData } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+      const currentLevel = mfaData?.currentLevel;
+      const nextLevel = mfaData?.nextLevel;
+
+      // If user has MFA enabled but hasn't verified it yet this session
+      if (currentLevel === 'aal1' && nextLevel === 'aal2' && data.session) {
+        console.log("[AuthContext] MFA verification required");
+
+        // Get the first verified TOTP factor
+        const { data: factorsData } = await supabase.auth.mfa.listFactors();
+        const verifiedFactor = factorsData?.totp?.find((f: any) => f.status === 'verified');
+
+        if (verifiedFactor) {
+          setAuthState(prev => ({
+            ...prev,
+            requiresMFA: true,
+            mfaFactorId: verifiedFactor.id,
+          }));
+
+          return {
+            success: false,
+            requiresMFA: true,
+            factorId: verifiedFactor.id,
+          };
+        }
       }
 
       console.log("[AuthContext] Login successful");
@@ -284,6 +320,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: false,
       isAdmin: false,
+      requiresMFA: false,
+      mfaFactorId: null,
     });
 
     // Call signOut with global scope and timeout

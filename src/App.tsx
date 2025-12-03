@@ -10,6 +10,7 @@ import { WelcomeModal } from "@/components/WelcomeModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { SessionManager } from "@/components/auth/SessionManager";
 
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
@@ -118,6 +119,7 @@ const App = () => (
   <TooltipProvider>
     <BrowserRouter>
       <AuthProvider>
+        <SessionManager />
         <ErrorBoundary>
           <KeyboardShortcutsProvider>
             <Toaster />
