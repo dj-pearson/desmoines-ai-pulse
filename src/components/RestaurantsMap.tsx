@@ -1,16 +1,5 @@
-
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
-import { Link } from "react-router-dom";
-
-// Fix for default icon issue with Webpack
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+import { InteractiveMap, MapLocation } from './InteractiveMap';
+import { useGeolocation } from '@/hooks/useProximitySearch';
 
 interface Restaurant {
   id: string;
@@ -18,6 +7,11 @@ interface Restaurant {
   slug: string;
   latitude?: number;
   longitude?: number;
+  cuisine?: string;
+  rating?: number;
+  image_url?: string;
+  description?: string;
+  price_range?: string;
 }
 
 interface RestaurantsMapProps {
@@ -25,33 +19,34 @@ interface RestaurantsMapProps {
 }
 
 const RestaurantsMap = ({ restaurants }: RestaurantsMapProps) => {
-  const validRestaurants = restaurants.filter(
-    (r) => r.latitude != null && r.longitude != null
-  );
+  const { location } = useGeolocation();
+
+  const mapLocations: MapLocation[] = restaurants
+    .filter(r => r.latitude != null && r.longitude != null)
+    .map(restaurant => ({
+      id: restaurant.id,
+      name: restaurant.name,
+      latitude: restaurant.latitude!,
+      longitude: restaurant.longitude!,
+      slug: restaurant.slug,
+      category: restaurant.cuisine,
+      rating: restaurant.rating,
+      image_url: restaurant.image_url,
+      description: restaurant.description,
+      price: restaurant.price_range,
+      type: 'restaurant',
+    }));
 
   return (
-    <MapContainer
-      center={[41.5868, -93.625]}
+    <InteractiveMap
+      locations={mapLocations}
+      showUserLocation={!!location}
+      userLocation={location}
+      linkPrefix="/restaurants"
+      colorByCategory={true}
+      height="600px"
       zoom={12}
-      className="h-[600px] w-full rounded-lg"
-    >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      {validRestaurants.map((restaurant) => (
-        <Marker
-          key={restaurant.id}
-          position={[restaurant.latitude!, restaurant.longitude!]}
-        >
-          <Popup>
-            <Link to={`/restaurants/${restaurant.slug || restaurant.id}`}>
-              {restaurant.name}
-            </Link>
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+    />
   );
 };
 

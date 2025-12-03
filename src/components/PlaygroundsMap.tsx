@@ -1,16 +1,5 @@
-
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
-import L from "leaflet";
-import { Link } from "react-router-dom";
-
-// Fix for default icon issue with Webpack
-delete (L.Icon.Default.prototype as any)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-});
+import { InteractiveMap, MapLocation } from './InteractiveMap';
+import { useGeolocation } from '@/hooks/useProximitySearch';
 
 const createSlug = (name: string): string => {
   return name
@@ -24,6 +13,8 @@ interface Playground {
   name: string;
   latitude?: number;
   longitude?: number;
+  description?: string;
+  amenities?: string[];
 }
 
 interface PlaygroundsMapProps {
@@ -31,33 +22,29 @@ interface PlaygroundsMapProps {
 }
 
 const PlaygroundsMap = ({ playgrounds }: PlaygroundsMapProps) => {
-  const validPlaygrounds = playgrounds.filter(
-    (p) => p.latitude != null && p.longitude != null
-  );
+  const { location } = useGeolocation();
+
+  const mapLocations: MapLocation[] = playgrounds
+    .filter(p => p.latitude != null && p.longitude != null)
+    .map(playground => ({
+      id: playground.id,
+      name: playground.name,
+      latitude: playground.latitude!,
+      longitude: playground.longitude!,
+      slug: createSlug(playground.name),
+      description: playground.description,
+      type: 'playground',
+    }));
 
   return (
-    <MapContainer
-      center={[41.5868, -93.625]}
+    <InteractiveMap
+      locations={mapLocations}
+      showUserLocation={!!location}
+      userLocation={location}
+      linkPrefix="/playgrounds"
+      height="600px"
       zoom={12}
-      className="h-[600px] w-full rounded-lg"
-    >
-      <TileLayer
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-      />
-      {validPlaygrounds.map((playground) => (
-        <Marker
-          key={playground.id}
-          position={[playground.latitude!, playground.longitude!]}
-        >
-          <Popup>
-            <Link to={`/playgrounds/${createSlug(playground.name)}`}>
-              {playground.name}
-            </Link>
-          </Popup>
-        </Marker>
-      ))}
-    </MapContainer>
+    />
   );
 };
 
