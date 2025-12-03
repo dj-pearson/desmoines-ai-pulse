@@ -1,0 +1,506 @@
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { toast } from 'sonner';
+import { Users, Plus, Edit, Trash2, FileText, Globe, Twitter, Linkedin, Search, UserPlus } from 'lucide-react';
+
+interface AuthorProfile {
+  id: string;
+  user_id: string | null;
+  display_name: string;
+  slug: string;
+  bio: string | null;
+  avatar_url: string | null;
+  email: string | null;
+  website: string | null;
+  twitter_handle: string | null;
+  linkedin_url: string | null;
+  is_active: boolean;
+  article_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AuthorFormData {
+  display_name: string;
+  bio: string;
+  avatar_url: string;
+  email: string;
+  website: string;
+  twitter_handle: string;
+  linkedin_url: string;
+  is_active: boolean;
+}
+
+const defaultFormData: AuthorFormData = {
+  display_name: '',
+  bio: '',
+  avatar_url: '',
+  email: '',
+  website: '',
+  twitter_handle: '',
+  linkedin_url: '',
+  is_active: true,
+};
+
+export function AuthorManager() {
+  const [authors, setAuthors] = useState<AuthorProfile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingAuthor, setEditingAuthor] = useState<AuthorProfile | null>(null);
+  const [formData, setFormData] = useState<AuthorFormData>(defaultFormData);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    loadAuthors();
+  }, []);
+
+  const loadAuthors = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('author_profiles')
+        .select('*')
+        .order('display_name', { ascending: true });
+
+      if (error) throw error;
+      setAuthors(data || []);
+    } catch (error: any) {
+      console.error('Error loading authors:', error);
+      toast.error('Failed to load authors');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenDialog = (author?: AuthorProfile) => {
+    if (author) {
+      setEditingAuthor(author);
+      setFormData({
+        display_name: author.display_name,
+        bio: author.bio || '',
+        avatar_url: author.avatar_url || '',
+        email: author.email || '',
+        website: author.website || '',
+        twitter_handle: author.twitter_handle || '',
+        linkedin_url: author.linkedin_url || '',
+        is_active: author.is_active,
+      });
+    } else {
+      setEditingAuthor(null);
+      setFormData(defaultFormData);
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setIsDialogOpen(false);
+    setEditingAuthor(null);
+    setFormData(defaultFormData);
+  };
+
+  const handleInputChange = (field: keyof AuthorFormData, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!formData.display_name.trim()) {
+      toast.error('Display name is required');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+
+      if (editingAuthor) {
+        // Update existing author
+        const { error } = await supabase
+          .from('author_profiles')
+          .update({
+            display_name: formData.display_name,
+            bio: formData.bio || null,
+            avatar_url: formData.avatar_url || null,
+            email: formData.email || null,
+            website: formData.website || null,
+            twitter_handle: formData.twitter_handle || null,
+            linkedin_url: formData.linkedin_url || null,
+            is_active: formData.is_active,
+          })
+          .eq('id', editingAuthor.id);
+
+        if (error) throw error;
+        toast.success('Author profile updated');
+      } else {
+        // Create new author
+        const { error } = await supabase.from('author_profiles').insert({
+          display_name: formData.display_name,
+          slug: '', // Will be auto-generated by trigger
+          bio: formData.bio || null,
+          avatar_url: formData.avatar_url || null,
+          email: formData.email || null,
+          website: formData.website || null,
+          twitter_handle: formData.twitter_handle || null,
+          linkedin_url: formData.linkedin_url || null,
+          is_active: formData.is_active,
+        });
+
+        if (error) throw error;
+        toast.success('Author profile created');
+      }
+
+      handleCloseDialog();
+      loadAuthors();
+    } catch (error: any) {
+      console.error('Error saving author:', error);
+      toast.error(error.message || 'Failed to save author');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (author: AuthorProfile) => {
+    try {
+      const { error } = await supabase
+        .from('author_profiles')
+        .delete()
+        .eq('id', author.id);
+
+      if (error) throw error;
+      toast.success(`Author "${author.display_name}" deleted`);
+      loadAuthors();
+    } catch (error: any) {
+      console.error('Error deleting author:', error);
+      toast.error('Failed to delete author');
+    }
+  };
+
+  const filteredAuthors = authors.filter(
+    (author) =>
+      author.display_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      author.email?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="flex items-center justify-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Author Management
+            </CardTitle>
+            <CardDescription>Manage author profiles and attribution</CardDescription>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => handleOpenDialog()}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add Author
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingAuthor ? 'Edit Author Profile' : 'Create Author Profile'}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingAuthor
+                    ? 'Update the author profile information'
+                    : 'Add a new author profile for article attribution'}
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="display_name">Display Name *</Label>
+                    <Input
+                      id="display_name"
+                      value={formData.display_name}
+                      onChange={(e) => handleInputChange('display_name', e.target.value)}
+                      placeholder="John Doe"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange('email', e.target.value)}
+                      placeholder="john@example.com"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bio">Bio</Label>
+                  <Textarea
+                    id="bio"
+                    value={formData.bio}
+                    onChange={(e) => handleInputChange('bio', e.target.value)}
+                    placeholder="A short bio about the author..."
+                    rows={3}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="avatar_url">Avatar URL</Label>
+                  <Input
+                    id="avatar_url"
+                    value={formData.avatar_url}
+                    onChange={(e) => handleInputChange('avatar_url', e.target.value)}
+                    placeholder="https://example.com/avatar.jpg"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="website">Website</Label>
+                    <Input
+                      id="website"
+                      value={formData.website}
+                      onChange={(e) => handleInputChange('website', e.target.value)}
+                      placeholder="https://example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="twitter_handle">Twitter Handle</Label>
+                    <Input
+                      id="twitter_handle"
+                      value={formData.twitter_handle}
+                      onChange={(e) => handleInputChange('twitter_handle', e.target.value)}
+                      placeholder="@johndoe"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="linkedin_url">LinkedIn URL</Label>
+                  <Input
+                    id="linkedin_url"
+                    value={formData.linkedin_url}
+                    onChange={(e) => handleInputChange('linkedin_url', e.target.value)}
+                    placeholder="https://linkedin.com/in/johndoe"
+                  />
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="is_active"
+                    checked={formData.is_active}
+                    onCheckedChange={(checked) => handleInputChange('is_active', checked)}
+                  />
+                  <Label htmlFor="is_active">Active</Label>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={handleCloseDialog}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? 'Saving...' : editingAuthor ? 'Update' : 'Create'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Search */}
+        <div className="flex items-center gap-2">
+          <Search className="h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search authors by name or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <div className="text-2xl font-bold">{authors.length}</div>
+            <div className="text-sm text-muted-foreground">Total Authors</div>
+          </div>
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <div className="text-2xl font-bold text-green-600">
+              {authors.filter((a) => a.is_active).length}
+            </div>
+            <div className="text-sm text-muted-foreground">Active Authors</div>
+          </div>
+          <div className="bg-muted/50 p-4 rounded-lg">
+            <div className="text-2xl font-bold">
+              {authors.reduce((sum, a) => sum + (a.article_count || 0), 0)}
+            </div>
+            <div className="text-sm text-muted-foreground">Total Articles</div>
+          </div>
+        </div>
+
+        {/* Authors Table */}
+        <div className="border rounded-md">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Author</TableHead>
+                <TableHead>Contact</TableHead>
+                <TableHead>Social</TableHead>
+                <TableHead>Articles</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredAuthors.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                    {searchTerm ? 'No authors match your search' : 'No authors found'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredAuthors.map((author) => (
+                  <TableRow key={author.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={author.avatar_url || undefined} />
+                          <AvatarFallback>{getInitials(author.display_name)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="font-medium">{author.display_name}</div>
+                          <div className="text-sm text-muted-foreground">/{author.slug}</div>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm">
+                        {author.email && <div>{author.email}</div>}
+                        {author.website && (
+                          <a
+                            href={author.website}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 text-primary hover:underline"
+                          >
+                            <Globe className="h-3 w-3" />
+                            Website
+                          </a>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {author.twitter_handle && (
+                          <a
+                            href={`https://twitter.com/${author.twitter_handle.replace('@', '')}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-primary"
+                          >
+                            <Twitter className="h-4 w-4" />
+                          </a>
+                        )}
+                        {author.linkedin_url && (
+                          <a
+                            href={author.linkedin_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-primary"
+                          >
+                            <Linkedin className="h-4 w-4" />
+                          </a>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <FileText className="h-3 w-3" />
+                        {author.article_count || 0}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={author.is_active ? 'default' : 'secondary'}>
+                        {author.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenDialog(author)}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Author</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete "{author.display_name}"? This action
+                                cannot be undone. Articles by this author will not be deleted but
+                                will no longer show author attribution.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDelete(author)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default AuthorManager;

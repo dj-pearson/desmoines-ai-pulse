@@ -1,5 +1,6 @@
-import ArticleEditor from "@/components/ArticleEditor";
+import EnhancedArticleEditor from "@/components/cms/EnhancedArticleEditor";
+import '@/components/cms/tiptap-styles.css';
 
 export default function AdminArticleEditor() {
-  return <ArticleEditor />;
+  return <EnhancedArticleEditor />;
 }

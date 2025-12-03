@@ -32,6 +32,7 @@ const EventsPage = lazy(() => import("./pages/EventsPage"));
 const Articles = lazy(() => import("./pages/Articles"));
 const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
 const AdminArticleEditor = lazy(() => import("./pages/AdminArticleEditor"));
+const CMSDashboard = lazy(() => import("./pages/CMSDashboard"));
 const Advertise = lazy(() => import("./pages/Advertise"));
 const AdvertiseSuccess = lazy(() => import("./pages/AdvertiseSuccess"));
 const AdvertiseCancel = lazy(() => import("./pages/AdvertiseCancel"));
@@ -172,6 +173,10 @@ const App = () => (
             <Route
               path="/admin/articles/edit/:id"
               element={<ProtectedRoute requireAdmin><AdminArticleEditor /></ProtectedRoute>}
+            />
+            <Route
+              path="/admin/cms"
+              element={<ProtectedRoute requireAdmin><CMSDashboard /></ProtectedRoute>}
             />
             <Route path="/admin/campaigns" element={<ProtectedRoute requireAdmin><AdminCampaigns /></ProtectedRoute>} />
             <Route path="/admin/campaigns/:campaignId" element={<ProtectedRoute requireAdmin><AdminCampaignDetail /></ProtectedRoute>} />
