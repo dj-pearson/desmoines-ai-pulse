@@ -1,13 +1,46 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+
+/**
+ * Database-backed Session Policy
+ */
+interface SessionPolicy {
+  id: string;
+  role_name: string;
+  idle_timeout_minutes: number;
+  absolute_timeout_hours: number;
+  warning_before_expiry_minutes: number;
+  require_mfa_reauth: boolean;
+  allow_remember_me: boolean;
+  remember_me_days: number;
+  is_active: boolean;
+}
+
+/**
+ * Active Session Info
+ */
+interface ActiveSession {
+  id: string;
+  session_id: string;
+  last_activity: string;
+  idle_timeout_at: string | null;
+  expires_at: string | null;
+  device_info: Record<string, unknown>;
+  ip_address: string | null;
+  user_agent: string | null;
+  is_active: boolean;
+  remember_me: boolean;
+}
 
 /**
  * Session Timeout Configuration
  */
 interface SessionTimeoutConfig {
   /**
-   * Idle timeout in minutes (default: 30 minutes)
+   * Idle timeout in minutes (default: 30 minutes, or from database policy)
    * User will be logged out after this period of inactivity
    */
   idleTimeout?: number;
@@ -28,6 +61,11 @@ interface SessionTimeoutConfig {
    * Whether to enable idle timeout monitoring (default: true)
    */
   enabled?: boolean;
+
+  /**
+   * Whether to use database-backed session policies (default: true)
+   */
+  useDatabasePolicy?: boolean;
 }
 
 /**
@@ -55,13 +93,14 @@ interface SessionTimeoutConfig {
  */
 export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
   const {
-    idleTimeout = 30,
-    warningTime = 5,
-    maxSessionDuration = 8,
+    idleTimeout: configIdleTimeout = 30,
+    warningTime: configWarningTime = 5,
+    maxSessionDuration: configMaxSessionDuration = 8,
     enabled = true,
+    useDatabasePolicy = true,
   } = config;
 
-  const { isAuthenticated, logout, getSessionExpiresAt } = useAuth();
+  const { isAuthenticated, logout, getSessionExpiresAt, user } = useAuth();
   const { toast } = useToast();
 
   const [isWarning, setIsWarning] = useState(false);
@@ -72,6 +111,104 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const sessionStartRef = useRef<number>(Date.now());
   const lastActivityRef = useRef<number>(Date.now());
+
+  // Fetch session policy from database
+  const { data: sessionPolicy } = useQuery<SessionPolicy | null>({
+    queryKey: ['session-policy', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      try {
+        const { data, error } = await supabase
+          .rpc('get_user_session_policy', { p_user_id: user.id });
+        if (error) throw error;
+        return data as SessionPolicy | null;
+      } catch (err) {
+        console.error('Error fetching session policy:', err);
+        return null;
+      }
+    },
+    enabled: !!user && useDatabasePolicy,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch active sessions
+  const { data: activeSessions, refetch: refetchSessions } = useQuery<ActiveSession[]>({
+    queryKey: ['user-sessions', user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data, error } = await supabase
+        .from('user_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .order('last_activity', { ascending: false });
+      if (error) {
+        console.error('Error fetching sessions:', error);
+        return [];
+      }
+      return data as ActiveSession[];
+    },
+    enabled: !!user,
+    refetchInterval: 60000,
+  });
+
+  // Update session activity mutation
+  const updateActivityMutation = useMutation({
+    mutationFn: async (rememberMe: boolean = false) => {
+      if (!user) throw new Error('Not authenticated');
+      const session = await supabase.auth.getSession();
+      const sessionId = session.data.session?.access_token?.substring(0, 32) || 'unknown';
+      const { data, error } = await supabase
+        .rpc('update_session_with_timeout', {
+          p_user_id: user.id,
+          p_session_id: sessionId,
+          p_remember_me: rememberMe,
+          p_ip_address: null,
+          p_user_agent: navigator.userAgent,
+        });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      lastActivityRef.current = Date.now();
+      refetchSessions();
+    },
+  });
+
+  // Revoke session mutation
+  const revokeSessionMutation = useMutation({
+    mutationFn: async (sessionId: string) => {
+      const { data, error } = await supabase
+        .rpc('revoke_session', { p_session_id: sessionId });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => refetchSessions(),
+  });
+
+  // Revoke all other sessions mutation
+  const revokeOtherSessionsMutation = useMutation({
+    mutationFn: async () => {
+      const session = await supabase.auth.getSession();
+      const currentSessionId = session.data.session?.access_token?.substring(0, 32) || 'unknown';
+      const { data, error } = await supabase
+        .rpc('revoke_all_other_sessions', { p_current_session_id: currentSessionId });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => refetchSessions(),
+  });
+
+  // Use database policy values if available, otherwise fall back to config
+  const idleTimeout = useDatabasePolicy && sessionPolicy?.idle_timeout_minutes
+    ? sessionPolicy.idle_timeout_minutes
+    : configIdleTimeout;
+  const warningTime = useDatabasePolicy && sessionPolicy?.warning_before_expiry_minutes
+    ? sessionPolicy.warning_before_expiry_minutes
+    : configWarningTime;
+  const maxSessionDuration = useDatabasePolicy && sessionPolicy?.absolute_timeout_hours
+    ? sessionPolicy.absolute_timeout_hours
+    : configMaxSessionDuration;
 
   /**
    * Clear all timers
@@ -304,5 +441,37 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
      * Manually trigger logout
      */
     logout: handleTimeout,
+
+    /**
+     * Session policy from database (if using database policies)
+     */
+    sessionPolicy,
+
+    /**
+     * List of active sessions for the current user
+     */
+    activeSessions: activeSessions || [],
+
+    /**
+     * Revoke a specific session by ID
+     */
+    revokeSession: revokeSessionMutation.mutateAsync,
+
+    /**
+     * Revoke all sessions except the current one
+     */
+    revokeAllOtherSessions: revokeOtherSessionsMutation.mutateAsync,
+
+    /**
+     * Update session activity (extends timeout)
+     */
+    updateSessionActivity: () => updateActivityMutation.mutate(false),
+
+    /**
+     * Whether session management operations are in progress
+     */
+    isSessionLoading: updateActivityMutation.isPending ||
+      revokeSessionMutation.isPending ||
+      revokeOtherSessionsMutation.isPending,
   };
 }
