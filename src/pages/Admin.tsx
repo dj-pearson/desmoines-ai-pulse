@@ -49,6 +49,7 @@ import AIEnhancementManager from "@/components/AIEnhancementManager";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
 // import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard"; // Temporarily disabled - requires database migrations
+import { CrmDashboard } from "@/components/crm";
 import { useArticles } from "@/hooks/useArticles";
 import {
   Shield,
@@ -87,6 +88,7 @@ import {
   ChevronDown,
   Layers,
   Wrench,
+  Contact,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -116,6 +118,7 @@ export default function Admin() {
     aiTools: true,
     contentTypes: true,
     contentTools: false,
+    crm: false,
     security: false,
     system: false,
   });
@@ -850,6 +853,38 @@ export default function Admin() {
 
               {canManageUsers() && !sidebarCollapsed && (
                 <>
+                  {/* CRM Section */}
+                  <Collapsible
+                    open={openSections.crm}
+                    onOpenChange={() => toggleSection("crm")}
+                    className="mt-4"
+                  >
+                    <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground transition-colors">
+                      <div className="flex items-center gap-2">
+                        <Contact className="h-4 w-4" />
+                        <span className="text-sm font-medium">CRM</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                          openSections.crm ? "rotate-180" : ""
+                        }`}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-1 mt-1 pl-2">
+                      <button
+                        onClick={() => setActiveTab("crm")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "crm"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <Contact className="h-4 w-4" />
+                        <span>CRM Dashboard</span>
+                      </button>
+                    </CollapsibleContent>
+                  </Collapsible>
+
                   {/* Security & Monitoring Section */}
                   <Collapsible
                     open={openSections.security}
@@ -1486,6 +1521,8 @@ export default function Admin() {
             )}
 
             {canManageUsers() && activeTab === "users" && <UserRoleManager />}
+
+            {canManageUsers() && activeTab === "crm" && <CrmDashboard />}
 
             {canManageUsers() && activeTab === "security" && <AdminSecurityManager />}
 
