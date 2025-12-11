@@ -1,0 +1,93 @@
+{
+  "name": "DMI - Des Moines Civic Center Events",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 12 }]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "schedule-dmpa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_URL }}/content",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"url\": \"https://desmoinesperformingarts.org/events/\",\n  \"waitFor\": 5000,\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 60000\n  }\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Fetch Events Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 0],
+      "id": "fetch-dmpa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract ALL events from Des Moines Performing Arts. Return ONLY a JSON array.\\n\\nFor each event:\\n- title (string)\\n- description (brief summary)\\n- date (ISO 8601 YYYY-MM-DD)\\n- time (string or null)\\n- end_date (if multi-day, else null)\\n- venue_name: 'Des Moines Civic Center' or 'Temple Theater' or 'Cowles Commons'\\n- address: '221 Walnut St, Des Moines, IA 50309'\\n- city: 'Des Moines'\\n- state: 'IA'\\n- category (Theater, Music, Comedy, Dance, Family, Other)\\n- price (string or null)\\n- image_url (full URL or null)\\n- ticket_url (full URL or null)\\n- source_url: 'https://desmoinesperformingarts.org/events/'\\n\\nHTML:\\n{{ $json.body.substring(0, 25000) }}\"\n  }]\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Extract with Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 0],
+      "id": "claude-dmpa"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || '';\n\ntry {\n  const jsonMatch = content.match(/```json\\n?([\\s\\S]*?)\\n?```/) || content.match(/```\\n?([\\s\\S]*?)\\n?```/);\n  const jsonStr = jsonMatch ? jsonMatch[1] : content;\n  const events = JSON.parse(jsonStr.trim());\n  \n  const eventArray = Array.isArray(events) ? events : [events];\n  \n  for (const event of eventArray) {\n    if (event.title && event.date) {\n      items.push({\n        json: {\n          ...event,\n          scraped_at: new Date().toISOString(),\n          source: 'dmpa_civic_center'\n        }\n      });\n    }\n  }\n} catch (e) {\n  console.log('Parse error:', e.message);\n}\n\nreturn items;"
+      },
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "parse-dmpa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEBHOOK_DESTINATION_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Send to Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 0],
+      "id": "webhook-dmpa"
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [[{ "node": "Fetch Events Page", "type": "main", "index": 0 }]]
+    },
+    "Fetch Events Page": {
+      "main": [[{ "node": "Extract with Claude", "type": "main", "index": 0 }]]
+    },
+    "Extract with Claude": {
+      "main": [[{ "node": "Parse Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Response": {
+      "main": [[{ "node": "Send to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}

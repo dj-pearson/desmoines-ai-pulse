@@ -1,0 +1,126 @@
+{
+  "name": "DMI - Restaurant Openings Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "schedule-resto"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      name: \"Des Moines Register Food\",\n      url: \"https://www.desmoinesregister.com/news/food/\",\n      source: \"dmregister\"\n    }\n  },\n  {\n    json: {\n      name: \"Business Record\",\n      url: \"https://businessrecord.com/Content/Food-Drink/\",\n      source: \"business_record\"\n    }\n  },\n  {\n    json: {\n      name: \"CITYVIEW\",\n      url: \"https://www.dmcityview.com/food-drink/\",\n      source: \"cityview\"\n    }\n  }\n];"
+      },
+      "name": "News Sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "sources-resto"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "delayBetweenBatches": 5000
+        }
+      },
+      "name": "Process One at a Time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "id": "batch-resto"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_URL }}/content",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n  \"waitFor\": 5000,\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 60000\n  }\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Fetch News Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 0],
+      "id": "fetch-resto"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Find any mentions of NEW restaurant openings, closings, or coming soon in Des Moines area. Return ONLY a JSON array (empty array if none found).\\n\\nFor each restaurant:\\n- name (string)\\n- description (what kind of restaurant, cuisine)\\n- location (address or neighborhood if known)\\n- city (default 'Des Moines')\\n- cuisine (type of food)\\n- opening_date (ISO date if known, or null)\\n- status: 'announced' or 'opening_soon' or 'newly_opened' or 'closed'\\n- source_url: '{{ $('Process One at a Time').item.json.url }}'\\n- article_title (headline if from news article)\\n\\nOnly include Des Moines metro area restaurants. Skip if it's just a review of an existing restaurant.\\n\\nHTML:\\n{{ $json.body.substring(0, 25000) }}\"\n  }]\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Extract with Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 0],
+      "id": "claude-resto"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || '';\nconst newsSource = $('Process One at a Time').item.json.source;\n\ntry {\n  const jsonMatch = content.match(/```json\\n?([\\s\\S]*?)\\n?```/) || content.match(/```\\n?([\\s\\S]*?)\\n?```/);\n  const jsonStr = jsonMatch ? jsonMatch[1] : content;\n  const restaurants = JSON.parse(jsonStr.trim());\n  \n  const restArray = Array.isArray(restaurants) ? restaurants : [restaurants];\n  \n  for (const rest of restArray) {\n    if (rest.name) {\n      items.push({\n        json: {\n          ...rest,\n          scraped_at: new Date().toISOString(),\n          news_source: newsSource\n        }\n      });\n    }\n  }\n} catch (e) {\n  console.log('Parse error:', e.message);\n}\n\nreturn items;"
+      },
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "parse-resto"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RESTAURANT_WEBHOOK_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Send to Restaurant Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1320, 0],
+      "id": "webhook-resto"
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [[{ "node": "News Sources", "type": "main", "index": 0 }]]
+    },
+    "News Sources": {
+      "main": [
+        [{ "node": "Process One at a Time", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process One at a Time": {
+      "main": [[{ "node": "Fetch News Page", "type": "main", "index": 0 }]]
+    },
+    "Fetch News Page": {
+      "main": [[{ "node": "Extract with Claude", "type": "main", "index": 0 }]]
+    },
+    "Extract with Claude": {
+      "main": [[{ "node": "Parse Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Response": {
+      "main": [
+        [{ "node": "Send to Restaurant Webhook", "type": "main", "index": 0 }]
+      ]
+    }
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "name": "DMI - Niche Venues (Middlebrook, Horizon)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "daysInterval": 1 }]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "schedule-niche"
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      name: \"Middlebrook Farm\",\n      url: \"https://www.middlebrookfarmdsm.com/events\",\n      address: \"2425 SE Tones Dr, Cumming, IA 50061\",\n      source: \"middlebrook_farm\",\n      defaultCategory: \"Community\"\n    }\n  },\n  {\n    json: {\n      name: \"Horizon Events Center\",\n      url: \"https://www.horizoneventscenter.com/events\",\n      address: \"2100 NW 100th St, Clive, IA 50325\",\n      source: \"horizon_events\",\n      defaultCategory: \"Other\"\n    }\n  },\n  {\n    json: {\n      name: \"Brenton Skating Plaza\",\n      url: \"https://www.bfrp.org/brenton-skating-plaza/\",\n      address: \"520 Robert D. Ray Dr, Des Moines, IA 50309\",\n      source: \"brenton_plaza\",\n      defaultCategory: \"Family\"\n    }\n  }\n];"
+      },
+      "name": "Venue List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0],
+      "id": "venues-niche"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "delayBetweenBatches": 5000
+        }
+      },
+      "name": "Process One at a Time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [440, 0],
+      "id": "batch-niche"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_URL }}/content",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n  \"waitFor\": 5000,\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 60000\n  }\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Fetch Venue Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 0],
+      "id": "fetch-niche"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract ALL upcoming events from {{ $('Process One at a Time').item.json.name }}. Return ONLY a JSON array.\\n\\nFor each event:\\n- title\\n- description (brief)\\n- date (ISO 8601 YYYY-MM-DD)\\n- time (string or null)\\n- venue_name: '{{ $('Process One at a Time').item.json.name }}'\\n- address: '{{ $('Process One at a Time').item.json.address }}'\\n- city: appropriate city\\n- state: 'IA'\\n- category (Family, Community, Music, Food & Drink, Festival, Other)\\n- price (string or null)\\n- image_url (full URL or null)\\n- ticket_url (full URL or null)\\n- source_url: '{{ $('Process One at a Time').item.json.url }}'\\n\\nHTML:\\n{{ $json.body.substring(0, 25000) }}\"\n  }]\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Extract with Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 0],
+      "id": "claude-niche"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || '';\nconst venueSource = $('Process One at a Time').item.json.source;\n\ntry {\n  const jsonMatch = content.match(/```json\\n?([\\s\\S]*?)\\n?```/) || content.match(/```\\n?([\\s\\S]*?)\\n?```/);\n  const jsonStr = jsonMatch ? jsonMatch[1] : content;\n  const events = JSON.parse(jsonStr.trim());\n  \n  const eventArray = Array.isArray(events) ? events : [events];\n  \n  for (const event of eventArray) {\n    if (event.title && event.date) {\n      items.push({\n        json: {\n          ...event,\n          scraped_at: new Date().toISOString(),\n          source: venueSource\n        }\n      });\n    }\n  }\n} catch (e) {\n  console.log('Parse error:', e.message);\n}\n\nreturn items;"
+      },
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0],
+      "id": "parse-niche"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEBHOOK_DESTINATION_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Send to Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1320, 0],
+      "id": "webhook-niche"
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [[{ "node": "Venue List", "type": "main", "index": 0 }]]
+    },
+    "Venue List": {
+      "main": [
+        [{ "node": "Process One at a Time", "type": "main", "index": 0 }]
+      ]
+    },
+    "Process One at a Time": {
+      "main": [[{ "node": "Fetch Venue Page", "type": "main", "index": 0 }]]
+    },
+    "Fetch Venue Page": {
+      "main": [[{ "node": "Extract with Claude", "type": "main", "index": 0 }]]
+    },
+    "Extract with Claude": {
+      "main": [[{ "node": "Parse Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Response": {
+      "main": [[{ "node": "Send to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "name": "DMI - Iowa Wolves Schedule",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "days", "daysInterval": 1 }]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0],
+      "id": "schedule-wolves"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_URL }}/content",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"url\": \"https://iowa.gleague.nba.com/schedule/\",\n  \"waitFor\": 5000,\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 60000\n  }\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Fetch Schedule",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 0],
+      "id": "fetch-wolves"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "content-type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract upcoming Iowa Wolves HOME games. Return ONLY a JSON array.\\n\\nFor each game:\\n- title: 'Iowa Wolves vs [Opponent]'\\n- description: 'NBA G League basketball - affiliate of the Minnesota Timberwolves'\\n- date (ISO 8601 YYYY-MM-DD)\\n- time (string or null)\\n- venue_name: 'Wells Fargo Arena'\\n- address: '730 3rd St, Des Moines, IA 50309'\\n- city: 'Des Moines'\\n- state: 'IA'\\n- category: 'Sports'\\n- price: null\\n- image_url: null\\n- ticket_url: 'https://iowa.gleague.nba.com/tickets/'\\n- source_url: 'https://iowa.gleague.nba.com/schedule/'\\n\\nOnly HOME games.\\n\\nHTML:\\n{{ $json.body.substring(0, 30000) }}\"\n  }]\n}",
+        "options": { "timeout": 120000 }
+      },
+      "name": "Extract with Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 0],
+      "id": "claude-wolves"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\nconst response = $input.first().json;\nconst content = response.content?.[0]?.text || '';\n\ntry {\n  const jsonMatch = content.match(/```json\\n?([\\s\\S]*?)\\n?```/) || content.match(/```\\n?([\\s\\S]*?)\\n?```/);\n  const jsonStr = jsonMatch ? jsonMatch[1] : content;\n  const events = JSON.parse(jsonStr.trim());\n  \n  const eventArray = Array.isArray(events) ? events : [events];\n  \n  for (const event of eventArray) {\n    if (event.title && event.date) {\n      items.push({\n        json: {\n          ...event,\n          scraped_at: new Date().toISOString(),\n          source: 'iowa_wolves'\n        }\n      });\n    }\n  }\n} catch (e) {\n  console.log('Parse error:', e.message);\n}\n\nreturn items;"
+      },
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "parse-wolves"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEBHOOK_DESTINATION_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Send to Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [880, 0],
+      "id": "webhook-wolves"
+    }
+  ],
+  "connections": {
+    "Schedule": {
+      "main": [[{ "node": "Fetch Schedule", "type": "main", "index": 0 }]]
+    },
+    "Fetch Schedule": {
+      "main": [[{ "node": "Extract with Claude", "type": "main", "index": 0 }]]
+    },
+    "Extract with Claude": {
+      "main": [[{ "node": "Parse Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Response": {
+      "main": [[{ "node": "Send to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}
