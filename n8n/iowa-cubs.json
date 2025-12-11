@@ -1,0 +1,41 @@
+{
+  "name": "DMI - Iowa Cubs Schedule",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "days", "daysInterval": 1 }] }
+      },
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://www.milb.com/iowa/schedule",
+        "options": {}
+      },
+      "name": "Fetch Schedule Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [{\n    \"role\": \"user\",\n    \"content\": \"Extract all upcoming Iowa Cubs home games from this HTML. Return JSON array with: title, date (ISO), time, opponent, venue_name ('Principal Park'), address ('1 Line Drive, Des Moines, IA'), category ('Sports').\\n\\n{{ $json.data.substring(0, 20000) }}\"\n  }]\n}"
+      },
+      "name": "Extract Games",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [440, 0]
+    }
+  ]
+}

@@ -1,0 +1,174 @@
+{
+  "name": "DMI - Catch Des Moines Event Scraper",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "name": "Schedule - Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_URL }}/scrape",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.catchdesmoines.com/events/\",\n  \"elements\": [\n    {\n      \"selector\": \".eventCard, .event-card, [data-event-id], .listing-item\",\n      \"timeout\": 30000\n    }\n  ],\n  \"waitFor\": 5000,\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 60000\n  }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Scrape Event Listing Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_URL }}/content",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"https://www.catchdesmoines.com/events/\",\n  \"waitFor\": \"body\",\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 60000\n  }\n}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "name": "Get Full HTML",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract event URLs from the HTML\nconst html = $input.first().json.body || $input.first().json;\n\n// Multiple patterns to catch different URL formats\nconst patterns = [\n  /href=\"(\\/events\\/[^\"]+)\"/g,\n  /href=\"(https:\\/\\/www\\.catchdesmoines\\.com\\/events\\/[^\"]+)\"/g\n];\n\nconst urls = new Set();\n\nfor (const pattern of patterns) {\n  let match;\n  const regex = new RegExp(pattern.source, pattern.flags);\n  while ((match = regex.exec(html)) !== null) {\n    let url = match[1];\n    if (url.startsWith('/')) {\n      url = 'https://www.catchdesmoines.com' + url;\n    }\n    // Filter out non-event pages\n    if (!url.includes('/events/?') && \n        !url.endsWith('/events/') &&\n        url.includes('/events/')) {\n      urls.add(url);\n    }\n  }\n}\n\nreturn Array.from(urls).slice(0, 50).map(url => ({ json: { url } }));"
+      },
+      "name": "Extract Event URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {
+          "delayBetweenBatches": 3000
+        }
+      },
+      "name": "Batch - 5 at a time",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.BROWSERLESS_URL }}/content",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"url\": \"{{ $json.url }}\",\n  \"waitFor\": \"body\",\n  \"gotoOptions\": {\n    \"waitUntil\": \"networkidle2\",\n    \"timeout\": 45000\n  }\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "Fetch Event Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 2000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Extract event information from this HTML. Return ONLY valid JSON with no markdown, no explanation.\\n\\nRequired fields:\\n- title (string)\\n- description (string, 2-3 sentences)\\n- date (ISO 8601 format YYYY-MM-DD)\\n- time (string like '7:00 PM' or null)\\n- end_date (ISO 8601 or null)\\n- venue_name (string)\\n- address (string)\\n- city (string, default 'Des Moines')\\n- state (string, default 'IA')\\n- category (one of: Music, Sports, Arts, Food & Drink, Family, Festival, Comedy, Theater, Community, Business, Other)\\n- price (string like '$25' or 'Free' or null)\\n- image_url (string or null)\\n- ticket_url (string or null)\\n- source_url (string)\\n\\nHTML to parse:\\n{{ $json.body.substring(0, 15000) }}\"\n    }\n  ]\n}"
+      },
+      "name": "Extract with Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\nfor (const item of $input.all()) {\n  try {\n    const response = item.json;\n    const content = response.content?.[0]?.text || '';\n    \n    // Try to parse JSON from Claude's response\n    let eventData;\n    try {\n      // Handle potential markdown code blocks\n      const jsonMatch = content.match(/```json\\n?([\\s\\S]*?)\\n?```/) || \n                        content.match(/```\\n?([\\s\\S]*?)\\n?```/);\n      const jsonStr = jsonMatch ? jsonMatch[1] : content;\n      eventData = JSON.parse(jsonStr.trim());\n    } catch (e) {\n      // Try direct parse\n      eventData = JSON.parse(content.trim());\n    }\n    \n    // Validate required fields\n    if (eventData.title && eventData.date) {\n      items.push({\n        json: {\n          ...eventData,\n          scraped_at: new Date().toISOString(),\n          source: 'catchdesmoines'\n        }\n      });\n    }\n  } catch (e) {\n    // Log error but continue\n    console.log('Parse error:', e.message);\n  }\n}\n\nreturn items;"
+      },
+      "name": "Parse Claude Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.WEBHOOK_DESTINATION_URL }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}"
+      },
+      "name": "Send to Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1760, 0]
+    }
+  ],
+  "connections": {
+    "Schedule - Every 6 Hours": {
+      "main": [
+        [{ "node": "Scrape Event Listing Page", "type": "main", "index": 0 }]
+      ]
+    },
+    "Scrape Event Listing Page": {
+      "main": [[{ "node": "Get Full HTML", "type": "main", "index": 0 }]]
+    },
+    "Get Full HTML": {
+      "main": [[{ "node": "Extract Event URLs", "type": "main", "index": 0 }]]
+    },
+    "Extract Event URLs": {
+      "main": [[{ "node": "Batch - 5 at a time", "type": "main", "index": 0 }]]
+    },
+    "Batch - 5 at a time": {
+      "main": [[{ "node": "Fetch Event Page", "type": "main", "index": 0 }]]
+    },
+    "Fetch Event Page": {
+      "main": [[{ "node": "Extract with Claude", "type": "main", "index": 0 }]]
+    },
+    "Extract with Claude": {
+      "main": [
+        [{ "node": "Parse Claude Response", "type": "main", "index": 0 }]
+      ]
+    },
+    "Parse Claude Response": {
+      "main": [[{ "node": "Send to Webhook", "type": "main", "index": 0 }]]
+    }
+  }
+}
