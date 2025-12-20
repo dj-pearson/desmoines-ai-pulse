@@ -39,6 +39,7 @@ export const navigationGroups: Record<string, NavGroup> = {
       { href: "/events/this-weekend", label: "This Weekend", icon: CalendarDays },
       { href: "/events/free", label: "Free Events", icon: Gift },
       { href: "/events/kids", label: "Kids & Family", icon: Baby },
+      { href: "/events/date-night", label: "Date Night", icon: Camera },
     ],
   },
   dining: {
@@ -75,6 +76,7 @@ export const navigationLinks: NavItem[] = [
   { href: "/events/this-weekend", label: "This Weekend", icon: Calendar, priority: true },
   { href: "/events/free", label: "Free Events", icon: Gift },
   { href: "/events/kids", label: "Kids & Family", icon: Baby },
+  { href: "/events/date-night", label: "Date Night", icon: Camera },
   { href: "/trip-planner", label: "AI Trip Planner", icon: Sparkles, priority: true },
   { href: "/weekend", label: "Weekend Guide", icon: CalendarDays },
   { href: "/restaurants", label: "Restaurants", icon: Utensils },
