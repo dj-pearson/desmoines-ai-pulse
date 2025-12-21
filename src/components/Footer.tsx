@@ -145,6 +145,11 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/trip-planner" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    AI Trip Planner
+                  </Link>
+                </li>
+                <li>
                   <Link to="/restaurants" className="text-neutral-400 hover:text-white transition-colors text-sm flex items-center gap-2">
                     <Utensils className="h-3.5 w-3.5" /> Restaurants
                   </Link>
