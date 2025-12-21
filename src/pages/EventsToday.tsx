@@ -10,8 +10,22 @@ import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
 
+interface EventItem {
+  id: string;
+  title: string;
+  date: string;
+  location: string;
+  venue: string;
+  price: string;
+  category: string;
+  enhanced_description: string;
+  original_description: string;
+  image_url: string;
+  event_start_utc: string;
+}
+
 export default function EventsToday() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

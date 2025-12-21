@@ -10,8 +10,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Baby, MapPin, Calendar, Users } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 
+interface EventItem {
+  id: string;
+  title: string;
+  date: string;
+  location: string;
+  venue: string;
+  price: string;
+  category: string;
+  enhanced_description: string;
+  original_description: string;
+  image_url: string;
+  event_start_utc: string;
+}
+
 export default function KidsEvents() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {

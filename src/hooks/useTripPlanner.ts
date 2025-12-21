@@ -43,7 +43,7 @@ export interface TripPlanItem {
   content_details: {
     type: 'event' | 'restaurant' | 'attraction';
     id: string;
-    [key: string]: any;
+    [key: string]: unknown;
   } | null;
 }
 

@@ -248,7 +248,7 @@ serve(async (req) => {
     for (const event of events) {
       try {
         // Create search query - simplified and more effective
-        let searchTerms = [event.title];
+        const searchTerms = [event.title];
         
         // Add venue if it exists and isn't already in title
         if (event.venue && !event.title.toLowerCase().includes(event.venue.toLowerCase())) {

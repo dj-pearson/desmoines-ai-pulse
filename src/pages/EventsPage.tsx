@@ -148,12 +148,12 @@ export default function EventsPage() {
         let filteredData = data || [];
 
         if (selectedCategory && selectedCategory !== "all") {
-          filteredData = filteredData.filter((e: any) => e.category === selectedCategory);
+          filteredData = filteredData.filter((e) => e.category === selectedCategory);
         }
 
         if (debouncedSearchQuery) {
           const searchLower = debouncedSearchQuery.toLowerCase();
-          filteredData = filteredData.filter((e: any) =>
+          filteredData = filteredData.filter((e) =>
             e.title?.toLowerCase().includes(searchLower) ||
             e.enhanced_description?.toLowerCase().includes(searchLower) ||
             e.venue?.toLowerCase().includes(searchLower)
@@ -162,11 +162,11 @@ export default function EventsPage() {
 
         if (priceRange && priceRange !== "any-price") {
           if (priceRange === "free") {
-            filteredData = filteredData.filter((e: any) =>
+            filteredData = filteredData.filter((e) =>
               !e.price || e.price.toLowerCase().includes('free') || e.price.includes('$0')
             );
           } else {
-            filteredData = filteredData.filter((e: any) =>
+            filteredData = filteredData.filter((e) =>
               e.price && !e.price.toLowerCase().includes('free')
             );
           }
@@ -228,14 +228,15 @@ export default function EventsPage() {
             case "tomorrow":
               query = query.eq("date", tomorrow.toISOString().split("T")[0]);
               break;
-            case "this-week":
+            case "this-week": {
               const endOfWeek = new Date(today);
               endOfWeek.setDate(today.getDate() + (6 - today.getDay()));
               query = query
                 .gte("date", today.toISOString().split("T")[0])
                 .lte("date", endOfWeek.toISOString().split("T")[0]);
               break;
-            case "this-weekend":
+            }
+            case "this-weekend": {
               const saturday = new Date(today);
               saturday.setDate(today.getDate() + (6 - today.getDay()));
               const sunday = new Date(saturday);
@@ -244,7 +245,8 @@ export default function EventsPage() {
                 .gte("date", saturday.toISOString().split("T")[0])
                 .lte("date", sunday.toISOString().split("T")[0]);
               break;
-            case "next-week":
+            }
+            case "next-week": {
               const nextMonday = new Date(today);
               nextMonday.setDate(today.getDate() + (7 - today.getDay()) + 1);
               const nextSunday = new Date(nextMonday);
@@ -253,6 +255,7 @@ export default function EventsPage() {
                 .gte("date", nextMonday.toISOString().split("T")[0])
                 .lte("date", nextSunday.toISOString().split("T")[0]);
               break;
+            }
           }
         }
       }

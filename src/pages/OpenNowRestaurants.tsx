@@ -11,8 +11,21 @@ import { Clock, MapPin, Calendar, Utensils } from "lucide-react";
 import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 
+interface Restaurant {
+  id: string;
+  name: string;
+  cuisine: string;
+  location: string;
+  rating?: number;
+  price_range?: string;
+  description?: string;
+  phone?: string;
+  website?: string;
+  image_url?: string;
+}
+
 export default function OpenNowRestaurants() {
-  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
 

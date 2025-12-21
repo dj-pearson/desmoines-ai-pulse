@@ -8,12 +8,25 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
+interface EventItem {
+  location?: string;
+  venue?: string;
+  [key: string]: unknown;
+}
+
+interface NeighborhoodData {
+  name: string;
+  events: EventItem[];
+  restaurants: unknown[];
+  attractions: unknown[];
+}
+
 export default function NeighborhoodPage() {
   const { neighborhood } = useParams<{ neighborhood: string }>();
-  const [neighborhoodData, setNeighborhoodData] = useState<any>(null);
+  const [neighborhoodData, setNeighborhoodData] = useState<NeighborhoodData | null>(null);
   
   // Mock data - replace with actual API calls
-  const events: any[] = []; // Would come from useEvents or API call
+  const events: EventItem[] = []; // Would come from useEvents or API call
   
   useEffect(() => {
     if (neighborhood) {

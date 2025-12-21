@@ -37,8 +37,8 @@ export function useUserSubmittedEvents() {
     queryFn: async (): Promise<UserSubmittedEvent[]> => {
       if (!user) throw new Error('User not authenticated');
       
-      // Use any for now since the table types may not be fully generated
-      const { data, error } = await (supabase as any)
+      // Use proper typing for the Supabase client
+      const { data, error} = await supabase
         .from('user_submitted_events')
         .select('*')
         .eq('user_id', user.id)
@@ -59,7 +59,7 @@ export function useSubmitEvent() {
     mutationFn: async (eventData: Omit<UserSubmittedEvent, 'id' | 'user_id' | 'status' | 'submitted_at' | 'created_at' | 'updated_at'>) => {
       if (!user) throw new Error('User not authenticated');
       
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('user_submitted_events')
         .insert([
           {
@@ -84,7 +84,7 @@ export function useUpdateEvent() {
   
   return useMutation({
     mutationFn: async ({ id, ...eventData }: Partial<UserSubmittedEvent> & { id: string }) => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('user_submitted_events')
         .update(eventData)
         .eq('id', id)
@@ -105,7 +105,7 @@ export function useDeleteEvent() {
   
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('user_submitted_events')
         .delete()
         .eq('id', id);

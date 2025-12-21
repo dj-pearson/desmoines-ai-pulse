@@ -29,10 +29,6 @@ export default function MonthlyEventsPage() {
   const targetDate = monthYear ? parseMonthYear(monthYear) : new Date();
   const isValidDate = isValid(targetDate);
   
-  if (!isValidDate) {
-    return <div>Invalid date format</div>;
-  }
-
   const monthStart = startOfMonth(targetDate);
   const monthEnd = endOfMonth(targetDate);
   
@@ -55,6 +51,7 @@ export default function MonthlyEventsPage() {
       if (error) throw error;
       return data || [];
     },
+    enabled: isValidDate, // Only run query if date is valid
   });
 
   const { data: categories } = useQuery({
@@ -72,7 +69,13 @@ export default function MonthlyEventsPage() {
       ].filter(Boolean);
       return uniqueCategories.sort();
     },
+    enabled: isValidDate, // Only run query if date is valid
   });
+  
+  // Check validity AFTER hooks
+  if (!isValidDate) {
+    return <div>Invalid date format</div>;
+  }
 
   // Navigation helpers
   const getNextMonth = () => {

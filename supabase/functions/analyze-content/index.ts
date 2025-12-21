@@ -60,7 +60,7 @@ serve(async (req) => {
     const h1 = html.match(/<h1[^>]*>([^<]+)<\/h1>/i)?.[1]?.trim() || null;
 
     // Extract main content (remove scripts, styles, nav, footer)
-    let textContent = html
+    const textContent = html
       .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
       .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
       .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
@@ -156,7 +156,7 @@ serve(async (req) => {
     // Calculate scores
     let overallContentScore = 100;
     let keywordOptimizationScore = 100;
-    let readabilityScoreRating = Math.round(readabilityScore);
+    const readabilityScoreRating = Math.round(readabilityScore);
     let structureScore = 100;
     let engagementScore = 100;
 

@@ -342,7 +342,7 @@ class EventDateTimeCrawler {
             // If time is from structured data, the date already includes time info
             let finalDateTime: Date;
             let eventStartLocal: string;
-            let eventTimezone: string = "America/Chicago"; // Default to CDT
+            const eventTimezone: string = "America/Chicago"; // Default to CDT
 
             if (info.extractedTime === "structured_data") {
               console.log("✅ Using complete datetime from structured data");

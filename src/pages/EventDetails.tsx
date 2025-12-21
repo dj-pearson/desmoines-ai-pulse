@@ -103,25 +103,6 @@ export default function EventDetails() {
   const eventDate = new Date(event.date);
   const isUpcoming = eventDate >= new Date();
 
-  // Generate comprehensive SEO data
-  const seoTitle = `${event.title} - Des Moines Event`;
-  const seoDescription =
-    event.enhanced_description ||
-    event.original_description ||
-    `Join us for ${event.title} in Des Moines. ${formatEventDate(event)}`;
-
-  const seoKeywords = [
-    event.title,
-    event.category,
-    "event",
-    "Des Moines events",
-    "Iowa events",
-    event.venue || "",
-    event.location || "",
-    "things to do",
-    "activities",
-  ].filter(Boolean);
-
   // Enhanced Google Events Schema with all required fields
   const eventSchema = {
     "@context": "https://schema.org",

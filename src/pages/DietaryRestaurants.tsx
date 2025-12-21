@@ -20,9 +20,23 @@ const dietaryOptions = [
   { id: "kosher", label: "Kosher", icon: Beef, color: "text-purple-600", keywords: ["kosher"] },
 ];
 
+interface Restaurant {
+  id: string;
+  name: string;
+  cuisine: string;
+  location: string;
+  rating?: number;
+  price_range?: string;
+  description?: string;
+  phone?: string;
+  website?: string;
+  image_url?: string;
+  dietary_options?: string[];
+}
+
 export default function DietaryRestaurants() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDiet, setSelectedDiet] = useState<string>(searchParams.get("diet") || "");
 

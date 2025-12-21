@@ -48,13 +48,13 @@ export const useWebVitals = () => {
   const sendToAnalytics = (metric: WebVitalMetric) => {
     // Send to Google Analytics 4 with custom metrics
     if (typeof window !== 'undefined' && 'gtag' in window) {
-      (window as any).gtag('event', 'web_vitals', {
+      (window as Window & { gtag?: (...args: unknown[]) => void }).gtag?.('event', 'web_vitals', {
         custom_metric_name: metric.name,
         custom_metric_value: metric.value,
         custom_metric_rating: metric.rating,
         page_url: window.location.pathname,
         user_agent: navigator.userAgent,
-        connection_type: (navigator as any).connection?.effectiveType || 'unknown'
+        connection_type: (navigator as Navigator & { connection?: { effectiveType?: string } }).connection?.effectiveType || 'unknown'
       });
     }
 
@@ -222,7 +222,7 @@ export const performanceUtils = {
 
   // Detect slow connection for performance adaptations
   isSlowConnection: () => {
-    const connection = (navigator as any).connection;
+    const connection = (navigator as Navigator & { connection?: { effectiveType?: string; saveData?: boolean } }).connection;
     return connection && 
            (connection.effectiveType === 'slow-2g' || 
             connection.effectiveType === '2g' ||

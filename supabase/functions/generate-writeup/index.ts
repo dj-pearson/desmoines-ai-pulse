@@ -29,7 +29,7 @@ function extractContentFromHTML(html: string): {
   contact: string;
 } {
   // Remove script and style elements
-  let cleanHtml = html
+  const cleanHtml = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "");

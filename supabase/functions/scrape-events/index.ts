@@ -1477,7 +1477,7 @@ async function analyzeWebsiteStructure(
 // Extract relevant HTML snippets for AI analysis
 function extractRelevantHTMLSnippets(html: string): string {
   // Remove scripts, styles, and other non-content elements
-  let cleanHtml = html
+  const cleanHtml = html
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "");

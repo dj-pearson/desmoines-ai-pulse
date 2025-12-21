@@ -167,92 +167,76 @@ export function useEventScraper() {
 }
 
 // Transform functions to match frontend types
-function transformEvent(event: any): Event {
+function transformEvent(event: Record<string, unknown>): Event {
   return {
-    id: event.id,
-    title: event.title,
-    original_description: event.original_description,
-    enhanced_description: event.enhanced_description,
-    date: event.date,
-    location: event.location,
-    venue: event.venue,
-    category: event.category,
-    price: event.price,
-    image_url: event.image_url,
-    source_url: event.source_url,
-    is_enhanced: event.is_enhanced,
-    is_featured: event.is_featured,
-    created_at: event.created_at,
-    updated_at: event.updated_at,
+    id: event.id as string,
+    title: event.title as string,
+    original_description: event.original_description as string,
+    enhanced_description: event.enhanced_description as string,
+    date: event.date as string,
+    location: event.location as string,
+    venue: event.venue as string,
+    category: event.category as string,
+    price: event.price as string,
+    image_url: event.image_url as string,
+    source_url: event.source_url as string,
+    is_enhanced: event.is_enhanced as boolean,
+    is_featured: event.is_featured as boolean,
+    created_at: event.created_at as string,
+    updated_at: event.updated_at as string,
   };
 }
 
-function transformRestaurantOpening(opening: any): RestaurantOpening {
+function transformRestaurant(restaurant: Record<string, unknown>): Restaurant {
   return {
-    id: opening.id,
-    name: opening.name,
-    description: opening.description,
-    location: opening.location,
-    cuisine: opening.cuisine,
-    openingDate: opening.opening_date,
-    openingTimeframe: opening.opening_timeframe,
-    status: opening.status,
-    sourceUrl: opening.source_url,
-    createdAt: opening.created_at,
-    updatedAt: opening.updated_at,
+    id: restaurant.id as string,
+    name: restaurant.name as string,
+    cuisine: restaurant.cuisine as string,
+    location: restaurant.location as string,
+    rating: restaurant.rating as number,
+    priceRange: restaurant.price_range as string,
+    description: restaurant.description as string,
+    phone: restaurant.phone as string,
+    website: restaurant.website as string,
+    image_url: restaurant.image_url as string,
+    isFeatured: restaurant.is_featured as boolean,
+    openingDate: restaurant.opening_date as string | undefined,
+    openingTimeframe: restaurant.opening_timeframe as string | undefined,
+    status: restaurant.status as string | undefined,
+    sourceUrl: restaurant.source_url as string | undefined,
+    createdAt: restaurant.created_at as string,
+    updatedAt: restaurant.updated_at as string,
   };
 }
 
-function transformRestaurant(restaurant: any): Restaurant {
+function transformAttraction(attraction: Record<string, unknown>): Attraction {
   return {
-    id: restaurant.id,
-    name: restaurant.name,
-    cuisine: restaurant.cuisine,
-    location: restaurant.location,
-    rating: restaurant.rating,
-    priceRange: restaurant.price_range,
-    description: restaurant.description,
-    phone: restaurant.phone,
-    website: restaurant.website,
-    image_url: restaurant.image_url,
-    isFeatured: restaurant.is_featured,
-    openingDate: restaurant.opening_date,
-    openingTimeframe: restaurant.opening_timeframe,
-    status: restaurant.status,
-    sourceUrl: restaurant.source_url,
-    createdAt: restaurant.created_at,
-    updatedAt: restaurant.updated_at,
+    id: attraction.id as string,
+    name: attraction.name as string,
+    type: attraction.type as string,
+    location: attraction.location as string,
+    description: attraction.description as string,
+    rating: attraction.rating as number,
+    website: attraction.website as string,
+    image_url: attraction.image_url as string,
+    isFeatured: attraction.is_featured as boolean,
+    createdAt: attraction.created_at as string,
+    updatedAt: attraction.updated_at as string,
   };
 }
 
-function transformAttraction(attraction: any): Attraction {
+function transformPlayground(playground: Record<string, unknown>): Playground {
   return {
-    id: attraction.id,
-    name: attraction.name,
-    type: attraction.type,
-    location: attraction.location,
-    description: attraction.description,
-    rating: attraction.rating,
-    website: attraction.website,
-    image_url: attraction.image_url,
-    isFeatured: attraction.is_featured,
-    createdAt: attraction.created_at,
-    updatedAt: attraction.updated_at,
-  };
-}
-
-function transformPlayground(playground: any): Playground {
-  return {
-    id: playground.id,
-    name: playground.name,
-    location: playground.location,
-    description: playground.description,
-    ageRange: playground.age_range,
-    amenities: playground.amenities,
-    rating: playground.rating,
-    image_url: playground.image_url,
-    isFeatured: playground.is_featured,
-    createdAt: playground.created_at,
-    updatedAt: playground.updated_at,
+    id: playground.id as string,
+    name: playground.name as string,
+    location: playground.location as string,
+    description: playground.description as string,
+    ageRange: playground.age_range as string,
+    amenities: playground.amenities as string[],
+    rating: playground.rating as number,
+    image_url: playground.image_url as string,
+    isFeatured: playground.is_featured as boolean,
+    createdAt: playground.created_at as string,
+    updatedAt: playground.updated_at as string,
   };
 }

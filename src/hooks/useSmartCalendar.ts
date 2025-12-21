@@ -31,7 +31,7 @@ export interface EventSuggestion {
   travel_time_minutes: number;
   is_dismissed: boolean;
   is_accepted: boolean;
-  event?: any;
+  event?: CalendarEvent;
 }
 
 export interface CalendarConflict {
@@ -53,7 +53,7 @@ export interface CalendarPreferences {
   auto_suggest_events: boolean;
   preferred_event_duration: number;
   location_radius_km: number;
-  notification_preferences: any;
+  notification_preferences: Record<string, unknown>;
 }
 
 export function useSmartCalendar() {
@@ -92,7 +92,7 @@ export function useSmartCalendar() {
     try {
       console.log("Preferences would be updated:", prefs);
       toast.success('Preferences updated successfully');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to update preferences');
     } finally {
       setLoading(false);
@@ -111,7 +111,7 @@ export function useSmartCalendar() {
     try {
       console.log("Generating smart suggestions for user:", user.id);
       toast.success('Smart suggestions updated');
-    } catch (error) {
+    } catch (_error) {
       toast.error('Failed to generate suggestions');
     } finally {
       setLoading(false);
@@ -148,7 +148,7 @@ export function useSmartCalendar() {
       fetchSuggestions();
       fetchPreferences();
     }
-  }, [user]);
+  }, [user, fetchCalendars, fetchEvents, fetchSuggestions, fetchPreferences]);
 
   return {
     calendars,

@@ -18,7 +18,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const tables = ["restaurants", "events", "attractions", "playgrounds"];
-    let results: Record<string, any> = {};
+    const results: Record<string, any> = {};
     let totalUpdated = 0;
 
     console.log('Starting coordinate backfill for all tables...');

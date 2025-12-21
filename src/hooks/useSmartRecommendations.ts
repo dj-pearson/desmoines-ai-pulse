@@ -30,7 +30,7 @@ const ALGORITHM_WEIGHTS = {
 export function useSmartRecommendations() {
   const { user } = useAuth();
   const { profile } = useProfile();
-  const { userFeedback, getFeedbackStats } = useFeedback();
+  const { userFeedback } = useFeedback();
   
   const [recommendations, setRecommendations] = useState<SmartRecommendation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -392,7 +392,7 @@ export function useSmartRecommendations() {
     return reasons;
   };
 
-  const calculateUserSimilarities = (userLikes: string[], similarUsers: any[]): Map<string, number> => {
+  const calculateUserSimilarities = (userLikes: string[], similarUsers: Array<{ user_id: string; event_id: string }>): Map<string, number> => {
     const similarities = new Map<string, number>();
     const userLikesSet = new Set(userLikes);
     
@@ -416,7 +416,7 @@ export function useSmartRecommendations() {
     return similarities;
   };
 
-  const determinePricePreference = (feedback: Array<{ event_id: string; feedback_type: string }>): string => {
+  const determinePricePreference = (_feedback: Array<{ event_id: string; feedback_type: string }>): string => {
     // Could analyze user's price preferences based on feedback patterns
     return 'moderate'; // Default for now
   };
@@ -443,6 +443,7 @@ export function useSmartRecommendations() {
     if (user && profile) {
       generateRecommendations();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, profile, userFeedback]);
 
   return {

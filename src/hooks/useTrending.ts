@@ -10,7 +10,7 @@ interface TrendingItem {
   views24h: number;
   views7d: number;
   velocityScore: number;
-  content?: any; // The actual content data
+  content?: Record<string, unknown>; // The actual content data
 }
 
 interface TrendingData {
@@ -38,6 +38,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
 
   useEffect(() => {
     fetchTrendingData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchTrendingData = async () => {
@@ -87,7 +88,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
     }
   };
 
-  const enrichTrendingWithContent = async (trendingScores: any[]) => {
+  const enrichTrendingWithContent = async (trendingScores: Array<Record<string, unknown>>) => {
     const enriched = [];
 
     for (const score of trendingScores) {
@@ -95,7 +96,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       
       try {
         switch (score.content_type) {
-          case 'event':
+          case 'event': {
             const { data: event } = await supabase
               .from('events')
               .select('*')
@@ -103,7 +104,8 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
               .single();
             content = event;
             break;
-          case 'restaurant':
+          }
+          case 'restaurant': {
             const { data: restaurant } = await supabase
               .from('restaurants')
               .select('*')
@@ -111,7 +113,8 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
               .single();
             content = restaurant;
             break;
-          case 'attraction':
+          }
+          case 'attraction': {
             const { data: attraction } = await supabase
               .from('attractions')
               .select('*')
@@ -119,7 +122,8 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
               .single();
             content = attraction;
             break;
-          case 'playground':
+          }
+          case 'playground': {
             const { data: playground } = await supabase
               .from('playgrounds')
               .select('*')
@@ -127,6 +131,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
               .single();
             content = playground;
             break;
+          }
         }
 
         if (content) {

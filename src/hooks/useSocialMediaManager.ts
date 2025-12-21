@@ -92,7 +92,7 @@ export function useSocialMediaManager() {
   };
 
   const generatePost = async (data: { contentType: string; subjectType: string }) => {
-    let result: any;
+    let result: { success: boolean; post?: unknown } | undefined;
     await preserveScrollPosition(async () => {
       setGenerating(true);
       try {
@@ -129,7 +129,7 @@ export function useSocialMediaManager() {
     let success = false;
     await preserveScrollPosition(async () => {
       try {
-        const { data, error } = await supabase.functions.invoke('social-media-manager', {
+        const { data: _data, error } = await supabase.functions.invoke('social-media-manager', {
           body: {
             action: 'publish',
             postId: id
@@ -173,7 +173,7 @@ export function useSocialMediaManager() {
     return success;
   };
 
-  const repostPost = async (id: string, type: string) => {
+  const repostPost = async (_id: string, _type: string) => {
     try {
       // Logic for reposting would go here
       toast.success('Post reposted successfully!');
@@ -246,7 +246,7 @@ export function useSocialMediaManager() {
     }
   };
 
-  const testWebhook = async (id: string) => {
+  const testWebhook = async (_id: string) => {
     try {
       // Logic for testing webhook would go here
       toast.success('Webhook test successful!');
@@ -290,6 +290,7 @@ export function useSocialMediaManager() {
     } else {
       console.log('Auth conditions not met. User:', !!user, 'IsAdmin:', isAdmin);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAdmin]);
 
   return {

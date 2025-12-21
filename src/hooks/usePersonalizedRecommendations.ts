@@ -136,7 +136,7 @@ export function usePersonalizedRecommendations() {
       // Score events based on user preferences and context
       const scoredEvents = (events || []).map(event => {
         let score = 50; // Base score
-        let reasons = [];
+        const reasons = [];
 
         // Time-based scoring
         if (context.timeOfDay === 'evening' && event.category?.toLowerCase().includes('concert')) {
@@ -187,7 +187,7 @@ export function usePersonalizedRecommendations() {
   // Generate personalized restaurant recommendations
   const getPersonalizedRestaurants = useCallback(async (context: PersonalizationContext, userPrefs: any) => {
     try {
-      let query = supabase
+      const query = supabase
         .from('restaurants')
         .select('*')
         .order('popularity_score', { ascending: false })
@@ -199,7 +199,7 @@ export function usePersonalizedRecommendations() {
       // Score restaurants based on user preferences and context
       const scoredRestaurants = (restaurants || []).map(restaurant => {
         let score = 40; // Base score
-        let reasons = [];
+        const reasons = [];
 
         // Time-based scoring
         if (context.timeOfDay === 'morning' && restaurant.cuisine?.toLowerCase().includes('coffee')) {

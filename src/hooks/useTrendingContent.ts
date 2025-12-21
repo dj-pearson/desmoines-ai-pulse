@@ -5,7 +5,7 @@ interface TrendingItem {
   id: string;
   contentType: 'event' | 'restaurant' | 'attraction' | 'playground';
   contentId: string;
-  content: any;
+  content: Record<string, unknown>;
   trendingScore: number;
   timeWindow: '1h' | '6h' | '24h' | '7d';
   reason: string;
@@ -32,6 +32,7 @@ export function useTrending(options: TrendingOptions = {}) {
 
   useEffect(() => {
     fetchTrendingItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contentType, timeWindow, limit]);
 
   const fetchTrendingItems = async () => {
@@ -43,7 +44,7 @@ export function useTrending(options: TrendingOptions = {}) {
       let trendingData;
       try {
         let query = supabase
-          .from('trending_scores_realtime' as any)
+          .from('trending_scores_realtime' as never)
           .select('*')
           .eq('date', new Date().toISOString().split('T')[0])
           .order(`score_${timeWindow}`, { ascending: false })
@@ -57,7 +58,7 @@ export function useTrending(options: TrendingOptions = {}) {
         
         if (enhancedError) throw enhancedError;
         trendingData = enhancedData;
-      } catch (enhancedError) {
+      } catch (_enhancedError) {
         console.log('Enhanced trending not available, using fallback method');
         // Fallback to calculating trending from existing analytics
         trendingData = await calculateTrendingFromAnalytics();
@@ -79,12 +80,12 @@ export function useTrending(options: TrendingOptions = {}) {
           try {
             const tableName = getTableName(item.content_type);
             const { data: contentData } = await supabase
-              .from(tableName as any)
+              .from(tableName as never)
               .select('*')
               .eq('id', item.content_id)
               .single();
             content = contentData;
-          } catch (contentError) {
+          } catch (_contentError) {
             console.log(`Could not fetch content for ${item.content_type}:${item.content_id}`);
           }
         }
@@ -128,7 +129,7 @@ export function useTrending(options: TrendingOptions = {}) {
       if (!analyticsData) return [];
 
       // Calculate trending scores
-      const contentScores: { [key: string]: any } = {};
+      const contentScores: { [key: string]: { content_type: string; content_id: string; views: number; clicks: number; shares: number; score: number } } = {};
       
       analyticsData.forEach(item => {
         const key = `${item.content_type}:${item.content_id}`;
@@ -165,7 +166,7 @@ export function useTrending(options: TrendingOptions = {}) {
 
       // Sort by score and return top items
       return Object.values(contentScores)
-        .sort((a: any, b: any) => b.score - a.score)
+        .sort((a, b) => b.score - a.score)
         .slice(0, limit);
         
     } catch (error) {
@@ -205,14 +206,14 @@ export function useTrending(options: TrendingOptions = {}) {
     }
   };
 
-  const generateTrendingReason = (item: any, window: string): string => {
-    const score = item[`score_${window}`] || item.score || 0;
-    const views = item[`unique_views_${window}`] || item.views || 0;
+  const generateTrendingReason = (item: Record<string, unknown>, window: string): string => {
+    const score = (item[`score_${window}`] as number) || (item.score as number) || 0;
+    const views = (item[`unique_views_${window}`] as number) || (item.views as number) || 0;
     
     if (score > 50) return 'Viral';
     if (score > 20) return 'Hot';
     if (views > 100) return 'Popular';
-    if (item.velocity_score > 10) return 'Rising';
+    if ((item.velocity_score as number) > 10) return 'Rising';
     return 'Trending';
   };
 

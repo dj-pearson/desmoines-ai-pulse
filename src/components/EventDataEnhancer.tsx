@@ -251,7 +251,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     try {
       if (mode === "bulk" && selectedEventsList.length > batchSize) {
         // Process in smaller batches
-        let allResults: any[] = [];
+        const allResults: any[] = [];
         
         for (let i = 0; i < selectedEventsList.length; i += batchSize) {
           const batch = selectedEventsList.slice(i, i + batchSize);

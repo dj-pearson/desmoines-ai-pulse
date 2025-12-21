@@ -671,7 +671,7 @@ function generateReport(results: AuditResult[]): void {
   console.log('='.repeat(80));
 
   let totalScore = 0;
-  let totalCategories = results.length;
+  const totalCategories = results.length;
 
   for (const result of results) {
     totalScore += result.score;

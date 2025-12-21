@@ -11,8 +11,22 @@ import { DollarSign, MapPin, Calendar, Gift } from "lucide-react";
 import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 
+interface EventItem {
+  id: string;
+  title: string;
+  date: string;
+  location: string;
+  venue: string;
+  price: string;
+  category: string;
+  enhanced_description: string;
+  original_description: string;
+  image_url: string;
+  event_start_utc: string;
+}
+
 export default function FreeEvents() {
-  const [events, setEvents] = useState<any[]>([]);
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -181,8 +195,8 @@ export default function FreeEvents() {
               <h2 className="text-xl font-semibold mb-4">Free Events by Category</h2>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {Object.entries(categoryCounts)
-                  .sort(([, a]: any, [, b]: any) => b - a)
-                  .map(([category, count]: any) => (
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .map(([category, count]) => (
                     <div key={category} className="flex items-center justify-between p-3 bg-muted rounded-lg">
                       <span className="text-sm font-medium">{category}</span>
                       <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">

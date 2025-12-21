@@ -494,7 +494,7 @@ serve(async (req) => {
 
     console.log(`📄 Will scrape ${urlsToScrape.length} pages`);
 
-    let allExtractedItems = [];
+    const allExtractedItems = [];
     let totalContentLength = 0;
 
     // Scrape URLs using universal scraper (supports Puppeteer/Playwright/Firecrawl)
@@ -914,7 +914,7 @@ Return empty array [] if no competitive content found.`
     console.log(`🕒 After filtering: ${filteredItems.length} items (removed ${allExtractedItems.length - filteredItems.length} items)`);
 
     // Track batch processing info for response
-    let batchInfo = {
+    const batchInfo = {
       totalEvents: filteredItems.length,
       processedStart: 0,
       processedEnd: 0,

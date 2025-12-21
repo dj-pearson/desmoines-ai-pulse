@@ -63,7 +63,7 @@ export function useSocialFeatures() {
   const { user } = useAuth();
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendGroups, setFriendGroups] = useState<FriendGroup[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
 
   // Mock functions since tables don't exist yet
   const fetchFriends = async () => {
@@ -212,6 +212,7 @@ export function useSocialFeatures() {
       fetchFriends();
       fetchFriendGroups();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   return {

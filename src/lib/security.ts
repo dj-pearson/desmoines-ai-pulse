@@ -54,7 +54,7 @@ export class SecurityUtils {
   static containsSQLInjection(input: string): boolean {
     const sqlPatterns = [
       /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT)\b)/i,
-      /(;|\-\-|\/\*|\*\/)/,
+      /(;|--|\/\*|\*\/)/,
       /(\b(OR|AND)\b\s+\d+\s*=\s*\d+)/i,
       /(\b(OR|AND)\b\s+\w+\s*=\s*\w+)/i,
       /(SCRIPT[\s\S]*?>)/i,
@@ -126,7 +126,7 @@ export class SecurityUtils {
         errors.push('Local and private IP addresses are not allowed');
       }
       
-    } catch (error) {
+    } catch (_error) {
       errors.push('Invalid URL format');
     }
     
@@ -169,7 +169,7 @@ export class SecurityUtils {
       errors.push('Password must contain at least one number');
     }
     
-    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) {
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
       errors.push('Password must contain at least one special character');
     }
     
@@ -177,7 +177,7 @@ export class SecurityUtils {
     const hasLower = /[a-z]/.test(password);
     const hasUpper = /[A-Z]/.test(password);
     const hasNumber = /\d/.test(password);
-    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    const hasSpecial = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
     const criteriaCount = [hasLower, hasUpper, hasNumber, hasSpecial].filter(Boolean).length;
     
     if (password.length >= 12 && criteriaCount >= 3) {
@@ -305,6 +305,6 @@ export const ValidationSchemas = {
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
   }),
-  phoneNumber: z.string().regex(/^\+?[\d\s\-\(\)]{10,}$/, 'Invalid phone number format'),
-  slug: z.string().regex(/^[a-z0-9\-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens'),
+  phoneNumber: z.string().regex(/^\+?[\d\s\-()]{10,}$/, 'Invalid phone number format'),
+  slug: z.string().regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers, and hyphens'),
 };

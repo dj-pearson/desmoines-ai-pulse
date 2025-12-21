@@ -23,6 +23,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
     if (campaignOwnerId) {
       fetchTeamMembers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignOwnerId]);
 
   const fetchTeamMembers = async () => {
@@ -38,7 +39,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
       if (error) throw error;
 
-      setTeamMembers(data as any[] || []);
+      setTeamMembers((data as TeamMember[]) || []);
     } catch (err) {
       console.error("Error fetching team members:", err);
       toast({

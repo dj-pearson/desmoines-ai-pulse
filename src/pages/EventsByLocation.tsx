@@ -70,7 +70,24 @@ export default function EventsByLocation() {
     ? SUBURBS[location as keyof typeof SUBURBS]
     : null;
 
-  const [events, setEvents] = useState<any[]>([]);
+  interface EventItem {
+    id: string;
+    title: string;
+    date: string;
+    time?: string;
+    location: string;
+    venue: string;
+    price: string;
+    category: string;
+    enhanced_description: string;
+    original_description: string;
+    image_url: string;
+    event_start_utc: string;
+    status?: string;
+    city?: string;
+  }
+
+  const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -90,7 +107,7 @@ export default function EventsByLocation() {
           setEvents([]);
         } else {
           // Filter events that match the suburb
-          const filteredData = (data || []).filter((event: any) => {
+          const filteredData = (data || []).filter((event) => {
             const eventLocation = (
               event.location ||
               event.venue ||

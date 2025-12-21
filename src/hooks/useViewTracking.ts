@@ -136,7 +136,7 @@ export function useRestaurantViewTracking(restaurantId: string) {
             trending_score: data.trending_score || 0,
           });
         }
-      } catch (error) {
+      } catch (_error) {
         setViewData(generateFallbackData(restaurantId));
       }
     }
