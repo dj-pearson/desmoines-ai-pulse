@@ -8,7 +8,7 @@ This plan outlines the phases and tasks required to enhance the AI-powered perso
 
 ### Tasks
 - [x] **Task:** Analyze existing recommendation system and data models. (21d6c47)
-- [ ] **Task:** Design and document the enhanced user profile schema.
+- [~] **Task:** Design and document the enhanced user profile schema.
 - [ ] **Task:** Write and apply database migrations to update the user_profiles and ecommendation_scores tables.
 - [ ] **Task:** Conductor - User Manual Verification 'Foundational Enhancements' (Protocol in workflow.md)
 
