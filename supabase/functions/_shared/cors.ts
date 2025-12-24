@@ -3,19 +3,45 @@
  */
 
 /**
- * Get CORS origin based on environment
+ * Get allowed origins based on environment
  */
-export function getCorsOrigin(): string {
+export function getAllowedOrigins(): string[] {
   const siteUrl = Deno.env.get('VITE_SITE_URL');
   const env = Deno.env.get('ENVIRONMENT') || 'development';
 
-  // In production, use the configured site URL
-  if (env === 'production' && siteUrl) {
-    return siteUrl;
-  }
+  // Define explicit allowed origins for each environment
+  const allowedOrigins: Record<string, string[]> = {
+    production: siteUrl ? [siteUrl] : ['https://yourdomain.com'],
+    staging: [
+      'https://staging.yourdomain.com',
+      'https://lovable.dev',
+    ],
+    development: [
+      'http://localhost:8080',
+      'http://localhost:5173',
+      'http://localhost:3000',
+      'http://localhost:8082',
+      'http://127.0.0.1:8080',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:3000',
+    ]
+  };
 
-  // In development/staging, allow all origins
-  return '*';
+  // Add Lovable preview domains for non-production environments
+  const baseOrigins = allowedOrigins[env] || allowedOrigins.development;
+
+  return baseOrigins;
+}
+
+/**
+ * Get CORS origin based on environment
+ * @deprecated Use getAllowedOrigins() instead for security
+ */
+export function getCorsOrigin(): string {
+  const allowedOrigins = getAllowedOrigins();
+  // Return first origin for backwards compatibility
+  // Note: This should be phased out in favor of origin validation
+  return allowedOrigins[0];
 }
 
 /**
@@ -40,22 +66,19 @@ export function handleCors(req: Request): Response | null {
   if (req.method === 'OPTIONS') {
     // Get origin from request
     const requestOrigin = req.headers.get('origin');
-    const corsOrigin = getCorsOrigin();
 
-    // If in production with specific origin, validate the request origin
-    let allowedOrigin = corsOrigin;
-    if (corsOrigin !== '*' && requestOrigin) {
-      // Check if request origin matches allowed origin
-      const isAllowed = requestOrigin === corsOrigin ||
-                       requestOrigin.endsWith('.lovable.dev') || // Allow Lovable preview
-                       requestOrigin.endsWith('.localhost') ||    // Allow local development
-                       requestOrigin.startsWith('http://localhost'); // Allow localhost
-
-      if (!isAllowed) {
-        return new Response('Forbidden', { status: 403 });
-      }
-      allowedOrigin = requestOrigin;
+    // Validate origin against allowed list
+    if (requestOrigin && !isOriginAllowed(requestOrigin)) {
+      return new Response('Forbidden - Origin not allowed', {
+        status: 403,
+        headers: {
+          'Content-Type': 'text/plain',
+        }
+      });
     }
+
+    // Use the validated request origin or first allowed origin as fallback
+    const allowedOrigin = requestOrigin || getCorsOrigin();
 
     return new Response(null, {
       status: 204,
@@ -88,32 +111,16 @@ export function addCorsHeaders(response: Response, origin?: string): Response {
  * Validate origin against allowed origins
  */
 export function isOriginAllowed(origin: string): boolean {
-  const corsOrigin = getCorsOrigin();
+  const allowedOrigins = getAllowedOrigins();
 
-  // Allow all in development
-  if (corsOrigin === '*') {
+  // Check exact match against allowed origins
+  if (allowedOrigins.includes(origin)) {
     return true;
   }
 
-  // Check exact match
-  if (origin === corsOrigin) {
-    return true;
-  }
-
-  // Allow common development origins
-  const devOrigins = [
-    'http://localhost:8080',
-    'http://localhost:5173',
-    'http://localhost:3000',
-    'https://localhost:8080',
-  ];
-
-  if (devOrigins.includes(origin)) {
-    return true;
-  }
-
-  // Allow Lovable preview domains
-  if (origin.endsWith('.lovable.dev')) {
+  // Allow Lovable preview domains (for development and staging)
+  const env = Deno.env.get('ENVIRONMENT') || 'development';
+  if (env !== 'production' && origin.endsWith('.lovable.dev')) {
     return true;
   }
 
