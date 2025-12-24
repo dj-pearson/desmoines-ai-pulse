@@ -16,6 +16,7 @@ import {
 import { BarChart3, Search, Globe, Link2, ExternalLink, CheckCircle2, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { storage } from "@/lib/safeStorage";
 
 interface OAuthProviderSetupProps {
   onComplete: () => void;
@@ -101,8 +102,8 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
       authUrl += `&access_type=offline`; // Request refresh token
       authUrl += `&prompt=consent`; // Force consent screen
 
-      // Save state to localStorage for verification
-      localStorage.setItem("oauth_state", state);
+      // Save state to secure storage for verification
+      storage.setString("oauth_state", state);
 
       // Redirect to OAuth provider
       window.location.href = authUrl;
