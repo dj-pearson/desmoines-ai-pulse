@@ -1,10 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import puppeteer from "puppeteer";
 
-// Using same credentials as event-datetime-crawler.ts
-const SUPABASE_URL = "https://wtkhfqpmcegzcbngroui.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE";
+// Using environment variables for secure credential management
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error("Missing required environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY");
+}
 
 async function testEventbritePage() {
   const url = "https://www.eventbrite.com/e/2025-iowa-wine-and-cider-festival-tickets-1471004968459";
