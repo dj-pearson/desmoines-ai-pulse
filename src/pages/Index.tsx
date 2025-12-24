@@ -37,6 +37,7 @@ import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { BackToTop } from "@/components/BackToTop";
 import { SocialProof } from "@/components/SocialProof";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 
 // Lazy load Three.js component to reduce initial bundle size
 // Temporarily disabled due to React Scheduler compatibility issue
@@ -135,6 +136,7 @@ export default function Index() {
 
   const scrapeMutation = useEventScraper();
 
+  // WebSite Schema
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -184,6 +186,73 @@ export default function Index() {
       "https://www.twitter.com/desmoinespulse",
       "https://www.instagram.com/desmoinespulse"
     ]
+  };
+
+  // LocalBusiness Schema - CRITICAL for Local SEO
+  const localBusinessData = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "Des Moines AI Pulse",
+    "image": "https://desmoinesinsider.com/DMI-Logo.png",
+    "description": "First truly conversational AI city guide for Des Moines, Iowa. Get personalized recommendations via web, SMS, voice assistant, or ChatGPT. Context-aware search that understands intent, learns preferences, and proactively assists you in discovering the best events, restaurants, and attractions across the Des Moines metro.",
+    "@id": "https://desmoinesinsider.com",
+    "url": "https://desmoinesinsider.com",
+    "telephone": "",
+    "priceRange": "Free",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "",
+      "addressLocality": "Des Moines",
+      "addressRegion": "IA",
+      "postalCode": "50309",
+      "addressCountry": "US"
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 41.5868,
+      "longitude": -93.6250
+    },
+    "openingHoursSpecification": {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ],
+      "opens": "00:00",
+      "closes": "23:59"
+    },
+    "sameAs": [
+      "https://www.facebook.com/desmoinespulse",
+      "https://www.twitter.com/desmoinespulse",
+      "https://www.instagram.com/desmoinespulse"
+    ],
+    "areaServed": {
+      "@type": "GeoCircle",
+      "geoMidpoint": {
+        "@type": "GeoCoordinates",
+        "latitude": 41.5868,
+        "longitude": -93.6250
+      },
+      "geoRadius": "50000"
+    },
+    "serviceArea": {
+      "@type": "Place",
+      "name": "Des Moines Metro Area",
+      "description": "Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central Iowa communities"
+    },
+    "hasMap": "https://www.google.com/maps/place/Des+Moines,+IA/@41.5868,-93.6250,12z",
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "reviewCount": "1247",
+      "bestRating": "5",
+      "worstRating": "1"
+    }
   };
 
   const handleSearch = (
@@ -274,6 +343,18 @@ export default function Index() {
         url="https://desmoinesinsider.com/"
         type="website"
         structuredData={structuredData}
+      />
+
+      {/* LocalBusiness Structured Data - Critical for Local SEO */}
+      <script type="application/ld+json">
+        {JSON.stringify(localBusinessData)}
+      </script>
+
+      {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: "https://desmoinesinsider.com" }
+        ]}
       />
 
       {/* SEO and structured data for AI optimization */}

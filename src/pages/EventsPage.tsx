@@ -46,6 +46,7 @@ import { BackToTop } from "@/components/BackToTop";
 import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
 import { SmartFilterChips } from "@/components/SmartFilters";
 import { useRef } from "react";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -708,6 +709,14 @@ export default function EventsPage() {
         url="https://desmoinesinsider.com/events"
         type="website"
         structuredData={eventsSchema}
+      />
+
+      {/* BreadcrumbList Schema - Improves search result display */}
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: "https://desmoinesinsider.com" },
+          { name: "Events", url: "https://desmoinesinsider.com/events" }
+        ]}
       />
 
       <div className="min-h-screen bg-background">
