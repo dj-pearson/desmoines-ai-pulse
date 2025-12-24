@@ -112,9 +112,15 @@ export default function EventFeedback({ eventId, className, showStats = false }:
   // Load stats on component mount if needed
   React.useEffect(() => {
     if (showStats) {
-      getFeedbackStats(eventId).then(setStats);
+      getFeedbackStats(eventId)
+        .then(setStats)
+        .catch((error) => {
+          console.error('Failed to load feedback stats:', error);
+          // Set default stats on error to avoid UI issues
+          setStats({ thumbs_up: 0, thumbs_down: 0, interested: 0, not_interested: 0 });
+        });
     }
-  }, [eventId, showStats]);
+  }, [eventId, showStats, getFeedbackStats]);
 
   return (
     <div className={cn("flex items-center gap-2", className)}>

@@ -38,7 +38,12 @@ export function MFAVerificationDialog({
   // Create challenge when dialog opens
   useEffect(() => {
     if (open && factorId && !challengeId) {
-      createChallenge(factorId).then(setChallengeId);
+      createChallenge(factorId)
+        .then(setChallengeId)
+        .catch((error) => {
+          console.error('Failed to create MFA challenge:', error);
+          setError('Failed to initialize authentication. Please try again.');
+        });
     }
   }, [open, factorId, challengeId, createChallenge]);
 
@@ -88,16 +93,23 @@ export function MFAVerificationDialog({
       // Small delay to show the last digit
       setTimeout(() => {
         if (challengeId && factorId) {
-          verifyChallenge(factorId, challengeId, cleanedValue).then(success => {
-            if (success) {
-              onSuccess?.();
-              handleClose();
-            } else {
+          verifyChallenge(factorId, challengeId, cleanedValue)
+            .then(success => {
+              if (success) {
+                onSuccess?.();
+                handleClose();
+              } else {
+                setAttempts(prev => prev + 1);
+                setVerificationCode('');
+                setError('Invalid code. Please try again.');
+              }
+            })
+            .catch((error) => {
+              console.error('MFA verification failed:', error);
               setAttempts(prev => prev + 1);
               setVerificationCode('');
-              setError('Invalid code. Please try again.');
-            }
-          });
+              setError('Verification failed. Please try again.');
+            });
         }
       }, 300);
     }
