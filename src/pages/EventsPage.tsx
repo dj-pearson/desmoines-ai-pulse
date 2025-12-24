@@ -50,6 +50,63 @@ import { useRef } from "react";
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
 
+/**
+ * Parse price from text string to numeric value
+ * Handles formats like: "$25", "$10-$20", "Free", "$100+", etc.
+ * Returns the average price for ranges, or null for free/unparseable
+ */
+function parsePriceFromText(priceText: string | null): number | null {
+  if (!priceText) return null;
+
+  const lowerPrice = priceText.toLowerCase().trim();
+
+  // Handle free events
+  if (lowerPrice.includes('free') || lowerPrice === '$0' || lowerPrice === '0') {
+    return 0;
+  }
+
+  // Extract all numbers from the string
+  const numbers = priceText.match(/\d+(?:\.\d+)?/g);
+  if (!numbers || numbers.length === 0) return null;
+
+  // Convert to numbers and filter out invalid values
+  const parsedNumbers = numbers.map(n => parseFloat(n)).filter(n => !isNaN(n) && n >= 0);
+  if (parsedNumbers.length === 0) return null;
+
+  // If multiple numbers (e.g., "$10-$20"), return average
+  if (parsedNumbers.length > 1) {
+    return parsedNumbers.reduce((a, b) => a + b, 0) / parsedNumbers.length;
+  }
+
+  return parsedNumbers[0];
+}
+
+/**
+ * Filter events by price range
+ */
+function filterEventsByPrice(events: any[], priceRange: string): any[] {
+  if (!priceRange || priceRange === 'any-price') return events;
+
+  return events.filter(event => {
+    const price = parsePriceFromText(event.price);
+
+    switch (priceRange) {
+      case 'free':
+        return price === null || price === 0;
+      case 'under-25':
+        return price !== null && price > 0 && price < 25;
+      case '25-50':
+        return price !== null && price >= 25 && price <= 50;
+      case '50-100':
+        return price !== null && price > 50 && price <= 100;
+      case 'over-100':
+        return price !== null && price > 100;
+      default:
+        return true;
+    }
+  });
+}
+
 export default function EventsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
@@ -276,28 +333,14 @@ export default function EventsPage() {
         }
       }
 
-      // Apply price filter
+      // Apply price filter (server-side for "free" only, client-side for ranges)
       if (priceRange && priceRange !== "any-price") {
         if (priceRange === "free") {
           // Match free events (null price, "free", "$0", "0")
           query = query.or("price.is.null,price.ilike.%free%,price.ilike.%$0%");
-        } else {
-          // For numeric price ranges, use text matching on common price formats
-          // Note: This is a simplified approach. For production, consider adding a price_numeric column
-          const pricePatterns: Record<string, string> = {
-            'under-25': 'price.not.is.null,price.not.ilike.%free%',
-            '25-50': 'price.ilike.%$2%,price.ilike.%$3%,price.ilike.%$4%',
-            '50-100': 'price.ilike.%$5%,price.ilike.%$6%,price.ilike.%$7%,price.ilike.%$8%,price.ilike.%$9%',
-            'over-100': 'price.ilike.%$1%'
-          };
-
-          // For now, just filter out free events for paid price ranges
-          // TODO: Add price_numeric column for accurate price filtering
-          if (priceRange === 'under-25' || priceRange === '25-50' || priceRange === '50-100' || priceRange === 'over-100') {
-            query = query.not('price', 'is', null)
-                         .not('price', 'ilike', '%free%');
-          }
         }
+        // Note: Paid price ranges are filtered client-side after data fetch
+        // for better accuracy. See filterEventsByPrice() below.
       }
 
       const { data, error, count } = await query;
@@ -306,7 +349,9 @@ export default function EventsPage() {
     },
   });
 
-  const events = eventsData?.events || [];
+  // Apply client-side price filtering for paid price ranges
+  const rawEvents = eventsData?.events || [];
+  const events = filterEventsByPrice(rawEvents, priceRange);
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
