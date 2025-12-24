@@ -150,10 +150,12 @@ export default function TrendingContent({
           >
             {item.content?.image_url && (
               <div className="relative h-40 overflow-hidden rounded-t-lg">
-                <img 
-                  src={item.content.image_url} 
+                <img
+                  src={item.content.image_url}
                   alt={item.content.name || item.content.title}
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                 />
                 <div className="absolute top-2 right-2">
                   <Badge 
