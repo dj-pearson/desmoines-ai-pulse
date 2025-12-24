@@ -68,10 +68,10 @@ export default function BottomNav() {
               key={item.href}
               to={item.href}
               className={cn(
-                "flex flex-col items-center justify-center min-w-[60px] h-full px-2 smooth-transition touch-feedback rounded-lg",
+                "relative flex flex-col items-center justify-center min-w-[60px] h-full px-3 smooth-transition touch-feedback rounded-xl",
                 isActive
-                  ? "text-primary"
-                  : "text-muted-foreground hover:text-foreground active:scale-95"
+                  ? "text-primary bg-primary/10"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50 active:scale-95"
               )}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
@@ -84,6 +84,9 @@ export default function BottomNav() {
                 }
               }}
             >
+              {isActive && (
+                <div className="absolute -top-[1px] left-1/2 -translate-x-1/2 w-8 h-1.5 bg-primary rounded-b-full shadow-sm" />
+              )}
               <Icon
                 className={cn(
                   "h-6 w-6 mb-1 smooth-transition",
@@ -99,9 +102,6 @@ export default function BottomNav() {
               >
                 {item.label}
               </span>
-              {isActive && (
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-1 bg-primary rounded-b-full" />
-              )}
             </Link>
           );
         })}

@@ -26,6 +26,7 @@ import {
   DollarSign,
   ExternalLink,
   Sparkles,
+  ImageOff,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -47,6 +48,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
   const { addToRecentlyViewed } = useRecentlyViewed();
   const { viewData, trackView } = useViewTracking(event.id);
   const [isNew, setIsNew] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   // Check if event is new (created within last 7 days)
   useEffect(() => {
@@ -88,18 +90,20 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
     <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group">
       {/* Image with overlay badges */}
       <div className="relative">
-        {event.image_url && (
+        {event.image_url && !imageError ? (
           <img
             src={event.image_url}
             alt={event.title}
             className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
             decoding="async"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = "none";
-            }}
+            onError={() => setImageError(true)}
           />
+        ) : (
+          <div className="w-full h-48 bg-gradient-to-br from-muted to-muted/50 flex flex-col items-center justify-center gap-2">
+            <ImageOff className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
+            <span className="text-xs text-muted-foreground/70">No image available</span>
+          </div>
         )}
 
         {/* Overlay badges for urgency/social proof */}
