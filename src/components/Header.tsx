@@ -4,7 +4,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useGamification } from "@/hooks/useGamification";
 import { useAccessibility } from "@/hooks/useAccessibility";
 import { useSwipe } from "@/hooks/use-swipe";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { OptimizedLogo } from "./OptimizedLogo";
 import { DesktopNav } from "./header/DesktopNav";
 import { MobileNav } from "./header/MobileNav";
@@ -18,6 +18,7 @@ export default function Header() {
   const { saveFocus, restoreFocus } = useFocusRestore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
 
   // Announce route changes to screen readers
   useEffect(() => {
@@ -32,7 +33,8 @@ export default function Header() {
       announceToScreenReader("Signing out...", "polite");
       await logout();
       announceToScreenReader("Successfully signed out", "polite");
-      window.location.href = "/";
+      // Use React Router navigate instead of window.location to prevent potential open redirect
+      navigate("/", { replace: true });
     } catch (error) {
       console.error("[Header] Logout failed:", error);
       announceToScreenReader("Logout failed", "assertive");
