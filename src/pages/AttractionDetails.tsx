@@ -220,6 +220,8 @@ export default function AttractionDetails() {
                   src={attraction.image_url}
                   alt={attraction.name}
                   className="w-full h-64 object-cover rounded-lg"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             )}

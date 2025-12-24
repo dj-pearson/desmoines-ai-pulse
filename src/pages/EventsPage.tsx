@@ -2,7 +2,7 @@ import React, { useState, useEffect, lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal, SearchX, Sparkles, Navigation } from "lucide-react";
+import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal, SearchX, Sparkles, Navigation, AlertCircle, RefreshCw } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -120,7 +120,7 @@ export default function EventsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const { data: eventsData, isLoading, refetch } = useQuery({
+  const { data: eventsData, isLoading, error, refetch } = useQuery({
     queryKey: [
       "events",
       debouncedSearchQuery,
@@ -611,6 +611,42 @@ export default function EventsPage() {
             <CardsGridSkeleton
               count={9}
               className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+            />
+          </div>
+          <Footer />
+        </div>
+      </>
+    );
+  }
+
+  // Error state - show user-friendly error with retry option
+  if (error) {
+    return (
+      <>
+        <SEOHead
+          title="Unable to Load Events | Des Moines Insider"
+          description="We're having trouble loading events. Please try again."
+          type="website"
+        />
+        <div className="min-h-screen bg-background">
+          <Header />
+          <div className="container mx-auto px-4 py-16">
+            <EmptyState
+              icon={AlertCircle}
+              title="Unable to Load Events"
+              description="We're having trouble loading the events list. This might be a temporary issue with our servers or your connection."
+              actions={[
+                {
+                  label: "Try Again",
+                  onClick: () => refetch(),
+                  icon: RefreshCw,
+                },
+                {
+                  label: "Go Home",
+                  onClick: () => navigate("/"),
+                  variant: "outline" as const,
+                },
+              ]}
             />
           </div>
           <Footer />
