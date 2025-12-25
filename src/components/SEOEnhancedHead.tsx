@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { BRAND } from "@/lib/brandConfig";
 
 interface SEOEnhancedHeadProps {
   title: string;
@@ -19,16 +20,16 @@ interface SEOEnhancedHeadProps {
 
 export const SEOEnhancedHead = ({
   title,
-  description = "Discover the best events, restaurants, and attractions in Des Moines, Iowa. Your complete guide to what's happening in the Des Moines metro area.",
-  image = "https://desmoinesinsider.com/DMI-Logo.png",
+  description = BRAND.description,
+  image = `${BRAND.baseUrl}${BRAND.logo}`,
   url,
   type = "website",
   article,
   structuredData,
   canonical
 }: SEOEnhancedHeadProps) => {
-  const fullTitle = title.includes("Des Moines") ? title : `${title} | Des Moines Insider`;
-  const currentUrl = url || `https://desmoinesinsider.com${window.location.pathname}`;
+  const fullTitle = title.includes(BRAND.city) ? title : `${title} | ${BRAND.name}`;
+  const currentUrl = url || (typeof window !== 'undefined' ? `${BRAND.baseUrl}${window.location.pathname}` : BRAND.baseUrl);
   const canonicalUrl = canonical || currentUrl;
 
   return (
@@ -36,26 +37,26 @@ export const SEOEnhancedHead = ({
       {/* Basic Meta Tags */}
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
-      <meta name="keywords" content="Des Moines, Iowa, events, restaurants, attractions, things to do, DSM, metro, entertainment, dining, activities" />
-      
+      <meta name="keywords" content={`${BRAND.city}, ${BRAND.state}, events, restaurants, attractions, things to do, DSM, metro, entertainment, dining, activities`} />
+
       {/* Canonical URL */}
       <link rel="canonical" href={canonicalUrl} />
-      
+
       {/* Open Graph Tags */}
       <meta property="og:title" content={fullTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:image" content={image} />
       <meta property="og:url" content={currentUrl} />
       <meta property="og:type" content={type} />
-      <meta property="og:site_name" content="Des Moines Insider" />
+      <meta property="og:site_name" content={BRAND.name} />
       <meta property="og:locale" content="en_US" />
-      
+
       {/* Twitter Card Tags */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
-      <meta name="twitter:site" content="@desmoinesinsider" />
+      <meta name="twitter:site" content={BRAND.twitter} />
       
       {/* Article-specific meta tags */}
       {article && type === "article" && (
@@ -77,18 +78,18 @@ export const SEOEnhancedHead = ({
       )}
       
       {/* Geo Tags for Local SEO */}
-      <meta name="geo.region" content="US-IA" />
-      <meta name="geo.placename" content="Des Moines" />
+      <meta name="geo.region" content={`US-${BRAND.stateAbbr}`} />
+      <meta name="geo.placename" content={BRAND.city} />
       <meta name="geo.position" content="41.5868;-93.6250" />
       <meta name="ICBM" content="41.5868, -93.6250" />
-      
+
       {/* Additional SEO Meta Tags */}
       <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
       <meta name="googlebot" content="index, follow" />
       <meta name="revisit-after" content="7 days" />
       <meta name="language" content="en-US" />
-      <meta name="author" content="Des Moines Insider" />
-      <meta name="publisher" content="Des Moines Insider" />
+      <meta name="author" content={BRAND.name} />
+      <meta name="publisher" content={BRAND.name} />
       
       {/* Mobile and Responsive */}
       <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
@@ -108,25 +109,25 @@ export const SEOEnhancedHead = ({
         {JSON.stringify({
           "@context": "https://schema.org",
           "@type": "Organization",
-          "name": "Des Moines Insider",
-          "url": "https://desmoinesinsider.com",
-          "logo": "https://desmoinesinsider.com/DMI-Logo.png",
-          "description": "Your complete guide to Des Moines events, restaurants, and attractions",
+          "name": BRAND.name,
+          "url": BRAND.baseUrl,
+          "logo": `${BRAND.baseUrl}${BRAND.logo}`,
+          "description": BRAND.tagline,
           "address": {
             "@type": "PostalAddress",
-            "addressLocality": "Des Moines",
-            "addressRegion": "IA",
-            "addressCountry": "US"
+            "addressLocality": BRAND.city,
+            "addressRegion": BRAND.stateAbbr,
+            "addressCountry": BRAND.country
           },
           "sameAs": [
-            "https://www.facebook.com/desmoinesinsider",
-            "https://www.twitter.com/desmoinesinsider",
-            "https://www.instagram.com/desmoinesinsider"
+            "https://www.facebook.com/desmoinespulse",
+            "https://www.twitter.com/desmoinespulse",
+            "https://www.instagram.com/desmoinespulse"
           ],
           "contactPoint": {
             "@type": "ContactPoint",
             "contactType": "Customer Service",
-            "email": "info@desmoinesinsider.com"
+            "email": BRAND.email
           }
         })}
       </script>

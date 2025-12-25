@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { BRAND } from "@/lib/brandConfig";
 
 export interface BreadcrumbItem {
   name: string;
@@ -18,9 +19,9 @@ interface BreadcrumbListSchemaProps {
  * @example
  * <BreadcrumbListSchema
  *   items={[
- *     { name: "Home", url: "https://desmoinesinsider.com" },
- *     { name: "Events", url: "https://desmoinesinsider.com/events" },
- *     { name: "Weekend Events", url: "https://desmoinesinsider.com/events/weekend" }
+ *     { name: "Home", url: BRAND.baseUrl },
+ *     { name: "Events", url: `${BRAND.baseUrl}/events` },
+ *     { name: "Weekend Events", url: `${BRAND.baseUrl}/events/weekend` }
  *   ]}
  * />
  */
@@ -61,25 +62,23 @@ export const useBreadcrumbs = (
   pathname: string,
   customItems?: BreadcrumbItem[]
 ): BreadcrumbItem[] => {
-  const baseUrl = "https://desmoinesinsider.com";
-
   // If custom items provided, use those
   if (customItems && customItems.length > 0) {
     return [
-      { name: "Home", url: baseUrl },
+      { name: "Home", url: BRAND.baseUrl },
       ...customItems
     ];
   }
 
   // Auto-generate from pathname
   const breadcrumbs: BreadcrumbItem[] = [
-    { name: "Home", url: baseUrl }
+    { name: "Home", url: BRAND.baseUrl }
   ];
 
   const pathParts = pathname.split('/').filter(part => part.length > 0);
 
   let currentPath = '';
-  pathParts.forEach((part, index) => {
+  pathParts.forEach((part) => {
     currentPath += `/${part}`;
 
     // Convert path part to readable name
@@ -90,7 +89,7 @@ export const useBreadcrumbs = (
 
     breadcrumbs.push({
       name,
-      url: `${baseUrl}${currentPath}`
+      url: `${BRAND.baseUrl}${currentPath}`
     });
   });
 

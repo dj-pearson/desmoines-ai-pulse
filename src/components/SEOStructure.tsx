@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { BRAND } from "@/lib/brandConfig";
 
 interface SEOStructureProps {
   title?: string;
@@ -10,26 +11,26 @@ interface SEOStructureProps {
 }
 
 export default function SEOStructure({
-  title = "Des Moines Insider: Events, Restaurants & Attractions",
-  description = "Discover the best events, restaurants, attractions, and playgrounds in Des Moines, Iowa. AI-powered recommendations and real-time updates.",
-  keywords = "Des Moines events, Iowa restaurants, Des Moines attractions, family activities, local guide, restaurant openings",
+  title = `${BRAND.name}: Events, Restaurants & Attractions`,
+  description = BRAND.description,
+  keywords = `${BRAND.city} events, ${BRAND.state} restaurants, ${BRAND.city} attractions, family activities, local guide, restaurant openings`,
   articleType,
   structuredData,
   canonicalUrl
 }: SEOStructureProps) {
-  
+
   const defaultStructuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "name": "Des Moines Insider",
+    "name": BRAND.name,
     "description": description,
-    "url": "https://desmoinesinsider.com",
+    "url": BRAND.baseUrl,
     "telephone": "+1-515-000-0000",
     "address": {
       "@type": "PostalAddress",
-      "addressLocality": "Des Moines",
-      "addressRegion": "Iowa",
-      "addressCountry": "US"
+      "addressLocality": BRAND.city,
+      "addressRegion": BRAND.state,
+      "addressCountry": BRAND.country
     },
     "geo": {
       "@type": "GeoCoordinates",
@@ -60,30 +61,31 @@ export default function SEOStructure({
       {articleType && (
         <>
           <meta name="article:section" content={articleType} />
-          <meta name="article:publisher" content="Des Moines Insider" />
-          <meta name="article:author" content="Des Moines Insider Team" />
+          <meta name="article:publisher" content={BRAND.name} />
+          <meta name="article:author" content={`${BRAND.name} Team`} />
         </>
       )}
-      
+
       {/* Enhanced Open Graph for AI */}
       <meta property="og:title" content={title} />
       <meta property="og:description" content={description} />
       <meta property="og:type" content="website" />
       <meta property="og:locale" content="en_US" />
-      <meta property="og:site_name" content="Des Moines Insider" />
-      
+      <meta property="og:site_name" content={BRAND.name} />
+
       {/* Twitter Card */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={title} />
       <meta name="twitter:description" content={description} />
-      
+      <meta name="twitter:site" content={BRAND.twitter} />
+
       {/* Structured Data */}
       <script type="application/ld+json">
         {JSON.stringify(structuredData || defaultStructuredData)}
       </script>
-      
+
       {/* Canonical URL */}
-      <link rel="canonical" href={canonicalUrl || (typeof window !== 'undefined' ? window.location.href : 'https://desmoinesinsider.com')} />
+      <link rel="canonical" href={canonicalUrl || (typeof window !== 'undefined' ? window.location.href : BRAND.baseUrl)} />
     </Helmet>
   );
 }
