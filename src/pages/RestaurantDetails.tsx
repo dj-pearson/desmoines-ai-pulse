@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { toast } from "sonner";
 import SEOHead from "@/components/SEOHead";
 import Header from "@/components/Header";
@@ -296,6 +297,16 @@ export default function RestaurantDetails() {
       )}
       <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-100">
         <div className="container mx-auto px-4 py-8 max-w-6xl">
+          {/* Breadcrumb Navigation */}
+          <Breadcrumbs
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Restaurants", href: "/restaurants" },
+              { label: restaurant?.name || "Restaurant" }
+            ]}
+            className="mb-6"
+          />
+
           {/* Header Navigation */}
           <div className="flex items-center justify-between mb-8">
             <Link to="/restaurants">

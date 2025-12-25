@@ -21,6 +21,7 @@
     "crawl-events:apply": "tsx scripts/event-datetime-crawler.ts --apply",
     "convert-timezones": "tsx scripts/convert-timezones.ts --dry-run",
     "convert-timezones:apply": "tsx scripts/convert-timezones.ts --apply",
+    "generate-sitemaps": "tsx scripts/generate-dynamic-sitemaps.ts",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
