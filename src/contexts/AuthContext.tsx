@@ -8,6 +8,7 @@ interface AuthState {
   isLoading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isAdminLoading: boolean; // True while admin check is in progress
   requiresMFA: boolean;
   mfaFactorId: string | null;
 }
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isLoading: true,
     isAuthenticated: false,
     isAdmin: false,
+    isAdminLoading: false,
     requiresMFA: false,
     mfaFactorId: null,
   });
@@ -121,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
         isAuthenticated: false,
         isAdmin: false,
+        isAdminLoading: false,
         requiresMFA: false,
         mfaFactorId: null,
       });
@@ -141,6 +144,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // For SIGNED_IN, INITIAL_SESSION, or USER_UPDATED events
+    const needsAdminCheck = session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION');
     setAuthState(prev => ({
       ...prev,
       user: session?.user || null,
@@ -148,14 +152,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: !!session,
       isAdmin: prev.isAdmin, // Keep previous admin status while checking
+      isAdminLoading: needsAdminCheck ? true : prev.isAdminLoading, // Mark as loading if checking
     }));
 
     // Check admin status for new sessions
-    if (session?.user && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+    if (needsAdminCheck) {
       const isAdmin = await checkIsAdmin(session.user);
       if (isMounted && !isLoggingOutRef.current) {
         console.log('[AuthContext] Admin check result:', isAdmin);
-        setAuthState(prev => ({ ...prev, isAdmin }));
+        setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
       }
     }
   }, [checkIsAdmin]);
@@ -186,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isLoading: false,
           isAuthenticated: !!session,
           isAdmin: false,
+          isAdminLoading: !!session?.user, // Set to true if we have a user to check
           requiresMFA: false,
           mfaFactorId: null,
         });
@@ -194,7 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const isAdmin = await checkIsAdmin(session.user);
           if (isMounted) {
             console.log('[AuthContext] Initial admin check:', isAdmin);
-            setAuthState(prev => ({ ...prev, isAdmin }));
+            setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
           }
         }
       } catch (error) {
@@ -320,6 +326,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading: false,
       isAuthenticated: false,
       isAdmin: false,
+      isAdminLoading: false,
       requiresMFA: false,
       mfaFactorId: null,
     });
