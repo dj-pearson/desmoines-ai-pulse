@@ -1,13 +1,14 @@
 /**
- * Create Campaign Checkout Session
+ * Create Subscription Checkout Session
  *
- * Creates a Stripe Checkout session for advertising campaign payments (one-time).
+ * Creates a Stripe Checkout session for consumer subscriptions (Insider/VIP plans).
+ * Supports both monthly and yearly billing with optional trial periods.
  *
  * Security:
  * - Requires authenticated user
  * - Uses environment-aware CORS
  * - Rate limited to prevent abuse
- * - Validates campaign ownership
+ * - Validates plan existence in database
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -25,7 +26,7 @@ serve(async (req) => {
   const origin = req.headers.get("origin") || "";
   const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
-  // Rate limiting (10 checkout attempts per 15 minutes)
+  // Rate limiting (stricter for checkout - 10 requests per 15 minutes)
   const rateLimit = checkRateLimit(req, {
     windowMs: 15 * 60 * 1000,
     max: 10,
@@ -63,7 +64,7 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: "User not authenticated" }), {
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -71,61 +72,77 @@ serve(async (req) => {
 
     // Parse request body
     const body = await req.json();
-    const { campaignId } = body;
+    const { planId, billingInterval = "monthly" } = body;
 
-    if (!campaignId) {
-      return new Response(JSON.stringify({ error: "Campaign ID is required" }), {
+    if (!planId) {
+      return new Response(JSON.stringify({ error: "Plan ID is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Get campaign details - must belong to authenticated user
-    const { data: campaign, error: campaignError } = await supabase
-      .from("campaigns")
-      .select(`
-        *,
-        campaign_placements (*)
-      `)
-      .eq("id", campaignId)
-      .eq("user_id", user.id)
+    if (!["monthly", "yearly"].includes(billingInterval)) {
+      return new Response(JSON.stringify({ error: "Invalid billing interval" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Get plan details from database
+    const { data: plan, error: planError } = await supabase
+      .from("subscription_plans")
+      .select("*")
+      .eq("id", planId)
+      .eq("is_active", true)
       .single();
 
-    if (campaignError || !campaign) {
-      return new Response(JSON.stringify({ error: "Campaign not found" }), {
+    if (planError || !plan) {
+      return new Response(JSON.stringify({ error: "Plan not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Validate campaign status
-    if (campaign.status !== "draft" && campaign.status !== "pending_payment") {
+    // Validate plan is not free
+    if (plan.name === "free") {
+      return new Response(JSON.stringify({ error: "Cannot purchase free plan" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Get the appropriate Stripe price ID
+    const stripePriceId = billingInterval === "yearly"
+      ? plan.stripe_price_id_yearly
+      : plan.stripe_price_id_monthly;
+
+    if (!stripePriceId) {
+      console.error(`No Stripe price ID configured for plan ${plan.name} (${billingInterval})`);
       return new Response(
-        JSON.stringify({ error: "Campaign is not in a payable state" }),
+        JSON.stringify({
+          error: "Payment not configured for this plan. Please contact support.",
+        }),
         {
-          status: 400,
+          status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
     }
 
-    // Validate campaign has placements
-    if (!campaign.campaign_placements || campaign.campaign_placements.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Campaign has no placements" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
+    // Check if user already has an active subscription
+    const { data: existingSubscription } = await supabase
+      .from("user_subscriptions")
+      .select("id, stripe_subscription_id, status")
+      .eq("user_id", user.id)
+      .in("status", ["active", "trialing"])
+      .single();
 
     // Initialize Stripe
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2023-10-16",
     });
 
-    // Check for existing customer
+    // Check for existing Stripe customer
     const customers = await stripe.customers.list({
       email: user.email!,
       limit: 1,
@@ -136,80 +153,59 @@ serve(async (req) => {
       customerId = customers.data[0].id;
     }
 
-    // Create line items from placements
-    const placementLabels: Record<string, string> = {
-      top_banner: "Top Banner Ad",
-      featured_spot: "Featured Spot Ad",
-      below_fold: "Below the Fold Ad",
-    };
-
-    const lineItems = campaign.campaign_placements.map((placement: {
-      placement_type: string;
-      days_count: number;
-      total_cost: number;
-    }) => ({
-      price_data: {
-        currency: "usd",
-        product_data: {
-          name: placementLabels[placement.placement_type] || "Ad Placement",
-          description: `${placement.days_count} days of advertising on Des Moines Insider`,
-          metadata: {
-            placement_type: placement.placement_type,
-            days_count: placement.days_count.toString(),
-          },
-        },
-        unit_amount: Math.round(placement.total_cost * 100), // Convert to cents
-      },
-      quantity: 1,
-    }));
-
     // Build success and cancel URLs
     const siteUrl = Deno.env.get("VITE_SITE_URL") || req.headers.get("origin") || "";
-    const successUrl = `${siteUrl}/advertise/success?campaign_id=${campaignId}`;
-    const cancelUrl = `${siteUrl}/advertise/cancel?campaign_id=${campaignId}`;
+    const successUrl = `${siteUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`;
+    const cancelUrl = `${siteUrl}/pricing?canceled=true`;
 
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
+    // Create checkout session options
+    const sessionOptions: Stripe.Checkout.SessionCreateParams = {
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
-      line_items: lineItems,
-      mode: "payment",
+      line_items: [
+        {
+          price: stripePriceId,
+          quantity: 1,
+        },
+      ],
+      mode: "subscription",
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {
-        campaignId,
         userId: user.id,
-        campaignName: campaign.name,
+        planId: planId,
+        planName: plan.name,
+        billingInterval,
       },
-      // Payment intent data for refunds
-      payment_intent_data: {
+      subscription_data: {
         metadata: {
-          campaignId,
           userId: user.id,
+          planId: planId,
+          planName: plan.name,
         },
+        // Add 7-day trial for new subscribers
+        trial_period_days: existingSubscription ? undefined : 7,
       },
       // Allow promotion codes
       allow_promotion_codes: true,
-      // Billing address for receipts
+      // Billing address collection
       billing_address_collection: "auto",
-      // Expiration (30 minutes)
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
-    });
+      // Tax ID collection for business customers
+      tax_id_collection: {
+        enabled: true,
+      },
+    };
 
-    // Update campaign with stripe session
-    const { error: updateError } = await supabase
-      .from("campaigns")
-      .update({
-        stripe_session_id: session.id,
-        status: "pending_payment",
-      })
-      .eq("id", campaignId);
-
-    if (updateError) {
-      console.error("Failed to update campaign:", updateError);
-      // Continue anyway - the checkout session was created
+    // If user already has a subscription, use subscription update mode
+    if (existingSubscription?.stripe_subscription_id) {
+      // For plan changes, cancel old subscription and create new one
+      // Or use Stripe's subscription update flow
+      console.log("User has existing subscription, creating new checkout for upgrade/downgrade");
     }
 
+    const session = await stripe.checkout.sessions.create(sessionOptions);
+
+    // Return the checkout URL
     const response = new Response(
       JSON.stringify({
         url: session.url,

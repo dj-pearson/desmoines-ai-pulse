@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useState } from "react";
 
 export type SubscriptionTier = "free" | "insider" | "vip";
 
@@ -46,6 +47,9 @@ const FREE_LIMITS: SubscriptionLimits = {
 
 export function useSubscription() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   // Fetch available subscription plans
   const { data: plans = [], isLoading: plansLoading } = useQuery({
@@ -200,6 +204,68 @@ export function useSubscription() {
     return daysUntilExpiry <= 7 && daysUntilExpiry > 0;
   };
 
+  // Create checkout session for subscription
+  const createCheckoutSession = async (
+    planId: string,
+    billingInterval: "monthly" | "yearly" = "monthly"
+  ): Promise<string | null> => {
+    if (!user) {
+      setCheckoutError("Please log in to subscribe");
+      return null;
+    }
+
+    setCheckoutLoading(true);
+    setCheckoutError(null);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "create-subscription-checkout",
+        {
+          body: { planId, billingInterval },
+        }
+      );
+
+      if (error) {
+        throw new Error(error.message || "Failed to create checkout session");
+      }
+
+      if (!data?.url) {
+        throw new Error("No checkout URL returned");
+      }
+
+      return data.url;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Checkout failed";
+      setCheckoutError(message);
+      return null;
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
+
+  // Redirect to checkout
+  const startCheckout = async (
+    planId: string,
+    billingInterval: "monthly" | "yearly" = "monthly"
+  ): Promise<boolean> => {
+    const url = await createCheckoutSession(planId, billingInterval);
+    if (url) {
+      window.location.href = url;
+      return true;
+    }
+    return false;
+  };
+
+  // Get a specific plan by name
+  const getPlanByName = (name: SubscriptionTier): SubscriptionPlan | undefined => {
+    return plans.find((plan) => plan.name === name);
+  };
+
+  // Refresh subscription data
+  const refreshSubscription = () => {
+    queryClient.invalidateQueries({ queryKey: ["user-subscription", user?.id] });
+  };
+
   return {
     // Data
     plans,
@@ -223,5 +289,15 @@ export function useSubscription() {
     isVIP: tier === "vip",
     isExpiringSoon: isExpiringSoon(),
     cancelAtPeriodEnd: subscription?.cancel_at_period_end || false,
+
+    // Checkout functions
+    createCheckoutSession,
+    startCheckout,
+    checkoutLoading,
+    checkoutError,
+
+    // Utility functions
+    getPlanByName,
+    refreshSubscription,
   };
 }

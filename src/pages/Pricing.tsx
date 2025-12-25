@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
 import {
   Check,
   Star,
@@ -25,6 +27,7 @@ import {
   Gift,
   Users,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 
 interface PlanFeature {
@@ -154,16 +157,85 @@ const faqs = [
 
 export default function Pricing() {
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
+  const [searchParams] = useSearchParams();
+  const { isAuthenticated, user } = useAuth();
+  const {
+    plans: dbPlans,
+    startCheckout,
+    checkoutLoading,
+    checkoutError,
+    tier: currentTier,
+    isPremium,
+  } = useSubscription();
+  const { toast } = useToast();
   const [isYearly, setIsYearly] = useState(false);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
 
-  const handleSelectPlan = (planId: string) => {
+  // Show toast if redirected from canceled checkout
+  useEffect(() => {
+    if (searchParams.get("canceled") === "true") {
+      toast({
+        title: "Checkout canceled",
+        description: "No worries! Your account is still active. You can subscribe anytime.",
+      });
+    }
+  }, [searchParams, toast]);
+
+  const handleSelectPlan = async (planId: string) => {
     if (planId === "free") {
       navigate("/auth");
-    } else {
-      // For paid plans, redirect to auth with plan info
-      navigate(`/auth?plan=${planId}&billing=${isYearly ? "yearly" : "monthly"}`);
+      return;
     }
+
+    // For paid plans, check if user is logged in
+    if (!isAuthenticated || !user) {
+      // Redirect to auth with plan info - they'll be redirected back after login
+      navigate(`/auth?redirect=/pricing&plan=${planId}&billing=${isYearly ? "yearly" : "monthly"}`);
+      return;
+    }
+
+    // Check if user already has this tier
+    if (currentTier === planId) {
+      toast({
+        title: "Already subscribed",
+        description: `You're already on the ${planId} plan!`,
+      });
+      return;
+    }
+
+    // Get the plan ID from database
+    const plan = dbPlans.find(p => p.name === planId);
+    if (!plan) {
+      toast({
+        title: "Plan not found",
+        description: "Unable to find the selected plan. Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if Stripe is configured
+    const priceId = isYearly ? plan.stripe_price_id_yearly : plan.stripe_price_id_monthly;
+    if (!priceId) {
+      toast({
+        title: "Coming soon",
+        description: "Online subscription is being set up. Please check back soon or contact support.",
+      });
+      return;
+    }
+
+    // Start checkout
+    setLoadingPlan(planId);
+    const success = await startCheckout(plan.id, isYearly ? "yearly" : "monthly");
+
+    if (!success && checkoutError) {
+      toast({
+        title: "Checkout failed",
+        description: checkoutError,
+        variant: "destructive",
+      });
+    }
+    setLoadingPlan(null);
   };
 
   const getPrice = (plan: PricingPlan) => {
@@ -327,9 +399,21 @@ export default function Pricing() {
                         }`}
                         variant={plan.popular ? "default" : "outline"}
                         size="lg"
+                        disabled={loadingPlan === plan.id || checkoutLoading}
                       >
-                        {plan.cta}
-                        <ArrowRight className="h-4 w-4 ml-2" />
+                        {loadingPlan === plan.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : currentTier === plan.id ? (
+                          "Current Plan"
+                        ) : (
+                          <>
+                            {plan.cta}
+                            <ArrowRight className="h-4 w-4 ml-2" />
+                          </>
+                        )}
                       </Button>
                     </CardContent>
                   </Card>
