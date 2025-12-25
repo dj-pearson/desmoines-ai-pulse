@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
+import { BRAND } from "@/lib/brandConfig";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
@@ -140,19 +141,19 @@ export default function Index() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": "Des Moines AI Pulse",
-    "alternateName": "DSM AI Pulse",
-    "url": "https://desmoinesinsider.com",
-    "description": "First truly conversational AI city guide for Des Moines. Context-aware recommendations via web, SMS, voice assistants, and ChatGPT. Semantic search, behavioral learning, and predictive analytics for intelligent event and restaurant discovery.",
+    "name": BRAND.name,
+    "alternateName": BRAND.shortName,
+    "url": BRAND.baseUrl,
+    "description": BRAND.description,
     "applicationCategory": "City Guide, AI Assistant, Event Discovery",
-    "keywords": "conversational AI, semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, Des Moines events",
+    "keywords": `conversational AI, semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, ${BRAND.city} events`,
     "publisher": {
       "@type": "Organization",
-      "name": "Des Moines AI Pulse",
+      "name": BRAND.name,
       "description": "AI-powered conversational city guide platform",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://desmoinesinsider.com/DMI-Logo.png"
+        "url": `${BRAND.baseUrl}${BRAND.logo}`
       }
     },
     "potentialAction": [
@@ -160,7 +161,7 @@ export default function Index() {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": "https://desmoinesinsider.com/events?search={search_term_string}",
+          "urlTemplate": `${BRAND.baseUrl}/events?search={search_term_string}`,
           "actionPlatform": [
             "http://schema.org/DesktopWebPlatform",
             "http://schema.org/MobileWebPlatform",
@@ -192,20 +193,20 @@ export default function Index() {
   const localBusinessData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "name": "Des Moines AI Pulse",
-    "image": "https://desmoinesinsider.com/DMI-Logo.png",
-    "description": "First truly conversational AI city guide for Des Moines, Iowa. Get personalized recommendations via web, SMS, voice assistant, or ChatGPT. Context-aware search that understands intent, learns preferences, and proactively assists you in discovering the best events, restaurants, and attractions across the Des Moines metro.",
-    "@id": "https://desmoinesinsider.com",
-    "url": "https://desmoinesinsider.com",
+    "name": BRAND.name,
+    "image": `${BRAND.baseUrl}${BRAND.logo}`,
+    "description": BRAND.description,
+    "@id": BRAND.baseUrl,
+    "url": BRAND.baseUrl,
     "telephone": "",
     "priceRange": "Free",
     "address": {
       "@type": "PostalAddress",
       "streetAddress": "",
-      "addressLocality": "Des Moines",
-      "addressRegion": "IA",
+      "addressLocality": BRAND.city,
+      "addressRegion": BRAND.stateAbbr,
       "postalCode": "50309",
-      "addressCountry": "US"
+      "addressCountry": BRAND.country
     },
     "geo": {
       "@type": "GeoCoordinates",
@@ -242,10 +243,10 @@ export default function Index() {
     },
     "serviceArea": {
       "@type": "Place",
-      "name": "Des Moines Metro Area",
-      "description": "Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central Iowa communities"
+      "name": BRAND.region,
+      "description": `${BRAND.city}, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central ${BRAND.state} communities`
     },
-    "hasMap": "https://www.google.com/maps/place/Des+Moines,+IA/@41.5868,-93.6250,12z",
+    "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`,
     "aggregateRating": {
       "@type": "AggregateRating",
       "ratingValue": "4.8",
@@ -338,9 +339,9 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <SEOEnhancedHead
-        title="Des Moines AI Pulse - Conversational City Guide | AI-Powered Event & Restaurant Discovery"
-        description="First truly conversational AI city guide for Des Moines, Iowa. Get personalized recommendations via web, SMS, voice assistant, or ChatGPT. Semantic search understands intent. Context-aware intelligence learns your preferences. Proactive assistance across all channels. Beyond directories—your intelligent companion for discovering the best events, restaurants, and attractions in Des Moines."
-        url="https://desmoinesinsider.com/"
+        title={`${BRAND.name} - Conversational City Guide | AI-Powered Event & Restaurant Discovery`}
+        description={BRAND.description}
+        url={`${BRAND.baseUrl}/`}
         type="website"
         structuredData={structuredData}
       />
@@ -353,7 +354,7 @@ export default function Index() {
       {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
       <BreadcrumbListSchema
         items={[
-          { name: "Home", url: "https://desmoinesinsider.com" }
+          { name: "Home", url: BRAND.baseUrl }
         ]}
       />
 
