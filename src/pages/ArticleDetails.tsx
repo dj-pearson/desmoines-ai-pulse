@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { 
@@ -184,6 +185,16 @@ const ArticleDetails: React.FC = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
               <div className={`py-8 ${!article.featured_image_url ? 'pt-16' : ''}`}>
+                {/* Breadcrumb Navigation */}
+                <Breadcrumbs
+                  items={[
+                    { label: "Home", href: "/" },
+                    { label: "Articles", href: "/articles" },
+                    { label: article.title }
+                  ]}
+                  className="mb-6"
+                />
+
                 {!article.featured_image_url && (
                   <Button asChild variant="ghost" size="sm" className="mb-6">
                     <Link to="/articles">

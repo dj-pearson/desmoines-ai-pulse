@@ -7,6 +7,7 @@ import ShareDialog from "@/components/ShareDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import SEOHead from "@/components/SEOHead";
 import EnhancedEventSEO from "@/components/EnhancedEventSEO";
 import AIWriteup from "@/components/AIWriteup";
@@ -211,18 +212,14 @@ export default function EventDetails() {
         <Header />
 
         <main className="container mx-auto px-4 py-8 space-y-8">
-          {/* Breadcrumb */}
-          <nav className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-foreground">
-              Home
-            </Link>
-            <span>/</span>
-            <Link to="/events" className="hover:text-foreground">
-              Events
-            </Link>
-            <span>/</span>
-            <span className="text-foreground">{event.title}</span>
-          </nav>
+          {/* Breadcrumb Navigation */}
+          <Breadcrumbs
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Events", href: "/events" },
+              { label: event.title }
+            ]}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Main Content */}
