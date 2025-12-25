@@ -9,9 +9,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
-import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette } from "lucide-react";
+import { useAuthSecurity } from "@/hooks/useAuthSecurity";
+import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, Gamepad2, Palette, AlertCircle } from "lucide-react";
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -93,6 +95,16 @@ export default function Auth() {
     resendVerification: resendVerificationContext,
   } = useAuth();
 
+  // Security hooks for rate limiting and validation
+  const {
+    isBlocked,
+    remainingAttempts,
+    timeUntilReset,
+    checkRateLimit,
+    logFailedAttempt,
+    validateInput
+  } = useAuthSecurity();
+
   useEffect(() => {
     if (isAuthenticated) {
       // Get the redirect parameter from URL or default to home
@@ -119,6 +131,30 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
+      // Check rate limit before attempting login
+      const rateLimitCheck = await checkRateLimit(formData.email);
+      if (!rateLimitCheck.allowed) {
+        toast({
+          title: "Too Many Attempts",
+          description: rateLimitCheck.message || "Please try again later.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Validate email format
+      const emailValidation = validateInput('email', formData.email);
+      if (!emailValidation.isValid) {
+        toast({
+          title: "Invalid Email",
+          description: emailValidation.errors[0],
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
       const result = await login(formData.email, formData.password);
 
       // Check if MFA verification is required
@@ -130,6 +166,9 @@ export default function Auth() {
       }
 
       if (!result.success) {
+        // Log failed attempt for security monitoring
+        await logFailedAttempt(formData.email, 'login', result.error || 'Invalid credentials');
+
         toast({
           title: "Login Failed",
           description: result.error || "Invalid email or password",
@@ -147,6 +186,9 @@ export default function Auth() {
       const redirectTo = searchParams.get("redirect") || "/";
       navigate(redirectTo, { replace: true });
     } catch (error: any) {
+      // Log failed attempt for security monitoring
+      await logFailedAttempt(formData.email, 'login', error.message || 'Unknown error');
+
       toast({
         title: "Login Error",
         description: error.message || "An unexpected error occurred. Please try again.",
@@ -233,6 +275,50 @@ export default function Auth() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validate email format
+    const emailValidation = validateInput('email', formData.email);
+    if (!emailValidation.isValid) {
+      toast({
+        title: "Invalid Email",
+        description: emailValidation.errors[0],
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate password strength
+    const passwordValidation = validateInput('password', formData.password);
+    if (!passwordValidation.isValid) {
+      toast({
+        title: "Weak Password",
+        description: passwordValidation.errors[0],
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate first name
+    const firstNameValidation = validateInput('firstName', formData.firstName);
+    if (!firstNameValidation.isValid) {
+      toast({
+        title: "Invalid First Name",
+        description: firstNameValidation.errors[0],
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate last name
+    const lastNameValidation = validateInput('lastName', formData.lastName);
+    if (!lastNameValidation.isValid) {
+      toast({
+        title: "Invalid Last Name",
+        description: lastNameValidation.errors[0],
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate location is selected
     if (!formData.location) {
       toast({
@@ -261,6 +347,17 @@ export default function Auth() {
         });
         return;
       }
+    }
+
+    // Check rate limit before attempting signup
+    const rateLimitCheck = await checkRateLimit(formData.email);
+    if (!rateLimitCheck.allowed) {
+      toast({
+        title: "Too Many Attempts",
+        description: rateLimitCheck.message || "Please try again later.",
+        variant: "destructive",
+      });
+      return;
     }
 
     setIsLoading(true);
@@ -462,6 +559,26 @@ export default function Auth() {
               ) : (
                 /* Login Form */
                 <form onSubmit={handleLogin} className="space-y-4">
+                  {/* Rate limit warning */}
+                  {isBlocked && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        Too many failed attempts. Please try again in {Math.ceil(timeUntilReset / 60)} minute{Math.ceil(timeUntilReset / 60) !== 1 ? 's' : ''}.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {/* Remaining attempts warning */}
+                  {!isBlocked && remainingAttempts < 3 && remainingAttempts > 0 && (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        {remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} remaining before temporary lockout.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -493,8 +610,8 @@ export default function Auth() {
                       required
                     />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>
-                    {isLoading ? "Signing in..." : "Sign In"}
+                  <Button type="submit" className="w-full" disabled={isLoading || isBlocked}>
+                    {isLoading ? "Signing in..." : isBlocked ? "Please wait..." : "Sign In"}
                   </Button>
 
                   <div className="relative my-6">
@@ -675,7 +792,7 @@ export default function Auth() {
                     value={formData.password}
                     onChange={(e) => handleInputChange("password", e.target.value)}
                     required
-                    minLength={6}
+                    minLength={8}
                   />
                   <PasswordStrengthMeter
                     password={formData.password}

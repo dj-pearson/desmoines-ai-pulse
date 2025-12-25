@@ -17,13 +17,14 @@ interface ProtectedRouteProps {
  * - Stores intended route in URL params for post-login redirect
  * - Prevents flickering and position loss on page reload
  * - Optional admin-only access requirement
+ * - Waits for admin check to complete before rendering admin routes
  *
  * Usage:
  * <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
  * <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
  */
 export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRouteProps) {
-  const { user, isLoading, isAdmin } = useAuth();
+  const { user, isLoading, isAdmin, isAdminLoading } = useAuth();
   const location = useLocation();
 
   // Clear any stored errors on successful navigation to a protected route
@@ -39,12 +40,15 @@ export function ProtectedRoute({ children, requireAdmin = false }: ProtectedRout
 
   // CRITICAL: Show loading state while auth is initializing
   // This prevents premature redirects during session restoration
-  if (isLoading) {
+  // For admin routes, also wait for admin check to complete
+  if (isLoading || (requireAdmin && isAdminLoading)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-          <p className="text-muted-foreground">Verifying authentication...</p>
+          <p className="text-muted-foreground">
+            {requireAdmin && isAdminLoading ? "Verifying admin access..." : "Verifying authentication..."}
+          </p>
         </div>
       </div>
     );
