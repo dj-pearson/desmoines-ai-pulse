@@ -47,6 +47,7 @@ export function OptimizedLogo({
   return (
     <picture>
       <source srcSet={`/${fileName}.webp`} type="image/webp" />
+      {/* eslint-disable-next-line react/no-unknown-property */}
       <img
         src={`/${fileName}.png`}
         alt={alt}
@@ -54,7 +55,8 @@ export function OptimizedLogo({
         width={width}
         height={height}
         loading={loading}
-        fetchPriority={fetchPriority}
+        // @ts-expect-error - fetchpriority is a valid HTML attribute but not yet in React types
+        fetchpriority={fetchPriority}
         decoding="async"
       />
     </picture>
