@@ -1,4 +1,4 @@
-import { Skeleton } from "./skeleton";
+import { Skeleton, SkeletonGroup } from "./skeleton";
 import { Card, CardContent, CardHeader } from "./card";
 
 // Card skeleton for events, restaurants, attractions
@@ -28,22 +28,24 @@ export function CardSkeleton({ showImage = true }: { showImage?: boolean }) {
   );
 }
 
-// Grid of cards skeleton
-export function CardsGridSkeleton({ 
-  count = 6, 
+// Grid of cards skeleton with accessibility
+export function CardsGridSkeleton({
+  count = 6,
   showImage = true,
-  className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-}: { 
-  count?: number; 
+  className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+  label = "Loading content..."
+}: {
+  count?: number;
   showImage?: boolean;
   className?: string;
+  label?: string;
 }) {
   return (
-    <div className={className}>
+    <SkeletonGroup label={label} className={className}>
       {Array.from({ length: count }).map((_, i) => (
         <CardSkeleton key={i} showImage={showImage} />
       ))}
-    </div>
+    </SkeletonGroup>
   );
 }
 
@@ -111,17 +113,21 @@ export function StatsGridSkeleton({ count = 4 }: { count?: number }) {
   );
 }
 
-// Dashboard skeleton with multiple sections
+// Dashboard skeleton with multiple sections and accessibility
 export function DashboardSkeleton() {
   return (
-    <div className="space-y-8">
+    <SkeletonGroup label="Loading dashboard..." className="space-y-8">
       <HeroSkeleton />
       <StatsGridSkeleton />
       <div className="space-y-6">
         <Skeleton className="h-8 w-48" />
-        <CardsGridSkeleton count={6} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} showImage={true} />
+          ))}
+        </div>
       </div>
-    </div>
+    </SkeletonGroup>
   );
 }
 
@@ -143,10 +149,10 @@ export function FormSkeleton({ fields = 4 }: { fields?: number }) {
   );
 }
 
-// Search results skeleton
-export function SearchResultsSkeleton() {
+// Search results skeleton with accessibility
+export function SearchResultsSkeleton({ label = "Loading search results..." }: { label?: string }) {
   return (
-    <div className="space-y-4">
+    <SkeletonGroup label={label} className="space-y-4">
       <div className="flex items-center justify-between">
         <Skeleton className="h-6 w-32" />
         <Skeleton className="h-4 w-24" />
@@ -163,37 +169,57 @@ export function SearchResultsSkeleton() {
           </div>
         ))}
       </div>
-    </div>
+    </SkeletonGroup>
   );
 }
 
-// Page loading overlay
+// Page loading overlay with accessibility
 export function PageLoadingOverlay({ message = "Loading..." }: { message?: string }) {
   return (
-    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div
+      className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
       <div className="text-center space-y-4">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-        <p className="text-sm text-muted-foreground animate-pulse">{message}</p>
+        <div
+          className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto motion-reduce:animate-pulse"
+          aria-hidden="true"
+        ></div>
+        <p className="text-sm text-muted-foreground animate-pulse motion-reduce:animate-none">{message}</p>
       </div>
     </div>
   );
 }
 
-// Inline loading spinner
-export function LoadingSpinner({ 
-  size = "default", 
-  className = "" 
-}: { 
-  size?: "sm" | "default" | "lg"; 
-  className?: string; 
+// Inline loading spinner with accessibility
+export function LoadingSpinner({
+  size = "default",
+  className = "",
+  label = "Loading..."
+}: {
+  size?: "sm" | "default" | "lg";
+  className?: string;
+  label?: string;
 }) {
   const sizeClasses = {
     sm: "h-4 w-4",
-    default: "h-6 w-6", 
+    default: "h-6 w-6",
     lg: "h-8 w-8"
   };
 
   return (
-    <div className={`animate-spin rounded-full border-2 border-muted border-t-primary ${sizeClasses[size]} ${className}`} />
+    <div
+      role="status"
+      aria-live="polite"
+      className="inline-flex items-center justify-center"
+    >
+      <div
+        className={`animate-spin rounded-full border-2 border-muted border-t-primary motion-reduce:animate-pulse ${sizeClasses[size]} ${className}`}
+        aria-hidden="true"
+      />
+      <span className="sr-only">{label}</span>
+    </div>
   );
 }

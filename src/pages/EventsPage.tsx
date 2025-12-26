@@ -634,21 +634,28 @@ export default function EventsPage() {
     return (
       <>
         <SEOHead
-          title="Loading Events..."
-          description="Loading upcoming events in Des Moines"
+          title="Events in Des Moines - Upcoming Activities & Entertainment | Des Moines Insider"
+          description="Discover upcoming events in Des Moines, Iowa. Find concerts, festivals, community gatherings, and entertainment activities happening now."
           type="website"
+          keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
         />
         <div className="min-h-screen bg-background">
           <Header />
 
-          {/* Hero Section Skeleton */}
-          <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]">
+          {/* Hero Section Skeleton with accessibility */}
+          <section
+            className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
             <div className="absolute inset-0 bg-black/20"></div>
             <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
-              <div className="animate-pulse space-y-4">
-                <div className="h-12 md:h-16 bg-white/20 rounded w-3/4 mx-auto"></div>
-                <div className="h-6 md:h-8 bg-white/20 rounded w-1/2 mx-auto"></div>
-                <div className="h-12 bg-white/20 rounded w-full max-w-2xl mx-auto mt-8"></div>
+              <div className="animate-pulse space-y-4 motion-reduce:animate-none">
+                <div className="h-12 md:h-16 bg-white/20 rounded w-3/4 mx-auto" aria-hidden="true"></div>
+                <div className="h-6 md:h-8 bg-white/20 rounded w-1/2 mx-auto" aria-hidden="true"></div>
+                <div className="h-12 bg-white/20 rounded w-full max-w-2xl mx-auto mt-8" aria-hidden="true"></div>
+                <span className="sr-only">Loading events page...</span>
               </div>
             </div>
           </section>
@@ -657,6 +664,7 @@ export default function EventsPage() {
             <CardsGridSkeleton
               count={9}
               className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+              label="Loading events..."
             />
           </div>
           <Footer />
@@ -1075,10 +1083,10 @@ export default function EventsPage() {
             </div>
           </div>
 
-          {isLoading && <CardsGridSkeleton count={6} />}
+          {isLoading && <CardsGridSkeleton count={6} label="Loading events..." />}
 
           {!isLoading && viewMode === "map" ? (
-            <Suspense fallback={<LoadingSpinner />}>
+            <Suspense fallback={<LoadingSpinner label="Loading map..." />}>
               <EventsMap events={events || []} />
             </Suspense>
           ) : !isLoading ? (

@@ -86,12 +86,18 @@ const Terms = lazy(() => import("./pages/Terms"));
 // Contact page
 const Contact = lazy(() => import("./pages/Contact"));
 
-// Mobile-optimized loading component
+// Mobile-optimized loading component with accessibility support
 const PageLoader = () => (
-  <div className="min-h-screen bg-background flex items-center justify-center">
-    <div className="animate-pulse space-y-4 text-center">
-      <div className="h-8 bg-muted rounded w-48 mx-auto"></div>
-      <div className="h-4 bg-muted rounded w-32 mx-auto"></div>
+  <div
+    className="min-h-screen bg-background flex items-center justify-center"
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+  >
+    <div className="animate-pulse space-y-4 text-center motion-reduce:animate-none">
+      <div className="h-8 bg-muted rounded w-48 mx-auto" aria-hidden="true"></div>
+      <div className="h-4 bg-muted rounded w-32 mx-auto" aria-hidden="true"></div>
+      <span className="sr-only">Loading page content...</span>
     </div>
   </div>
 );
