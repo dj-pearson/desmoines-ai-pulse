@@ -41,7 +41,9 @@
     "test:export:csv": "node export-test-results.cjs csv",
     "test:export:json": "node export-test-results.cjs json",
     "validate": "npm run type-check && npm run lint",
-    "validate:strict": "npm run type-check:strict && npm run lint"
+    "validate:strict": "npm run type-check:strict && npm run lint",
+    "setup:stripe": "node scripts/setup-stripe-products.js",
+    "setup:stripe:dry-run": "node scripts/setup-stripe-products.js --dry-run"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.19",
@@ -125,6 +127,7 @@
     "recharts": "^2.12.7",
     "remark-gfm": "^4.0.1",
     "sonner": "^1.5.0",
+    "stripe": "^14.25.0",
     "tailwind-merge": "^2.5.2",
     "tailwindcss-animate": "^1.0.7",
     "terser": "^5.43.1",
