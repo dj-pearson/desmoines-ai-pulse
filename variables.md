@@ -502,8 +502,98 @@ supabase secrets unset SECRET_NAME
 
 ---
 
+---
+
+## Stripe Product Configuration
+
+### Consumer Subscription Products
+
+The platform uses two paid subscription tiers managed through Stripe. These products must be created in your Stripe account before subscriptions can be processed.
+
+#### Products to Create
+
+| Product | Monthly Price | Yearly Price | Features |
+|---------|--------------|--------------|----------|
+| **Des Moines Insider** | $4.99 | $49.99 | Unlimited favorites, early event access, advanced filters, ad-free, priority support |
+| **Des Moines VIP** | $12.99 | $129.99 | Everything in Insider + VIP events, reservation assistance, SMS alerts, concierge |
+
+#### Setup Script
+
+Use the provided setup scripts to create Stripe products:
+
+```bash
+# Using Node.js script (recommended - cross-platform)
+npm run setup:stripe              # Create products in test mode
+npm run setup:stripe:dry-run      # Preview without creating
+
+# Using PowerShell (Windows with Stripe CLI)
+.\scripts\setup-stripe-products.ps1
+.\scripts\setup-stripe-products.ps1 -DryRun
+.\scripts\setup-stripe-products.ps1 -Live  # For production
+```
+
+#### Database Configuration
+
+After running the setup script, update the `subscription_plans` table with the Stripe price IDs:
+
+```sql
+-- Example (replace with actual IDs from script output)
+UPDATE public.subscription_plans
+SET
+    stripe_price_id_monthly = 'price_xxx_monthly',
+    stripe_price_id_yearly = 'price_xxx_yearly',
+    updated_at = NOW()
+WHERE name = 'insider';
+
+UPDATE public.subscription_plans
+SET
+    stripe_price_id_monthly = 'price_yyy_monthly',
+    stripe_price_id_yearly = 'price_yyy_yearly',
+    updated_at = NOW()
+WHERE name = 'vip';
+```
+
+Or use the helper function:
+
+```sql
+SELECT update_subscription_stripe_prices('insider', 'price_xxx_monthly', 'price_xxx_yearly');
+SELECT update_subscription_stripe_prices('vip', 'price_yyy_monthly', 'price_yyy_yearly');
+```
+
+#### Webhook Configuration
+
+Configure a webhook endpoint in Stripe Dashboard:
+- **Endpoint URL**: `https://your-project.supabase.co/functions/v1/stripe-webhook`
+- **Events to listen for**:
+  - `checkout.session.completed`
+  - `customer.subscription.created`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.payment_succeeded`
+  - `invoice.payment_failed`
+
+#### Required Supabase Secrets
+
+```bash
+supabase secrets set STRIPE_SECRET_KEY=sk_live_xxx  # or sk_test_xxx for testing
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_xxx
+```
+
+### Advertising Campaigns
+
+Advertising campaigns use dynamic pricing based on placement types and duration. Products are created on-the-fly during checkout (not pre-configured in Stripe).
+
+| Placement Type | Description |
+|----------------|-------------|
+| `top_banner` | Top Banner Ad |
+| `featured_spot` | Featured Spot Ad |
+| `below_fold` | Below the Fold Ad |
+
+---
+
 ## Version History
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2025-12-27 | Added Stripe product configuration section |
 | 1.0 | 2025-12-27 | Initial comprehensive documentation |
