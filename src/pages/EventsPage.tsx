@@ -348,6 +348,7 @@ export default function EventsPage() {
       if (error) throw error;
       return { events: data || [], totalCount: count || 0 };
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents excessive refetches
   });
 
   // Apply client-side price filtering for paid price ranges
@@ -371,6 +372,7 @@ export default function EventsPage() {
       if (error) throw error;
       return (data || []).map((row: { category: string }) => row.category);
     },
+    staleTime: 30 * 60 * 1000, // 30 minutes - categories rarely change
   });
 
   // Batch fetch social data for all events to prevent N+1 queries

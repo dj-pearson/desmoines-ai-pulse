@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -74,6 +75,7 @@ export function AdvancedSearchFilters({
 }: AdvancedSearchFiltersProps) {
   const [saveSearchName, setSaveSearchName] = useState('');
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
+  const { toast } = useToast();
 
   // Get user's location for "Near Me" feature
   useEffect(() => {
@@ -138,7 +140,11 @@ export function AdvancedSearchFilters({
             });
           },
           () => {
-            alert('Please enable location access to use "Near Me" feature');
+            toast({
+              title: "Location Access Required",
+              description: 'Please enable location access to use the "Near Me" feature',
+              variant: "destructive",
+            });
           }
         );
       }
