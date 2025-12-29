@@ -108,7 +108,7 @@ export default function Contact() {
           <div className="max-w-6xl mx-auto">
             {/* Hero Section */}
             <div className="text-center space-y-4 mb-12">
-              <h1 className="text-4xl md:text-5xl font-bold">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold">
                 Get in <span className="text-primary">Touch</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">

@@ -105,7 +105,7 @@ export default function BusinessHub() {
           <div className="text-center space-y-4 mb-8">
             <div className="flex items-center justify-center gap-2">
               <Building2 className="h-10 w-10 text-primary" />
-              <h1 className="text-4xl font-bold">Business Hub</h1>
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">Business Hub</h1>
             </div>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
               Your central command center for growing your business on Des Moines Insider
@@ -137,22 +137,22 @@ export default function BusinessHub() {
 
           {/* Main Tabs */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="dashboard" className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Dashboard</span>
+            <TabsList className="grid w-full grid-cols-4 h-auto gap-0.5 sm:gap-1">
+              <TabsTrigger value="dashboard" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <BarChart3 className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Dashboard</span>
               </TabsTrigger>
-              <TabsTrigger value="partnership" className="flex items-center gap-2">
-                <Star className="h-4 w-4" />
-                <span className="hidden sm:inline">Partnership</span>
+              <TabsTrigger value="partnership" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <Star className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Partner</span>
               </TabsTrigger>
-              <TabsTrigger value="advertising" className="flex items-center gap-2">
-                <Megaphone className="h-4 w-4" />
-                <span className="hidden sm:inline">Advertising</span>
+              <TabsTrigger value="advertising" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <Megaphone className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Ads</span>
               </TabsTrigger>
-              <TabsTrigger value="events" className="flex items-center gap-2">
-                <Calendar className="h-4 w-4" />
-                <span className="hidden sm:inline">Events</span>
+              <TabsTrigger value="events" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <Calendar className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Events</span>
               </TabsTrigger>
             </TabsList>
 

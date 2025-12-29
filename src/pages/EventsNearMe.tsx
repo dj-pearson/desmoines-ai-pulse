@@ -75,7 +75,7 @@ export default function EventsNearMe() {
         <main className="flex-1 container mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4">Events Near Me</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Events Near Me</h1>
             <p className="text-lg text-muted-foreground">
               Discover events happening around you. Adjust the radius to find events within your preferred distance.
             </p>
