@@ -80,6 +80,7 @@ export default function RestaurantsPage() {
       if (error) throw error;
       return { restaurants: data || [], totalCount: count || 0 };
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents excessive refetches
   });
 
   const restaurants = restaurantsData?.restaurants || [];
@@ -101,6 +102,7 @@ export default function RestaurantsPage() {
       if (error) throw error;
       return (data || []).map((row: { cuisine: string }) => row.cuisine);
     },
+    staleTime: 30 * 60 * 1000, // 30 minutes - cuisines rarely change
   });
 
   const handleClearFilters = () => {
