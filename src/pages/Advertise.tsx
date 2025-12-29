@@ -188,7 +188,7 @@ export default function Advertise() {
       <section className="bg-gradient-to-br from-primary/10 via-background to-secondary/10 py-16">
         <div className="container mx-auto px-4">
           <div className="max-w-4xl mx-auto text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-foreground">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-6 text-foreground">
               Advertise with Des Moines Insider
             </h1>
             <p className="text-muted-foreground text-xl md:text-2xl mb-8 leading-relaxed">

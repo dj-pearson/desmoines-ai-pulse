@@ -85,7 +85,7 @@ export default function Enhanced404() {
         {/* Hero Section */}
         <div className="text-center mb-12">
           <div className="text-8xl font-bold text-muted-foreground/20 mb-4">404</div>
-          <h1 className="text-4xl font-bold mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
             Oops! Page Not Found
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">

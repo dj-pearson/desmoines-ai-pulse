@@ -61,7 +61,7 @@ export default function Social() {
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-16 text-center">
-          <h1 className="text-4xl font-bold mb-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
             Join the Social Experience
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
@@ -83,19 +83,19 @@ export default function Social() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Social Hub</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Social Hub</h1>
           <p className="text-xl text-muted-foreground">
             Connect with friends and discover events together
           </p>
         </div>
 
         <Tabs defaultValue="friends" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="friends">Friends</TabsTrigger>
-            <TabsTrigger value="groups">Groups</TabsTrigger>
-            <TabsTrigger value="forums">Forums</TabsTrigger>
-            <TabsTrigger value="trending">Trending</TabsTrigger>
-            <TabsTrigger value="nearby">Nearby</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 h-auto gap-1">
+            <TabsTrigger value="friends" className="text-xs sm:text-sm py-2">Friends</TabsTrigger>
+            <TabsTrigger value="groups" className="text-xs sm:text-sm py-2">Groups</TabsTrigger>
+            <TabsTrigger value="forums" className="text-xs sm:text-sm py-2">Forums</TabsTrigger>
+            <TabsTrigger value="trending" className="text-xs sm:text-sm py-2">Trending</TabsTrigger>
+            <TabsTrigger value="nearby" className="text-xs sm:text-sm py-2">Nearby</TabsTrigger>
           </TabsList>
 
           <TabsContent value="friends" className="space-y-6">

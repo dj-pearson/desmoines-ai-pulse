@@ -65,26 +65,26 @@ export default function CMSDashboard() {
         {/* Main Content */}
         <main className="container mx-auto px-4 py-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid grid-cols-5 w-full max-w-3xl">
-              <TabsTrigger value="articles" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                <span className="hidden sm:inline">Articles</span>
+            <TabsList className="grid grid-cols-5 w-full max-w-3xl h-auto gap-0.5 sm:gap-1">
+              <TabsTrigger value="articles" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <FileText className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Articles</span>
               </TabsTrigger>
-              <TabsTrigger value="queue" className="flex items-center gap-2">
-                <ClipboardList className="h-4 w-4" />
-                <span className="hidden sm:inline">Queue</span>
+              <TabsTrigger value="queue" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <ClipboardList className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Queue</span>
               </TabsTrigger>
-              <TabsTrigger value="authors" className="flex items-center gap-2">
-                <Users className="h-4 w-4" />
-                <span className="hidden sm:inline">Authors</span>
+              <TabsTrigger value="authors" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <Users className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Authors</span>
               </TabsTrigger>
-              <TabsTrigger value="taxonomy" className="flex items-center gap-2">
-                <Tags className="h-4 w-4" />
-                <span className="hidden sm:inline">Categories</span>
+              <TabsTrigger value="taxonomy" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <Tags className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">Tags</span>
               </TabsTrigger>
-              <TabsTrigger value="ai" className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
-                <span className="hidden sm:inline">AI Generator</span>
+              <TabsTrigger value="ai" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+                <Sparkles className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden sm:inline text-xs sm:text-sm">AI</span>
               </TabsTrigger>
             </TabsList>
 

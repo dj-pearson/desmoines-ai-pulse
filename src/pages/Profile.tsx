@@ -123,26 +123,26 @@ export default function Profile() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-5">
-            <TabsTrigger value="overview" className="flex items-center gap-2">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Overview</span>
+          <TabsList className="grid w-full grid-cols-5 h-auto gap-0.5 sm:gap-1">
+            <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+              <User className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline text-xs sm:text-sm">Overview</span>
             </TabsTrigger>
-            <TabsTrigger value="favorites" className="flex items-center gap-2">
-              <Heart className="h-4 w-4" />
-              <span className="hidden sm:inline">Favorites</span>
+            <TabsTrigger value="favorites" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+              <Heart className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline text-xs sm:text-sm">Favorites</span>
             </TabsTrigger>
-            <TabsTrigger value="events" className="flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              <span className="hidden sm:inline">My Events</span>
+            <TabsTrigger value="events" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+              <Calendar className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline text-xs sm:text-sm">Events</span>
             </TabsTrigger>
-            <TabsTrigger value="activity" className="flex items-center gap-2">
-              <Trophy className="h-4 w-4" />
-              <span className="hidden sm:inline">Activity</span>
+            <TabsTrigger value="activity" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+              <Trophy className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline text-xs sm:text-sm">Activity</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Settings</span>
+            <TabsTrigger value="settings" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
+              <Settings className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline text-xs sm:text-sm">Settings</span>
             </TabsTrigger>
           </TabsList>
 
