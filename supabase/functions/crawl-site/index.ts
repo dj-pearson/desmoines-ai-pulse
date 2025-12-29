@@ -7,12 +7,21 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+// Allowed domains for SEO crawling (only crawl your own sites)
+const ALLOWED_CRAWL_DOMAINS = [
+  'desmoinesaipulse.com',
+  'www.desmoinesaipulse.com',
+  'desmoinesinsider.com',
+  'www.desmoinesinsider.com',
+];
 
 interface CrawlRequest {
   startUrl: string;
@@ -51,6 +60,25 @@ serve(async (req) => {
 
     if (!startUrl) {
       return new Response(JSON.stringify({ error: "Start URL is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // SSRF Protection: Validate URL before crawling
+    const validation = validateURLForSSRF(startUrl, {
+      allowedDomains: ALLOWED_CRAWL_DOMAINS,
+      allowedProtocols: ['https:', 'http:'],
+      blockPrivateIPs: true,
+    });
+
+    if (!validation.valid) {
+      console.error('SSRF validation failed for crawl:', validation.error);
+      return new Response(JSON.stringify({
+        error: "URL not allowed for crawling",
+        details: validation.error,
+        allowedDomains: ALLOWED_CRAWL_DOMAINS,
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
