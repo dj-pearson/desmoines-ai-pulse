@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
+import { SecurityUtils } from "@/lib/security";
 
 /**
  * AuthCallback Component
@@ -56,7 +57,8 @@ export default function AuthCallback() {
               console.log("[AuthCallback] Session established");
               setStatus("success");
 
-              const redirectTo = searchParams.get("redirect") || "/";
+              // Validate redirect URL to prevent open redirect attacks
+              const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
               setTimeout(() => {
                 navigate(redirectTo, { replace: true });
               }, 500);
