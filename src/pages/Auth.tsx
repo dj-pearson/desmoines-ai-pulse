@@ -14,6 +14,7 @@ import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, 
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SecurityUtils } from "@/lib/security";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -107,8 +108,8 @@ export default function Auth() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      // Get the redirect parameter from URL or default to home
-      const redirectTo = searchParams.get("redirect") || "/";
+      // Get the redirect parameter from URL, validate to prevent open redirect attacks
+      const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
       navigate(redirectTo, { replace: true });
     }
   }, [isAuthenticated, navigate, searchParams]);
@@ -182,8 +183,8 @@ export default function Auth() {
         description: "You've been successfully logged in.",
       });
 
-      // Redirect to intended destination or home
-      const redirectTo = searchParams.get("redirect") || "/";
+      // Redirect to intended destination or home, validate to prevent open redirect attacks
+      const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
       navigate(redirectTo, { replace: true });
     } catch (error: any) {
       // Log failed attempt for security monitoring
@@ -205,8 +206,8 @@ export default function Auth() {
       description: "You've been successfully logged in.",
     });
 
-    // Redirect to intended destination or home
-    const redirectTo = searchParams.get("redirect") || "/";
+    // Redirect to intended destination or home, validate to prevent open redirect attacks
+    const redirectTo = SecurityUtils.getSafeRedirectUrl(searchParams.get("redirect"), "/");
     navigate(redirectTo, { replace: true });
   };
 

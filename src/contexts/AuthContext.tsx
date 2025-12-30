@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
+import { SecurityUtils } from "@/lib/security";
 
 interface AuthState {
   user: User | null;
@@ -411,7 +412,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = useCallback(async (redirectTo?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
-      if (redirectTo) {
+      // Validate redirect URL to prevent open redirect attacks
+      if (redirectTo && SecurityUtils.isValidRedirectUrl(redirectTo)) {
         callbackUrl.searchParams.set("redirect", redirectTo);
       }
 
@@ -442,7 +444,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithApple = useCallback(async (redirectTo?: string): Promise<{ success: boolean; error?: string }> => {
     try {
       const callbackUrl = new URL(`${window.location.origin}/auth/callback`);
-      if (redirectTo) {
+      // Validate redirect URL to prevent open redirect attacks
+      if (redirectTo && SecurityUtils.isValidRedirectUrl(redirectTo)) {
         callbackUrl.searchParams.set("redirect", redirectTo);
       }
 

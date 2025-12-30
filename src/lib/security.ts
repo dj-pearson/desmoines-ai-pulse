@@ -287,6 +287,63 @@ export class SecurityUtils {
       }
     }
   }
+
+  /**
+   * Validate redirect URL to prevent open redirect attacks
+   * Only allows relative paths (starting with /) and blocks external URLs
+   */
+  static isValidRedirectUrl(url: string | null): boolean {
+    if (!url || typeof url !== 'string') {
+      return false;
+    }
+
+    // Trim whitespace
+    const trimmedUrl = url.trim();
+
+    // Must start with a single forward slash (relative path)
+    // Block protocol-relative URLs (//evil.com) and absolute URLs
+    if (!trimmedUrl.startsWith('/') || trimmedUrl.startsWith('//')) {
+      return false;
+    }
+
+    // Block URLs containing protocol indicators
+    if (trimmedUrl.includes(':')) {
+      return false;
+    }
+
+    // Block encoded characters that could bypass validation
+    // Check for URL-encoded slashes, colons, and other bypass attempts
+    const decoded = decodeURIComponent(trimmedUrl);
+    if (decoded.startsWith('//') || decoded.includes(':')) {
+      return false;
+    }
+
+    // Block common bypass patterns
+    const bypassPatterns = [
+      /^\/\\/i,           // /\evil.com
+      /^\/[^/]*@/i,       // /@evil.com
+      /^\/[^/]*%/i,       // /%2F pattern at start
+      /javascript:/i,     // javascript: protocol
+      /data:/i,           // data: protocol
+      /vbscript:/i,       // vbscript: protocol
+    ];
+
+    if (bypassPatterns.some(pattern => pattern.test(trimmedUrl))) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Get a safe redirect URL, falling back to default if invalid
+   */
+  static getSafeRedirectUrl(url: string | null, defaultUrl: string = '/'): string {
+    if (this.isValidRedirectUrl(url)) {
+      return url!;
+    }
+    return defaultUrl;
+  }
 }
 
 /**
