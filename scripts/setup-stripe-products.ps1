@@ -83,21 +83,21 @@ Write-Host "Step 1: Creating Insider Product" -ForegroundColor Yellow
 Write-Host "=================================" -ForegroundColor Yellow
 
 # Create Insider product
-$insiderProductCmd = 'products create --name="Des Moines Insider" --description="For the passionate Des Moines explorer. Get unlimited favorites, early access to events, advanced filters, ad-free experience, and priority support." --metadata[tier]=insider'
+$insiderProductCmd = 'products create --name="Des Moines Insider" --description="For the passionate Des Moines explorer. Get unlimited favorites, early access to events, advanced filters, ad-free experience, and priority support." -d metadata[tier]=insider'
 Write-Host "Creating product: Des Moines Insider"
 $insiderProductResult = Invoke-StripeCommand $insiderProductCmd
 $createdIds.InsiderProduct = Get-StripeId $insiderProductResult
 Write-Host "  Product ID: $($createdIds.InsiderProduct)" -ForegroundColor Green
 
 # Create Insider monthly price
-$insiderMonthlyCmd = "prices create --product=$($createdIds.InsiderProduct) --unit-amount=499 --currency=usd --recurring[interval]=month --metadata[plan]=insider --metadata[billing]=monthly"
+$insiderMonthlyCmd = "prices create --product=$($createdIds.InsiderProduct) --unit-amount=499 --currency=usd --recurring.interval=month -d metadata[plan]=insider -d metadata[billing]=monthly"
 Write-Host "Creating price: Insider Monthly ($4.99/month)"
 $insiderMonthlyResult = Invoke-StripeCommand $insiderMonthlyCmd
 $createdIds.InsiderPriceMonthly = Get-StripeId $insiderMonthlyResult
 Write-Host "  Price ID: $($createdIds.InsiderPriceMonthly)" -ForegroundColor Green
 
 # Create Insider yearly price
-$insiderYearlyCmd = "prices create --product=$($createdIds.InsiderProduct) --unit-amount=4999 --currency=usd --recurring[interval]=year --metadata[plan]=insider --metadata[billing]=yearly"
+$insiderYearlyCmd = "prices create --product=$($createdIds.InsiderProduct) --unit-amount=4999 --currency=usd --recurring.interval=year -d metadata[plan]=insider -d metadata[billing]=yearly"
 Write-Host "Creating price: Insider Yearly ($49.99/year)"
 $insiderYearlyResult = Invoke-StripeCommand $insiderYearlyCmd
 $createdIds.InsiderPriceYearly = Get-StripeId $insiderYearlyResult
@@ -108,21 +108,21 @@ Write-Host "Step 2: Creating VIP Product" -ForegroundColor Yellow
 Write-Host "=============================" -ForegroundColor Yellow
 
 # Create VIP product
-$vipProductCmd = 'products create --name="Des Moines VIP" --description="The ultimate Des Moines experience. Get exclusive VIP events, restaurant reservation assistance, personalized recommendations, SMS alerts, monthly local business perks, and concierge support." --metadata[tier]=vip'
+$vipProductCmd = 'products create --name="Des Moines VIP" --description="The ultimate Des Moines experience. Get exclusive VIP events, restaurant reservation assistance, personalized recommendations, SMS alerts, monthly local business perks, and concierge support." -d metadata[tier]=vip'
 Write-Host "Creating product: Des Moines VIP"
 $vipProductResult = Invoke-StripeCommand $vipProductCmd
 $createdIds.VIPProduct = Get-StripeId $vipProductResult
 Write-Host "  Product ID: $($createdIds.VIPProduct)" -ForegroundColor Green
 
 # Create VIP monthly price
-$vipMonthlyCmd = "prices create --product=$($createdIds.VIPProduct) --unit-amount=1299 --currency=usd --recurring[interval]=month --metadata[plan]=vip --metadata[billing]=monthly"
+$vipMonthlyCmd = "prices create --product=$($createdIds.VIPProduct) --unit-amount=1299 --currency=usd --recurring.interval=month -d metadata[plan]=vip -d metadata[billing]=monthly"
 Write-Host "Creating price: VIP Monthly ($12.99/month)"
 $vipMonthlyResult = Invoke-StripeCommand $vipMonthlyCmd
 $createdIds.VIPPriceMonthly = Get-StripeId $vipMonthlyResult
 Write-Host "  Price ID: $($createdIds.VIPPriceMonthly)" -ForegroundColor Green
 
 # Create VIP yearly price
-$vipYearlyCmd = "prices create --product=$($createdIds.VIPProduct) --unit-amount=12999 --currency=usd --recurring[interval]=year --metadata[plan]=vip --metadata[billing]=yearly"
+$vipYearlyCmd = "prices create --product=$($createdIds.VIPProduct) --unit-amount=12999 --currency=usd --recurring.interval=year -d metadata[plan]=vip -d metadata[billing]=yearly"
 Write-Host "Creating price: VIP Yearly ($129.99/year)"
 $vipYearlyResult = Invoke-StripeCommand $vipYearlyCmd
 $createdIds.VIPPriceYearly = Get-StripeId $vipYearlyResult
