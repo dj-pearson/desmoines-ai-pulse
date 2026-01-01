@@ -1,6 +1,6 @@
 # CLAUDE.md - AI Assistant Development Guide
 
-**Last Updated**: 2025-11-28
+**Last Updated**: 2026-01-01
 **Project**: Des Moines AI Pulse
 **Purpose**: Comprehensive guide for AI assistants working on this codebase
 
@@ -82,6 +82,7 @@
 - **Package Manager**: npm
 
 ### Third-Party Integrations
+- **Stripe** (Payment processing for subscriptions & campaigns)
 - Google PageSpeed Insights API
 - OpenAI / Anthropic (AI content generation)
 - Web scraping (Puppeteer, custom crawlers)
@@ -108,7 +109,7 @@ desmoines-ai-pulse/
 │   │   ├── advertising/   # Advertising components
 │   │   ├── schema/        # Schema.org structured data
 │   │   └── [feature]/     # Feature-specific components
-│   ├── hooks/             # Custom React hooks (85+ hooks)
+│   ├── hooks/             # Custom React hooks (101 hooks)
 │   ├── contexts/          # React contexts (AuthContext, etc.)
 │   ├── integrations/
 │   │   └── supabase/      # Supabase client & types
@@ -119,10 +120,10 @@ desmoines-ai-pulse/
 │   ├── main.tsx           # Entry point
 │   └── index.css          # Global styles + Tailwind
 ├── supabase/
-│   ├── functions/         # Edge Functions (68 functions)
+│   ├── functions/         # Edge Functions (73 functions)
 │   │   ├── _shared/       # Shared utilities (CORS, rate limiting, validation)
 │   │   └── [function]/    # Individual edge functions
-│   ├── migrations/        # SQL migration files (128 migrations)
+│   ├── migrations/        # SQL migration files (142 migrations)
 │   └── config.toml        # Supabase configuration
 ├── tests/                 # Playwright tests (7 test suites)
 ├── docs/                  # Additional documentation
@@ -874,7 +875,7 @@ seo-audit                   # Run SEO audits
 | `src/lib/utils.ts` | General utility functions |
 | `src/components/ui/` | shadcn/ui base components |
 | `src/components/PremiumGate.tsx` | Premium feature gating |
-| `src/hooks/` | Custom React hooks (85+ hooks) |
+| `src/hooks/` | Custom React hooks (101 hooks) |
 | `src/hooks/useSubscription.ts` | Subscription tier management |
 | `src/hooks/useTripPlanner.ts` | AI trip planning logic |
 
@@ -1213,6 +1214,7 @@ VITE_SITE_URL            # Site URL (for SEO, redirects)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2 | 2026-01-01 | Updated counts (101 hooks, 73 edge functions, 142 migrations); added Stripe integration; documented security improvements and mobile optimizations |
 | 1.1 | 2025-11-28 | Added AuthContext, subscription system, AI Trip Planner docs; updated counts (85+ hooks, 68 edge functions, 128 migrations) |
 | 1.0 | 2025-11-16 | Initial comprehensive documentation |
 
