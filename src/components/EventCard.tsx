@@ -29,7 +29,7 @@ import {
   ImageOff,
 } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useCallback } from "react";
 
 const createSlug = (name: string): string => {
   return name
@@ -42,7 +42,8 @@ interface EventCardProps {
   event: Event;
   onViewDetails: (event: Event) => void;
 }
-export default function EventCard({ event, onViewDetails }: EventCardProps) {
+
+function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   const { isAuthenticated } = useAuth();
   const { trackInteraction } = useFeedback();
   const { addToRecentlyViewed } = useRecentlyViewed();
@@ -62,7 +63,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
   // Determine if trending based on view data
   const isTrending = viewData.trending_score > 70 || viewData.recent_views > 100;
 
-  const handleViewDetails = () => {
+  const handleViewDetails = useCallback(() => {
     // Track interaction
     if (isAuthenticated) {
       trackInteraction(event.id, "view");
@@ -75,7 +76,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
     trackView();
 
     onViewDetails(event);
-  };
+  }, [isAuthenticated, trackInteraction, event, addToRecentlyViewed, trackView, onViewDetails]);
 
   const getCategoryColor = (category: string) => {
     const lowerCategory = category.toLowerCase();
@@ -207,3 +208,7 @@ export default function EventCard({ event, onViewDetails }: EventCardProps) {
     </Card>
   );
 }
+
+// Memoize to prevent unnecessary re-renders when parent updates
+const EventCard = memo(EventCardComponent);
+export default EventCard;

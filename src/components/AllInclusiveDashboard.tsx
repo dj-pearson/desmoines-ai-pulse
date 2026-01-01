@@ -169,7 +169,6 @@ export default function AllInclusiveDashboard({
     // Text search filter
     if (filters.query && filters.query.trim() !== "") {
       const searchQuery = filters.query.toLowerCase().trim();
-      console.log("Applying text search filter:", searchQuery);
 
       filtered = filtered.filter((item) => {
         const searchableText = [
@@ -186,21 +185,8 @@ export default function AllInclusiveDashboard({
           .join(" ")
           .toLowerCase();
 
-        const matches = searchableText.includes(searchQuery);
-        if (!matches) {
-          console.log(
-            "Filtered out:",
-            item.title || item.name,
-            "because it does not contain:",
-            searchQuery
-          );
-        }
-        return matches;
+        return searchableText.includes(searchQuery);
       });
-
-      console.log("After text filter, items remaining:", filtered.length);
-    } else {
-      console.log("No text search filter applied, showing all items");
     }
 
     // Category filter
@@ -218,66 +204,19 @@ export default function AllInclusiveDashboard({
     // Subcategory filter (for events and restaurants)
     if (filters.subcategory && filters.subcategory.trim() !== "") {
       const subcategoryFilter = filters.subcategory.toLowerCase();
-      console.log(
-        "Applying subcategory filter:",
-        subcategoryFilter,
-        "to",
-        itemType
-      );
 
       filtered = filtered.filter((item) => {
         if (itemType === "event") {
           // For events, filter by category field
           const eventCategory = (item.category || "").toLowerCase();
-          const matches = eventCategory === subcategoryFilter;
-          if (!matches) {
-            console.log(
-              "Filtered out event:",
-              item.title,
-              "category:",
-              eventCategory,
-              "looking for:",
-              subcategoryFilter
-            );
-          } else {
-            console.log(
-              "Keeping event:",
-              item.title,
-              "category:",
-              eventCategory
-            );
-          }
-          return matches;
+          return eventCategory === subcategoryFilter;
         } else if (itemType === "restaurant") {
           // For restaurants, filter by cuisine field
           const restaurantCuisine = (item.cuisine || "").toLowerCase();
-          const matches = restaurantCuisine === subcategoryFilter;
-          if (!matches) {
-            console.log(
-              "Filtered out restaurant:",
-              item.name,
-              "cuisine:",
-              restaurantCuisine,
-              "looking for:",
-              subcategoryFilter
-            );
-          } else {
-            console.log(
-              "Keeping restaurant:",
-              item.name,
-              "cuisine:",
-              restaurantCuisine
-            );
-          }
-          return matches;
+          return restaurantCuisine === subcategoryFilter;
         }
         return true; // No subcategory filtering for other types
       });
-
-      console.log(
-        "After subcategory filter, items remaining:",
-        filtered.length
-      );
     }
 
     // Location filter
