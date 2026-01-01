@@ -279,7 +279,7 @@ export default function CampaignAnalytics() {
                   <div className="flex items-start gap-4">
                     <div className="w-32 h-24 bg-muted rounded overflow-hidden flex-shrink-0">
                       {creative.imageUrl ? (
-                        <img src={creative.imageUrl} alt={creative.title} className="w-full h-full object-cover" />
+                        <img src={creative.imageUrl} alt={creative.title} className="w-full h-full object-cover" loading="lazy" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Eye className="h-8 w-8 text-muted-foreground" />

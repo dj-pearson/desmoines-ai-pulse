@@ -598,7 +598,7 @@ export function MediaLibrary({
                       {asset.mime_type.startsWith("image/") ? (
                         <OptimizedImage
                           src={asset.public_url || ""}
-                          alt=""
+                          alt={asset.title || asset.original_file_name || "Media asset"}
                           className="object-cover"
                           width={48}
                           height={48}

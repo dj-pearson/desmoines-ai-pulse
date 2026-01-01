@@ -235,8 +235,9 @@ export function InteractiveMap({
               {location.image_url && (
                 <img
                   src={location.image_url}
-                  alt={location.name}
+                  alt={`${location.name} - ${location.category || 'location'} in Des Moines`}
                   className="w-full h-32 object-cover rounded-md mb-2"
+                  loading="lazy"
                 />
               )}
               <div className="space-y-2">
