@@ -177,8 +177,9 @@ export function EventPhotoUpload({ eventId, onPhotoUploaded, trigger }: EventPho
               <div className="relative">
                 <img
                   src={previewUrl!}
-                  alt="Preview"
+                  alt="Event photo preview"
                   className="w-full h-48 object-cover rounded-lg"
+                  loading="lazy"
                 />
                 <Button
                   variant="destructive"

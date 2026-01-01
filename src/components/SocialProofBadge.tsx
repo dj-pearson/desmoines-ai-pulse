@@ -118,8 +118,9 @@ export function AttendeeAvatars({
           >
             <img
               src={url}
-              alt="Attendee"
+              alt={`Event attendee ${idx + 1}`}
               className="h-full w-full object-cover"
+              loading="lazy"
             />
           </div>
         ))}

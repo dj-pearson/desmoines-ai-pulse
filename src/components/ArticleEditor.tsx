@@ -469,8 +469,9 @@ export default function ArticleEditor() {
               <CardContent>
                 <img
                   src={articleData.featured_image_url}
-                  alt="Featured"
+                  alt={`Featured image for ${articleData.title || 'article'}`}
                   className="w-full h-32 object-cover rounded"
+                  loading="lazy"
                   onError={(e) => {
                     (e.target as HTMLImageElement).style.display = 'none';
                   }}
