@@ -334,9 +334,9 @@ export default function RestaurantsPage() {
                     <SelectContent>
                       <SelectItem value="any-price">Any price</SelectItem>
                       <SelectItem value="$">$ - Budget Friendly</SelectItem>
-                      <SelectItem value="$">$ - Moderate</SelectItem>
-                      <SelectItem value="$$">$$ - Upscale</SelectItem>
-                      <SelectItem value="$$">$$ - Fine Dining</SelectItem>
+                      <SelectItem value="$$">$$ - Moderate</SelectItem>
+                      <SelectItem value="$$$">$$$ - Upscale</SelectItem>
+                      <SelectItem value="$$$$">$$$$ - Fine Dining</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -352,20 +352,6 @@ export default function RestaurantsPage() {
               </div>
             </div>
           )}
-
-          {/* Results Header */}
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">
-              {searchQuery
-                ? `Search results for "${searchQuery}"`
-                : selectedCuisine && selectedCuisine !== "all"
-                ? `${selectedCuisine} Restaurants`
-                : "Top Restaurants"}
-            </h2>
-            <div className="text-sm text-gray-500">
-              {restaurants?.length || 0} restaurants
-            </div>
-          </div>
 
           {/* Results Header */}
           <div className="flex items-center justify-between mb-6">
