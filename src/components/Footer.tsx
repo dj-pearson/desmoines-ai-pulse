@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { OptimizedLogo } from "@/components/OptimizedLogo";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -83,10 +84,13 @@ export default function Footer() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
             {/* Brand */}
             <div className="lg:col-span-2">
-              <img
-                src="/DMI-Logo2.png"
+              <OptimizedLogo
+                variant="logo2"
                 alt="Des Moines Insider"
                 className="h-12 w-auto mb-4"
+                height={48}
+                loading="lazy"
+                fetchPriority="low"
               />
               <p className="text-neutral-400 mb-4 text-sm">
                 Your AI-powered guide to discovering the best events, dining, and attractions
