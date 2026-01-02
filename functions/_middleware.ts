@@ -1,5 +1,7 @@
+import { EventContext } from "@cloudflare/workers-types";
+
 // Cloudflare Pages Functions middleware for SPA routing
-export async function onRequest(context: any) {
+export async function onRequest(context: EventContext) {
   const url = new URL(context.request.url);
   const pathname = url.pathname;
 

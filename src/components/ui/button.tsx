@@ -42,11 +42,15 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
+    const accessibleProps = { ...props };
+    if (!accessibleProps['aria-label'] && typeof accessibleProps.children !== 'string') {
+      accessibleProps['aria-label'] = accessibleProps.title || 'Button'; // Use title as fallback or generic 'Button'
+    }
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
-        {...props}
+        {...accessibleProps}
       />
     )
   }
