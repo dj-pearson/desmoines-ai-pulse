@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
+import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Baby, MapPin, Calendar, Users } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
@@ -288,6 +289,14 @@ export default function KidsEvents() {
             </div>
           </CardContent>
         </Card>
+
+        {/* FAQ Section - Visible FAQs for SEO rich results */}
+        <FAQSection
+          faqs={faqData}
+          title="Kids & Family Events FAQ"
+          description="Common questions about family-friendly activities in the Des Moines metro area"
+          showSchema={false}
+        />
 
         {/* Related Content for Internal Linking */}
         <RelatedContent

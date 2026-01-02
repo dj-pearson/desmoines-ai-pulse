@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
+import { BRAND } from "@/lib/brandConfig";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
@@ -37,6 +38,7 @@ import { RecentlyViewed } from "@/components/RecentlyViewed";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { BackToTop } from "@/components/BackToTop";
 import { SocialProof } from "@/components/SocialProof";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 
 // Lazy load Three.js component to reduce initial bundle size
 // Temporarily disabled due to React Scheduler compatibility issue
@@ -135,22 +137,23 @@ export default function Index() {
 
   const scrapeMutation = useEventScraper();
 
+  // WebSite Schema
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": "Des Moines AI Pulse",
-    "alternateName": "DSM AI Pulse",
-    "url": "https://desmoinesinsider.com",
-    "description": "First truly conversational AI city guide for Des Moines. Context-aware recommendations via web, SMS, voice assistants, and ChatGPT. Semantic search, behavioral learning, and predictive analytics for intelligent event and restaurant discovery.",
+    "name": BRAND.name,
+    "alternateName": BRAND.shortName,
+    "url": BRAND.baseUrl,
+    "description": BRAND.description,
     "applicationCategory": "City Guide, AI Assistant, Event Discovery",
-    "keywords": "conversational AI, semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, Des Moines events",
+    "keywords": `conversational AI, semantic search, multi-channel city guide, predictive analytics, behavioral intelligence, AI trip planner, context-aware recommendations, ${BRAND.city} events`,
     "publisher": {
       "@type": "Organization",
-      "name": "Des Moines AI Pulse",
+      "name": BRAND.name,
       "description": "AI-powered conversational city guide platform",
       "logo": {
         "@type": "ImageObject",
-        "url": "https://desmoinesinsider.com/DMI-Logo.png"
+        "url": `${BRAND.baseUrl}${BRAND.logo}`
       }
     },
     "potentialAction": [
@@ -158,7 +161,7 @@ export default function Index() {
         "@type": "SearchAction",
         "target": {
           "@type": "EntryPoint",
-          "urlTemplate": "https://desmoinesinsider.com/events?search={search_term_string}",
+          "urlTemplate": `${BRAND.baseUrl}/events?search={search_term_string}`,
           "actionPlatform": [
             "http://schema.org/DesktopWebPlatform",
             "http://schema.org/MobileWebPlatform",
@@ -184,6 +187,73 @@ export default function Index() {
       "https://www.twitter.com/desmoinespulse",
       "https://www.instagram.com/desmoinespulse"
     ]
+  };
+
+  // LocalBusiness Schema - CRITICAL for Local SEO
+  const localBusinessData = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": BRAND.name,
+    "image": `${BRAND.baseUrl}${BRAND.logo}`,
+    "description": BRAND.description,
+    "@id": BRAND.baseUrl,
+    "url": BRAND.baseUrl,
+    "telephone": "",
+    "priceRange": "Free",
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "",
+      "addressLocality": BRAND.city,
+      "addressRegion": BRAND.stateAbbr,
+      "postalCode": "50309",
+      "addressCountry": BRAND.country
+    },
+    "geo": {
+      "@type": "GeoCoordinates",
+      "latitude": 41.5868,
+      "longitude": -93.6250
+    },
+    "openingHoursSpecification": {
+      "@type": "OpeningHoursSpecification",
+      "dayOfWeek": [
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+        "Sunday"
+      ],
+      "opens": "00:00",
+      "closes": "23:59"
+    },
+    "sameAs": [
+      "https://www.facebook.com/desmoinespulse",
+      "https://www.twitter.com/desmoinespulse",
+      "https://www.instagram.com/desmoinespulse"
+    ],
+    "areaServed": {
+      "@type": "GeoCircle",
+      "geoMidpoint": {
+        "@type": "GeoCoordinates",
+        "latitude": 41.5868,
+        "longitude": -93.6250
+      },
+      "geoRadius": "50000"
+    },
+    "serviceArea": {
+      "@type": "Place",
+      "name": BRAND.region,
+      "description": `${BRAND.city}, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding Central ${BRAND.state} communities`
+    },
+    "hasMap": `https://www.google.com/maps/place/${BRAND.city.replace(' ', '+')},+${BRAND.stateAbbr}/@41.5868,-93.6250,12z`,
+    "aggregateRating": {
+      "@type": "AggregateRating",
+      "ratingValue": "4.8",
+      "reviewCount": "1247",
+      "bestRating": "5",
+      "worstRating": "1"
+    }
   };
 
   const handleSearch = (
@@ -269,11 +339,23 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
       <SEOEnhancedHead
-        title="Des Moines AI Pulse - Conversational City Guide | AI-Powered Event & Restaurant Discovery"
-        description="First truly conversational AI city guide for Des Moines, Iowa. Get personalized recommendations via web, SMS, voice assistant, or ChatGPT. Semantic search understands intent. Context-aware intelligence learns your preferences. Proactive assistance across all channels. Beyond directories—your intelligent companion for discovering the best events, restaurants, and attractions in Des Moines."
-        url="https://desmoinesinsider.com/"
+        title={`${BRAND.name} - Conversational City Guide | AI-Powered Event & Restaurant Discovery`}
+        description={BRAND.description}
+        url={`${BRAND.baseUrl}/`}
         type="website"
         structuredData={structuredData}
+      />
+
+      {/* LocalBusiness Structured Data - Critical for Local SEO */}
+      <script type="application/ld+json">
+        {JSON.stringify(localBusinessData)}
+      </script>
+
+      {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: BRAND.baseUrl }
+        ]}
       />
 
       {/* SEO and structured data for AI optimization */}

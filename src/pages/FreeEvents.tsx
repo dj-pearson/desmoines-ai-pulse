@@ -6,6 +6,7 @@ import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
+import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, MapPin, Calendar, Gift } from "lucide-react";
 import { format } from "date-fns";
@@ -294,6 +295,14 @@ export default function FreeEvents() {
             </div>
           </CardContent>
         </Card>
+
+        {/* FAQ Section - Visible FAQs for SEO rich results */}
+        <FAQSection
+          faqs={faqData}
+          title="Free Events in Des Moines FAQ"
+          description="Common questions about free activities and events in the Des Moines metro area"
+          showSchema={false}
+        />
 
         {/* Related Content for Internal Linking */}
         <RelatedContent

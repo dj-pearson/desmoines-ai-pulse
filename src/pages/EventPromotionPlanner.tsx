@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Calendar, Download, Share2, TrendingUp, Users, Zap, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,10 +29,12 @@ import {
   trackListingClicked,
   trackReferralGenerated,
 } from '@/lib/analytics-tracker';
+import { storage } from '@/lib/safeStorage';
 import type { EventFormData, PromotionTimeline, EmailCaptureData } from '@/types/event-promotion';
 
 export default function EventPromotionPlanner() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [step, setStep] = useState<'intro' | 'wizard' | 'results'>('intro');
   const [timeline, setTimeline] = useState<PromotionTimeline | null>(null);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -51,14 +53,10 @@ export default function EventPromotionPlanner() {
       console.log('Referral code:', ref);
     }
 
-    // Load completed tasks from localStorage
-    try {
-      const stored = localStorage.getItem('epp_completed_tasks');
-      if (stored) {
-        setCompletedTasks(new Set(JSON.parse(stored)));
-      }
-    } catch (error) {
-      console.error('Failed to load completed tasks:', error);
+    // Load completed tasks from secure storage
+    const stored = storage.get<string[]>('epp_completed_tasks');
+    if (stored) {
+      setCompletedTasks(new Set(stored));
     }
   }, [searchParams]);
 
@@ -145,12 +143,8 @@ export default function EventPromotionPlanner() {
     }
     setCompletedTasks(newCompleted);
 
-    // Save to localStorage
-    try {
-      localStorage.setItem('epp_completed_tasks', JSON.stringify(Array.from(newCompleted)));
-    } catch (error) {
-      console.error('Failed to save completed tasks:', error);
-    }
+    // Save to secure storage
+    storage.set('epp_completed_tasks', Array.from(newCompleted));
   };
 
   const handleShare = (platform: string) => {
@@ -397,7 +391,8 @@ export default function EventPromotionPlanner() {
                         className="w-full"
                         onClick={() => {
                           trackListingClicked('timeline_share_tab');
-                          window.location.href = '/advertise';
+                          // Use React Router navigate instead of window.location to prevent potential open redirect
+                          navigate('/advertise');
                         }}
                       >
                         List Your Event Free →

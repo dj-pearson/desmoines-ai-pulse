@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 // CORS headers for cross-origin requests
 const corsHeaders = {
@@ -50,11 +51,14 @@ function parseOptions(searchParams: URLSearchParams): TransformOptions {
     throw new Error("Missing required 'url' parameter");
   }
 
-  // Validate URL
-  try {
-    new URL(url);
-  } catch {
-    throw new Error("Invalid URL provided");
+  // SSRF Protection: Validate URL before processing
+  const validation = validateURLForSSRF(url, {
+    allowedProtocols: ['https:', 'http:'],
+    blockPrivateIPs: true,
+  });
+
+  if (!validation.valid) {
+    throw new Error(validation.error || "URL validation failed");
   }
 
   const width = searchParams.get("width")

@@ -279,7 +279,12 @@ export function useTripPlanner() {
     onSuccess: () => {
       toast.success('Item updated');
       if (selectedTrip) {
-        fetchTripDetails(selectedTrip.id).then(setSelectedTrip);
+        fetchTripDetails(selectedTrip.id)
+          .then(setSelectedTrip)
+          .catch((error) => {
+            console.error('Failed to refresh trip details:', error);
+            toast.error('Failed to refresh trip. Please reload the page.');
+          });
       }
     },
     onError: (error: Error) => {
@@ -311,7 +316,12 @@ export function useTripPlanner() {
     onSuccess: () => {
       toast.success('Item added to itinerary');
       if (selectedTrip) {
-        fetchTripDetails(selectedTrip.id).then(setSelectedTrip);
+        fetchTripDetails(selectedTrip.id)
+          .then(setSelectedTrip)
+          .catch((error) => {
+            console.error('Failed to refresh trip details:', error);
+            toast.error('Failed to refresh trip. Please reload the page.');
+          });
       }
     },
     onError: (error: Error) => {
@@ -332,7 +342,12 @@ export function useTripPlanner() {
     onSuccess: () => {
       toast.success('Item removed');
       if (selectedTrip) {
-        fetchTripDetails(selectedTrip.id).then(setSelectedTrip);
+        fetchTripDetails(selectedTrip.id)
+          .then(setSelectedTrip)
+          .catch((error) => {
+            console.error('Failed to refresh trip details:', error);
+            toast.error('Failed to refresh trip. Please reload the page.');
+          });
       }
     },
     onError: (error: Error) => {

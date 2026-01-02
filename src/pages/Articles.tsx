@@ -309,6 +309,8 @@ const Articles: React.FC = () => {
                           className={`w-full object-cover transition-transform duration-300 group-hover:scale-105 ${
                             viewMode === 'list' ? 'h-48 md:h-full' : 'h-full'
                           }`}
+                          loading="lazy"
+                          decoding="async"
                         />
                       </div>
                     )}

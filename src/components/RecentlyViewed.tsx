@@ -71,6 +71,8 @@ export function RecentlyViewed({
                       src={item.image_url}
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
                 )}
@@ -153,6 +155,8 @@ export function RecentlyViewed({
                       src={item.image_url}
                       alt={item.title}
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      loading="lazy"
+                      decoding="async"
                     />
                   </div>
                 )}

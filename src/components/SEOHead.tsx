@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
 interface SEOHeadProps {
   title: string;
@@ -32,30 +33,30 @@ export default function SEOHead({
   structuredData,
   alternateUrls,
   canonicalUrl,
-  author = "Des Moines Insider",
+  author = BRAND.name,
   publishedTime,
   modifiedTime,
   location,
   breadcrumbs,
 }: SEOHeadProps) {
-  const baseUrl = "https://desmoinesinsider.com";
-  const fullUrl = url ? `${baseUrl}${url}` : window.location.href;
-  const defaultImage = `${baseUrl}/og-image.jpg`;
+  const baseUrl = BRAND.baseUrl;
+  const fullUrl = url ? getCanonicalUrl(url) : (typeof window !== 'undefined' ? window.location.href : baseUrl);
+  const defaultImage = `${baseUrl}${BRAND.ogImage}`;
   const image = imageUrl || defaultImage;
 
   // Enhanced title with branding
-  const enhancedTitle = title.includes("Des Moines Insider")
+  const enhancedTitle = title.includes(BRAND.name)
     ? title
-    : `${title} | Des Moines Insider`;
+    : `${title} | ${BRAND.name}`;
 
   // Generate comprehensive keywords
   const defaultKeywords = [
-    "Des Moines",
-    "Iowa",
+    BRAND.city,
+    BRAND.state,
     "local guide",
-    "Des Moines Insider",
-    "Iowa attractions",
-    "Des Moines events",
+    BRAND.name,
+    `${BRAND.state} attractions`,
+    `${BRAND.city} events`,
   ];
   const allKeywords = [...keywords, ...defaultKeywords].join(", ");
 
@@ -82,9 +83,9 @@ export default function SEOHead({
         address: {
           "@type": "PostalAddress",
           streetAddress: location.address,
-          addressLocality: "Des Moines",
-          addressRegion: "Iowa",
-          addressCountry: "US",
+          addressLocality: BRAND.city,
+          addressRegion: BRAND.state,
+          addressCountry: BRAND.country,
         },
         ...(location.latitude &&
           location.longitude && {
@@ -122,7 +123,7 @@ export default function SEOHead({
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content={title} />
       <meta property="og:locale" content="en_US" />
-      <meta property="og:site_name" content="Des Moines Insider" />
+      <meta property="og:site_name" content={BRAND.name} />
 
       {/* Article specific tags */}
       {type === "article" && (
@@ -147,12 +148,12 @@ export default function SEOHead({
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
       <meta name="twitter:image:alt" content={title} />
-      <meta name="twitter:site" content="@desmoinesinsider" />
-      <meta name="twitter:creator" content="@desmoinesinsider" />
+      <meta name="twitter:site" content={BRAND.twitter} />
+      <meta name="twitter:creator" content={BRAND.twitter} />
 
       {/* Geographic Meta Tags */}
-      <meta name="geo.region" content="US-IA" />
-      <meta name="geo.placename" content="Des Moines" />
+      <meta name="geo.region" content={`US-${BRAND.stateAbbr}`} />
+      <meta name="geo.placename" content={BRAND.city} />
       <meta name="geo.position" content="41.5868;-93.6250" />
       <meta name="ICBM" content="41.5868, -93.6250" />
 
@@ -201,12 +202,17 @@ export default function SEOHead({
           "@context": "https://schema.org",
           "@type": "Organization",
           "@id": `${baseUrl}/#organization`,
-          "name": "Des Moines Insider",
+          "name": BRAND.name,
           "url": baseUrl,
           "logo": {
             "@type": "ImageObject",
-            "url": `${baseUrl}/DMI-Logo.png`
-          }
+            "url": `${baseUrl}${BRAND.logo}`
+          },
+          "sameAs": [
+            "https://www.facebook.com/desmoinespulse",
+            "https://www.twitter.com/desmoinespulse",
+            "https://www.instagram.com/desmoinespulse"
+          ]
         })}
       </script>
 
@@ -216,20 +222,21 @@ export default function SEOHead({
           "@context": "https://schema.org",
           "@type": "WebSite",
           "url": baseUrl,
-          "name": "Des Moines Insider",
+          "name": BRAND.name,
+          "description": BRAND.description,
           "potentialAction": {
             "@type": "SearchAction",
-            "target": `${baseUrl}/?q={search_term_string}`,
+            "target": `${baseUrl}/events?search={search_term_string}`,
             "query-input": "required name=search_term_string"
           }
         })}
       </script>
 
       {/* Additional Meta for Search Engines */}
-      <meta name="theme-color" content="#1e40af" />
-      <meta name="msapplication-TileColor" content="#1e40af" />
-      <meta name="application-name" content="Des Moines Insider" />
-      <meta name="apple-mobile-web-app-title" content="Des Moines Insider" />
+      <meta name="theme-color" content={BRAND.themeColor} />
+      <meta name="msapplication-TileColor" content={BRAND.themeColor} />
+      <meta name="application-name" content={BRAND.name} />
+      <meta name="apple-mobile-web-app-title" content={BRAND.shortName} />
       <meta name="apple-mobile-web-app-capable" content="yes" />
       <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     </Helmet>

@@ -204,6 +204,8 @@ export default function GuidesPage() {
                     src={guide.image}
                     alt={guide.title}
                     className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   <div className="absolute top-4 left-4">
                     <Badge variant="secondary" className="bg-background/90 backdrop-blur">

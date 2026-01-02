@@ -361,10 +361,11 @@ export default function EventReviewSystem() {
                                     {event.image_url && (
                                       <div className="md:col-span-2">
                                         <Label className="font-semibold">Event Image</Label>
-                                        <img 
-                                          src={event.image_url} 
-                                          alt="Event" 
+                                        <img
+                                          src={event.image_url}
+                                          alt={`Image for ${event.title || 'event'}`}
                                           className="mt-2 max-w-full h-48 object-cover rounded-lg"
+                                          loading="lazy"
                                         />
                                       </div>
                                     )}

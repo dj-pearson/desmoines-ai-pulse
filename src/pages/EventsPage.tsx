@@ -2,7 +2,7 @@ import React, { useState, useEffect, lazy, Suspense } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal, SearchX, Sparkles, Navigation } from "lucide-react";
+import { Calendar, MapPin, Tag, Search, Filter, List, Map, X, SlidersHorizontal, SearchX, Sparkles, Navigation, AlertCircle, RefreshCw } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -46,9 +46,67 @@ import { BackToTop } from "@/components/BackToTop";
 import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
 import { SmartFilterChips } from "@/components/SmartFilters";
 import { useRef } from "react";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
+
+/**
+ * Parse price from text string to numeric value
+ * Handles formats like: "$25", "$10-$20", "Free", "$100+", etc.
+ * Returns the average price for ranges, or null for free/unparseable
+ */
+function parsePriceFromText(priceText: string | null): number | null {
+  if (!priceText) return null;
+
+  const lowerPrice = priceText.toLowerCase().trim();
+
+  // Handle free events
+  if (lowerPrice.includes('free') || lowerPrice === '$0' || lowerPrice === '0') {
+    return 0;
+  }
+
+  // Extract all numbers from the string
+  const numbers = priceText.match(/\d+(?:\.\d+)?/g);
+  if (!numbers || numbers.length === 0) return null;
+
+  // Convert to numbers and filter out invalid values
+  const parsedNumbers = numbers.map(n => parseFloat(n)).filter(n => !isNaN(n) && n >= 0);
+  if (parsedNumbers.length === 0) return null;
+
+  // If multiple numbers (e.g., "$10-$20"), return average
+  if (parsedNumbers.length > 1) {
+    return parsedNumbers.reduce((a, b) => a + b, 0) / parsedNumbers.length;
+  }
+
+  return parsedNumbers[0];
+}
+
+/**
+ * Filter events by price range
+ */
+function filterEventsByPrice(events: any[], priceRange: string): any[] {
+  if (!priceRange || priceRange === 'any-price') return events;
+
+  return events.filter(event => {
+    const price = parsePriceFromText(event.price);
+
+    switch (priceRange) {
+      case 'free':
+        return price === null || price === 0;
+      case 'under-25':
+        return price !== null && price > 0 && price < 25;
+      case '25-50':
+        return price !== null && price >= 25 && price <= 50;
+      case '50-100':
+        return price !== null && price > 50 && price <= 100;
+      case 'over-100':
+        return price !== null && price > 100;
+      default:
+        return true;
+    }
+  });
+}
 
 export default function EventsPage() {
   const navigate = useNavigate();
@@ -120,7 +178,7 @@ export default function EventsPage() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const { data: eventsData, isLoading, refetch } = useQuery({
+  const { data: eventsData, isLoading, error, refetch } = useQuery({
     queryKey: [
       "events",
       debouncedSearchQuery,
@@ -276,37 +334,26 @@ export default function EventsPage() {
         }
       }
 
-      // Apply price filter
+      // Apply price filter (server-side for "free" only, client-side for ranges)
       if (priceRange && priceRange !== "any-price") {
         if (priceRange === "free") {
           // Match free events (null price, "free", "$0", "0")
           query = query.or("price.is.null,price.ilike.%free%,price.ilike.%$0%");
-        } else {
-          // For numeric price ranges, use text matching on common price formats
-          // Note: This is a simplified approach. For production, consider adding a price_numeric column
-          const pricePatterns: Record<string, string> = {
-            'under-25': 'price.not.is.null,price.not.ilike.%free%',
-            '25-50': 'price.ilike.%$2%,price.ilike.%$3%,price.ilike.%$4%',
-            '50-100': 'price.ilike.%$5%,price.ilike.%$6%,price.ilike.%$7%,price.ilike.%$8%,price.ilike.%$9%',
-            'over-100': 'price.ilike.%$1%'
-          };
-
-          // For now, just filter out free events for paid price ranges
-          // TODO: Add price_numeric column for accurate price filtering
-          if (priceRange === 'under-25' || priceRange === '25-50' || priceRange === '50-100' || priceRange === 'over-100') {
-            query = query.not('price', 'is', null)
-                         .not('price', 'ilike', '%free%');
-          }
         }
+        // Note: Paid price ranges are filtered client-side after data fetch
+        // for better accuracy. See filterEventsByPrice() below.
       }
 
       const { data, error, count } = await query;
       if (error) throw error;
       return { events: data || [], totalCount: count || 0 };
     },
+    staleTime: 5 * 60 * 1000, // 5 minutes - prevents excessive refetches
   });
 
-  const events = eventsData?.events || [];
+  // Apply client-side price filtering for paid price ranges
+  const rawEvents = eventsData?.events || [];
+  const events = filterEventsByPrice(rawEvents, priceRange);
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
@@ -325,6 +372,7 @@ export default function EventsPage() {
       if (error) throw error;
       return (data || []).map((row: { category: string }) => row.category);
     },
+    staleTime: 30 * 60 * 1000, // 30 minutes - categories rarely change
   });
 
   // Batch fetch social data for all events to prevent N+1 queries
@@ -588,21 +636,28 @@ export default function EventsPage() {
     return (
       <>
         <SEOHead
-          title="Loading Events..."
-          description="Loading upcoming events in Des Moines"
+          title="Events in Des Moines - Upcoming Activities & Entertainment | Des Moines Insider"
+          description="Discover upcoming events in Des Moines, Iowa. Find concerts, festivals, community gatherings, and entertainment activities happening now."
           type="website"
+          keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
         />
         <div className="min-h-screen bg-background">
           <Header />
 
-          {/* Hero Section Skeleton */}
-          <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]">
+          {/* Hero Section Skeleton with accessibility */}
+          <section
+            className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+          >
             <div className="absolute inset-0 bg-black/20"></div>
             <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
-              <div className="animate-pulse space-y-4">
-                <div className="h-12 md:h-16 bg-white/20 rounded w-3/4 mx-auto"></div>
-                <div className="h-6 md:h-8 bg-white/20 rounded w-1/2 mx-auto"></div>
-                <div className="h-12 bg-white/20 rounded w-full max-w-2xl mx-auto mt-8"></div>
+              <div className="animate-pulse space-y-4 motion-reduce:animate-none">
+                <div className="h-12 md:h-16 bg-white/20 rounded w-3/4 mx-auto" aria-hidden="true"></div>
+                <div className="h-6 md:h-8 bg-white/20 rounded w-1/2 mx-auto" aria-hidden="true"></div>
+                <div className="h-12 bg-white/20 rounded w-full max-w-2xl mx-auto mt-8" aria-hidden="true"></div>
+                <span className="sr-only">Loading events page...</span>
               </div>
             </div>
           </section>
@@ -611,6 +666,43 @@ export default function EventsPage() {
             <CardsGridSkeleton
               count={9}
               className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
+              label="Loading events..."
+            />
+          </div>
+          <Footer />
+        </div>
+      </>
+    );
+  }
+
+  // Error state - show user-friendly error with retry option
+  if (error) {
+    return (
+      <>
+        <SEOHead
+          title="Unable to Load Events | Des Moines Insider"
+          description="We're having trouble loading events. Please try again."
+          type="website"
+        />
+        <div className="min-h-screen bg-background">
+          <Header />
+          <div className="container mx-auto px-4 py-16">
+            <EmptyState
+              icon={AlertCircle}
+              title="Unable to Load Events"
+              description="We're having trouble loading the events list. This might be a temporary issue with our servers or your connection."
+              actions={[
+                {
+                  label: "Try Again",
+                  onClick: () => refetch(),
+                  icon: RefreshCw,
+                },
+                {
+                  label: "Go Home",
+                  onClick: () => navigate("/"),
+                  variant: "outline" as const,
+                },
+              ]}
             />
           </div>
           <Footer />
@@ -627,6 +719,14 @@ export default function EventsPage() {
         url="https://desmoinesinsider.com/events"
         type="website"
         structuredData={eventsSchema}
+      />
+
+      {/* BreadcrumbList Schema - Improves search result display */}
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: "https://desmoinesinsider.com" },
+          { name: "Events", url: "https://desmoinesinsider.com/events" }
+        ]}
       />
 
       <div className="min-h-screen bg-background">
@@ -985,10 +1085,10 @@ export default function EventsPage() {
             </div>
           </div>
 
-          {isLoading && <CardsGridSkeleton count={6} />}
+          {isLoading && <CardsGridSkeleton count={6} label="Loading events..." />}
 
           {!isLoading && viewMode === "map" ? (
-            <Suspense fallback={<LoadingSpinner />}>
+            <Suspense fallback={<LoadingSpinner label="Loading map..." />}>
               <EventsMap events={events || []} />
             </Suspense>
           ) : !isLoading ? (

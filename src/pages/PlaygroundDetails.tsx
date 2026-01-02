@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { MapPin, Star, Share2, ArrowLeft, Users, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -179,20 +180,15 @@ export default function PlaygroundDetails() {
             </script>
           </Helmet>
 
-          {/* Breadcrumbs */}
-          <nav className="mb-6">
-            <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-              <Link to="/" className="hover:text-primary">
-                Home
-              </Link>
-              <span>/</span>
-              <Link to="/playgrounds" className="hover:text-primary">
-                Playgrounds
-              </Link>
-              <span>/</span>
-              <span className="text-foreground">{playground.name}</span>
-            </div>
-          </nav>
+          {/* Breadcrumb Navigation */}
+          <Breadcrumbs
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Playgrounds", href: "/playgrounds" },
+              { label: playground.name }
+            ]}
+            className="mb-6"
+          />
 
           <div className="grid lg:grid-cols-3 gap-8">
             {/* Main Content */}

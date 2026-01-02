@@ -515,7 +515,7 @@ export default function Restaurants() {
               )}
 
               {isLoading ? (
-                <CardsGridSkeleton count={9} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" />
+                <CardsGridSkeleton count={9} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" label="Loading restaurants..." />
               ) : error ? (
                 <EmptyState
                   icon={AlertCircle}
@@ -577,7 +577,7 @@ export default function Restaurants() {
                   }
                 />
               ) : viewMode === "map" ? (
-                <Suspense fallback={<LoadingSpinner />}>
+                <Suspense fallback={<LoadingSpinner label="Loading map..." />}>
                   <RestaurantsMap restaurants={restaurants || []} />
                 </Suspense>
               ) : (

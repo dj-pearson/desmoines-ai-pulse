@@ -135,7 +135,8 @@ async function sendWelcomeEmail(data: EmailCaptureData): Promise<void> {
 }
 
 /**
- * Send email via API
+ * Send email via server-side API endpoint
+ * Note: API keys are stored securely on the server-side, not in client code
  */
 export async function sendEmail(config: {
   to: string;
@@ -143,15 +144,14 @@ export async function sendEmail(config: {
   html: string;
   text?: string;
 }): Promise<void> {
-  // Example using Resend API
-  const response = await fetch('https://api.resend.com/emails', {
+  // Use server-side API endpoint to send emails
+  // This keeps API keys secure on the server
+  const response = await fetch('/api/send-email', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${import.meta.env.VITE_RESEND_API_KEY}`,
     },
     body: JSON.stringify({
-      from: 'DesMoinesInsider <hello@desmoinesinsider.com>',
       to: config.to,
       subject: config.subject,
       html: config.html,
@@ -160,7 +160,7 @@ export async function sendEmail(config: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({ message: 'Unknown error' }));
     console.error('Email send error:', error);
     throw new Error('Failed to send email');
   }

@@ -165,3 +165,128 @@ export function validateQueryParams(
 
   return validateInput(params, schema);
 }
+
+/**
+ * SSRF Protection: Validate URL to prevent Server-Side Request Forgery attacks
+ * Blocks private IP ranges, localhost, and non-HTTP protocols
+ */
+export interface SSRFValidationOptions {
+  allowedDomains?: string[];
+  allowedProtocols?: string[];
+  blockPrivateIPs?: boolean;
+}
+
+export interface SSRFValidationResult {
+  valid: boolean;
+  error?: string;
+  url?: URL;
+}
+
+/**
+ * Check if an IP address is in a private range
+ */
+function isPrivateIP(hostname: string): boolean {
+  // Check for localhost variants
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') {
+    return true;
+  }
+
+  // Check for IPv4 private ranges
+  const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (ipv4Match) {
+    const [, a, b] = ipv4Match.map(Number);
+
+    // 10.0.0.0/8
+    if (a === 10) return true;
+
+    // 172.16.0.0/12
+    if (a === 172 && b >= 16 && b <= 31) return true;
+
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) return true;
+
+    // 169.254.0.0/16 (link-local)
+    if (a === 169 && b === 254) return true;
+
+    // 127.0.0.0/8 (loopback)
+    if (a === 127) return true;
+
+    // 0.0.0.0/8
+    if (a === 0) return true;
+  }
+
+  // Check for common private hostnames
+  const privatePatterns = [
+    /^localhost$/i,
+    /^127\.\d+\.\d+\.\d+$/,
+    /\.local$/i,
+    /\.internal$/i,
+    /\.localhost$/i,
+  ];
+
+  return privatePatterns.some(pattern => pattern.test(hostname));
+}
+
+/**
+ * Validate a URL for SSRF vulnerabilities
+ */
+export function validateURLForSSRF(
+  urlString: string,
+  options: SSRFValidationOptions = {}
+): SSRFValidationResult {
+  const {
+    allowedDomains = [],
+    allowedProtocols = ['http:', 'https:'],
+    blockPrivateIPs = true,
+  } = options;
+
+  // Parse URL
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(urlString);
+  } catch {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+
+  // Check protocol
+  if (!allowedProtocols.includes(parsedUrl.protocol)) {
+    return {
+      valid: false,
+      error: `Protocol not allowed. Only ${allowedProtocols.join(', ')} are permitted`,
+    };
+  }
+
+  // Check for private/internal IPs
+  if (blockPrivateIPs && isPrivateIP(parsedUrl.hostname)) {
+    return {
+      valid: false,
+      error: 'Access to private/internal addresses is not allowed',
+    };
+  }
+
+  // Check allowed domains if specified
+  if (allowedDomains.length > 0) {
+    const isAllowed = allowedDomains.some(domain => {
+      // Exact match or subdomain match
+      return parsedUrl.hostname === domain ||
+             parsedUrl.hostname.endsWith('.' + domain);
+    });
+
+    if (!isAllowed) {
+      return {
+        valid: false,
+        error: `Domain not allowed. Permitted domains: ${allowedDomains.join(', ')}`,
+      };
+    }
+  }
+
+  // Block URLs with credentials
+  if (parsedUrl.username || parsedUrl.password) {
+    return {
+      valid: false,
+      error: 'URLs with embedded credentials are not allowed',
+    };
+  }
+
+  return { valid: true, url: parsedUrl };
+}

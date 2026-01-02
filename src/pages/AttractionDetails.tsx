@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import ShareDialog from "@/components/ShareDialog";
 import {
   MapPin,
@@ -175,20 +176,15 @@ export default function AttractionDetails() {
         modifiedTime={attraction.updated_at}
       />
       <div className="container mx-auto px-4 py-8">
-        {/* Breadcrumbs */}
-        <nav className="mb-6">
-          <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-primary">
-              Home
-            </Link>
-            <span>/</span>
-            <Link to="/attractions" className="hover:text-primary">
-              Attractions
-            </Link>
-            <span>/</span>
-            <span className="text-foreground">{attraction.name}</span>
-          </div>
-        </nav>
+        {/* Breadcrumb Navigation */}
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Attractions", href: "/attractions" },
+            { label: attraction.name }
+          ]}
+          className="mb-6"
+        />
 
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Main Content */}
@@ -220,6 +216,8 @@ export default function AttractionDetails() {
                   src={attraction.image_url}
                   alt={attraction.name}
                   className="w-full h-64 object-cover rounded-lg"
+                  loading="lazy"
+                  decoding="async"
                 />
               </div>
             )}

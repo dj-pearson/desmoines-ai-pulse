@@ -68,7 +68,7 @@ export default function Gamification() {
         <div className="container mx-auto px-4 py-16 text-center">
           <div className="max-w-2xl mx-auto space-y-6">
             <Trophy className="h-16 w-16 text-primary mx-auto" />
-            <h1 className="text-4xl font-bold">Level Up Your Des Moines Experience</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">Level Up Your Des Moines Experience</h1>
             <p className="text-xl text-muted-foreground">
               Earn XP, collect badges, and compete with other explorers as you discover the best of Des Moines!
             </p>
@@ -119,7 +119,7 @@ export default function Gamification() {
       
       <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">Your Des Moines Adventure</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Your Des Moines Adventure</h1>
           <p className="text-xl text-muted-foreground">
             Level up by exploring, reviewing, and engaging with the Des Moines community
           </p>
