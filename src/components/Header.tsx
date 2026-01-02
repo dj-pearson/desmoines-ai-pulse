@@ -92,6 +92,7 @@ export default function Header() {
               variant="logo2"
               alt="Des Moines Insider"
               className="h-8 md:h-10 w-auto dark:drop-shadow-[0_0_15px_rgba(255,255,255,0.3)] dark:filter dark:brightness-110"
+              width={40}
               height={40}
             />
           </Link>
