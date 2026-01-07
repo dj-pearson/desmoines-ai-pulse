@@ -204,13 +204,36 @@ function Scene() {
 
 export default function HeroCityLite() {
     const [isMounted, setIsMounted] = useState(false);
+    const [shouldRender, setShouldRender] = useState(false);
 
     useEffect(() => {
-        console.log("HeroCityLite mounted");
         setIsMounted(true);
+
+        // Defer 3D rendering to prioritize critical content (LCP optimization)
+        // Use requestIdleCallback if available, otherwise setTimeout
+        const scheduleRender = () => {
+            if ('requestIdleCallback' in window) {
+                (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(
+                    () => setShouldRender(true),
+                    { timeout: 3000 }
+                );
+            } else {
+                setTimeout(() => setShouldRender(true), 1500);
+            }
+        };
+
+        scheduleRender();
     }, []);
 
-    if (!isMounted) return null;
+    // Show placeholder until ready to render 3D
+    if (!isMounted || !shouldRender) {
+        return (
+            <div className="absolute inset-0 w-full h-full z-0 opacity-60 bg-gradient-to-br from-[#020916] via-[#0a0a1a] to-[#1a1a2e]">
+                {/* Gradient placeholder matching the 3D scene colors */}
+                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-[#020916]/50 to-[#020916]" />
+            </div>
+        );
+    }
 
     return (
         <div className="absolute inset-0 w-full h-full z-0 opacity-60">
