@@ -1,0 +1,1329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Automated Test Report - 1/6/2026</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #1f2937; background: #f9fafb; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+    h2 { font-size: 1.5rem; margin: 2rem 0 1rem; border-bottom: 2px solid #e5e7eb; padding-bottom: 0.5rem; }
+    h3 { font-size: 1.25rem; margin: 1.5rem 0 0.75rem; }
+    .header { background: #1f2937; color: white; padding: 2rem; margin-bottom: 2rem; border-radius: 8px; }
+    .header p { opacity: 0.8; }
+    .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .stat-card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stat-card .value { font-size: 2rem; font-weight: bold; }
+    .stat-card .label { color: #6b7280; font-size: 0.875rem; }
+    .stat-card.success .value { color: #22c55e; }
+    .stat-card.danger .value { color: #ef4444; }
+    .stat-card.warning .value { color: #f59e0b; }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
+    .badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 500; }
+    .badge-passed { background: #dcfce7; color: #166534; }
+    .badge-failed { background: #fee2e2; color: #991b1b; }
+    .badge-warning { background: #fef3c7; color: #92400e; }
+    .badge-critical { background: #fee2e2; color: #991b1b; }
+    .badge-high { background: #ffedd5; color: #9a3412; }
+    .badge-medium { background: #fef3c7; color: #92400e; }
+    .badge-low { background: #e0f2fe; color: #075985; }
+    .progress-bar { height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 0.5rem 0; }
+    .progress-bar .fill { height: 100%; transition: width 0.3s; }
+    .progress-bar .fill.success { background: #22c55e; }
+    .progress-bar .fill.danger { background: #ef4444; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; font-weight: 600; }
+    .error-item { border-left: 4px solid #ef4444; padding-left: 1rem; margin-bottom: 1rem; }
+    .error-item.warning { border-color: #f59e0b; }
+    .error-message { font-family: monospace; font-size: 0.875rem; background: #f3f4f6; padding: 0.5rem; border-radius: 4px; overflow-x: auto; }
+    .recommendation { padding: 1rem; border-radius: 8px; margin-bottom: 1rem; }
+    .recommendation.critical { background: #fee2e2; border-left: 4px solid #ef4444; }
+    .recommendation.high { background: #ffedd5; border-left: 4px solid #f97316; }
+    .recommendation.medium { background: #fef3c7; border-left: 4px solid #f59e0b; }
+    .recommendation.low { background: #e0f2fe; border-left: 4px solid #0ea5e9; }
+    .collapsible { cursor: pointer; }
+    .collapsible::after { content: ' ▼'; font-size: 0.75rem; }
+    .collapsible.collapsed::after { content: ' ▶'; }
+    .content { overflow: hidden; transition: max-height 0.3s; }
+    .content.collapsed { max-height: 0 !important; }
+    code { background: #f3f4f6; padding: 0.125rem 0.375rem; border-radius: 4px; font-size: 0.875rem; }
+    .footer { text-align: center; padding: 2rem; color: #6b7280; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🧪 Automated Test Report</h1>
+      <p>Generated: 1/6/2026, 10:21:21 PM</p>
+      <p>Duration: 4m 52s | Browser: chromium | Pages: 59</p>
+    </div>
+
+    <div class="summary-grid">
+      <div class="stat-card success">
+        <div class="value">53.6%</div>
+        <div class="label">Pass Rate</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">3722</div>
+        <div class="label">Total Tests</div>
+      </div>
+      <div class="stat-card success">
+        <div class="value">1996</div>
+        <div class="label">Passed</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="value">1321</div>
+        <div class="label">Failed</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="value">405</div>
+        <div class="label">Warnings</div>
+      </div>
+      <div class="stat-card">
+        <div class="value">1.47s</div>
+        <div class="label">Avg Load Time</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Test Results Distribution</h3>
+      <div class="progress-bar" style="height: 24px;">
+        <div class="fill success" style="width: 53.62708221386352%; display: inline-block;"></div>
+        <div class="fill danger" style="width: 35.49167114454595%; display: inline-block;"></div>
+      </div>
+      <div style="display: flex; gap: 1rem; margin-top: 0.5rem;">
+        <span><span style="color: #22c55e">■</span> Passed: 1996</span>
+        <span><span style="color: #ef4444">■</span> Failed: 1321</span>
+        <span><span style="color: #f59e0b">■</span> Warnings: 405</span>
+        <span><span style="color: #6b7280">■</span> Skipped: 0</span>
+      </div>
+    </div>
+
+    
+    <h2>📋 Recommendations</h2>
+    
+      <div class="recommendation high">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <strong>Fix Network Request Failures</strong>
+          <span class="badge badge-high">HIGH</span>
+        </div>
+        <p>24 network request(s) failed, indicating potential API or connectivity issues.</p>
+        <p style="margin-top: 0.5rem;"><strong>Suggested Fix:</strong> Review API endpoints, ensure proper error handling, and check server availability.</p>
+        <p style="margin-top: 0.5rem;"><strong>Affected Pages:</strong> 12</p>
+      </div>
+    
+      <div class="recommendation high">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <strong>Improve Overall Test Pass Rate</strong>
+          <span class="badge badge-high">HIGH</span>
+        </div>
+        <p>Test pass rate is 53.6%, which is below the recommended 80% threshold.</p>
+        <p style="margin-top: 0.5rem;"><strong>Suggested Fix:</strong> Review failing tests and prioritize fixes based on severity and user impact.</p>
+        <p style="margin-top: 0.5rem;"><strong>Affected Pages:</strong> 59</p>
+      </div>
+    
+      <div class="recommendation medium">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <strong>Address Accessibility Issues</strong>
+          <span class="badge badge-medium">MEDIUM</span>
+        </div>
+        <p>17 accessibility violation(s) found that may prevent users with disabilities from using the application.</p>
+        <p style="margin-top: 0.5rem;"><strong>Suggested Fix:</strong> Ensure all images have alt text, form inputs have labels, buttons have accessible names, and color contrast meets WCAG guidelines.</p>
+        <p style="margin-top: 0.5rem;"><strong>Affected Pages:</strong> 11</p>
+      </div>
+    
+      <div class="recommendation medium">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <strong>Resolve Console Errors</strong>
+          <span class="badge badge-medium">MEDIUM</span>
+        </div>
+        <p>8 JavaScript error(s) logged to the console.</p>
+        <p style="margin-top: 0.5rem;"><strong>Suggested Fix:</strong> Check browser console for error details, add proper error handling, and fix any undefined variable issues.</p>
+        <p style="margin-top: 0.5rem;"><strong>Affected Pages:</strong> 5</p>
+      </div>
+    
+    
+
+    
+    <h2>❌ Errors (57)</h2>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 3 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter your email&quot; class=&quot;w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter your email&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173 | Occurrences: 10</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">19 network error(s) detected</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL:  | Occurrences: 59</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">1 HTTP error(s) detected</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL:  | Occurrences: 59</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 5 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; id=&quot;email&quot; required=&quot;&quot; type=&quot;email&quot; aria-invalid=&quot;false&quot; placeholder=&quot;you@example.com&quot; class=&quot;w-full px-4 py-3 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent border-gray-600&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Email Address *&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; id=&quot;password&quot; type=&quot;password&quot; aria-invalid=&quot;false&quot; placeholder=&quot;Enter your password&quot; class=&quot;w-full px-4 py-3 bg-gray-700 border rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent border-gray-600&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Password *&#39; })
+    4) &lt;input type=&quot;checkbox&quot; class=&quot;w-4 h-4 rounded border-gray-600 bg-gray-700 text-orange-500 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;checkbox&#39;, { name: &#39;Remember me&#39; })
+    5) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/Admin | Occurrences: 3</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 3 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search...&quot; class=&quot;w-full pl-10 pr-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 focus:outline-none focus:border-brand-primary&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search...&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/dashboard | Occurrences: 2</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">1 network error(s) detected</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/dashboard | Occurrences: 155</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 2 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/compare | Occurrences: 20</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 4 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input min=&quot;1&quot; value=&quot;100&quot; type=&quot;number&quot; class=&quot;w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-brand-primary&quot;/&gt; aka getByRole(&#39;spinbutton&#39;).first()
+    3) &lt;input min=&quot;1&quot; max=&quot;120&quot; value=&quot;12&quot; type=&quot;number&quot; class=&quot;w-full px-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-brand-primary&quot;/&gt; aka getByRole(&#39;spinbutton&#39;).nth(1)
+    4) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/calculators | Occurrences: 1</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 3 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search pools...&quot; class=&quot;w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search pools...&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/defi-yield | Occurrences: 1</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 3 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter your email for crypto updates&quot; class=&quot;w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter your email for crypto&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/learn | Occurrences: 15</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 6 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; id=&quot;email&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;you@example.com&quot; class=&quot;w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Email Address *&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; id=&quot;password&quot; type=&quot;password&quot; placeholder=&quot;Create a strong password&quot; class=&quot;w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Password *&#39;, exact: true })
+    4) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;password&quot; id=&quot;confirmPassword&quot; placeholder=&quot;Confirm your password&quot; class=&quot;w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Confirm Password *&#39; })
+    5) &lt;input id=&quot;terms&quot; type=&quot;checkbox&quot; class=&quot;w-4 h-4 mt-1 rounded border-gray-600 bg-gray-700 text-orange-500 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;checkbox&#39;, { name: &#39;I agree to the Terms of&#39; })
+    6) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/signup | Occurrences: 1</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 3 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search terms...&quot; class=&quot;w-full pl-12 pr-4 py-4 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search terms...&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/glossary | Occurrences: 1</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 3 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search scams by name, description, or token...&quot; class=&quot;w-full px-4 py-3 pl-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500 focus:border-transparent&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search scams by name,&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/scam-database | Occurrences: 1</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">6 network error(s) detected</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/scam-database | Occurrences: 38</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">locator.isVisible: Error: strict mode violation: locator(&#39;input:nth-of-type(1)&#39;) resolved to 3 elements:
+    1) &lt;input value=&quot;&quot; type=&quot;text&quot; placeholder=&quot;Search guides, exchanges, wallets...&quot; class=&quot;w-full pl-10 pr-10 py-2.5 sm:py-2 rounded-lg bg-white/5 border border-white/10 text-white placeholder-gray-400 text-sm sm:text-base focus:outline-none focus:border-brand-primary focus:ring-1 focus:ring-brand-primary transition-all min-h-[44px]&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Search guides, exchanges,&#39; })
+    2) &lt;input value=&quot;&quot; id=&quot;email&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;you@example.com&quot; class=&quot;w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Email Address *&#39; })
+    3) &lt;input value=&quot;&quot; required=&quot;&quot; type=&quot;email&quot; placeholder=&quot;Enter email&quot; class=&quot;flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white text-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500&quot;/&gt; aka getByRole(&#39;textbox&#39;, { name: &#39;Enter email&#39; })
+
+Call log:
+[2m    - checking visibility of locator(&#39;input:nth-of-type(1)&#39;)[22m
+</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/forgot-password | Occurrences: 1</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">Failed to load resource: net::ERR_FAILED</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/dashboard | Occurrences: 18</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">Error fetching global market data: TypeError: Failed to fetch
+    at rateLimitedFetch (http://localhost:5173/src/services/coingecko.ts:75:28)
+    at async getGlobalMarketData (http://localhost:5173/src/services/coingecko.ts:194:22)
+    at async Promise.all (index 1)
+    at async fetchData (http://localhost:5173/src/pages/Dashboard.tsx?t=1767757992452:51:50)</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/dashboard | Occurrences: 2</p>
+      </div>
+    
+      <div class="error-item ">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>NETWORK</strong>
+          <span class="badge badge-failed">Severity 2</span>
+        </div>
+        <p class="error-message">Failed to load resource: net::ERR_NAME_NOT_RESOLVED</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173/scam-database | Occurrences: 12</p>
+      </div>
+    
+      <div class="error-item warning">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>ACCESSIBILITY</strong>
+          <span class="badge badge-warning">Severity 3</span>
+        </div>
+        <p class="error-message">3 element(s) have form inputs must have labels</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173 | Occurrences: 31</p>
+      </div>
+    
+      <div class="error-item warning">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <strong>ACCESSIBILITY</strong>
+          <span class="badge badge-warning">Severity 3</span>
+        </div>
+        <p class="error-message">1 element(s) have heading levels should increase by one</p>
+        <p style="font-size: 0.75rem; color: #6b7280;">URL: http://localhost:5173 | Occurrences: 24</p>
+      </div>
+    
+    <p>... and 37 more errors</p>
+    
+
+    <h2>📄 Pages Tested (59)</h2>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>URL</th>
+            <th>Load Time</th>
+            <th>Tests</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+              <td><code>http://localhost:5173</code></td>
+              <td>2.97s</td>
+              <td>32/50</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/Admin</code></td>
+              <td>1.04s</td>
+              <td>36/53</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/AdminArticleEditor</code></td>
+              <td>1.21s</td>
+              <td>31/50</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/AdminCampaignDetail</code></td>
+              <td>1.07s</td>
+              <td>31/51</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/AdminCampaigns</code></td>
+              <td>1.12s</td>
+              <td>31/52</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/Advertise</code></td>
+              <td>1.11s</td>
+              <td>31/53</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/AdvertiseCancel</code></td>
+              <td>1.13s</td>
+              <td>31/54</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/AdvertiseSuccess</code></td>
+              <td>1.07s</td>
+              <td>31/55</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/ArticleDetails</code></td>
+              <td>1.17s</td>
+              <td>31/56</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/Articles</code></td>
+              <td>925ms</td>
+              <td>31/57</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/dashboard</code></td>
+              <td>2.61s</td>
+              <td>32/58</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/charts</code></td>
+              <td>1.15s</td>
+              <td>34/58</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare</code></td>
+              <td>838ms</td>
+              <td>39/65</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/calculators</code></td>
+              <td>1.25s</td>
+              <td>31/57</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/portfolio-analysis</code></td>
+              <td>1.06s</td>
+              <td>37/65</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/defi-yield</code></td>
+              <td>18.27s</td>
+              <td>32/59</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn</code></td>
+              <td>1.22s</td>
+              <td>46/74</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/login</code></td>
+              <td>1.09s</td>
+              <td>36/65</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/signup</code></td>
+              <td>1.03s</td>
+              <td>38/66</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/pricing</code></td>
+              <td>996ms</td>
+              <td>33/59</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/glossary</code></td>
+              <td>1.06s</td>
+              <td>33/58</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/scam-database</code></td>
+              <td>1.31s</td>
+              <td>32/60</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/privacy</code></td>
+              <td>1.22s</td>
+              <td>32/60</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/terms</code></td>
+              <td>1.12s</td>
+              <td>32/60</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/disclaimer</code></td>
+              <td>985ms</td>
+              <td>32/60</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/legal/terms</code></td>
+              <td>1.40s</td>
+              <td>14/39</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/onchain-analytics</code></td>
+              <td>2.26s</td>
+              <td>16/40</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/forgot-password</code></td>
+              <td>1.20s</td>
+              <td>34/66</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/prices</code></td>
+              <td>1.40s</td>
+              <td>31/65</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/trading-indicators</code></td>
+              <td>766ms</td>
+              <td>31/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/whale-tracking</code></td>
+              <td>719ms</td>
+              <td>30/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/coinbase</code></td>
+              <td>1.08s</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/kraken</code></td>
+              <td>1.11s</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/gemini</code></td>
+              <td>1.02s</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/coinbase-pro</code></td>
+              <td>863ms</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/crypto-com</code></td>
+              <td>1.30s</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/binance-us</code></td>
+              <td>997ms</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/robinhood</code></td>
+              <td>828ms</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/compare/exchange/uphold</code></td>
+              <td>967ms</td>
+              <td>33/64</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/course/beginner-complete-course</code></td>
+              <td>1.07s</td>
+              <td>39/73</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/what-is-bitcoin</code></td>
+              <td>1.05s</td>
+              <td>35/69</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/how-to-buy-crypto</code></td>
+              <td>1.09s</td>
+              <td>36/70</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/crypto-wallets-explained</code></td>
+              <td>1.41s</td>
+              <td>35/69</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/understanding-blockchain</code></td>
+              <td>1.37s</td>
+              <td>46/81</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/crypto-taxes-basics</code></td>
+              <td>1.39s</td>
+              <td>46/81</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/common-crypto-mistakes</code></td>
+              <td>1.31s</td>
+              <td>34/68</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/dca-strategies</code></td>
+              <td>845ms</td>
+              <td>33/67</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/portfolio-rebalancing</code></td>
+              <td>1.13s</td>
+              <td>33/67</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/risk-management</code></td>
+              <td>865ms</td>
+              <td>33/67</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+            <tr>
+              <td><code>http://localhost:5173/learn/defi-basics</code></td>
+              <td>937ms</td>
+              <td>33/67</td>
+              <td><span class="badge badge-failed">failed</span></td>
+            </tr>
+          
+        </tbody>
+      </table>
+      <p style="margin-top: 1rem;">... and 9 more pages</p>
+    </div>
+
+    
+    <h2>⚡ Edge Functions (72)</h2>
+    <div class="card">
+      <table>
+        <thead>
+          <tr>
+            <th>Function</th>
+            <th>Status</th>
+            <th>Response Time</th>
+            <th>Auth Required</th>
+          </tr>
+        </thead>
+        <tbody>
+          
+            <tr>
+              <td><code>ai-crawler</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5.11s</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>analyze-competitor</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>analyze-content</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>7ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>analyze-images</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>api-events</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>api-restaurants</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>auto-enrich-restaurants</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>backfill-all-coordinates</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>backfill-all-coordinates-force</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>backfill-coordinates</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>3ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>batch-enhance-events</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>batch-process-images</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>bulk-enhance-events</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>bulk-event-updater</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>bulk-update-restaurants</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>calculate-trending</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>check-broken-links</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>check-core-web-vitals</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>check-restaurant-status</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>check-security-headers</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>cleanup-old-events</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>clear-system-cache</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>1ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>crawl-site</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>create-campaign-checkout</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>create-subscription-checkout</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>enhance-content</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>export-analytics-data</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>extract-catchdesmoines-urls</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>firecrawl-scraper</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>fix-broken-event-urls</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>generate-article</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>1ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>generate-itinerary</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>generate-seo-content</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>generate-sitemap</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>generate-sitemaps</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>generate-weekend-guide</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>generate-writeup</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>geocode-location</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>gsc-fetch-properties</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>gsc-oauth</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>gsc-sync-data</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>image-proxy</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>image-transform</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>log-content-metrics</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>nlp-search</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>oauth-callback</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>personalized-recommendations</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>populate-playgrounds</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>process-stripe-refund</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>publish-article-webhook</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>refresh-cdn-cache</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>restart-web-server</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>restaurant-opening-scraper</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>run-scheduled-audit</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>scrape-events</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>search-new-restaurants</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>1ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>security-middleware</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>send-event-reminders</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>send-seo-notification</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>1ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>send-weekly-digest</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>seo-audit</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>social-media-manager</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>stripe-webhook</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>suggest-article-topics</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>sync-analytics-data</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>6ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>system-backup</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>test-ai-model</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>test-article-webhook</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>5ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>test-google-api</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>update-event-datetime</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>validate-source-urls</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>2ms</td>
+              <td>No</td>
+            </tr>
+          
+            <tr>
+              <td><code>verify-campaign-payment</code></td>
+              <td><span class="badge badge-failed">503</span></td>
+              <td>4ms</td>
+              <td>No</td>
+            </tr>
+          
+        </tbody>
+      </table>
+    </div>
+    
+
+    <div class="footer">
+      <p>Generated by Automated Testing Tool</p>
+      <p>Test run completed in 4m 52s</p>
+    </div>
+  </div>
+
+  <script>
+    document.querySelectorAll('.collapsible').forEach(el => {
+      el.addEventListener('click', () => {
+        el.classList.toggle('collapsed');
+        const content = el.nextElementSibling;
+        if (content) content.classList.toggle('collapsed');
+      });
+    });
+  </script>
+</body>
+</html>
