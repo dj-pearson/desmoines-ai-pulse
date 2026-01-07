@@ -225,7 +225,10 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                     value={subcategory}
                     onValueChange={handleSubcategoryChange}
                   >
-                    <SelectTrigger className="touch-target w-full sm:w-48 bg-background/95 backdrop-blur border-0">
+                    <SelectTrigger
+                      className="touch-target w-full sm:w-48 bg-background/95 backdrop-blur border-0"
+                      aria-label={category === "Events" ? "Event type filter" : "Cuisine type filter"}
+                    >
                       <SelectValue
                         placeholder={
                           category === "Events" ? "Event type" : "Cuisine type"

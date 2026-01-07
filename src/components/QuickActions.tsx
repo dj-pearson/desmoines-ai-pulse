@@ -100,7 +100,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
   const getTimeBasedAction = () => {
     if (isMorning) {
       return {
-        icon: <Coffee className="h-6 w-6" />,
+        icon: <Coffee className="h-6 w-6" aria-hidden="true" />,
         label: "Brunch Spots",
         sublabel: "Open now",
         href: "/restaurants?filter=brunch",
@@ -108,14 +108,14 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
     }
     if (isAfternoon) {
       return {
-        icon: <Sun className="h-6 w-6" />,
+        icon: <Sun className="h-6 w-6" aria-hidden="true" />,
         label: "Afternoon Fun",
         sublabel: "Day activities",
         href: "/events?time=afternoon",
       };
     }
     return {
-      icon: <Moon className="h-6 w-6" />,
+      icon: <Moon className="h-6 w-6" aria-hidden="true" />,
       label: "Tonight's Events",
       sublabel: "Happening now",
       href: "/events?time=tonight",
@@ -140,7 +140,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-5xl mx-auto">
         {/* AI Plan My Night - Featured */}
         <QuickAction
-          icon={<Sparkles className="h-6 w-6" />}
+          icon={<Sparkles className="h-6 w-6" aria-hidden="true" />}
           label="AI Plan My Night"
           sublabel="Let AI decide"
           variant="primary"
@@ -153,7 +153,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
 
         {/* Near Me */}
         <QuickAction
-          icon={<MapPin className="h-6 w-6" />}
+          icon={<MapPin className="h-6 w-6" aria-hidden="true" />}
           label="Near Me"
           sublabel="Within 10 miles"
           href="/events?nearMe=true"
@@ -162,7 +162,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
 
         {/* Trending Now */}
         <QuickAction
-          icon={<TrendingUp className="h-6 w-6" />}
+          icon={<TrendingUp className="h-6 w-6" aria-hidden="true" />}
           label="Trending Now"
           sublabel="Most popular"
           href="/events?sort=trending"
@@ -171,7 +171,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
 
         {/* This Weekend */}
         <QuickAction
-          icon={<Calendar className="h-6 w-6" />}
+          icon={<Calendar className="h-6 w-6" aria-hidden="true" />}
           label="This Weekend"
           sublabel="Fri-Sun events"
           href="/events?time=weekend"
@@ -180,7 +180,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
 
         {/* Open Now */}
         <QuickAction
-          icon={<Utensils className="h-6 w-6" />}
+          icon={<Utensils className="h-6 w-6" aria-hidden="true" />}
           label="Open Now"
           sublabel="Restaurants"
           href="/restaurants?openNow=true"
@@ -189,7 +189,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
 
         {/* Last Minute */}
         <QuickAction
-          icon={<Clock className="h-6 w-6" />}
+          icon={<Clock className="h-6 w-6" aria-hidden="true" />}
           label="Last Minute"
           sublabel="Tonight's deals"
           href="/events?time=tonight&sort=availability"
@@ -198,7 +198,7 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
 
         {/* New This Week */}
         <QuickAction
-          icon={<Sparkles className="h-6 w-6" />}
+          icon={<Sparkles className="h-6 w-6" aria-hidden="true" />}
           label="New This Week"
           sublabel="Fresh finds"
           href="/events?filter=new"
@@ -241,9 +241,10 @@ export function QuickActionsMobile({
           size="lg"
           onClick={onAIPlanClick}
           className="h-20 bg-gradient-to-r from-[#FFD700] to-[#FFA500] hover:from-[#FFA500] hover:to-[#FFD700] text-[#2D1B69] font-bold shadow-lg"
+          aria-label="AI Plan My Night - Let AI decide your plans"
         >
           <div className="flex flex-col items-center gap-1">
-            <Sparkles className="h-5 w-5" />
+            <Sparkles className="h-5 w-5" aria-hidden="true" />
             <span className="text-sm">AI Plan My Night</span>
           </div>
         </Button>
@@ -253,12 +254,13 @@ export function QuickActionsMobile({
             size="lg"
             variant="outline"
             className="h-20 w-full bg-white/10 hover:bg-white/20 text-white border-white/30"
+            aria-label={isEvening ? "View tonight's events" : "View today's events"}
           >
             <div className="flex flex-col items-center gap-1">
               {isEvening ? (
-                <Moon className="h-5 w-5" />
+                <Moon className="h-5 w-5" aria-hidden="true" />
               ) : (
-                <Sun className="h-5 w-5" />
+                <Sun className="h-5 w-5" aria-hidden="true" />
               )}
               <span className="text-sm">
                 {isEvening ? "Tonight" : "Today"}
@@ -275,8 +277,9 @@ export function QuickActionsMobile({
             size="sm"
             variant="ghost"
             className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
+            aria-label="Find events near me"
           >
-            <MapPin className="h-4 w-4" />
+            <MapPin className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs">Near Me</span>
           </Button>
         </Link>
@@ -286,8 +289,9 @@ export function QuickActionsMobile({
             size="sm"
             variant="ghost"
             className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
+            aria-label="Find restaurants open now"
           >
-            <Utensils className="h-4 w-4" />
+            <Utensils className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs">Open Now</span>
           </Button>
         </Link>
@@ -297,8 +301,9 @@ export function QuickActionsMobile({
             size="sm"
             variant="ghost"
             className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
+            aria-label="View weekend events"
           >
-            <Calendar className="h-4 w-4" />
+            <Calendar className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs">Weekend</span>
           </Button>
         </Link>
@@ -308,8 +313,9 @@ export function QuickActionsMobile({
             size="sm"
             variant="ghost"
             className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
+            aria-label="View trending events"
           >
-            <TrendingUp className="h-4 w-4" />
+            <TrendingUp className="h-4 w-4" aria-hidden="true" />
             <span className="text-xs">Trending</span>
           </Button>
         </Link>
