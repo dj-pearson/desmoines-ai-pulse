@@ -119,8 +119,9 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
               "justify-start text-left font-normal bg-white/95 backdrop-blur border-white/20 relative",
               !hasAppliedFilter && "text-muted-foreground"
             )}
+            aria-label={`Select date filter. Currently: ${getDisplayText()}`}
           >
-            <CalendarIcon className="mr-2 h-4 w-4" />
+            <CalendarIcon className="mr-2 h-4 w-4" aria-hidden="true" />
             {getDisplayText()}
             {pendingChanges && (
               <div className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full" />
@@ -138,8 +139,9 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
                   size="sm"
                   onClick={clearSelection}
                   className="h-8 px-2"
+                  aria-label="Clear date filter"
                 >
-                  <X className="h-3 w-3" />
+                  <X className="h-3 w-3" aria-hidden="true" />
                   Clear
                 </Button>
               )}
@@ -171,7 +173,7 @@ export default function InteractiveDateSelector({ onDateChange, className }: Int
 
             {mode === 'preset' && (
               <Select value={preset} onValueChange={handlePresetChange}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Quick date filter selection">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

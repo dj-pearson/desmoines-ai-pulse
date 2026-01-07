@@ -90,7 +90,7 @@ export function EnhancedHero({
         {/* Top badge */}
         <div className="flex justify-center mb-6">
           <div className="inline-flex items-center gap-2 bg-[#FFD700]/20 backdrop-blur-sm border border-[#FFD700]/30 rounded-full px-4 py-2 animate-fade-in">
-            <Brain className="h-4 w-4 text-[#FFD700]" />
+            <Brain className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
             <span className="text-sm text-[#FFD700] font-semibold">
               First AI-Powered Conversational City Guide
             </span>
@@ -145,28 +145,28 @@ export function EnhancedHero({
         </div>
 
         {/* Multi-channel badges */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-8">
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all">
-            <MessageSquare className="h-4 w-4 text-[#FFD700]" />
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-8" role="list" aria-label="Available access channels">
+          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all" role="listitem">
+            <MessageSquare className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
             <span className="text-sm text-white/90">SMS Concierge</span>
           </div>
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all">
-            <Mic className="h-4 w-4 text-[#FFD700]" />
+          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all" role="listitem">
+            <Mic className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
             <span className="text-sm text-white/90">Voice Assistant</span>
           </div>
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all">
-            <Sparkles className="h-4 w-4 text-[#FFD700]" />
+          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all" role="listitem">
+            <Sparkles className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
             <span className="text-sm text-white/90">ChatGPT Plugin</span>
           </div>
-          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all">
-            <Brain className="h-4 w-4 text-[#FFD700]" />
+          <div className="flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20 hover:bg-white/15 transition-all" role="listitem">
+            <Brain className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
             <span className="text-sm text-white/90">Web Intelligence</span>
           </div>
         </div>
 
         {/* Scroll indicator */}
         <div className="flex justify-center pt-8">
-          <div className="animate-bounce">
+          <div className="animate-bounce" role="presentation" aria-hidden="true">
             <svg
               className="w-6 h-6 text-white/60"
               fill="none"
@@ -175,6 +175,7 @@ export function EnhancedHero({
               strokeWidth="2"
               viewBox="0 0 24 24"
               stroke="currentColor"
+              aria-hidden="true"
             >
               <path d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
             </svg>

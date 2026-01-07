@@ -146,20 +146,20 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
           {event.enhanced_description || event.original_description}
         </CardDescription>
 
-        <div className="space-y-2 text-sm text-neutral-600">
+        <div className="space-y-2 text-sm text-neutral-600 dark:text-neutral-400">
           <div className="flex items-center">
-            <Calendar className="h-4 w-4 mr-2" />
+            <Calendar className="h-4 w-4 mr-2" aria-hidden="true" />
             <span>{formatEventDateShort(event)}</span>
           </div>
 
           <div className="flex items-center">
-            <MapPin className="h-4 w-4 mr-2" />
+            <MapPin className="h-4 w-4 mr-2" aria-hidden="true" />
             <span>{event.venue || event.location}</span>
           </div>
 
           {event.price && (
             <div className="flex items-center">
-              <DollarSign className="h-4 w-4 mr-2" />
+              <DollarSign className="h-4 w-4 mr-2" aria-hidden="true" />
               <span>{event.price}</span>
             </div>
           )}
@@ -185,8 +185,8 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
                 event
               )}`}
             >
-              <Button variant="outline" size="sm">
-                <ExternalLink className="h-4 w-4 mr-1" />
+              <Button variant="outline" size="sm" aria-label={`View full page for ${event.title}`}>
+                <ExternalLink className="h-4 w-4 mr-1" aria-hidden="true" />
                 Full Page
               </Button>
             </Link>
