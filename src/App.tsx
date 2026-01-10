@@ -54,6 +54,8 @@ const SmartCalendarIntegration = lazy(
 const Gamification = lazy(() => import("./pages/Gamification"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
+const SubscriptionPortal = lazy(() => import("./pages/SubscriptionPortal"));
+const AdminRefunds = lazy(() => import("./pages/AdminRefunds"));
 const BusinessPartnership = lazy(() => import("./pages/BusinessPartnership"));
 const BusinessHub = lazy(() => import("./pages/BusinessHub"));
 const GuidesPage = lazy(() => import("./pages/GuidesPage"));
@@ -211,6 +213,8 @@ const App = () => (
             <Route path="/gamification" element={<Gamification />} />
             <Route path="/pricing" element={<Pricing />} />
             <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+            <Route path="/subscription" element={<ProtectedRoute><SubscriptionPortal /></ProtectedRoute>} />
+            <Route path="/admin/refunds" element={<ProtectedRoute requireAdmin><AdminRefunds /></ProtectedRoute>} />
             <Route
               path="/business-partnership"
               element={<BusinessPartnership />}

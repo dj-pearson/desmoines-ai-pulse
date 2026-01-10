@@ -175,6 +175,13 @@ async function handleCampaignPayment(
 ) {
   console.log("Processing campaign payment:", campaignId);
 
+  // Get campaign details for payment logging
+  const { data: campaign } = await supabase
+    .from("campaigns")
+    .select("user_id, name, total_cost")
+    .eq("id", campaignId)
+    .single();
+
   const { error } = await supabase
     .from("campaigns")
     .update({
@@ -187,6 +194,30 @@ async function handleCampaignPayment(
   if (error) {
     console.error("Failed to update campaign:", error);
     throw error;
+  }
+
+  // Log payment to payments table
+  const paymentData = {
+    user_id: campaign?.user_id || null,
+    stripe_payment_intent_id: session.payment_intent as string,
+    amount: (session.amount_total || 0) / 100,
+    currency: session.currency || 'usd',
+    payment_type: 'campaign' as const,
+    status: 'succeeded' as const,
+    campaign_id: campaignId,
+    description: `Advertising Campaign - ${campaign?.name || 'Campaign'}`,
+    paid_at: new Date().toISOString(),
+  };
+
+  const { error: paymentError } = await supabase
+    .from("payments")
+    .upsert(paymentData, {
+      onConflict: 'stripe_payment_intent_id',
+      ignoreDuplicates: false,
+    });
+
+  if (paymentError) {
+    console.error("Failed to log campaign payment:", paymentError);
   }
 
   console.log("Campaign payment processed successfully:", campaignId);
@@ -330,18 +361,55 @@ async function handleInvoicePaymentSucceeded(
 ) {
   console.log("Invoice payment succeeded:", invoice.id);
 
-  if (!invoice.subscription) return;
+  // Get user ID from subscription or customer
+  let userId: string | null = null;
+  let subscriptionId: string | null = null;
 
-  // Update subscription status to active
-  const { error } = await supabase
-    .from("user_subscriptions")
-    .update({
-      status: "active",
-    })
-    .eq("stripe_subscription_id", invoice.subscription as string);
+  if (invoice.subscription) {
+    // Get user from subscription
+    const { data: subscription } = await supabase
+      .from("user_subscriptions")
+      .select("id, user_id")
+      .eq("stripe_subscription_id", invoice.subscription as string)
+      .single();
 
-  if (error) {
-    console.error("Failed to update subscription after payment:", error);
+    if (subscription) {
+      userId = subscription.user_id;
+      subscriptionId = subscription.id;
+    }
+
+    // Update subscription status to active
+    await supabase
+      .from("user_subscriptions")
+      .update({
+        status: "active",
+      })
+      .eq("stripe_subscription_id", invoice.subscription as string);
+  }
+
+  // Log payment to payments table
+  const paymentData = {
+    user_id: userId,
+    stripe_invoice_id: invoice.id,
+    stripe_charge_id: typeof invoice.charge === 'string' ? invoice.charge : null,
+    amount: (invoice.amount_paid || 0) / 100,
+    currency: invoice.currency || 'usd',
+    payment_type: 'subscription' as const,
+    status: 'succeeded' as const,
+    subscription_id: subscriptionId,
+    description: `Subscription payment - ${invoice.lines?.data?.[0]?.description || 'Monthly/Yearly subscription'}`,
+    paid_at: new Date().toISOString(),
+  };
+
+  const { error: paymentError } = await supabase
+    .from("payments")
+    .upsert(paymentData, {
+      onConflict: 'stripe_invoice_id',
+      ignoreDuplicates: false,
+    });
+
+  if (paymentError) {
+    console.error("Failed to log payment:", paymentError);
   }
 }
 
