@@ -731,20 +731,20 @@ export default function Index() {
 
                 {selectedEvent.venue && (
                   <div>
-                    <h4 className="font-semibold mb-2">Venue</h4>
+                    <h3 className="font-semibold mb-2 text-base">Venue</h3>
                     <p className="text-neutral-600">{selectedEvent.venue}</p>
                   </div>
                 )}
 
                 {selectedEvent.price && (
                   <div>
-                    <h4 className="font-semibold mb-2">Price</h4>
+                    <h3 className="font-semibold mb-2 text-base">Price</h3>
                     <p className="text-neutral-600">{selectedEvent.price}</p>
                   </div>
                 )}
 
                 <div>
-                  <h4 className="font-semibold mb-2">Description</h4>
+                  <h3 className="font-semibold mb-2 text-base">Description</h3>
                   <p className="text-neutral-600 leading-relaxed">
                     {selectedEvent.enhanced_description ||
                       selectedEvent.original_description}

@@ -9,6 +9,7 @@ import {
   Settings,
   SkipBack,
   SkipForward,
+  Subtitles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
@@ -18,6 +19,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+
+export interface VideoCaption {
+  src: string;
+  srclang: string;
+  label: string;
+  default?: boolean;
+}
 
 export interface VideoPlayerProps {
   src: string;
@@ -35,6 +43,8 @@ export interface VideoPlayerProps {
   onEnded?: () => void;
   onTimeUpdate?: (currentTime: number, duration: number) => void;
   playbackRates?: number[];
+  /** Array of caption tracks for accessibility */
+  captions?: VideoCaption[];
 }
 
 /**
@@ -78,6 +88,7 @@ export function VideoPlayer({
   onEnded,
   onTimeUpdate,
   playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2],
+  captions = [],
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -91,6 +102,9 @@ export function VideoPlayer({
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showControls, setShowControls] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
+  const [captionsEnabled, setCaptionsEnabled] = useState(
+    captions.some(c => c.default) || false
+  );
 
   const hideControlsTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -171,6 +185,20 @@ export function VideoPlayer({
     }
   }, []);
 
+  // Toggle captions
+  const toggleCaptions = useCallback(() => {
+    if (videoRef.current && videoRef.current.textTracks.length > 0) {
+      const track = videoRef.current.textTracks[0];
+      if (captionsEnabled) {
+        track.mode = "hidden";
+        setCaptionsEnabled(false);
+      } else {
+        track.mode = "showing";
+        setCaptionsEnabled(true);
+      }
+    }
+  }, [captionsEnabled]);
+
   // Show/hide controls on mouse activity
   const handleMouseMove = useCallback(() => {
     setShowControls(true);
@@ -203,6 +231,9 @@ export function VideoPlayer({
         case "f":
           toggleFullscreen();
           break;
+        case "c":
+          toggleCaptions();
+          break;
         case "ArrowLeft":
           e.preventDefault();
           skip(-10);
@@ -224,7 +255,7 @@ export function VideoPlayer({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [togglePlay, toggleMute, toggleFullscreen, skip, handleVolumeChange, volume]);
+  }, [togglePlay, toggleMute, toggleFullscreen, toggleCaptions, skip, handleVolumeChange, volume]);
 
   // Video event handlers
   useEffect(() => {
@@ -305,7 +336,21 @@ export function VideoPlayer({
         playsInline
         className={cn("w-full h-full object-contain", className)}
         onClick={togglePlay}
-      />
+        aria-label={title || "Video player"}
+      >
+        {/* Caption tracks for accessibility */}
+        {captions.map((caption, index) => (
+          <track
+            key={index}
+            kind="captions"
+            src={caption.src}
+            srcLang={caption.srclang}
+            label={caption.label}
+            default={caption.default}
+          />
+        ))}
+        Your browser does not support the video tag.
+      </video>
 
       {/* Buffering Indicator */}
       {isBuffering && (
@@ -414,6 +459,21 @@ export function VideoPlayer({
 
             {/* Right Controls */}
             <div className="flex items-center gap-2">
+              {/* Captions Toggle */}
+              {captions.length > 0 && (
+                <button
+                  onClick={toggleCaptions}
+                  className={cn(
+                    "p-1 hover:bg-white/20 rounded transition-colors",
+                    captionsEnabled && "bg-white/20"
+                  )}
+                  aria-label={captionsEnabled ? "Disable captions" : "Enable captions"}
+                  aria-pressed={captionsEnabled}
+                >
+                  <Subtitles className="h-5 w-5 text-white" aria-hidden="true" />
+                </button>
+              )}
+
               {/* Playback Speed */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

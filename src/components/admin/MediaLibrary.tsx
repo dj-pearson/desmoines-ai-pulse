@@ -415,8 +415,8 @@ export function MediaLibrary({
         </label>
 
         {/* Refresh */}
-        <Button variant="outline" size="icon" onClick={() => refetch()}>
-          <RefreshCw className="h-4 w-4" />
+        <Button variant="outline" size="icon" onClick={() => refetch()} aria-label="Refresh media library">
+          <RefreshCw className="h-4 w-4" aria-hidden="true" />
         </Button>
       </div>
 
@@ -516,8 +516,8 @@ export function MediaLibrary({
                     <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="secondary" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
+                          <Button variant="secondary" size="icon" className="h-8 w-8" aria-label="Media options">
+                            <MoreVertical className="h-4 w-4" aria-hidden="true" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -626,8 +626,8 @@ export function MediaLibrary({
                     <StatusBadge status={asset.processing_status} />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon">
-                          <MoreVertical className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" aria-label="Media options">
+                          <MoreVertical className="h-4 w-4" aria-hidden="true" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">

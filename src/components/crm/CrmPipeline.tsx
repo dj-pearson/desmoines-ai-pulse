@@ -182,8 +182,8 @@ function DealCard({ deal, stages, currentStageIndex, onMoveToStage, onClose }: D
           <h4 className="font-medium text-sm line-clamp-1">{deal.title}</h4>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-6 w-6" aria-label="Deal options">
+                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">

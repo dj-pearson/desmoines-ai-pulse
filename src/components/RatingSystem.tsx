@@ -365,8 +365,9 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ rating, onVoteHelpful, currentU
             variant="ghost"
             size="sm"
             className="h-8 px-2 text-red-500"
+            aria-label="Report this review"
           >
-            <Flag className="h-3 w-3" />
+            <Flag className="h-3 w-3" aria-hidden="true" />
           </Button>
         </div>
       )}
