@@ -105,8 +105,8 @@ export function CrmContactDetail({ contactId, onBack }: CrmContactDetailProps) {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={onBack}>
-          <ArrowLeft className="h-4 w-4" />
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Go back to contacts list">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl font-bold">
