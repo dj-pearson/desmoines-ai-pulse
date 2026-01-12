@@ -366,7 +366,7 @@ const Articles: React.FC = () => {
                           {formatDate(article.published_at || article.created_at)}
                         </div>
                         
-                        <span className="text-primary font-medium group-hover:underline">
+                        <span className="text-primary font-medium group-hover:underline" aria-hidden="true">
                           Read more →
                         </span>
                       </div>

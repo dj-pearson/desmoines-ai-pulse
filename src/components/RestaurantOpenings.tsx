@@ -163,8 +163,10 @@ export function RestaurantOpenings() {
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-[#DC143C] hover:text-[#8B0000] smooth-transition touch-target self-start"
+                        aria-label={`Read more about ${restaurant.name} (opens in new tab)`}
                       >
-                        Read More <ExternalLink className="h-3 w-3" />
+                        <span aria-hidden="true">Read More</span>
+                        <ExternalLink className="h-3 w-3" aria-hidden="true" />
                       </a>
                     )}
                   </div>

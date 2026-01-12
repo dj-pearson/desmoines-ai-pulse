@@ -327,7 +327,7 @@ export default function BusinessHub() {
                   <Button variant="outline">
                     Contact Support
                   </Button>
-                  <Button onClick={() => navigate("/business-partnership")}>
+                  <Button onClick={() => navigate("/business-partnership")} aria-label="Learn more about business partnership">
                     Learn More
                   </Button>
                 </div>
