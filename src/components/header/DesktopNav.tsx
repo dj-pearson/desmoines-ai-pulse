@@ -37,12 +37,14 @@ export function DesktopNav() {
                       to={item.href}
                       className={cn(
                         "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-                        item.featured && "bg-primary/5 border-l-2 border-primary"
+                        item.featured && "bg-primary/5 border-l-2 border-primary",
+                        isActivePath(item.href) && "bg-accent/50"
                       )}
                       onMouseEnter={() => prefetchRoute(item.href)}
+                      aria-current={isActivePath(item.href) ? "page" : undefined}
                     >
                       <div className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
+                        <item.icon className="h-4 w-4" aria-hidden="true" />
                         <div className="text-sm font-medium leading-none">
                           {item.label}
                         </div>
@@ -70,12 +72,14 @@ export function DesktopNav() {
                       to={item.href}
                       className={cn(
                         "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-                        item.featured && "bg-primary/5 border-l-2 border-primary"
+                        item.featured && "bg-primary/5 border-l-2 border-primary",
+                        isActivePath(item.href) && "bg-accent/50"
                       )}
                       onMouseEnter={() => prefetchRoute(item.href)}
+                      aria-current={isActivePath(item.href) ? "page" : undefined}
                     >
                       <div className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
+                        <item.icon className="h-4 w-4" aria-hidden="true" />
                         <div className="text-sm font-medium leading-none">
                           {item.label}
                         </div>
@@ -103,12 +107,14 @@ export function DesktopNav() {
                       to={item.href}
                       className={cn(
                         "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
-                        item.featured && "bg-primary/5 border-l-2 border-primary"
+                        item.featured && "bg-primary/5 border-l-2 border-primary",
+                        isActivePath(item.href) && "bg-accent/50"
                       )}
                       onMouseEnter={() => prefetchRoute(item.href)}
+                      aria-current={isActivePath(item.href) ? "page" : undefined}
                     >
                       <div className="flex items-center gap-2">
-                        <item.icon className="h-4 w-4" />
+                        <item.icon className="h-4 w-4" aria-hidden="true" />
                         <div className="text-sm font-medium leading-none">
                           {item.label}
                         </div>
@@ -131,8 +137,9 @@ export function DesktopNav() {
                 isActivePath("/articles") && "bg-accent/50"
               )}
               onMouseEnter={() => prefetchRoute("/articles")}
+              aria-current={isActivePath("/articles") ? "page" : undefined}
             >
-              <FileText className="h-4 w-4 mr-1.5" />
+              <FileText className="h-4 w-4 mr-1.5" aria-hidden="true" />
               Articles
             </Link>
           </NavigationMenuLink>

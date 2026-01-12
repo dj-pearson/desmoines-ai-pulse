@@ -5,6 +5,7 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useState } from "react";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -84,6 +85,7 @@ const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 // Legal pages
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Terms = lazy(() => import("./pages/Terms"));
+const AccessibilityStatement = lazy(() => import("./pages/AccessibilityStatement"));
 
 // Contact page
 const Contact = lazy(() => import("./pages/Contact"));
@@ -106,6 +108,9 @@ const PageLoader = () => (
 
 const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) => {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+
+  // Enable focus management on route changes for accessibility
+  useFocusOnRouteChange("main-content", true);
 
   useKeyboardShortcuts({
     enabled: true,
@@ -231,6 +236,7 @@ const App = () => (
             {/* Legal pages */}
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />
+            <Route path="/accessibility" element={<AccessibilityStatement />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

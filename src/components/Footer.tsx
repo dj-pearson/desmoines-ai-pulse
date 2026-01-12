@@ -98,33 +98,40 @@ export default function Footer() {
               </p>
 
               {/* Newsletter Mini Form */}
-              <form onSubmit={handleNewsletterSubmit} className="flex gap-2 mb-4">
+              <form onSubmit={handleNewsletterSubmit} className="flex gap-2 mb-4" aria-label="Newsletter subscription">
+                <label htmlFor="footer-newsletter-email" className="sr-only">Email address for newsletter</label>
                 <Input
+                  id="footer-newsletter-email"
                   type="email"
                   placeholder="Your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 h-10"
                   required
+                  aria-describedby="newsletter-description"
                 />
-                <Button type="submit" disabled={isLoading} size="sm" className="h-10 px-4">
-                  <Mail className="h-4 w-4" />
+                <span id="newsletter-description" className="sr-only">Subscribe to receive weekly updates about Des Moines events</span>
+                <Button type="submit" disabled={isLoading} size="sm" className="h-10 px-4" aria-label="Subscribe to newsletter">
+                  <Mail className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </form>
 
               {/* Social Links */}
-              <div className="flex gap-3">
+              <div className="flex gap-3" role="group" aria-label="Social media links">
                 <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors">
-                  <Facebook className="h-4 w-4" />
+                   aria-label="Follow us on Facebook (opens in new tab)"
+                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                  <Facebook className="h-4 w-4" aria-hidden="true" />
                 </a>
                 <a href="https://twitter.com" target="_blank" rel="noopener noreferrer"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors">
-                  <Twitter className="h-4 w-4" />
+                   aria-label="Follow us on Twitter (opens in new tab)"
+                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                  <Twitter className="h-4 w-4" aria-hidden="true" />
                 </a>
                 <a href="https://instagram.com" target="_blank" rel="noopener noreferrer"
-                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors">
-                  <Instagram className="h-4 w-4" />
+                   aria-label="Follow us on Instagram (opens in new tab)"
+                   className="w-9 h-9 rounded-full bg-neutral-800 hover:bg-neutral-700 flex items-center justify-center transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900">
+                  <Instagram className="h-4 w-4" aria-hidden="true" />
                 </a>
               </div>
             </div>
@@ -215,6 +222,11 @@ export default function Footer() {
                 <li>
                   <Link to="/terms" className="text-neutral-400 hover:text-white transition-colors text-sm">
                     Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/accessibility" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    Accessibility
                   </Link>
                 </li>
                 <li>
