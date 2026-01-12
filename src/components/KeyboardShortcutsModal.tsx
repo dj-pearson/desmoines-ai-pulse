@@ -17,12 +17,19 @@ interface KeyboardShortcut {
 
 const shortcuts: KeyboardShortcut[] = [
   // Navigation
-  { keys: ['H'], description: 'Go to home page', category: 'Navigation' },
-  { keys: ['E'], description: 'Go to events page', category: 'Navigation' },
-  { keys: ['R'], description: 'Go to restaurants page', category: 'Navigation' },
+  { keys: ['G', 'H'], description: 'Go to home page', category: 'Navigation' },
+  { keys: ['G', 'E'], description: 'Go to events page', category: 'Navigation' },
+  { keys: ['G', 'R'], description: 'Go to restaurants page', category: 'Navigation' },
+  { keys: ['G', 'A'], description: 'Go to attractions page', category: 'Navigation' },
 
   // Search
   { keys: ['/'], description: 'Focus search bar', category: 'Search' },
+
+  // Accessibility
+  { keys: ['Tab'], description: 'Move to next focusable element', category: 'Accessibility' },
+  { keys: ['Shift', 'Tab'], description: 'Move to previous focusable element', category: 'Accessibility' },
+  { keys: ['Enter'], description: 'Activate button or link', category: 'Accessibility' },
+  { keys: ['Space'], description: 'Activate button or toggle checkbox', category: 'Accessibility' },
 
   // Actions
   { keys: ['Esc'], description: 'Close modal or dialog', category: 'Actions' },
@@ -62,12 +69,13 @@ export function KeyboardShortcutsModal({
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="p-2 rounded-lg bg-primary/10">
-              <Keyboard className="w-5 h-5 text-primary" />
+              <Keyboard className="w-5 h-5 text-primary" aria-hidden="true" />
             </div>
             <DialogTitle>Keyboard Shortcuts</DialogTitle>
           </div>
           <DialogDescription>
-            Use these keyboard shortcuts to navigate faster and boost your productivity
+            Use these keyboard shortcuts to navigate faster and boost your productivity.
+            All shortcuts work from anywhere on the site.
           </DialogDescription>
         </DialogHeader>
 
