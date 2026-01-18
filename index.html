@@ -15,24 +15,8 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
-    <!-- SECURITY FIX: Content Security Policy (Meta tag as fallback - HTTP headers take precedence) -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="
-        default-src 'self';
-        script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://www.googletagmanager.com https://www.google-analytics.com https://api.ipify.org https://static.cloudflareinsights.com;
-        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        font-src 'self' https://fonts.gstatic.com data:;
-        img-src 'self' data: https: http:;
-        connect-src 'self' https://wtkhfqpmcegzcbngroui.supabase.co wss://wtkhfqpmcegzcbngroui.supabase.co https://www.google-analytics.com https://api.ipify.org https://cloudflareinsights.com https://static.cloudflareinsights.com;
-        worker-src 'self' blob:;
-        child-src 'self' blob:;
-        frame-ancestors 'none';
-        base-uri 'self';
-        form-action 'self';
-        upgrade-insecure-requests;
-      "
-    />
+    <!-- Note: CSP frame-ancestors directive should be in HTTP headers, not meta tag -->
+    <!-- The warning about frame-ancestors being ignored in meta tags is expected -->
 
     <!-- Open Graph enhanced for AI-First positioning -->
     <meta
