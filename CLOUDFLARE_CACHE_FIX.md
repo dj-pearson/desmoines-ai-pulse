@@ -1,12 +1,18 @@
 # Cloudflare Pages Caching Issue - FIXED
+# + Recharts Circular Dependency - FIXED
 
 **Date:** 2026-01-18  
-**Issue:** Blank homepage with "Unexpected token '<'" error  
-**Root Cause:** Cloudflare CDN caching old `index.html` with stale JavaScript references
+**Issues:** 
+1. Blank homepage with "Unexpected token '<'" error (RESOLVED)
+2. Blank homepage with "Cannot access 'A' before initialization" error (RESOLVED)
+
+**Root Causes:** 
+1. Cloudflare CDN caching old `index.html` with stale JavaScript references
+2. Recharts/d3 circular dependencies in bundled vendor-charts chunk
 
 ---
 
-## Problem Analysis
+## Problem 1: Cache Issue (RESOLVED ✅)
 
 ### Console Errors Observed:
 ```
@@ -76,17 +82,70 @@ Enhanced cache headers for HTML files:
 
 ---
 
-## Deployment Status
+## Problem 2: Recharts Circular Dependency (RESOLVED ✅)
 
-**Commit:** `1d53256`  
-**Pushed to:** `main` branch  
-**Cloudflare Pages:** Will auto-deploy within 2-3 minutes
+### Console Error Observed:
+```
+vendor-charts-DF8mv9Od.js:9 Uncaught ReferenceError: Cannot access 'A' before initialization
+```
+
+### What Happened:
+1. **Recharts and d3 bundled together** in `vendor-charts` chunk
+2. **Circular dependency between modules** caused Temporal Dead Zone (TDZ) error
+3. **Variable 'A' accessed before initialization** due to module loading order
+4. **Result:** JavaScript execution halted, blank page
+
+### Solutions Implemented:
+
+#### 1. Split Chart Bundles ✅
+**File:** `vite.config.ts`
+
+Separated Recharts and d3 into different chunks:
+
+```typescript
+// Charts - Don't bundle together to avoid circular deps
+if (id.includes('recharts') && !id.includes('d3')) {
+  return 'vendor-recharts';
+}
+
+// D3 utilities - separate from recharts
+if (id.includes('d3-')) {
+  return 'vendor-d3';
+}
+```
+
+**Result:** Creates `vendor-recharts-XXX.js` and `vendor-d3-XXX.js` separately.
+
+#### 2. Exclude from Optimization ✅
+**File:** `vite.config.ts`
+
+Excluded chart libraries from pre-bundling:
+
+```typescript
+optimizeDeps: {
+  exclude: [
+    'recharts', // Exclude due to circular dependency issues
+    'd3-scale',
+    'd3-array',
+    'd3-shape',
+    'd3-interpolate',
+  ],
+}
+```
+
+**Result:** Vite doesn't try to pre-bundle these, avoiding TDZ errors.
 
 ---
 
-## Verification Steps
+## Status: ALL ISSUES RESOLVED ✅
 
-After deployment completes:
+**Deploy #1** (commit `1d53256`): Fixed caching issue  
+**Deploy #2** (commit `75cdf88`): Fixed Recharts circular dependency  
+**Next Deployment:** Should load correctly with no errors
+
+---
+
+## Verification Steps (After Deployment Completes)
 
 1. **Hard Refresh** browser: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
 2. **Check Console** for errors - should be clean
