@@ -108,14 +108,12 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-ui';
           }
 
-          // Maps - Leaflet (only loaded on map pages)
-          // Keep leaflet and react-leaflet together but DON'T include React here
+          // Maps - Leaflet (DO NOT BUNDLE - causes preload issues)
+          // By returning undefined, we let each lazy-loaded map component
+          // have its own chunk, preventing premature loading
           if (id.includes('leaflet') || id.includes('react-leaflet')) {
-            // Ensure React isn't bundled with maps
-            if (id.includes('/react/') || id.includes('/react-dom/')) {
-              return 'vendor-react';
-            }
-            return 'vendor-maps';
+            // Don't bundle - let dynamic imports create separate chunks
+            return undefined;
           }
 
           // Charts - Don't bundle together to avoid circular deps
