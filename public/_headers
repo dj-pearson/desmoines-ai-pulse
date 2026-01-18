@@ -25,9 +25,16 @@
 
 # HTML Files - NO CACHE to prevent stale JavaScript references
 /*.html
-  Cache-Control: no-cache, no-store, must-revalidate
+  Cache-Control: no-cache, no-store, must-revalidate, max-age=0
   Pragma: no-cache
   Expires: 0
+
+# Root HTML - CRITICAL: Absolutely no caching
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate, max-age=0, s-maxage=0
+  Pragma: no-cache
+  Expires: 0
+  CDN-Cache-Control: no-cache
 
 # Service Worker - NO CACHE for immediate updates
 /sw.js

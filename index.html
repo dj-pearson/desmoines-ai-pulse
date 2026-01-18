@@ -6,8 +6,14 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="cache-version" content="3.0.0" />
+    <meta name="cache-version" content="4.0.0" />
+    <meta name="build-timestamp" content="__BUILD_TIMESTAMP__" />
     <meta name="impact-site-verification" value="e1bd2196-112a-4a58-8dd8-bdd7f1084090" />
+    
+    <!-- CRITICAL: Prevent any HTML caching -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
 
     <!-- SECURITY FIX: Content Security Policy (Meta tag as fallback - HTTP headers take precedence) -->
     <meta

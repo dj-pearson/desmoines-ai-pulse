@@ -1,11 +1,24 @@
-import { defineConfig } from "vite";
+import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { visualizer } from "rollup-plugin-visualizer";
 
+// Custom plugin to inject build timestamp for cache busting
+function injectBuildTimestamp(): Plugin {
+  return {
+    name: 'inject-build-timestamp',
+    transformIndexHtml(html) {
+      return html.replace(
+        '__BUILD_TIMESTAMP__',
+        new Date().toISOString()
+      );
+    },
+  };
+}
+
 // https://vitejs.dev/config/
-// Force rebuild: 2025-08-13
+// Force rebuild: 2025-01-18
 export default defineConfig(({ command, mode }) => ({
   base: "/",
   server: {
@@ -13,6 +26,7 @@ export default defineConfig(({ command, mode }) => ({
     port: 8080,
   },
   plugins: [
+    injectBuildTimestamp(), // Add timestamp to prevent HTML caching
     react({
       babel: {
         plugins: [
