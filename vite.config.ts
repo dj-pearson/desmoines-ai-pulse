@@ -152,18 +152,10 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-icons';
           }
 
-          // Group remaining node_modules into a general vendor chunk
-          // EXCEPT for Three.js which must be lazy-loaded
-          if (id.includes('node_modules')) {
-            // 3D - Three.js (DO NOT BUNDLE - causes preload issues)
-            // @react-three/fiber needs React.useLayoutEffect, must not load before React
-            if (id.includes('three') || id.includes('@react-three/')) {
-              return undefined; // Don't bundle - let dynamic imports create chunks
-            }
-            return 'vendor-misc';
-          }
+          // DON'T create vendor-misc - let Vite handle remaining node_modules automatically
+          // This prevents bundling issues with lazy-loaded libraries
 
-          // IMPORTANT: Don't bundle anything else - let lazy imports work
+          // Don't bundle anything else - let Vite's automatic code splitting handle it
           return undefined;
         },
         assetFileNames: "assets/[name]-[hash][extname]",
