@@ -127,11 +127,6 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-d3';
           }
 
-          // 3D - Three.js (only loaded on 3D hero pages)
-          if (id.includes('three') || id.includes('@react-three/')) {
-            return 'vendor-3d';
-          }
-
           // Forms and validation
           if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform/')) {
             return 'vendor-forms';
@@ -158,9 +153,18 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // Group remaining node_modules into a general vendor chunk
+          // EXCEPT for Three.js which must be lazy-loaded
           if (id.includes('node_modules')) {
+            // 3D - Three.js (DO NOT BUNDLE - causes preload issues)
+            // @react-three/fiber needs React.useLayoutEffect, must not load before React
+            if (id.includes('three') || id.includes('@react-three/')) {
+              return undefined; // Don't bundle - let dynamic imports create chunks
+            }
             return 'vendor-misc';
           }
+
+          // IMPORTANT: Don't bundle anything else - let lazy imports work
+          return undefined;
         },
         assetFileNames: "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
