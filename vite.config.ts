@@ -17,6 +17,21 @@ function injectBuildTimestamp(): Plugin {
   };
 }
 
+// Custom plugin to remove vendor-maps from preload list
+function removeMapPreload(): Plugin {
+  return {
+    name: 'remove-map-preload',
+    enforce: 'post',
+    transformIndexHtml(html) {
+      // Remove modulepreload for vendor-maps to prevent it loading before React
+      return html.replace(
+        /<link rel="modulepreload"[^>]*vendor-maps[^>]*>/g,
+        ''
+      );
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 // Force rebuild: 2025-01-18
 export default defineConfig(({ command, mode }) => ({
@@ -27,6 +42,7 @@ export default defineConfig(({ command, mode }) => ({
   },
   plugins: [
     injectBuildTimestamp(), // Add timestamp to prevent HTML caching
+    removeMapPreload(), // Remove vendor-maps from preload list
     react({
       babel: {
         plugins: [
