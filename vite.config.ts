@@ -71,12 +71,13 @@ export default defineConfig(({ command, mode }) => ({
         // Improved code splitting - group related modules to reduce chunk count
         // and improve caching while avoiding circular dependencies
         manualChunks: (id) => {
-          // React core - highest priority, cached long-term
+          // React core - MUST be first, highest priority
+          // This ensures React is always available before any other code
           if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
             return 'vendor-react';
           }
 
-          // React ecosystem - router, query, etc.
+          // React ecosystem - depends on vendor-react
           if (id.includes('react-router') || id.includes('@tanstack/react-query')) {
             return 'vendor-react-ecosystem';
           }
@@ -92,7 +93,12 @@ export default defineConfig(({ command, mode }) => ({
           }
 
           // Maps - Leaflet (only loaded on map pages)
+          // Keep leaflet and react-leaflet together but DON'T include React here
           if (id.includes('leaflet') || id.includes('react-leaflet')) {
+            // Ensure React isn't bundled with maps
+            if (id.includes('/react/') || id.includes('/react-dom/')) {
+              return 'vendor-react';
+            }
             return 'vendor-maps';
           }
 
@@ -145,6 +151,8 @@ export default defineConfig(({ command, mode }) => ({
         assetFileNames: "assets/[name]-[hash][extname]",
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",
+        // Prevent preloading of lazy-loaded chunks like maps
+        experimentalMinChunkSize: 20000, // 20KB minimum - prevents tiny preloaded chunks
       },
     },
     chunkSizeWarningLimit: 500, // Stricter limit due to better splitting
@@ -164,7 +172,7 @@ export default defineConfig(({ command, mode }) => ({
       'react-reconciler',
     ],
     exclude: [
-      'react-leaflet', // Exclude to prevent pre-bundling issues
+      'react-leaflet', // Exclude to prevent pre-bundling issues AND loading order problems
       'leaflet', // Exclude to load with maps chunk
       'recharts', // Exclude due to circular dependency issues
       'd3-scale', // Exclude d3 modules to prevent TDZ errors
@@ -172,5 +180,7 @@ export default defineConfig(({ command, mode }) => ({
       'd3-shape',
       'd3-interpolate',
     ],
+    // Force React to be bundled first
+    force: true,
   },
 }));
