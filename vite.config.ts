@@ -96,9 +96,15 @@ export default defineConfig(({ command, mode }) => ({
             return 'vendor-maps';
           }
 
-          // Charts - Recharts (only loaded on analytics pages)
-          if (id.includes('recharts') || id.includes('d3-')) {
-            return 'vendor-charts';
+          // Charts - Don't bundle together to avoid circular deps
+          // Let Vite handle them naturally
+          if (id.includes('recharts') && !id.includes('d3')) {
+            return 'vendor-recharts';
+          }
+          
+          // D3 utilities - separate from recharts
+          if (id.includes('d3-')) {
+            return 'vendor-d3';
           }
 
           // 3D - Three.js (only loaded on 3D hero pages)
@@ -160,6 +166,11 @@ export default defineConfig(({ command, mode }) => ({
     exclude: [
       'react-leaflet', // Exclude to prevent pre-bundling issues
       'leaflet', // Exclude to load with maps chunk
+      'recharts', // Exclude due to circular dependency issues
+      'd3-scale', // Exclude d3 modules to prevent TDZ errors
+      'd3-array',
+      'd3-shape',
+      'd3-interpolate',
     ],
   },
 }));
