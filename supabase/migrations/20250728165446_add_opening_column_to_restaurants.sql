@@ -3,14 +3,14 @@
 -- the restaurant will appear in the "Restaurant Openings" section.
 
 ALTER TABLE public.restaurants 
-ADD COLUMN opening_date DATE;
+ADD COLUMN IF NOT EXISTS opening_date DATE;
 
 -- Add index for efficient querying of upcoming restaurant openings
-CREATE INDEX idx_restaurants_opening_date ON public.restaurants(opening_date) WHERE opening_date IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_restaurants_opening_date ON public.restaurants(opening_date) WHERE opening_date IS NOT NULL;
 
 -- Add status column to track opening status
 ALTER TABLE public.restaurants 
-ADD COLUMN status TEXT CHECK (status IN ('open', 'opening_soon', 'newly_opened', 'announced', 'closed')) DEFAULT 'open';
+ADD COLUMN IF NOT EXISTS status TEXT CHECK (status IN ('open', 'opening_soon', 'newly_opened', 'announced', 'closed')) DEFAULT 'open';
 
 -- Add index for status
-CREATE INDEX idx_restaurants_status ON public.restaurants(status);
+CREATE INDEX IF NOT EXISTS idx_restaurants_status ON public.restaurants(status);

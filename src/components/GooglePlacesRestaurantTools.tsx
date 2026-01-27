@@ -13,6 +13,21 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   MapPin,
   Search,
   AlertTriangle,
@@ -22,6 +37,10 @@ import {
   Plus,
   RefreshCw,
   Info,
+  Ban,
+  Trash2,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,6 +75,37 @@ interface RestaurantStatus {
   needs_update: boolean;
 }
 
+interface BlacklistEntry {
+  id: string;
+  google_place_id: string | null;
+  restaurant_name: string;
+  reason: string;
+  reason_category: string;
+  formatted_address: string | null;
+  blocked_at: string;
+}
+
+type BlacklistCategory =
+  | "not_restaurant"
+  | "chain"
+  | "duplicate"
+  | "out_of_scope"
+  | "closed_permanent"
+  | "spam"
+  | "added_to_db"
+  | "other";
+
+const BLACKLIST_CATEGORIES: { value: BlacklistCategory; label: string }[] = [
+  { value: "not_restaurant", label: "Not a Restaurant" },
+  { value: "chain", label: "Chain/Fast Food" },
+  { value: "duplicate", label: "Duplicate Entry" },
+  { value: "out_of_scope", label: "Out of Area" },
+  { value: "closed_permanent", label: "Permanently Closed" },
+  { value: "spam", label: "Spam/Fake" },
+  { value: "added_to_db", label: "Already Added" },
+  { value: "other", label: "Other" },
+];
+
 export default function GooglePlacesRestaurantTools() {
   const [searchLocation, setSearchLocation] = useState("Des Moines, IA");
   const [searchRadius, setSearchRadius] = useState("5000");
@@ -71,6 +121,124 @@ export default function GooglePlacesRestaurantTools() {
   const [searchOffset, setSearchOffset] = useState(0);
   const [hasMoreResults, setHasMoreResults] = useState(false);
   const { toast } = useToast();
+
+  // Blacklist state
+  const [blacklist, setBlacklist] = useState<BlacklistEntry[]>([]);
+  const [isLoadingBlacklist, setIsLoadingBlacklist] = useState(false);
+  const [showBlacklist, setShowBlacklist] = useState(false);
+  const [blacklistDialogOpen, setBlacklistDialogOpen] = useState(false);
+  const [selectedForBlacklist, setSelectedForBlacklist] =
+    useState<GooglePlacesResult | null>(null);
+  const [blacklistReason, setBlacklistReason] = useState("");
+  const [blacklistCategory, setBlacklistCategory] =
+    useState<BlacklistCategory>("not_restaurant");
+
+  // Load blacklist entries
+  const loadBlacklist = async () => {
+    setIsLoadingBlacklist(true);
+    try {
+      const { data, error } = await supabase
+        .from("restaurant_blacklist")
+        .select("*")
+        .order("blocked_at", { ascending: false });
+
+      if (error) throw error;
+      setBlacklist(data || []);
+    } catch (error) {
+      console.error("Error loading blacklist:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load blacklist",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingBlacklist(false);
+    }
+  };
+
+  // Add to blacklist
+  const addToBlacklist = async () => {
+    if (!selectedForBlacklist || !blacklistReason.trim()) {
+      toast({
+        title: "Error",
+        description: "Please provide a reason for blacklisting",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const { error } = await supabase.from("restaurant_blacklist").insert({
+        google_place_id: selectedForBlacklist.place_id,
+        restaurant_name: selectedForBlacklist.name,
+        reason: blacklistReason,
+        reason_category: blacklistCategory,
+        formatted_address: selectedForBlacklist.formatted_address,
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Added to Blacklist",
+        description: `${selectedForBlacklist.name} will no longer appear in search results`,
+      });
+
+      // Remove from search results
+      setNewRestaurants((prev) =>
+        prev.filter((r) => r.place_id !== selectedForBlacklist.place_id)
+      );
+
+      // Reset dialog state
+      setBlacklistDialogOpen(false);
+      setSelectedForBlacklist(null);
+      setBlacklistReason("");
+      setBlacklistCategory("not_restaurant");
+
+      // Refresh blacklist if visible
+      if (showBlacklist) {
+        loadBlacklist();
+      }
+    } catch (error) {
+      console.error("Error adding to blacklist:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add to blacklist",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Remove from blacklist
+  const removeFromBlacklist = async (entry: BlacklistEntry) => {
+    try {
+      const { error } = await supabase
+        .from("restaurant_blacklist")
+        .delete()
+        .eq("id", entry.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Removed from Blacklist",
+        description: `${entry.restaurant_name} can now appear in search results`,
+      });
+
+      setBlacklist((prev) => prev.filter((b) => b.id !== entry.id));
+    } catch (error) {
+      console.error("Error removing from blacklist:", error);
+      toast({
+        title: "Error",
+        description: "Failed to remove from blacklist",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Open blacklist dialog for a restaurant
+  const openBlacklistDialog = (restaurant: GooglePlacesResult) => {
+    setSelectedForBlacklist(restaurant);
+    setBlacklistDialogOpen(true);
+  };
 
   const searchNewRestaurants = async (append = false) => {
     if (!searchLocation.trim()) {
@@ -387,14 +555,23 @@ export default function GooglePlacesRestaurantTools() {
                           ))}
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        onClick={() => addRestaurant(restaurant)}
-                        className="ml-4"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
-                      </Button>
+                      <div className="flex gap-2 ml-4">
+                        <Button
+                          size="sm"
+                          onClick={() => addRestaurant(restaurant)}
+                        >
+                          <Plus className="h-4 w-4 mr-1" />
+                          Add
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openBlacklistDialog(restaurant)}
+                          title="Hide from future searches"
+                        >
+                          <Ban className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -491,6 +668,180 @@ export default function GooglePlacesRestaurantTools() {
           )}
         </CardContent>
       </Card>
+
+      {/* Blacklist Management */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Ban className="h-5 w-5" />
+                Blacklist Management
+              </CardTitle>
+              <CardDescription>
+                Manage places that should be excluded from search results
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBlacklist(!showBlacklist);
+                if (!showBlacklist && blacklist.length === 0) {
+                  loadBlacklist();
+                }
+              }}
+            >
+              {showBlacklist ? (
+                <>
+                  <EyeOff className="h-4 w-4 mr-2" />
+                  Hide Blacklist
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Blacklist
+                </>
+              )}
+            </Button>
+          </div>
+        </CardHeader>
+        {showBlacklist && (
+          <CardContent className="space-y-4">
+            {isLoadingBlacklist ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : blacklist.length === 0 ? (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  No blacklisted places. Use the ban icon on search results to
+                  hide unwanted places.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  {blacklist.length} place{blacklist.length !== 1 ? "s" : ""}{" "}
+                  blacklisted
+                </div>
+                {blacklist.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="border rounded-lg p-4 space-y-2"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h5 className="font-medium">{entry.restaurant_name}</h5>
+                        {entry.formatted_address && (
+                          <p className="text-sm text-muted-foreground flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {entry.formatted_address}
+                          </p>
+                        )}
+                        <div className="flex gap-2 mt-2">
+                          <Badge variant="secondary">
+                            {BLACKLIST_CATEGORIES.find(
+                              (c) => c.value === entry.reason_category
+                            )?.label || entry.reason_category}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {entry.reason}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Blocked:{" "}
+                          {new Date(entry.blocked_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeFromBlacklist(entry)}
+                        title="Remove from blacklist"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Blacklist Dialog */}
+      <Dialog open={blacklistDialogOpen} onOpenChange={setBlacklistDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add to Blacklist</DialogTitle>
+            <DialogDescription>
+              This place will be hidden from future search results.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedForBlacklist && (
+            <div className="space-y-4">
+              <div className="border rounded-lg p-3 bg-muted/50">
+                <p className="font-medium">{selectedForBlacklist.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedForBlacklist.formatted_address}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="blacklist-category">Category</Label>
+                <Select
+                  value={blacklistCategory}
+                  onValueChange={(value: BlacklistCategory) =>
+                    setBlacklistCategory(value)
+                  }
+                >
+                  <SelectTrigger id="blacklist-category">
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BLACKLIST_CATEGORIES.map((cat) => (
+                      <SelectItem key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="blacklist-reason">Reason</Label>
+                <Textarea
+                  id="blacklist-reason"
+                  placeholder="Why should this place be hidden? (e.g., 'This is a gas station convenience store, not a restaurant')"
+                  value={blacklistReason}
+                  onChange={(e) => setBlacklistReason(e.target.value)}
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setBlacklistDialogOpen(false);
+                setSelectedForBlacklist(null);
+                setBlacklistReason("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={addToBlacklist} disabled={!blacklistReason.trim()}>
+              <Ban className="h-4 w-4 mr-2" />
+              Add to Blacklist
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

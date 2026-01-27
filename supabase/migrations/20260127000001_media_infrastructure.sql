@@ -169,13 +169,8 @@ USING (auth.uid() = user_id);
 CREATE POLICY "Admins can manage all media"
 ON public.media_assets FOR ALL
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid()
-    AND role IN ('admin', 'super_admin')
-  )
-);
+USING (is_admin())
+WITH CHECK (is_admin());
 
 -- ============================================================
 -- 3. IMAGE OPTIMIZATION QUEUE
@@ -271,17 +266,11 @@ ALTER TABLE public.media_performance_metrics ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins can view performance metrics"
 ON public.media_performance_metrics FOR SELECT
 TO authenticated
-USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid()
-    AND role IN ('admin', 'super_admin')
-  )
-);
+USING (is_admin());
 
 CREATE POLICY "Anyone can insert performance metrics"
 ON public.media_performance_metrics FOR INSERT
-USING (true);
+WITH CHECK (true);
 
 -- ============================================================
 -- 5. STORAGE POLICIES FOR NEW BUCKETS

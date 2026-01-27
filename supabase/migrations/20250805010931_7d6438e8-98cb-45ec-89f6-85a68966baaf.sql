@@ -70,16 +70,18 @@ CREATE TABLE public.user_activities (
 -- Enhanced user reputation table (update existing)
 DO $$
 BEGIN
-  -- Add new columns to existing user_reputation table
-  ALTER TABLE public.user_reputation 
-  ADD COLUMN IF NOT EXISTS experience_points integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS current_level integer DEFAULT 1,
-  ADD COLUMN IF NOT EXISTS current_level_progress integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS next_level_xp integer DEFAULT 100,
-  ADD COLUMN IF NOT EXISTS total_badges integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS rank_position integer,
-  ADD COLUMN IF NOT EXISTS streak_days integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS last_activity_date date;
+  -- Add new columns to existing user_reputation table (if table exists)
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_reputation') THEN
+    ALTER TABLE public.user_reputation 
+    ADD COLUMN IF NOT EXISTS experience_points integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS current_level integer DEFAULT 1,
+    ADD COLUMN IF NOT EXISTS current_level_progress integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS next_level_xp integer DEFAULT 100,
+    ADD COLUMN IF NOT EXISTS total_badges integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS rank_position integer,
+    ADD COLUMN IF NOT EXISTS streak_days integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_activity_date date;
+  END IF;
 END $$;
 
 -- Create function to calculate required XP for level

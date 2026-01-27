@@ -54,25 +54,35 @@ CREATE TRIGGER update_weekend_guides_updated_at
 
 -- Create CRON job to run every Sunday at 9 PM CDT (2 AM UTC Monday)
 -- This will generate content for the upcoming weekend
-SELECT cron.schedule(
-  'generate-weekend-guide',
-  '0 2 * * 1', -- Every Monday at 2 AM UTC (Sunday 9 PM CDT)
-  $$
-  SELECT net.http_post(
-    url := 'https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/generate-weekend-guide',
-    headers := jsonb_build_object(
-      'Content-Type', 'application/json',
-      'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true),
-      'x-point', 'cron-trigger'
-    ),
-    body := jsonb_build_object(
-      'trigger', 'cron',
-      'timestamp', now()
-    )::text
-  );
-  $$
-);
+DO $outer$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    PERFORM cron.schedule(
+      'generate-weekend-guide',
+      '0 2 * * 1', -- Every Monday at 2 AM UTC (Sunday 9 PM CDT)
+      $inner$
+      SELECT net.http_post(
+        url := 'https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/generate-weekend-guide',
+        headers := jsonb_build_object(
+          'Content-Type', 'application/json',
+          'Authorization', 'Bearer ' || current_setting('app.settings.service_role_key', true),
+          'x-point', 'cron-trigger'
+        ),
+        body := jsonb_build_object(
+          'trigger', 'cron',
+          'timestamp', now()
+        )::text
+      );
+      $inner$
+    );
+  END IF;
+END $outer$;
 
--- Log the CRON job creation
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('Weekend guide CRON job created - runs every Sunday at 9 PM CDT', NOW());
+-- Log the CRON job creation (if cron_logs table exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('Weekend guide CRON job created - runs every Sunday at 9 PM CDT', NOW());
+  END IF;
+END $$;
