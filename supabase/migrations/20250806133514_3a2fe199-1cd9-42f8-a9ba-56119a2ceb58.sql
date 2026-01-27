@@ -9,8 +9,8 @@ CREATE OR REPLACE FUNCTION public.validate_role_assignment()
  SET search_path = ''
 AS $function$
 DECLARE
-  assigner_role public.user_role;
-  target_role public.user_role;
+  assigner_role TEXT;
+  target_role TEXT;
 BEGIN
   -- Get the assigner's role
   SELECT role INTO assigner_role
