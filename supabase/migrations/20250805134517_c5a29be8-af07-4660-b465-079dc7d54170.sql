@@ -29,7 +29,13 @@ ALTER TABLE public.security_audit_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Only admins can view security audit logs" 
 ON public.security_audit_logs 
 FOR SELECT 
-USING (public.user_has_role_or_higher(auth.uid(), 'admin'));
+USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  )
+);
 
 CREATE POLICY "System can insert security audit logs" 
 ON public.security_audit_logs 
@@ -78,7 +84,13 @@ ALTER TABLE public.csp_violation_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Only admins can view CSP violations" 
 ON public.csp_violation_logs 
 FOR SELECT 
-USING (public.user_has_role_or_higher(auth.uid(), 'admin'));
+USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  )
+);
 
 CREATE POLICY "System can insert CSP violations" 
 ON public.csp_violation_logs 

@@ -19,6 +19,11 @@ SELECT cron.schedule(
   $$
 );
 
--- Log the cron job creation
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('Created nightly coordinate backfill cron job (runs at 2 AM daily)', NOW());
+-- Log the cron job creation (guarded)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('Created nightly coordinate backfill cron job (runs at 2 AM daily)', NOW());
+  END IF;
+END $$;

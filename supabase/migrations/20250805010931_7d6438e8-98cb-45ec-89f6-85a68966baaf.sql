@@ -268,7 +268,13 @@ CREATE POLICY "Anyone can view active challenges" ON public.community_challenges
 FOR SELECT USING (is_active = true);
 
 CREATE POLICY "Admins can manage challenges" ON public.community_challenges
-FOR ALL USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  )
+);
 
 CREATE POLICY "Users can view their own participation" ON public.user_challenge_participation
 FOR SELECT USING (auth.uid() = user_id);
