@@ -57,20 +57,24 @@
  * ```
  */
 
-// Types
+// Types (type-only exports)
+export type {
+  UserRole,
+  Permission,
+  PermissionScope,
+  PermissionAction,
+  SecurityContext,
+  SecurityCheckResult,
+  SecurityLayer,
+  SecurityErrorCode,
+  OwnableResource,
+  OwnershipConfig,
+  SecurityEventType,
+  SecurityAuditEntry,
+} from './types';
+
+// Values from types
 export {
-  type UserRole,
-  type Permission,
-  type PermissionScope,
-  type PermissionAction,
-  type SecurityContext,
-  type SecurityCheckResult,
-  type SecurityLayer,
-  type SecurityErrorCode,
-  type OwnableResource,
-  type OwnershipConfig,
-  type SecurityEventType,
-  type SecurityAuditEntry,
   ROLE_LEVELS,
   PERMISSIONS,
   ROLE_PERMISSIONS,

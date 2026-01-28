@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { SecurityUtils, ValidationSchemas } from "@/lib/security";
+import { SecurityUtils, ValidationSchemas } from "@/lib/securityUtils";
 
 interface AuthSecurityHookReturn {
   isBlocked: boolean;
