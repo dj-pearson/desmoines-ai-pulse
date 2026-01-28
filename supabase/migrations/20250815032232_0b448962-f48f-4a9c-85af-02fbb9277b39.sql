@@ -1,26 +1,31 @@
 -- Fix the cron system to actually trigger scraping jobs instead of just scheduling them
--- Update the cron job to directly call the scrape-events function for jobs that are due
-
--- First, let's unschedule the old job
-SELECT cron.unschedule('scraping-jobs-runner-simple');
-
--- Create a new enhanced cron job that actually triggers the jobs
-SELECT cron.schedule(
-  'scraping-jobs-auto-trigger',
-  '*/15 * * * *', -- Every 15 minutes
-  $$
-  DO $$
-  DECLARE
-    job_record RECORD;
-    function_url TEXT;
-    http_response_id BIGINT;
-  BEGIN
-    -- Set the function URL
-    function_url := 'https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/scrape-events';
-    
-    -- Log the cron execution
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🔄 Auto-trigger cron job started', NOW());
+-- Guard the entire migration since it depends on optional tables (cron_logs, scraping_jobs)
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'scraping_jobs')
+       AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        
+        -- First, let's unschedule the old job (if it exists)
+        IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'scraping-jobs-runner-simple') THEN
+            PERFORM cron.unschedule('scraping-jobs-runner-simple');
+        END IF;
+        
+        -- Create a new enhanced cron job that actually triggers the jobs
+        PERFORM cron.schedule(
+          'scraping-jobs-auto-trigger',
+          '*/15 * * * *', -- Every 15 minutes
+          $cron$
+          DECLARE
+            job_record RECORD;
+            function_url TEXT;
+            http_response_id BIGINT;
+          BEGIN
+            -- Set the function URL
+            function_url := 'https://wtkhfqpmcegzcbngroui.supabase.co/functions/v1/scrape-events';
+            
+            -- Log the cron execution
+            INSERT INTO public.cron_logs (message, created_at) 
+            VALUES ('🔄 Auto-trigger cron job started', NOW());
     
     -- Find jobs that are due to run (either scheduled_for_trigger or overdue)
     FOR job_record IN 
@@ -92,10 +97,13 @@ SELECT cron.schedule(
       END;
     END LOOP;
     
-    -- Log completion
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🔄 Auto-trigger cron job completed', NOW());
-    
-  END $$;
-  $$
+            -- Log completion
+            INSERT INTO public.cron_logs (message, created_at) 
+            VALUES ('🔄 Auto-trigger cron job completed', NOW());
+            
+          END;
+          $cron$
+        );
+    END IF;
+END $$;
 );

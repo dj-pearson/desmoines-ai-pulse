@@ -70,16 +70,18 @@ CREATE TABLE public.user_activities (
 -- Enhanced user reputation table (update existing)
 DO $$
 BEGIN
-  -- Add new columns to existing user_reputation table
-  ALTER TABLE public.user_reputation 
-  ADD COLUMN IF NOT EXISTS experience_points integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS current_level integer DEFAULT 1,
-  ADD COLUMN IF NOT EXISTS current_level_progress integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS next_level_xp integer DEFAULT 100,
-  ADD COLUMN IF NOT EXISTS total_badges integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS rank_position integer,
-  ADD COLUMN IF NOT EXISTS streak_days integer DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS last_activity_date date;
+  -- Add new columns to existing user_reputation table (if table exists)
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_reputation') THEN
+    ALTER TABLE public.user_reputation 
+    ADD COLUMN IF NOT EXISTS experience_points integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS current_level integer DEFAULT 1,
+    ADD COLUMN IF NOT EXISTS current_level_progress integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS next_level_xp integer DEFAULT 100,
+    ADD COLUMN IF NOT EXISTS total_badges integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS rank_position integer,
+    ADD COLUMN IF NOT EXISTS streak_days integer DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS last_activity_date date;
+  END IF;
 END $$;
 
 -- Create function to calculate required XP for level
@@ -266,7 +268,13 @@ CREATE POLICY "Anyone can view active challenges" ON public.community_challenges
 FOR SELECT USING (is_active = true);
 
 CREATE POLICY "Admins can manage challenges" ON public.community_challenges
-FOR ALL USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+FOR ALL USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  )
+);
 
 CREATE POLICY "Users can view their own participation" ON public.user_challenge_participation
 FOR SELECT USING (auth.uid() = user_id);

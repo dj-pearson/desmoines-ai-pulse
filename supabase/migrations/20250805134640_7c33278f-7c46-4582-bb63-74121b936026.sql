@@ -63,7 +63,7 @@ RETURNS TABLE (
   endpoint TEXT,
   details JSONB,
   severity TEXT,
-  timestamp TIMESTAMPTZ,
+  event_timestamp TIMESTAMPTZ,
   user_id UUID,
   action TEXT,
   resource TEXT,
@@ -76,7 +76,11 @@ SET search_path = ''
 AS $$
 BEGIN
   -- Check if user has admin role
-  IF NOT public.user_has_role_or_higher(auth.uid(), 'admin') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_roles.user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  ) THEN
     RAISE EXCEPTION 'Unauthorized access to security events';
   END IF;
 
@@ -88,7 +92,7 @@ BEGIN
     sal.endpoint,
     sal.details,
     sal.severity,
-    sal.timestamp,
+    sal.timestamp AS event_timestamp,
     sal.user_id,
     sal.action,
     sal.resource,
@@ -127,7 +131,11 @@ DECLARE
   v_suspicious_activity INTEGER;
 BEGIN
   -- Check if user has admin role
-  IF NOT public.user_has_role_or_higher(auth.uid(), 'admin') THEN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_roles.user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  ) THEN
     RAISE EXCEPTION 'Unauthorized access to security statistics';
   END IF;
 

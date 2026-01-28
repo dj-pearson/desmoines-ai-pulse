@@ -4,6 +4,15 @@
 -- First, let's see what we're working with
 -- SELECT id, title, date, date AT TIME ZONE 'America/Chicago' as cdt_date FROM events ORDER BY date LIMIT 10;
 
+-- Create migration_logs table if it doesn't exist (do this first!)
+CREATE TABLE IF NOT EXISTS public.migration_logs (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    migration_name TEXT NOT NULL,
+    description TEXT,
+    affected_rows INTEGER,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
 -- Convert UTC midnight dates to CDT evening times
 -- Most events are typically in the evening (7-8pm), so we'll use 7:30pm CDT as default
 -- UTC midnight becomes CDT 6pm previous day (during CDT) or 7pm previous day (during CST)
@@ -21,17 +30,9 @@ WHERE
     ;
 
 -- Log the changes made
-INSERT INTO public.migration_logs (migration_name, description, affected_rows, created_at)
+INSERT INTO public.migration_logs (migration_name, description, affected_rows)
 SELECT 
     '20250730040000_convert_utc_to_cdt_events',
     'Converted UTC midnight events to CDT evening times (7:30 PM)',
-    (SELECT COUNT(*) FROM events ;
-
--- Create migration_logs table if it doesn't exist
-CREATE TABLE IF NOT EXISTS public.migration_logs (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    migration_name TEXT NOT NULL,
-    description TEXT,
-    affected_rows INTEGER,
-    created_at TIMESTAMPTZ DEFAULT now()
-);
+    (SELECT COUNT(*) FROM events)
+WHERE NOT EXISTS (SELECT 1 FROM public.migration_logs WHERE migration_name = '20250730040000_convert_utc_to_cdt_events');

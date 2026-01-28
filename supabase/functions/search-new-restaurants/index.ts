@@ -200,6 +200,30 @@ serve(async (req) => {
       "existing restaurants in database"
     );
 
+    // Fetch blacklisted places
+    console.log("Fetching blacklisted places...");
+    const { data: blacklistedPlaces, error: blacklistError } = await supabase
+      .from("restaurant_blacklist")
+      .select("google_place_id, restaurant_name")
+      .or("expires_at.is.null,expires_at.gt.now()");
+
+    if (blacklistError) {
+      console.error("Error fetching blacklist:", blacklistError);
+      // Continue without filtering if blacklist fetch fails
+    }
+
+    const blacklistedPlaceIds = new Set(
+      blacklistedPlaces?.filter((b) => b.google_place_id).map((b) => b.google_place_id) || []
+    );
+    const blacklistedNames = new Set(
+      blacklistedPlaces?.map((b) => b.restaurant_name.toLowerCase()) || []
+    );
+    console.log(
+      "Found",
+      blacklistedPlaceIds.size + blacklistedNames.size,
+      "blacklisted entries"
+    );
+
     // Filter out fast food chains and already existing restaurants
     const filteredRestaurants = placesData.places.filter((place: any) => {
       // Skip fast food chains (common chain indicators)
@@ -245,8 +269,12 @@ serve(async (req) => {
       const isExisting =
         existingPlaceIds.has(place.id) || existingNames.has(nameLower);
 
+      // Check if restaurant is blacklisted
+      const isBlacklisted =
+        blacklistedPlaceIds.has(place.id) || blacklistedNames.has(nameLower);
+
       console.log(
-        `Filtering ${nameLower}: chain=${isChain}, restaurant=${isRestaurant}, existing=${isExisting}, operational=${
+        `Filtering ${nameLower}: chain=${isChain}, restaurant=${isRestaurant}, existing=${isExisting}, blacklisted=${isBlacklisted}, operational=${
           place.businessStatus === "OPERATIONAL"
         }`
       );
@@ -255,6 +283,7 @@ serve(async (req) => {
         !isChain &&
         isRestaurant &&
         !isExisting &&
+        !isBlacklisted &&
         place.businessStatus === "OPERATIONAL"
       );
     });

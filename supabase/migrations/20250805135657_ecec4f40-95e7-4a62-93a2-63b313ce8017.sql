@@ -14,17 +14,27 @@ CREATE INDEX IF NOT EXISTS idx_restaurants_location_rating ON restaurants(locati
 CREATE INDEX IF NOT EXISTS idx_restaurants_status_opening ON restaurants(status, opening_date) WHERE status IN ('opening_soon', 'announced');
 CREATE INDEX IF NOT EXISTS idx_restaurants_full_text ON restaurants USING gin(to_tsvector('english', name || ' ' || COALESCE(description, '') || ' ' || COALESCE(cuisine, '')));
 
--- Attractions table indexes
-CREATE INDEX IF NOT EXISTS idx_attractions_featured_rating ON attractions(is_featured, rating DESC) WHERE is_featured = true;
-CREATE INDEX IF NOT EXISTS idx_attractions_type_rating ON attractions(type, rating DESC);
-CREATE INDEX IF NOT EXISTS idx_attractions_location_rating ON attractions(location, rating DESC);
-CREATE INDEX IF NOT EXISTS idx_attractions_full_text ON attractions USING gin(to_tsvector('english', name || ' ' || COALESCE(description, '') || ' ' || COALESCE(type, '')));
+-- Attractions table indexes (guarded)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'attractions') THEN
+    CREATE INDEX IF NOT EXISTS idx_attractions_featured_rating ON attractions(is_featured, rating DESC) WHERE is_featured = true;
+    CREATE INDEX IF NOT EXISTS idx_attractions_type_rating ON attractions(type, rating DESC);
+    CREATE INDEX IF NOT EXISTS idx_attractions_location_rating ON attractions(location, rating DESC);
+    CREATE INDEX IF NOT EXISTS idx_attractions_full_text ON attractions USING gin(to_tsvector('english', name || ' ' || COALESCE(description, '') || ' ' || COALESCE(type, '')));
+  END IF;
+END $$;
 
--- Playgrounds table indexes
-CREATE INDEX IF NOT EXISTS idx_playgrounds_featured_rating ON playgrounds(is_featured, rating DESC) WHERE is_featured = true;
-CREATE INDEX IF NOT EXISTS idx_playgrounds_age_rating ON playgrounds(age_range, rating DESC);
-CREATE INDEX IF NOT EXISTS idx_playgrounds_location_rating ON playgrounds(location, rating DESC);
-CREATE INDEX IF NOT EXISTS idx_playgrounds_full_text ON playgrounds USING gin(to_tsvector('english', name || ' ' || COALESCE(description, '') || ' ' || COALESCE(amenities, '')));
+-- Playgrounds table indexes (guarded)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'playgrounds') THEN
+    CREATE INDEX IF NOT EXISTS idx_playgrounds_featured_rating ON playgrounds(is_featured, rating DESC) WHERE is_featured = true;
+    CREATE INDEX IF NOT EXISTS idx_playgrounds_age_rating ON playgrounds(age_range, rating DESC);
+    CREATE INDEX IF NOT EXISTS idx_playgrounds_location_rating ON playgrounds(location, rating DESC);
+    CREATE INDEX IF NOT EXISTS idx_playgrounds_full_text ON playgrounds USING gin(to_tsvector('english', name || ' ' || COALESCE(description, '') || ' ' || COALESCE(amenities, '')));
+  END IF;
+END $$;
 
 -- Security audit logs indexes (from previous migration)
 CREATE INDEX IF NOT EXISTS idx_security_audit_logs_timestamp ON security_audit_logs(timestamp DESC);
@@ -33,7 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_security_audit_logs_user_id ON security_audit_log
 
 -- CSP violation logs indexes (from previous migration)
 CREATE INDEX IF NOT EXISTS idx_csp_violation_logs_timestamp ON csp_violation_logs(timestamp DESC);
-CREATE INDEX IF NOT EXISTS idx_csp_violation_logs_directive ON csp_violation_logs(directive);
+CREATE INDEX IF NOT EXISTS idx_csp_violation_logs_violated_directive ON csp_violation_logs(violated_directive);
 
 -- Create materialized view for trending content (refreshed periodically)
 CREATE MATERIALIZED VIEW IF NOT EXISTS trending_events AS
@@ -41,7 +51,7 @@ SELECT
     e.*,
     COUNT(sal.id) as interaction_count
 FROM events e
-LEFT JOIN security_audit_logs sal ON sal.metadata->>'event_id' = e.id::text 
+LEFT JOIN security_audit_logs sal ON sal.details->>'event_id' = e.id::text 
     AND sal.event_type = 'event_view' 
     AND sal.timestamp > NOW() - INTERVAL '7 days'
 WHERE e.date >= CURRENT_DATE
@@ -67,5 +77,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Add query optimization hints
 COMMENT ON TABLE events IS 'Events table optimized for date-based queries and full-text search';
 COMMENT ON TABLE restaurants IS 'Restaurants table optimized for featured content and location-based queries';
-COMMENT ON TABLE attractions IS 'Attractions table optimized for type and rating queries';
-COMMENT ON TABLE playgrounds IS 'Playgrounds table optimized for age-range and location queries';
+
+-- Add comments for optional tables if they exist
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'attractions') THEN
+    EXECUTE 'COMMENT ON TABLE attractions IS ''Attractions table optimized for type and rating queries''';
+  END IF;
+  
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'playgrounds') THEN
+    EXECUTE 'COMMENT ON TABLE playgrounds IS ''Playgrounds table optimized for age-range and location queries''';
+  END IF;
+END $$;

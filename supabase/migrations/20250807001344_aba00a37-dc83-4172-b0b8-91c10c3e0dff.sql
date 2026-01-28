@@ -21,10 +21,10 @@ SET
       CASE 
         WHEN EXTRACT(HOUR FROM date) = 0 AND EXTRACT(MINUTE FROM date) = 0 AND EXTRACT(SECOND FROM date) = 0 THEN
           -- For midnight UTC events, show as 7:30 PM on the previous day in Central Time
-          TO_CHAR((date - INTERVAL '5 hours 30 minutes'), 'YYYY-MM-DD HH24:MI:SS')
+          (date - INTERVAL '5 hours 30 minutes')
         ELSE
           -- For other events, convert to Central Time
-          TO_CHAR((date - INTERVAL '5 hours'), 'YYYY-MM-DD HH24:MI:SS')
+          (date - INTERVAL '5 hours')
       END
     ELSE NULL
   END,

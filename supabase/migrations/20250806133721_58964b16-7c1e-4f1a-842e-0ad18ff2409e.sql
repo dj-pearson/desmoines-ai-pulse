@@ -19,7 +19,13 @@ ALTER TABLE public.failed_auth_attempts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Only admins can view failed auth attempts"
 ON public.failed_auth_attempts
 FOR SELECT
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  )
+);
 
 -- System can insert failed auth attempts
 CREATE POLICY "System can insert failed auth attempts"
@@ -54,13 +60,25 @@ ALTER TABLE public.admin_action_logs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Only admins can view admin action logs"
 ON public.admin_action_logs
 FOR SELECT
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+USING (
+    EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid()
+        AND role IN ('admin', 'root_admin')
+    )
+);
 
 -- Moderators and above can insert admin action logs
 CREATE POLICY "Moderators can insert admin action logs"
 ON public.admin_action_logs
 FOR INSERT
-WITH CHECK (user_has_role_or_higher(auth.uid(), 'moderator'::user_role));
+WITH CHECK (
+    EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_id = auth.uid()
+        AND role IN ('moderator', 'admin', 'root_admin')
+    )
+);
 
 -- Create indexes for admin action logs
 CREATE INDEX IF NOT EXISTS idx_admin_action_logs_admin_user ON public.admin_action_logs(admin_user_id);

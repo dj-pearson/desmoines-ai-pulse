@@ -14,7 +14,13 @@ ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Only admins can manage system settings" 
 ON public.system_settings 
 FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+USING (
+  EXISTS (
+    SELECT 1 FROM public.user_roles 
+    WHERE user_id = auth.uid() 
+    AND role IN ('admin', 'root_admin')
+  )
+);
 
 -- Create function for database optimization
 CREATE OR REPLACE FUNCTION public.optimize_database_performance()
