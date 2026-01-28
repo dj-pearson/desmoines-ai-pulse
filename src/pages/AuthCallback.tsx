@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
-import { SecurityUtils } from "@/lib/security";
+import { SecurityUtils } from "@/lib/securityUtils";
 
 /**
  * AuthCallback Component

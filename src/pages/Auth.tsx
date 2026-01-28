@@ -14,7 +14,7 @@ import { User, LogIn, UserPlus, MapPin, Heart, Calendar, Music, Coffee, Camera, 
 import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { SecurityUtils } from "@/lib/security";
+import { SecurityUtils } from "@/lib/securityUtils";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { useSecurityAudit } from '@/hooks/useSecurityAudit';
-import { SecurityUtils, ValidationSchemas } from '@/lib/security';
+import { SecurityUtils, ValidationSchemas } from '@/lib/securityUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
 
