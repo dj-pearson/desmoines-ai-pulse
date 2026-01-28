@@ -202,10 +202,11 @@ serve(async (req) => {
 
     // Fetch blacklisted places
     console.log("Fetching blacklisted places...");
+    const now = new Date().toISOString();
     const { data: blacklistedPlaces, error: blacklistError } = await supabase
       .from("restaurant_blacklist")
       .select("google_place_id, restaurant_name")
-      .or("expires_at.is.null,expires_at.gt.now()");
+      .or(`expires_at.is.null,expires_at.gt.${now}`);
 
     if (blacklistError) {
       console.error("Error fetching blacklist:", blacklistError);
@@ -220,9 +221,16 @@ serve(async (req) => {
     );
     console.log(
       "Found",
-      blacklistedPlaceIds.size + blacklistedNames.size,
-      "blacklisted entries"
+      blacklistedPlaces?.length || 0,
+      "blacklisted entries:",
+      blacklistedPlaceIds.size,
+      "by place_id,",
+      blacklistedNames.size,
+      "by name"
     );
+    if (blacklistedPlaces?.length) {
+      console.log("Blacklisted names:", Array.from(blacklistedNames).slice(0, 10));
+    }
 
     // Filter out fast food chains and already existing restaurants
     const filteredRestaurants = placesData.places.filter((place: any) => {
