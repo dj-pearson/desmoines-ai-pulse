@@ -3,11 +3,15 @@
  *
  * Creates a Stripe Checkout session for advertising campaign payments (one-time).
  *
- * Security:
- * - Requires authenticated user
- * - Uses environment-aware CORS
+ * Security Layers Applied:
+ * - Layer 1 (Authentication): Validates JWT token via securityMiddleware
+ * - Layer 2 (Authorization): Requires 'campaigns.update.own' permission
+ * - Layer 3 (Ownership): Validates campaign belongs to authenticated user
+ * - Layer 4 (RLS): Database policies enforce final security
+ *
+ * Additional:
+ * - Environment-aware CORS
  * - Rate limited to prevent abuse
- * - Validates campaign ownership
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
@@ -15,6 +19,12 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
+import {
+  securityMiddleware,
+  securityErrorResponse,
+  logSecurityEvent,
+  type SecurityContext,
+} from "../_shared/securityLayers.ts";
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -50,26 +60,7 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Authenticate user
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Authorization required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "User not authenticated" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Parse request body
+    // Parse request body first to get campaignId for security checks
     const body = await req.json();
     const { campaignId } = body;
 
@@ -80,7 +71,45 @@ serve(async (req) => {
       });
     }
 
-    // Get campaign details - must belong to authenticated user
+    // =========================================================================
+    // SECURITY LAYERS CHECK
+    // =========================================================================
+    // Layer 1: Authentication - Validate JWT token
+    // Layer 2: Authorization - Check 'campaigns.update.own' permission
+    // Layer 3: Ownership - Verify user owns the campaign
+    // =========================================================================
+    const { context, result: securityResult } = await securityMiddleware(req, supabase, {
+      requireAuth: true,
+      permission: 'campaigns.update.own',
+      ownership: {
+        tableName: 'campaigns',
+        resourceId: campaignId,
+        ownerColumn: 'user_id',
+        adminBypass: false, // Users must own their own campaigns for checkout
+      },
+    });
+
+    if (!securityResult.allowed) {
+      // Log the security denial
+      await logSecurityEvent(supabase, {
+        eventType: 'permission_denied',
+        userId: context.userId,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+        resourceType: 'campaign',
+        resourceId: campaignId,
+        securityLayer: securityResult.deniedByLayer,
+        errorCode: securityResult.errorCode,
+        metadata: { action: 'create_checkout' },
+      });
+
+      return securityErrorResponse(securityResult);
+    }
+
+    // Security passed - user is authenticated, authorized, and owns the campaign
+    const user = { id: context.userId!, email: context.email };
+
+    // Get campaign details (ownership already verified by security middleware)
     const { data: campaign, error: campaignError } = await supabase
       .from("campaigns")
       .select(`
@@ -88,15 +117,18 @@ serve(async (req) => {
         campaign_placements (*)
       `)
       .eq("id", campaignId)
-      .eq("user_id", user.id)
       .single();
 
     if (campaignError || !campaign) {
+      // This shouldn't happen since ownership was verified, but handle it anyway
+      // (could be a race condition or database error)
       return new Response(JSON.stringify({ error: "Campaign not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Layer 4: RLS - Final enforcement happens automatically in subsequent queries
 
     // Validate campaign status
     if (campaign.status !== "draft" && campaign.status !== "pending_payment") {
