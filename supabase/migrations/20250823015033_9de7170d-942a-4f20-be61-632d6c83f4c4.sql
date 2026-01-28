@@ -15,8 +15,10 @@ BEGIN
     WHERE nspname = 'public'
   LOOP
     -- Log extensions in public schema that need attention
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('⚠️ Extension in public schema: ' || ext_record.extname || ' (requires manual review)', NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('⚠️ Extension in public schema: ' || ext_record.extname || ' (requires manual review)', NOW());
+    END IF;
   END LOOP;
 END $$;
 
@@ -27,14 +29,17 @@ DECLARE
   func_record RECORD;
 BEGIN
   FOR func_record IN 
-    SELECT schemaname, functionname
-    FROM pg_functions 
-    WHERE schemaname = 'public' 
-    AND functionname LIKE '%purge%' OR functionname LIKE '%social%' OR functionname LIKE '%trending%'
+    SELECT n.nspname as schemaname, p.proname as functionname
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public' 
+    AND (p.proname LIKE '%purge%' OR p.proname LIKE '%social%' OR p.proname LIKE '%trending%')
   LOOP
     -- Log functions for security review
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🔍 Function security review: ' || func_record.schemaname || '.' || func_record.functionname, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('🔍 Function security review: ' || func_record.schemaname || '.' || func_record.functionname, NOW());
+    END IF;
   END LOOP;
 END $$;
 
@@ -57,5 +62,9 @@ INSERT INTO public.security_audit_tracking (issue_type, description) VALUES
 ('leaked_password_protection', 'Leaked password protection disabled - enable in auth settings');
 
 -- Log completion
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🔒 Security audit completed - SQL fixes applied, configuration issues logged', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔒 Security audit completed - SQL fixes applied, configuration issues logged', NOW());
+  END IF;
+END $$;

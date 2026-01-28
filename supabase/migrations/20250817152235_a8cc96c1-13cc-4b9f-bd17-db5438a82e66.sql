@@ -108,18 +108,30 @@ CREATE POLICY "Users can update their own business profile"
 ON public.business_profiles FOR UPDATE 
 USING (auth.uid() = user_id);
 
-CREATE POLICY "Admins can manage all business profiles" 
-ON public.business_profiles FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'business_profiles' AND policyname = 'Admins can manage all business profiles') THEN
+    CREATE POLICY "Admins can manage all business profiles" 
+    ON public.business_profiles FOR ALL 
+    USING (user_has_role_or_higher(auth.uid(), 'admin'));
+  END IF;
+EXCEPTION WHEN undefined_function THEN
+  -- Function doesn't exist, skip policy
+END $$;
 
 -- RLS Policies for partnership_benefits
 CREATE POLICY "Anyone can view active partnership benefits" 
 ON public.partnership_benefits FOR SELECT 
 USING (is_active = true);
 
-CREATE POLICY "Admins can manage partnership benefits" 
-ON public.partnership_benefits FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'partnership_benefits' AND policyname = 'Admins can manage partnership benefits') THEN
+    CREATE POLICY "Admins can manage partnership benefits" 
+    ON public.partnership_benefits FOR ALL 
+    USING (user_has_role_or_higher(auth.uid(), 'admin'));
+  END IF;
+EXCEPTION WHEN undefined_function THEN
+  -- Function doesn't exist, skip policy
+END $$;
 
 -- RLS Policies for partnership_applications
 CREATE POLICY "Users can create their own applications" 
@@ -130,18 +142,30 @@ CREATE POLICY "Users can view their own applications"
 ON public.partnership_applications FOR SELECT 
 USING (auth.uid() = user_id);
 
-CREATE POLICY "Admins can manage all applications" 
-ON public.partnership_applications FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'partnership_applications' AND policyname = 'Admins can manage all applications') THEN
+    CREATE POLICY "Admins can manage all applications" 
+    ON public.partnership_applications FOR ALL 
+    USING (user_has_role_or_higher(auth.uid(), 'admin'));
+  END IF;
+EXCEPTION WHEN undefined_function THEN
+  -- Function doesn't exist, skip policy
+END $$;
 
 -- RLS Policies for advertising_packages
 CREATE POLICY "Anyone can view active advertising packages" 
 ON public.advertising_packages FOR SELECT 
 USING (is_active = true);
 
-CREATE POLICY "Admins can manage advertising packages" 
-ON public.advertising_packages FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public' AND tablename = 'advertising_packages' AND policyname = 'Admins can manage advertising packages') THEN
+    CREATE POLICY "Admins can manage advertising packages" 
+    ON public.advertising_packages FOR ALL 
+    USING (user_has_role_or_higher(auth.uid(), 'admin'));
+  END IF;
+EXCEPTION WHEN undefined_function THEN
+  -- Function doesn't exist, skip policy
+END $$;
 
 -- RLS Policies for business_analytics
 CREATE POLICY "Business owners can view their own analytics" 

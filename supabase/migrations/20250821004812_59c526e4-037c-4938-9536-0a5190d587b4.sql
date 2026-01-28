@@ -14,8 +14,10 @@ DECLARE
   function_response JSONB;
 BEGIN
   -- Log the cron execution
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🚀 Auto-trigger with direct function calls started', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🚀 Auto-trigger with direct function calls started', NOW());
+  END IF;
   
   -- Process jobs that are due to run
   FOR job_record IN 
@@ -68,21 +70,25 @@ BEGIN
       WHERE id = job_record.id;
       
       -- Log successful execution
-      INSERT INTO public.cron_logs (message, job_id, created_at) 
-      VALUES (
-        '✅ Auto-executed job: ' || job_record.name || 
-        ' - found ' || COALESCE((function_response->>'total_events_found')::integer, 0) || ' events' ||
-        ' (next: ' || next_run_time || ')', 
-        job_record.id, 
-        NOW()
-      );
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, created_at) 
+        VALUES (
+          '✅ Auto-executed job: ' || job_record.name || 
+          ' - found ' || COALESCE((function_response->>'total_events_found')::integer, 0) || ' events' ||
+          ' (next: ' || next_run_time || ')', 
+          job_record.id, 
+          NOW()
+        );
+      END IF;
       
       jobs_processed := jobs_processed + 1;
       
     EXCEPTION WHEN OTHERS THEN
       -- Log error and reset job
-      INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
-      VALUES ('❌ Error auto-executing: ' || job_record.name, job_record.id, SQLERRM, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
+        VALUES ('❌ Error auto-executing: ' || job_record.name, job_record.id, SQLERRM, NOW());
+      END IF;
       
       -- Reset job status and retry later
       UPDATE public.scraping_jobs 
@@ -92,8 +98,10 @@ BEGIN
   END LOOP;
   
   -- Log completion
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🚀 Auto-trigger completed: ' || jobs_processed || ' jobs executed automatically', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🚀 Auto-trigger completed: ' || jobs_processed || ' jobs executed automatically', NOW());
+  END IF;
   
   -- Clean up old logs
   DELETE FROM public.cron_logs 

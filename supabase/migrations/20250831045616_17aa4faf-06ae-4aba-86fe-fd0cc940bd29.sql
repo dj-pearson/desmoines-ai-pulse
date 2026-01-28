@@ -15,16 +15,22 @@ CREATE TABLE IF NOT EXISTS public.social_media_schedules (
 ALTER TABLE public.social_media_schedules ENABLE ROW LEVEL SECURITY;
 
 -- Create policy for admin access only
-CREATE POLICY "Admins can manage social media schedules" 
-ON public.social_media_schedules 
-FOR ALL 
-USING (
-  EXISTS (
-    SELECT 1 FROM public.profiles 
-    WHERE user_id = auth.uid() 
-    AND user_role IN ('root_admin', 'admin')
-  )
-);
+DO $$ BEGIN
+  CREATE POLICY "Admins can manage social media schedules" 
+  ON public.social_media_schedules 
+  FOR ALL 
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles 
+      WHERE user_id = auth.uid() 
+      AND user_role IN ('root_admin', 'admin')
+    )
+  );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_table THEN NULL;
+  WHEN undefined_column THEN NULL;
+END $$;
 
 -- Insert default schedules for events at 9 AM and restaurants at 6 PM
 INSERT INTO public.social_media_schedules (schedule_type, scheduled_time, next_run) VALUES
@@ -50,8 +56,10 @@ DECLARE
   http_result INTEGER;
 BEGIN
   -- Log the automation run
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🤖 Social media automation check started', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🤖 Social media automation check started', NOW());
+  END IF;
 
   -- Process due schedules
   FOR schedule_rec IN 
@@ -87,17 +95,21 @@ BEGIN
       WHERE id = schedule_rec.id;
 
       -- Log successful execution
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('✅ Social media post generated and published: ' || schedule_rec.schedule_type, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('✅ Social media post generated and published: ' || schedule_rec.schedule_type, NOW());
+      END IF;
 
     EXCEPTION WHEN OTHERS THEN
       -- Log error and reschedule for 1 hour later
-      INSERT INTO public.cron_logs (message, error_details, created_at) 
-      VALUES (
-        '❌ Social media automation failed for: ' || schedule_rec.schedule_type,
-        SQLERRM,
-        NOW()
-      );
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, error_details, created_at) 
+        VALUES (
+          '❌ Social media automation failed for: ' || schedule_rec.schedule_type,
+          SQLERRM,
+          NOW()
+        );
+      END IF;
 
       -- Reschedule for 1 hour later
       UPDATE public.social_media_schedules 
@@ -107,8 +119,10 @@ BEGIN
   END LOOP;
 
   -- Log completion
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🤖 Social media automation check completed', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🤖 Social media automation check completed', NOW());
+  END IF;
 END;
 $$;
 
@@ -126,8 +140,10 @@ DECLARE
   schedules_updated INTEGER := 0;
 BEGIN
   -- Log the cron job execution
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('Starting enhanced cron job run (auto-detects schedule changes)', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('Starting enhanced cron job run (auto-detects schedule changes)', NOW());
+  END IF;
   
   -- First, update any jobs where the schedule has changed but next_run wasn't recalculated
   FOR job_record IN 
@@ -162,8 +178,10 @@ BEGIN
     SET next_run = next_run_time
     WHERE id = job_record.id;
     
-    INSERT INTO public.cron_logs (message, job_id, created_at) 
-    VALUES ('🔄 Auto-updated schedule for: ' || job_record.name || ' (new next run: ' || next_run_time || ')', job_record.id, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, job_id, created_at) 
+      VALUES ('🔄 Auto-updated schedule for: ' || job_record.name || ' (new next run: ' || next_run_time || ')', job_record.id, NOW());
+    END IF;
     
     schedules_updated := schedules_updated + 1;
   END LOOP;
@@ -205,19 +223,23 @@ BEGIN
         updated_at = NOW()
       WHERE id = job_record.id;
       
-      INSERT INTO public.cron_logs (message, job_id, created_at) 
-      VALUES ('🔵 Job scheduled for manual trigger: ' || job_record.name || ' (next run: ' || next_run_time || ')', job_record.id, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, created_at) 
+        VALUES ('🔵 Job scheduled for manual trigger: ' || job_record.name || ' (next run: ' || next_run_time || ')', job_record.id, NOW());
+      END IF;
       
       jobs_processed := jobs_processed + 1;
       
     EXCEPTION WHEN OTHERS THEN
-      INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
-      VALUES (
-        '❌ Error processing job: ' || job_record.name, 
-        job_record.id,
-        SQLERRM,
-        NOW()
-      );
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
+        VALUES (
+          '❌ Error processing job: ' || job_record.name, 
+          job_record.id,
+          SQLERRM,
+          NOW()
+        );
+      END IF;
       
       UPDATE public.scraping_jobs 
       SET status = 'idle', next_run = NOW() + INTERVAL '1 hour', updated_at = NOW()
@@ -230,8 +252,10 @@ BEGIN
   
   -- Trigger AI enhancement when we process jobs
   IF jobs_processed > 0 AND (jobs_processed % 20 = 0 OR (EXTRACT(HOUR FROM NOW()) IN (6, 18) AND jobs_processed > 0)) THEN
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🤖 Triggering AI bulk enhancement (processed ' || jobs_processed || ' jobs or scheduled time)', NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('🤖 Triggering AI bulk enhancement (processed ' || jobs_processed || ' jobs or scheduled time)', NOW());
+    END IF;
     
     BEGIN
       PERFORM net.http_post(
@@ -246,17 +270,23 @@ BEGIN
         )::text
       );
       
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('✨ AI bulk enhancement triggered successfully (batch size: 15)', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('✨ AI bulk enhancement triggered successfully (batch size: 15)', NOW());
+      END IF;
       
     EXCEPTION WHEN OTHERS THEN
-      INSERT INTO public.cron_logs (message, error_details, created_at) 
-      VALUES ('❌ Failed to trigger AI bulk enhancement', SQLERRM, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, error_details, created_at) 
+        VALUES ('❌ Failed to trigger AI bulk enhancement', SQLERRM, NOW());
+      END IF;
     END;
   END IF;
 
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('✅ Enhanced cron completed. Updated ' || schedules_updated || ' schedules, processed ' || jobs_processed || ' jobs.', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('✅ Enhanced cron completed. Updated ' || schedules_updated || ' schedules, processed ' || jobs_processed || ' jobs.', NOW());
+  END IF;
   
   DELETE FROM public.cron_logs 
   WHERE id NOT IN (

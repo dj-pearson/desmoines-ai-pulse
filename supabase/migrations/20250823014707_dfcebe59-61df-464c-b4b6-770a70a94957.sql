@@ -17,8 +17,10 @@ BEGIN
   cutoff_date := CURRENT_DATE - (retention_months || ' months')::INTERVAL;
   
   -- Log the purge operation start
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🗑️ Starting event purge for events older than ' || cutoff_date, NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🗑️ Starting event purge for events older than ' || cutoff_date, NOW());
+  END IF;
   
   -- Count events to be deleted
   SELECT COUNT(*) INTO events_deleted
@@ -106,8 +108,10 @@ BEGIN
   );
   
   -- Log the completion
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('✅ Event purge completed: ' || events_deleted || ' events deleted (older than ' || cutoff_date || ')', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('✅ Event purge completed: ' || events_deleted || ' events deleted (older than ' || cutoff_date || ')', NOW());
+  END IF;
   
   RETURN result;
 END;
@@ -126,5 +130,9 @@ SELECT cron.schedule(
 SELECT jobname, schedule, active FROM cron.job WHERE jobname = 'monthly-event-purge';
 
 -- Log the setup
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('📅 Monthly event purge cron job scheduled (6 month retention)', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('📅 Monthly event purge cron job scheduled (6 month retention)', NOW());
+  END IF;
+END $$;

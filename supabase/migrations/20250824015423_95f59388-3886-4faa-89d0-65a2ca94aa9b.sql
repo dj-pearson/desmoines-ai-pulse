@@ -13,8 +13,10 @@ BEGIN
     WHERE schemaname = 'public'
   LOOP
     -- Log each view for manual review
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🔍 Found view for security review: ' || view_info.schemaname || '.' || view_info.viewname, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('🔍 Found view for security review: ' || view_info.schemaname || '.' || view_info.viewname, NOW());
+    END IF;
   END LOOP;
 END $$;
 
@@ -35,8 +37,10 @@ BEGIN
   cutoff_date := CURRENT_DATE - (retention_months || ' months')::INTERVAL;
   
   -- Log the purge operation start
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🗑️ Starting event purge for events older than ' || cutoff_date, NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🗑️ Starting event purge for events older than ' || cutoff_date, NOW());
+  END IF;
   
   -- Count events to be deleted
   SELECT COUNT(*) INTO events_deleted
@@ -69,8 +73,10 @@ BEGIN
   );
   
   -- Log the completion
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('✅ Event purge completed: ' || events_deleted || ' events deleted (older than ' || cutoff_date || ')', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('✅ Event purge completed: ' || events_deleted || ' events deleted (older than ' || cutoff_date || ')', NOW());
+  END IF;
   
   RETURN result;
 END;
@@ -84,5 +90,9 @@ SET status = 'in_progress',
 WHERE issue_type IN ('function_search_path', 'security_definer_view');
 
 -- 4. Log remaining manual configuration tasks
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('📋 MANUAL CONFIG REQUIRED: Go to Supabase Dashboard > Authentication > Settings to: 1) Reduce OTP expiry time, 2) Enable leaked password protection', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('📋 MANUAL CONFIG REQUIRED: Go to Supabase Dashboard > Authentication > Settings to: 1) Reduce OTP expiry time, 2) Enable leaked password protection', NOW());
+  END IF;
+END $$;

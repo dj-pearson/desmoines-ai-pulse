@@ -10,8 +10,10 @@ DECLARE
   jobs_processed INTEGER := 0;
 BEGIN
   -- Log the cron execution
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🔄 Auto-trigger function started (no HTTP dependency)', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔄 Auto-trigger function started (no HTTP dependency)', NOW());
+  END IF;
   
   -- Process jobs that are due to run
   FOR job_record IN 
@@ -47,15 +49,19 @@ BEGIN
       WHERE id = job_record.id;
       
       -- Log that job is ready for trigger
-      INSERT INTO public.cron_logs (message, job_id, created_at) 
-      VALUES ('🔵 Job ready for trigger: ' || job_record.name || ' (next: ' || next_run_time || ')', job_record.id, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, created_at) 
+        VALUES ('🔵 Job ready for trigger: ' || job_record.name || ' (next: ' || next_run_time || ')', job_record.id, NOW());
+      END IF;
       
       jobs_processed := jobs_processed + 1;
       
     EXCEPTION WHEN OTHERS THEN
       -- Log error and reset job
-      INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
-      VALUES ('❌ Error processing: ' || job_record.name, job_record.id, SQLERRM, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
+        VALUES ('❌ Error processing: ' || job_record.name, job_record.id, SQLERRM, NOW());
+      END IF;
       
       UPDATE public.scraping_jobs 
       SET status = 'idle', next_run = NOW() + INTERVAL '1 hour', updated_at = NOW()
@@ -64,8 +70,10 @@ BEGIN
   END LOOP;
   
   -- Log completion
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🔄 Auto-trigger completed: ' || jobs_processed || ' jobs processed', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔄 Auto-trigger completed: ' || jobs_processed || ' jobs processed', NOW());
+  END IF;
   
   -- Clean up old logs
   DELETE FROM public.cron_logs 

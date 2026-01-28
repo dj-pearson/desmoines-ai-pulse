@@ -18,8 +18,10 @@ BEGIN
   -- Get current Central Time hour using reliable method
   SELECT EXTRACT(HOUR FROM (NOW() AT TIME ZONE 'America/Chicago'))::INTEGER INTO current_central_hour;
   
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🕐 Social media automation check - Central Time hour: ' || current_central_hour, NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🕐 Social media automation check - Central Time hour: ' || current_central_hour, NOW());
+  END IF;
   
   -- Get service role key from vault or use fallback
   BEGIN
@@ -39,8 +41,10 @@ BEGIN
       AND status IN ('draft', 'posted');
     
     IF events_generated = 0 THEN
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('🎉 Generating event post for today (9 AM Central)', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('🎉 Generating event post for today (9 AM Central)', NOW());
+      END IF;
       
       BEGIN
         SELECT net.http_post(
@@ -58,16 +62,22 @@ BEGIN
           )
         ) INTO social_media_response;
         
-        INSERT INTO public.cron_logs (message, created_at) 
-        VALUES ('✅ Event post generation triggered: ' || COALESCE(social_media_response, 'no response'), NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, created_at) 
+          VALUES ('✅ Event post generation triggered: ' || COALESCE(social_media_response, 'no response'), NOW());
+        END IF;
         
       EXCEPTION WHEN OTHERS THEN
-        INSERT INTO public.cron_logs (message, error_details, created_at) 
-        VALUES ('❌ Event post generation failed', SQLERRM, NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, error_details, created_at) 
+          VALUES ('❌ Event post generation failed', SQLERRM, NOW());
+        END IF;
       END;
     ELSE
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('⏩ Event already generated today (' || events_generated || ' posts found)', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('⏩ Event already generated today (' || events_generated || ' posts found)', NOW());
+      END IF;
     END IF;
   END IF;
   
@@ -82,8 +92,10 @@ BEGIN
       AND status IN ('draft', 'posted');
     
     IF restaurants_generated = 0 THEN
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('🍽️ Generating restaurant post for today (6 PM Central)', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('🍽️ Generating restaurant post for today (6 PM Central)', NOW());
+      END IF;
       
       BEGIN
         SELECT net.http_post(
@@ -101,23 +113,31 @@ BEGIN
           )
         ) INTO social_media_response;
         
-        INSERT INTO public.cron_logs (message, created_at) 
-        VALUES ('✅ Restaurant post generation triggered: ' || COALESCE(social_media_response, 'no response'), NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, created_at) 
+          VALUES ('✅ Restaurant post generation triggered: ' || COALESCE(social_media_response, 'no response'), NOW());
+        END IF;
         
       EXCEPTION WHEN OTHERS THEN
-        INSERT INTO public.cron_logs (message, error_details, created_at) 
-        VALUES ('❌ Restaurant post generation failed', SQLERRM, NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, error_details, created_at) 
+          VALUES ('❌ Restaurant post generation failed', SQLERRM, NOW());
+        END IF;
       END;
     ELSE
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('⏩ Restaurant already generated today (' || restaurants_generated || ' posts found)', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('⏩ Restaurant already generated today (' || restaurants_generated || ' posts found)', NOW());
+      END IF;
     END IF;
   END IF;
   
   -- Log when it's not the right time
   IF current_central_hour != 9 AND current_central_hour != 18 THEN
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('⏰ Not the right time for posting (hour: ' || current_central_hour || ', need 9 or 18)', NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('⏰ Not the right time for posting (hour: ' || current_central_hour || ', need 9 or 18)', NOW());
+    END IF;
   END IF;
 END;
 $$;
@@ -146,8 +166,10 @@ BEGIN
   WHERE status = 'draft'
     AND DATE(created_at AT TIME ZONE 'America/Chicago') = CURRENT_DATE;
   
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('📤 Publishing check: found ' || pending_posts_count || ' pending posts to publish', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('📤 Publishing check: found ' || pending_posts_count || ' pending posts to publish', NOW());
+  END IF;
   
   IF pending_posts_count > 0 THEN
     BEGIN
@@ -163,17 +185,23 @@ BEGIN
         )
       ) INTO social_media_response;
       
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('✅ Post publishing triggered: ' || COALESCE(social_media_response, 'no response'), NOW());
-      
-    EXCEPTION WHEN OTHERS THEN
-      INSERT INTO public.cron_logs (message, error_details, created_at) 
-      VALUES ('❌ Post publishing failed', SQLERRM, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('✅ Post publishing triggered: ' || COALESCE(social_media_response, 'no response'), NOW());
+      END IF;
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, error_details, created_at) 
+        VALUES ('❌ Post publishing failed', SQLERRM, NOW());
+      END IF;
     END;
   END IF;
 END;
 $$;
 
 -- Test the system right now
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🔧 Updated CRON social media functions with proper Central Time logic and direct generation calls', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔧 Updated CRON social media functions with proper Central Time logic and direct generation calls', NOW());
+  END IF;
+END $$;

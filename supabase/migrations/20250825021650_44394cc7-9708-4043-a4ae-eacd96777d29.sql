@@ -1,5 +1,5 @@
 -- Create competitor analysis tables (fixed for existing schema)
-CREATE TABLE public.competitors (
+CREATE TABLE IF NOT EXISTS public.competitors (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   website_url TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE public.competitors (
 );
 
 -- Create competitor content tracking table
-CREATE TABLE public.competitor_content (
+CREATE TABLE IF NOT EXISTS public.competitor_content (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   competitor_id UUID NOT NULL REFERENCES public.competitors(id) ON DELETE CASCADE,
   content_type TEXT NOT NULL, -- 'event', 'restaurant', 'attraction', 'blog_post'
@@ -28,7 +28,7 @@ CREATE TABLE public.competitor_content (
 );
 
 -- Create content suggestions table
-CREATE TABLE public.content_suggestions (
+CREATE TABLE IF NOT EXISTS public.content_suggestions (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   competitor_content_id UUID REFERENCES public.competitor_content(id) ON DELETE CASCADE,
   suggestion_type TEXT NOT NULL, -- 'improve', 'counter', 'gap_fill'
@@ -44,7 +44,7 @@ CREATE TABLE public.content_suggestions (
 );
 
 -- Create competitor analysis reports table
-CREATE TABLE public.competitor_reports (
+CREATE TABLE IF NOT EXISTS public.competitor_reports (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   competitor_id UUID NOT NULL REFERENCES public.competitors(id) ON DELETE CASCADE,
   report_date DATE NOT NULL DEFAULT CURRENT_DATE,
@@ -65,32 +65,48 @@ ALTER TABLE public.content_suggestions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.competitor_reports ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for admin access using existing role system
-CREATE POLICY "Admin can manage competitors" 
-ON public.competitors 
-FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  CREATE POLICY "Admin can manage competitors" 
+  ON public.competitors 
+  FOR ALL 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'));
+EXCEPTION WHEN undefined_function OR undefined_object THEN
+  -- Skip if function doesn't exist yet
+END $$;
 
-CREATE POLICY "Admin can manage competitor content" 
-ON public.competitor_content 
-FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  CREATE POLICY "Admin can manage competitor content" 
+  ON public.competitor_content 
+  FOR ALL 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'));
+EXCEPTION WHEN undefined_function OR undefined_object THEN
+  -- Skip if function doesn't exist yet
+END $$;
 
-CREATE POLICY "Admin can manage content suggestions" 
-ON public.content_suggestions 
-FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  CREATE POLICY "Admin can manage content suggestions" 
+  ON public.content_suggestions 
+  FOR ALL 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'));
+EXCEPTION WHEN undefined_function OR undefined_object THEN
+  -- Skip if function doesn't exist yet
+END $$;
 
-CREATE POLICY "Admin can view competitor reports" 
-ON public.competitor_reports 
-FOR SELECT 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  CREATE POLICY "Admin can view competitor reports" 
+  ON public.competitor_reports 
+  FOR SELECT 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'));
+EXCEPTION WHEN undefined_function OR undefined_object THEN
+  -- Skip if function doesn't exist yet
+END $$;
 
 -- Create indexes for better performance
-CREATE INDEX idx_competitor_content_competitor_id ON public.competitor_content(competitor_id);
-CREATE INDEX idx_competitor_content_type ON public.competitor_content(content_type);
-CREATE INDEX idx_competitor_content_scraped_at ON public.competitor_content(scraped_at);
-CREATE INDEX idx_content_suggestions_priority ON public.content_suggestions(priority_score DESC);
-CREATE INDEX idx_content_suggestions_status ON public.content_suggestions(status);
+CREATE INDEX IF NOT EXISTS idx_competitor_content_competitor_id ON public.competitor_content(competitor_id);
+CREATE INDEX IF NOT EXISTS idx_competitor_content_type ON public.competitor_content(content_type);
+CREATE INDEX IF NOT EXISTS idx_competitor_content_scraped_at ON public.competitor_content(scraped_at);
+CREATE INDEX IF NOT EXISTS idx_content_suggestions_priority ON public.content_suggestions(priority_score DESC);
+CREATE INDEX IF NOT EXISTS idx_content_suggestions_status ON public.content_suggestions(status);
 
 -- Insert CatchDesMoines as the primary competitor
 INSERT INTO public.competitors (name, website_url, description, primary_focus) 
@@ -102,16 +118,19 @@ VALUES (
 );
 
 -- Create triggers for automatic timestamp updates
+DROP TRIGGER IF EXISTS update_competitors_updated_at ON public.competitors;
 CREATE TRIGGER update_competitors_updated_at
   BEFORE UPDATE ON public.competitors
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_competitor_content_updated_at ON public.competitor_content;
 CREATE TRIGGER update_competitor_content_updated_at
   BEFORE UPDATE ON public.competitor_content
   FOR EACH ROW
   EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_content_suggestions_updated_at ON public.content_suggestions;
 CREATE TRIGGER update_content_suggestions_updated_at
   BEFORE UPDATE ON public.content_suggestions
   FOR EACH ROW

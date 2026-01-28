@@ -4,15 +4,24 @@
 ALTER TABLE public.security_audit_tracking ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policy for security_audit_tracking (admin access only)
-CREATE POLICY "Only admins can view security audit tracking" 
-ON public.security_audit_tracking 
-FOR SELECT 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+-- Wrapped in DO block to handle missing user_role type
+DO $$ BEGIN
+  CREATE POLICY "Only admins can view security audit tracking" 
+  ON public.security_audit_tracking 
+  FOR SELECT 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'));
+EXCEPTION WHEN undefined_function OR undefined_object THEN
+  -- Skip if function doesn't exist yet
+END $$;
 
-CREATE POLICY "Only admins can manage security audit tracking" 
-ON public.security_audit_tracking 
-FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+DO $$ BEGIN
+  CREATE POLICY "Only admins can manage security audit tracking" 
+  ON public.security_audit_tracking 
+  FOR ALL 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'));
+EXCEPTION WHEN undefined_function OR undefined_object THEN
+  -- Skip if function doesn't exist yet
+END $$;
 
 -- 2. Check for any other tables without RLS and enable it
 DO $$
@@ -32,14 +41,18 @@ BEGIN
     )
   LOOP
     -- Log tables without RLS
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('⚠️ Table without RLS: ' || table_record.schemaname || '.' || table_record.tablename, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('⚠️ Table without RLS: ' || table_record.schemaname || '.' || table_record.tablename, NOW());
+    END IF;
     table_count := table_count + 1;
   END LOOP;
   
   -- Log summary
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🔍 RLS audit completed: ' || table_count || ' tables may need RLS policies', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔍 RLS audit completed: ' || table_count || ' tables may need RLS policies', NOW());
+  END IF;
 END $$;
 
 -- 3. Update security audit tracking with RLS fix
@@ -50,5 +63,9 @@ SET status = 'resolved',
 WHERE issue_type = 'security_definer_view';
 
 -- 4. Log that configuration issues need manual attention
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('📋 Remaining security config needed in Supabase Dashboard: 1) Auth > Settings > reduce OTP expiry 2) Auth > Settings > enable leaked password protection', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('📋 Remaining security config needed in Supabase Dashboard: 1) Auth > Settings > reduce OTP expiry 2) Auth > Settings > enable leaked password protection', NOW());
+  END IF;
+END $$;

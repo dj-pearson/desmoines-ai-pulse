@@ -33,5 +33,9 @@ SET status = 'resolved',
 WHERE issue_type = 'function_search_path';
 
 -- Log completion with next steps
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🔒 Security audit completed. SQL issues addressed. Manual config needed: 1) Auth OTP expiry 2) Leaked password protection in Supabase Dashboard', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔒 Security audit completed. SQL issues addressed. Manual config needed: 1) Auth OTP expiry 2) Leaked password protection in Supabase Dashboard', NOW());
+  END IF;
+END $$;

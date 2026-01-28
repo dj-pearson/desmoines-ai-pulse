@@ -15,5 +15,9 @@ SELECT cron.schedule(
 SELECT jobname, schedule, active FROM cron.job WHERE jobname LIKE '%social-media%';
 
 -- Log the setup
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('📱 Social media automation cron job scheduled to run hourly', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('📱 Social media automation cron job scheduled to run hourly', NOW());
+  END IF;
+END $$;

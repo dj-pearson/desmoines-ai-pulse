@@ -78,29 +78,38 @@ CREATE INDEX IF NOT EXISTS idx_search_analytics_user_id ON public.search_analyti
 ALTER TABLE public.search_analytics ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policy for search analytics (anyone can insert, only admins can view)
-DROP POLICY IF EXISTS "Anyone can log searches" ON public.search_analytics;
-CREATE POLICY "Anyone can log searches"
-  ON public.search_analytics
-  FOR INSERT
-  WITH CHECK (true);
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Anyone can log searches" ON public.search_analytics;
+  CREATE POLICY "Anyone can log searches"
+    ON public.search_analytics
+    FOR INSERT
+    WITH CHECK (true);
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
-DROP POLICY IF EXISTS "Admins can view search analytics" ON public.search_analytics;
-CREATE POLICY "Admins can view search analytics"
-  ON public.search_analytics
-  FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE profiles.id = auth.uid()
-        AND profiles.user_role IN ('admin', 'root_admin')
-    )
-    OR
-    EXISTS (
-      SELECT 1 FROM public.user_roles
-      WHERE user_roles.user_id = auth.uid()
-        AND user_roles.role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  DROP POLICY IF EXISTS "Admins can view search analytics" ON public.search_analytics;
+  CREATE POLICY "Admins can view search analytics"
+    ON public.search_analytics
+    FOR SELECT
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.profiles
+        WHERE profiles.id = auth.uid()
+          AND profiles.user_role IN ('admin', 'root_admin')
+      )
+      OR
+      EXISTS (
+        SELECT 1 FROM public.user_roles
+        WHERE user_roles.user_id = auth.uid()
+          AND user_roles.role IN ('admin', 'root_admin')
+      )
+    );
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+  WHEN undefined_table OR undefined_function THEN NULL;
+END $$;
 
 -- Enhanced search function with ranking and fuzzy matching
 CREATE OR REPLACE FUNCTION enhanced_event_search(
@@ -334,19 +343,49 @@ END;
 $$;
 
 -- Grant permissions
-GRANT EXECUTE ON FUNCTION enhanced_event_search TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION get_search_suggestions TO authenticated, anon;
-GRANT EXECUTE ON FUNCTION get_popular_searches TO authenticated, anon;
+DO $$ BEGIN
+  GRANT EXECUTE ON FUNCTION enhanced_event_search TO authenticated, anon;
+EXCEPTION
+  WHEN undefined_function OR insufficient_privilege THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  GRANT EXECUTE ON FUNCTION get_search_suggestions TO authenticated, anon;
+EXCEPTION
+  WHEN undefined_function OR insufficient_privilege THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  GRANT EXECUTE ON FUNCTION get_popular_searches TO authenticated, anon;
+EXCEPTION
+  WHEN undefined_function OR insufficient_privilege THEN NULL;
+END $$;
 
 -- Add comments
-COMMENT ON FUNCTION enhanced_event_search IS
-'Advanced search with full-text search, fuzzy matching, and intelligent ranking';
+DO $$ BEGIN
+  COMMENT ON FUNCTION enhanced_event_search IS
+  'Advanced search with full-text search, fuzzy matching, and intelligent ranking';
+EXCEPTION
+  WHEN undefined_function OR undefined_object THEN NULL;
+END $$;
 
-COMMENT ON FUNCTION get_search_suggestions IS
-'Returns autocomplete suggestions based on partial query';
+DO $$ BEGIN
+  COMMENT ON FUNCTION get_search_suggestions IS
+  'Returns autocomplete suggestions based on partial query';
+EXCEPTION
+  WHEN undefined_function OR undefined_object THEN NULL;
+END $$;
 
-COMMENT ON FUNCTION get_popular_searches IS
-'Returns most popular search queries over specified time period';
+DO $$ BEGIN
+  COMMENT ON FUNCTION get_popular_searches IS
+  'Returns most popular search queries over specified time period';
+EXCEPTION
+  WHEN undefined_function OR undefined_object THEN NULL;
+END $$;
 
-COMMENT ON TABLE public.search_analytics IS
-'Tracks search queries for analytics and improving search results';
+DO $$ BEGIN
+  COMMENT ON TABLE public.search_analytics IS
+  'Tracks search queries for analytics and improving search results';
+EXCEPTION
+  WHEN undefined_object THEN NULL;
+END $$;

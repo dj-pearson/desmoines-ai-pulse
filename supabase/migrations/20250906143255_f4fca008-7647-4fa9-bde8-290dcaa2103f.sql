@@ -5,30 +5,38 @@
 -- We will document this limitation and implement monitoring
 
 -- Create a security audit log entry to document this security finding
-INSERT INTO public.security_audit_logs (
-  event_type,
-  identifier,
-  resource,
-  action,
-  details,
-  severity
-) VALUES (
-  'admin_action',
-  'vault_security_definer_view_analysis',
-  'vault_schema',
-  'document_security_limitation',
-  jsonb_build_object(
-    'issue', 'Security Definer View detected in vault.decrypted_secrets',
-    'root_cause', 'Supabase system view with SECURITY DEFINER property',
-    'risk_assessment', 'Medium - Could allow privilege escalation if vault is used',
-    'current_status', 'No secrets stored in vault (verified count = 0)',
-    'impact', 'Minimal - vault not currently in use',
-    'recommendation', 'Continue using edge functions for secret management',
-    'monitoring_implemented', 'Added vault usage monitoring function',
-    'compliance_note', 'Cannot modify Supabase system components directly'
-  ),
-  'medium'
-);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_logs') THEN
+    INSERT INTO public.security_audit_logs (
+      event_type,
+      identifier,
+      resource,
+      action,
+      details,
+      severity
+    ) VALUES (
+      'admin_action',
+      'vault_security_definer_view_analysis',
+      'vault_schema',
+      'document_security_limitation',
+      jsonb_build_object(
+        'issue', 'Security Definer View detected in vault.decrypted_secrets',
+        'root_cause', 'Supabase system view with SECURITY DEFINER property',
+        'risk_assessment', 'Medium - Could allow privilege escalation if vault is used',
+        'current_status', 'No secrets stored in vault (verified count = 0)',
+        'impact', 'Minimal - vault not currently in use',
+        'recommendation', 'Continue using edge functions for secret management',
+        'monitoring_implemented', 'Added vault usage monitoring function',
+        'compliance_note', 'Cannot modify Supabase system components directly'
+      ),
+      'medium'
+    );
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN
+    NULL;
+END $$;
 
 -- Create a function to monitor and report vault security status
 CREATE OR REPLACE FUNCTION public.check_vault_security_status()
@@ -72,26 +80,28 @@ BEGIN
   
   -- Log security check (only if vault is in use)
   IF vault_count > 0 THEN
-    INSERT INTO public.security_audit_logs (
-      event_type,
-      identifier,
-      resource,
-      action,
-      details,
-      severity
-    ) VALUES (
-      'suspicious_activity',
-      'vault_usage_detected',
-      'vault.secrets',
-      'security_check',
-      jsonb_build_object(
-        'secret_count', vault_count,
-        'security_concern', 'vault.decrypted_secrets has SECURITY DEFINER property',
-        'risk', 'Potential privilege escalation through system view',
-        'checked_at', now()
-      ),
-      'medium'
-    );
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_logs') THEN
+      INSERT INTO public.security_audit_logs (
+        event_type,
+        identifier,
+        resource,
+        action,
+        details,
+        severity
+      ) VALUES (
+        'suspicious_activity',
+        'vault_usage_detected',
+        'vault.secrets',
+        'security_check',
+        jsonb_build_object(
+          'secret_count', vault_count,
+          'security_concern', 'vault.decrypted_secrets has SECURITY DEFINER property',
+          'risk', 'Potential privilege escalation through system view',
+          'checked_at', now()
+        ),
+        'medium'
+      );
+    END IF;
   END IF;
   
   RETURN result;
@@ -135,24 +145,32 @@ COMMENT ON FUNCTION public.check_vault_security_status() IS
 'Monitors vault usage due to security definer view concerns in vault.decrypted_secrets. This Supabase system view cannot be modified and runs with elevated privileges.';
 
 -- Final documentation entry
-INSERT INTO public.security_audit_logs (
-  event_type,
-  identifier,
-  resource,
-  action,
-  details,
-  severity
-) VALUES (
-  'admin_action',
-  'vault_security_mitigation_complete',
-  'security_system',
-  'implement_monitoring',
-  jsonb_build_object(
-    'mitigation_summary', 'Implemented monitoring for vault.decrypted_secrets security definer view',
-    'functions_created', jsonb_build_array('check_vault_security_status', 'get_security_recommendations'),
-    'current_risk_level', 'low',
-    'reason', 'vault not in use and monitoring implemented',
-    'next_steps', 'Continue using edge functions, monitor vault usage'
-  ),
-  'low'
-);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_logs') THEN
+    INSERT INTO public.security_audit_logs (
+      event_type,
+      identifier,
+      resource,
+      action,
+      details,
+      severity
+    ) VALUES (
+      'admin_action',
+      'vault_security_mitigation_complete',
+      'security_system',
+      'implement_monitoring',
+      jsonb_build_object(
+        'mitigation_summary', 'Implemented monitoring for vault.decrypted_secrets security definer view',
+        'functions_created', jsonb_build_array('check_vault_security_status', 'get_security_recommendations'),
+        'current_risk_level', 'low',
+        'reason', 'vault not in use and monitoring implemented',
+        'next_steps', 'Continue using edge functions, monitor vault usage'
+      ),
+      'low'
+    );
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN
+    NULL;
+END $$;

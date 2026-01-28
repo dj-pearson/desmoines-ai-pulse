@@ -148,20 +148,20 @@ CREATE POLICY "Users can delete their own reactions" ON public.event_discussion_
   FOR DELETE USING (auth.uid() = user_id);
 
 -- Indexes for Performance
-CREATE INDEX idx_event_checkins_event_id ON public.event_checkins(event_id);
-CREATE INDEX idx_event_checkins_user_id ON public.event_checkins(user_id);
-CREATE INDEX idx_event_checkins_created_at ON public.event_checkins(created_at);
+CREATE INDEX IF NOT EXISTS idx_event_checkins_event_id ON public.event_checkins(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_checkins_user_id ON public.event_checkins(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_checkins_created_at ON public.event_checkins(created_at);
 
-CREATE INDEX idx_event_discussions_event_id ON public.event_discussions(event_id);
-CREATE INDEX idx_event_discussions_user_id ON public.event_discussions(user_id);
-CREATE INDEX idx_event_discussions_created_at ON public.event_discussions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_event_discussions_event_id ON public.event_discussions(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_discussions_user_id ON public.event_discussions(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_discussions_created_at ON public.event_discussions(created_at DESC);
 
-CREATE INDEX idx_event_attendees_event_id ON public.event_attendees(event_id);
-CREATE INDEX idx_event_attendees_user_id ON public.event_attendees(user_id);
-CREATE INDEX idx_event_attendees_status ON public.event_attendees(status);
+CREATE INDEX IF NOT EXISTS idx_event_attendees_event_id ON public.event_attendees(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_attendees_user_id ON public.event_attendees(user_id);
+CREATE INDEX IF NOT EXISTS idx_event_attendees_status ON public.event_attendees(status);
 
-CREATE INDEX idx_event_live_feed_event_id ON public.event_live_feed(event_id);
-CREATE INDEX idx_event_live_feed_created_at ON public.event_live_feed(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_event_live_feed_event_id ON public.event_live_feed(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_live_feed_created_at ON public.event_live_feed(created_at DESC);
 
 -- Functions for Real-time Updates
 CREATE OR REPLACE FUNCTION update_event_live_stats()
@@ -212,14 +212,17 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Triggers for Real-time Stats Updates
+DROP TRIGGER IF EXISTS trigger_update_stats_on_checkin ON public.event_checkins;
 CREATE TRIGGER trigger_update_stats_on_checkin
   AFTER INSERT OR UPDATE OR DELETE ON public.event_checkins
   FOR EACH ROW EXECUTE FUNCTION update_event_live_stats();
 
+DROP TRIGGER IF EXISTS trigger_update_stats_on_attendee ON public.event_attendees;
 CREATE TRIGGER trigger_update_stats_on_attendee
   AFTER INSERT OR UPDATE OR DELETE ON public.event_attendees
   FOR EACH ROW EXECUTE FUNCTION update_event_live_stats();
 
+DROP TRIGGER IF EXISTS trigger_update_stats_on_discussion ON public.event_discussions;
 CREATE TRIGGER trigger_update_stats_on_discussion
   AFTER INSERT OR UPDATE OR DELETE ON public.event_discussions
   FOR EACH ROW EXECUTE FUNCTION update_event_live_stats();
@@ -260,10 +263,12 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Triggers for Live Feed Generation
+DROP TRIGGER IF EXISTS trigger_create_feed_on_checkin ON public.event_checkins;
 CREATE TRIGGER trigger_create_feed_on_checkin
   AFTER INSERT ON public.event_checkins
   FOR EACH ROW EXECUTE FUNCTION create_live_feed_item();
 
+DROP TRIGGER IF EXISTS trigger_create_feed_on_discussion ON public.event_discussions;
 CREATE TRIGGER trigger_create_feed_on_discussion
   AFTER INSERT ON public.event_discussions
   FOR EACH ROW EXECUTE FUNCTION create_live_feed_item();

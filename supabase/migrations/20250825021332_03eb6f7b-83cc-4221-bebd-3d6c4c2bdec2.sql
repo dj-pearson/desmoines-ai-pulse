@@ -65,33 +65,49 @@ ALTER TABLE public.content_suggestions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.competitor_reports ENABLE ROW LEVEL SECURITY;
 
 -- Create policies for admin access
-CREATE POLICY "Admin can manage competitors" 
-ON public.competitors 
-FOR ALL 
-USING (auth.uid() IN (
-  SELECT user_id FROM public.profiles WHERE role = 'admin'
-));
+DO $$ BEGIN
+  CREATE POLICY "Admin can manage competitors" 
+  ON public.competitors 
+  FOR ALL 
+  USING (auth.uid() IN (
+    SELECT user_id FROM public.profiles WHERE role = 'admin'
+  ));
+EXCEPTION WHEN undefined_table THEN
+  -- Skip if profiles table doesn't exist yet
+END $$;
 
-CREATE POLICY "Admin can manage competitor content" 
-ON public.competitor_content 
-FOR ALL 
-USING (auth.uid() IN (
-  SELECT user_id FROM public.profiles WHERE role = 'admin'
-));
+DO $$ BEGIN
+  CREATE POLICY "Admin can manage competitor content" 
+  ON public.competitor_content 
+  FOR ALL 
+  USING (auth.uid() IN (
+    SELECT user_id FROM public.profiles WHERE role = 'admin'
+  ));
+EXCEPTION WHEN undefined_table THEN
+  -- Skip if profiles table doesn't exist yet
+END $$;
 
-CREATE POLICY "Admin can manage content suggestions" 
-ON public.content_suggestions 
-FOR ALL 
-USING (auth.uid() IN (
-  SELECT user_id FROM public.profiles WHERE role = 'admin'
-));
+DO $$ BEGIN
+  CREATE POLICY "Admin can manage content suggestions" 
+  ON public.content_suggestions 
+  FOR ALL 
+  USING (auth.uid() IN (
+    SELECT user_id FROM public.profiles WHERE role = 'admin'
+  ));
+EXCEPTION WHEN undefined_table THEN
+  -- Skip if profiles table doesn't exist yet
+END $$;
 
-CREATE POLICY "Admin can view competitor reports" 
-ON public.competitor_reports 
-FOR SELECT 
-USING (auth.uid() IN (
-  SELECT user_id FROM public.profiles WHERE role = 'admin'
-));
+DO $$ BEGIN
+  CREATE POLICY "Admin can view competitor reports" 
+  ON public.competitor_reports 
+  FOR SELECT 
+  USING (auth.uid() IN (
+    SELECT user_id FROM public.profiles WHERE role = 'admin'
+  ));
+EXCEPTION WHEN undefined_table THEN
+  -- Skip if profiles table doesn't exist yet
+END $$;
 
 -- Create indexes for better performance
 CREATE INDEX idx_competitor_content_competitor_id ON public.competitor_content(competitor_id);

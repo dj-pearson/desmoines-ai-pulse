@@ -34,10 +34,18 @@ ON public.articles
 FOR ALL 
 USING (auth.uid() = author_id);
 
-CREATE POLICY "Admins can manage all articles" 
-ON public.articles 
-FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+-- Wrap admin policy in DO block with exception handler
+DO $$
+BEGIN
+  CREATE POLICY "Admins can manage all articles" 
+  ON public.articles 
+  FOR ALL 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+EXCEPTION
+  WHEN undefined_function OR undefined_object THEN
+    -- Function or type doesn't exist yet, skip policy creation
+    NULL;
+END $$;
 
 -- Create article comments table
 CREATE TABLE public.article_comments (
@@ -70,17 +78,25 @@ ON public.article_comments
 FOR UPDATE 
 USING (auth.uid() = user_id);
 
-CREATE POLICY "Admins can manage all comments" 
-ON public.article_comments 
-FOR ALL 
-USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+-- Wrap admin policy in DO block with exception handler
+DO $$
+BEGIN
+  CREATE POLICY "Admins can manage all comments" 
+  ON public.article_comments 
+  FOR ALL 
+  USING (user_has_role_or_higher(auth.uid(), 'admin'::user_role));
+EXCEPTION
+  WHEN undefined_function OR undefined_object THEN
+    -- Function or type doesn't exist yet, skip policy creation
+    NULL;
+END $$;
 
 -- Create indexes for better performance
-CREATE INDEX idx_articles_status ON articles(status);
-CREATE INDEX idx_articles_category ON articles(category);
-CREATE INDEX idx_articles_published_at ON articles(published_at);
-CREATE INDEX idx_articles_slug ON articles(slug);
-CREATE INDEX idx_article_comments_article_id ON article_comments(article_id);
+CREATE INDEX IF NOT EXISTS idx_articles_status ON articles(status);
+CREATE INDEX IF NOT EXISTS idx_articles_category ON articles(category);
+CREATE INDEX IF NOT EXISTS idx_articles_published_at ON articles(published_at);
+CREATE INDEX IF NOT EXISTS idx_articles_slug ON articles(slug);
+CREATE INDEX IF NOT EXISTS idx_article_comments_article_id ON article_comments(article_id);
 
 -- Create trigger for updating timestamps
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
@@ -91,11 +107,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS update_articles_updated_at ON public.articles;
 CREATE TRIGGER update_articles_updated_at
 BEFORE UPDATE ON public.articles
 FOR EACH ROW
 EXECUTE FUNCTION public.update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_article_comments_updated_at ON public.article_comments;
 CREATE TRIGGER update_article_comments_updated_at
 BEFORE UPDATE ON public.article_comments
 FOR EACH ROW
@@ -140,6 +158,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS auto_generate_article_slug_trigger ON public.articles;
 CREATE TRIGGER auto_generate_article_slug_trigger
 BEFORE INSERT OR UPDATE ON public.articles
 FOR EACH ROW

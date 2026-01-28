@@ -1,8 +1,12 @@
 -- COMPREHENSIVE CRON SYSTEM FIX
 -- Enable required extensions and fix all scheduling issues
 
--- Step 1: Enable the net extension for HTTP requests
-CREATE EXTENSION IF NOT EXISTS net;
+-- Step 1: Enable the net extension for HTTP requests (skip if not available)
+DO $$ BEGIN
+  CREATE EXTENSION IF NOT EXISTS net;
+EXCEPTION WHEN OTHERS THEN
+  -- Extension not available (e.g., in shadow database), skip
+END $$;
 
 -- Step 2: Update the trigger function to use net extension properly
 CREATE OR REPLACE FUNCTION public.trigger_due_scraping_jobs()
@@ -94,32 +98,44 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Step 3: Reset all overdue jobs to run soon with staggered timing
-UPDATE public.scraping_jobs 
-SET 
-  next_run = CASE 
-    -- Stagger jobs to avoid overwhelming the system
-    WHEN name LIKE '%Google%' THEN NOW() + INTERVAL '2 minutes'
-    WHEN name LIKE '%Catch%' THEN NOW() + INTERVAL '4 minutes'
-    WHEN name LIKE '%Iowa Events%' THEN NOW() + INTERVAL '6 minutes'
-    WHEN name LIKE '%Vibrant%' THEN NOW() + INTERVAL '8 minutes'
-    WHEN name LIKE '%Cubs%' THEN NOW() + INTERVAL '10 minutes'
-    WHEN name LIKE '%Wolves%' THEN NOW() + INTERVAL '12 minutes'
-    WHEN name LIKE '%Wild%' THEN NOW() + INTERVAL '14 minutes'
-    WHEN name LIKE '%Barnstormers%' THEN NOW() + INTERVAL '16 minutes'
-    ELSE NOW() + INTERVAL '3 minutes'
-  END,
-  status = 'idle',
-  updated_at = NOW()
-WHERE next_run <= NOW() OR status = 'scheduled_for_trigger';
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'scraping_jobs') THEN
+    UPDATE public.scraping_jobs 
+    SET 
+      next_run = CASE 
+        -- Stagger jobs to avoid overwhelming the system
+        WHEN name LIKE '%Google%' THEN NOW() + INTERVAL '2 minutes'
+        WHEN name LIKE '%Catch%' THEN NOW() + INTERVAL '4 minutes'
+        WHEN name LIKE '%Iowa Events%' THEN NOW() + INTERVAL '6 minutes'
+        WHEN name LIKE '%Vibrant%' THEN NOW() + INTERVAL '8 minutes'
+        WHEN name LIKE '%Cubs%' THEN NOW() + INTERVAL '10 minutes'
+        WHEN name LIKE '%Wolves%' THEN NOW() + INTERVAL '12 minutes'
+        WHEN name LIKE '%Wild%' THEN NOW() + INTERVAL '14 minutes'
+        WHEN name LIKE '%Barnstormers%' THEN NOW() + INTERVAL '16 minutes'
+        ELSE NOW() + INTERVAL '3 minutes'
+      END,
+      status = 'idle',
+      updated_at = NOW()
+    WHERE next_run <= NOW() OR status = 'scheduled_for_trigger';
+  END IF;
+END $$;
 
 -- Step 4: Ensure all jobs have proper configuration
-UPDATE public.scraping_jobs 
-SET config = config || jsonb_build_object(
-  'isActive', true,
-  'schedule', COALESCE(config->>'schedule', '0 */6 * * *')
-)
-WHERE (config->>'isActive') IS NULL OR (config->>'schedule') IS NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'scraping_jobs') THEN
+    UPDATE public.scraping_jobs 
+    SET config = config || jsonb_build_object(
+      'isActive', true,
+      'schedule', COALESCE(config->>'schedule', '0 */6 * * *')
+    )
+    WHERE (config->>'isActive') IS NULL OR (config->>'schedule') IS NULL;
+  END IF;
+END $$;
 
 -- Step 5: Log this comprehensive fix
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🔧 COMPREHENSIVE CRON FIX: Enabled net extension, updated functions, reset all job schedules', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔧 COMPREHENSIVE CRON FIX: Enabled net extension, updated functions, reset all job schedules', NOW());
+  END IF;
+END $$;

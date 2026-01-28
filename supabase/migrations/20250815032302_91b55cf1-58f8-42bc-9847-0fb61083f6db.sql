@@ -88,11 +88,22 @@ END;
 $function$;
 
 -- Now update the cron job to use this function
-SELECT cron.unschedule('scraping-jobs-runner-simple');
+-- Only unschedule if the job exists
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'scraping-jobs-runner-simple') THEN
+    PERFORM cron.unschedule('scraping-jobs-runner-simple');
+  END IF;
+END $$;
 
--- Create the new cron job that runs every 15 minutes
-SELECT cron.schedule(
-  'auto-trigger-scraping-jobs',
-  '*/15 * * * *',
-  'SELECT public.trigger_due_scraping_jobs();'
-);
+-- Create the new cron job that runs every 15 minutes (only if it doesn't exist)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'auto-trigger-scraping-jobs') THEN
+    PERFORM cron.schedule(
+      'auto-trigger-scraping-jobs',
+      '*/15 * * * *',
+      'SELECT public.trigger_due_scraping_jobs();'
+    );
+  END IF;
+END $$;

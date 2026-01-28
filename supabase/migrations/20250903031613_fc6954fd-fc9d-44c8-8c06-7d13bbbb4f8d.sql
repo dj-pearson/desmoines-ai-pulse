@@ -1,23 +1,50 @@
 -- Fix Social Media CRON Schedule to run every hour and let function handle timing
--- Drop existing social media cron jobs
-SELECT cron.unschedule('social-media-generation');
-SELECT cron.unschedule('social-media-publishing');
-SELECT cron.unschedule('daily-social-media-automation');
+-- Drop existing social media cron jobs (wrapped for safety)
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'cron' AND table_name = 'job') THEN
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'social-media-generation') THEN
+      PERFORM cron.unschedule('social-media-generation');
+    END IF;
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'social-media-publishing') THEN
+      PERFORM cron.unschedule('social-media-publishing');
+    END IF;
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'daily-social-media-automation') THEN
+      PERFORM cron.unschedule('daily-social-media-automation');
+    END IF;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL; -- Ignore if cron operations fail
+END $$;
 
 -- Create new optimized schedule
 -- Generation check: every hour, function will decide based on Central Time
-SELECT cron.schedule(
-  'social-media-generation',
-  '0 * * * *', -- Every hour at minute 0
-  $$SELECT public.run_social_media_automation();$$
-);
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'cron' AND table_name = 'job') THEN
+    PERFORM cron.schedule(
+      'social-media-generation',
+      '0 * * * *', -- Every hour at minute 0
+      'SELECT public.run_social_media_automation();'
+    );
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL; -- Ignore if cron operations fail
+END $$;
 
 -- Publishing check: 15 minutes after generation
-SELECT cron.schedule(
-  'social-media-publishing',
-  '15 * * * *', -- Every hour at minute 15
-  $$SELECT public.run_social_media_publishing();$$
-);
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'cron' AND table_name = 'job') THEN
+    PERFORM cron.schedule(
+      'social-media-publishing',
+      '15 * * * *', -- Every hour at minute 15
+      'SELECT public.run_social_media_publishing();'
+    );
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  NULL; -- Ignore if cron operations fail
+END $$;
 
 -- Also create a function to check if service role key is available
 CREATE OR REPLACE FUNCTION public.run_social_media_publishing()
@@ -50,12 +77,16 @@ BEGIN
       )
     ) INTO social_media_response;
     
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('📤 Social media webhook publishing completed: ' || COALESCE(social_media_response, 'no response'), NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('📤 Social media webhook publishing completed: ' || COALESCE(social_media_response, 'no response'), NOW());
+    END IF;
     
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO public.cron_logs (message, error_details, created_at) 
-    VALUES ('❌ Social media webhook publishing failed', SQLERRM, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, error_details, created_at) 
+      VALUES ('❌ Social media webhook publishing failed', SQLERRM, NOW());
+    END IF;
   END;
 END;
 $$;
@@ -91,16 +122,25 @@ BEGIN
       )
     ) INTO social_media_response;
     
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('📝 Social media post generation check completed: ' || COALESCE(social_media_response, 'no response'), NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('📝 Social media post generation check completed: ' || COALESCE(social_media_response, 'no response'), NOW());
+    END IF;
     
   EXCEPTION WHEN OTHERS THEN
-    INSERT INTO public.cron_logs (message, error_details, created_at) 
-    VALUES ('❌ Social media post generation failed', SQLERRM, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, error_details, created_at) 
+      VALUES ('❌ Social media post generation failed', SQLERRM, NOW());
+    END IF;
   END;
 END;
 $$;
 
 -- Test the fixed system
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🔧 Fixed social media CRON schedule - now runs every hour with proper fallback service key', NOW());
+DO $$ 
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔧 Fixed social media CRON schedule - now runs every hour with proper fallback service key', NOW());
+  END IF;
+END $$;

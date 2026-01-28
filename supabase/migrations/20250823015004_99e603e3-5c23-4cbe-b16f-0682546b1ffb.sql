@@ -47,8 +47,10 @@ BEGIN
     WHERE schemaname = 'public'
   LOOP
     -- Log existing views for review
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🔍 Found view for security review: ' || view_record.schemaname || '.' || view_record.viewname, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('🔍 Found view for security review: ' || view_record.schemaname || '.' || view_record.viewname, NOW());
+    END IF;
   END LOOP;
 END $$;
 
@@ -57,5 +59,9 @@ END $$;
 -- This is preventive - most functions should already have it
 
 -- Log the security fixes applied
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🔒 Applied SQL security fixes: moved extensions to proper schema, reviewed views', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔒 Applied SQL security fixes: moved extensions to proper schema, reviewed views', NOW());
+  END IF;
+END $$;

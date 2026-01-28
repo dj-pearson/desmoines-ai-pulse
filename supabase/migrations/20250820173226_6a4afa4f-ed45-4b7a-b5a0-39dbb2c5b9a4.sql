@@ -79,39 +79,58 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Step 2: Reset all overdue jobs with staggered timing
-UPDATE public.scraping_jobs 
-SET 
-  next_run = CASE 
-    WHEN name LIKE '%Google%' THEN NOW() + INTERVAL '2 minutes'
-    WHEN name LIKE '%Catch%' THEN NOW() + INTERVAL '4 minutes'
-    WHEN name LIKE '%Iowa Events%' THEN NOW() + INTERVAL '6 minutes'
-    WHEN name LIKE '%Vibrant%' THEN NOW() + INTERVAL '8 minutes'
-    WHEN name LIKE '%Cubs%' THEN NOW() + INTERVAL '10 minutes'
-    WHEN name LIKE '%Wolves%' THEN NOW() + INTERVAL '12 minutes'
-    WHEN name LIKE '%Wild%' THEN NOW() + INTERVAL '14 minutes'
-    WHEN name LIKE '%Barnstormers%' THEN NOW() + INTERVAL '16 minutes'
-    ELSE NOW() + INTERVAL '3 minutes'
-  END,
-  status = 'idle',
-  updated_at = NOW()
-WHERE next_run <= NOW() OR status = 'scheduled_for_trigger';
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'scraping_jobs') THEN
+    UPDATE public.scraping_jobs 
+    SET 
+      next_run = CASE 
+        WHEN name LIKE '%Google%' THEN NOW() + INTERVAL '2 minutes'
+        WHEN name LIKE '%Catch%' THEN NOW() + INTERVAL '4 minutes'
+        WHEN name LIKE '%Iowa Events%' THEN NOW() + INTERVAL '6 minutes'
+        WHEN name LIKE '%Vibrant%' THEN NOW() + INTERVAL '8 minutes'
+        WHEN name LIKE '%Cubs%' THEN NOW() + INTERVAL '10 minutes'
+        WHEN name LIKE '%Wolves%' THEN NOW() + INTERVAL '12 minutes'
+        WHEN name LIKE '%Wild%' THEN NOW() + INTERVAL '14 minutes'
+        WHEN name LIKE '%Barnstormers%' THEN NOW() + INTERVAL '16 minutes'
+        ELSE NOW() + INTERVAL '3 minutes'
+      END,
+      status = 'idle',
+      updated_at = NOW()
+    WHERE next_run <= NOW() OR status = 'scheduled_for_trigger';
+  END IF;
+END $$;
 
 -- Step 3: Ensure all jobs have proper configuration
-UPDATE public.scraping_jobs 
-SET config = config || jsonb_build_object(
-  'isActive', true,
-  'schedule', COALESCE(config->>'schedule', '0 */6 * * *')
-)
-WHERE (config->>'isActive') IS NULL OR (config->>'schedule') IS NULL;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'scraping_jobs') THEN
+    UPDATE public.scraping_jobs 
+    SET config = config || jsonb_build_object(
+      'isActive', true,
+      'schedule', COALESCE(config->>'schedule', '0 */6 * * *')
+    )
+    WHERE (config->>'isActive') IS NULL OR (config->>'schedule') IS NULL;
+  END IF;
+END $$;
 
 -- Step 4: Update the cron job to run more frequently for better responsiveness
-SELECT cron.unschedule('auto-trigger-scraping-jobs');
-SELECT cron.schedule(
-  'auto-trigger-scraping-jobs',
-  '*/10 * * * *', -- Every 10 minutes
-  'SELECT public.trigger_due_scraping_jobs();'
-);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'auto-trigger-scraping-jobs') THEN
+    PERFORM cron.unschedule('auto-trigger-scraping-jobs');
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'auto-trigger-scraping-jobs') THEN
+    PERFORM cron.schedule(
+      'auto-trigger-scraping-jobs',
+      '*/10 * * * *', -- Every 10 minutes
+      'SELECT public.trigger_due_scraping_jobs();'
+    );
+  END IF;
+END $$;
 
 -- Step 5: Log this fix
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🔧 CRON SYSTEM FIXED: Updated functions, reset schedules, improved timing (no net dependency)', NOW());
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🔧 CRON SYSTEM FIXED: Updated functions, reset schedules, improved timing (no net dependency)', NOW());
+  END IF;
+END $$;

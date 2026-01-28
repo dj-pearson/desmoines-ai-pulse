@@ -7,29 +7,37 @@
 -- we will document this as a known system limitation and restrict access where possible
 
 -- Create a security audit log entry to document this security finding
-INSERT INTO public.security_audit_logs (
-  event_type,
-  identifier,
-  resource,
-  action,
-  details,
-  severity
-) VALUES (
-  'security_hardening',
-  'vault_security_definer_view_mitigation',
-  'vault_schema',
-  'document_limitation',
-  jsonb_build_object(
-    'issue', 'Security Definer View detected in vault.decrypted_secrets',
-    'root_cause', 'Supabase system view with SECURITY DEFINER property',
-    'risk_level', 'Medium - Could allow privilege escalation if vault is used',
-    'current_status', 'No secrets stored in vault (verified)',
-    'mitigation', 'Documented security concern and recommended alternatives',
-    'recommendation', 'Use edge functions with proper authentication for secret management instead of vault',
-    'monitoring', 'Monitor vault.secrets table for any future usage'
-  ),
-  'medium'
-);
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_logs') THEN
+    INSERT INTO public.security_audit_logs (
+      event_type,
+      identifier,
+      resource,
+      action,
+      details,
+      severity
+    ) VALUES (
+      'admin_action',
+      'vault_security_definer_view_mitigation',
+      'vault_schema',
+      'document_limitation',
+      jsonb_build_object(
+        'issue', 'Security Definer View detected in vault.decrypted_secrets',
+        'root_cause', 'Supabase system view with SECURITY DEFINER property',
+        'risk_level', 'Medium - Could allow privilege escalation if vault is used',
+        'current_status', 'No secrets stored in vault (verified)',
+        'mitigation', 'Documented security concern and recommended alternatives',
+        'recommendation', 'Use edge functions with proper authentication for secret management instead of vault',
+        'monitoring', 'Monitor vault.secrets table for any future usage'
+      ),
+      'medium'
+    );
+  END IF;
+EXCEPTION
+  WHEN undefined_table THEN
+    NULL;
+END $$;
 
 -- Create a function to check vault usage and alert if secrets are added
 CREATE OR REPLACE FUNCTION public.monitor_vault_usage()
@@ -40,28 +48,30 @@ SET search_path = public
 AS $$
 BEGIN
   -- Log any new secrets being added to vault for security monitoring
-  INSERT INTO public.security_audit_logs (
-    event_type,
-    identifier,
-    user_id,
-    resource,
-    action,
-    details,
-    severity
-  ) VALUES (
-    'vault_secret_added',
-    'vault_secret_' || NEW.id::text,
-    auth.uid(),
-    'vault.secrets',
-    'insert',
-    jsonb_build_object(
-      'secret_name', NEW.name,
-      'added_by', (SELECT email FROM auth.users WHERE id = auth.uid()),
-      'timestamp', now(),
-      'warning', 'New secret added to vault with security definer view concerns'
-    ),
-    'high'
-  );
+IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_logs') THEN
+        INSERT INTO public.security_audit_logs (
+          event_type,
+          identifier,
+          user_id,
+          resource,
+          action,
+          details,
+          severity
+        ) VALUES (
+          'suspicious_activity',
+          'vault_secret_' || NEW.id::text,
+          auth.uid(),
+          'vault.secrets',
+          'insert',
+          jsonb_build_object(
+            'secret_name', NEW.name,
+            'added_by', (SELECT email FROM auth.users WHERE id = auth.uid()),
+            'timestamp', now(),
+            'warning', 'New secret added to vault with security definer view concerns'
+          ),
+          'high'
+        );
+      END IF;
   
   RETURN NEW;
 END;
@@ -79,25 +89,27 @@ BEGIN
       FOR EACH ROW EXECUTE FUNCTION public.monitor_vault_usage();
   EXCEPTION WHEN OTHERS THEN
     -- If we can't add trigger to vault table, log this limitation
-    INSERT INTO public.security_audit_logs (
-      event_type,
-      identifier,
-      resource,
-      action,
-      details,
-      severity
-    ) VALUES (
-      'security_limitation',
-      'vault_monitoring_limitation',
-      'vault.secrets',
-      'trigger_add_failed',
-      jsonb_build_object(
-        'error', 'Could not add monitoring trigger to vault.secrets',
-        'implication', 'Cannot automatically monitor vault usage',
-        'recommendation', 'Manually check vault.secrets periodically'
-      ),
-      'low'
-    );
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_logs') THEN
+      INSERT INTO public.security_audit_logs (
+        event_type,
+        identifier,
+        resource,
+        action,
+        details,
+        severity
+      ) VALUES (
+        'admin_action',
+        'vault_monitoring_limitation',
+        'vault.secrets',
+        'trigger_add_failed',
+        jsonb_build_object(
+          'error', 'Could not add monitoring trigger to vault.secrets',
+          'implication', 'Cannot automatically monitor vault usage',
+          'recommendation', 'Manually check vault.secrets periodically'
+        ),
+        'low'
+      );
+    END IF;
   END;
 END;
 $$;
@@ -132,25 +144,27 @@ BEGIN
     
     -- Log if vault is being used
     IF vault_count > 0 THEN
-      INSERT INTO public.security_audit_logs (
-        event_type,
-        identifier,
-        resource,
-        action,
-        details,
-        severity
-      ) VALUES (
-        'security_alert',
-        'vault_in_use_' || vault_count::text,
-        'vault.secrets',
-        'usage_detected',
-        jsonb_build_object(
-          'secret_count', vault_count,
-          'security_concern', 'vault.decrypted_secrets view has SECURITY DEFINER',
-          'checked_at', now()
-        ),
-        'medium'
-      );
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'security_audit_logs') THEN
+        INSERT INTO public.security_audit_logs (
+          event_type,
+          identifier,
+          resource,
+          action,
+          details,
+          severity
+        ) VALUES (
+          'suspicious_activity',
+          'vault_in_use_' || vault_count::text,
+          'vault.secrets',
+          'usage_detected',
+          jsonb_build_object(
+            'secret_count', vault_count,
+            'security_concern', 'vault.decrypted_secrets view has SECURITY DEFINER',
+            'checked_at', now()
+          ),
+          'medium'
+        );
+      END IF;
     END IF;
     
   EXCEPTION WHEN OTHERS THEN

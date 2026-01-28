@@ -12,8 +12,10 @@ DECLARE
   schedules_updated INTEGER := 0;
 BEGIN
   -- Log the cron job execution
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('Starting enhanced cron job run (auto-detects schedule changes)', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('Starting enhanced cron job run (auto-detects schedule changes)', NOW());
+  END IF;
   
   -- First, update any jobs where the schedule has changed but next_run wasn't recalculated
   FOR job_record IN 
@@ -50,8 +52,10 @@ BEGIN
     WHERE id = job_record.id;
     
     -- Log the schedule update
-    INSERT INTO public.cron_logs (message, job_id, created_at) 
-    VALUES ('🔄 Auto-updated schedule for: ' || job_record.name || ' (new next run: ' || next_run_time || ')', job_record.id, NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, job_id, created_at) 
+      VALUES ('🔄 Auto-updated schedule for: ' || job_record.name || ' (new next run: ' || next_run_time || ')', job_record.id, NOW());
+    END IF;
     
     schedules_updated := schedules_updated + 1;
   END LOOP;
@@ -96,20 +100,24 @@ BEGIN
       WHERE id = job_record.id;
       
       -- Log that job is ready for manual trigger
-      INSERT INTO public.cron_logs (message, job_id, created_at) 
-      VALUES ('🔵 Job scheduled for manual trigger: ' || job_record.name || ' (next run: ' || next_run_time || ')', job_record.id, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, created_at) 
+        VALUES ('🔵 Job scheduled for manual trigger: ' || job_record.name || ' (next run: ' || next_run_time || ')', job_record.id, NOW());
+      END IF;
       
       jobs_processed := jobs_processed + 1;
       
     EXCEPTION WHEN OTHERS THEN
       -- Log the error and reset job status
-      INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
-      VALUES (
-        '❌ Error processing job: ' || job_record.name, 
-        job_record.id,
-        SQLERRM,
-        NOW()
-      );
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
+        VALUES (
+          '❌ Error processing job: ' || job_record.name, 
+          job_record.id,
+          SQLERRM,
+          NOW()
+        );
+      END IF;
       
       -- Reset job status to idle and retry in 1 hour
       UPDATE public.scraping_jobs 
@@ -120,8 +128,10 @@ BEGIN
   
   -- Trigger AI enhancement when we process jobs (every 20 scraping jobs triggers AI enhancement)
   IF jobs_processed > 0 AND (jobs_processed % 20 = 0 OR (EXTRACT(HOUR FROM NOW()) IN (6, 18) AND jobs_processed > 0)) THEN
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🤖 Triggering AI bulk enhancement (processed ' || jobs_processed || ' jobs or scheduled time)', NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('🤖 Triggering AI bulk enhancement (processed ' || jobs_processed || ' jobs or scheduled time)', NOW());
+    END IF;
     
     -- Call bulk enhancement function via HTTP
     BEGIN
@@ -138,18 +148,24 @@ BEGIN
         )::text
       );
       
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('✨ AI bulk enhancement triggered successfully (batch size: 15)', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('✨ AI bulk enhancement triggered successfully (batch size: 15)', NOW());
+      END IF;
       
     EXCEPTION WHEN OTHERS THEN
-      INSERT INTO public.cron_logs (message, error_details, created_at) 
-      VALUES ('❌ Failed to trigger AI bulk enhancement', SQLERRM, NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, error_details, created_at) 
+        VALUES ('❌ Failed to trigger AI bulk enhancement', SQLERRM, NOW());
+      END IF;
     END;
   END IF;
 
   -- Log completion
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('✅ Enhanced cron completed. Updated ' || schedules_updated || ' schedules, processed ' || jobs_processed || ' jobs.', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('✅ Enhanced cron completed. Updated ' || schedules_updated || ' schedules, processed ' || jobs_processed || ' jobs.', NOW());
+  END IF;
   
   -- Clean up old cron logs (keep last 100 entries)
   DELETE FROM public.cron_logs 

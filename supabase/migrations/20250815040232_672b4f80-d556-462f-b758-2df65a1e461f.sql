@@ -1,6 +1,11 @@
 -- Update social media automation CRON system for daily scheduling
 -- Remove existing automation job if it exists
-SELECT cron.unschedule('social-media-automation');
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'social-media-automation') THEN
+    PERFORM cron.unschedule('social-media-automation');
+  END IF;
+END $$;
 
 -- Create enhanced social media automation function with specific timing
 CREATE OR REPLACE FUNCTION public.run_social_media_automation()
@@ -106,12 +111,22 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path TO '';
 
 -- Schedule social media automation to run every 30 minutes
 -- This allows for precise timing checks at 9 AM and 6 PM Central
-SELECT cron.schedule(
-  'daily-social-media-automation',
-  '*/30 * * * *', -- Every 30 minutes
-  'SELECT public.run_social_media_automation();'
-);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'daily-social-media-automation') THEN
+    PERFORM cron.schedule(
+      'daily-social-media-automation',
+      '*/30 * * * *', -- Every 30 minutes
+      'SELECT public.run_social_media_automation();'
+    );
+  END IF;
+END $$;
 
--- Log the cron setup
-INSERT INTO public.cron_logs (message, created_at) 
-VALUES ('🚀 Daily social media automation CRON job installed - Events at 9 AM, Restaurants at 6 PM Central', NOW());
+-- Log the cron setup (only if table exists)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🚀 Daily social media automation CRON job installed - Events at 9 AM, Restaurants at 6 PM Central', NOW());
+  END IF;
+END $$;

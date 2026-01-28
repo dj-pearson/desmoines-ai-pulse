@@ -13,7 +13,11 @@ SELECT cron.schedule(
 );
 
 -- Add comment for documentation
-COMMENT ON EXTENSION pg_cron IS 'Job scheduler - Used for weekly digest emails and recurring event generation';
+DO $$ BEGIN
+  COMMENT ON EXTENSION pg_cron IS 'Job scheduler - Used for weekly digest emails and recurring event generation';
+EXCEPTION
+  WHEN insufficient_privilege THEN NULL;
+END $$;
 
 -- Log the cron job creation
 DO $$

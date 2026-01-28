@@ -52,8 +52,10 @@ BEGIN
   
   -- If no settings found or automation disabled, exit
   IF automation_enabled IS NULL OR NOT automation_enabled THEN
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('⏸️ Social media automation is disabled or no settings found', NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('⏸️ Social media automation is disabled or no settings found', NOW());
+    END IF;
     RETURN;
   END IF;
   
@@ -63,8 +65,10 @@ BEGIN
   current_minute := EXTRACT(MINUTE FROM central_time)::INTEGER;
   
   -- Log the cron job execution with current time info
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🤖 Social Media Automation Check - Central Time: ' || central_time || ' (Hour: ' || current_hour || ', Minute: ' || current_minute || ')', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🤖 Social Media Automation Check - Central Time: ' || central_time || ' (Hour: ' || current_hour || ', Minute: ' || current_minute || ')', NOW());
+  END IF;
   
   -- Check for event posting (configurable hour + 1.5 hour window)
   IF current_hour = event_hour OR (current_hour = (event_hour + 1) AND current_minute < 30) THEN
@@ -77,8 +81,10 @@ BEGIN
     should_post_event := (last_event_post IS NULL OR last_event_post < NOW() - INTERVAL '18 hours');
     
     IF should_post_event THEN
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('🌅 Triggering morning event post generation (Hour: ' || current_hour || ')', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('🌅 Triggering morning event post generation (Hour: ' || current_hour || ')', NOW());
+      END IF;
       
       -- Call social media manager to generate event post
       BEGIN
@@ -95,15 +101,21 @@ BEGIN
           )::text
         );
         
-        INSERT INTO public.cron_logs (message, created_at) 
-        VALUES ('✅ Morning event post HTTP request sent successfully', NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, created_at) 
+          VALUES ('✅ Morning event post HTTP request sent successfully', NOW());
+        END IF;
       EXCEPTION WHEN OTHERS THEN
-        INSERT INTO public.cron_logs (message, error_details, created_at) 
-        VALUES ('❌ Failed to send event post HTTP request', SQLERRM, NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, error_details, created_at) 
+          VALUES ('❌ Failed to send event post HTTP request', SQLERRM, NOW());
+        END IF;
       END;
     ELSE
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('⏭️ Skipping event post - already posted recently (last post: ' || COALESCE(last_event_post::text, 'never') || ')', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('⏭️ Skipping event post - already posted recently (last post: ' || COALESCE(last_event_post::text, 'never') || ')', NOW());
+      END IF;
     END IF;
   END IF;
   
@@ -118,8 +130,10 @@ BEGIN
     should_post_restaurant := (last_restaurant_post IS NULL OR last_restaurant_post < NOW() - INTERVAL '18 hours');
     
     IF should_post_restaurant THEN
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('🍽️ Triggering evening restaurant post generation (Hour: ' || current_hour || ')', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('🍽️ Triggering evening restaurant post generation (Hour: ' || current_hour || ')', NOW());
+      END IF;
       
       -- Call social media manager to generate restaurant post
       BEGIN
@@ -136,15 +150,21 @@ BEGIN
           )::text
         );
         
-        INSERT INTO public.cron_logs (message, created_at) 
-        VALUES ('✅ Evening restaurant post HTTP request sent successfully', NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, created_at) 
+          VALUES ('✅ Evening restaurant post HTTP request sent successfully', NOW());
+        END IF;
       EXCEPTION WHEN OTHERS THEN
-        INSERT INTO public.cron_logs (message, error_details, created_at) 
-        VALUES ('❌ Failed to send restaurant post HTTP request', SQLERRM, NOW());
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+          INSERT INTO public.cron_logs (message, error_details, created_at) 
+          VALUES ('❌ Failed to send restaurant post HTTP request', SQLERRM, NOW());
+        END IF;
       END;
     ELSE
-      INSERT INTO public.cron_logs (message, created_at) 
-      VALUES ('⏭️ Skipping restaurant post - already posted recently (last post: ' || COALESCE(last_restaurant_post::text, 'never') || ')', NOW());
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, created_at) 
+        VALUES ('⏭️ Skipping restaurant post - already posted recently (last post: ' || COALESCE(last_restaurant_post::text, 'never') || ')', NOW());
+      END IF;
     END IF;
   END IF;
   
@@ -152,8 +172,10 @@ BEGIN
   IF (current_hour NOT IN (event_hour, event_hour + 1, restaurant_hour, restaurant_hour + 1)) OR 
      (current_hour = (event_hour + 1) AND current_minute >= 30) OR 
      (current_hour = (restaurant_hour + 1) AND current_minute >= 30) THEN
-    INSERT INTO public.cron_logs (message, created_at) 
-    VALUES ('🕐 Social media automation check completed - outside posting windows (' || event_hour || '-' || (event_hour + 1) || ':30 or ' || restaurant_hour || '-' || (restaurant_hour + 1) || ':30 Central)', NOW());
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+      INSERT INTO public.cron_logs (message, created_at) 
+      VALUES ('🕐 Social media automation check completed - outside posting windows (' || event_hour || '-' || (event_hour + 1) || ':30 or ' || restaurant_hour || '-' || (restaurant_hour + 1) || ':30 Central)', NOW());
+    END IF;
   END IF;
   
 END;

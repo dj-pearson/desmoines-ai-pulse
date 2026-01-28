@@ -127,7 +127,6 @@ CREATE TABLE IF NOT EXISTS gsc_keyword_performance (
 
   -- Date Range
   date DATE NOT NULL,
-  data_age_days INTEGER GENERATED ALWAYS AS (EXTRACT(DAY FROM (CURRENT_DATE - date))) STORED,
 
   -- Performance Metrics
   impressions BIGINT DEFAULT 0,
@@ -163,7 +162,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_gsc_keyword_perf_unique ON gsc_keyword_per
 
 -- Comments
 COMMENT ON TABLE gsc_keyword_performance IS 'Keyword performance data imported from Google Search Console';
-COMMENT ON COLUMN gsc_keyword_performance.data_age_days IS 'Automatically calculated age of data in days';
 
 -- ============================================================================
 -- Table: gsc_page_performance
@@ -180,7 +178,6 @@ CREATE TABLE IF NOT EXISTS gsc_page_performance (
 
   -- Date Range
   date DATE NOT NULL,
-  data_age_days INTEGER GENERATED ALWAYS AS (EXTRACT(DAY FROM (CURRENT_DATE - date))) STORED,
 
   -- Performance Metrics
   impressions BIGINT DEFAULT 0,
@@ -337,7 +334,7 @@ BEGIN
       SUM(clicks) as total_clicks,
       AVG(ctr) as avg_ctr
     FROM gsc_keyword_performance
-     - INTERVAL '7 days'
+    WHERE date >= CURRENT_DATE - INTERVAL '7 days'
     GROUP BY query, page_url
   )
   UPDATE seo_keywords k
@@ -389,26 +386,26 @@ BEGIN
       SELECT COALESCE(SUM(impressions), 0)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-         - INTERVAL '28 days'
+        AND date >= CURRENT_DATE - INTERVAL '28 days'
     ),
     total_clicks = (
       SELECT COALESCE(SUM(clicks), 0)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-         - INTERVAL '28 days'
+        AND date >= CURRENT_DATE - INTERVAL '28 days'
     ),
     average_ctr = (
       SELECT ROUND(AVG(ctr), 2)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-         - INTERVAL '28 days'
+        AND date >= CURRENT_DATE - INTERVAL '28 days'
         AND ctr IS NOT NULL
     ),
     average_position = (
       SELECT ROUND(AVG(position), 2)
       FROM gsc_page_performance
       WHERE property_id = NEW.property_id
-         - INTERVAL '28 days'
+        AND date >= CURRENT_DATE - INTERVAL '28 days'
         AND position IS NOT NULL
     ),
     updated_at = now()

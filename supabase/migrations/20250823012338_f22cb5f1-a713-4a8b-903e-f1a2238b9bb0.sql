@@ -11,8 +11,10 @@ DECLARE
   http_result INTEGER;
 BEGIN
   -- Log the start
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🚀 Auto-trigger with HTTP calls started', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🚀 Auto-trigger with HTTP calls started', NOW());
+  END IF;
 
   -- Process jobs that are due to run
   FOR job_record IN 
@@ -72,12 +74,14 @@ BEGIN
       WHERE id = job_record.id;
       
       -- Log successful execution
-      INSERT INTO public.cron_logs (message, job_id, created_at) 
-      VALUES (
-        '✅ Job executed successfully: ' || job_record.name,
-        job_record.id,
-        NOW()
-      );
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, created_at) 
+        VALUES (
+          '✅ Job executed successfully: ' || job_record.name,
+          job_record.id,
+          NOW()
+        );
+      END IF;
       
       jobs_triggered := jobs_triggered + 1;
       
@@ -88,19 +92,23 @@ BEGIN
       WHERE id = job_record.id;
       
       -- Log the error
-      INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
-      VALUES (
-        'Error executing job: ' || job_record.name,
-        job_record.id,
-        SQLERRM,
-        NOW()
-      );
+      IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+        INSERT INTO public.cron_logs (message, job_id, error_details, created_at) 
+        VALUES (
+          'Error executing job: ' || job_record.name,
+          job_record.id,
+          SQLERRM,
+          NOW()
+        );
+      END IF;
     END;
   END LOOP;
   
   -- Log completion
-  INSERT INTO public.cron_logs (message, created_at) 
-  VALUES ('🚀 Auto-trigger completed: ' || jobs_triggered || ' jobs executed with HTTP calls', NOW());
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'cron_logs') THEN
+    INSERT INTO public.cron_logs (message, created_at) 
+    VALUES ('🚀 Auto-trigger completed: ' || jobs_triggered || ' jobs executed with HTTP calls', NOW());
+  END IF;
   
 END;
 $function$;
