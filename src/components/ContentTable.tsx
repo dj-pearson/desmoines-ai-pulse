@@ -43,6 +43,12 @@ import {
   ArrowUp,
   ArrowDown,
   Download,
+  LayoutGrid,
+  List,
+  CheckCircle2,
+  AlertCircle,
+  XCircle,
+  Globe,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -57,6 +63,52 @@ type ContentType =
   | "attraction"
   | "playground"
   | "restaurant_opening";
+
+type ViewMode = "table" | "card";
+
+// SEO status calculation helper
+type SeoStatus = "complete" | "partial" | "none";
+
+const calculateSeoStatus = (item: any): SeoStatus => {
+  const seoFields = [
+    item.seo_title,
+    item.seo_description,
+    item.seo_keywords,
+    item.geo_summary,
+  ];
+
+  const filledCount = seoFields.filter(field => {
+    if (Array.isArray(field)) return field.length > 0;
+    return field && field.trim && field.trim() !== "";
+  }).length;
+
+  if (filledCount === seoFields.length) return "complete";
+  if (filledCount > 0) return "partial";
+  return "none";
+};
+
+const getSeoStatusInfo = (status: SeoStatus) => {
+  switch (status) {
+    case "complete":
+      return {
+        label: "SEO Complete",
+        color: "bg-green-100 text-green-800 border-green-200",
+        icon: CheckCircle2,
+      };
+    case "partial":
+      return {
+        label: "SEO Partial",
+        color: "bg-yellow-100 text-yellow-800 border-yellow-200",
+        icon: AlertCircle,
+      };
+    case "none":
+      return {
+        label: "No SEO",
+        color: "bg-gray-100 text-gray-600 border-gray-200",
+        icon: XCircle,
+      };
+  }
+};
 
 interface ContentTableProps {
   type: ContentType;
@@ -81,6 +133,7 @@ const tableConfigs = {
       { key: "title", label: "Title", type: "text" },
       { key: "date", label: "Date", type: "date" },
       { key: "category", label: "Category", type: "badge" },
+      { key: "seo_status", label: "SEO", type: "seo_status" },
       { key: "is_featured", label: "Featured", type: "boolean" },
     ],
     // Secondary columns shown on larger screens
@@ -96,11 +149,12 @@ const tableConfigs = {
     // All columns for backward compatibility
     columns: [
       { key: "title", label: "Title", type: "text" },
+      { key: "date", label: "Date", type: "date" },
+      { key: "category", label: "Category", type: "badge" },
+      { key: "seo_status", label: "SEO", type: "seo_status" },
       { key: "venue", label: "Venue", type: "text" },
       { key: "location", label: "Location", type: "text" },
-      { key: "date", label: "Date", type: "date" },
       { key: "price", label: "Price", type: "text" },
-      { key: "category", label: "Category", type: "badge" },
       { key: "original_description", label: "Description", type: "truncated" },
       { key: "source_url", label: "Source", type: "link" },
       { key: "is_featured", label: "Featured", type: "boolean" },
@@ -128,6 +182,7 @@ const tableConfigs = {
       { key: "price", label: "Price" },
       { key: "created_at", label: "Date Added" },
       { key: "is_featured", label: "Featured First" },
+      { key: "seo_status", label: "SEO Status" },
       { key: "is_enhanced", label: "Enhanced First" },
       { key: "ai_writeup", label: "Has AI Writeup" },
     ],
@@ -135,10 +190,29 @@ const tableConfigs = {
   restaurant: {
     title: "Restaurants",
     searchPlaceholder: "Search restaurants...",
+    // Primary columns for card view
+    primaryColumns: [
+      { key: "name", label: "Name", type: "text" },
+      { key: "cuisine", label: "Cuisine", type: "text" },
+      { key: "location", label: "Location", type: "text" },
+      { key: "seo_status", label: "SEO", type: "seo_status" },
+      { key: "status", label: "Status", type: "badge" },
+    ],
+    // Secondary columns for expanded view
+    secondaryColumns: [
+      { key: "price_range", label: "Price", type: "badge" },
+      { key: "opening_date", label: "Opening Date", type: "date" },
+      { key: "phone", label: "Phone", type: "text" },
+      { key: "website", label: "Website", type: "link" },
+      { key: "rating", label: "Rating", type: "rating" },
+      { key: "is_featured", label: "Featured", type: "boolean" },
+      { key: "ai_writeup", label: "AI Writeup", type: "boolean" },
+    ],
     columns: [
       { key: "name", label: "Name", type: "text" },
       { key: "cuisine", label: "Cuisine", type: "text" },
       { key: "location", label: "Location", type: "text" },
+      { key: "seo_status", label: "SEO", type: "seo_status" },
       { key: "price_range", label: "Price", type: "badge" },
       { key: "opening_date", label: "Opening Date", type: "date" },
       { key: "opening_timeframe", label: "Opening Timeframe", type: "text" },
@@ -182,6 +256,7 @@ const tableConfigs = {
       { key: "opening_date", label: "Opening Date" },
       { key: "rating", label: "Rating" },
       { key: "is_featured", label: "Featured First" },
+      { key: "seo_status", label: "SEO Status" },
       { key: "ai_writeup", label: "Has AI Writeup" },
     ],
   },
@@ -308,6 +383,7 @@ export default function ContentTable({
   const [enhancingId, setEnhancingId] = useState<string | null>(null);
   const [showDataEnhancer, setShowDataEnhancer] = useState(false);
   const [compactView, setCompactView] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<string>("date");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
@@ -385,6 +461,17 @@ export default function ContentTable({
           aValue = new Date(aValue).getTime();
           bValue = new Date(bValue).getTime();
           break;
+
+        case "seo_status": {
+          // Sort by SEO completeness: complete > partial > none
+          const statusOrder = { complete: 0, partial: 1, none: 2 };
+          const aStatus = calculateSeoStatus(a);
+          const bStatus = calculateSeoStatus(b);
+          const aOrder = statusOrder[aStatus];
+          const bOrder = statusOrder[bStatus];
+          if (aOrder === bOrder) return 0;
+          return direction === "asc" ? aOrder - bOrder : bOrder - aOrder;
+        }
 
         case "is_featured":
         case "is_enhanced":
@@ -557,6 +644,21 @@ export default function ContentTable({
     }
 
     switch (column.type) {
+      case "seo_status": {
+        const status = calculateSeoStatus(item);
+        const statusInfo = getSeoStatusInfo(status);
+        const StatusIcon = statusInfo.icon;
+        return (
+          <Badge
+            variant="outline"
+            className={`${statusInfo.color} flex items-center gap-1 text-xs`}
+          >
+            <StatusIcon className="h-3 w-3" />
+            <span className="hidden sm:inline">{statusInfo.label}</span>
+          </Badge>
+        );
+      }
+
       case "text":
         return <span className="font-medium">{value || "-"}</span>;
 
@@ -703,28 +805,52 @@ export default function ContentTable({
                   `• ${eventsWithoutDates.length} missing dates`}
               </span>
             )}
+            {(type === "event" || type === "restaurant") && (
+              <span className="ml-2 text-muted-foreground">
+                • {processedItems.filter(item => calculateSeoStatus(item) === "complete").length} SEO complete
+              </span>
+            )}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center border rounded-md">
+            <Button
+              variant={viewMode === "table" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("table")}
+              className="rounded-r-none"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "card" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("card")}
+              className="rounded-l-none"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </div>
+          {type === "event" && viewMode === "table" && (
+            <Button
+              variant="outline"
+              onClick={() => setCompactView(!compactView)}
+              className="touch-target"
+              size="sm"
+            >
+              {compactView ? "Full View" : "Compact"}
+            </Button>
+          )}
           {type === "event" && (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => setCompactView(!compactView)}
-                className="touch-target"
-                size="sm"
-              >
-                {compactView ? "Full View" : "Compact"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setShowDataEnhancer(true)}
-                className="touch-target"
-              >
-                <Brain className="h-4 w-4 mr-2" />
-                AI Enhance
-              </Button>
-            </>
+            <Button
+              variant="outline"
+              onClick={() => setShowDataEnhancer(true)}
+              className="touch-target"
+            >
+              <Brain className="h-4 w-4 mr-2" />
+              AI Enhance
+            </Button>
           )}
           <Button
             variant="outline"
@@ -843,232 +969,435 @@ export default function ContentTable({
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <span>{config.title} List</span>
-            <div className="flex items-center gap-4">
-              {type === "event" && "sortOptions" in config && (
-                <Badge variant="outline" className="text-xs">
-                  Sorted by{" "}
-                  {config.sortOptions
-                    .find((opt) => opt.key === sortField)
-                    ?.label.toLowerCase()}{" "}
-                  ({sortDirection === "asc" ? "ascending" : "descending"})
-                </Badge>
-              )}
+      {/* Card View Mode */}
+      {viewMode === "card" ? (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {processedItems.length} of {totalCount} items shown
+            </p>
+            {"sortOptions" in config && (
+              <Badge variant="outline" className="text-xs">
+                Sorted by{" "}
+                {config.sortOptions
+                  .find((opt: any) => opt.key === sortField)
+                  ?.label.toLowerCase()}{" "}
+                ({sortDirection === "asc" ? "↑" : "↓"})
+              </Badge>
+            )}
+          </div>
 
-              {/* View Toggle */}
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">View:</span>
-                <div className="flex items-center border border-gray-300 rounded-md">
-                  <button
-                    onClick={() => setCompactView(false)}
-                    className={`px-3 py-1 text-sm rounded-l-md ${
-                      !compactView
-                        ? "bg-blue-500 text-white"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    Full
-                  </button>
-                  <button
-                    onClick={() => setCompactView(true)}
-                    className={`px-3 py-1 text-sm rounded-r-md ${
-                      compactView
-                        ? "bg-blue-500 text-white"
-                        : "text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    Compact
-                  </button>
-                </div>
+          {processedItems.length === 0 ? (
+            <Card className="p-8 text-center">
+              <div className="text-muted-foreground">
+                <p>No {config.title.toLowerCase()} found.</p>
+                <p className="text-sm mt-1">
+                  Try adjusting your search or filters.
+                </p>
               </div>
-            </div>
-          </CardTitle>
-          <CardDescription>
-            {processedItems.length} of {totalCount} items shown
-            {type === "event" && eventsWithoutDates.length > 0 && (
-              <span className="ml-2 text-destructive font-medium">
-                • {eventsWithoutDates.length} need dates
-              </span>
-            )}
-            {type === "restaurant" && (
-              <span className="ml-2 text-green-600 font-medium">
-                • {processedItems.filter(item => item.ai_writeup).length} AI enhanced
-              </span>
-            )}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {compactView && type === "event" && (
-                    <TableHead className="w-8"></TableHead>
-                  )}
-                  {getDisplayColumns().map((column) => (
-                    <TableHead key={column.key}>{column.label}</TableHead>
-                  ))}
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {processedItems.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={config.columns.length + 1}
-                      className="text-center py-8"
-                    >
-                      <div className="text-muted-foreground">
-                        <p>No {config.title.toLowerCase()} found.</p>
-                        <p className="text-sm mt-1">
-                          Try adjusting your search or filters.
-                        </p>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  processedItems.map((item) => {
-                     const isHighlighted =
-                       type === "event" &&
-                       item.source_url &&
-                       isHighlightedDomain(item.source_url);
-                     const hasMissingDate = type === "event" && !item.date;
-                     const hasAiWriteup = type === "restaurant" && item.ai_writeup;
-                     const isExpanded = expandedRows.has(item.id);
-                    const hasAdditionalDetails =
-                      compactView &&
-                      type === "event" &&
-                      getAdditionalColumns().length > 0;
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {processedItems.map((item) => {
+                const seoStatus = calculateSeoStatus(item);
+                const seoInfo = getSeoStatusInfo(seoStatus);
+                const SeoIcon = seoInfo.icon;
+                const hasMissingDate = type === "event" && !item.date;
+                const itemTitle = item.title || item.name || "Untitled";
+                const itemSubtitle =
+                  type === "event"
+                    ? item.venue || item.location
+                    : type === "restaurant"
+                    ? item.cuisine
+                    : item.type || item.location;
 
-                    return (
-                      <React.Fragment key={item.id}>
-                        <TableRow
-                          className={`
-                          ${
-                            hasMissingDate
-                              ? "bg-destructive/5 border-l-4 border-l-destructive"
-                              : ""
-                          }
-                          ${
-                            isHighlighted
-                              ? "bg-warning/10 border-l-4 border-l-warning"
-                              : ""
-                          }
-                           ${
-                             hasAiWriteup
-                               ? "bg-green-50 border-l-4 border-l-green-500"
-                               : ""
-                           }
-                        `.trim()}
-                        >
-                          {/* Expand/Collapse button for compact view */}
-                          {hasAdditionalDetails && (
-                            <TableCell className="w-8">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => toggleRowExpansion(item.id)}
-                                className="h-6 w-6 p-0"
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="h-3 w-3" />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3" />
-                                )}
-                              </Button>
-                            </TableCell>
+                return (
+                  <Card
+                    key={item.id}
+                    className={`overflow-hidden ${
+                      hasMissingDate ? "border-destructive border-2" : ""
+                    } ${seoStatus === "complete" ? "border-l-4 border-l-green-500" : ""}`}
+                  >
+                    <CardContent className="p-4">
+                      {/* Header with title and SEO status */}
+                      <div className="flex items-start justify-between gap-2 mb-3">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-sm truncate" title={itemTitle}>
+                            {itemTitle}
+                          </h3>
+                          {itemSubtitle && (
+                            <p className="text-xs text-muted-foreground truncate">
+                              {itemSubtitle}
+                            </p>
                           )}
+                        </div>
+                        <Badge
+                          variant="outline"
+                          className={`${seoInfo.color} flex items-center gap-1 text-xs shrink-0`}
+                          title={seoInfo.label}
+                        >
+                          <SeoIcon className="h-3 w-3" />
+                          <span className="hidden lg:inline">{seoStatus === "complete" ? "SEO" : seoStatus === "partial" ? "Part" : "None"}</span>
+                        </Badge>
+                      </div>
 
-                          {/* Main columns */}
-                          {getDisplayColumns().map((column) => (
-                            <TableCell key={column.key}>
-                              {renderCellContent(item, column)}
-                            </TableCell>
-                          ))}
+                      {/* Status indicators row */}
+                      <div className="flex flex-wrap gap-1.5 mb-3">
+                        {type === "event" && (
+                          <>
+                            {item.date ? (
+                              <Badge variant="secondary" className="text-xs">
+                                <Calendar className="h-3 w-3 mr-1" />
+                                {new Date(item.date).toLocaleDateString()}
+                              </Badge>
+                            ) : (
+                              <Badge variant="destructive" className="text-xs">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                No Date
+                              </Badge>
+                            )}
+                            {item.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {item.category}
+                              </Badge>
+                            )}
+                          </>
+                        )}
+                        {type === "restaurant" && (
+                          <>
+                            {item.status && (
+                              <Badge
+                                variant={item.status === "open" ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {item.status}
+                              </Badge>
+                            )}
+                            {item.price_range && (
+                              <Badge variant="outline" className="text-xs">
+                                {item.price_range}
+                              </Badge>
+                            )}
+                          </>
+                        )}
+                        {item.is_featured && (
+                          <Badge className="bg-yellow-100 text-yellow-800 text-xs">
+                            <Star className="h-3 w-3 mr-1" />
+                            Featured
+                          </Badge>
+                        )}
+                        {item.ai_writeup && (
+                          <Badge className="bg-purple-100 text-purple-800 text-xs">
+                            <Brain className="h-3 w-3 mr-1" />
+                            AI
+                          </Badge>
+                        )}
+                        {item.is_enhanced && (
+                          <Badge className="bg-blue-100 text-blue-800 text-xs">
+                            <Sparkles className="h-3 w-3 mr-1" />
+                            Enhanced
+                          </Badge>
+                        )}
+                      </div>
 
-                          {/* Actions */}
-                          <TableCell>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => onEdit(item)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEnhanceContent(item)}
-                                disabled={enhancingId === item.id}
-                              >
-                                <Sparkles className="h-4 w-4" />
-                              </Button>
-                              {(type === "event" || type === "restaurant") && (
+                      {/* Location if available */}
+                      {item.location && (
+                        <p className="text-xs text-muted-foreground mb-3 truncate flex items-center gap-1">
+                          <Globe className="h-3 w-3" />
+                          {item.location}
+                        </p>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 pt-2 border-t">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onEdit(item)}
+                          className="flex-1"
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEnhanceContent(item)}
+                          disabled={enhancingId === item.id}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                        </Button>
+                        {(type === "event" || type === "restaurant") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleGenerateWriteup(item)}
+                            disabled={isGeneratingId(item.id)}
+                            title="Generate AI Writeup"
+                          >
+                            <FileText className="h-3 w-3" />
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `Are you sure you want to delete this ${type}?`
+                              )
+                            ) {
+                              onDelete(item.id);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Table View Mode */
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span>{config.title} List</span>
+              <div className="flex items-center gap-4">
+                {"sortOptions" in config && (
+                  <Badge variant="outline" className="text-xs">
+                    Sorted by{" "}
+                    {config.sortOptions
+                      .find((opt: any) => opt.key === sortField)
+                      ?.label.toLowerCase()}{" "}
+                    ({sortDirection === "asc" ? "ascending" : "descending"})
+                  </Badge>
+                )}
+
+                {/* View Toggle for table */}
+                {type === "event" && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Columns:</span>
+                    <div className="flex items-center border border-gray-300 rounded-md">
+                      <button
+                        onClick={() => setCompactView(false)}
+                        className={`px-3 py-1 text-sm rounded-l-md ${
+                          !compactView
+                            ? "bg-blue-500 text-white"
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        Full
+                      </button>
+                      <button
+                        onClick={() => setCompactView(true)}
+                        className={`px-3 py-1 text-sm rounded-r-md ${
+                          compactView
+                            ? "bg-blue-500 text-white"
+                            : "text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        Compact
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardTitle>
+            <CardDescription>
+              {processedItems.length} of {totalCount} items shown
+              {type === "event" && eventsWithoutDates.length > 0 && (
+                <span className="ml-2 text-destructive font-medium">
+                  • {eventsWithoutDates.length} need dates
+                </span>
+              )}
+              {(type === "event" || type === "restaurant") && (
+                <span className="ml-2 text-green-600 font-medium">
+                  • {processedItems.filter(item => calculateSeoStatus(item) === "complete").length} SEO complete
+                </span>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    {compactView && type === "event" && (
+                      <TableHead className="w-8"></TableHead>
+                    )}
+                    {getDisplayColumns().map((column) => (
+                      <TableHead key={column.key}>{column.label}</TableHead>
+                    ))}
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {processedItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={config.columns.length + 1}
+                        className="text-center py-8"
+                      >
+                        <div className="text-muted-foreground">
+                          <p>No {config.title.toLowerCase()} found.</p>
+                          <p className="text-sm mt-1">
+                            Try adjusting your search or filters.
+                          </p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    processedItems.map((item) => {
+                       const isHighlighted =
+                         type === "event" &&
+                         item.source_url &&
+                         isHighlightedDomain(item.source_url);
+                       const hasMissingDate = type === "event" && !item.date;
+                       const hasAiWriteup = (type === "event" || type === "restaurant") && item.ai_writeup;
+                       const seoStatus = calculateSeoStatus(item);
+                       const isExpanded = expandedRows.has(item.id);
+                      const hasAdditionalDetails =
+                        compactView &&
+                        type === "event" &&
+                        getAdditionalColumns().length > 0;
+
+                      return (
+                        <React.Fragment key={item.id}>
+                          <TableRow
+                            className={`
+                            ${
+                              hasMissingDate
+                                ? "bg-destructive/5 border-l-4 border-l-destructive"
+                                : ""
+                            }
+                            ${
+                              isHighlighted
+                                ? "bg-warning/10 border-l-4 border-l-warning"
+                                : ""
+                            }
+                            ${
+                              hasAiWriteup && !hasMissingDate && !isHighlighted
+                                ? "bg-green-50 border-l-4 border-l-green-500"
+                                : ""
+                            }
+                            ${
+                              seoStatus === "complete" && !hasMissingDate && !isHighlighted && !hasAiWriteup
+                                ? "bg-blue-50/50"
+                                : ""
+                            }
+                          `.trim()}
+                          >
+                            {/* Expand/Collapse button for compact view */}
+                            {hasAdditionalDetails && (
+                              <TableCell className="w-8">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => toggleRowExpansion(item.id)}
+                                  className="h-6 w-6 p-0"
+                                >
+                                  {isExpanded ? (
+                                    <ChevronDown className="h-3 w-3" />
+                                  ) : (
+                                    <ChevronRight className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              </TableCell>
+                            )}
+
+                            {/* Main columns */}
+                            {getDisplayColumns().map((column) => (
+                              <TableCell key={column.key}>
+                                {renderCellContent(item, column)}
+                              </TableCell>
+                            ))}
+
+                            {/* Actions */}
+                            <TableCell>
+                              <div className="flex gap-2">
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => handleGenerateWriteup(item)}
-                                  disabled={isGeneratingId(item.id)}
-                                  title="Generate AI Writeup"
+                                  onClick={() => onEdit(item)}
                                 >
-                                  <FileText className="h-4 w-4" />
+                                  <Edit className="h-4 w-4" />
                                 </Button>
-                              )}
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => {
-                                  if (
-                                    confirm(
-                                      `Are you sure you want to delete this ${type}?`
-                                    )
-                                  ) {
-                                    onDelete(item.id);
-                                  }
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-
-                        {/* Expanded row with additional details */}
-                        {hasAdditionalDetails && isExpanded && (
-                          <TableRow>
-                            <TableCell></TableCell>
-                            <TableCell
-                              colSpan={getDisplayColumns().length + 1}
-                              className="bg-muted/20 p-4"
-                            >
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {getAdditionalColumns().map((column) => (
-                                  <div key={column.key} className="space-y-1">
-                                    <span className="text-sm font-medium text-muted-foreground">
-                                      {column.label}:
-                                    </span>
-                                    <div className="text-sm">
-                                      {renderCellContent(item, column)}
-                                    </div>
-                                  </div>
-                                ))}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleEnhanceContent(item)}
+                                  disabled={enhancingId === item.id}
+                                >
+                                  <Sparkles className="h-4 w-4" />
+                                </Button>
+                                {(type === "event" || type === "restaurant") && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleGenerateWriteup(item)}
+                                    disabled={isGeneratingId(item.id)}
+                                    title="Generate AI Writeup"
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => {
+                                    if (
+                                      confirm(
+                                        `Are you sure you want to delete this ${type}?`
+                                      )
+                                    ) {
+                                      onDelete(item.id);
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
                               </div>
                             </TableCell>
                           </TableRow>
-                        )}
-                      </React.Fragment>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+
+                          {/* Expanded row with additional details */}
+                          {hasAdditionalDetails && isExpanded && (
+                            <TableRow>
+                              <TableCell></TableCell>
+                              <TableCell
+                                colSpan={getDisplayColumns().length + 1}
+                                className="bg-muted/20 p-4"
+                              >
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                  {getAdditionalColumns().map((column) => (
+                                    <div key={column.key} className="space-y-1">
+                                      <span className="text-sm font-medium text-muted-foreground">
+                                        {column.label}:
+                                      </span>
+                                      <div className="text-sm">
+                                        {renderCellContent(item, column)}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Event Data Enhancer Dialog */}
       {type === "event" && (
