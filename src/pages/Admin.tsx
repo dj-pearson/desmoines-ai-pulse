@@ -48,6 +48,7 @@ import AIArticleGenerator from "@/components/AIArticleGenerator";
 import AIEnhancementManager from "@/components/AIEnhancementManager";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
 import QuickCreatePanel from "@/components/admin/QuickCreatePanel";
+import VenuesManager from "@/components/admin/VenuesManager";
 // import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard"; // Temporarily disabled - requires database migrations
 import { CrmDashboard } from "@/components/crm";
 import { useArticles } from "@/hooks/useArticles";
@@ -89,6 +90,7 @@ import {
   Layers,
   Wrench,
   Contact,
+  MapPin,
 } from "lucide-react";
 import { useEvents } from "@/hooks/useEvents";
 import { ContentItem, ContentType } from "@/lib/types";
@@ -718,6 +720,18 @@ export default function Admin() {
                       >
                         <Play className="h-4 w-4" />
                         <span>Playgrounds</span>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab("venues")}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors text-sm ${
+                          activeTab === "venues"
+                            ? "bg-primary text-primary-foreground"
+                            : "hover:bg-accent hover:text-accent-foreground"
+                        }`}
+                      >
+                        <MapPin className="h-4 w-4" />
+                        <span>Known Venues</span>
                       </button>
 
                       <button
@@ -1411,6 +1425,10 @@ export default function Admin() {
                 }
                 onCreate={() => handleCreate("playground")}
               />
+            )}
+
+            {canManageContent() && activeTab === "venues" && (
+              <VenuesManager />
             )}
 
             {canManageContent() && activeTab === "articles" && (
