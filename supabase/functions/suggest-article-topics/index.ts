@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,14 +23,19 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    console.log('Starting suggest-article-topics function');
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
 
-    const claudeApiKey = Deno.env.get('CLAUDE_API_KEY');
+    const claudeApiKey = Deno.env.get('CLAUDE_API') || Deno.env.get('CLAUDE_API_KEY');
+    console.log('Claude API key found:', !!claudeApiKey);
+    
     if (!claudeApiKey) {
-      throw new Error('CLAUDE_API_KEY is required');
+      console.error('Missing CLAUDE_API key');
+      throw new Error('CLAUDE_API or CLAUDE_API_KEY is required');
     }
 
     const { 
@@ -40,45 +46,74 @@ serve(async (req) => {
       excludeExistingTopics = true,
       suggestionCount = 8
     }: TopicSuggestionRequest = await req.json();
+    
+    console.log('Request params:', { category, focusArea, suggestionCount });
 
     // Get user info
     const authHeader = req.headers.get('Authorization');
     const token = authHeader?.replace('Bearer ', '');
     
+    console.log('Checking auth...');
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
-    if (authError || !user) throw new Error('Authentication required');
+    if (authError) {
+      console.error('Auth error:', authError);
+      throw new Error('Authentication required: ' + authError.message);
+    }
+    if (!user) {
+      console.error('No user found');
+      throw new Error('Authentication required');
+    }
+    console.log('User authenticated:', user.id);
 
     console.log('Generating article topic suggestions');
 
     // Get existing articles to avoid duplicates
     let existingTopics: string[] = [];
     if (excludeExistingTopics) {
-      const { data: articles } = await supabaseClient
+      console.log('Fetching existing articles...');
+      const { data: articles, error: articlesError } = await supabaseClient
         .from('articles')
         .select('title, category, tags')
         .limit(100);
       
+      if (articlesError) {
+        console.error('Error fetching articles:', articlesError);
+      }
       existingTopics = articles?.map(a => a.title.toLowerCase()) || [];
+      console.log('Found', existingTopics.length, 'existing articles');
     }
 
     // Get current date for seasonal context
     const currentDate = new Date();
     const currentMonth = currentDate.toLocaleString('default', { month: 'long' });
     const currentSeason = getSeason(currentDate);
+    console.log('Season context:', currentSeason, currentMonth);
 
     // Get competitor content for gap analysis
-    const { data: competitorContent } = await supabaseClient
+    console.log('Fetching competitor content...');
+    const { data: competitorContent, error: competitorError } = await supabaseClient
       .from('competitor_content')
       .select('title, category, tags')
       .limit(50);
+      
+    if (competitorError) {
+      console.error('Error fetching competitor content:', competitorError);
+    }
 
     // Get trending content if available
-    const { data: trendingContent } = await supabaseClient
+    console.log('Fetching trending content...');
+    const { data: trendingContent, error: trendingError } = await supabaseClient
       .from('trending_scores')
       .select('content_type, content_id')
       .eq('content_type', 'event')
       .order('score', { ascending: false })
       .limit(20);
+      
+    if (trendingError) {
+      console.error('Error fetching trending content:', trendingError);
+    }
+
+    console.log('Building prompt...');
 
     // Build context for AI suggestions
     const suggestionPrompt = `
@@ -155,15 +190,17 @@ Format your response as a JSON object with this structure:
 Generate diverse, engaging topics that would genuinely help Des Moines residents and visitors while performing well in search results.`;
 
     // Call Claude API for topic suggestions
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    console.log('Calling Claude API...');
+    
+    // Use centralized AI config
+    const config = await getAIConfig(supabaseUrl, supabaseServiceKey);
+    const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseServiceKey);
+    
+    const response = await fetch(config.api_endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': claudeApiKey,
-        'anthropic-version': '2023-06-01'
-      },
+      headers,
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
+        model: config.default_model,
         max_tokens: 4000,
         messages: [{
           role: 'user',
@@ -171,6 +208,8 @@ Generate diverse, engaging topics that would genuinely help Des Moines residents
         }]
       })
     });
+
+    console.log('Claude API response status:', response.status);
 
     if (!response.ok) {
       const errorData = await response.text();
@@ -234,8 +273,12 @@ Generate diverse, engaging topics that would genuinely help Des Moines residents
 
   } catch (error) {
     console.error('Error in suggest-article-topics function:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, null, 2));
+    
     return new Response(JSON.stringify({ 
-      error: error.message,
+      error: error.message || 'Unknown error occurred',
+      errorType: error.constructor.name,
       success: false 
     }), {
       status: 500,
