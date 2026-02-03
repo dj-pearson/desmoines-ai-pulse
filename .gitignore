@@ -61,3 +61,4 @@ mobile-app/android/local.properties
 mobile-app/node_modules/
 generate-apple-secret.js
 CASCADING_VENDOR_ISSUES.md
+events_rows.sql

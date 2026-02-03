@@ -258,6 +258,120 @@ const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Known venue data interface
+interface KnownVenueData {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+}
+
+// Cache for known venues to avoid repeated DB queries
+let knownVenuesCache: KnownVenueData[] | null = null;
+let venuesCacheLoadedAt: number = 0;
+const VENUES_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Load all known venues into memory cache for fast matching
+ */
+async function loadKnownVenuesCache(): Promise<KnownVenueData[]> {
+  const now = Date.now();
+
+  // Return cached data if still valid
+  if (knownVenuesCache && (now - venuesCacheLoadedAt) < VENUES_CACHE_TTL) {
+    return knownVenuesCache;
+  }
+
+  console.log('🏢 Loading known venues cache...');
+
+  const { data, error } = await supabase
+    .from('known_venues')
+    .select('id, name, aliases, address, city, state, zip, latitude, longitude, phone, email, website')
+    .eq('is_active', true);
+
+  if (error) {
+    console.error('❌ Error loading known venues:', error);
+    return [];
+  }
+
+  knownVenuesCache = data || [];
+  venuesCacheLoadedAt = now;
+
+  console.log(`✅ Loaded ${knownVenuesCache.length} known venues into cache`);
+  return knownVenuesCache;
+}
+
+/**
+ * Find a matching known venue by name or alias
+ * Returns venue data if found, null otherwise
+ */
+async function findMatchingKnownVenue(venueName: string): Promise<KnownVenueData | null> {
+  if (!venueName || venueName.trim().length === 0) {
+    return null;
+  }
+
+  const venues = await loadKnownVenuesCache();
+  const searchText = venueName.toLowerCase().trim();
+
+  // First, try exact name match
+  for (const venue of venues) {
+    if (venue.name.toLowerCase() === searchText) {
+      console.log(`🎯 Exact venue match: "${venueName}" -> "${venue.name}"`);
+      return venue;
+    }
+  }
+
+  // Then, try alias match
+  for (const venue of venues) {
+    const venueData = venue as any;
+    if (venueData.aliases && Array.isArray(venueData.aliases)) {
+      for (const alias of venueData.aliases) {
+        if (alias.toLowerCase() === searchText) {
+          console.log(`🎯 Alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
+          return venue;
+        }
+      }
+    }
+  }
+
+  // Try partial match on name (venue name contains search or vice versa)
+  for (const venue of venues) {
+    const venueLower = venue.name.toLowerCase();
+    if (venueLower.includes(searchText) || searchText.includes(venueLower)) {
+      // Only match if significant overlap (avoid matching "The" in everything)
+      if (searchText.length >= 5 || venueLower.length >= 5) {
+        console.log(`🎯 Partial venue match: "${venueName}" -> "${venue.name}"`);
+        return venue;
+      }
+    }
+  }
+
+  // Try partial match on aliases
+  for (const venue of venues) {
+    const venueData = venue as any;
+    if (venueData.aliases && Array.isArray(venueData.aliases)) {
+      for (const alias of venueData.aliases) {
+        const aliasLower = alias.toLowerCase();
+        if (aliasLower.includes(searchText) || searchText.includes(aliasLower)) {
+          if (searchText.length >= 5 || aliasLower.length >= 5) {
+            console.log(`🎯 Partial alias match: "${venueName}" -> "${venue.name}" (via alias "${alias}")`);
+            return venue;
+          }
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 // Enhanced time parsing for events with Central Time handling 
 interface ParsedDateTime { 
   event_start_local: string; 
@@ -592,9 +706,11 @@ Look for anchor tags that link to event detail pages:
 
 🏢 VENUE EXTRACTION:
 - Look for venue names near event titles
-- Common Des Moines venues: Wells Fargo Arena, Civic Center, etc.
+- Just extract the venue NAME - we have a database of known venues with full addresses
+- Common Des Moines venues: Wells Fargo Arena, Civic Center, Hoyt Sherman, Val Air, etc.
 - County fairgrounds, high schools, parks
 - If unclear → use "Des Moines, IA" as location
+- DO NOT spend tokens on addresses/coordinates - we'll look these up automatically
 
 For EVERY event you find, extract:
 - title: Exact event name from content
@@ -1068,13 +1184,46 @@ Return empty array [] if no competitive content found.`
             switch (category) {
               case 'events':
                 const parsedEventDateTime = item.date ? parseEventDateTime(item.date) : null;
-                
+
                 // Skip events where we can't parse the date properly
                 if (!parsedEventDateTime?.event_start_utc) {
                   console.warn(`⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`);
                   continue; // Skip this item
                 }
-                
+
+                // Check for known venue match to auto-populate address, coordinates, etc.
+                const venueText = item.venue || item.location || '';
+                const knownVenue = await findMatchingKnownVenue(venueText);
+
+                // Build location string from known venue or use AI-extracted data
+                let eventLocation = item.location?.substring(0, 100) || "Des Moines, IA";
+                let eventVenue = item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD";
+                let eventLatitude = null;
+                let eventLongitude = null;
+
+                if (knownVenue) {
+                  console.log(`🏢 Using known venue data for: ${knownVenue.name}`);
+
+                  // Use canonical venue name
+                  eventVenue = knownVenue.name;
+
+                  // Build full address from known venue
+                  if (knownVenue.address) {
+                    eventLocation = [
+                      knownVenue.address,
+                      knownVenue.city || 'Des Moines',
+                      knownVenue.state || 'IA',
+                      knownVenue.zip
+                    ].filter(Boolean).join(', ');
+                  } else if (knownVenue.city) {
+                    eventLocation = `${knownVenue.city}, ${knownVenue.state || 'IA'}`;
+                  }
+
+                  // Use coordinates from known venue
+                  eventLatitude = knownVenue.latitude;
+                  eventLongitude = knownVenue.longitude;
+                }
+
                 transformedData = {
                   title: item.title?.substring(0, 200) || "Untitled Event",
                   original_description: item.description?.substring(0, 500) || "",
@@ -1083,13 +1232,16 @@ Return empty array [] if no competitive content found.`
                   event_start_local: parsedEventDateTime.event_start_local,
                   event_timezone: parsedEventDateTime.event_timezone,
                   event_start_utc: parsedEventDateTime.event_start_utc,
-                  location: item.location?.substring(0, 100) || "Des Moines, IA",
-                  venue: item.venue?.substring(0, 100) || item.location?.substring(0, 100) || "TBD",
+                  location: eventLocation,
+                  venue: eventVenue,
                   category: item.category?.substring(0, 50) || "General",
                   price: item.price?.substring(0, 50) || "See website",
                   source_url: item.source_url || url,
                   is_enhanced: false,
                   updated_at: new Date().toISOString(),
+                  // Add coordinates if we have them from known venue
+                  ...(eventLatitude !== null && { latitude: eventLatitude }),
+                  ...(eventLongitude !== null && { longitude: eventLongitude }),
                 };
                 break;
                 
@@ -1258,12 +1410,17 @@ Return empty array [] if no competitive content found.`
                 if (category === 'events' && insertedData?.[0]?.id) {
                   const claudeApiKey = Deno.env.get('CLAUDE_API');
                   if (claudeApiKey) {
+                    // Include known venue info for better SEO
+                    const seoVenueInfo = knownVenue
+                      ? `${knownVenue.name} at ${knownVenue.address || ''}, ${knownVenue.city || 'Des Moines'}, ${knownVenue.state || 'IA'}`
+                      : transformedData.venue;
+
                     // Run SEO generation asynchronously (don't wait, don't block)
                     generateEventSEO(
                       insertedData[0].id,
                       {
                         title: transformedData.title,
-                        venue: transformedData.venue,
+                        venue: seoVenueInfo,
                         location: transformedData.location,
                         date: transformedData.event_start_local,
                         category: transformedData.category
