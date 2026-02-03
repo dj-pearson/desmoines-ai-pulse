@@ -1,8 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   Card,
   CardContent,
@@ -40,7 +42,6 @@ import {
   Trash2,
   MapPin,
   Phone,
-  Mail,
   Globe,
   Search,
   Building2,
@@ -48,13 +49,20 @@ import {
   CheckCircle2,
   XCircle,
   Navigation,
+  RefreshCw,
+  Calendar,
+  ArrowRight,
+  Loader2,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 import {
   useKnownVenues,
   useCreateVenue,
   useUpdateVenue,
   useDeleteVenue,
   useVenueStats,
+  useVenueMatcher,
   KnownVenue,
   VenueFormData,
 } from "@/hooks/useKnownVenues";
@@ -464,10 +472,364 @@ function VenueDialog({
   );
 }
 
+// Types for backfill preview
+interface EventToBackfill {
+  id: string;
+  title: string;
+  venue: string;
+  currentLocation: string | null;
+  currentLatitude: number | null;
+  currentLongitude: number | null;
+  matchedVenue: KnownVenue;
+  fieldsToUpdate: string[];
+  selected: boolean;
+}
+
+interface BackfillDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  venues: KnownVenue[];
+}
+
+function BackfillDialog({ open, onOpenChange, venues }: BackfillDialogProps) {
+  const [isScanning, setIsScanning] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
+  const [eventsToBackfill, setEventsToBackfill] = useState<EventToBackfill[]>([]);
+  const [hasScanned, setHasScanned] = useState(false);
+  const { findVenue, getAutoFillData } = useVenueMatcher();
+
+  const selectedCount = eventsToBackfill.filter((e) => e.selected).length;
+
+  const scanForMatchingEvents = async () => {
+    setIsScanning(true);
+    try {
+      // Fetch all events
+      const { data: events, error } = await supabase
+        .from("events")
+        .select("id, title, venue, location, latitude, longitude")
+        .not("venue", "is", null)
+        .order("date", { ascending: false });
+
+      if (error) throw error;
+
+      const matches: EventToBackfill[] = [];
+
+      for (const event of events || []) {
+        if (!event.venue) continue;
+
+        const matchedVenue = findVenue(event.venue);
+        if (!matchedVenue) continue;
+
+        const autoFillData = getAutoFillData(matchedVenue);
+        const fieldsToUpdate: string[] = [];
+
+        // Check which fields need updating (only empty or incomplete fields)
+        if (!event.location && autoFillData.location) {
+          fieldsToUpdate.push("location");
+        } else if (event.location && autoFillData.location) {
+          // Check if current location is incomplete (e.g., just city name)
+          const currentLoc = event.location.toLowerCase();
+          const venueLoc = autoFillData.location.toLowerCase();
+          if (
+            currentLoc.length < venueLoc.length &&
+            venueLoc.includes(currentLoc.split(",")[0])
+          ) {
+            fieldsToUpdate.push("location");
+          }
+        }
+
+        if (!event.latitude && autoFillData.latitude) {
+          fieldsToUpdate.push("latitude");
+        }
+        if (!event.longitude && autoFillData.longitude) {
+          fieldsToUpdate.push("longitude");
+        }
+
+        // Only include events that have fields to update
+        if (fieldsToUpdate.length > 0) {
+          matches.push({
+            id: event.id,
+            title: event.title,
+            venue: event.venue,
+            currentLocation: event.location,
+            currentLatitude: event.latitude,
+            currentLongitude: event.longitude,
+            matchedVenue,
+            fieldsToUpdate,
+            selected: true,
+          });
+        }
+      }
+
+      setEventsToBackfill(matches);
+      setHasScanned(true);
+
+      if (matches.length === 0) {
+        toast.info("No events found that need backfilling");
+      } else {
+        toast.success(`Found ${matches.length} events to update`);
+      }
+    } catch (error) {
+      console.error("Scan error:", error);
+      toast.error("Failed to scan events: " + (error as Error).message);
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const toggleEventSelection = (eventId: string) => {
+    setEventsToBackfill((prev) =>
+      prev.map((e) =>
+        e.id === eventId ? { ...e, selected: !e.selected } : e
+      )
+    );
+  };
+
+  const toggleAll = (selected: boolean) => {
+    setEventsToBackfill((prev) => prev.map((e) => ({ ...e, selected })));
+  };
+
+  const applyBackfill = async () => {
+    const selectedEvents = eventsToBackfill.filter((e) => e.selected);
+    if (selectedEvents.length === 0) {
+      toast.error("No events selected");
+      return;
+    }
+
+    setIsApplying(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const event of selectedEvents) {
+        const autoFillData = getAutoFillData(event.matchedVenue);
+        const updateData: Record<string, any> = {};
+
+        if (event.fieldsToUpdate.includes("location") && autoFillData.location) {
+          updateData.location = autoFillData.location;
+        }
+        if (event.fieldsToUpdate.includes("latitude") && autoFillData.latitude) {
+          updateData.latitude = autoFillData.latitude;
+        }
+        if (event.fieldsToUpdate.includes("longitude") && autoFillData.longitude) {
+          updateData.longitude = autoFillData.longitude;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          const { error } = await supabase
+            .from("events")
+            .update(updateData)
+            .eq("id", event.id);
+
+          if (error) {
+            console.error(`Failed to update event ${event.id}:`, error);
+            errorCount++;
+          } else {
+            successCount++;
+          }
+        }
+      }
+
+      if (successCount > 0) {
+        toast.success(`Updated ${successCount} events successfully`);
+      }
+      if (errorCount > 0) {
+        toast.error(`Failed to update ${errorCount} events`);
+      }
+
+      // Remove successfully updated events from the list
+      setEventsToBackfill((prev) =>
+        prev.filter((e) => !e.selected || errorCount > 0)
+      );
+
+      if (errorCount === 0) {
+        onOpenChange(false);
+      }
+    } catch (error) {
+      console.error("Backfill error:", error);
+      toast.error("Backfill failed: " + (error as Error).message);
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  // Reset state when dialog closes
+  React.useEffect(() => {
+    if (!open) {
+      setEventsToBackfill([]);
+      setHasScanned(false);
+    }
+  }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Backfill Events from Known Venues
+          </DialogTitle>
+          <DialogDescription>
+            Scan existing events to find matches with known venues and update
+            their location data (address, coordinates).
+          </DialogDescription>
+        </DialogHeader>
+
+        {!hasScanned ? (
+          <div className="py-8 text-center">
+            <Building2 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+            <p className="text-muted-foreground mb-4">
+              Click scan to find events that match your {venues.length} known
+              venues and need location updates.
+            </p>
+            <Button onClick={scanForMatchingEvents} disabled={isScanning}>
+              {isScanning ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <Search className="h-4 w-4 mr-2" />
+                  Scan Events
+                </>
+              )}
+            </Button>
+          </div>
+        ) : eventsToBackfill.length === 0 ? (
+          <div className="py-8 text-center">
+            <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
+            <p className="text-muted-foreground">
+              All events are up to date! No backfill needed.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between py-2 border-b">
+              <div className="flex items-center gap-4">
+                <Checkbox
+                  checked={selectedCount === eventsToBackfill.length}
+                  onCheckedChange={(checked) => toggleAll(!!checked)}
+                />
+                <span className="text-sm text-muted-foreground">
+                  {selectedCount} of {eventsToBackfill.length} selected
+                </span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={scanForMatchingEvents}
+                disabled={isScanning}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 mr-2 ${isScanning ? "animate-spin" : ""}`}
+                />
+                Re-scan
+              </Button>
+            </div>
+
+            <ScrollArea className="flex-1 max-h-[400px]">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>Event</TableHead>
+                    <TableHead>Matched Venue</TableHead>
+                    <TableHead>Updates</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {eventsToBackfill.map((event) => (
+                    <TableRow key={event.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={event.selected}
+                          onCheckedChange={() => toggleEventSelection(event.id)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <p className="font-medium text-sm truncate max-w-[200px]">
+                            {event.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Venue: {event.venue}
+                          </p>
+                          {event.currentLocation && (
+                            <p className="text-xs text-muted-foreground">
+                              Current: {event.currentLocation}
+                            </p>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <ArrowRight className="h-4 w-4 text-green-500" />
+                          <div>
+                            <p className="font-medium text-sm text-green-700">
+                              {event.matchedVenue.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {event.matchedVenue.address},{" "}
+                              {event.matchedVenue.city}
+                            </p>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-wrap gap-1">
+                          {event.fieldsToUpdate.map((field) => (
+                            <Badge
+                              key={field}
+                              variant="outline"
+                              className="text-xs bg-blue-50 text-blue-700"
+                            >
+                              {field}
+                            </Badge>
+                          ))}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ScrollArea>
+          </>
+        )}
+
+        <DialogFooter className="border-t pt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            {hasScanned && eventsToBackfill.length > 0 ? "Cancel" : "Close"}
+          </Button>
+          {hasScanned && eventsToBackfill.length > 0 && (
+            <Button
+              onClick={applyBackfill}
+              disabled={isApplying || selectedCount === 0}
+            >
+              {isApplying ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Applying...
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />
+                  Apply to {selectedCount} Events
+                </>
+              )}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function VenuesManager() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [backfillDialogOpen, setBackfillDialogOpen] = useState(false);
   const [selectedVenue, setSelectedVenue] = useState<KnownVenue | null>(null);
 
   const { data: venues, isLoading } = useKnownVenues(showInactive);
@@ -587,10 +949,20 @@ export default function VenuesManager() {
             Show inactive
           </label>
         </div>
-        <Button onClick={handleCreate}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Venue
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setBackfillDialogOpen(true)}
+            disabled={!venues || venues.length === 0}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Backfill Events
+          </Button>
+          <Button onClick={handleCreate}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Venue
+          </Button>
+        </div>
       </div>
 
       {/* Venues Table */}
@@ -752,6 +1124,13 @@ export default function VenuesManager() {
         venue={selectedVenue}
         onSave={handleSave}
         isLoading={createVenue.isPending || updateVenue.isPending}
+      />
+
+      {/* Backfill Dialog */}
+      <BackfillDialog
+        open={backfillDialogOpen}
+        onOpenChange={setBackfillDialogOpen}
+        venues={venues || []}
       />
     </div>
   );
