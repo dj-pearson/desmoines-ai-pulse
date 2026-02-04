@@ -11,9 +11,9 @@ const corsHeaders = {
 
 interface WriteupRequest {
   type: "event" | "restaurant";
-  id: string;
-  url: string;
-  title: string;
+  id?: string; // Optional - will select random if not provided
+  url?: string; // Optional - fetched from database if random
+  title?: string; // Optional - fetched from database if random
   description?: string;
   location?: string;
   cuisine?: string;
@@ -241,15 +241,15 @@ serve(async (req) => {
     const requestBody = await req.json();
     console.log("Generate writeup request:", requestBody);
 
-    const { type, id, url, title, description, location, cuisine, category } =
+    let { type, id, url, title, description, location, cuisine, category } =
       requestBody;
 
-    // Validate required fields
-    if (!type || !id || !url || !title) {
+    // Validate type is provided
+    if (!type) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: "Missing required fields: type, id, url, title",
+          error: "Missing required field: type (must be 'event' or 'restaurant')",
         }),
         {
           status: 400,
@@ -262,6 +262,71 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // If no ID provided, select a random item that hasn't been written up yet
+    if (!id) {
+      console.log(`No ID provided, selecting random ${type} without writeup...`);
+      
+      const tableName = type === "event" ? "events" : "restaurants";
+      const nameColumn = type === "event" ? "title" : "name";
+      
+      // Query for items without writeup that have a valid website/url
+      const { data: candidates, error: queryError } = await supabase
+        .from(tableName)
+        .select("*")
+        .is("ai_writeup", null)
+        .not(type === "event" ? "url" : "website", "is", null)
+        .not(type === "event" ? "url" : "website", "eq", "")
+        .limit(100); // Get 100 candidates to randomly choose from
+
+      if (queryError) {
+        throw new Error(`Database query error: ${queryError.message}`);
+      }
+
+      if (!candidates || candidates.length === 0) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `No ${type}s found without writeups that have a valid URL/website`,
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Randomly select one
+      const selectedItem = candidates[Math.floor(Math.random() * candidates.length)];
+      console.log(`Selected random ${type}: ${selectedItem[nameColumn]} (ID: ${selectedItem.id})`);
+
+      // Populate the request data from the selected item
+      id = selectedItem.id;
+      url = type === "event" ? selectedItem.url : selectedItem.website;
+      title = selectedItem[nameColumn];
+      description = description || selectedItem.description || selectedItem.original_description;
+      location = location || selectedItem.location;
+      
+      if (type === "restaurant") {
+        cuisine = cuisine || selectedItem.cuisine;
+      } else {
+        category = category || selectedItem.category;
+      }
+    }
+
+    // Now validate we have all required fields (after potential random selection)
+    if (!id || !url || !title) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: "Missing required fields after selection: id, url, title",
+        }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
     // Get Claude API key
     const claudeApiKey = Deno.env.get("CLAUDE_API");
@@ -333,6 +398,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         writeup,
+        restaurantId: id,
+        restaurantName: title,
         extractedContentLength: extractedContent.text.length,
         featuresFound: extractedContent.features.length,
       }),
