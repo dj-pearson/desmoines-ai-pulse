@@ -1,0 +1,79 @@
+# Codebase Patterns
+
+## Tech Stack
+- React 18.3.1 + TypeScript 5.5.3 + Vite 5.4.1
+- Supabase (PostgreSQL, Auth, Edge Functions, Storage, Realtime)
+- Tailwind CSS + shadcn/ui (Radix primitives) + Lucide icons
+- TanStack Query v5 for server state
+- React Router DOM v6 for routing
+- Stripe for payments (subscriptions + campaigns)
+- Playwright for E2E testing (7 suites)
+- Cloudflare Pages for hosting
+
+## Project Structure
+- src/components/ui/ — shadcn/ui base components (do NOT modify these directly)
+- src/components/[feature]/ — feature-specific components
+- src/hooks/ — 116 custom hooks (use-*.ts naming)
+- src/lib/ — utility libraries (errorHandler, safeStorage, utils)
+- src/contexts/ — React contexts (AuthContext is the primary one)
+- src/pages/ — 62 route page components
+- src/integrations/supabase/ — Supabase client + generated types
+- supabase/functions/ — 76 edge functions with _shared/ middleware
+- supabase/migrations/ — 151 SQL migrations
+
+## Key Conventions
+- Environment variables: use import.meta.env (NOT process.env) — Vite project
+- localStorage: use safeStorage wrapper from @/lib/safeStorage (NOT direct access)
+- Error handling: use handleError/withErrorHandling from @/lib/errorHandler
+- Auth: use useAuth() from @/contexts/AuthContext
+- Subscriptions: use useSubscription() hook + PremiumGate component
+- Named exports preferred over default exports (except pages)
+- 2-space indentation, single quotes, semicolons
+
+## Build & Quality Commands
+- npm run dev — dev server on localhost:8080
+- npm run build — production build (strips console.* via esbuild)
+- npm run lint — ESLint
+- npm run type-check — TypeScript (relaxed mode)
+- npm run type-check:strict — TypeScript (strict mode, partial files)
+- npm run validate — lint + typecheck combined
+- npm test — Playwright E2E tests
+
+## Edge Function Patterns
+- CORS middleware from _shared/cors.ts
+- Rate limiting from _shared/rateLimit.ts (100 req/15min default)
+- Input validation from _shared/validation.ts
+- 18 functions have verify_jwt=false (scrapers, crawlers, webhooks)
+
+## Database Patterns
+- RLS enabled on all tables
+- Public read for content tables (events, restaurants, attractions)
+- Authenticated write with role checks
+- Admin-only for sensitive operations
+- Auto-update timestamps via triggers
+
+## Known Technical Debt (as of PRD creation)
+- 682 instances of 'any' type (TypeScript relaxed mode)
+- 188 files with raw console.log/error/warn
+- 14 files use localStorage directly (should use safeStorage)
+- 18 unauthenticated edge functions (need audit)
+- No unit tests (only Playwright E2E)
+- No CI/CD PR validation (only event-crawler workflow)
+- Error tracking placeholder (Sentry not configured)
+- PearsonASUS file naming artifacts from merge
+- SearchTrafficDashboard commented out (missing migrations)
+- TODOs: user preferences server-side, scraping job persistence, distance calculation
+
+---
+
+## Progress Log
+
+## 2026-02-06 — PRD Created
+- Created prd.json with 30 user stories for enterprise readiness
+- Created progress.txt with codebase patterns
+- **Learnings for future iterations:**
+  - The codebase has strong foundations but critical operational gaps
+  - CI/CD and observability are the highest-priority blockers
+  - TypeScript strict mode migration should start from src/lib/ (imported everywhere)
+  - Console cleanup needs a structured logger utility first (US-005) before bulk replacement
+  - Edge function security is a mix: some intentionally unauthenticated (webhooks), some should be locked down

@@ -1,0 +1,487 @@
+{
+  "project": "Des Moines AI Pulse",
+  "branchName": "ralph/enterprise-readiness",
+  "description": "Enterprise & Production Readiness — Comprehensive hardening of the Des Moines AI Pulse platform across CI/CD, testing, security, observability, code quality, performance, accessibility, and documentation to achieve enterprise-grade production standards.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create GitHub Actions PR validation workflow",
+      "description": "As a developer, I need automated PR checks so that every pull request is validated for lint, type safety, and build integrity before merge.",
+      "acceptanceCriteria": [
+        "Create .github/workflows/pr-checks.yml that triggers on pull_request to main",
+        "Workflow runs: npm ci, npm run lint, npm run type-check, npm run build",
+        "Workflow uses Node 20 and caches node_modules via actions/cache",
+        "Workflow fails if any step fails, blocking merge",
+        "Typecheck passes locally"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "The project currently only has an event-crawler.yml workflow. This is the single most critical gap for enterprise readiness — no code quality gates exist in CI."
+    },
+    {
+      "id": "US-002",
+      "title": "Set up Vitest unit testing framework",
+      "description": "As a developer, I need a unit testing framework so that individual functions, hooks, and components can be tested in isolation without spinning up a full browser.",
+      "acceptanceCriteria": [
+        "Install vitest, @testing-library/react, @testing-library/jest-dom, jsdom as devDependencies",
+        "Create vitest.config.ts with jsdom environment, path aliases matching vite.config.ts, and coverage configuration",
+        "Add scripts to package.json: test:unit, test:unit:coverage, test:unit:watch",
+        "Create src/__tests__/setup.ts with testing-library matchers",
+        "Create one passing example test (e.g., src/lib/__tests__/utils.test.ts) that tests an exported utility function",
+        "npm run test:unit passes with the example test",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Currently the project only has Playwright E2E tests. No unit testing framework exists. Vitest is the natural choice since the project already uses Vite."
+    },
+    {
+      "id": "US-003",
+      "title": "Write unit tests for core utility libraries",
+      "description": "As a developer, I need tests for the core utility libraries so that foundational functions like error handling, storage, and utilities are verified to work correctly.",
+      "acceptanceCriteria": [
+        "Create src/lib/__tests__/errorHandler.test.ts testing handleError, withErrorHandling, createComponentErrorHandler with at least 5 test cases",
+        "Create src/lib/__tests__/safeStorage.test.ts testing get, set, remove, and fallback behavior when localStorage is unavailable with at least 4 test cases",
+        "Create src/lib/__tests__/utils.test.ts testing key exported utility functions with at least 5 test cases",
+        "All tests pass via npm run test:unit",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Focus on the three most critical library files: errorHandler.ts, safeStorage.ts, and utils.ts. These are used across the entire codebase."
+    },
+    {
+      "id": "US-004",
+      "title": "Integrate unit tests and build check into CI/CD workflow",
+      "description": "As a developer, I need unit tests running in CI so that regressions are caught automatically on every PR.",
+      "acceptanceCriteria": [
+        "Update .github/workflows/pr-checks.yml to include npm run test:unit step after lint and typecheck",
+        "Test step runs with coverage reporting (--coverage flag)",
+        "Add a build verification step that runs npm run build after tests",
+        "Workflow remains fast (use caching, parallel jobs where possible)",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Depends on US-001 (workflow) and US-002 (vitest setup). This ensures tests are enforced, not just available."
+    },
+    {
+      "id": "US-005",
+      "title": "Create structured logging utility",
+      "description": "As a developer, I need a structured logging utility so that log output is consistent, leveled, and automatically suppressed in production builds.",
+      "acceptanceCriteria": [
+        "Create src/lib/logger.ts with log levels: debug, info, warn, error",
+        "Logger accepts context object: { component: string, action: string, metadata?: Record<string, unknown> }",
+        "In production (import.meta.env.PROD), debug and info levels are no-ops",
+        "In development, logs include timestamp, level, component, action, and message",
+        "Export a default logger instance and a createLogger(component: string) factory",
+        "Add unit test in src/lib/__tests__/logger.test.ts with at least 4 test cases covering level filtering and context",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "This replaces the 188 files of raw console.log with a structured alternative. Must be created before the cleanup stories."
+    },
+    {
+      "id": "US-006",
+      "title": "Add ESLint no-console rule and fix violations in src/lib/",
+      "description": "As a developer, I need a lint rule preventing raw console usage so that new code uses the structured logger and existing critical library code is migrated.",
+      "acceptanceCriteria": [
+        "Add 'no-console': 'warn' rule to eslint.config.js (warn, not error, to allow gradual migration)",
+        "Replace all console.log/warn/error calls in src/lib/ files with the structured logger from US-005",
+        "No console.* calls remain in any file under src/lib/ (excluding test files)",
+        "npm run lint passes (no errors; console warnings in other directories are acceptable as warnings)",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Start with src/lib/ because these are the foundational utilities used everywhere. Subsequent stories will clean up hooks and components."
+    },
+    {
+      "id": "US-007",
+      "title": "Replace console.log in src/hooks/ with structured logger",
+      "description": "As a developer, I need clean logging in hooks so that debugging output is structured and production-safe across all custom hooks.",
+      "acceptanceCriteria": [
+        "Replace all console.log/warn/error calls in src/hooks/ files with the structured logger",
+        "Each logger instance uses createLogger with the hook name as component",
+        "No raw console.* calls remain in src/hooks/ directory",
+        "npm run lint passes for src/hooks/ (no console warnings)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage — skip those."
+    },
+    {
+      "id": "US-008",
+      "title": "Replace console.log in src/contexts/ and src/pages/ with structured logger",
+      "description": "As a developer, I need clean logging in contexts and pages so that application-level debugging is structured throughout.",
+      "acceptanceCriteria": [
+        "Replace all console.log/warn/error calls in src/contexts/ with structured logger",
+        "Replace all console.log/warn/error calls in src/pages/ with structured logger",
+        "No raw console.* calls remain in either directory",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Contexts are critical (AuthContext handles auth state). Pages are user-facing entry points. Both should have clean logging."
+    },
+    {
+      "id": "US-009",
+      "title": "Replace console.log in src/components/ with structured logger",
+      "description": "As a developer, I need clean logging in components so that the largest source of console.log usage is cleaned up.",
+      "acceptanceCriteria": [
+        "Replace all console.log/warn/error calls in src/components/ with structured logger",
+        "No raw console.* calls remain in src/components/ directory (excluding src/components/ui/ which are third-party generated)",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "This is the largest batch — 178 components. Many may already be clean. Focus on files that actually have console.* calls. The shadcn/ui base components in src/components/ui/ can be excluded if they have no console calls."
+    },
+    {
+      "id": "US-010",
+      "title": "Integrate Sentry error tracking",
+      "description": "As an operations engineer, I need production error tracking so that runtime errors are captured, reported, and triaged without relying on user reports.",
+      "acceptanceCriteria": [
+        "Install @sentry/react as a dependency",
+        "Create src/lib/sentry.ts that initializes Sentry with DSN from VITE_SENTRY_DSN environment variable",
+        "Initialize Sentry in src/main.tsx before React renders, only when VITE_SENTRY_DSN is set",
+        "Update the ErrorTrackingService in src/lib/errorHandler.ts to use Sentry.captureException and Sentry.captureMessage",
+        "Wire initErrorTracking() to actually initialize the Sentry service instead of being a placeholder",
+        "Add VITE_SENTRY_DSN to .env.example with a comment explaining setup",
+        "Wrap the root App component with Sentry.ErrorBoundary as a fallback to the existing ErrorBoundary",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "The codebase already has an ErrorTrackingService interface and initErrorTracking placeholder. This story fills in the actual implementation. The DSN will be configured per-environment at deploy time."
+    },
+    {
+      "id": "US-011",
+      "title": "Add security headers via Cloudflare Pages configuration",
+      "description": "As a security engineer, I need proper HTTP security headers so that the application is protected against common web attacks like XSS, clickjacking, and MIME sniffing.",
+      "acceptanceCriteria": [
+        "Create public/_headers file with Cloudflare Pages header rules",
+        "Add Content-Security-Policy header with appropriate directives for the app (allow Supabase, Stripe, Leaflet tile servers, inline styles for Tailwind)",
+        "Add Strict-Transport-Security: max-age=31536000; includeSubDomains",
+        "Add X-Content-Type-Options: nosniff",
+        "Add X-Frame-Options: DENY",
+        "Add Referrer-Policy: strict-origin-when-cross-origin",
+        "Add Permissions-Policy restricting camera, microphone, geolocation to self",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Cloudflare Pages supports a _headers file in the output directory (public/ gets copied to dist/). CSP must be carefully crafted to not break Supabase realtime, Stripe checkout, Leaflet maps, or inline Tailwind styles."
+    },
+    {
+      "id": "US-012",
+      "title": "Audit and document unauthenticated edge functions",
+      "description": "As a security engineer, I need a documented audit of all edge functions with verify_jwt=false so that the security posture is understood and intentional.",
+      "acceptanceCriteria": [
+        "Review all edge functions with verify_jwt = false in their config.toml",
+        "For each unauthenticated function, add a comment block at the top explaining WHY authentication is disabled and what alternative security measures exist (API key, webhook secret, IP restriction, rate limiting, etc.)",
+        "Create docs/SECURITY_AUDIT.md documenting all 18 unauthenticated functions with their justification and risk level (low/medium/high)",
+        "Identify any functions that SHOULD have auth enabled but don't, and enable verify_jwt = true for those",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "18 of 76 edge functions have verify_jwt=false. Many are background jobs (scrapers, crawlers) which is acceptable. But some may be misconfigured. The audit creates accountability."
+    },
+    {
+      "id": "US-013",
+      "title": "Add API key authentication middleware for data processing edge functions",
+      "description": "As a security engineer, I need API key authentication on data processing endpoints so that scrapers and crawlers cannot be triggered by unauthorized parties.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/_shared/apiKeyAuth.ts middleware that validates an X-API-Key header against a WORKER_API_KEY secret",
+        "Apply API key middleware to scraper/crawler functions that are currently unauthenticated: ai-crawler, scrape-events, restaurant-opening-scraper, firecrawl-scraper, bulk-enhance-events, bulk-event-updater",
+        "Functions return 401 Unauthorized when called without a valid API key",
+        "Functions continue to work when called with the correct API key",
+        "Update the event-crawler GitHub Action workflow to pass the API key when invoking edge functions",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "These functions process external data and modify the database. Without API key auth, anyone who discovers the function URL can trigger bulk data operations."
+    },
+    {
+      "id": "US-014",
+      "title": "Standardize rate limiting across all public edge functions",
+      "description": "As a security engineer, I need consistent rate limiting on all public-facing edge functions so that abuse and denial-of-service attacks are mitigated.",
+      "acceptanceCriteria": [
+        "Audit all edge functions for rate limiting usage",
+        "Ensure every public-facing function (those callable from the frontend) imports and uses the rate limiter from _shared/rateLimit.ts",
+        "Standardize rate limits: 100 req/15min for read operations, 30 req/15min for write operations, 10 req/15min for checkout/payment operations",
+        "Document rate limit tiers in a comment at the top of _shared/rateLimit.ts",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "The rate limiter exists in _shared/rateLimit.ts but not all functions use it. Payment functions already have stricter limits (10 req/15min). This story ensures consistency."
+    },
+    {
+      "id": "US-015",
+      "title": "Audit and migrate direct localStorage usage to safeStorage",
+      "description": "As a security-conscious developer, I need all localStorage access to go through the safe wrapper so that the app handles private browsing mode gracefully and sensitive data is not stored insecurely.",
+      "acceptanceCriteria": [
+        "Search all source files for direct localStorage.getItem, localStorage.setItem, localStorage.removeItem calls",
+        "Replace each with the equivalent safeStorage (storage.get, storage.set, storage.remove) from @/lib/safeStorage",
+        "Verify no sensitive data (tokens, passwords, PII) is stored in localStorage — if found, remove it or move to session-only storage",
+        "No direct localStorage.* calls remain in src/ (excluding node_modules and test files)",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "14 files currently use localStorage directly. The safeStorage wrapper handles try-catch for private browsing mode and provides typed access."
+    },
+    {
+      "id": "US-016",
+      "title": "Begin TypeScript strict mode migration for src/lib/",
+      "description": "As a developer, I need TypeScript strict mode on core libraries so that null safety and type correctness are enforced where it matters most.",
+      "acceptanceCriteria": [
+        "Enable strict mode checks for all files in src/lib/ by adding them to tsconfig.strict.json include paths",
+        "Fix all strict mode TypeScript errors in src/lib/ files (strictNullChecks, noImplicitAny, etc.)",
+        "Replace any usage of 'any' type in src/lib/ with proper types (unknown, specific types, or generics)",
+        "npm run type-check:strict passes for src/lib/ files",
+        "npm run type-check (relaxed) still passes for the full project",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "The project has 682 instances of 'any' type. Starting with src/lib/ is strategic because these utilities are imported everywhere — fixing them improves downstream type safety."
+    },
+    {
+      "id": "US-017",
+      "title": "TypeScript strict mode migration for critical hooks",
+      "description": "As a developer, I need TypeScript strict mode on critical hooks so that the most-used data fetching and auth hooks have full type safety.",
+      "acceptanceCriteria": [
+        "Enable strict mode for these hooks: useAuth (in contexts/AuthContext.tsx), use-events.ts, use-restaurants.ts, use-attractions.ts, useSubscription.ts, useTripPlanner.ts",
+        "Fix all strict mode TypeScript errors in these files",
+        "Replace 'any' types with proper types in these files",
+        "npm run type-check:strict passes for these files",
+        "npm run type-check (relaxed) still passes for the full project",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "These are the most commonly referenced hooks in CLAUDE.md. Strict typing here cascades type safety to all consumers."
+    },
+    {
+      "id": "US-018",
+      "title": "Clean up file naming artifacts and dead code",
+      "description": "As a developer, I need the codebase free of merge artifacts and deprecated code so that the project is clean and navigable.",
+      "acceptanceCriteria": [
+        "Remove all *-PearsonASUS.ts files (these are merge/sync artifacts with duplicate functionality)",
+        "Remove deprecated methods in EventDataEnhancer.tsx or consolidate them",
+        "Verify no imports reference the removed files (search for PearsonASUS in all source files)",
+        "Verify no runtime errors from the removals by checking that typecheck passes",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Files like timezone-PearsonASUS.ts, useAuth-PearsonASUS.ts, types-PearsonASUS.ts appear to be workstation sync artifacts. They should be removed if they are duplicates of the canonical files."
+    },
+    {
+      "id": "US-019",
+      "title": "Implement server-side user preferences storage",
+      "description": "As a user, I need my preferences (theme, notifications, location) to persist across devices so that my experience is consistent regardless of which browser or device I use.",
+      "acceptanceCriteria": [
+        "Verify the user_preferences or user_profiles table exists with a preferences JSONB column (create migration if needed)",
+        "Update the use-user-preferences.ts hook to sync preferences to Supabase when user is authenticated",
+        "On login, load server-side preferences and merge with any localStorage preferences (server wins on conflict)",
+        "On logout, continue using localStorage preferences only",
+        "For unauthenticated users, continue using localStorage (graceful degradation)",
+        "Resolve the TODO comment in use-user-preferences.ts",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Currently marked as TODO in use-user-preferences.ts. The profiles table has a preferences JSONB column that can be used."
+    },
+    {
+      "id": "US-020",
+      "title": "Implement scraping jobs database persistence",
+      "description": "As an admin, I need scraping jobs persisted in the database so that job history, status, and results are tracked and queryable.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for scraping_jobs table with columns: id (UUID PK), job_type (text), status (text: pending/running/completed/failed/stopped), config (JSONB), results (JSONB), started_at (timestamptz), completed_at (timestamptz), created_by (UUID FK to auth.users), error_message (text)",
+        "Add RLS policy: admins can CRUD, authenticated users can read their own jobs",
+        "Update useScraping.ts to persist jobs to the scraping_jobs table instead of in-memory only",
+        "Implement the stop job functionality (resolve the TODO at useScraping.ts:397)",
+        "Resolve the TODO at useScraping.ts:483 for database persistence",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Two TODOs in useScraping.ts reference this. Without persistence, scraping jobs are lost on page refresh and there's no audit trail."
+    },
+    {
+      "id": "US-021",
+      "title": "Enable SearchTrafficDashboard in admin panel",
+      "description": "As an admin, I need the search traffic dashboard enabled so that search analytics are visible and actionable.",
+      "acceptanceCriteria": [
+        "Investigate why SearchTrafficDashboard was commented out in Admin.tsx (check for missing table dependencies)",
+        "Create any required database migrations for missing tables",
+        "Uncomment and re-enable SearchTrafficDashboard in Admin.tsx",
+        "Verify the component renders without runtime errors by checking typecheck and build",
+        "Typecheck passes",
+        "npm run build passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "SearchTrafficDashboard is commented out in Admin.tsx with a note about requiring database migrations not yet applied."
+    },
+    {
+      "id": "US-022",
+      "title": "Implement distance calculation in recommendation algorithm",
+      "description": "As a user, I want event and restaurant recommendations that factor in distance from my location so that nearby options are prioritized.",
+      "acceptanceCriteria": [
+        "Create a Haversine distance calculation utility in src/lib/geo.ts",
+        "Add unit test for the Haversine function with at least 3 test cases (known distances between Des Moines landmarks)",
+        "Integrate distance calculation into the recommendation algorithm (resolve the TODO about distance calculation awaiting event coordinates)",
+        "When user location is available, factor distance into recommendation scoring",
+        "When user location is unavailable, gracefully skip distance factor",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "TODO in recommendation algorithm awaits event coordinates. Many events now have latitude/longitude from the backfill-coordinates work."
+    },
+    {
+      "id": "US-023",
+      "title": "Add environment variable validation at startup",
+      "description": "As a developer, I need environment variables validated at application startup so that missing configuration is caught immediately with clear error messages instead of causing cryptic runtime failures.",
+      "acceptanceCriteria": [
+        "Create src/lib/env.ts that validates required environment variables on import",
+        "Required variables: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY",
+        "Optional variables with defaults: VITE_SITE_URL, VITE_SENTRY_DSN, VITE_STRIPE_PUBLISHABLE_KEY",
+        "In development mode, log warnings for missing optional variables",
+        "In production mode, throw an error for missing required variables",
+        "Export typed env object for use throughout the app (replacing scattered import.meta.env calls)",
+        "Import env.ts in main.tsx to trigger validation at startup",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Currently env vars are accessed via scattered import.meta.env calls with no validation. Missing vars cause silent failures at runtime."
+    },
+    {
+      "id": "US-024",
+      "title": "Optimize bundle size and remove unused dependencies",
+      "description": "As a developer, I need the production bundle optimized so that initial page load is fast and meets the <500KB gzipped target.",
+      "acceptanceCriteria": [
+        "Run npm run build:analyze and document current bundle sizes",
+        "Identify and remove unused dependencies from package.json (check for packages imported nowhere)",
+        "Verify Puppeteer is NOT included in the client bundle (it should be devDependency or server-only)",
+        "Ensure heavy libraries (Three.js, Leaflet, Tiptap, FullCalendar) are in separate lazy-loaded chunks",
+        "After cleanup, run npm run build and verify bundle size is reduced",
+        "Document final bundle sizes in a comment in vite.config.ts",
+        "Typecheck passes",
+        "npm run build passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Target is <500KB gzipped initial bundle. Heavy libraries should already be chunk-split but Puppeteer may be leaking into the client bundle."
+    },
+    {
+      "id": "US-025",
+      "title": "Optimize database queries with missing indexes",
+      "description": "As a developer, I need optimized database queries so that page loads are fast and the database performs well under production load.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration adding composite indexes for common query patterns: (events: date + category, date + city), (restaurants: cuisine + city, rating DESC), (attractions: category + city)",
+        "Add indexes for foreign key columns used in joins: favorites.user_id, favorites.event_id, ratings.user_id, reviews.entity_id",
+        "Add partial index for upcoming events: WHERE date >= NOW()",
+        "Add index for full-text search if not already present on events.title, restaurants.name",
+        "Migration applies cleanly",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Some indexes exist (idx_events_date, idx_events_category, idx_restaurants_cuisine) but composite indexes for common filter combinations are likely missing."
+    },
+    {
+      "id": "US-026",
+      "title": "Complete WCAG 2.1 AA keyboard accessibility",
+      "description": "As a user with motor disabilities, I need full keyboard navigation support so that I can use all features without a mouse.",
+      "acceptanceCriteria": [
+        "Verify skip navigation link exists and works (the test currently warns 'consider adding'). If missing, add <a href='#main-content' class='sr-only focus:not-sr-only'> at the top of the layout",
+        "Add id='main-content' to the main content area in the root layout",
+        "Ensure all modal/dialog components trap focus when open (check Dialog, Sheet, AlertDialog from shadcn/ui)",
+        "Verify all interactive elements (buttons, links, inputs) have visible focus indicators (outline or ring)",
+        "Add aria-label to icon-only buttons that lack visible text labels",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Accessibility tests exist but flag gaps. The skip link is the most commonly flagged issue. shadcn/ui components generally handle focus trapping well but need verification."
+    },
+    {
+      "id": "US-027",
+      "title": "Implement prefers-reduced-motion across all animations",
+      "description": "As a user with vestibular disorders, I need animations to respect my OS motion preferences so that the site does not cause discomfort.",
+      "acceptanceCriteria": [
+        "Add a global CSS rule: @media (prefers-reduced-motion: reduce) that disables transitions and animations",
+        "Specifically disable the 3D CityScape hero animation when reduced motion is preferred (check the Three.js/React Three Fiber component)",
+        "Disable any scroll-triggered animations or parallax effects",
+        "Disable auto-playing carousels or slideshows",
+        "Create a useReducedMotion() hook in src/hooks/ that returns a boolean for component-level checks",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "The 3D cityscape hero is the most prominent animation. Leaflet map transitions should also be considered."
+    },
+    {
+      "id": "US-028",
+      "title": "Implement feature flags system",
+      "description": "As an operations engineer, I need a feature flags system so that new features can be deployed behind flags and toggled without code deployments.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for feature_flags table: id (UUID PK), flag_key (text UNIQUE), enabled (boolean default false), description (text), target_tiers (text[] for subscription tier targeting), created_at, updated_at",
+        "Add RLS policy: public read, admin-only write",
+        "Create src/hooks/useFeatureFlag.ts that fetches flag state from Supabase with TanStack Query caching (5 min stale time)",
+        "Export useFeatureFlag(flagKey: string): { enabled: boolean, isLoading: boolean }",
+        "Create a FeatureFlag wrapper component: <FeatureFlag flag='my-feature'><NewFeature /></FeatureFlag>",
+        "Seed initial flags: 'search_traffic_dashboard', 'ai_trip_planner_v2', 'mobile_app_banner'",
+        "Add unit test for useFeatureFlag hook",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Feature flags are essential for enterprise deployments. They allow progressive rollouts and instant rollbacks without redeploying code."
+    },
+    {
+      "id": "US-029",
+      "title": "Create API documentation for edge functions",
+      "description": "As a developer, I need comprehensive API documentation so that edge functions can be understood, maintained, and consumed correctly.",
+      "acceptanceCriteria": [
+        "Create docs/API_REFERENCE.md documenting all 76 edge functions",
+        "For each function, document: endpoint URL, HTTP method, authentication requirement (JWT/API key/none), request body schema, response schema, rate limit tier, example request/response",
+        "Group functions by domain: Content (events/restaurants/attractions), Payment (Stripe), Data Processing (scrapers/crawlers), Analytics, AI/ML, Admin, Utility",
+        "Note which functions are internal-only vs public-facing",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "76 edge functions with no centralized API documentation. This is critical for onboarding developers and maintaining the system."
+    },
+    {
+      "id": "US-030",
+      "title": "Create production deployment runbook",
+      "description": "As an operations engineer, I need a deployment runbook so that production deployments are safe, repeatable, and recoverable.",
+      "acceptanceCriteria": [
+        "Create docs/PRODUCTION_RUNBOOK.md with the following sections:",
+        "Pre-deployment checklist: all CI checks pass, database migrations reviewed, env vars set, feature flags configured",
+        "Deployment steps: Cloudflare Pages deployment via main branch push, Supabase migration deployment, edge function deployment",
+        "Post-deployment verification: health check URLs, smoke test list (homepage, auth, events, restaurants, admin, payments), monitoring dashboard links",
+        "Rollback procedures: Cloudflare Pages rollback (previous deployment), database migration rollback (down migration), edge function rollback (previous version)",
+        "Incident response: severity levels (P1-P4), escalation contacts placeholder, communication templates",
+        "Common issues and troubleshooting: Supabase connection issues, Stripe webhook failures, edge function timeouts",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "DEPLOYMENT.md exists but is a basic guide. A production runbook is more comprehensive with operational procedures, rollback plans, and incident response."
+    }
+  ]
+}
