@@ -2,10 +2,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useState } from "react";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
+import { usePageTracking } from "@/hooks/usePageTracking";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -112,6 +114,9 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   // Enable focus management on route changes for accessibility
   useFocusOnRouteChange("main-content", true);
 
+  // Track page views for analytics dashboard
+  usePageTracking();
+
   useKeyboardShortcuts({
     enabled: true,
     onShowHelp: () => setShowShortcutsModal(true),
@@ -138,6 +143,7 @@ const App = () => (
           <KeyboardShortcutsProvider>
             <Toaster />
             <Sonner />
+            <RouteErrorBoundary>
             <Suspense fallback={<PageLoader />}>
             <Routes>
             <Route path="/" element={<Index />} />
@@ -243,6 +249,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          </RouteErrorBoundary>
           <BottomNav />
         </KeyboardShortcutsProvider>
       </ErrorBoundary>
