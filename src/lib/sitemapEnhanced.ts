@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createEventSlugWithCentralTime } from "./timezone";
+import { BRAND } from "./brandConfig";
 
 interface SitemapUrl {
   loc: string;
@@ -9,7 +10,7 @@ interface SitemapUrl {
 }
 
 export class EnhancedSitemapGenerator {
-  private baseUrl = "https://desmoinesinsider.com";
+  private baseUrl = BRAND.baseUrl;
   private currentDate = new Date().toISOString().split("T")[0];
 
   async generateMainSitemap(): Promise<string> {

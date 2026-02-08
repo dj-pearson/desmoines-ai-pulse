@@ -9,6 +9,7 @@ import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Calendar, Users, Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
+import { BRAND } from "@/lib/brandConfig";
 
 // Suburb mapping for SEO-friendly URLs and proper names
 const SUBURBS = {
@@ -191,7 +192,7 @@ export default function EventsByLocation() {
       }
     }) || [];
 
-  const pageTitle = `${suburbInfo.name} Events - Things To Do | Des Moines Insider`;
+  const pageTitle = `${suburbInfo.name} Events - Things To Do | ${BRAND.name}`;
   const pageDescription = `Find events in ${suburbInfo.name}, Iowa. ${suburbInfo.description} See dates, times, locations, and get directions.`;
 
   const breadcrumbs = [
@@ -219,7 +220,7 @@ export default function EventsByLocation() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`https://desmoinesinsider.com/events/${location}`}
+        canonicalUrl={`${BRAND.baseUrl}/events/${location}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}

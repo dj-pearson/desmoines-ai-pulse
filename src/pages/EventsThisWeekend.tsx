@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -89,7 +90,7 @@ export default function EventsThisWeekend() {
   const pageTitle = `Des Moines Events This Weekend - ${format(
     new Date(),
     "MMMM d"
-  )} | Des Moines Insider`;
+  )} | ${BRAND.name}`;
   const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps, and tips for ${format(
     new Date(),
     "MMMM d"
@@ -127,7 +128,7 @@ export default function EventsThisWeekend() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/events/this-weekend"
+        canonicalUrl={getCanonicalUrl('/events/this-weekend')}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}

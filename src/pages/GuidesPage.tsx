@@ -20,6 +20,7 @@ import {
   Snowflake
 } from "lucide-react";
 import OptimizedImage from "@/components/OptimizedImage";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 const guides = [
   {
@@ -138,7 +139,7 @@ export default function GuidesPage() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/guides"
+        canonicalUrl={getCanonicalUrl('/guides')}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}

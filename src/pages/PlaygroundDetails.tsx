@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { MapPin, Star, Share2, ArrowLeft, Users, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { BRAND } from "@/lib/brandConfig";
 
 const createSlug = (name: string): string => {
   return name
@@ -122,7 +123,7 @@ export default function PlaygroundDetails() {
       <HelmetProvider>
         <div className="container mx-auto px-4 py-8">
           <Helmet>
-            <title>{playground.name} - Des Moines Insider</title>
+            <title>{playground.name} - {BRAND.name}</title>
             <meta
               name="description"
               content={
@@ -132,7 +133,7 @@ export default function PlaygroundDetails() {
             />
             <meta
               property="og:title"
-              content={`${playground.name} - Des Moines Insider`}
+              content={`${playground.name} - ${BRAND.name}`}
             />
             <meta
               property="og:description"
@@ -146,7 +147,7 @@ export default function PlaygroundDetails() {
               property="og:image"
               content={
                 playground.image_url ||
-                "https://desmoinesinsider.com/og-image.jpg"
+                `${BRAND.baseUrl}/og-image.jpg`
               }
             />
 

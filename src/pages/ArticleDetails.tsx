@@ -28,6 +28,7 @@ import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import ShareDialog from '@/components/ShareDialog';
 import { Helmet } from 'react-helmet-async';
+import { BRAND } from '@/lib/brandConfig';
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
@@ -110,25 +111,25 @@ const ArticleDetails: React.FC = () => {
     "@type": "Article",
     "headline": article.title,
     "description": article.excerpt || article.seo_description || '',
-    "image": article.featured_image_url || "https://desmoinesinsider.com/DMI-Logo.png",
+    "image": article.featured_image_url || `${BRAND.baseUrl}${BRAND.logo}`,
     "datePublished": article.published_at || article.created_at,
     "dateModified": article.updated_at || article.published_at || article.created_at,
     "author": {
       "@type": "Organization",
-      "name": "Des Moines Insider",
-      "url": "https://desmoinesinsider.com"
+      "name": BRAND.name,
+      "url": BRAND.baseUrl
     },
     "publisher": {
       "@type": "Organization",
-      "name": "Des Moines Insider",
+      "name": BRAND.name,
       "logo": {
         "@type": "ImageObject",
-        "url": "https://desmoinesinsider.com/DMI-Logo.png"
+        "url": `${BRAND.baseUrl}${BRAND.logo}`
       }
     },
     "mainEntityOfPage": {
       "@type": "WebPage",
-      "@id": `https://desmoinesinsider.com/articles/${article.slug}`
+      "@id": `${BRAND.baseUrl}/articles/${article.slug}`
     },
     "articleSection": article.category || "Local News",
     "keywords": Array.isArray(article.tags) ? article.tags.join(', ') : article.tags || '',
@@ -144,10 +145,10 @@ const ArticleDetails: React.FC = () => {
     <>
       <SEOHead
         title={article.seo_title || article.title}
-        description={article.seo_description || article.excerpt || `Read ${article.title} on Des Moines Insider`}
+        description={article.seo_description || article.excerpt || `Read ${article.title} on ${BRAND.name}`}
         keywords={article.seo_keywords || article.tags || []}
         type="article"
-        canonicalUrl={`https://desmoinesinsider.com/articles/${article.slug}`}
+        canonicalUrl={`${BRAND.baseUrl}/articles/${article.slug}`}
       />
       <Helmet>
         <script type="application/ld+json">

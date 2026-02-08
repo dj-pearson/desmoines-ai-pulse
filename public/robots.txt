@@ -1,6 +1,8 @@
 # Des Moines AI Pulse - Robots.txt
-# Optimized for search engine indexing and AI crawlers
+# Optimized for search engine indexing and AI search crawlers
+# Last updated: 2026-02-08
 
+# Default rules for all crawlers
 User-agent: *
 Allow: /
 Disallow: /admin
@@ -10,11 +12,13 @@ Disallow: /dashboard
 Disallow: /api/
 Disallow: /social
 Disallow: /gamification
+Disallow: /campaigns
+Disallow: /subscription
 Disallow: /_redirects
 Disallow: /_headers
 Disallow: /sw.js
 
-# Allow important crawlable paths
+# Allow important crawlable content paths
 Allow: /events/
 Allow: /restaurants/
 Allow: /playgrounds/
@@ -22,16 +26,44 @@ Allow: /attractions/
 Allow: /neighborhoods/
 Allow: /articles/
 Allow: /guides/
+Allow: /trip-planner
+Allow: /weekend
+Allow: /iowa-state-fair
+Allow: /pricing
+Allow: /contact
+Allow: /llms.txt
 
-# Special permissions for AI crawlers
+# ============================================
+# AI Search Crawlers - ALLOW (for AI citation)
+# These bots power AI search engines that cite sources
+# ============================================
+
+# OpenAI - ChatGPT Search
 User-agent: GPTBot
 Allow: /
 Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
+Disallow: /campaigns
 
-User-agent: PerplexityBot
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+# OpenAI Search Bot (dedicated search crawler)
+User-agent: OAI-SearchBot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+# Anthropic - Claude Search
+User-agent: ClaudeBot
 Allow: /
 Disallow: /admin
 Disallow: /auth
@@ -45,13 +77,7 @@ Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
 
-User-agent: ChatGPT-User
-Allow: /
-Disallow: /admin
-Disallow: /auth
-Disallow: /profile
-Disallow: /dashboard
-
+# Google AI (Gemini, AI Overviews)
 User-agent: Google-Extended
 Allow: /
 Disallow: /admin
@@ -59,20 +85,45 @@ Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
 
-User-agent: Anthropic-AI
+User-agent: Googlebot
 Allow: /
 Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
 
-User-agent: Omgilibot
+# Perplexity AI Search
+User-agent: PerplexityBot
 Allow: /
 Disallow: /admin
 Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
 
+# Apple Siri/Spotlight
+User-agent: Applebot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+# Microsoft Copilot / Bing
+User-agent: Bingbot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+# Meta AI
 User-agent: FacebookBot
 Allow: /
 Disallow: /admin
@@ -80,8 +131,52 @@ Disallow: /auth
 Disallow: /profile
 Disallow: /dashboard
 
-# Sitemap locations
+User-agent: meta-externalagent
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+# Cohere AI Search
+User-agent: cohere-ai
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+# You.com AI Search
+User-agent: YouBot
+Allow: /
+Disallow: /admin
+Disallow: /auth
+Disallow: /profile
+Disallow: /dashboard
+
+# ============================================
+# AI Training-Only Bots - BLOCK
+# These bots only scrape for model training, not search
+# ============================================
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Omgilibot
+Disallow: /
+
+# ============================================
+# Sitemap Locations
+# ============================================
+
 Sitemap: https://desmoinesaipulse.com/sitemap.xml
+Sitemap: https://desmoinesaipulse.com/sitemap-static.xml
 Sitemap: https://desmoinesaipulse.com/sitemap-events.xml
 Sitemap: https://desmoinesaipulse.com/sitemap-restaurants.xml
 Sitemap: https://desmoinesaipulse.com/sitemap-attractions.xml
