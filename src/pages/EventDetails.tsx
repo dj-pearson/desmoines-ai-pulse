@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { BRAND } from "@/lib/brandConfig";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -133,7 +134,7 @@ export default function EventDetails() {
         }
       })
     },
-    image: event.image_url || "https://desmoinesinsider.com/default-event-image.jpg",
+    image: event.image_url || `${BRAND.baseUrl}/default-event-image.jpg`,
     url: window.location.href,
     eventStatus: isUpcoming
       ? "https://schema.org/EventScheduled"
@@ -141,14 +142,14 @@ export default function EventDetails() {
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     organizer: {
       "@type": "Organization",
-      name: "Des Moines Insider",
-      url: "https://desmoinesinsider.com",
-      logo: "https://desmoinesinsider.com/DMI-Logo.png"
+      name: BRAND.name,
+      url: BRAND.baseUrl,
+      logo: `${BRAND.baseUrl}${BRAND.logo}`
     },
     publisher: {
       "@type": "Organization",
-      name: "Des Moines Insider",
-      url: "https://desmoinesinsider.com"
+      name: BRAND.name,
+      url: BRAND.baseUrl
     },
     offers: event.price && event.price.toLowerCase() !== 'free'
       ? {

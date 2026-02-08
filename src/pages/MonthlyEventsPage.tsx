@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
 import { useState, useEffect } from "react";
+import { BRAND } from "@/lib/brandConfig";
 
 export default function MonthlyEventsPage() {
   const { monthYear } = useParams<{ monthYear: string }>();
@@ -123,7 +124,7 @@ export default function MonthlyEventsPage() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`https://desmoinesinsider.com/events/${monthYear}`}
+        canonicalUrl={`${BRAND.baseUrl}/events/${monthYear}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}

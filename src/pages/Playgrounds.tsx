@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { MapPin, Star, Users, Filter, List, Map } from "lucide-react";
 import { Link } from "react-router-dom";
+import { BRAND } from "@/lib/brandConfig";
 
 // Lazy load map to prevent react-leaflet bundling issues
 const PlaygroundsMap = lazy(() => import("@/components/PlaygroundsMap"));
@@ -189,7 +190,7 @@ export default function Playgrounds() {
         <meta property="og:type" content="website" />
         <meta
           property="og:image"
-          content="https://desmoinesinsider.com/og-image.jpg"
+          content={`${BRAND.baseUrl}/og-image.jpg`}
         />
 
         {/* JSON-LD Structured Data */}

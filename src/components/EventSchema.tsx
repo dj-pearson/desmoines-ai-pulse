@@ -1,6 +1,7 @@
 import { Helmet } from "react-helmet-async";
 import { Event } from "@/lib/types";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
+import { BRAND } from "@/lib/brandConfig";
 
 interface EventSchemaProps {
   event: Event;
@@ -38,31 +39,31 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
       })
     },
     image: [
-      event.image_url || "https://desmoinesinsider.com/default-event-image.jpg"
+      event.image_url || `${BRAND.baseUrl}/default-event-image.jpg`
     ],
-    url: `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`,
+    url: `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
     eventStatus: isUpcoming
       ? "https://schema.org/EventScheduled"
       : "https://schema.org/EventPostponed",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
     organizer: {
       "@type": "Organization",
-      name: "Des Moines Insider",
-      url: "https://desmoinesinsider.com",
+      name: BRAND.name,
+      url: BRAND.baseUrl,
       logo: {
         "@type": "ImageObject",
-        url: "https://desmoinesinsider.com/DMI-Logo.png"
+        url: `${BRAND.baseUrl}${BRAND.logo}`
       },
       sameAs: [
-        "https://facebook.com/desmoinesinsider",
-        "https://twitter.com/desmoinesinsider",
-        "https://instagram.com/desmoinesinsider"
+        "https://facebook.com/desmoinespulse",
+        "https://twitter.com/desmoinespulse",
+        "https://instagram.com/desmoinespulse"
       ]
     },
     publisher: {
       "@type": "Organization",
-      name: "Des Moines Insider",
-      url: "https://desmoinesinsider.com"
+      name: BRAND.name,
+      url: BRAND.baseUrl
     },
     offers: event.price && event.price.toLowerCase() !== 'free'
       ? {
@@ -70,7 +71,7 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
           price: event.price.replace(/[^0-9.]/g, '') || "0",
           priceCurrency: "USD",
           availability: "https://schema.org/InStock",
-          url: event.source_url || `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`,
+          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
           validFrom: new Date().toISOString(),
           seller: {
             "@type": "Organization",
@@ -82,7 +83,7 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
           price: "0",
           priceCurrency: "USD",
           availability: "https://schema.org/InStock",
-          url: event.source_url || `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`
+          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`
         },
     performer: event.venue ? {
       "@type": "Organization",
@@ -155,7 +156,7 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
       <meta property="og:title" content={event.title} />
       <meta property="og:description" content={event.enhanced_description || event.original_description || event.title} />
       {event.image_url && <meta property="og:image" content={event.image_url} />}
-      <meta property="og:url" content={`https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(event.title, event)}`} />
+      <meta property="og:url" content={`${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`} />
       
       {/* Twitter Card for events */}
       <meta name="twitter:card" content="summary_large_image" />

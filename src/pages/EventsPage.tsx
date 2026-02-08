@@ -47,6 +47,7 @@ import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
 import { SmartFilterChips } from "@/components/SmartFilters";
 import { useRef } from "react";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -493,16 +494,16 @@ export default function EventsPage() {
   const eventsSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    "@id": "https://desmoinesinsider.com/events#eventlist",
+    "@id": `${BRAND.baseUrl}/events#eventlist`,
     name: "Des Moines Events - Local Activities & Entertainment Guide",
     description: `${seoDescription} Find the best events happening in Des Moines, Iowa and surrounding areas.`,
     numberOfItems: events?.length || 0,
-    url: "https://desmoinesinsider.com/events",
+    url: `${BRAND.baseUrl}/events`,
     mainEntity: {
       "@type": "WebPage",
-      "@id": "https://desmoinesinsider.com/events",
+      "@id": `${BRAND.baseUrl}/events`,
       name: "Des Moines Events Calendar",
-      url: "https://desmoinesinsider.com/events",
+      url: `${BRAND.baseUrl}/events`,
       about: {
         "@type": "City",
         name: "Des Moines",
@@ -511,8 +512,8 @@ export default function EventsPage() {
     },
     provider: {
       "@type": "LocalBusiness",
-      name: "Des Moines Insider",
-      url: "https://desmoinesinsider.com",
+      name: BRAND.name,
+      url: BRAND.baseUrl,
       areaServed: {
         "@type": "City",
         name: "Des Moines",
@@ -525,7 +526,7 @@ export default function EventsPage() {
         position: index + 1,
         item: {
           "@type": "Event",
-          "@id": `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(
+          "@id": `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(
             event.title,
             event
           )}`,
@@ -564,9 +565,9 @@ export default function EventsPage() {
           },
           image: [
             event.image_url ||
-              "https://desmoinesinsider.com/default-event-image.jpg",
+              `${BRAND.baseUrl}/default-event-image.jpg`,
           ],
-          url: `https://desmoinesinsider.com/events/${createEventSlugWithCentralTime(
+          url: `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(
             event.title,
             event
           )}`,
@@ -574,12 +575,12 @@ export default function EventsPage() {
           eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
           organizer: {
             "@type": "Organization",
-            "@id": "https://desmoinesinsider.com/#organization",
-            name: "Des Moines Insider",
-            url: "https://desmoinesinsider.com",
+            "@id": `${BRAND.baseUrl}/#organization`,
+            name: BRAND.name,
+            url: BRAND.baseUrl,
             logo: {
               "@type": "ImageObject",
-              url: "https://desmoinesinsider.com/DMI-Logo.png",
+              url: `${BRAND.baseUrl}${BRAND.logo}`,
             },
           },
           offers:
@@ -636,7 +637,7 @@ export default function EventsPage() {
     return (
       <>
         <SEOHead
-          title="Events in Des Moines - Upcoming Activities & Entertainment | Des Moines Insider"
+          title={`Events in Des Moines - Upcoming Activities & Entertainment | ${BRAND.name}`}
           description="Discover upcoming events in Des Moines, Iowa. Find concerts, festivals, community gatherings, and entertainment activities happening now."
           type="website"
           keywords={["Des Moines events", "Iowa events", "upcoming events", "things to do Des Moines"]}
@@ -680,7 +681,7 @@ export default function EventsPage() {
     return (
       <>
         <SEOHead
-          title="Unable to Load Events | Des Moines Insider"
+          title={`Unable to Load Events | ${BRAND.name}`}
           description="We're having trouble loading events. Please try again."
           type="website"
         />
@@ -716,7 +717,7 @@ export default function EventsPage() {
       <SEOEnhancedHead
         title={seoTitle}
         description={seoDescription}
-        url="https://desmoinesinsider.com/events"
+        url={getCanonicalUrl('/events')}
         type="website"
         structuredData={eventsSchema}
       />
@@ -724,8 +725,8 @@ export default function EventsPage() {
       {/* BreadcrumbList Schema - Improves search result display */}
       <BreadcrumbListSchema
         items={[
-          { name: "Home", url: "https://desmoinesinsider.com" },
-          { name: "Events", url: "https://desmoinesinsider.com/events" }
+          { name: "Home", url: BRAND.baseUrl },
+          { name: "Events", url: getCanonicalUrl('/events') }
         ]}
       />
 

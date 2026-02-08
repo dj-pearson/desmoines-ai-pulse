@@ -9,6 +9,7 @@ import { Calendar, MapPin, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
 interface EventItem {
   id: string;
@@ -66,7 +67,7 @@ export default function EventsToday() {
 
   const todaysEvents = events || [];
 
-  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | Des Moines Insider`;
+  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | ${BRAND.name}`;
   const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
 
   const breadcrumbs = [
@@ -98,7 +99,7 @@ export default function EventsToday() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/events/today"
+        canonicalUrl={getCanonicalUrl('/events/today')}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
