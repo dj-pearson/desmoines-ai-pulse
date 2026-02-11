@@ -10,24 +10,16 @@ import {
   useRestaurants,
   useRestaurantFilterOptions,
 } from "@/hooks/useRestaurants";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CardsGridSkeleton, StatsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
+import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
 import {
   MapPin,
   Star,
   DollarSign,
   ChefHat,
   Search,
-  Filter,
   SearchX,
   Utensils,
   X,
@@ -37,15 +29,31 @@ import {
   List,
   Map,
   SlidersHorizontal,
+  TrendingUp,
+  ArrowRight,
+  Flame,
+  Leaf,
+  Pizza,
+  Fish,
+  Beef,
+  Coffee,
+  Globe,
 } from "lucide-react";
-import { Link } from "react-router-dom";
-import { useState, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { useIsMobile } from "@/hooks/use-mobile";
+import RestaurantCard from "@/components/RestaurantCard";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -57,15 +65,30 @@ import {
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
-const createSlug = (name: string): string => {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-};
+// Popular cuisine quick-filters with icons
+const cuisineQuickFilters = [
+  { label: "All", value: "", icon: Utensils },
+  { label: "American", value: "American", icon: Beef },
+  { label: "Italian", value: "Italian", icon: Pizza },
+  { label: "Mexican", value: "Mexican", icon: Flame },
+  { label: "Asian", value: "Asian", icon: Globe },
+  { label: "Seafood", value: "Seafood", icon: Fish },
+  { label: "Vegetarian", value: "Vegetarian", icon: Leaf },
+  { label: "Coffee & Cafe", value: "Cafe", icon: Coffee },
+];
+
+const sortOptions = [
+  { value: "popularity", label: "Most Popular", icon: TrendingUp },
+  { value: "rating", label: "Highest Rated", icon: Star },
+  { value: "newest", label: "Newest", icon: Clock },
+  { value: "alphabetical", label: "A-Z", icon: SlidersHorizontal },
+  { value: "price_low", label: "Price: Low-High", icon: DollarSign },
+  { value: "price_high", label: "Price: High-Low", icon: DollarSign },
+];
 
 export default function Restaurants() {
   const isMobile = useIsMobile();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<RestaurantFilterOptions>({
     search: "",
     cuisine: [],
@@ -77,19 +100,43 @@ export default function Restaurants() {
     openNow: false,
     tags: [],
   });
-  const [showFilters, setShowFilters] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
-  const [viewMode, setViewMode] = useState("list");
+  const [viewMode, setViewMode] = useState<"list" | "map">("list");
+  const [searchInput, setSearchInput] = useState("");
+  const [activeCuisineQuick, setActiveCuisineQuick] = useState("");
   const { toast } = useToast();
 
   const { restaurants, isLoading, error, totalCount } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
 
-  const handleSearchChange = (value: string) => {
-    setFilters((prev) => ({ ...prev, search: value }));
-  };
+  // Debounced search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== filters.search) {
+        setFilters((prev) => ({ ...prev, search: searchInput }));
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, filters.search]);
 
-  const handleClearFilters = () => {
+  const handleCuisineQuickFilter = useCallback((cuisineValue: string) => {
+    setActiveCuisineQuick(cuisineValue);
+    if (cuisineValue === "") {
+      setFilters((prev) => ({ ...prev, cuisine: [] }));
+    } else {
+      // Match any cuisine containing the value (e.g., "Asian" matches "Asian Fusion", "Thai", etc.)
+      const matchingCuisines = filterOptions.cuisines.filter((c) =>
+        c.toLowerCase().includes(cuisineValue.toLowerCase())
+      );
+      setFilters((prev) => ({
+        ...prev,
+        cuisine: matchingCuisines.length > 0 ? matchingCuisines : [cuisineValue],
+      }));
+    }
+  }, [filterOptions.cuisines]);
+
+  const handleClearFilters = useCallback(() => {
     setFilters({
       search: "",
       cuisine: [],
@@ -101,18 +148,22 @@ export default function Restaurants() {
       openNow: false,
       tags: [],
     });
+    setSearchInput("");
+    setActiveCuisineQuick("");
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
-  };
+  }, [toast]);
 
-  const removeFilter = (filterType: string, value?: string) => {
+  const removeFilter = useCallback((filterType: string, value?: string) => {
     setFilters((prev) => {
       switch (filterType) {
         case "search":
+          setSearchInput("");
           return { ...prev, search: "" };
         case "cuisine":
+          setActiveCuisineQuick("");
           return { ...prev, cuisine: prev.cuisine.filter((c) => c !== value) };
         case "priceRange":
           return { ...prev, priceRange: prev.priceRange.filter((p) => p !== value) };
@@ -130,9 +181,9 @@ export default function Restaurants() {
           return prev;
       }
     });
-  };
+  }, []);
 
-  const getActiveFiltersCount = () => {
+  const getActiveFiltersCount = useMemo(() => {
     let count = 0;
     if (filters.search) count++;
     count += filters.cuisine.length;
@@ -143,31 +194,47 @@ export default function Restaurants() {
     if (filters.openNow) count++;
     if (filters.rating[0] !== 0 || filters.rating[1] !== 5) count++;
     return count;
-  };
+  }, [filters]);
 
-  const hasActiveFilters = getActiveFiltersCount() > 0;
+  const hasActiveFilters = getActiveFiltersCount > 0;
 
-  // Enhanced SEO data for restaurants page
+  // Split restaurants for featured section
+  const featuredRestaurants = useMemo(
+    () => restaurants.filter((r) => r.is_featured).slice(0, 3),
+    [restaurants]
+  );
+
+  // SEO data
   const restaurantsKeywords = [
     "Des Moines restaurants",
-    "Iowa dining",
-    "restaurant reviews",
-    "local restaurants",
-    "Des Moines food",
-    "restaurant guide",
-    "dining guide",
-    "new restaurants",
-    "restaurant openings",
     "best restaurants Des Moines",
+    "Des Moines dining guide",
+    "restaurants near me Des Moines",
+    "where to eat Des Moines Iowa",
+    "Des Moines food",
+    "Iowa restaurants",
+    "Des Moines restaurant reviews",
+    "new restaurants Des Moines",
+    "Des Moines restaurant openings",
+    "best food Des Moines",
+    "downtown Des Moines restaurants",
+    "West Des Moines restaurants",
+    "East Village restaurants Des Moines",
+    "cheap eats Des Moines",
+    "fine dining Des Moines",
+    "family restaurants Des Moines",
+    "Des Moines brunch",
+    "late night food Des Moines",
   ];
 
   const restaurantsSchema = {
     "@context": "https://schema.org",
     "@type": "ItemList",
-    name: "Des Moines Restaurants",
-    description: "Comprehensive guide to restaurants in Des Moines, Iowa",
+    name: "Best Restaurants in Des Moines, Iowa",
+    description:
+      "Complete guide to the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, menus, and real-time availability.",
     numberOfItems: totalCount || restaurants.length,
-    itemListElement: restaurants.slice(0, 10).map((restaurant, index) => ({
+    itemListElement: restaurants.slice(0, 20).map((restaurant, index) => ({
       "@type": "ListItem",
       position: index + 1,
       item: {
@@ -175,17 +242,33 @@ export default function Restaurants() {
         name: restaurant.name,
         description: restaurant.description,
         servesCuisine: restaurant.cuisine,
+        priceRange: restaurant.price_range,
         address: {
           "@type": "PostalAddress",
-          addressLocality: "Des Moines",
+          streetAddress: restaurant.location,
+          addressLocality: restaurant.city || "Des Moines",
           addressRegion: "Iowa",
           addressCountry: "US",
         },
+        ...(restaurant.image_url && { image: restaurant.image_url }),
         aggregateRating: restaurant.rating
           ? {
               "@type": "AggregateRating",
               ratingValue: restaurant.rating,
-              ratingCount: "100",
+              bestRating: "5",
+              worstRating: "1",
+              ratingCount: Math.round(
+                (restaurant.popularity_score || 50) * 2
+              ),
+            }
+          : undefined,
+        ...(restaurant.phone && { telephone: restaurant.phone }),
+        ...(restaurant.website && { url: restaurant.website }),
+        geo: restaurant.latitude
+          ? {
+              "@type": "GeoCoordinates",
+              latitude: restaurant.latitude,
+              longitude: restaurant.longitude,
             }
           : undefined,
       },
@@ -195,64 +278,224 @@ export default function Restaurants() {
   return (
     <>
       <SEOHead
-        title="Des Moines Restaurants - Complete Dining Guide & New Openings"
-        description="Discover the best restaurants in Des Moines, Iowa. Find new openings, read reviews, and explore diverse cuisines with our comprehensive dining guide featuring 200+ local restaurants."
+        title="Best Restaurants in Des Moines, Iowa - Complete Dining Guide 2026"
+        description="Find the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, photos, and real-time open/closed status. Filter by cuisine, price, and neighborhood."
         type="website"
         keywords={restaurantsKeywords}
         structuredData={restaurantsSchema}
         url="/restaurants"
       />
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-gray-50">
         <Header />
 
-        {/* Hero Section with DMI Brand Colors */}
-        <section className="relative bg-gradient-to-br from-[#2D1B69] via-[#8B0000] to-[#DC143C] overflow-hidden min-h-[400px]">
-          <div className="absolute inset-0 bg-black/20"></div>
-          <div className="relative container mx-auto px-4 py-16 md:py-24 text-center">
-            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-4 tracking-tight">
-              Discover Des Moines Dining
-            </h1>
-            <p className="text-xl md:text-2xl text-white/90 mb-8 max-w-3xl mx-auto">
-              Find the best restaurants, local favorites, and new dining
-              experiences in the capital city
-            </p>
+        {/* Hero Section */}
+        <section className="relative bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] overflow-hidden">
+          {/* Animated background elements */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute -top-20 -right-20 w-96 h-96 bg-white/5 rounded-full blur-3xl" />
+            <div className="absolute -bottom-32 -left-32 w-[500px] h-[500px] bg-[#DC143C]/20 rounded-full blur-3xl" />
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#2D1B69]/30 rounded-full blur-3xl" />
+          </div>
 
-            {/* Search Bar */}
-            <div className="max-w-2xl mx-auto">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
-                  <Input
-                    type="text"
-                    placeholder="Search restaurants..."
-                    value={filters.search}
-                    onChange={(e) => handleSearchChange(e.target.value)}
-                    className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
-                  />
+          <div className="relative container mx-auto px-4 pt-16 pb-20 md:pt-20 md:pb-28">
+            {/* Title */}
+            <div className="text-center mb-10">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold text-white mb-4 tracking-tight">
+                Des Moines
+                <span className="block bg-gradient-to-r from-amber-300 to-orange-400 bg-clip-text text-transparent">
+                  Restaurant Guide
+                </span>
+              </h1>
+              <p className="text-lg md:text-xl text-white/80 max-w-2xl mx-auto">
+                Discover 200+ restaurants across Des Moines. Search by cuisine, price,
+                neighborhood, or find what's open right now.
+              </p>
+            </div>
+
+            {/* Search Bar - The Main Event */}
+            <div className="max-w-3xl mx-auto">
+              <div className="relative">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 z-10" />
+                <Input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder={isMobile ? "Search restaurants..." : "Search restaurants, cuisines, neighborhoods..."}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-gray-400"
+                  aria-label="Search restaurants"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                  {searchInput && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-gray-400 hover:text-gray-600"
+                      onClick={() => {
+                        setSearchInput("");
+                        setFilters((prev) => ({ ...prev, search: "" }));
+                        searchInputRef.current?.focus();
+                      }}
+                      aria-label="Clear search"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button
+                    className="h-10 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] hover:opacity-90 text-white rounded-xl px-5 font-semibold"
+                    onClick={() => setFilters((prev) => ({ ...prev, search: searchInput }))}
+                  >
+                    <Search className="h-4 w-4 mr-2" />
+                    Search
+                  </Button>
                 </div>
+              </div>
 
-                {/* Filter Button - Mobile Sheet or Desktop Toggle */}
+              {/* Quick action pills below search */}
+              <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+                <Button
+                  variant={filters.openNow ? "default" : "secondary"}
+                  size="sm"
+                  onClick={() => setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))}
+                  className={`rounded-full text-sm ${
+                    filters.openNow
+                      ? "bg-emerald-500 hover:bg-emerald-600 text-white"
+                      : "bg-white/15 hover:bg-white/25 text-white border-white/20"
+                  }`}
+                >
+                  <Clock className="h-3.5 w-3.5 mr-1.5" />
+                  Open Now
+                </Button>
+                <Button
+                  variant={filters.featuredOnly ? "default" : "secondary"}
+                  size="sm"
+                  onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: !prev.featuredOnly }))}
+                  className={`rounded-full text-sm ${
+                    filters.featuredOnly
+                      ? "bg-amber-500 hover:bg-amber-600 text-white"
+                      : "bg-white/15 hover:bg-white/25 text-white border-white/20"
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Featured
+                </Button>
+
+                {/* View Mode Toggle */}
+                <div className="flex items-center rounded-full bg-white/15 p-0.5 ml-2">
+                  <Button
+                    onClick={() => setViewMode("list")}
+                    variant="ghost"
+                    size="icon"
+                    className={`h-8 w-8 rounded-full ${
+                      viewMode === "list"
+                        ? "bg-white/30 text-white"
+                        : "text-white/60 hover:text-white hover:bg-white/10"
+                    }`}
+                    aria-label="List view"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    onClick={() => setViewMode("map")}
+                    variant="ghost"
+                    size="icon"
+                    className={`h-8 w-8 rounded-full ${
+                      viewMode === "map"
+                        ? "bg-white/30 text-white"
+                        : "text-white/60 hover:text-white hover:bg-white/10"
+                    }`}
+                    aria-label="Map view"
+                  >
+                    <Map className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Curved bottom edge */}
+          <div className="absolute bottom-0 left-0 right-0">
+            <svg viewBox="0 0 1440 60" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full">
+              <path d="M0 60L1440 60L1440 0C1440 0 1080 60 720 60C360 60 0 0 0 0L0 60Z" fill="#f9fafb" />
+            </svg>
+          </div>
+        </section>
+
+        <main className="container mx-auto px-4 py-6 md:py-8">
+          <div className="space-y-8">
+            {/* Cuisine Quick Filter Bar */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+              {cuisineQuickFilters.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeCuisineQuick === item.value;
+                return (
+                  <button
+                    key={item.value}
+                    onClick={() => handleCuisineQuickFilter(item.value)}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full whitespace-nowrap transition-all duration-200 text-sm font-medium border ${
+                      isActive
+                        ? "bg-[#2D1B69] text-white border-[#2D1B69] shadow-md"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-[#2D1B69]/30 hover:bg-[#2D1B69]/5 shadow-sm"
+                    }`}
+                    aria-pressed={isActive}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Sort & Filter Controls Bar */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                {/* Sort dropdown */}
+                <Select
+                  value={filters.sortBy}
+                  onValueChange={(value) =>
+                    setFilters((prev) => ({ ...prev, sortBy: value as RestaurantFilterOptions["sortBy"] }))
+                  }
+                >
+                  <SelectTrigger className="w-44 bg-white rounded-xl shadow-sm">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sortOptions.map((option) => {
+                      const Icon = option.icon;
+                      return (
+                        <SelectItem key={option.value} value={option.value}>
+                          <div className="flex items-center gap-2">
+                            <Icon className="h-4 w-4" />
+                            {option.label}
+                          </div>
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+
+                {/* Advanced filters button */}
                 {isMobile ? (
                   <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
                     <SheetTrigger asChild>
                       <Button
-                        variant="secondary"
-                        className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12 relative"
+                        variant="outline"
+                        className="rounded-xl bg-white shadow-sm relative"
                       >
                         <SlidersHorizontal className="h-4 w-4 mr-2" />
                         Filters
-                        {hasActiveFilters && (
-                          <Badge className="ml-2 bg-primary text-primary-foreground h-5 w-5 p-0 flex items-center justify-center text-xs">
-                            {getActiveFiltersCount()}
+                        {getActiveFiltersCount > 0 && (
+                          <Badge className="ml-2 bg-[#DC143C] text-white h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
+                            {getActiveFiltersCount}
                           </Badge>
                         )}
                       </Button>
                     </SheetTrigger>
-                    <SheetContent side="bottom" className="h-[85vh]">
+                    <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
                       <SheetHeader>
                         <SheetTitle className="text-xl">Filter Restaurants</SheetTitle>
                       </SheetHeader>
                       <div className="mt-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-                        {/* Mobile Filter Content */}
                         <RestaurantFilters
                           filters={filters}
                           onFiltersChange={setFilters}
@@ -262,13 +505,11 @@ export default function Restaurants() {
                           totalResults={totalCount}
                           isLoading={isLoading}
                         />
-
-                        {/* Mobile Filter Actions */}
-                        <div className="flex gap-3 pt-4">
-                          <Button variant="outline" onClick={handleClearFilters} className="flex-1">
+                        <div className="flex gap-3 pt-4 sticky bottom-0 bg-background pb-4">
+                          <Button variant="outline" onClick={handleClearFilters} className="flex-1 rounded-xl">
                             Clear All
                           </Button>
-                          <Button onClick={() => setShowMobileFilters(false)} className="flex-1">
+                          <Button onClick={() => setShowMobileFilters(false)} className="flex-1 rounded-xl bg-[#2D1B69]">
                             Show {restaurants?.length || 0} Results
                           </Button>
                         </div>
@@ -277,70 +518,120 @@ export default function Restaurants() {
                   </Sheet>
                 ) : (
                   <Button
-                    onClick={() => setShowFilters(!showFilters)}
-                    variant="secondary"
-                    className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
+                    variant="outline"
+                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                    className="rounded-xl bg-white shadow-sm relative"
                   >
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filters
+                    <SlidersHorizontal className="h-4 w-4 mr-2" />
+                    More Filters
+                    {getActiveFiltersCount > 0 && (
+                      <Badge className="ml-2 bg-[#DC143C] text-white h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
+                        {getActiveFiltersCount}
+                      </Badge>
+                    )}
                   </Button>
                 )}
-
-                {/* View Mode Toggle */}
-                <div className="flex items-center rounded-md bg-white/20 p-0.5">
-                  <Button
-                    onClick={() => setViewMode("list")}
-                    variant={viewMode === "list" ? "secondary" : "ghost"}
-                    size="icon"
-                    className={
-                      viewMode === "list"
-                        ? "bg-white/30 text-white h-11"
-                        : "text-white/70 hover:bg-white/30 hover:text-white h-11"
-                    }
-                    aria-label="Switch to list view"
-                    title="Switch to list view"
-                  >
-                    <List className="h-5 w-5" />
-                  </Button>
-                  <Button
-                    onClick={() => setViewMode("map")}
-                    variant={viewMode === "map" ? "secondary" : "ghost"}
-                    size="icon"
-                    className={
-                      viewMode === "map"
-                        ? "bg-white/30 text-white h-11"
-                        : "text-white/70 hover:bg-white/30 hover:text-white h-11"
-                    }
-                    aria-label="Switch to map view"
-                    title="Switch to map view"
-                  >
-                    <Map className="h-5 w-5" />
-                  </Button>
-                </div>
               </div>
+
+              {/* Results count */}
+              <p className="text-sm text-muted-foreground">
+                {isLoading ? (
+                  "Searching..."
+                ) : (
+                  <span>
+                    <strong className="text-foreground">{totalCount}</strong> restaurant{totalCount !== 1 ? "s" : ""} found
+                  </span>
+                )}
+              </p>
             </div>
-          </div>
-        </section>
 
-        <main className="container mx-auto mobile-padding py-6 md:py-8 safe-area-top">
-          {/* Mobile-Optimized Content */}
-          <div className="space-y-8">
-            {/* Restaurant Openings Section */}
-            <RestaurantOpenings />
+            {/* Active Filter Chips */}
+            {hasActiveFilters && (
+              <div className="flex flex-wrap items-center gap-2">
+                {filters.search && (
+                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
+                    Search: "{filters.search}"
+                    <button onClick={() => removeFilter("search")} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.cuisine.map((cuisine) => (
+                  <Badge key={cuisine} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
+                    <ChefHat className="h-3 w-3" />
+                    {cuisine}
+                    <button onClick={() => removeFilter("cuisine", cuisine)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {filters.priceRange.map((price) => (
+                  <Badge key={price} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
+                    <DollarSign className="h-3 w-3" />
+                    {price}
+                    <button onClick={() => removeFilter("priceRange", price)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {filters.location.map((location) => (
+                  <Badge key={location} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
+                    <MapPin className="h-3 w-3" />
+                    {location}
+                    <button onClick={() => removeFilter("location", location)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {filters.tags.map((tag) => (
+                  <Badge key={tag} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
+                    {tag}
+                    <button onClick={() => removeFilter("tags", tag)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+                {filters.featuredOnly && (
+                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-amber-50 border-amber-200 text-amber-800">
+                    <Sparkles className="h-3 w-3" />
+                    Featured Only
+                    <button onClick={() => removeFilter("featuredOnly")} className="ml-1 hover:bg-amber-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {filters.openNow && (
+                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-emerald-50 border-emerald-200 text-emerald-800">
+                    <Clock className="h-3 w-3" />
+                    Open Now
+                    <button onClick={() => removeFilter("openNow")} className="ml-1 hover:bg-emerald-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                {(filters.rating[0] !== 0 || filters.rating[1] !== 5) && (
+                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
+                    <Star className="h-3 w-3" />
+                    Rating: {filters.rating[0]}-{filters.rating[1]}
+                    <button onClick={() => removeFilter("rating")} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="text-xs h-7 text-[#DC143C] hover:text-[#DC143C]/80 hover:bg-red-50"
+                >
+                  Clear All
+                </Button>
+              </div>
+            )}
 
-            {/* Open Now Banner - Prominent Feature */}
-            <OpenNowBanner
-              isActive={filters.openNow}
-              onToggle={() =>
-                setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))
-              }
-              openCount={filters.openNow ? restaurants.length : undefined}
-              totalCount={totalCount}
-            />
-
-            {/* Advanced Filters */}
-            {showFilters && (
-              <div className="bg-white rounded-2xl shadow-lg p-6 border">
+            {/* Advanced Filters Panel */}
+            {showAdvancedFilters && !isMobile && (
+              <div className="bg-white rounded-2xl shadow-md p-6 border">
                 <RestaurantFilters
                   filters={filters}
                   onFiltersChange={setFilters}
@@ -351,171 +642,73 @@ export default function Restaurants() {
                   isLoading={isLoading}
                 />
                 <div className="flex justify-between mt-6">
-                  <Button variant="outline" onClick={handleClearFilters}>
+                  <Button variant="outline" onClick={handleClearFilters} className="rounded-xl">
                     Clear Filters
                   </Button>
-                  <div className="text-sm text-gray-500">
-                    {totalCount || 0} restaurants found
-                  </div>
+                  <Button onClick={() => setShowAdvancedFilters(false)} className="rounded-xl bg-[#2D1B69]">
+                    Apply Filters
+                  </Button>
                 </div>
               </div>
             )}
 
-            {/* All Restaurants Section */}
-            <div className="space-y-4 md:space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 md:gap-4">
-                <h2 className="text-mobile-title md:text-2xl font-bold">
-                  All Restaurants
-                </h2>
-                <p className="text-mobile-caption md:text-sm text-muted-foreground">
-                  {filters.sortBy === "popularity"
-                    ? "Sorted by AI popularity ranking"
-                    : filters.sortBy === "rating"
-                    ? "Sorted by highest ratings"
-                    : filters.sortBy === "newest"
-                    ? "Newest restaurants first"
-                    : filters.sortBy === "alphabetical"
-                    ? "Listed alphabetically"
-                    : filters.sortBy === "price_low"
-                    ? "Most affordable first"
-                    : "Premium options first"}
-                </p>
-              </div>
+            {/* Restaurant Openings Section */}
+            <RestaurantOpenings />
 
-              {/* Quick Filter Buttons */}
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  variant={filters.openNow ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilters(prev => ({ ...prev, openNow: !prev.openNow }))}
-                  className={filters.openNow ? "bg-green-600 hover:bg-green-700 text-white" : ""}
-                >
-                  <Clock className="h-4 w-4 mr-2" />
-                  Open Now
-                  {filters.openNow && " ✓"}
-                </Button>
-                <Button
-                  variant={filters.featuredOnly ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setFilters(prev => ({ ...prev, featuredOnly: !prev.featuredOnly }))}
-                >
-                  <Star className="h-4 w-4 mr-2" />
-                  Featured
-                  {filters.featuredOnly && " ✓"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowFilters(!showFilters)}
-                >
-                  <Filter className="h-4 w-4 mr-2" />
-                  More Filters
-                </Button>
-              </div>
+            {/* Open Now Banner */}
+            <OpenNowBanner
+              isActive={filters.openNow}
+              onToggle={() =>
+                setFilters((prev) => ({ ...prev, openNow: !prev.openNow }))
+              }
+              openCount={filters.openNow ? restaurants.length : undefined}
+              totalCount={totalCount}
+            />
 
-              {/* Active Filters Chips */}
-              {hasActiveFilters && (
-                <div className="flex flex-wrap items-center gap-2 p-4 bg-muted/30 rounded-lg">
-                  <span className="text-sm font-medium text-muted-foreground">
-                    Active filters:
-                  </span>
-
-                  {filters.search && (
-                    <Badge variant="secondary" className="gap-1">
-                      Search: {filters.search}
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("search")}
-                      />
-                    </Badge>
-                  )}
-
-                  {filters.cuisine.map((cuisine) => (
-                    <Badge key={cuisine} variant="secondary" className="gap-1">
-                      {cuisine}
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("cuisine", cuisine)}
-                      />
-                    </Badge>
-                  ))}
-
-                  {filters.priceRange.map((price) => (
-                    <Badge key={price} variant="secondary" className="gap-1">
-                      {price}
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("priceRange", price)}
-                      />
-                    </Badge>
-                  ))}
-
-                  {filters.location.map((location) => (
-                    <Badge key={location} variant="secondary" className="gap-1">
-                      <MapPin className="h-3 w-3" />
-                      {location}
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("location", location)}
-                      />
-                    </Badge>
-                  ))}
-
-                  {filters.tags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="gap-1">
-                      {tag}
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("tags", tag)}
-                      />
-                    </Badge>
-                  ))}
-
-                  {filters.featuredOnly && (
-                    <Badge variant="secondary" className="gap-1">
-                      <Star className="h-3 w-3" />
-                      Featured Only
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("featuredOnly")}
-                      />
-                    </Badge>
-                  )}
-
-                  {filters.openNow && (
-                    <Badge variant="secondary" className="gap-1 bg-green-100 text-green-800">
-                      Open Now
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("openNow")}
-                      />
-                    </Badge>
-                  )}
-
-                  {(filters.rating[0] !== 0 || filters.rating[1] !== 5) && (
-                    <Badge variant="secondary" className="gap-1">
-                      <Star className="h-3 w-3" />
-                      Rating: {filters.rating[0]} - {filters.rating[1]}
-                      <X
-                        className="h-3 w-3 cursor-pointer hover:text-destructive"
-                        onClick={() => removeFilter("rating")}
-                      />
-                    </Badge>
-                  )}
-
+            {/* Featured Restaurants Row */}
+            {!hasActiveFilters && featuredRestaurants.length > 0 && (
+              <section aria-labelledby="featured-heading">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 id="featured-heading" className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                    <Sparkles className="h-6 w-6 text-amber-500" />
+                    Featured Restaurants
+                  </h2>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={handleClearFilters}
-                    className="text-xs h-7"
+                    onClick={() => setFilters((prev) => ({ ...prev, featuredOnly: true }))}
+                    className="text-[#2D1B69] hover:text-[#2D1B69]/80"
                   >
-                    Clear All
+                    View All
+                    <ArrowRight className="h-4 w-4 ml-1" />
                   </Button>
                 </div>
-              )}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {featuredRestaurants.map((restaurant) => (
+                    <RestaurantCard
+                      key={restaurant.id}
+                      restaurant={restaurant}
+                      variant="featured"
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Main Restaurant Grid */}
+            <section aria-labelledby="all-restaurants-heading">
+              <div className="flex items-center justify-between mb-4">
+                <h2 id="all-restaurants-heading" className="text-2xl font-bold text-gray-900">
+                  {hasActiveFilters ? "Search Results" : "All Restaurants"}
+                </h2>
+              </div>
 
               {isLoading ? (
-                <CardsGridSkeleton count={9} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" label="Loading restaurants..." />
+                <CardsGridSkeleton
+                  count={9}
+                  className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
+                  label="Loading restaurants..."
+                />
               ) : error ? (
                 <EmptyState
                   icon={AlertCircle}
@@ -531,32 +724,19 @@ export default function Restaurants() {
                 />
               ) : restaurants.length === 0 ? (
                 <EmptyState
-                  icon={
-                    filters.search ||
-                    filters.cuisine.length > 0 ||
-                    filters.priceRange.length > 0 ||
-                    filters.location.length > 0
-                      ? SearchX
-                      : Utensils
-                  }
+                  icon={hasActiveFilters ? SearchX : Utensils}
                   title={
                     filters.search
                       ? `No results for "${filters.search}"`
                       : "No restaurants found"
                   }
                   description={
-                    filters.search ||
-                    filters.cuisine.length > 0 ||
-                    filters.priceRange.length > 0 ||
-                    filters.location.length > 0
-                      ? "Try adjusting your search criteria or filters to find more restaurants"
-                      : "No restaurants available at the moment. Check back soon for updates!"
+                    hasActiveFilters
+                      ? "Try adjusting your search criteria or filters to find more restaurants."
+                      : "No restaurants available at the moment. Check back soon!"
                   }
                   actions={
-                    filters.search ||
-                    filters.cuisine.length > 0 ||
-                    filters.priceRange.length > 0 ||
-                    filters.location.length > 0
+                    hasActiveFilters
                       ? [
                           {
                             label: "Clear All Filters",
@@ -565,10 +745,10 @@ export default function Restaurants() {
                             icon: X,
                           },
                           {
-                            label: "Browse All Restaurants",
+                            label: "Browse All",
                             onClick: () => {
                               handleClearFilters();
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              window.scrollTo({ top: 0, behavior: "smooth" });
                             },
                             icon: Sparkles,
                           },
@@ -581,250 +761,194 @@ export default function Restaurants() {
                   <RestaurantsMap restaurants={restaurants || []} />
                 </Suspense>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                   {restaurants.map((restaurant) => (
-                    <Link
+                    <RestaurantCard
                       key={restaurant.id}
-                      to={`/restaurants/${restaurant.slug || restaurant.id}`}
-                      className="block hover:scale-105 transition-transform duration-200"
-                    >
-                      <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                        <CardHeader className="pb-4">
-                          <div className="flex items-start justify-between gap-2">
-                            <CardTitle className="text-lg leading-tight line-clamp-2">
-                              {restaurant.name}
-                            </CardTitle>
-                            <div className="flex items-center gap-1 shrink-0">
-                              {restaurant.status === "open" && (
-                                <Badge className="bg-green-500 text-white hover:bg-green-600">
-                                  Open Now
-                                </Badge>
-                              )}
-                              {restaurant.status === "closed" && (
-                                <Badge variant="secondary" className="text-muted-foreground">
-                                  Closed
-                                </Badge>
-                              )}
-                              {restaurant.is_featured && (
-                                <Badge className="bg-[#DC143C] text-white hover:bg-[#DC143C]/90">
-                                  Featured
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            {restaurant.cuisine && (
-                              <div className="flex items-center gap-1">
-                                <ChefHat className="h-4 w-4" />
-                                <span className="line-clamp-1">
-                                  {restaurant.cuisine}
-                                </span>
-                              </div>
-                            )}
-                            {restaurant.rating && (
-                              <div className="flex items-center gap-1">
-                                <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                <span>{restaurant.rating}</span>
-                              </div>
-                            )}
-                            {restaurant.price_range && (
-                               <div className="flex items-center gap-1">
-                                 <DollarSign className="h-4 w-4" />
-                                 <span className="font-medium text-green-600">
-                                   {restaurant.price_range}
-                                 </span>
-                               </div>
-                            )}
-                          </div>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                          <CardDescription className="line-clamp-3 mb-3">
-                            {restaurant.description}
-                          </CardDescription>
-                          {restaurant.location && (
-                            <p className="text-sm text-muted-foreground line-clamp-1">
-                              📍 {restaurant.location}
-                            </p>
-                          )}
-                        </CardContent>
-                      </Card>
-                    </Link>
+                      restaurant={restaurant}
+                    />
                   ))}
                 </div>
               )}
-            </div>
-            
-            {/* Enhanced Content Section for SEO Authority */}
-            <div className="max-w-4xl mx-auto space-y-12 mt-16">
-              {/* Main Authority Content */}
+            </section>
+
+            {/* SEO Content Section */}
+            <section className="max-w-4xl mx-auto space-y-12 mt-16" aria-labelledby="guide-heading">
               <div className="prose prose-lg max-w-none">
-                <h2 className="text-3xl font-bold mb-6 text-center">Des Moines Restaurant Guide: Your Complete Local Dining Directory</h2>
-                
-                <div className="bg-blue-50 p-6 rounded-lg mb-8">
-                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2">
+                <h2 id="guide-heading" className="text-3xl font-bold mb-6 text-center text-gray-900">
+                  Des Moines Restaurant Guide: Your Complete Local Dining Directory
+                </h2>
+
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl mb-8 border border-blue-100">
+                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-gray-900">
                     <ChefHat className="h-5 w-5 text-blue-600" />
-                    TL;DR: Des Moines Dining Scene
+                    Des Moines Dining at a Glance
                   </h3>
-                  <p className="text-lg leading-relaxed">
-                    Des Moines offers 200+ diverse restaurants spanning 30+ cuisines across downtown, East Village, West Des Moines, and Ankeny. 
-                    From farm-to-table establishments to ethnic food gems, the capital city's dining scene features both acclaimed fine dining 
-                    and beloved local favorites. New restaurant openings occur monthly, with West Des Moines leading growth in family dining options.
+                  <p className="text-lg leading-relaxed text-gray-700">
+                    Des Moines, Iowa offers over 200 diverse restaurants spanning 30+ cuisines across downtown,
+                    East Village, West Des Moines, and Ankeny. From James Beard-nominated fine dining establishments
+                    to beloved neighborhood diners, the capital city's food scene rivals cities twice its size.
+                    New restaurant openings happen monthly, making Des Moines one of the Midwest's most exciting
+                    dining destinations.
                   </p>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4">Best Restaurants in Des Moines by Category</h3>
-                
-                <div className="grid md:grid-cols-2 gap-6 mb-8">
-                  <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h4 className="text-xl font-semibold mb-3">Downtown Des Moines Dining</h4>
-                    <p className="mb-3">
-                      Downtown Des Moines features upscale dining in the East Village and Court Avenue districts. 
-                      Notable restaurants include farm-to-table establishments, craft breweries, and ethnic cuisine 
-                      options within walking distance of major hotels and entertainment venues.
+                <h3 className="text-2xl font-semibold mb-4 text-gray-900">Best Neighborhoods for Dining in Des Moines</h3>
+
+                <div className="grid md:grid-cols-2 gap-6 mb-8 not-prose">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                    <h4 className="text-xl font-semibold mb-3 text-gray-900">East Village & Downtown</h4>
+                    <p className="mb-3 text-gray-600">
+                      The epicenter of Des Moines dining. Farm-to-table restaurants, craft cocktail bars,
+                      and critically acclaimed fine dining. Home to Harbinger, Alba, and other nationally
+                      recognized establishments. Best area for date nights and special occasions.
                     </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Best for:</strong> Date nights, business dinners, pre-event dining
-                    </p>
-                  </div>
-                  
-                  <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h4 className="text-xl font-semibold mb-3">West Des Moines Restaurants</h4>
-                    <p className="mb-3">
-                      West Des Moines offers family-friendly chain restaurants and local favorites near Jordan Creek Town Center. 
-                      The area leads in new restaurant openings with diverse options from casual dining to specialty cuisines, 
-                      particularly strong in Asian and Mexican restaurants.
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Best for:</strong> Family dining, shopping center meals, suburban favorites
+                    <p className="text-sm text-gray-500">
+                      <strong>Best for:</strong> Fine dining, date nights, craft cocktails, farm-to-table
                     </p>
                   </div>
-                  
-                  <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h4 className="text-xl font-semibold mb-3">Ankeny Dining Scene</h4>
-                    <p className="mb-3">
-                      Ankeny's rapidly growing restaurant scene features new establishments opening regularly to serve 
-                      the expanding suburban population. Known for family-friendly atmospheres, competitive pricing, 
-                      and convenient parking options.
+
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                    <h4 className="text-xl font-semibold mb-3 text-gray-900">West Des Moines & Jordan Creek</h4>
+                    <p className="mb-3 text-gray-600">
+                      The fastest-growing dining corridor in the metro. Family-friendly restaurants near
+                      Jordan Creek Town Center plus diverse ethnic eateries along University Avenue.
+                      Particularly strong in Asian and Latin American cuisines.
                     </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Best for:</strong> Family meals, casual dining, value-conscious dining
+                    <p className="text-sm text-gray-500">
+                      <strong>Best for:</strong> Family dining, international cuisine, suburban convenience
                     </p>
                   </div>
-                  
-                  <div className="bg-white p-6 rounded-lg shadow-md">
-                    <h4 className="text-xl font-semibold mb-3">Late-Night Des Moines Dining</h4>
-                    <p className="mb-3">
-                      Limited but growing late-night dining options include 24-hour diners, food trucks, and select 
-                      restaurants open past 10pm. East Village and downtown areas offer the most after-hours dining choices 
-                      for night shift workers and entertainment district visitors.
+
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                    <h4 className="text-xl font-semibold mb-3 text-gray-900">Ingersoll & Grand Avenue</h4>
+                    <p className="mb-3 text-gray-600">
+                      Classic Des Moines neighborhood dining. Locally-owned institutions serving the community
+                      for decades alongside trendy newcomers. Known for brunch spots, neighborhood bars,
+                      and casual American dining.
                     </p>
-                    <p className="text-sm text-gray-600">
-                      <strong>Best for:</strong> Night shift workers, post-event dining, late-night cravings
+                    <p className="text-sm text-gray-500">
+                      <strong>Best for:</strong> Brunch, neighborhood favorites, casual dining
+                    </p>
+                  </div>
+
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                    <h4 className="text-xl font-semibold mb-3 text-gray-900">Ankeny & Altoona</h4>
+                    <p className="mb-3 text-gray-600">
+                      Rapidly expanding suburban dining with new openings monthly. Excellent value,
+                      family-friendly atmospheres, and convenient access. Growing selection of
+                      independent restaurants alongside popular chains.
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      <strong>Best for:</strong> Value dining, families, new restaurant openings
                     </p>
                   </div>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4">Des Moines Restaurant FAQs</h3>
-                
-                <div className="space-y-6">
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <h4 className="text-lg font-semibold mb-2">What time do most Des Moines restaurants close on Sunday?</h4>
-                    <p>Most Des Moines restaurants close between 8-9 PM on Sundays, with casual dining and family restaurants 
-                    typically closing earlier than downtown establishments. Some ethnic restaurants may have different Sunday hours.</p>
+                <h3 className="text-2xl font-semibold mb-4 text-gray-900">Dining Tips for Des Moines</h3>
+
+                <div className="space-y-4 mb-8 not-prose">
+                  <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
+                    <div className="bg-amber-100 rounded-full p-2 shrink-0 mt-0.5">
+                      <Clock className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Peak Hours & Reservations</h4>
+                      <p className="text-gray-600 text-sm">
+                        Friday and Saturday evenings (6-8 PM) are busiest. Make reservations for fine dining
+                        and popular spots. Most casual restaurants accommodate walk-ins even during peak hours.
+                        Sunday brunch is popular from 9-11 AM at East Village and Ingersoll restaurants.
+                      </p>
+                    </div>
                   </div>
-                  
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <h4 className="text-lg font-semibold mb-2">Where can I find the best happy hour deals in Des Moines?</h4>
-                    <p>Downtown Des Moines and East Village offer the most comprehensive happy hour options, typically 3-6 PM weekdays. 
-                    Many establishments feature half-price appetizers and discounted drinks. West Des Moines chains also offer 
-                    competitive happy hour pricing.</p>
+
+                  <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
+                    <div className="bg-emerald-100 rounded-full p-2 shrink-0 mt-0.5">
+                      <DollarSign className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Best Value Dining</h4>
+                      <p className="text-gray-600 text-sm">
+                        Des Moines offers exceptional dining value compared to larger metros. Many top-rated
+                        restaurants fall in the $15-30 per person range. Happy hour deals (typically 3-6 PM)
+                        at downtown establishments offer half-price appetizers and drink specials.
+                      </p>
+                    </div>
                   </div>
-                  
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <h4 className="text-lg font-semibold mb-2">What Des Moines neighborhoods are best for food trucks?</h4>
-                    <p>Food trucks concentrate in downtown Des Moines during lunch hours, particularly around the Capitol building 
-                    and business district. Weekend events like farmers markets in multiple neighborhoods feature rotating food truck vendors. 
-                    Special events and festivals bring food trucks to suburban areas.</p>
-                  </div>
-                  
-                  <div className="bg-gray-50 p-6 rounded-lg">
-                    <h4 className="text-lg font-semibold mb-2">Pet-friendly restaurants in Des Moines?</h4>
-                    <p>Many Des Moines restaurants offer pet-friendly patios, particularly in the East Village and downtown areas. 
-                    Several establishments provide water bowls and welcome well-behaved leashed pets on outdoor seating areas. 
-                    Call ahead to confirm pet policies, especially during busy weekend hours.</p>
+
+                  <div className="bg-white p-5 rounded-xl border flex gap-4 items-start">
+                    <div className="bg-purple-100 rounded-full p-2 shrink-0 mt-0.5">
+                      <Leaf className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-gray-900 mb-1">Dietary Accommodations</h4>
+                      <p className="text-gray-600 text-sm">
+                        The Des Moines dining scene increasingly caters to dietary needs. Vegetarian and
+                        vegan options are available at most restaurants. Gluten-free menus are common at
+                        upscale establishments. Asian and Mediterranean restaurants naturally offer many
+                        plant-based options.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
-                <h3 className="text-2xl font-semibold mb-4 mt-8">New Restaurant Openings in Des Moines</h3>
-                <p className="text-lg mb-4">
-                  Des Moines welcomes new restaurants monthly, with West Des Moines and Ankeny leading growth in suburban dining options. 
-                  The restaurant scene continues expanding with diverse cuisines including Vietnamese, Indian, Korean, and authentic Mexican options. 
-                  Downtown development brings upscale dining while suburbs focus on family-friendly chains and local concepts.
-                </p>
-                
-                <p className="text-lg mb-6">
-                  <strong>Local expertise you can trust:</strong> Our dining guide covers 200+ restaurants across the Des Moines metro area, 
-                  with weekly updates on new openings, seasonal menus, and special events. We track restaurant hours, pricing, and availability 
-                  to help you discover your next favorite Des Moines dining experience.
-                </p>
-
-                <div className="bg-green-50 p-6 rounded-lg">
-                  <h4 className="text-lg font-semibold mb-3">Des Moines Food Scene Highlights:</h4>
-                  <ul className="list-disc list-inside space-y-2">
-                    <li><strong>200+ restaurants</strong> across Des Moines metro area with weekly updates</li>
-                    <li><strong>30+ cuisine types</strong> from farm-to-table to authentic ethnic options</li>
-                    <li><strong>Weekly new openings</strong> tracked and verified by local food experts</li>
-                    <li><strong>Family-friendly focus</strong> with detailed kids menu and accessibility information</li>
-                    <li><strong>Real-time updates</strong> on hours, pricing, and seasonal menu changes</li>
+                <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-6 rounded-2xl border border-emerald-100">
+                  <h4 className="text-lg font-semibold mb-3 text-gray-900">Des Moines Food Scene by the Numbers</h4>
+                  <ul className="list-disc list-inside space-y-2 text-gray-700">
+                    <li><strong>200+ restaurants</strong> in the greater Des Moines metro area</li>
+                    <li><strong>30+ cuisine types</strong> from farm-to-table to authentic international</li>
+                    <li><strong>Weekly new openings</strong> tracked and verified by local experts</li>
+                    <li><strong>Real-time status</strong> showing which restaurants are open right now</li>
+                    <li><strong>Free, unbiased reviews</strong> from the Des Moines community</li>
                   </ul>
                 </div>
               </div>
-            </div>
+            </section>
           </div>
         </main>
 
-        {/* FAQ Section for SEO and Featured Snippets */}
-        <section className="py-16 bg-muted/30">
+        {/* FAQ Section */}
+        <section className="py-16 bg-white" aria-labelledby="faq-heading">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <FAQSection
               title="Des Moines Restaurants - Frequently Asked Questions"
               description="Common questions about dining, restaurants, and the food scene in Des Moines, Iowa."
               faqs={[
                 {
-                  question: "What are the best restaurants in Des Moines?",
-                  answer: "Des Moines features over 300 diverse restaurants. Top-rated establishments include Malo for upscale Mexican, Django for French-inspired fine dining, Bubba for Southern fusion, Alba for innovative American cuisine, and Centro for authentic Italian. The East Village offers trendy farm-to-table options, while Ingersoll Avenue features local favorites. Valley Junction in West Des Moines is known for unique dining experiences. Our restaurant directory includes real-time ratings, reviews, and current menus with weekly updates."
+                  question: "What are the best restaurants in Des Moines in 2026?",
+                  answer: "Des Moines features over 200 diverse restaurants. Top-rated establishments include Harbinger for Asian-inspired fine dining, Alba for innovative American cuisine, Centro for authentic Italian, Django for French-inspired dishes, and Bubba for Southern fusion. The East Village neighborhood offers trendy farm-to-table options, while Ingersoll Avenue features beloved local institutions. Use our search filters to find restaurants by cuisine, price, rating, and neighborhood to discover your perfect Des Moines dining experience."
+                },
+                {
+                  question: "What restaurants are open right now in Des Moines?",
+                  answer: "Use our 'Open Now' filter at the top of this page to instantly see all Des Moines restaurants currently serving. We track real-time operating hours for 200+ local restaurants. Most downtown restaurants serve lunch 11 AM-2 PM and dinner 5-10 PM. Late-night options are available in the East Village and Court Avenue districts. For the most up-to-date information, click 'Open Now' above or visit our dedicated Open Now Restaurants page."
                 },
                 {
                   question: "What cuisines are available in Des Moines?",
-                  answer: "Des Moines offers 30+ cuisine types including American (farm-to-table and classic), Italian, Mexican and Latin American, Asian (Chinese, Japanese, Thai, Vietnamese, Korean), Indian, Mediterranean and Middle Eastern, French, steakhouses, seafood, BBQ and Southern, vegetarian and vegan options, and authentic ethnic restaurants. Use our cuisine filter to discover restaurants by type. The East Village and Downtown areas have the highest concentration of diverse dining options."
+                  answer: "Des Moines offers 30+ cuisine types including American (farm-to-table and classic), Italian, Mexican, Chinese, Japanese, Thai, Vietnamese, Korean, Indian, Mediterranean, French, BBQ, seafood, and more. The metro area has seen significant growth in authentic ethnic restaurants, particularly along University Avenue in West Des Moines. Use our cuisine filter to browse restaurants by food type."
                 },
                 {
                   question: "Where can I find new restaurant openings in Des Moines?",
-                  answer: "Des Moines Insider tracks new restaurant openings within 48 hours of announcement. Check our 'New Openings' section on the Restaurants page for the latest additions. Recent trends include farm-to-table concepts in East Village, ethnic restaurants expanding in suburban areas, food halls downtown, and craft breweries with full kitchens. We monitor building permits, social media announcements, and industry sources to provide the most current information on upcoming restaurants."
+                  answer: "Our 'New Openings' section at the top of this page tracks every new restaurant opening in the Des Moines metro within 48 hours of announcement. Recent growth areas include West Des Moines (particularly near Jordan Creek), Ankeny, and the East Village. We monitor social media, building permits, and local news sources to bring you the most current restaurant opening information."
                 },
                 {
-                  question: "What are the price ranges for restaurants in Des Moines?",
-                  answer: "Des Moines restaurants range from budget-friendly to upscale: $ (Under $15 per person) - casual dining, fast-casual, food trucks; $$ ($15-30 per person) - mid-range restaurants, most local favorites; $$$ ($30-60 per person) - upscale casual, steakhouses, specialty cuisine; $$$$ (Over $60 per person) - fine dining, tasting menus, special occasions. Use our price filter to find restaurants matching your budget. Des Moines offers exceptional value with many highly-rated restaurants in the $$ range."
+                  question: "What are the best cheap eats in Des Moines?",
+                  answer: "Des Moines offers excellent budget-friendly dining. Filter by '$' price range to find meals under $15 per person. Popular affordable options include food trucks downtown during lunch, family-style restaurants in Ankeny, taco shops on the east side, and weekday lunch specials at downtown establishments. Happy hour deals (3-6 PM) at many restaurants offer half-price appetizers."
                 },
                 {
-                  question: "Are there family-friendly restaurants in Des Moines?",
-                  answer: "Yes! Des Moines has numerous family-friendly restaurants with kids menus, high chairs, and welcoming atmospheres. Popular choices include Machine Shed (country cooking with generous portions), Fong's Pizza (unique pizza combinations in a fun setting), Zombie Burger (creative burgers that kids love), Jethro's BBQ (casual BBQ with large portions), Perkins (classic family restaurant), and many ethnic restaurants with family-style dining. Our platform indicates family-friendly features and kids menu availability for each restaurant."
+                  question: "Are there vegan and vegetarian restaurants in Des Moines?",
+                  answer: "Yes, Des Moines has expanding plant-based dining options. Several restaurants offer dedicated vegetarian and vegan menus, and most upscale restaurants accommodate dietary restrictions. Asian restaurants, Mediterranean eateries, and farm-to-table establishments offer naturally plant-forward options. Visit our Dietary Restaurants page for a complete guide to vegan, vegetarian, gluten-free, and allergen-friendly dining in Des Moines."
                 },
                 {
                   question: "What neighborhoods have the best restaurant scenes in Des Moines?",
-                  answer: "Des Moines has several distinct dining districts: East Village (trendy, farm-to-table, craft cocktails), Downtown (business lunch, upscale dining, hotels), Ingersoll Avenue (local institutions, neighborhood favorites), Court Avenue (bars, nightlife, casual dining), Valley Junction in West Des Moines (unique concepts, antique district charm), Drake neighborhood (student-friendly, diverse options), and Beaverdale (family-friendly local spots). Each neighborhood offers unique dining experiences reflecting its character."
-                },
-                {
-                  question: "How do I find restaurants with specific dietary options in Des Moines?",
-                  answer: "Des Moines offers extensive options for dietary restrictions. Search our restaurant directory using tags for vegetarian, vegan, gluten-free, dairy-free, and allergen-friendly options. Notable restaurants include Ritual Cafe (vegan and vegetarian), Proof (extensive gluten-free menu), Fresh (healthy bowls and smoothies), and many Asian and Mediterranean restaurants with naturally vegetarian options. Most upscale restaurants accommodate dietary restrictions with advance notice. Contact restaurants directly for specific allergen information."
+                  answer: "Des Moines has several distinct dining districts: East Village (trendy farm-to-table, craft cocktails), Downtown (business dining, fine dining), Ingersoll Avenue (neighborhood favorites, brunch spots), Court Avenue (nightlife, casual dining), Valley Junction in West Des Moines (unique concepts), and Drake neighborhood (diverse, student-friendly options). Each area reflects its unique neighborhood character through its restaurants."
                 },
                 {
                   question: "Do Des Moines restaurants require reservations?",
-                  answer: "Reservation policies vary by restaurant type and popularity. Fine dining and upscale restaurants (Django, Alba, Centro) typically require reservations, especially weekends. Mid-range restaurants may accept reservations but often accommodate walk-ins during off-peak hours. Casual dining and fast-casual restaurants generally operate on a first-come, first-served basis. We recommend calling ahead for parties of 6+ or dining during peak hours (Friday-Saturday evenings). Our restaurant pages include contact information and reservation recommendations."
-                }
+                  answer: "Reservation policies vary. Fine dining restaurants (Harbinger, Django, Alba) typically require reservations, especially on weekends. Mid-range restaurants accept reservations but often accommodate walk-ins. Casual dining operates first-come, first-served. We recommend calling ahead for groups of 6 or more, and for Friday-Saturday dinner service at popular restaurants. Check individual restaurant pages for contact details."
+                },
               ]}
               showSchema={true}
-              className="border-0 shadow-lg"
+              className="border-0 shadow-lg rounded-2xl"
             />
           </div>
         </section>
