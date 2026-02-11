@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { MapPin, Star, Filter, List, Map, SlidersHorizontal } from "lucide-react";
+import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -446,40 +446,56 @@ export default function Attractions() {
               <Link
                 key={attraction.id}
                 to={`/attractions/${createSlug(attraction.name)}`}
-                className="block hover:scale-105 transition-transform duration-200"
+                className="block"
               >
-                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-                  <CardHeader className="pb-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-lg leading-tight line-clamp-2">
-                        {attraction.name}
-                      </CardTitle>
+                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
+                  {attraction.image_url ? (
+                    <div className="aspect-video overflow-hidden">
+                      <img
+                        src={attraction.image_url}
+                        alt={`${attraction.name} - ${attraction.type} in Des Moines`}
+                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
+                        loading="lazy"
+                      />
+                    </div>
+                  ) : (
+                    <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center">
+                      <Landmark className="h-12 w-12 text-white/40" />
+                    </div>
+                  )}
+                  <CardContent className="p-5">
+                    <div className="flex items-center justify-between mb-2">
+                      <Badge
+                        variant="outline"
+                        className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
+                      >
+                        <Landmark className="h-3 w-3 mr-1" />
+                        {attraction.type}
+                      </Badge>
                       {attraction.is_featured && (
-                        <Badge className="shrink-0 bg-[#DC143C] text-white hover:bg-[#DC143C]/90">
-                          Featured
-                        </Badge>
+                        <Badge className="bg-[#DC143C] text-white text-xs">Featured</Badge>
                       )}
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <MapPin className="h-4 w-4" />
-                        <span className="line-clamp-1">{attraction.type}</span>
-                      </div>
+                    <h3 className="font-semibold text-lg line-clamp-2 mb-2">
+                      {attraction.name}
+                    </h3>
+                    <div className="space-y-2 text-sm text-muted-foreground">
                       {attraction.rating && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-2">
                           <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span>{attraction.rating}</span>
+                          <span>{attraction.rating}/5</span>
+                        </div>
+                      )}
+                      {attraction.location && (
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          <span className="line-clamp-1">{attraction.location}</span>
                         </div>
                       )}
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <CardDescription className="line-clamp-3 mb-3">
-                      {attraction.description}
-                    </CardDescription>
-                    {attraction.location && (
-                      <p className="text-sm text-muted-foreground line-clamp-1">
-                        📍 {attraction.location}
+                    {attraction.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
+                        {attraction.description}
                       </p>
                     )}
                   </CardContent>
@@ -489,6 +505,74 @@ export default function Attractions() {
           </div>
         )}
       </main>
+
+      {/* Browse Attractions By Type - Internal Linking for SEO */}
+      {attractionTypes.length > 0 && (
+        <section className="py-12 bg-white border-t">
+          <div className="container mx-auto px-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">
+              Browse Attractions By Type
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Explore Des Moines attractions by category to find exactly what you're looking for
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+              {attractionTypes.map((type) => {
+                const count = allAttractions.filter((a) => a.type === type).length;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => {
+                      setSelectedType(type);
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    className="flex items-center justify-between p-3 rounded-xl border hover:border-[#2D1B69] hover:bg-[#2D1B69]/5 transition-colors text-left group"
+                  >
+                    <div>
+                      <span className="text-sm font-medium text-gray-900 group-hover:text-[#2D1B69]">
+                        {type}
+                      </span>
+                      <span className="block text-xs text-gray-500">{count} attractions</span>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-[#2D1B69]" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* SEO Content Section - Things to Do */}
+      <section className="py-12 bg-gray-50 border-t">
+        <div className="container mx-auto px-4 max-w-4xl">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
+            Things to Do in Des Moines, Iowa
+          </h2>
+          <div className="prose prose-gray max-w-none text-gray-700 leading-relaxed space-y-4">
+            <p>
+              Des Moines, the capital city of Iowa, offers a diverse array of attractions that cater to
+              every interest and age group. From world-class museums and interactive science centers to
+              sprawling parks and outdoor recreation, there's something for everyone in the Greater Des
+              Moines Area. Our comprehensive guide covers {allAttractions.length}+ attractions to help
+              you plan the perfect visit.
+            </p>
+            <p>
+              Whether you're a local looking for new weekend activities or a tourist planning a trip to
+              central Iowa, Des Moines delivers with attractions like the Pappajohn Sculpture Park (one
+              of the largest free outdoor sculpture parks in the country), the Des Moines Art Center
+              (offering free admission to internationally recognized collections), and the Science Center
+              of Iowa (featuring hands-on exhibits and an IMAX theater). Families will love Blank Park
+              Zoo, Adventureland Park, and the city's extensive network of playgrounds and splash pads.
+            </p>
+            <p>
+              Use the filters above to narrow down attractions by type, rating, or featured status. Switch
+              to map view to find attractions near you. Each attraction page includes visitor information,
+              directions, and tips to make the most of your visit to Des Moines.
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* FAQ Section for SEO and Featured Snippets */}
       <section className="py-16 bg-muted/30">
