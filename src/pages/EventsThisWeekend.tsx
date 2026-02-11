@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -138,6 +139,14 @@ export default function EventsThisWeekend() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "This Weekend" },
+          ]}
+        />
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -239,7 +248,7 @@ export default function EventsThisWeekend() {
                       >
                         All
                       </Button>
-                      {categories.slice(0, 6).map((category) => (
+                      {categories.map((category) => (
                         <Button
                           key={category}
                           variant={
@@ -273,7 +282,7 @@ export default function EventsThisWeekend() {
                       >
                         All Areas
                       </Button>
-                      {locations.slice(0, 6).map((location) => (
+                      {locations.map((location) => (
                         <Button
                           key={location}
                           variant={

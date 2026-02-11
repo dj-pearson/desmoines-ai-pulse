@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Calendar, Users, Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
 import { BRAND } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 // Suburb mapping for SEO-friendly URLs and proper names
 const SUBURBS = {
@@ -230,6 +231,14 @@ export default function EventsByLocation() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: suburbInfo.name },
+          ]}
+        />
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">

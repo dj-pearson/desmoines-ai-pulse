@@ -2,6 +2,7 @@ import React, { useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
 import { getCanonicalUrl } from "@/lib/brandConfig";
@@ -337,6 +338,14 @@ export default function Attractions() {
       </section>
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Attractions" },
+          ]}
+        />
+
         {/* Filters Section */}
         {showFilters && (
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">

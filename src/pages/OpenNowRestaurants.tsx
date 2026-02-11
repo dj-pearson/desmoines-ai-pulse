@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Clock, MapPin, Calendar, Utensils } from "lucide-react";
 import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface Restaurant {
   id: string;
@@ -22,6 +23,7 @@ interface Restaurant {
   phone?: string;
   website?: string;
   image_url?: string;
+  opening?: string;
 }
 
 export default function OpenNowRestaurants() {
@@ -55,9 +57,29 @@ export default function OpenNowRestaurants() {
           console.error('Error fetching restaurants:', error);
           setRestaurants([]);
         } else {
-          // For now, show all restaurants as potentially open
-          // In production, filter by actual operating hours
-          setRestaurants(data || []);
+          // Filter restaurants likely open based on current time and opening field
+          const hour = new Date().getHours();
+          const filtered = (data || []).filter(restaurant => {
+            const opening = restaurant.opening?.toLowerCase() || '';
+            // If no hours data, use reasonable defaults
+            if (!opening) {
+              // Most restaurants: 11 AM - 10 PM
+              return hour >= 11 && hour < 22;
+            }
+            // Check for "24 hour" or "always open"
+            if (opening.includes('24 hour') || opening.includes('always')) return true;
+            // Check for "closed" indicators
+            if (opening.includes('closed') || opening.includes('temporarily')) return false;
+            // If hours contain current day name, check if it says closed for that day
+            const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+            const today = days[new Date().getDay()];
+            if (opening.includes(today) && opening.includes('closed')) return false;
+            // Default: use common restaurant hours based on time of day
+            if (hour < 6) return false; // Before 6 AM
+            if (hour < 11) return opening.includes('breakfast') || opening.includes('brunch') || hour >= 7;
+            return hour < 22; // Until 10 PM
+          });
+          setRestaurants(filtered);
         }
       } catch (error) {
         console.error('Error in fetchOpenRestaurants:', error);
@@ -141,6 +163,14 @@ export default function OpenNowRestaurants() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Restaurants", href: "/restaurants" },
+            { label: "Open Now" },
+          ]}
+          className="mb-4"
+        />
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -164,7 +194,10 @@ export default function OpenNowRestaurants() {
           </div>
 
           <p className="text-lg text-muted-foreground max-w-3xl mb-4">
-            <strong>Find {openRestaurants.length}+ restaurants currently open in Des Moines with real-time hour tracking.</strong> According to the Greater Des Moines Partnership, the metro area has 300+ restaurants with varying operating hours. Our system updates continuously to show which restaurants are accepting orders right now—whether you need breakfast, lunch, dinner, or late-night food. Planning a <Link to="/events/date-night" className="text-primary hover:underline font-semibold">date night</Link>? Check restaurant hours before your event.
+            <strong>Find {openRestaurants.length}+ restaurants likely open now in Des Moines.</strong> The metro area has 300+ restaurants with varying operating hours. We filter based on typical operating hours for each restaurant. Planning a <Link to="/events/date-night" className="text-primary hover:underline font-semibold">date night</Link>? Check restaurant hours before your event.
+          </p>
+          <p className="text-sm text-muted-foreground/70 max-w-3xl">
+            Hours are estimated based on available data. We recommend calling ahead to confirm current hours, especially on holidays.
           </p>
 
           <p className="text-base text-muted-foreground max-w-3xl">

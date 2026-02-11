@@ -5,8 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { PLACEMENT_SPECS, ALLOWED_MIME_TYPES } from "@/lib/placementSpecs";
+import type { PlacementType } from "@/lib/placementSpecs";
 
-export type PlacementType = 'top_banner' | 'featured_spot' | 'below_fold';
+export type { PlacementType };
 
 interface CreativeFile {
   file: File;
@@ -22,43 +24,16 @@ interface CreativeUploaderProps {
   campaignId: string;
   onUploadComplete?: (fileUrl: string, metadata: any) => void;
   onUploadError?: (error: string) => void;
+  onFilesReady?: (files: CreativeFile[]) => void;
   maxFiles?: number;
 }
-
-const PLACEMENT_SPECS = {
-  top_banner: {
-    dimensions: [
-      { width: 970, height: 90, label: '970x90 (Desktop)' },
-      { width: 320, height: 50, label: '320x50 (Mobile)' },
-    ],
-    maxSize: 512000, // 500KB
-    aspectRatio: '~10.8:1',
-  },
-  featured_spot: {
-    dimensions: [
-      { width: 300, height: 250, label: '300x250 (Medium Rectangle)' },
-      { width: 336, height: 280, label: '336x280 (Large Rectangle)' },
-    ],
-    maxSize: 307200, // 300KB
-    aspectRatio: '1:1 or 6:5',
-  },
-  below_fold: {
-    dimensions: [
-      { width: 728, height: 90, label: '728x90 (Leaderboard)' },
-      { width: 320, height: 50, label: '320x50 (Mobile Banner)' },
-    ],
-    maxSize: 409600, // 400KB
-    aspectRatio: '8:1',
-  },
-};
-
-const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 
 export function CreativeUploader({
   placementType,
   campaignId,
   onUploadComplete,
   onUploadError,
+  onFilesReady,
   maxFiles = 3,
 }: CreativeUploaderProps) {
   const [files, setFiles] = useState<CreativeFile[]>([]);
@@ -71,7 +46,7 @@ export function CreativeUploader({
   const validateFile = useCallback(
     async (file: File): Promise<{ isValid: boolean; error?: string; width?: number; height?: number }> => {
       // Check file type
-      if (!ALLOWED_TYPES.includes(file.type)) {
+      if (!ALLOWED_MIME_TYPES.includes(file.type)) {
         return {
           isValid: false,
           error: 'Invalid file type. Only JPEG, PNG, WebP, and GIF are allowed.',
@@ -377,8 +352,10 @@ export function CreativeUploader({
             <Button
               disabled={files.filter((f) => f.isValid).length === 0}
               onClick={() => {
-                // Upload logic will be implemented in the parent component
-                console.log('Ready to upload:', files.filter((f) => f.isValid));
+                const validFiles = files.filter((f) => f.isValid);
+                if (onFilesReady) {
+                  onFilesReady(validFiles);
+                }
               }}
             >
               Continue to Upload Details

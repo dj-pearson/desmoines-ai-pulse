@@ -8,6 +8,7 @@ import { BusinessDashboard } from "@/components/BusinessDashboard";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useAuth } from "@/hooks/useAuth";
 import { useBusinessPartnership } from "@/hooks/useBusinessPartnership";
 import { 
@@ -85,6 +86,14 @@ export default function BusinessPartnership() {
 
         <main className="container mx-auto px-4 py-8">
           <div className="max-w-6xl mx-auto">
+            <Breadcrumbs
+              className="mb-4"
+              items={[
+                { label: "Home", href: "/" },
+                { label: "Partnership" },
+              ]}
+            />
+
             {/* Hero Section */}
             <div className="text-center space-y-4 mb-12">
               <h1 className="text-4xl md:text-6xl font-bold">

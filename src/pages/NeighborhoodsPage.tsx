@@ -7,6 +7,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function NeighborhoodsPage() {
   
@@ -111,6 +112,14 @@ export default function NeighborhoodsPage() {
       <Header />
       
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Neighborhoods" },
+          ]}
+        />
+
         {/* Hero Section */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-lg mb-8">
           <div className="flex items-center gap-2 mb-4">

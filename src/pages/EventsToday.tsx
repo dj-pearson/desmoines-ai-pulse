@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
   id: string;
@@ -109,6 +110,15 @@ export default function EventsToday() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "Today" },
+          ]}
+          className="mb-4"
+        />
+
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">

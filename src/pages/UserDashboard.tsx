@@ -31,6 +31,7 @@ import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useFavorites } from "@/hooks/useFavorites";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
 import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
 import { format } from "date-fns";
@@ -113,6 +114,13 @@ export default function UserDashboard() {
       </div>
 
       <div className="container mx-auto mobile-padding py-6">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Dashboard" },
+          ]}
+        />
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Tab Navigation */}
           <div className="mb-6 overflow-x-auto">

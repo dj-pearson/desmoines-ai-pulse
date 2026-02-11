@@ -2,6 +2,7 @@ import React, { useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useToast } from "@/hooks/use-toast";
@@ -356,6 +357,14 @@ export default function Playgrounds() {
       </section>
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Playgrounds" },
+          ]}
+        />
+
         {/* Filters Section - Desktop */}
         {!isMobile && showFilters && (
           <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">

@@ -13,6 +13,7 @@ import { Calendar, MapPin, ChevronLeft, ChevronRight, Clock } from "lucide-react
 import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
 import { useState, useEffect } from "react";
 import { BRAND } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function MonthlyEventsPage() {
   const { monthYear } = useParams<{ monthYear: string }>();
@@ -134,6 +135,14 @@ export default function MonthlyEventsPage() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: monthDisplayName },
+          ]}
+        />
         {/* Header with Navigation */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">

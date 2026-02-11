@@ -114,12 +114,12 @@ export function EnhancedHero({
             </div>
             <p className="text-sm text-white/80">New This Week</p>
           </Link>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
+          <Link to="/trip-planner" className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
             <div className="text-3xl font-bold text-[#FFD700] mb-1">
               24/7
             </div>
             <p className="text-sm text-white/80">AI Assistant</p>
-          </div>
+          </Link>
         </div>
 
         {/* Quick Actions */}

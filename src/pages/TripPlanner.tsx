@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useTripPlanner, TripPlan, TripPlanItem, TripPreferences } from "@/hooks/useTripPlanner";
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useNavigate } from "react-router-dom";
@@ -168,6 +169,14 @@ export default function TripPlanner() {
         <Header />
 
         <main className="container mx-auto px-4 py-8">
+          <Breadcrumbs
+            className="mb-4"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Trip Planner" },
+            ]}
+          />
+
           {/* Page Header */}
           <div className="text-center space-y-4 mb-8">
             <div className="flex items-center justify-center gap-2">

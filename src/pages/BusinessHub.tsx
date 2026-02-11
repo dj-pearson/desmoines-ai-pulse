@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { BusinessDashboard } from "@/components/BusinessDashboard";
 import { BusinessPartnershipApplication } from "@/components/BusinessPartnershipApplication";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,26 +41,37 @@ export default function BusinessHub() {
     return (
       <>
         <Header />
-        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
-          <Card className="max-w-md text-center">
-            <CardHeader>
-              <CardTitle className="text-2xl">Business Hub</CardTitle>
-              <CardDescription>Sign in to access your business dashboard</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-6">
-                Join Des Moines Insider to grow your business with powerful tools and local visibility.
-              </p>
-              <div className="flex flex-col gap-3">
-                <Button onClick={() => navigate("/auth")} size="lg">
-                  Sign In
-                </Button>
-                <Button onClick={() => navigate("/auth")} variant="outline">
-                  Create Business Account
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+          <div className="container mx-auto">
+            <Breadcrumbs
+              className="mb-4"
+              items={[
+                { label: "Home", href: "/" },
+                { label: "Business Hub" },
+              ]}
+            />
+          </div>
+          <div className="flex items-center justify-center">
+            <Card className="max-w-md text-center">
+              <CardHeader>
+                <CardTitle className="text-2xl">Business Hub</CardTitle>
+                <CardDescription>Sign in to access your business dashboard</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground mb-6">
+                  Join Des Moines Insider to grow your business with powerful tools and local visibility.
+                </p>
+                <div className="flex flex-col gap-3">
+                  <Button onClick={() => navigate("/auth")} size="lg">
+                    Sign In
+                  </Button>
+                  <Button onClick={() => navigate("/auth")} variant="outline">
+                    Create Business Account
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
         <Footer />
       </>
@@ -101,6 +113,14 @@ export default function BusinessHub() {
         <Header />
 
         <main className="container mx-auto px-4 py-8 max-w-7xl">
+          <Breadcrumbs
+            className="mb-4"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Business Hub" },
+            ]}
+          />
+
           {/* Hero Section */}
           <div className="text-center space-y-4 mb-8">
             <div className="flex items-center justify-center gap-2">

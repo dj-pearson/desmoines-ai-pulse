@@ -12,7 +12,12 @@
       "Bash(find:*)",
       "Bash(npm run type-check:*)",
       "Bash(npx eslint:*)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite build)",
+      "Bash(npm run validate:*)"
     ],
     "deny": [],
     "ask": []

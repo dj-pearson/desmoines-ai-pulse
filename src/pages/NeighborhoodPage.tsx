@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import NeighborhoodGuide from "@/components/NeighborhoodGuide";
 import LocalSEO from "@/components/LocalSEO";
 import { Button } from "@/components/ui/button";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "react-router-dom";
 
@@ -66,6 +67,15 @@ export default function NeighborhoodPage() {
       <Header />
       
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Neighborhoods", href: "/neighborhoods" },
+            { label: neighborhoodName },
+          ]}
+        />
+
         {/* Back Navigation */}
         <div className="mb-6">
           <Link to="/neighborhoods">

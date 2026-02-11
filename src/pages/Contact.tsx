@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import {
   Mail,
   Phone,
@@ -106,6 +107,14 @@ export default function Contact() {
 
         <main className="container mx-auto px-4 py-8">
           <div className="max-w-6xl mx-auto">
+            <Breadcrumbs
+              className="mb-4"
+              items={[
+                { label: "Home", href: "/" },
+                { label: "Contact" },
+              ]}
+            />
+
             {/* Hero Section */}
             <div className="text-center space-y-4 mb-12">
               <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold">

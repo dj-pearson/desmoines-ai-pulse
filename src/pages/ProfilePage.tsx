@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { SocialEventCard } from '@/components/SocialEventCard';
 import SEOHead from '@/components/SEOHead';
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import {
   Calendar,
   Heart,
@@ -212,6 +213,13 @@ export default function ProfilePage() {
         <Header />
 
         <main className="container mx-auto px-4 py-8">
+          <Breadcrumbs
+            className="mb-4"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "My Events" },
+            ]}
+          />
           {/* Profile Header */}
           <div className="mb-8">
             <h1 className="text-3xl md:text-4xl font-bold mb-2">My Events</h1>

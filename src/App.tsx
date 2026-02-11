@@ -45,6 +45,7 @@ const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
 const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
 const IowaStateFairPage = lazy(() => import("./pages/IowaStateFairPage"));
 const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
+const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
 const UploadCreatives = lazy(() => import("./pages/UploadCreatives"));
 const AdminCampaigns = lazy(() => import("./pages/AdminCampaigns"));
 const AdminCampaignDetail = lazy(() => import("./pages/AdminCampaignDetail"));
@@ -91,6 +92,14 @@ const AccessibilityStatement = lazy(() => import("./pages/AccessibilityStatement
 
 // Contact page
 const Contact = lazy(() => import("./pages/Contact"));
+
+// Admin sub-pages
+const AdminContent = lazy(() => import("./pages/AdminContent"));
+const AdminAI = lazy(() => import("./pages/AdminAI"));
+const AdminTools = lazy(() => import("./pages/AdminTools"));
+const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
+const AdminSecurity = lazy(() => import("./pages/AdminSecurity"));
+const AdminSystem = lazy(() => import("./pages/AdminSystem"));
 
 // Mobile-optimized loading component with accessibility support
 const PageLoader = () => (
@@ -154,6 +163,12 @@ const App = () => (
             <Route path="/my-events" element={<ProfilePage />} />
             <Route path="/dashboard" element={<ProtectedRoute><UserDashboard /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute requireAdmin><Admin /></ProtectedRoute>} />
+            <Route path="/admin/content" element={<ProtectedRoute requireAdmin><AdminContent /></ProtectedRoute>} />
+            <Route path="/admin/ai" element={<ProtectedRoute requireAdmin><AdminAI /></ProtectedRoute>} />
+            <Route path="/admin/tools" element={<ProtectedRoute requireAdmin><AdminTools /></ProtectedRoute>} />
+            <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
+            <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
+            <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
             {/* Restaurant SEO hub pages */}
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
@@ -209,6 +224,7 @@ const App = () => (
             <Route path="/advertise/success" element={<AdvertiseSuccess />} />
             <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
             <Route path="/campaigns" element={<ProtectedRoute><CampaignDashboard /></ProtectedRoute>} />
+            <Route path="/campaigns/:campaignId" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/creatives" element={<ProtectedRoute><UploadCreatives /></ProtectedRoute>} />
             <Route path="/campaigns/:campaignId/analytics" element={<ProtectedRoute><CampaignAnalytics /></ProtectedRoute>} />
             <Route path="/campaigns/team" element={<ProtectedRoute><TeamManagement /></ProtectedRoute>} />

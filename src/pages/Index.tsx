@@ -7,7 +7,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, MessageSquare, Phone, Mic, Brain, Zap, TrendingUp, Share2 } from "lucide-react";
+import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, Brain, Zap, TrendingUp, Share2, ArrowRight } from "lucide-react";
 import { downloadICS } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
@@ -15,7 +15,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
 import { BRAND } from "@/lib/brandConfig";
+import { Link } from "react-router-dom";
 import Header from "@/components/Header";
+import { FAQSection } from "@/components/FAQSection";
 import SEOHead from "@/components/SEOHead";
 import SEOStructure from "@/components/SEOStructure";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
@@ -36,13 +38,13 @@ const EventFilters = lazy(() => import("@/components/EventFilters"));
 const GEOContent = lazy(() => import("@/components/GEOContent"));
 const Newsletter = lazy(() => import("@/components/Newsletter"));
 const EventSocialHub = lazy(() => import("@/components/EventSocialHub").then(m => ({ default: m.EventSocialHub })));
-const FAQSection = lazy(() => import("@/components/FAQSection").then(m => ({ default: m.FAQSection })));
+// FAQSection imported directly (not lazy) for SEO indexing
 const PreferencesOnboarding = lazy(() => import("@/components/PreferencesOnboarding").then(m => ({ default: m.PreferencesOnboarding })));
 const PersonalizedRecommendations = lazy(() => import("@/components/PersonalizedRecommendations").then(m => ({ default: m.PersonalizedRecommendations })));
 const RecentlyViewed = lazy(() => import("@/components/RecentlyViewed").then(m => ({ default: m.RecentlyViewed })));
 const SocialProof = lazy(() => import("@/components/SocialProof").then(m => ({ default: m.SocialProof })));
 
-// Simple loading fallback for sections
+// Shape-matched skeleton loaders for lazy-loaded sections
 const SectionLoader = () => (
   <div className="w-full py-12 flex items-center justify-center">
     <div className="animate-pulse flex space-x-4">
@@ -53,12 +55,53 @@ const SectionLoader = () => (
   </div>
 );
 
+const CardGridSkeleton = () => (
+  <div className="w-full py-12 px-4">
+    <div className="max-w-7xl mx-auto">
+      <div className="animate-pulse space-y-6">
+        <div className="h-8 bg-muted rounded w-1/3 mx-auto"></div>
+        <div className="h-4 bg-muted/60 rounded w-1/2 mx-auto"></div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="rounded-lg border border-border p-4 space-y-3">
+              <div className="h-40 bg-muted rounded"></div>
+              <div className="h-5 bg-muted rounded w-3/4"></div>
+              <div className="h-4 bg-muted/60 rounded w-full"></div>
+              <div className="h-4 bg-muted/60 rounded w-2/3"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const DashboardSkeleton = () => (
+  <div className="w-full py-12 px-4">
+    <div className="max-w-7xl mx-auto animate-pulse space-y-6">
+      <div className="h-8 bg-muted rounded w-1/4"></div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="rounded-lg border border-border p-4 space-y-3">
+            <div className="h-32 bg-muted rounded"></div>
+            <div className="h-5 bg-muted rounded w-3/4"></div>
+            <div className="h-4 bg-muted/60 rounded w-1/2"></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
 export default function Index() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showEventDetails, setShowEventDetails] = useState(false);
-  const [showAllEvents, setShowAllEvents] = useState(false);
-  const [showSocialHub, setShowSocialHub] = useState(false);
-  const [socialEventId, setSocialEventId] = useState<string | null>(null);
+  // Consolidated view state: which secondary view is active
+  const [activeView, setActiveView] = useState<
+    | { type: 'default' }
+    | { type: 'allEvents' }
+    | { type: 'socialHub'; eventId: string }
+  >({ type: 'default' });
   const [searchFilters, setSearchFilters] = useState<{
     query?: string;
     category?: string;
@@ -311,12 +354,11 @@ export default function Index() {
   };
 
   const handleViewAllEvents = () => {
-    setShowAllEvents(true);
+    setActiveView({ type: 'allEvents' });
   };
 
   const handleViewSocial = (eventId: string) => {
-    setSocialEventId(eventId);
-    setShowSocialHub(true);
+    setActiveView({ type: 'socialHub', eventId });
   };
 
   const handleScrapeEvents = () => {
@@ -400,7 +442,7 @@ export default function Index() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {/* Conversational Intelligence */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+              <Link to="/events" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-blue-300 dark:hover:border-blue-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-blue-100 dark:bg-blue-900/30 rounded-full p-3">
                     <Brain className="h-6 w-6 text-blue-600 dark:text-blue-400" />
@@ -410,33 +452,17 @@ export default function Index() {
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                   Ask naturally, like you're talking to a local friend. "Find romantic dinner spots with live music tonight" or "Plan a family-friendly Saturday morning."
                 </p>
-                <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                  <Sparkles className="h-4 w-4" />
-                  <span>Semantic search understands intent</span>
-                </div>
-              </div>
-
-              {/* Multi-Channel Access */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-3">
-                    <MessageSquare className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Semantic search understands intent</span>
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Access Anywhere</h3>
+                  <ArrowRight className="h-4 w-4 text-blue-600 dark:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-                <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  Get recommendations via web, SMS, voice (Alexa/Google), or ChatGPT. Your city guide follows you everywhere you need it.
-                </p>
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">Web</span>
-                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">SMS</span>
-                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">Voice</span>
-                  <span className="bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-1 rounded">ChatGPT</span>
-                </div>
-              </div>
+              </Link>
 
               {/* Context-Aware Recommendations */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+              <Link to="/events" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-green-300 dark:hover:border-green-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-green-100 dark:bg-green-900/30 rounded-full p-3">
                     <Zap className="h-6 w-6 text-green-600 dark:text-green-400" />
@@ -446,14 +472,17 @@ export default function Index() {
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                   We consider time, weather, location, your past preferences, and real-time availability to suggest the perfect experiences for you.
                 </p>
-                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-                  <Brain className="h-4 w-4" />
-                  <span>Learns from your behavior</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                    <Brain className="h-4 w-4" />
+                    <span>Learns from your behavior</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-green-600 dark:text-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </div>
+              </Link>
 
               {/* Proactive Assistance */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+              <Link to="/events/today" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-orange-300 dark:hover:border-orange-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-orange-100 dark:bg-orange-900/30 rounded-full p-3">
                     <TrendingUp className="h-6 w-6 text-orange-600 dark:text-orange-400" />
@@ -463,14 +492,17 @@ export default function Index() {
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                   Get alerts for events you'll love, weather changes affecting your plans, and last-minute availability—before you even ask.
                 </p>
-                <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
-                  <Sparkles className="h-4 w-4" />
-                  <span>Smart notifications & alerts</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-orange-600 dark:text-orange-400">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Smart notifications & alerts</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-orange-600 dark:text-orange-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </div>
+              </Link>
 
               {/* Predictive Analytics */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+              <Link to="/restaurants" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-red-300 dark:hover:border-red-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-red-100 dark:bg-red-900/30 rounded-full p-3">
                     <TrendingUp className="h-6 w-6 text-red-600 dark:text-red-400" />
@@ -480,14 +512,17 @@ export default function Index() {
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                   See demand forecasts, optimal visit times, and sell-out predictions. Make smarter decisions with data-driven intelligence.
                 </p>
-                <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
-                  <TrendingUp className="h-4 w-4" />
-                  <span>Real-time demand analytics</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                    <TrendingUp className="h-4 w-4" />
+                    <span>Real-time demand analytics</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </div>
+              </Link>
 
               {/* Automated Trip Planning */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow">
+              <Link to="/trip-planner" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-indigo-300 dark:hover:border-indigo-600">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="bg-indigo-100 dark:bg-indigo-900/30 rounded-full p-3">
                     <Calendar className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
@@ -497,18 +532,41 @@ export default function Index() {
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
                   Generate complete day-by-day itineraries in seconds. Optimized for travel times, variety, and your unique interests.
                 </p>
-                <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
-                  <Sparkles className="h-4 w-4" />
-                  <span>Automated itinerary generation</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-indigo-600 dark:text-indigo-400">
+                    <Sparkles className="h-4 w-4" />
+                    <span>Automated itinerary generation</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
-              </div>
+              </Link>
+
+              {/* Attractions & Playgrounds */}
+              <Link to="/attractions" className="group bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all hover:border-purple-300 dark:hover:border-purple-600">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="bg-purple-100 dark:bg-purple-900/30 rounded-full p-3">
+                    <MapPin className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">Attractions & More</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  Discover museums, parks, playgrounds, and landmarks. Find the perfect family-friendly activity or hidden gem in Des Moines.
+                </p>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400">
+                    <Sparkles className="h-4 w-4" />
+                    <span>50+ attractions mapped</span>
+                  </div>
+                  <ArrowRight className="h-4 w-4 text-purple-600 dark:text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </Link>
             </div>
           </div>
         </section>
 
         {/* All-Inclusive Dashboard */}
         <div data-dashboard="all-inclusive">
-          <Suspense fallback={<SectionLoader />}>
+          <Suspense fallback={<DashboardSkeleton />}>
             <AllInclusiveDashboard
               onViewEventDetails={handleViewEventDetails}
               filters={searchFilters}
@@ -517,8 +575,8 @@ export default function Index() {
           </Suspense>
         </div>
 
-        {!showAllEvents && !showSocialHub && (
-          <Suspense fallback={<SectionLoader />}>
+        {activeView.type === 'default' && (
+          <Suspense fallback={<CardGridSkeleton />}>
             {/* Recently Viewed Section */}
             <section className="py-8 bg-background">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -562,23 +620,20 @@ export default function Index() {
           </Suspense>
         )}
 
-        {showSocialHub && socialEventId && (
+        {activeView.type === 'socialHub' && (
           <Suspense fallback={<SectionLoader />}>
             <div className="py-8">
               <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="mb-6">
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      setShowSocialHub(false);
-                      setSocialEventId(null);
-                    }}
+                    onClick={() => setActiveView({ type: 'default' })}
                   >
                     ← Back to Events
                   </Button>
                 </div>
                 <EventSocialHub
-                  eventId={socialEventId}
+                  eventId={activeView.eventId}
                   eventTitle={selectedEvent?.title || "Event"}
                   eventDate={selectedEvent?.date ? new Date(selectedEvent.date).toISOString() : ""}
                 />
@@ -587,14 +642,14 @@ export default function Index() {
           </Suspense>
         )}
 
-        {showAllEvents && (
-          <Suspense fallback={<SectionLoader />}>
+        {activeView.type === 'allEvents' && (
+          <Suspense fallback={<DashboardSkeleton />}>
             <div className="py-8">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
                 <div className="flex items-center justify-between">
                   <Button
                     variant="outline"
-                    onClick={() => setShowAllEvents(false)}
+                    onClick={() => setActiveView({ type: 'default' })}
                   >
                     ← Back to Smart Discovery
                   </Button>
@@ -627,11 +682,10 @@ export default function Index() {
           <SocialProof />
         </Suspense>
 
-        {/* FAQ Section for Featured Snippets */}
-        <Suspense fallback={<SectionLoader />}>
-          <section className="py-16 bg-background">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-              <FAQSection
+        {/* FAQ Section for Featured Snippets - directly rendered for SEO */}
+        <section className="py-16 bg-background">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <FAQSection
                 title="Frequently Asked Questions About Des Moines AI Pulse"
                 description="Learn how our conversational AI technology transforms the way you discover and experience Des Moines."
                 faqs={[
@@ -683,9 +737,8 @@ export default function Index() {
                 showSchema={true}
                 className="border-0 shadow-lg"
               />
-            </div>
-          </section>
-        </Suspense>
+          </div>
+        </section>
 
         <Suspense fallback={<SectionLoader />}>
           <Newsletter />
@@ -695,13 +748,13 @@ export default function Index() {
         </Suspense>
       </main>
 
-      {/* Event Details Dialog */}
+      {/* Event Details Dialog - full-screen on mobile */}
       <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto sm:max-h-[85vh]">
           {selectedEvent && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-2xl font-bold">
+                <DialogTitle className="text-xl sm:text-2xl font-bold pr-8">
                   {selectedEvent.title}
                 </DialogTitle>
               </DialogHeader>
@@ -711,7 +764,7 @@ export default function Index() {
                   <img
                     src={selectedEvent.image_url}
                     alt={selectedEvent.title}
-                    className="w-full h-64 object-cover rounded-lg"
+                    className="w-full h-48 sm:h-64 object-cover rounded-lg"
                     loading="lazy"
                     decoding="async"
                     onError={(e) => {
@@ -721,47 +774,61 @@ export default function Index() {
                   />
                 )}
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center text-neutral-600">
-                    <Calendar className="h-5 w-5 mr-2" />
-                    <span>{formatEventDate(selectedEvent.date)}</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex items-start text-neutral-600 dark:text-neutral-400">
+                    <Calendar className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <span className="text-sm sm:text-base">{formatEventDate(selectedEvent.date)}</span>
                   </div>
 
-                  <div className="flex items-center text-neutral-600">
-                    <MapPin className="h-5 w-5 mr-2" />
-                    <span>{selectedEvent.location}</span>
+                  <div className="flex items-start text-neutral-600 dark:text-neutral-400">
+                    <MapPin className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                    <span className="text-sm sm:text-base">{selectedEvent.location}</span>
                   </div>
                 </div>
 
-                {selectedEvent.venue && (
-                  <div>
-                    <h3 className="font-semibold mb-2 text-base">Venue</h3>
-                    <p className="text-neutral-600">{selectedEvent.venue}</p>
-                  </div>
-                )}
-
-                {selectedEvent.price && (
-                  <div>
-                    <h3 className="font-semibold mb-2 text-base">Price</h3>
-                    <p className="text-neutral-600">{selectedEvent.price}</p>
+                {(selectedEvent.venue || selectedEvent.price) && (
+                  <div className="flex flex-wrap gap-4">
+                    {selectedEvent.venue && (
+                      <div>
+                        <h3 className="font-semibold mb-1 text-sm">Venue</h3>
+                        <p className="text-neutral-600 dark:text-neutral-400 text-sm">{selectedEvent.venue}</p>
+                      </div>
+                    )}
+                    {selectedEvent.price && (
+                      <div>
+                        <h3 className="font-semibold mb-1 text-sm">Price</h3>
+                        <p className="text-neutral-600 dark:text-neutral-400 text-sm">{selectedEvent.price}</p>
+                      </div>
+                    )}
                   </div>
                 )}
 
                 <div>
-                  <h3 className="font-semibold mb-2 text-base">Description</h3>
-                  <p className="text-neutral-600 leading-relaxed">
+                  <h3 className="font-semibold mb-2 text-sm">Description</h3>
+                  <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed text-sm">
                     {selectedEvent.enhanced_description ||
                       selectedEvent.original_description}
                   </p>
                   {selectedEvent.is_enhanced && (
-                    <p className="text-sm text-accent mt-2 flex items-center">
-                      <Sparkles className="h-4 w-4 mr-1" />
+                    <p className="text-xs text-accent mt-2 flex items-center">
+                      <Sparkles className="h-3 w-3 mr-1" />
                       Enhanced with AI
                     </p>
                   )}
                 </div>
 
                 <div className="pt-4 border-t space-y-3">
+                  {/* View full event page */}
+                  <Button asChild className="w-full">
+                    <Link
+                      to={`/events/${selectedEvent.id}`}
+                      onClick={() => setShowEventDetails(false)}
+                    >
+                      View Full Event Details
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+
                   <div className="grid grid-cols-2 gap-3">
                     <FavoriteButton
                       eventId={selectedEvent.id}
@@ -791,7 +858,7 @@ export default function Index() {
                   </Button>
 
                   {selectedEvent.source_url && (
-                    <Button asChild className="w-full">
+                    <Button asChild variant="outline" className="w-full">
                       <a
                         href={selectedEvent.source_url}
                         target="_blank"

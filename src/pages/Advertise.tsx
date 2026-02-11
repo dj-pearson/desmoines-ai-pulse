@@ -14,72 +14,30 @@ import { cn } from "@/lib/utils";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
+import type { PlacementType } from "@/lib/placementSpecs";
 
-const PLACEMENT_OPTIONS = [
-  {
-    type: "top_banner" as const,
-    name: "Top Banner",
-    description: "Premium placement at the top of every page",
-    dailyCost: 10,
-    icon: Star,
-    features: ["Maximum visibility", "Mobile & desktop", "All pages"],
-    assetRequirements: {
-      desktop: "728x90px or 970x250px",
-      mobile: "320x50px or 300x100px",
-      formats: ["JPG", "PNG", "WebP"],
-      maxFileSize: "2MB",
-      animationType: "Static images only"
-    },
-    specifications: [
-      "High-resolution images (300 DPI recommended)",
-      "Clear, readable text even at small sizes",
-      "Strong call-to-action button",
-      "Brand logo prominently displayed"
-    ]
+const ICON_MAP = {
+  top_banner: Star,
+  featured_spot: Eye,
+  below_fold: Target,
+} as const;
+
+const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SPECS[PlacementType][]).map(spec => ({
+  type: spec.type,
+  name: spec.name,
+  description: spec.description,
+  dailyCost: spec.dailyCost,
+  icon: ICON_MAP[spec.type],
+  features: spec.features,
+  assetRequirements: {
+    dimensions: spec.dimensions.map(d => d.label).join(', '),
+    formats: spec.formats,
+    maxFileSize: spec.maxSizeLabel,
+    animationType: spec.animationType,
   },
-  {
-    type: "featured_spot" as const,
-    name: "Featured Spot",
-    description: "Highlighted placement in search results and event listings",
-    dailyCost: 5,
-    icon: Eye,
-    features: ["1st or 2nd position", "Event listings", "High engagement"],
-    assetRequirements: {
-      desktop: "300x250px or 336x280px",
-      mobile: "300x250px (responsive)",
-      formats: ["JPG", "PNG", "WebP"],
-      maxFileSize: "1.5MB",
-      animationType: "Static or subtle animation (GIF up to 5 seconds)"
-    },
-    specifications: [
-      "Eye-catching visuals with local appeal",
-      "Clear business name and offering",
-      "High contrast for mobile readability",
-      "Include location or Des Moines reference"
-    ]
-  },
-  {
-    type: "below_fold" as const,
-    name: "Below the Fold",
-    description: "Cost-effective placement integrated within content areas",
-    dailyCost: 5,
-    icon: Target,
-    features: ["Content integration", "Targeted audience", "Great value"],
-    assetRequirements: {
-      desktop: "300x250px or 250x250px",
-      mobile: "300x250px (responsive)",
-      formats: ["JPG", "PNG", "WebP"],
-      maxFileSize: "1MB",
-      animationType: "Static images preferred"
-    },
-    specifications: [
-      "Native advertising style preferred",
-      "Blend with editorial content design",
-      "Focus on value proposition",
-      "Local Des Moines imagery encouraged"
-    ]
-  },
-];
+  specifications: spec.specifications,
+}));
 
 export default function Advertise() {
   const navigate = useNavigate();
@@ -338,13 +296,8 @@ export default function Advertise() {
                            {/* Asset Requirements */}
                            <div className="bg-muted/50 p-3 rounded-md mb-3 text-xs space-y-1">
                              <h4 className="font-semibold text-sm mb-2">Asset Requirements:</h4>
-                             <div className="grid grid-cols-2 gap-2">
-                               <div>
-                                 <span className="font-medium">Desktop:</span> {option.assetRequirements.desktop}
-                               </div>
-                               <div>
-                                 <span className="font-medium">Mobile:</span> {option.assetRequirements.mobile}
-                               </div>
+                             <div>
+                               <span className="font-medium">Accepted Sizes:</span> {option.assetRequirements.dimensions}
                              </div>
                              <div>
                                <span className="font-medium">Formats:</span> {option.assetRequirements.formats.join(", ")}

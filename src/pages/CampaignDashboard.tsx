@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
-import { Eye, Calendar, DollarSign, Plus } from "lucide-react";
+import { Eye, Calendar, DollarSign, Plus, Upload, BarChart3 } from "lucide-react";
 
 const STATUS_COLORS = {
   draft: "secondary",
@@ -123,20 +123,40 @@ export default function CampaignDashboard() {
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => navigate(`/campaigns/${campaign.id}`)}
                   >
-                    Manage Campaign
+                    View Details
                   </Button>
                   {campaign.status === 'pending_creative' && (
                     <Button
                       size="sm"
                       onClick={() => navigate(`/campaigns/${campaign.id}/creatives`)}
                     >
+                      <Upload className="h-3 w-3 mr-1" />
                       Upload Creatives
+                    </Button>
+                  )}
+                  {campaign.status === 'draft' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate("/advertise")}
+                    >
+                      Complete Setup
+                    </Button>
+                  )}
+                  {(campaign.status === 'active' || campaign.status === 'completed') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(`/campaigns/${campaign.id}/analytics`)}
+                    >
+                      <BarChart3 className="h-3 w-3 mr-1" />
+                      Analytics
                     </Button>
                   )}
                 </div>

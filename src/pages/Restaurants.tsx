@@ -45,6 +45,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { OpenNowBanner } from "@/components/OpenNowBanner";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
 import {
@@ -422,6 +423,13 @@ export default function Restaurants() {
         </section>
 
         <main className="container mx-auto px-4 py-6 md:py-8">
+          <Breadcrumbs
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Restaurants" },
+            ]}
+            className="mb-4"
+          />
           <div className="space-y-8">
             {/* Cuisine Quick Filter Bar */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">

@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { BackToTop } from "@/components/BackToTop";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function Terms() {
   const lastUpdated = "November 25, 2025";
@@ -19,6 +20,14 @@ export default function Terms() {
       <Header />
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Terms of Service" },
+          ]}
+        />
+
         <article className="prose prose-lg dark:prose-invert max-w-none">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">Terms of Service</h1>
           <p className="text-muted-foreground mb-8">Last Updated: {lastUpdated}</p>

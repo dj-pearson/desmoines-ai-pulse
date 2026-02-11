@@ -47,7 +47,6 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
   const [priceRange, setPriceRange] = useState("");
 
   const { trackSearch } = useAnalytics();
-  const [resultsCount, setResultsCount] = useState(0);
 
   // Fetch subcategories based on selected category
   const { data: subcategories } = useQuery({
@@ -87,34 +86,6 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
     setSubcategory("");
   }, [category]);
 
-  // Auto-trigger search when any filter changes
-  const handleFilterChange = (
-    newFilters: Partial<{
-      query?: string;
-      category?: string;
-      subcategory?: string;
-      dateFilter?: {
-        start?: Date;
-        end?: Date;
-        mode: "single" | "range" | "preset";
-        preset?: string;
-      } | null;
-      location?: string;
-      priceRange?: string;
-    }>
-  ) => {
-    const updatedFilters = {
-      query,
-      category,
-      subcategory,
-      dateFilter,
-      location,
-      priceRange,
-      ...newFilters,
-    };
-    onSearch(updatedFilters, false); // Don't scroll during filter changes
-  };
-
   const handleDateFilterChange = (
     newDateFilter: {
       start?: Date;
@@ -124,30 +95,25 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
     } | null
   ) => {
     setDateFilter(newDateFilter);
-    handleFilterChange({ dateFilter: newDateFilter });
   };
 
   const handleCategoryChange = (newCategory: string) => {
     setCategory(newCategory);
-    setSubcategory(""); // Reset subcategory when category changes
-    handleFilterChange({ category: newCategory, subcategory: "" });
+    setSubcategory("");
   };
 
   const handleSubcategoryChange = (newSubcategory: string) => {
     const subcategoryValue =
       newSubcategory === "all-subcategories" ? "" : newSubcategory;
     setSubcategory(subcategoryValue);
-    handleFilterChange({ subcategory: subcategoryValue });
   };
 
   const handleLocationChange = (newLocation: string) => {
     setLocation(newLocation);
-    handleFilterChange({ location: newLocation });
   };
 
   const handlePriceChange = (newPriceRange: string) => {
     setPriceRange(newPriceRange);
-    handleFilterChange({ priceRange: newPriceRange });
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -155,24 +121,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
     onSearch(
       { query, category, subcategory, dateFilter, location, priceRange },
       true
-    ); // Scroll when explicitly searching
-  };
-
-  const handleQueryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newQuery = e.target.value;
-    setQuery(newQuery);
-
-    console.log("Search query changed:", newQuery, "Length:", newQuery.length);
-
-    // Always trigger filter change for clearing (empty) or meaningful search (2+ chars)
-    if (newQuery.length === 0) {
-      console.log("Clearing search - showing all results");
-      handleFilterChange({ query: "" });
-    } else if (newQuery.length >= 2) {
-      console.log("Applying search filter:", newQuery);
-      handleFilterChange({ query: newQuery });
-    }
-    // For 1 character, don't filter yet but keep the previous state
+    );
   };
 
   return (
@@ -198,7 +147,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
                   type="text"
                   placeholder="Search events, restaurants, attractions..."
                   value={query}
-                  onChange={handleQueryChange}
+                  onChange={(e) => setQuery(e.target.value)}
                   className="touch-target text-base md:text-lg bg-background/95 backdrop-blur border-0 focus:ring-2 focus:ring-primary-foreground"
                   aria-label="Search events, restaurants, and attractions"
                   role="searchbox"

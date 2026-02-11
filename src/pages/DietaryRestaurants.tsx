@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 const dietaryOptions = [
   { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
@@ -164,6 +165,14 @@ export default function DietaryRestaurants() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Restaurants", href: "/restaurants" },
+            { label: "Dietary Options" },
+          ]}
+          className="mb-4"
+        />
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">

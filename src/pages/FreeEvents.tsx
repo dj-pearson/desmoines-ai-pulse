@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, MapPin, Calendar, Gift } from "lucide-react";
 import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
   id: string;
@@ -127,6 +128,14 @@ export default function FreeEvents() {
       <Header />
 
       <main className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "Free Events" },
+          ]}
+        />
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
