@@ -1,5 +1,6 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { Brain, MessageSquare, Mic, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
@@ -8,15 +9,19 @@ import { cn } from "@/lib/utils";
 const HeroCityLite = lazy(() => import("./HeroCityLite"));
 
 interface EnhancedHeroProps {
-  eventCount?: number;
-  restaurantCount?: number;
+  eventsToday?: number;
+  restaurantsCount?: number;
+  newThisWeek?: number;
+  isLoadingStats?: boolean;
   onAIPlanClick?: () => void;
   className?: string;
 }
 
 export function EnhancedHero({
-  eventCount = 1000,
-  restaurantCount = 300,
+  eventsToday = 0,
+  restaurantsCount = 0,
+  newThisWeek = 0,
+  isLoadingStats = false,
   onAIPlanClick,
   className,
 }: EnhancedHeroProps) {
@@ -50,25 +55,7 @@ export function EnhancedHero({
     }
   }, []);
 
-  const getTodayEvents = () => {
-    // This would be dynamic based on actual data
-    const day = new Date().getDay();
-    const isWeekend = day === 0 || day === 6;
-    return isWeekend ? Math.floor(eventCount * 0.3) : Math.floor(eventCount * 0.15);
-  };
-
-  const getOpenNowCount = () => {
-    // This would be dynamic based on actual restaurant hours
-    const hour = new Date().getHours();
-    if (hour >= 6 && hour < 11) return Math.floor(restaurantCount * 0.4); // Breakfast
-    if (hour >= 11 && hour < 15) return Math.floor(restaurantCount * 0.7); // Lunch
-    if (hour >= 17 && hour < 22) return Math.floor(restaurantCount * 0.8); // Dinner
-    return Math.floor(restaurantCount * 0.2); // Late night/early morning
-  };
-
-  const getNewThisWeek = () => {
-    return Math.floor(eventCount * 0.05); // 5% of events are new
-  };
+  const statPlaceholder = "—";
 
   return (
     <section
@@ -107,26 +94,26 @@ export function EnhancedHero({
           </p>
         </div>
 
-        {/* Live Stats - Dynamic */}
+        {/* Live Stats - Database-driven */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12 max-w-4xl mx-auto">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
+          <Link to="/events/today" className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
             <div className="text-3xl font-bold text-[#FFD700] mb-1">
-              {getTodayEvents()}+
+              {isLoadingStats ? statPlaceholder : eventsToday}
             </div>
             <p className="text-sm text-white/80">Events Today</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
+          </Link>
+          <Link to="/restaurants/open-now" className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
             <div className="text-3xl font-bold text-[#FFD700] mb-1">
-              {getOpenNowCount()}+
+              {isLoadingStats ? statPlaceholder : restaurantsCount}
             </div>
-            <p className="text-sm text-white/80">Open Now</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
+            <p className="text-sm text-white/80">Restaurants</p>
+          </Link>
+          <Link to="/events" className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
             <div className="text-3xl font-bold text-[#FFD700] mb-1">
-              {getNewThisWeek()}+
+              {isLoadingStats ? statPlaceholder : newThisWeek}
             </div>
             <p className="text-sm text-white/80">New This Week</p>
-          </div>
+          </Link>
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-all duration-300 hover:scale-105">
             <div className="text-3xl font-bold text-[#FFD700] mb-1">
               24/7

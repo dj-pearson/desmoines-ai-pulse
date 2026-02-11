@@ -22,6 +22,7 @@ import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
 import { EnhancedHero } from "@/components/EnhancedHero";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
+import { useHomepageStats } from "@/hooks/useHomepageStats";
 import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 
@@ -75,6 +76,7 @@ export default function Index() {
   const { toast } = useToast();
   const { isAuthenticated, user } = useAuth();
   const { preferences, isLoading: preferencesLoading } = useUserPreferences();
+  const { eventsToday, restaurantsCount, newThisWeek, isLoading: statsLoading } = useHomepageStats();
 
   // Check if user should see preferences onboarding
   useEffect(() => {
@@ -375,8 +377,10 @@ export default function Index() {
 
         {/* Enhanced Hero with dynamic content and quick actions */}
         <EnhancedHero
-          eventCount={1000}
-          restaurantCount={300}
+          eventsToday={eventsToday}
+          restaurantsCount={restaurantsCount}
+          newThisWeek={newThisWeek}
+          isLoadingStats={statsLoading}
           onAIPlanClick={handleAIPlanClick}
         />
 
