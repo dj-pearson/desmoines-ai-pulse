@@ -138,6 +138,7 @@ export default function SearchSection({ onSearch }: SearchSectionProps) {
         <form
           onSubmit={handleSearch}
           className="space-y-3 md:space-y-6 max-w-4xl mx-auto"
+          aria-label="Search events, restaurants, and attractions"
         >
           {/* Mobile-First Main search bar */}
           <div className="flex flex-col gap-3 md:gap-4">

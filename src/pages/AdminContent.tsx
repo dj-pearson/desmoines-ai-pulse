@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import ContentEditDialog from "@/components/ContentEditDialog";
 import ContentTemplateSelector from "@/components/ContentTemplateSelector";
@@ -45,6 +46,7 @@ const CONTENT_TABS = [
 
 export default function AdminContent() {
   const { userRole } = useAdminAuth();
+  useDocumentTitle("Content Management");
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("events");

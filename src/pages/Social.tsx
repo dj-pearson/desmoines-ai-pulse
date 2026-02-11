@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Social() {
   const { isAuthenticated } = useAuth();
+  useDocumentTitle("Community");
   const { toast } = useToast();
   const [searchEmail, setSearchEmail] = useState("");
   const [groupName, setGroupName] = useState("");

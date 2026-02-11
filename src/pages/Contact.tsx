@@ -105,7 +105,7 @@ export default function Contact() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8">
           <div className="max-w-6xl mx-auto">
             <Breadcrumbs
               className="mb-4"
@@ -269,6 +269,8 @@ export default function Contact() {
                               value={formData.name}
                               onChange={(e) => handleChange('name', e.target.value)}
                               required
+                              autoComplete="name"
+                              aria-required="true"
                             />
                           </div>
 
@@ -283,6 +285,8 @@ export default function Contact() {
                               value={formData.email}
                               onChange={(e) => handleChange('email', e.target.value)}
                               required
+                              autoComplete="email"
+                              aria-required="true"
                             />
                           </div>
 
@@ -296,6 +300,7 @@ export default function Contact() {
                               placeholder="(515) 555-0123"
                               value={formData.phone}
                               onChange={(e) => handleChange('phone', e.target.value)}
+                              autoComplete="tel"
                             />
                           </div>
 
@@ -345,6 +350,7 @@ export default function Contact() {
                             onChange={(e) => handleChange('message', e.target.value)}
                             rows={6}
                             required
+                            aria-required="true"
                           />
                         </div>
 
@@ -370,7 +376,7 @@ export default function Contact() {
               </div>
             </div>
           </div>
-        </main>
+        </div>
 
         <Footer />
       </div>

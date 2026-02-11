@@ -12,6 +12,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Trophy, Target, Users, Award, Star, Camera, MapPin, Share2 } from "lucide-react";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 // Sample XP activities for demo
 const XP_ACTIVITIES = [
@@ -55,6 +56,7 @@ const XP_ACTIVITIES = [
 export default function Gamification() {
   const { isAuthenticated, user } = useAuth();
   const { challenges, awardPoints, reputation } = useGamification();
+  useDocumentTitle("Rewards & Achievements");
 
   const handleTestXP = (activityType: string, points: number) => {
     if (user) {

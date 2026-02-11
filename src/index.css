@@ -128,6 +128,13 @@
   }
 }
 
+@layer base {
+  /* WCAG 1.4.3 - Ensure placeholder text meets 3:1 minimum contrast */
+  ::placeholder {
+    opacity: 0.65;
+  }
+}
+
 @layer utilities {
   .glass {
     @apply bg-white/70 backdrop-blur-lg border border-white/20 shadow-lg;

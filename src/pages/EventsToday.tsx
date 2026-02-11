@@ -10,6 +10,7 @@ import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
@@ -29,6 +30,7 @@ interface EventItem {
 export default function EventsToday() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  useDocumentTitle("Events Today");
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -109,7 +111,7 @@ export default function EventsToday() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           items={[
             { label: "Home", href: "/" },
@@ -249,7 +251,7 @@ export default function EventsToday() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
 
       <Footer />
     </div>

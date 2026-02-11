@@ -77,7 +77,7 @@ export default function EventDetails() {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8">
           <div className="animate-pulse space-y-6">
             <div className="h-6 bg-muted rounded w-1/4" />
             <div className="h-72 md:h-96 bg-muted rounded-2xl" />
@@ -97,7 +97,7 @@ export default function EventDetails() {
               </div>
             </div>
           </div>
-        </main>
+        </div>
         <Footer />
       </div>
     );
@@ -113,7 +113,7 @@ export default function EventDetails() {
         />
         <div className="min-h-screen bg-background">
           <Header />
-          <main className="container mx-auto px-4 py-16">
+          <div className="container mx-auto px-4 py-16">
             <div className="text-center space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto">
                 <Calendar className="h-8 w-8 text-muted-foreground" />
@@ -132,7 +132,7 @@ export default function EventDetails() {
                 </Button>
               </div>
             </div>
-          </main>
+          </div>
           <Footer />
         </div>
       </>
@@ -194,7 +194,7 @@ export default function EventDetails() {
           </div>
         )}
 
-        <main className="container mx-auto px-4">
+        <div className="container mx-auto px-4">
           {/* Content starts overlapping hero image */}
           <div className={event.image_url ? '-mt-32 relative z-10' : 'pt-8'}>
             {/* Breadcrumbs */}
@@ -560,7 +560,7 @@ export default function EventDetails() {
               </section>
             )}
           </div>
-        </main>
+        </div>
 
         <Footer />
       </div>

@@ -112,7 +112,7 @@ export default function BusinessHub() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto px-4 py-8 max-w-7xl">
+        <div className="container mx-auto px-4 py-8 max-w-7xl">
           <Breadcrumbs
             className="mb-4"
             items={[
@@ -354,7 +354,7 @@ export default function BusinessHub() {
               </div>
             </CardContent>
           </Card>
-        </main>
+        </div>
 
         <Footer />
       </div>

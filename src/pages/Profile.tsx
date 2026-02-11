@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ import { CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
 
 export default function Profile() {
   const { profile, updateProfile, isLoading } = useProfile();
+  useDocumentTitle("Profile Settings");
   const { friends, friendGroups } = useSocialFeatures();
   const { data: submittedEvents } = useUserSubmittedEvents();
   const { userLevel, userXP, badges } = useGamification();

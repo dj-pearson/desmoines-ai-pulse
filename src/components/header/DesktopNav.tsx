@@ -20,7 +20,7 @@ export function DesktopNav() {
   };
 
   return (
-    <NavigationMenu className="hidden lg:flex flex-1 min-w-0">
+    <NavigationMenu className="hidden lg:flex flex-1 min-w-0" aria-label="Main navigation">
       <NavigationMenuList className="gap-1">
         {/* Events */}
         <NavigationMenuItem>

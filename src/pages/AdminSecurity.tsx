@@ -1,9 +1,11 @@
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import AdminSecurityManager from "@/components/AdminSecurityManager";
 
 export default function AdminSecurity() {
   const { userRole } = useAdminAuth();
+  useDocumentTitle("Security Settings");
 
   const canManageUsers = () => ["admin", "root_admin"].includes(userRole);
 

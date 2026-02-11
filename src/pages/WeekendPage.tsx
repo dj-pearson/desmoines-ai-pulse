@@ -13,9 +13,9 @@ export default function WeekendPage() {
       />
       <Header />
       
-      <main>
+      <div>
         <WeekendGuide />
-      </main>
+      </div>
       
       <Footer />
     </div>

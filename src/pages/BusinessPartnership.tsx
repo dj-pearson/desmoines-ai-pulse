@@ -84,7 +84,7 @@ export default function BusinessPartnership() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8">
           <div className="max-w-6xl mx-auto">
             <Breadcrumbs
               className="mb-4"
@@ -256,7 +256,7 @@ export default function BusinessPartnership() {
               </TabsContent>
             </Tabs>
           </div>
-        </main>
+        </div>
 
         <Footer />
       </div>

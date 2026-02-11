@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Sparkles, Calendar, Heart, ArrowRight } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
@@ -11,6 +12,7 @@ export default function AuthVerified() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
   const [countdown, setCountdown] = useState(10);
+  useDocumentTitle("Email Verified");
 
   useEffect(() => {
     // Auto-redirect after 10 seconds
@@ -35,7 +37,7 @@ export default function AuthVerified() {
     <div className="min-h-screen bg-gradient-to-br from-primary/10 to-accent/10 flex flex-col">
       <Header />
 
-      <main className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center p-4">
         <Card className="w-full max-w-2xl">
           <CardHeader className="text-center space-y-4 pb-6">
             <div className="flex justify-center">
@@ -146,7 +148,7 @@ export default function AuthVerified() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
 
       <Footer />
     </div>

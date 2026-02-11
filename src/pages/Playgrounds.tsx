@@ -6,6 +6,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useToast } from "@/hooks/use-toast";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -46,6 +47,7 @@ const createSlug = (name: string): string => {
 export default function Playgrounds() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  useDocumentTitle("Playgrounds");
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -356,7 +358,7 @@ export default function Playgrounds() {
         </div>
       </section>
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -577,7 +579,7 @@ export default function Playgrounds() {
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {/* Browse by Age Range - Internal Linking for SEO */}
       {ageRanges.length > 0 && (

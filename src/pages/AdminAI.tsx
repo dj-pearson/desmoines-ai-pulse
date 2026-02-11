@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import AICrawler from "@/components/AICrawler";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
@@ -38,6 +39,7 @@ const AI_TABS = [
 
 export default function AdminAI() {
   const { userRole } = useAdminAuth();
+  useDocumentTitle("AI Management");
   const [activeTab, setActiveTab] = useState("ai-crawler");
   const [showScraperWizard, setShowScraperWizard] = useState(false);
   const [showJobManager, setShowJobManager] = useState(false);

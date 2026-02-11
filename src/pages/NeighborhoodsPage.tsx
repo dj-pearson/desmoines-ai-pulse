@@ -8,9 +8,11 @@ import Footer from "@/components/Footer";
 import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function NeighborhoodsPage() {
-  
+  useDocumentTitle("Neighborhoods");
+
   const neighborhoods = [
     {
       name: "East Village",
@@ -111,7 +113,7 @@ export default function NeighborhoodsPage() {
       
       <Header />
       
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -234,7 +236,7 @@ export default function NeighborhoodsPage() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
 
       {/* FAQ Section for SEO and Featured Snippets */}
       <section className="py-16 bg-muted/30">

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import { ActivityLogViewer } from "@/components/ActivityLogViewer";
@@ -25,6 +26,7 @@ const ANALYTICS_TABS = [
 
 export default function AdminAnalyticsPage() {
   const { userRole } = useAdminAuth();
+  useDocumentTitle("Analytics Dashboard");
   const [activeTab, setActiveTab] = useState("analytics");
 
   // Data hooks needed for DataQualityDashboard

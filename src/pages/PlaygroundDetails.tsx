@@ -32,6 +32,7 @@ import {
   Shield,
 } from "lucide-react";
 import { useState } from "react";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 const createSlug = (name: string): string => {
   return name
@@ -98,6 +99,8 @@ export default function PlaygroundDetails() {
     },
     enabled: !!playground,
   });
+
+  useDocumentTitle(playground?.name || "Playground Details");
 
   if (isLoading) {
     return (

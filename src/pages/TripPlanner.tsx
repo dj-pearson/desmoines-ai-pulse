@@ -168,7 +168,7 @@ export default function TripPlanner() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8">
           <Breadcrumbs
             className="mb-4"
             items={[
@@ -740,7 +740,7 @@ export default function TripPlanner() {
               )}
             </TabsContent>
           </Tabs>
-        </main>
+        </div>
 
         <Footer />
       </div>

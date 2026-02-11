@@ -779,7 +779,7 @@ export default function EventsPage() {
           </div>
         </section>
 
-        <main ref={pullToRefreshRef} className="container mx-auto px-4 py-6 md:py-8 relative">
+        <div ref={pullToRefreshRef} className="container mx-auto px-4 py-6 md:py-8 relative">
           {/* Pull to Refresh */}
           {isMobile && (isPulling || isRefreshing) && (
             <div className="ptr-indicator" style={{ transform: `translateY(${Math.min(pullDistance, 80)}px)` }}>
@@ -952,7 +952,7 @@ export default function EventsPage() {
               compact={isMobile}
             />
           )}
-        </main>
+        </div>
 
         {/* SEO Content Section */}
         <section className="border-t bg-muted/30">

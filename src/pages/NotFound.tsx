@@ -3,10 +3,12 @@ import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Home, Calendar, MapPin, Search } from "lucide-react";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 const NotFound = () => {
   const location = useLocation();
   const isEventPath = location.pathname.includes('/events/');
+  useDocumentTitle("Page Not Found");
 
   useEffect(() => {
     console.error(

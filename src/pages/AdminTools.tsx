@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import SEOTools from "@/components/SEOTools";
 import WeekendGuideManager from "@/components/WeekendGuideManager";
@@ -36,6 +37,7 @@ const TOOLS_TABS = [
 
 export default function AdminTools() {
   const { userRole } = useAdminAuth();
+  useDocumentTitle("Admin Tools");
   const [activeTab, setActiveTab] = useState("seo");
 
   const canManageContent = () =>

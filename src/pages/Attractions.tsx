@@ -7,6 +7,7 @@ import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
 import {
   Card,
@@ -50,6 +51,7 @@ const createSlug = (name: string): string => {
 export default function Attractions() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  useDocumentTitle("Attractions");
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
@@ -337,7 +339,7 @@ export default function Attractions() {
         </div>
       </section>
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -513,7 +515,7 @@ export default function Attractions() {
             ))}
           </div>
         )}
-      </main>
+      </div>
 
       {/* Browse Attractions By Type - Internal Linking for SEO */}
       {attractionTypes.length > 0 && (

@@ -4,6 +4,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import NeighborhoodGuide from "@/components/NeighborhoodGuide";
 import LocalSEO from "@/components/LocalSEO";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { ArrowLeft } from "lucide-react";
@@ -25,7 +26,12 @@ interface NeighborhoodData {
 export default function NeighborhoodPage() {
   const { neighborhood } = useParams<{ neighborhood: string }>();
   const [neighborhoodData, setNeighborhoodData] = useState<NeighborhoodData | null>(null);
-  
+
+  const formattedNeighborhoodName = neighborhood
+    ? neighborhood.replace(/-/g, " ").replace(/\b\w/g, l => l.toUpperCase())
+    : "Neighborhood";
+  useDocumentTitle(formattedNeighborhoodName);
+
   // Mock data - replace with actual API calls
   const events: EventItem[] = []; // Would come from useEvents or API call
   
@@ -66,7 +72,7 @@ export default function NeighborhoodPage() {
       
       <Header />
       
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -93,8 +99,8 @@ export default function NeighborhoodPage() {
           restaurants={neighborhoodData.restaurants}
           attractions={neighborhoodData.attractions}
         />
-      </main>
-      
+      </div>
+
       <Footer />
     </div>
   );

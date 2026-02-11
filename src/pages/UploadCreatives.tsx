@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { ArrowLeft, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +25,7 @@ export default function UploadCreatives() {
   const { campaignId } = useParams<{ campaignId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  useDocumentTitle("Upload Creatives");
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<PlacementType | null>(null);

@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Calendar, DollarSign, Eye, Upload, BarChart3, ArrowLeft, AlertCircle } from "lucide-react";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
 import type { PlacementType } from "@/lib/placementSpecs";
 
@@ -34,6 +35,7 @@ export default function CampaignDetail() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { campaigns, isLoading } = useCampaigns();
+  useDocumentTitle("Campaign Details");
 
   useEffect(() => {
     if (!user) {

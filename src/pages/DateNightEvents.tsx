@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Heart, MapPin, Calendar, Clock, Sparkles } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
@@ -30,6 +31,7 @@ export default function DateNightEvents() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [eveningOnly, setEveningOnly] = useState(true);
+  useDocumentTitle("Date Night Events");
 
   useEffect(() => {
     const fetchDateNightEvents = async () => {
@@ -125,7 +127,7 @@ export default function DateNightEvents() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -327,7 +329,7 @@ export default function DateNightEvents() {
           currentPath="/events/date-night"
           title="More Des Moines Experiences"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,7 @@ export default function UserDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
+  useDocumentTitle("My Dashboard");
   const { data: events, isLoading, refetch } = useUserSubmittedEvents();
   const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
   const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();

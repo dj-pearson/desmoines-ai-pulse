@@ -19,11 +19,13 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
+  useDocumentTitle("Events This Weekend");
 
   const { data: events, isLoading } = useQuery({
     queryKey: ["events-weekend"],
@@ -138,7 +140,7 @@ export default function EventsThisWeekend() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -411,7 +413,7 @@ export default function EventsThisWeekend() {
             </CardContent>
           </Card>
         )}
-      </main>
+      </div>
 
       <Footer />
     </div>

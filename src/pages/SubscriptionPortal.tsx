@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   Card,
   CardContent,
@@ -57,6 +58,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 export default function SubscriptionPortal() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  useDocumentTitle("Subscription Management");
   const {
     payments,
     invoices,

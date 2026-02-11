@@ -311,6 +311,7 @@ export function CreativeUploader({
                         size="icon"
                         onClick={() => removeFile(index)}
                         className="flex-shrink-0"
+                        aria-label="Remove file"
                       >
                         <X className="h-4 w-4" />
                       </Button>

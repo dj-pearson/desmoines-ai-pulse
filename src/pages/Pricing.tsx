@@ -267,7 +267,7 @@ export default function Pricing() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main>
+        <div>
           <div className="container mx-auto px-4">
             <Breadcrumbs
               className="mb-4 pt-4"
@@ -565,7 +565,7 @@ export default function Pricing() {
               </div>
             </div>
           </section>
-        </main>
+        </div>
 
         <Footer />
       </div>

@@ -422,7 +422,7 @@ export default function Restaurants() {
           </div>
         </section>
 
-        <main className="container mx-auto px-4 py-6 md:py-8">
+        <div className="container mx-auto px-4 py-6 md:py-8">
           <Breadcrumbs
             items={[
               { label: "Home", href: "/" },
@@ -913,7 +913,7 @@ export default function Restaurants() {
               </div>
             </section>
           </div>
-        </main>
+        </div>
 
         {/* FAQ Section */}
         <section className="py-16 bg-white" aria-labelledby="faq-heading">

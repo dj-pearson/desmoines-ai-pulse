@@ -414,7 +414,7 @@ export default function Index() {
       <SEOStructure />
 
       {/* Main content wrapper with semantic HTML for AI parsing */}
-      <main role="main" itemScope itemType="https://schema.org/WebPage">
+      <div itemScope itemType="https://schema.org/WebPage">
         <Header />
 
         {/* Enhanced Hero with dynamic content and quick actions */}
@@ -746,7 +746,7 @@ export default function Index() {
         <Suspense fallback={<SectionLoader />}>
           <Footer />
         </Suspense>
-      </main>
+      </div>
 
       {/* Event Details Dialog - full-screen on mobile */}
       <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>

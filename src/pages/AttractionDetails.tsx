@@ -35,6 +35,7 @@ import {
   TreePine,
 } from "lucide-react";
 import { useState } from "react";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 const createSlug = (name: string): string => {
   return name
@@ -101,6 +102,8 @@ export default function AttractionDetails() {
     },
     enabled: !!attraction,
   });
+
+  useDocumentTitle(attraction?.name || "Attraction Details");
 
   if (isLoading) {
     return (

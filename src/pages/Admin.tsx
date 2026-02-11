@@ -1,4 +1,5 @@
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   Card,
   CardContent,
@@ -35,6 +36,7 @@ export default function Admin() {
   const { user, userRole, isLoading, hasAdminAccess, isRootAdmin } =
     useAdminAuth();
   const { clearEventCache } = useClearEventCache();
+  useDocumentTitle("Admin Dashboard");
 
   // Edit dialog state for QuickCreatePanel
   const [editDialog, setEditDialog] = useState<{

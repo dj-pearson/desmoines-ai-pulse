@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import UserRoleManager from "@/components/UserRoleManager";
 import AdminSystemControls from "@/components/AdminSystemControls";
@@ -18,6 +19,7 @@ const SYSTEM_TABS = [
 
 export default function AdminSystem() {
   const { userRole } = useAdminAuth();
+  useDocumentTitle("System Settings");
   const [activeTab, setActiveTab] = useState("users");
 
   const canManageUsers = () => ["admin", "root_admin"].includes(userRole);

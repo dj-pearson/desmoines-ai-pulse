@@ -153,6 +153,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <RouteErrorBoundary>
+            <main id="main-content" tabIndex={-1}>
             <Suspense fallback={<PageLoader />}>
             <Routes>
             <Route path="/" element={<Index />} />
@@ -265,6 +266,7 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           </Suspense>
+          </main>
           </RouteErrorBoundary>
           <BottomNav />
         </KeyboardShortcutsProvider>

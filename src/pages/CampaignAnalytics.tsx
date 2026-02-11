@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Download, TrendingUp, MousePointerClick, Eye, DollarSign, Users } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function CampaignAnalytics() {
   const { campaignId } = useParams<{ campaignId: string }>();
@@ -16,6 +17,7 @@ export default function CampaignAnalytics() {
   const { campaigns } = useCampaigns();
   const { summary, dailyData, creativePerformance, isLoading, fetchAnalytics, exportToCSV } = useCampaignAnalytics(campaignId || "");
   const [dateRange, setDateRange] = useState("all");
+  useDocumentTitle("Campaign Analytics");
 
   const campaign = campaigns.find((c) => c.id === campaignId);
 

@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Clock, MapPin, Calendar, Utensils } from "lucide-react";
 import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface Restaurant {
@@ -30,6 +31,7 @@ export default function OpenNowRestaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentTime, setCurrentTime] = useState(new Date());
+  useDocumentTitle("Open Now Restaurants");
 
   useEffect(() => {
     // Update current time every minute
@@ -162,7 +164,7 @@ export default function OpenNowRestaurants() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           items={[
             { label: "Home", href: "/" },
@@ -370,7 +372,7 @@ export default function OpenNowRestaurants() {
           currentPath="/restaurants/open-now"
           title="More Des Moines Dining & Activities"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

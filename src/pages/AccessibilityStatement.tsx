@@ -75,7 +75,7 @@ export default function AccessibilityStatement() {
 
       <Header />
 
-      <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -451,7 +451,7 @@ export default function AccessibilityStatement() {
             </p>
           </section>
         </article>
-      </main>
+      </div>
 
       <Footer />
       <BackToTop />

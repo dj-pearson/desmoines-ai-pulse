@@ -7,6 +7,7 @@ import { useCampaigns } from "@/hooks/useCampaigns";
 import { useAuth } from "@/hooks/useAuth";
 import { format } from "date-fns";
 import { Eye, Calendar, DollarSign, Plus, Upload, BarChart3 } from "lucide-react";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 const STATUS_COLORS = {
   draft: "secondary",
@@ -21,6 +22,7 @@ export default function CampaignDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { campaigns, isLoading } = useCampaigns();
+  useDocumentTitle("Campaign Dashboard");
 
   useEffect(() => {
     if (!user) {

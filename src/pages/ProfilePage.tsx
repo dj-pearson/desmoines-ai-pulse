@@ -178,7 +178,7 @@ export default function ProfilePage() {
         />
         <div className="min-h-screen bg-background">
           <Header />
-          <main className="container mx-auto px-4 py-16">
+          <div className="container mx-auto px-4 py-16">
             <EmptyState
               icon={LogIn}
               title="Sign In Required"
@@ -191,7 +191,7 @@ export default function ProfilePage() {
                 }
               ]}
             />
-          </main>
+          </div>
           <Footer />
         </div>
       </>
@@ -212,7 +212,7 @@ export default function ProfilePage() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8">
           <Breadcrumbs
             className="mb-4"
             items={[
@@ -468,7 +468,7 @@ export default function ProfilePage() {
               </Card>
             </TabsContent>
           </Tabs>
-        </main>
+        </div>
 
         <Footer />
       </div>

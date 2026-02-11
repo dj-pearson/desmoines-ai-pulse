@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import OptimizedImage from "@/components/OptimizedImage";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 const guides = [
   {
@@ -128,6 +129,7 @@ const faqData = [
 ];
 
 export default function GuidesPage() {
+  useDocumentTitle("City Guides");
   const pageTitle = "Des Moines Local Guides - Best Activities, Dining & Attractions";
   const pageDescription = "Comprehensive guides to the best of Des Moines. Find seasonal activities, dining recommendations, family fun, date night spots, and local insider tips for Des Moines and suburbs.";
   
@@ -148,7 +150,7 @@ export default function GuidesPage() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           className="mb-4"
           items={[
@@ -303,7 +305,7 @@ export default function GuidesPage() {
           title="Guide Questions"
           description="Common questions about our Des Moines local guides and recommendations"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

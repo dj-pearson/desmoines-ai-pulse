@@ -148,7 +148,7 @@ export default function IowaStateFairPage() {
         </div>
       </section>
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         
         {/* TL;DR Section for AI Search Optimization */}
         <Card className="mb-8 bg-blue-50">
@@ -353,7 +353,7 @@ export default function IowaStateFairPage() {
           </CardContent>
         </Card>
 
-      </main>
+      </div>
 
       {/* FAQ Section for SEO and Featured Snippets */}
       <section className="py-16 bg-muted/30">

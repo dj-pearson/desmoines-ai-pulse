@@ -10,6 +10,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 const dietaryOptions = [
@@ -40,6 +41,7 @@ export default function DietaryRestaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDiet, setSelectedDiet] = useState<string>(searchParams.get("diet") || "");
+  useDocumentTitle("Dietary-Friendly Restaurants");
 
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -164,7 +166,7 @@ export default function DietaryRestaurants() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
         <Breadcrumbs
           items={[
             { label: "Home", href: "/" },
@@ -409,7 +411,7 @@ export default function DietaryRestaurants() {
           currentPath="/restaurants/dietary"
           title="Explore More Des Moines Dining"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>
