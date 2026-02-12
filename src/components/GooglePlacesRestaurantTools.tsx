@@ -44,6 +44,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('GooglePlacesRestaurantTools');
 
 interface GooglePlacesResult {
   place_id: string;
@@ -145,7 +148,7 @@ export default function GooglePlacesRestaurantTools() {
       if (error) throw error;
       setBlacklist(data || []);
     } catch (error) {
-      console.error("Error loading blacklist:", error);
+      log.error('Error loading blacklist', { action: 'loadBlacklist', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to load blacklist",
@@ -199,7 +202,7 @@ export default function GooglePlacesRestaurantTools() {
         loadBlacklist();
       }
     } catch (error) {
-      console.error("Error adding to blacklist:", error);
+      log.error('Error adding to blacklist', { action: 'addToBlacklist', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to add to blacklist",
@@ -225,7 +228,7 @@ export default function GooglePlacesRestaurantTools() {
 
       setBlacklist((prev) => prev.filter((b) => b.id !== entry.id));
     } catch (error) {
-      console.error("Error removing from blacklist:", error);
+      log.error('Error removing from blacklist', { action: 'removeFromBlacklist', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to remove from blacklist",
@@ -299,7 +302,7 @@ export default function GooglePlacesRestaurantTools() {
         });
       }
     } catch (error) {
-      console.error("Error searching restaurants:", error);
+      log.error('Error searching restaurants', { action: 'searchNewRestaurants', metadata: { error } });
       setSearchResults("Error occurred during search");
       toast({
         title: "Search Failed",
@@ -350,7 +353,7 @@ export default function GooglePlacesRestaurantTools() {
         });
       }
     } catch (error) {
-      console.error("Error checking restaurant status:", error);
+      log.error('Error checking restaurant status', { action: 'checkClosedRestaurants', metadata: { error } });
       toast({
         title: "Status Check Failed",
         description:
@@ -399,7 +402,7 @@ export default function GooglePlacesRestaurantTools() {
         prev.filter((r) => r.place_id !== restaurant.place_id)
       );
     } catch (error) {
-      console.error("Error adding restaurant:", error);
+      log.error('Error adding restaurant', { action: 'addRestaurant', metadata: { error } });
       toast({
         title: "Failed to Add Restaurant",
         description: "Could not add restaurant to database",
@@ -427,7 +430,7 @@ export default function GooglePlacesRestaurantTools() {
         prev.filter((r) => r.id !== restaurantStatus.id)
       );
     } catch (error) {
-      console.error("Error marking restaurant as closed:", error);
+      log.error('Error marking restaurant as closed', { action: 'markAsClosed', metadata: { error } });
       toast({
         title: "Failed to Update Restaurant",
         description: "Could not mark restaurant as closed",

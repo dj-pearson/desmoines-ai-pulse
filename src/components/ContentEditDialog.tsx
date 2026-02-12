@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ContentEditDialog');
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening";
 
@@ -174,7 +177,7 @@ export default function ContentEditDialog({
         }
       });
 
-      console.log('Initialized form data:', initialData);
+      log.debug('Initialized form data', { action: 'useEffect', metadata: { initialData } });
       setFormData(initialData);
 
       // Reset venue matching state
@@ -237,9 +240,9 @@ export default function ContentEditDialog({
       // Prepare data for save
       const saveData = { ...formData };
       
-      console.log('Original form data:', formData);
-      console.log('Content type:', contentType);
-      console.log('Is new item:', item.isNew);
+      log.debug('Original form data', { action: 'handleSave', metadata: { formData } });
+      log.debug('Content type', { action: 'handleSave', metadata: { contentType } });
+      log.debug('Is new item', { action: 'handleSave', metadata: { isNew: item.isNew } });
       
       // Format dates properly
       config.fields.forEach(field => {
@@ -258,16 +261,16 @@ export default function ContentEditDialog({
       delete saveData.updated_at;
       delete saveData.isNew; // Remove the isNew flag
 
-      console.log('Save data after processing:', saveData);
+      log.debug('Save data after processing', { action: 'handleSave', metadata: { saveData } });
 
       const tableName = getTableName(contentType);
-      console.log('Table name:', tableName);
+      log.debug('Table name', { action: 'handleSave', metadata: { tableName } });
 
       let result, error;
 
       if (item.isNew) {
         // Creating a new item
-        console.log('Creating new item...');
+        log.debug('Creating new item', { action: 'handleSave' });
         const createResult = await supabase
           .from(tableName)
           .insert(saveData)
@@ -277,7 +280,7 @@ export default function ContentEditDialog({
         error = createResult.error;
       } else {
         // Updating existing item
-        console.log('Updating existing item with ID:', item.id);
+        log.debug('Updating existing item with ID', { action: 'handleSave', metadata: { id: item.id } });
         
         // First check if the record exists
         const { data: existingRecord, error: checkError } = await supabase
@@ -286,16 +289,16 @@ export default function ContentEditDialog({
           .eq('id', item.id)
           .maybeSingle();
 
-        console.log('Existing record check:', { existingRecord, checkError });
+        log.debug('Existing record check', { action: 'handleSave', metadata: { existingRecord, checkError } });
 
         if (!existingRecord) {
-          console.error('Record not found in table:', tableName);
+          log.error('Record not found in table', { action: 'handleSave', metadata: { tableName, id: item.id } });
           throw new Error(`Record with ID ${item.id} not found in ${tableName} table`);
         }
 
-        console.log('Full existing record:', existingRecord);
-        console.log('Fields we are trying to update:', Object.keys(saveData));
-        console.log('Update values:', saveData);
+        log.debug('Full existing record', { action: 'handleSave', metadata: { existingRecord } });
+        log.debug('Fields we are trying to update', { action: 'handleSave', metadata: { fields: Object.keys(saveData) } });
+        log.debug('Update values', { action: 'handleSave', metadata: { saveData } });
 
         const updateResult = await supabase
           .from(tableName)
@@ -307,25 +310,25 @@ export default function ContentEditDialog({
         error = updateResult.error;
       }
 
-      console.log('Supabase response:', { result, error });
+      log.debug('Supabase response', { action: 'handleSave', metadata: { result, error } });
 
       if (error) {
-        console.error('Supabase error details:', error);
+        log.error('Supabase error details', { action: 'handleSave', metadata: { error } });
         throw error;
       }
 
       if (!result || result.length === 0) {
-        console.error('No rows were affected!');
+        log.error('No rows were affected', { action: 'handleSave' });
         throw new Error(`No rows were ${item.isNew ? 'created' : 'updated'}.`);
       }
 
-      console.log('Save successful! Result data:', result);
+      log.debug('Save successful', { action: 'handleSave', metadata: { result } });
       const action = item.isNew ? 'created' : 'updated';
       toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} ${action} successfully!`);
       onSave();
       onOpenChange(false);
     } catch (error) {
-      console.error('Save error:', error);
+      log.error('Save error', { action: 'handleSave', metadata: { error } });
       toast.error('Failed to save: ' + (error as Error).message);
     } finally {
       setIsLoading(false);

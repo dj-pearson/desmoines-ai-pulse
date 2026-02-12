@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, RefreshCw } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('FixBrokenEventUrls');
 
 export default function FixBrokenEventUrls() {
   const [isFixing, setIsFixing] = useState(false);
@@ -27,7 +30,7 @@ export default function FixBrokenEventUrls() {
         description: `Fixed ${data.fixed} out of ${data.processed} events`,
       });
     } catch (error: any) {
-      console.error('Error fixing URLs:', error);
+      log.error('Error fixing URLs', { action: 'handleFixUrls', metadata: { error } });
       toast({
         title: "Error",
         description: error.message || "Failed to fix URLs",

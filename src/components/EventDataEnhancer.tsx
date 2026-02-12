@@ -15,6 +15,9 @@ import { Search, Brain, AlertTriangle, CheckCircle, XCircle, Loader2, Sparkles, 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Event } from "@/lib/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventDataEnhancer');
 
 interface EventDataEnhancerProps {
   open: boolean;
@@ -66,15 +69,11 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     domainSet.add("catchdesmoines.com");
     domainSet.add("www.catchdesmoines.com");
     
-    console.log('EventDataEnhancer: Processing', events.length, 'events for domain extraction');
+    log.debug('Processing events for domain extraction', { action: 'domainExtraction', metadata: { eventCount: events.length } });
     
     // Log first 20 sourceUrls to see what we're working with
     // Handle both camelCase (sourceUrl) and snake_case (source_url) field names
-    console.log('First 20 sourceUrls:');
-    events.slice(0, 20).forEach((event, index) => {
-      const sourceUrl = event.source_url;
-      console.log(`${index + 1}. sourceUrl: "${sourceUrl}" (${typeof sourceUrl})`);
-    });
+    log.debug('First 20 sourceUrls', { action: 'domainExtraction', metadata: { urls: events.slice(0, 20).map((event, index) => ({ index: index + 1, sourceUrl: event.source_url, type: typeof event.source_url })) } });
     
     // Look for any URLs containing 'catch' or 'desmoines'
     const catchEvents = events.filter(event => {
@@ -84,11 +83,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
         sourceUrl.toLowerCase().includes('desmoines')
       );
     });
-    console.log(`Found ${catchEvents.length} events with 'catch' or 'desmoines' in sourceUrl:`);
-    catchEvents.forEach((event, index) => {
-      const sourceUrl = event.source_url;
-      console.log(`${index + 1}. "${sourceUrl}"`);
-    });
+    log.debug('Events with catch or desmoines in sourceUrl', { action: 'domainExtraction', metadata: { count: catchEvents.length, urls: catchEvents.map((event, index) => ({ index: index + 1, sourceUrl: event.source_url })) } });
     
     events.forEach((event, index) => {
       const sourceUrl = event.source_url;
@@ -100,7 +95,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
           // Try to extract domain from malformed URLs
           const match = sourceUrl.match(/(?:https?:\/\/)?(?:www\.)?([^\/\s]+)/);
           if (match && match[1]) {
-            console.log(`Extracted domain from malformed URL: ${match[1]}`);
+            log.debug('Extracted domain from malformed URL', { action: 'domainExtraction', metadata: { domain: match[1] } });
             domainSet.add(match[1]);
           }
         }
@@ -108,7 +103,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     });
     
     const domainsArray = Array.from(domainSet).sort();
-    console.log('Final domains array:', domainsArray);
+    log.debug('Final domains array', { action: 'domainExtraction', metadata: { domains: domainsArray } });
     return domainsArray;
   }, [events]);
 
@@ -154,7 +149,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
                normalizedUrl.includes(normalizedDomain.replace('www.', ''));
         
         if (domain.includes('catchdesmoines') && matches) {
-          console.log(`Found catchdesmoines match: ${sourceUrl} matches domain ${domain}`);
+          log.debug('Found catchdesmoines match', { action: 'domainEventCounts', metadata: { sourceUrl, domain } });
         }
         
         return matches;
@@ -163,10 +158,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
       counts[domain] = matchingEvents.length;
       
       if (domain.includes('catchdesmoines')) {
-        console.log(`Domain ${domain} has ${counts[domain]} events`);
-        if (matchingEvents.length > 0) {
-          console.log('Sample URLs:', matchingEvents.slice(0, 3).map(e => e.source_url));
-        }
+        log.debug('catchdesmoines domain event count', { action: 'domainEventCounts', metadata: { domain, count: counts[domain], sampleUrls: matchingEvents.slice(0, 3).map(e => e.source_url) } });
       }
     });
     return counts;
@@ -257,7 +249,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
           const batch = selectedEventsList.slice(i, i + batchSize);
           const batchIds = batch.map(e => e.id);
           
-          console.log(`Processing batch ${Math.floor(i / batchSize) + 1} of ${Math.ceil(selectedEventsList.length / batchSize)}`);
+          log.debug('Processing batch', { action: 'processEvents', metadata: { batchNumber: Math.floor(i / batchSize) + 1, totalBatches: Math.ceil(selectedEventsList.length / batchSize) } });
           
           // Update progress for current batch
           setProgress(prev => prev.map(p => 
@@ -273,7 +265,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
           });
 
           if (error) {
-            console.error(`Batch ${Math.floor(i / batchSize) + 1} error:`, error);
+            log.error('Batch enhancement error', { action: 'processEvents', metadata: { batchNumber: Math.floor(i / batchSize) + 1, error } });
             // Mark batch as error and continue
             setProgress(prev => prev.map(p => 
               batchIds.includes(p.eventId) ? { 
@@ -352,7 +344,7 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
       }
 
     } catch (error) {
-      console.error('Batch enhancement error:', error);
+      log.error('Batch enhancement error', { action: 'processEvents', metadata: { error } });
       toast.error('Failed to enhance events: ' + (error instanceof Error ? error.message : 'Unknown error'));
       
       // Mark all as error

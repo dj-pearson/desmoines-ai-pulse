@@ -9,6 +9,9 @@ import { useSecurityAudit } from '@/hooks/useSecurityAudit';
 import { SecurityUtils, ValidationSchemas } from '@/lib/securityUtils';
 import { useToast } from '@/hooks/use-toast';
 import { Shield, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SecurityTestingPanel');
 
 interface ValidationResult {
   field: string;
@@ -143,7 +146,7 @@ export default function SecurityTestingPanel() {
         description: `Tested ${results.length} requests. Check console for results.`,
       });
       
-      console.log('Rate Limit Test Results:', results);
+      log.debug('Rate Limit Test Results', { action: 'testRateLimit', metadata: { results } });
     } catch (error) {
       toast({
         title: 'Rate Limit Test Failed',
@@ -169,7 +172,7 @@ export default function SecurityTestingPanel() {
       containsSQL: SecurityUtils.containsSQLInjection(input),
     }));
     
-    console.log('Input Sanitization Test Results:', results);
+    log.debug('Input Sanitization Test Results', { action: 'testInputSanitization', metadata: { results } });
     
     toast({
       title: 'Input Sanitization Test Complete',
@@ -186,7 +189,7 @@ export default function SecurityTestingPanel() {
       description: 'Token copied to clipboard.',
     });
     
-    console.log('Generated Token:', token);
+    log.debug('Generated Token', { action: 'generateSecureToken', metadata: { token } });
   };
 
   const getValidationIcon = (result: ValidationResult) => {

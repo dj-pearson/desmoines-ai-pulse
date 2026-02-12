@@ -28,8 +28,11 @@ import {
   Star
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+
+const log = createLogger('AIArticleGenerator');
 
 interface GenerationSettings {
   topic: string;
@@ -154,7 +157,7 @@ const AIArticleGenerator: React.FC = () => {
       });
 
       if (error) {
-        console.error('Generation error:', error);
+        log.error('Generation error', { action: 'handleGenerate', metadata: { error } });
         throw new Error(error.message || 'Failed to generate article');
       }
 
@@ -167,7 +170,7 @@ const AIArticleGenerator: React.FC = () => {
         throw new Error(data.error || 'Generation failed');
       }
     } catch (error) {
-      console.error('Error generating article:', error);
+      log.error('Error generating article', { action: 'handleGenerate', metadata: { error } });
       toast.error('Failed to generate article', {
         description: error instanceof Error ? error.message : 'Unknown error occurred'
       });
@@ -198,7 +201,7 @@ const AIArticleGenerator: React.FC = () => {
       });
 
       if (error) {
-        console.error('Suggestions error:', error);
+        log.error('Suggestions error', { action: 'loadTopicSuggestions', metadata: { error } });
         throw new Error(error.message || 'Failed to load suggestions');
       }
 
@@ -208,7 +211,7 @@ const AIArticleGenerator: React.FC = () => {
         throw new Error(data.error || 'Failed to load suggestions');
       }
     } catch (error) {
-      console.error('Error loading suggestions:', error);
+      log.error('Error loading suggestions', { action: 'loadTopicSuggestions', metadata: { error } });
       toast.error('Failed to load topic suggestions', {
         description: error instanceof Error ? error.message : 'Unknown error occurred'
       });

@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SEOOpportunities');
 
 interface SEOOpportunitiesProps {
   dateRange: { from: Date; to: Date };
@@ -41,7 +44,7 @@ export function SEOOpportunities({ dateRange, selectedProvider }: SEOOpportuniti
       if (error) throw error;
       setOpportunities(data || []);
     } catch (error) {
-      console.error("Error loading opportunities:", error);
+      log.error('Error loading opportunities', { action: 'loadOpportunities', metadata: { error } });
     } finally {
       setLoading(false);
     }

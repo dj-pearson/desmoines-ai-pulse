@@ -17,6 +17,9 @@ import { BarChart3, Search, Globe, Link2, ExternalLink, CheckCircle2, Settings }
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { storage } from "@/lib/safeStorage";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('OAuthProviderSetup');
 
 interface OAuthProviderSetupProps {
   onComplete: () => void;
@@ -108,7 +111,7 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
       // Redirect to OAuth provider
       window.location.href = authUrl;
     } catch (error: any) {
-      console.error("OAuth connection error:", error);
+      log.error('OAuth connection error', { action: 'handleConnect', metadata: { error } });
       toast.error("Failed to connect", {
         description: error.message || "Please try again",
       });
@@ -144,7 +147,7 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
       setClientSecret("");
       setSelectedProvider(null);
     } catch (error: any) {
-      console.error("Save credentials error:", error);
+      log.error('Save credentials error', { action: 'handleSaveCredentials', metadata: { error } });
       toast.error("Failed to save credentials", {
         description: error.message,
       });

@@ -3,6 +3,9 @@ import { Clock, MapPin, Phone, Globe, AlertCircle, CheckCircle } from 'lucide-re
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('RealTimeBusinessInfo');
 
 interface BusinessHours {
   [key: string]: {
@@ -346,7 +349,7 @@ export const RealTimeSearch = () => {
     
     // This would integrate with your real-time business API
     // For now, return mock results based on query
-    console.log(`Real-time search: ${searchQuery}`);
+    log.debug('Real-time search', { action: 'handleSearch', metadata: { searchQuery } });
   };
 
   return (

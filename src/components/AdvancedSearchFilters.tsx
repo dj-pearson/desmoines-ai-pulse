@@ -36,6 +36,9 @@ import {
   Navigation,
   Zap
 } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AdvancedSearchFilters');
 
 export interface AdvancedSearchFilters {
   query: string;
@@ -88,7 +91,7 @@ export function AdvancedSearchFilters({
           });
         },
         (error) => {
-          console.log('Location access denied:', error);
+          log.debug('Location access denied', { action: 'getCurrentPosition', metadata: { error } });
         }
       );
     }

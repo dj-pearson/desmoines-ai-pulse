@@ -7,6 +7,9 @@ import { AlertCircle, MapPin, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CoordinateManager');
 
 interface BackfillResult {
   status: string;
@@ -45,7 +48,7 @@ const CoordinateManager = () => {
       setResults(data);
       toast.success(`Successfully updated coordinates for ${data.totalUpdated} records!`);
     } catch (error) {
-      console.error('Coordinate backfill error:', error);
+      log.error('Coordinate backfill error', { action: 'runCoordinateBackfill', metadata: { error } });
       toast.error('Failed to update coordinates. Please try again.');
     } finally {
       setIsRunning(false);
@@ -71,7 +74,7 @@ const CoordinateManager = () => {
         toast.error("Geocoding failed - no coordinates returned");
       }
     } catch (error) {
-      console.error('Geocoding test error:', error);
+      log.error('Geocoding test error', { action: 'testGeocodingFunction', metadata: { error } });
       toast.error('Geocoding test failed');
     }
   };

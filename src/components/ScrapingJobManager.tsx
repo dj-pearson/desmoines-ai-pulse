@@ -44,6 +44,9 @@ import {
   cronToFriendly,
   friendlyToCron,
 } from "@/lib/cronUtils";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ScrapingJobManager');
 
 interface ScrapingJob {
   id: string;
@@ -123,7 +126,7 @@ const ScrapingJobManager: React.FC<ScrapingJobManagerProps> = ({
         [job.id]: data || []
       }));
     } catch (error) {
-      console.error(`Error fetching recent events for ${job.name}:`, error);
+      log.error('Error fetching recent events', { action: 'fetchRecentEventsForJob', metadata: { jobName: job.name, error } });
       toast({
         title: "Error",
         description: `Failed to load recent events for ${job.name}`,

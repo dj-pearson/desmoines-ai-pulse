@@ -26,7 +26,10 @@ import {
   Target
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
 import { toast } from "sonner";
+
+const log = createLogger('AffiliateManager');
 
 interface UniqueURL {
   domain: string;
@@ -73,7 +76,7 @@ export default function AffiliateManager() {
       ];
 
       for (const config of tableConfigs) {
-        console.log(`Scanning table: ${config.table} for columns: ${config.urlColumns.join(', ')}`);
+        log.debug(`Scanning table: ${config.table} for columns: ${config.urlColumns.join(', ')}`, { action: 'fetchUniqueUrls' });
         
         // Fetch all records from each table
         const { data, error } = await supabase
@@ -81,12 +84,12 @@ export default function AffiliateManager() {
           .select(config.urlColumns.join(','));
 
         if (error) {
-          console.error(`Error fetching from ${config.table}:`, error);
+          log.error(`Error fetching from ${config.table}`, { action: 'fetchUniqueUrls', metadata: { error } });
           continue;
         }
 
         if (data) {
-          console.log(`Found ${data.length} records in ${config.table}`);
+          log.debug(`Found ${data.length} records in ${config.table}`, { action: 'fetchUniqueUrls' });
           let urlsFoundInTable = 0;
           data.forEach((record: any) => {
             config.urlColumns.forEach(column => {
@@ -115,14 +118,14 @@ export default function AffiliateManager() {
               }
             });
           });
-          console.log(`Found ${urlsFoundInTable} URLs in ${config.table}`);
+          log.debug(`Found ${urlsFoundInTable} URLs in ${config.table}`, { action: 'fetchUniqueUrls' });
         }
       }
 
       const urls = Array.from(urlMap.values()).sort((a, b) => b.count - a.count);
       setUniqueUrls(urls);
     } catch (error) {
-      console.error('Error fetching URLs:', error);
+      log.error('Error fetching URLs', { action: 'fetchUniqueUrls', metadata: { error } });
       toast.error('Failed to fetch URLs');
     } finally {
       setIsLoading(false);
@@ -158,7 +161,7 @@ export default function AffiliateManager() {
       
       return url.toString();
     } catch (error) {
-      console.error('Error appending UTM parameters:', error);
+      log.error('Error appending UTM parameters', { action: 'appendUtmToUrl', metadata: { error } });
       return originalUrl;
     }
   };
@@ -205,7 +208,7 @@ export default function AffiliateManager() {
             .not(column, 'is', null);
 
           if (error) {
-            console.error(`Error fetching from ${config.table}.${column}:`, error);
+            log.error(`Error fetching from ${config.table}.${column}`, { action: 'processUtmParameterAddition', metadata: { error } });
             continue;
           }
 
@@ -227,7 +230,7 @@ export default function AffiliateManager() {
                 .eq('id', (record as any).id);
 
               if (updateError) {
-                console.error(`Error updating ${config.table}.${column}:`, updateError);
+                log.error(`Error updating ${config.table}.${column}`, { action: 'processUtmParameterAddition', metadata: { error: updateError } });
               } else {
                 totalUpdated++;
               }
@@ -249,7 +252,7 @@ export default function AffiliateManager() {
       await fetchUniqueUrls();
 
     } catch (error) {
-      console.error('Error processing UTM parameter addition:', error);
+      log.error('Error processing UTM parameter addition', { action: 'processUtmParameterAddition', metadata: { error } });
       toast.error('Failed to add UTM parameters');
       
       setProcessingStats(prev => ({

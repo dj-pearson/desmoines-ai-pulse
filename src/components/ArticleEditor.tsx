@@ -13,6 +13,9 @@ import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { FileText, Save, Eye, Trash2, ArrowLeft, Plus, X, Globe, Search, Tag } from "lucide-react";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ArticleEditor');
 
 interface ArticleData {
   title: string;
@@ -145,7 +148,7 @@ export default function ArticleEditor() {
         toast.success(`Article ${shouldPublish ? 'published' : 'updated'} successfully!`);
       }
     } catch (error) {
-      console.error('Error saving article:', error);
+      log.error('Error saving article', { action: 'handleSave', metadata: { error } });
       toast.error("Failed to save article");
     } finally {
       setIsSaving(false);
@@ -161,7 +164,7 @@ export default function ArticleEditor() {
       toast.success("Article deleted successfully");
       navigate("/admin/articles");
     } catch (error) {
-      console.error('Error deleting article:', error);
+      log.error('Error deleting article', { action: 'handleDelete', metadata: { error } });
       toast.error("Failed to delete article");
     }
   };

@@ -56,6 +56,9 @@ import { useDomainHighlights } from "@/hooks/useDomainHighlights";
 import EventDataEnhancer from "./EventDataEnhancer";
 import { useWriteupGenerator } from "@/hooks/useWriteupGenerator";
 import { useContentExport } from "@/hooks/useDataExport";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ContentTable');
 
 type ContentType =
   | "event"
@@ -589,7 +592,7 @@ export default function ContentTable({
         throw new Error(data.error || "Enhancement failed");
       }
     } catch (error) {
-      console.error("Enhancement error:", error);
+      log.error('Enhancement error', { action: 'handleEnhanceContent', metadata: { error } });
       toast.error("Failed to enhance content: " + (error as Error).message);
     } finally {
       setEnhancingId(null);
@@ -626,7 +629,7 @@ export default function ContentTable({
         onRefresh();
       }
     } catch (error) {
-      console.error("Writeup generation error:", error);
+      log.error('Writeup generation error', { action: 'handleGenerateWriteup', metadata: { error } });
     }
   };
 

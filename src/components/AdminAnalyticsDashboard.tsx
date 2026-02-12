@@ -31,6 +31,9 @@ import {
   RefreshCw,
   Download,
 } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AdminAnalyticsDashboard');
 
 interface AnalyticsData {
   pageViews: { name: string; value: number }[];
@@ -195,7 +198,7 @@ export default function AdminAnalyticsDashboard() {
       });
 
     } catch (error) {
-      console.error("Failed to load analytics data:", error);
+      log.error('Failed to load analytics data', { action: 'loadAnalyticsData', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to load analytics data.",

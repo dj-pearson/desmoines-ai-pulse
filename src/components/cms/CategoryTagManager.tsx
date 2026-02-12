@@ -23,6 +23,9 @@ import {
   FileText,
   Star,
 } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CategoryTagManager');
 
 interface Category {
   id: string;
@@ -142,7 +145,7 @@ export function CategoryTagManager() {
       setCategories(categoriesRes.data || []);
       setTags(tagsRes.data || []);
     } catch (error: any) {
-      console.error('Error loading data:', error);
+      log.error('Error loading data', { action: 'loadData', metadata: { error } });
       toast.error('Failed to load categories and tags');
     } finally {
       setLoading(false);
@@ -215,7 +218,7 @@ export function CategoryTagManager() {
       setCategoryForm(defaultCategoryForm);
       loadData();
     } catch (error: any) {
-      console.error('Error saving category:', error);
+      log.error('Error saving category', { action: 'handleSaveCategory', metadata: { error } });
       toast.error(error.message || 'Failed to save category');
     } finally {
       setIsSaving(false);
@@ -233,7 +236,7 @@ export function CategoryTagManager() {
       toast.success(`Category "${category.name}" deleted`);
       loadData();
     } catch (error: any) {
-      console.error('Error deleting category:', error);
+      log.error('Error deleting category', { action: 'handleDeleteCategory', metadata: { error } });
       toast.error('Failed to delete category');
     }
   };
@@ -295,7 +298,7 @@ export function CategoryTagManager() {
       setTagForm(defaultTagForm);
       loadData();
     } catch (error: any) {
-      console.error('Error saving tag:', error);
+      log.error('Error saving tag', { action: 'handleSaveTag', metadata: { error } });
       toast.error(error.message || 'Failed to save tag');
     } finally {
       setIsSaving(false);
@@ -313,7 +316,7 @@ export function CategoryTagManager() {
       toast.success(`Tag "${tag.name}" deleted`);
       loadData();
     } catch (error: any) {
-      console.error('Error deleting tag:', error);
+      log.error('Error deleting tag', { action: 'handleDeleteTag', metadata: { error } });
       toast.error('Failed to delete tag');
     }
   };

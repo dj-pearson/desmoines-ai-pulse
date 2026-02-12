@@ -15,6 +15,9 @@ import {
   RotateCw
 } from "lucide-react";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CronMonitor');
 
 interface ScrapingJob {
   id: string;
@@ -71,7 +74,7 @@ export default function CronMonitor() {
       // Mock implementation - would trigger actual job
       toast.success('Job triggered successfully');
     } catch (error) {
-      console.error('Failed to trigger job:', error);
+      log.error('Failed to trigger job', { action: 'triggerJob', metadata: { error, jobId } });
       toast.error('Failed to trigger job');
     } finally {
       setIsLoading(false);

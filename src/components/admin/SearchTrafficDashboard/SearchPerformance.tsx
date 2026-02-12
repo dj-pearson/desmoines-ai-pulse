@@ -16,6 +16,7 @@ import { Search, Eye, MousePointer, ArrowUpRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { createLogger } from '@/lib/logger';
 import {
   Table,
   TableBody,
@@ -24,6 +25,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+const log = createLogger('SearchPerformance');
 
 interface SearchPerformanceProps {
   dateRange: { from: Date; to: Date };
@@ -142,7 +145,7 @@ export function SearchPerformance({ dateRange, selectedProvider }: SearchPerform
 
       setTopPages(topPages);
     } catch (error) {
-      console.error("Error loading search data:", error);
+      log.error('Error loading search data', { action: 'loadSearchData', metadata: { error } });
     } finally {
       setLoading(false);
     }

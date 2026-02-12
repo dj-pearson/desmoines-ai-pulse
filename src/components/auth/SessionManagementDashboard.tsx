@@ -18,6 +18,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Monitor, Smartphone, Tablet, MapPin, Clock, LogOut, CheckCircle2, Loader2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SessionManagementDashboard');
 
 interface Session {
   id: string;
@@ -70,7 +73,7 @@ export function SessionManagementDashboard() {
 
       setSessions(data || []);
     } catch (error) {
-      console.error('Error loading sessions:', error);
+      log.error('Error loading sessions', { action: 'loadSessions', metadata: { error } });
       toast({
         title: 'Failed to Load Sessions',
         description: 'Could not retrieve your active sessions',
@@ -97,7 +100,7 @@ export function SessionManagementDashboard() {
 
       await loadSessions();
     } catch (error) {
-      console.error('Error revoking session:', error);
+      log.error('Error revoking session', { action: 'revokeSession', metadata: { error } });
       toast({
         title: 'Revoke Failed',
         description: 'Could not revoke the session',
@@ -128,7 +131,7 @@ export function SessionManagementDashboard() {
       setShowRevokeAllDialog(false);
       await loadSessions();
     } catch (error) {
-      console.error('Error revoking sessions:', error);
+      log.error('Error revoking sessions', { action: 'revokeAllOtherSessions', metadata: { error } });
       toast({
         title: 'Revoke Failed',
         description: 'Could not revoke other sessions',
