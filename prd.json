@@ -79,7 +79,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "This replaces the 188 files of raw console.log with a structured alternative. Must be created before the cleanup stories."
     },
     {

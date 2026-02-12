@@ -25,10 +25,13 @@
 - Environment variables: use import.meta.env (NOT process.env) — Vite project
 - localStorage: use safeStorage wrapper from @/lib/safeStorage (NOT direct access)
 - Error handling: use handleError/withErrorHandling from @/lib/errorHandler
+- Logging: use `createLogger('ComponentName')` from `@/lib/logger` (NOT raw console.*)
 - Auth: use useAuth() from @/contexts/AuthContext
 - Subscriptions: use useSubscription() hook + PremiumGate component
 - Named exports preferred over default exports (except pages)
 - 2-space indentation, single quotes, semicolons
+- Unit tests: vitest + @testing-library/react, run with `npm run test:unit`
+- Test files go in `__tests__` directories alongside source (e.g., `src/lib/__tests__/`)
 
 ## Build & Quality Commands
 - npm run dev — dev server on localhost:8080
@@ -77,3 +80,24 @@
   - TypeScript strict mode migration should start from src/lib/ (imported everywhere)
   - Console cleanup needs a structured logger utility first (US-005) before bulk replacement
   - Edge function security is a mix: some intentionally unauthenticated (webhooks), some should be locked down
+
+## 2026-02-12 — US-005
+- Created `src/lib/logger.ts` with structured logging utility
+- Log levels: debug, info, warn, error
+- Accepts context: `{ component: string, action: string, metadata?: Record<string, unknown> }`
+- Production filtering: debug and info are no-ops when `import.meta.env.PROD` is true
+- Development logs include ISO timestamp, level, component, action, and message
+- Exports `logger` (default instance) and `createLogger(component)` factory
+- Created `src/lib/__tests__/logger.test.ts` with 14 test cases covering:
+  - All four log levels in development mode
+  - Context formatting (component, action, timestamp, metadata)
+  - `createLogger` component scoping and override behavior
+  - All log levels on scoped logger
+- Files changed: `src/lib/logger.ts` (new), `src/lib/__tests__/logger.test.ts` (new)
+- All 50 unit tests pass, typecheck passes, lint clean on new files
+- **Learnings for future iterations:**
+  - `console.debug/info/warn/error` map directly to log levels (don't use `console.log` for structured output)
+  - Don't add `eslint-disable-next-line no-console` comments until the `no-console` rule is actually added (US-006) — they cause "unused directive" warnings
+  - The logger is the only file that should use raw console methods — all other files should import from `@/lib/logger`
+  - `import.meta.env.PROD` is `false` in Vitest (DEV is true), so production filtering can't be directly tested in unit tests
+---
