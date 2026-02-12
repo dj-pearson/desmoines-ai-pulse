@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { SecurityUtils, ValidationSchemas } from "@/lib/securityUtils";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAuthSecurity');
 
 interface AuthSecurityHookReturn {
   isBlocked: boolean;
@@ -59,7 +62,7 @@ export function useAuthSecurity(): AuthSecurityHookReturn {
       });
 
       if (error) {
-        console.error('Rate limit check failed:', error);
+        log.error('Rate limit check failed', { action: 'checkRateLimit', metadata: { error } });
         return { allowed: true }; // Fail open for rate limiting
       }
 
@@ -88,7 +91,7 @@ export function useAuthSecurity(): AuthSecurityHookReturn {
 
       return { allowed: true };
     } catch (error) {
-      console.error('Rate limit check error:', error);
+      log.error('Rate limit check error', { action: 'checkRateLimit', metadata: { error } });
       return { allowed: true }; // Fail open
     }
   };
@@ -109,7 +112,7 @@ export function useAuthSecurity(): AuthSecurityHookReturn {
         ip_address: clientInfo.ip_address
       });
     } catch (error) {
-      console.error('Failed to log auth attempt:', error);
+      log.error('Failed to log auth attempt', { action: 'logFailedAttempt', metadata: { error } });
       // Don't throw - logging failure shouldn't block auth
     }
   };

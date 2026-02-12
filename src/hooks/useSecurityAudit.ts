@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSecurityAudit');
 
 interface SecurityEvent {
   id: string;
@@ -55,10 +58,10 @@ export function useSecurityAudit() {
         });
 
       if (error) {
-        console.error('Error logging security event:', error);
+        log.error('Error logging security event', { action: 'logSecurityEvent', metadata: { error } });
       }
     } catch (err) {
-      console.error('Error logging security event:', err);
+      log.error('Error logging security event', { action: 'logSecurityEvent', metadata: { error: err } });
     }
   };
 
@@ -83,7 +86,7 @@ export function useSecurityAudit() {
         resource,
       });
     } catch (err) {
-      console.error('Error logging admin action:', err);
+      log.error('Error logging admin action', { action: 'logAdminAction', metadata: { error: err } });
     }
   };
 
@@ -173,7 +176,7 @@ export function useSecurityAudit() {
         .gte('timestamp', startDate.toISOString());
 
       if (typeError) {
-        console.error('Error fetching type stats:', typeError);
+        log.error('Error fetching type stats', { action: 'getSecurityStats', metadata: { error: typeError } });
         return null;
       }
 
@@ -184,7 +187,7 @@ export function useSecurityAudit() {
         .gte('timestamp', startDate.toISOString());
 
       if (severityError) {
-        console.error('Error fetching severity stats:', severityError);
+        log.error('Error fetching severity stats', { action: 'getSecurityStats', metadata: { error: severityError } });
         return null;
       }
 
@@ -219,7 +222,7 @@ export function useSecurityAudit() {
         },
       };
     } catch (err) {
-      console.error('Error fetching security stats:', err);
+      log.error('Error fetching security stats', { action: 'getSecurityStats', metadata: { error: err } });
       return null;
     }
   };

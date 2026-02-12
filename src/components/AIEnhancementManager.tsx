@@ -18,8 +18,11 @@ import {
   Bot
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+
+const log = createLogger('AIEnhancementManager');
 
 interface EnhancementStats {
   totalEvents: number;
@@ -100,7 +103,7 @@ export default function AIEnhancementManager() {
         enhancementRate
       });
     } catch (error) {
-      console.error('Error fetching enhancement stats:', error);
+      log.error('Error fetching enhancement stats', { action: 'fetchStats', metadata: { error } });
       toast.error('Failed to load enhancement statistics');
     }
   };
@@ -123,7 +126,7 @@ export default function AIEnhancementManager() {
         setHistory(historyData);
       }
     } catch (error) {
-      console.error('Error fetching enhancement history:', error);
+      log.error('Error fetching enhancement history', { action: 'fetchHistory', metadata: { error } });
     }
   };
 
@@ -164,7 +167,7 @@ export default function AIEnhancementManager() {
       await Promise.all([fetchStats(), fetchHistory()]);
       
     } catch (error) {
-      console.error('Error triggering enhancement:', error);
+      log.error('Error triggering enhancement', { action: 'triggerEnhancement', metadata: { error } });
       toast.error('Failed to trigger enhancement', {
         description: error.message
       });

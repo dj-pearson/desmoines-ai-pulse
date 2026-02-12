@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSmartCalendar');
 
 export interface CalendarProvider {
   id: string;
@@ -90,7 +93,7 @@ export function useSmartCalendar() {
     
     setLoading(true);
     try {
-      console.log("Preferences would be updated:", prefs);
+      log.debug("Preferences would be updated", { action: 'updatePreferences', metadata: { prefs } });
       toast.success('Preferences updated successfully');
     } catch (_error) {
       toast.error('Failed to update preferences');
@@ -100,7 +103,7 @@ export function useSmartCalendar() {
   };
 
   const checkConflicts = async (startTime: string, endTime: string): Promise<CalendarConflict> => {
-    console.log("Checking conflicts for:", startTime, endTime);
+    log.debug("Checking conflicts", { action: 'checkConflicts', metadata: { startTime, endTime } });
     return { count: 0, events: [] };
   };
 
@@ -109,7 +112,7 @@ export function useSmartCalendar() {
     
     setLoading(true);
     try {
-      console.log("Generating smart suggestions for user:", user.id);
+      log.debug("Generating smart suggestions", { action: 'generateSuggestions', metadata: { userId: user.id } });
       toast.success('Smart suggestions updated');
     } catch (_error) {
       toast.error('Failed to generate suggestions');
@@ -119,12 +122,12 @@ export function useSmartCalendar() {
   };
 
   const acceptSuggestion = async (suggestionId: string) => {
-    console.log("Accepting suggestion:", suggestionId);
+    log.debug("Accepting suggestion", { action: 'acceptSuggestion', metadata: { suggestionId } });
     toast.success('Event added to your interests');
   };
 
   const dismissSuggestion = async (suggestionId: string) => {
-    console.log("Dismissing suggestion:", suggestionId);
+    log.debug("Dismissing suggestion", { action: 'dismissSuggestion', metadata: { suggestionId } });
   };
 
   const addManualEvent = async (eventData: {
@@ -137,7 +140,7 @@ export function useSmartCalendar() {
   }) => {
     if (!user) return;
     
-    console.log("Adding manual event:", eventData);
+    log.debug("Adding manual event", { action: 'addManualEvent', metadata: { eventData } });
     toast.success('Event added to calendar');
   };
 

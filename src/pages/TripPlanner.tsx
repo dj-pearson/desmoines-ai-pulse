@@ -48,6 +48,9 @@ import {
   AlertCircle,
   Download,
 } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('TripPlanner');
 
 export default function TripPlanner() {
   const { user } = useAuth();
@@ -104,7 +107,7 @@ export default function TripPlanner() {
     try {
       await generateItinerary({ startDate, endDate, preferences });
     } catch (error) {
-      console.error('Error generating itinerary:', error);
+      log.error('Error generating itinerary', { action: 'handleGenerateItinerary', metadata: { error } });
     }
   };
 

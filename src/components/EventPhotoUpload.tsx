@@ -7,6 +7,9 @@ import { Camera, Upload, X, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventPhotoUpload');
 
 interface EventPhotoUploadProps {
   eventId: string;
@@ -107,7 +110,7 @@ export function EventPhotoUpload({ eventId, onPhotoUploaded, trigger }: EventPho
       }
       
     } catch (error) {
-      console.error('Error uploading photo:', error);
+      log.error('Error uploading photo', { action: 'handleUpload', metadata: { error } });
       toast({
         title: "Upload failed",
         description: "Failed to upload photo. Please try again.",

@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useState } from "react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('usePayments');
 
 export interface Payment {
   id: string;
@@ -202,7 +205,7 @@ export function usePayments() {
       }
       return null;
     } catch (err) {
-      console.error("Failed to open customer portal:", err);
+      log.error("Failed to open customer portal", { action: 'openCustomerPortal', metadata: { error: err } });
       return null;
     } finally {
       setPortalLoading(false);
@@ -276,7 +279,7 @@ export function usePayments() {
         window.open(url, "_blank");
       }
     } catch (err) {
-      console.error("Failed to view invoice:", err);
+      log.error("Failed to view invoice", { action: 'viewInvoice', metadata: { error: err } });
       throw err;
     }
   };
@@ -298,7 +301,7 @@ export function usePayments() {
         }
       }
     } catch (err) {
-      console.error("Failed to print invoice:", err);
+      log.error("Failed to print invoice", { action: 'printInvoice', metadata: { error: err } });
       throw err;
     }
   };

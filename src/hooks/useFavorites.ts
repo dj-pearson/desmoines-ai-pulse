@@ -5,6 +5,9 @@ import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
 import { useGamification } from "./useGamification";
 import { useSubscription } from "./useSubscription";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useFavorites');
 
 export function useFavorites() {
   const { user } = useAuth();
@@ -64,7 +67,7 @@ export function useFavorites() {
         description: "Failed to add to favorites",
         variant: "destructive",
       });
-      console.error("Add favorite error:", error);
+      log.error("Add favorite error", { action: 'addFavorite', metadata: { error } });
     },
   });
 
@@ -96,7 +99,7 @@ export function useFavorites() {
         description: "Failed to remove from favorites",
         variant: "destructive",
       });
-      console.error("Remove favorite error:", error);
+      log.error("Remove favorite error", { action: 'removeFavorite', metadata: { error } });
     },
   });
 

@@ -1,0 +1,74 @@
+# Ralph Progress Log
+Started: Thu Feb 12 10:13:04 CST 2026
+
+## Codebase Patterns
+- Typecheck command: `npm run type-check` (tsc --noEmit, relaxed mode)
+- Lint command: `npm run lint` (eslint .)
+- Validate command: `npm run validate` (type-check + lint)
+- Unit test command: `npm run test:unit` (vitest run)
+- Existing CI workflows are in `.github/workflows/`
+- Node 20 is the target runtime (specified in package.json engines)
+- package-lock.json exists for `npm ci` usage in CI
+- Vitest config is in `vitest.config.ts` (separate from vite.config.ts)
+- Test setup file is `src/__tests__/setup.ts` (imports @testing-library/jest-dom/vitest)
+- Unit tests go in `__tests__` directories alongside source (e.g., `src/lib/__tests__/utils.test.ts`)
+- `src/lib/utils.ts` only exports `cn` (tailwind-merge + clsx wrapper)
+- Coverage requires `@vitest/coverage-v8` devDependency; run with `npm run test:unit -- --coverage`
+- CI workflow uses 3 jobs: lint-and-typecheck, unit-tests (parallel), then build (needs both)
+
+---
+
+## 2026-02-12 - US-001
+- Created `.github/workflows/pr-checks.yml` with lint, type-check, and build steps
+- Triggers on pull_request to main branch
+- Uses Node 20, caches node_modules via actions/cache@v4
+- Includes concurrency group to cancel in-progress runs on same PR
+- Files changed: `.github/workflows/pr-checks.yml` (new)
+- **Learnings for future iterations:**
+  - Only `event-crawler.yml` existed before — no code quality gates in CI
+  - Typecheck passes cleanly with zero errors in relaxed mode
+  - Use `npm ci` (not `npm install`) in CI for deterministic installs
+---
+
+## 2026-02-12 - US-002
+- Set up Vitest unit testing framework with jsdom environment
+- Installed: vitest, @testing-library/react, @testing-library/jest-dom, jsdom, @testing-library/user-event
+- Created `vitest.config.ts` with jsdom environment, `@/` path alias, coverage config (v8 provider)
+- Created `src/__tests__/setup.ts` importing @testing-library/jest-dom/vitest matchers
+- Created example test `src/lib/__tests__/utils.test.ts` with 5 test cases for `cn()` utility
+- Added scripts: `test:unit`, `test:unit:coverage`, `test:unit:watch`
+- Files changed: `vitest.config.ts` (new), `src/__tests__/setup.ts` (new), `src/lib/__tests__/utils.test.ts` (new), `package.json` (updated)
+- **Learnings for future iterations:**
+  - Use `@testing-library/jest-dom/vitest` (not `@testing-library/jest-dom`) for vitest-specific matchers
+  - Vitest config is separate from vite.config.ts to avoid pulling in all vite plugins for tests
+  - The `globals: true` option in vitest config allows using `describe`, `it`, `expect` without imports (but explicit imports still work)
+  - Exclude `tests/**` from vitest config to avoid picking up Playwright E2E tests
+---
+
+## 2026-02-12 - US-003
+- Created unit tests for three core utility libraries
+- `src/lib/__tests__/errorHandler.test.ts` — 18 test cases covering handleError, withErrorHandling, createComponentErrorHandler, safeJsonParse, safeParseInt, safeParseFloat
+- `src/lib/__tests__/safeStorage.test.ts` — 13 test cases covering safeStorage (raw), storage (typed JSON helpers), getString/setString, default values, invalid JSON fallback
+- `src/lib/__tests__/utils.test.ts` — already had 5 test cases from US-002 (cn function)
+- Total: 36 passing unit tests across 3 files
+- Files changed: `src/lib/__tests__/errorHandler.test.ts` (new), `src/lib/__tests__/safeStorage.test.ts` (new)
+- **Learnings for future iterations:**
+  - `import.meta.env.DEV` is `true` by default in Vitest's jsdom environment, so console.error/warn calls in dev-guarded code paths are testable
+  - `window.localStorage` is available in jsdom, so safeStorage uses real localStorage (not memory fallback) in tests
+  - `handleError` dispatches `CustomEvent('app-error')` on window — can be tested with `window.addEventListener`
+  - `handleError` does NOT dispatch events for INFO/WARNING severity levels (it returns early)
+  - Mock `console.error`, `console.log`, `console.warn` with `vi.spyOn` to prevent test noise and to assert logging behavior
+---
+
+## 2026-02-12 - US-004
+- Updated `.github/workflows/pr-checks.yml` to add unit tests with coverage and build verification
+- Restructured workflow into 3 parallel/dependent jobs: `lint-and-typecheck`, `unit-tests` (run in parallel), then `build` (depends on both)
+- Unit tests run with `--coverage` flag using @vitest/coverage-v8
+- Installed `@vitest/coverage-v8` as devDependency (was configured in vitest.config.ts but not installed)
+- Files changed: `.github/workflows/pr-checks.yml` (updated), `package.json` (updated), `package-lock.json` (updated)
+- **Learnings for future iterations:**
+  - `@vitest/coverage-v8` must be installed separately — vitest.config.ts can reference `provider: 'v8'` but the package must be a devDependency
+  - GitHub Actions parallel jobs each need their own checkout/setup/install steps (no shared state between jobs)
+  - `needs: [job1, job2]` ensures a job only runs after its dependencies pass — useful for making build depend on lint+tests
+  - Splitting into parallel jobs (lint+typecheck vs unit tests) is faster than sequential steps in one job
+---

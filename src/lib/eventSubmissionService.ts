@@ -1,5 +1,8 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Event } from '@/lib/types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventSubmissionService');
 
 interface EventSubmissionData {
   event: Event;
@@ -42,12 +45,12 @@ class EventSubmissionService {
     this.loadConfiguration(); // Refresh config
 
     if (!this.autoSubmitEnabled && submissionType !== 'test') {
-      console.log('Auto-submission disabled, skipping event submission');
+      log.debug('Auto-submission disabled, skipping event submission', { action: 'submitEvent' });
       return;
     }
 
     if (!this.webhookUrl && this.enabledPlatforms.length === 0) {
-      console.log('No submission methods configured');
+      log.debug('No submission methods configured', { action: 'submitEvent' });
       return;
     }
 
@@ -76,7 +79,7 @@ class EventSubmissionService {
       // Submit to master webhook if configured
       if (this.webhookUrl) {
         await this.submitToWebhook(this.webhookUrl, submissionData);
-        console.log('Event submitted to master webhook');
+        log.info('Event submitted to master webhook', { action: 'submitEvent' });
       }
 
       // Submit to individual platform webhooks
@@ -87,9 +90,9 @@ class EventSubmissionService {
         await this.logSubmission(event.id, this.enabledPlatforms);
       }
 
-      console.log(`Event ${submissionType} submitted to ${this.enabledPlatforms.length} platforms`);
+      log.info(`Event ${submissionType} submitted to ${this.enabledPlatforms.length} platforms`, { action: 'submitEvent' });
     } catch (error) {
-      console.error('Event submission error:', error);
+      log.error('Event submission error', { action: 'submitEvent', metadata: { error } });
       throw error;
     }
   }
@@ -123,7 +126,7 @@ class EventSubmissionService {
             platforms: [platform.id]
           });
         } catch (error) {
-          console.error(`Failed to submit to ${platform.name}:`, error);
+          log.error(`Failed to submit to ${platform.name}`, { action: 'submitToPlatform', metadata: { error } });
         }
       }
     }
@@ -141,7 +144,7 @@ class EventSubmissionService {
           date: new Date().toISOString().split('T')[0]
         });
     } catch (error) {
-      console.error('Failed to log submission:', error);
+      log.error('Failed to log submission', { action: 'logSubmission', metadata: { error } });
     }
   }
 
@@ -158,7 +161,7 @@ class EventSubmissionService {
 
       return this.buildRSSXML(events || []);
     } catch (error) {
-      console.error('RSS feed generation error:', error);
+      log.error('RSS feed generation error', { action: 'generateRSSFeed', metadata: { error } });
       throw error;
     }
   }

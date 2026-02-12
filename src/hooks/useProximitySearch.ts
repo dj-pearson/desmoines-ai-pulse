@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useProximitySearch');
 
 type Event = Database['public']['Tables']['events']['Row'];
 type Restaurant = Database['public']['Tables']['restaurants']['Row'];
@@ -103,7 +106,7 @@ export function useEventsNearby(options: ProximitySearchOptions) {
         searchCenter: { latitude: options.latitude, longitude: options.longitude },
       });
     } catch (error) {
-      console.error('Error searching nearby events:', error);
+      log.error('Error searching nearby events', { action: 'searchEventsNearby', metadata: { error } });
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -171,7 +174,7 @@ export function useRestaurantsNearby(options: ProximitySearchOptions) {
         searchCenter: { latitude: options.latitude, longitude: options.longitude },
       });
     } catch (error) {
-      console.error('Error searching nearby restaurants:', error);
+      log.error('Error searching nearby restaurants', { action: 'searchRestaurantsNearby', metadata: { error } });
       setState(prev => ({
         ...prev,
         isLoading: false,

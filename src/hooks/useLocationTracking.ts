@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useLocationTracking');
 
 export interface LocationPoint {
   latitude: number;
@@ -86,7 +89,7 @@ export function useLocationTracking(options: LocationTrackingOptions = {}) {
         timestamp: location.timestamp.toISOString(),
       });
     } catch (err) {
-      console.error('Error saving location to database:', err);
+      log.error('Error saving location to database', { action: 'saveLocation', metadata: { error: err } });
     }
   }, [saveToDatabase]);
 
@@ -174,7 +177,7 @@ export function useLocationTracking(options: LocationTrackingOptions = {}) {
           }
         });
       } catch (err) {
-        console.warn('Could not query geolocation permission');
+        log.warn('Could not query geolocation permission', { action: 'startTracking' });
       }
     }
 
@@ -312,7 +315,7 @@ export function useLocationHistory(userId?: string, limit = 100) {
         timestamp: new Date(record.timestamp),
       })));
     } catch (err) {
-      console.error('Error fetching location history:', err);
+      log.error('Error fetching location history', { action: 'fetchHistory', metadata: { error: err } });
       setError(err instanceof Error ? err.message : 'Failed to fetch history');
     } finally {
       setIsLoading(false);

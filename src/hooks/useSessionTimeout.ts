@@ -3,6 +3,9 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSessionTimeout');
 
 /**
  * Database-backed Session Policy
@@ -123,7 +126,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
         if (error) throw error;
         return data as SessionPolicy | null;
       } catch (err) {
-        console.error('Error fetching session policy:', err);
+        log.error('Error fetching session policy', { action: 'fetchSessionPolicy', metadata: { error: err } });
         return null;
       }
     },
@@ -143,7 +146,7 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
         .eq('is_active', true)
         .order('last_activity', { ascending: false });
       if (error) {
-        console.error('Error fetching sessions:', error);
+        log.error('Error fetching sessions', { action: 'fetchSessions', metadata: { error } });
         return [];
       }
       return data as ActiveSession[];
@@ -307,12 +310,10 @@ export function useSessionTimeout(config: SessionTimeoutConfig = {}) {
     const timeoutMs = idleTimeout * 60 * 1000;
     idleTimerRef.current = setTimeout(handleTimeout, timeoutMs);
 
-    if (import.meta.env.DEV) {
-      console.log('[SessionTimeout] Timer reset:', {
-        warningIn: `${idleTimeout - warningTime} minutes`,
-        logoutIn: `${idleTimeout} minutes`,
-      });
-    }
+    log.debug('Timer reset', { action: 'resetTimer', metadata: {
+      warningIn: `${idleTimeout - warningTime} minutes`,
+      logoutIn: `${idleTimeout} minutes`,
+    } });
   }, [
     enabled,
     isAuthenticated,

@@ -19,6 +19,9 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventSubmissionManager');
 
 interface PlatformConfig {
   id: string;
@@ -184,7 +187,7 @@ export default function EventSubmissionManager() {
             }),
           });
         } catch (error) {
-          console.error(`Error testing ${platform.name}:`, error);
+          log.error('Error testing platform', { action: 'handleTestSubmission', metadata: { platformName: platform.name, error } });
         }
       }
 
@@ -193,7 +196,7 @@ export default function EventSubmissionManager() {
         description: "Test event has been sent to configured platforms. Check your Zapier history to confirm delivery.",
       });
     } catch (error) {
-      console.error("Test submission error:", error);
+      log.error('Test submission error', { action: 'handleTestSubmission', metadata: { error } });
       toast({
         title: "Test Failed",
         description: "Failed to send test event. Please check your configuration.",

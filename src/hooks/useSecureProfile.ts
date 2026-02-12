@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useAuthSecurity } from "./useAuthSecurity";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSecureProfile');
 
 export interface SecureUserProfile {
   id: string;
@@ -70,7 +73,7 @@ export function useSecureProfile(targetUserId?: string) {
       });
 
       if (error) {
-        console.error("Error fetching secure profile:", error);
+        log.error("Error fetching secure profile", { action: 'fetchProfile', metadata: { error } });
         setError(error.message);
         return;
       }
@@ -90,7 +93,7 @@ export function useSecureProfile(targetUserId?: string) {
             .single();
 
           if (createError) {
-            console.error("Error creating profile:", createError);
+            log.error("Error creating profile", { action: 'fetchProfile', metadata: { error: createError } });
             setError(createError.message);
             return;
           }
@@ -103,7 +106,7 @@ export function useSecureProfile(targetUserId?: string) {
         setProfile(data[0]);
       }
     } catch (error) {
-      console.error("Error fetching secure profile:", error);
+      log.error("Error fetching secure profile", { action: 'fetchProfile', metadata: { error } });
       setError(error instanceof Error ? error.message : "Failed to fetch profile");
     } finally {
       setIsLoading(false);
@@ -166,7 +169,7 @@ export function useSecureProfile(targetUserId?: string) {
       setProfile(data);
       return data;
     } catch (error) {
-      console.error("Error updating secure profile:", error);
+      log.error("Error updating secure profile", { action: 'updateProfile', metadata: { error } });
       throw error;
     }
   };

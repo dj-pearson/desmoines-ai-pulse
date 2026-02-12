@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useViewTracking');
 
 interface ViewCount {
   total_views: number;
@@ -32,7 +35,7 @@ export function useViewTracking(eventId: string) {
 
         if (error) {
           // Table might not exist yet, use fallback
-          console.debug('Analytics table not available, using fallback');
+          log.debug('Analytics table not available, using fallback', { action: 'fetchViewCount' });
           setViewData(generateFallbackData(eventId));
         } else if (data) {
           setViewData({
@@ -44,7 +47,7 @@ export function useViewTracking(eventId: string) {
           setViewData(generateFallbackData(eventId));
         }
       } catch (error) {
-        console.debug('View tracking error:', error);
+        log.debug('View tracking error', { action: 'fetchViewCount', metadata: { error } });
         setViewData(generateFallbackData(eventId));
       } finally {
         setIsLoading(false);
@@ -63,7 +66,7 @@ export function useViewTracking(eventId: string) {
       });
 
       if (error) {
-        console.debug('View tracking not available:', error.message);
+        log.debug('View tracking not available', { action: 'trackView', metadata: { errorMessage: error.message } });
         // Silently fail - analytics are nice to have but not critical
       } else {
         // Update local state optimistically
@@ -74,7 +77,7 @@ export function useViewTracking(eventId: string) {
         }));
       }
     } catch (error) {
-      console.debug('Error tracking view:', error);
+      log.debug('Error tracking view', { action: 'trackView', metadata: { error } });
       // Silently fail
     }
   };
@@ -156,7 +159,7 @@ export function useRestaurantViewTracking(restaurantId: string) {
         recent_views: prev.recent_views + 1,
       }));
     } catch (error) {
-      console.debug('Error tracking restaurant view:', error);
+      log.debug('Error tracking restaurant view', { action: 'trackRestaurantView', metadata: { error } });
     }
   };
 
@@ -176,6 +179,6 @@ export async function batchTrackViews(eventIds: string[]) {
       event_ids: eventIds,
     });
   } catch (error) {
-    console.debug('Batch view tracking not available:', error);
+    log.debug('Batch view tracking not available', { action: 'batchTrackViews', metadata: { error } });
   }
 }

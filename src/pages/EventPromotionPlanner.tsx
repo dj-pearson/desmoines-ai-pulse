@@ -33,6 +33,9 @@ import { storage } from '@/lib/safeStorage';
 import { getCanonicalUrl } from '@/lib/brandConfig';
 import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import type { EventFormData, PromotionTimeline, EmailCaptureData } from '@/types/event-promotion';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventPromotionPlanner');
 
 export default function EventPromotionPlanner() {
   const [searchParams] = useSearchParams();
@@ -52,7 +55,7 @@ export default function EventPromotionPlanner() {
     // Check for referral code
     const ref = searchParams.get('ref');
     if (ref) {
-      console.log('Referral code:', ref);
+      log.debug('Referral code detected', { action: 'checkReferral', metadata: { ref } });
     }
 
     // Load completed tasks from secure storage
@@ -109,7 +112,7 @@ export default function EventPromotionPlanner() {
         }, 1000);
       }
     } catch (error) {
-      console.error('Failed to capture email:', error);
+      log.error('Failed to capture email', { action: 'handleEmailCapture', metadata: { error } });
       toast.error('Something went wrong. Please try again.');
     }
   };
@@ -129,7 +132,7 @@ export default function EventPromotionPlanner() {
         setShowEmailModal(true);
       }
     } catch (error) {
-      console.error('Failed to generate PDF:', error);
+      log.error('Failed to generate PDF', { action: 'handleDownloadPDF', metadata: { error } });
       toast.error('Failed to generate PDF. Please try again.');
     }
   };

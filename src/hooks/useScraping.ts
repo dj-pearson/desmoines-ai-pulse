@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useScraping');
 
 interface ScrapingJobRow {
   id: string;
@@ -219,7 +222,7 @@ export function useScraping() {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
-      console.log("Fetching scraping jobs from database...");
+      log.debug("Fetching scraping jobs from database", { action: 'fetchJobs' });
 
       // Direct query with type casting
       const { data, error } = await (
@@ -242,16 +245,14 @@ export function useScraping() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Database query error:", error);
+        log.error("Database query error", { action: 'fetchJobs', metadata: { error } });
         throw error;
       }
 
-      console.log("Raw database response:", data);
+      log.debug("Raw database response", { action: 'fetchJobs', metadata: { data } });
 
       if (!data || data.length === 0) {
-        console.log(
-          "No scraping jobs found in database - using fallback real jobs data"
-        );
+        log.debug("No scraping jobs found in database - using fallback real jobs data", { action: 'fetchJobs' });
         setState((prev) => ({
           ...prev,
           jobs: realJobs,
@@ -285,7 +286,7 @@ export function useScraping() {
         };
       });
 
-      console.log("Successfully transformed jobs:", jobs);
+      log.debug("Successfully transformed jobs", { action: 'fetchJobs', metadata: { jobs } });
 
       setState((prev) => ({
         ...prev,
@@ -293,12 +294,10 @@ export function useScraping() {
         isLoading: false,
       }));
     } catch (error) {
-      console.error("Error fetching scraping jobs:", error);
+      log.error("Error fetching scraping jobs", { action: 'fetchJobs', metadata: { error } });
 
       // If database query fails, it might be because the table doesn't exist or migration wasn't run
-      console.log(
-        "Database query failed - falling back to empty array. Make sure to run the migration!"
-      );
+      log.debug("Database query failed - falling back to empty array. Make sure to run the migration!", { action: 'fetchJobs' });
 
       setState((prev) => ({
         ...prev,
@@ -309,7 +308,7 @@ export function useScraping() {
       }));
 
       // Fallback to real jobs data so the interface still works
-      console.log("Using fallback real jobs data...");
+      log.debug("Using fallback real jobs data", { action: 'fetchJobs' });
       setState((prev) => ({
         ...prev,
         jobs: realJobs,
@@ -320,7 +319,7 @@ export function useScraping() {
   };
 
   const forceRefresh = async () => {
-    console.log("Force refreshing scraping jobs from database...");
+    log.debug("Force refreshing scraping jobs from database", { action: 'forceRefresh' });
     await fetchJobs();
   };
 
@@ -361,7 +360,7 @@ export function useScraping() {
 
       return { success: true, eventsFound };
     } catch (error) {
-      console.error("Error running scraping job:", error);
+      log.error("Error running scraping job", { action: 'runScrapingJob', metadata: { error } });
 
       setState((prev) => ({
         ...prev,
@@ -386,7 +385,7 @@ export function useScraping() {
 
       setState((prev) => ({ ...prev, isGlobalRunning: false }));
     } catch (error) {
-      console.error("Error running all jobs:", error);
+      log.error("Error running all jobs", { action: 'runAllJobs', metadata: { error } });
       setState((prev) => ({ ...prev, isGlobalRunning: false }));
       throw error;
     }
@@ -401,7 +400,7 @@ export function useScraping() {
         jobs: prev.jobs.map((job) => ({ ...job, status: "idle" as const })),
       }));
     } catch (error) {
-      console.error("Error stopping all jobs:", error);
+      log.error("Error stopping all jobs", { action: 'stopAllJobs', metadata: { error } });
       throw error;
     }
   };
@@ -430,7 +429,7 @@ export function useScraping() {
         ),
       }));
 
-      console.log("💾 Saving job config to database:", { jobId, mergedConfig });
+      log.debug("Saving job config to database", { action: 'updateJobConfig', metadata: { jobId, mergedConfig } });
 
       // Save to database with the merged config
       const { error } = await supabase
@@ -442,17 +441,17 @@ export function useScraping() {
         .eq('id', jobId);
 
       if (error) {
-        console.error("❌ Database update error:", error);
+        log.error("Database update error", { action: 'updateJobConfig', metadata: { error } });
         throw error;
       }
 
-      console.log("✅ Job config saved to database successfully");
+      log.debug("Job config saved to database successfully", { action: 'updateJobConfig' });
       
       // Refresh jobs from database to ensure consistency
       await fetchJobs();
       
     } catch (error) {
-      console.error("❌ Error updating job config:", error);
+      log.error("Error updating job config", { action: 'updateJobConfig', metadata: { error } });
       // Revert local state on error
       await fetchJobs();
       throw error;
@@ -484,7 +483,7 @@ export function useScraping() {
 
       return newJob;
     } catch (error) {
-      console.error("Error adding job:", error);
+      log.error("Error adding job", { action: 'addJob', metadata: { error } });
       throw error;
     }
   };

@@ -1,6 +1,9 @@
 import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useMediaUpload');
 
 export interface MediaUploadOptions {
   bucket?: 'media' | 'videos' | 'event-photos' | 'ad-creatives';
@@ -327,7 +330,7 @@ export function useMediaUpload() {
           .single();
 
         if (assetError) {
-          console.error('Failed to create media asset record:', assetError);
+          log.error('Failed to create media asset record', { action: 'upload', metadata: { error: assetError } });
           // Don't throw - file is uploaded, just record failed
         }
 

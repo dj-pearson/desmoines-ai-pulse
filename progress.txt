@@ -25,10 +25,15 @@
 - Environment variables: use import.meta.env (NOT process.env) — Vite project
 - localStorage: use safeStorage wrapper from @/lib/safeStorage (NOT direct access)
 - Error handling: use handleError/withErrorHandling from @/lib/errorHandler
+- Logging: use `createLogger('ComponentName')` from `@/lib/logger` (NOT raw console.*)
 - Auth: use useAuth() from @/contexts/AuthContext
 - Subscriptions: use useSubscription() hook + PremiumGate component
 - Named exports preferred over default exports (except pages)
 - 2-space indentation, single quotes, semicolons
+- Unit tests: vitest + @testing-library/react, run with `npm run test:unit`
+- Test files go in `__tests__` directories alongside source (e.g., `src/lib/__tests__/`)
+- ESLint `no-console` rule is `warn` — only `logger.ts` and `errorSuppression.ts` may use raw console (with eslint-disable comments)
+- When replacing console calls guarded by `import.meta.env.DEV`: keep guard for warn/error (not suppressed in prod), remove guard for debug/info (suppressed by logger)
 
 ## Build & Quality Commands
 - npm run dev — dev server on localhost:8080
@@ -77,3 +82,80 @@
   - TypeScript strict mode migration should start from src/lib/ (imported everywhere)
   - Console cleanup needs a structured logger utility first (US-005) before bulk replacement
   - Edge function security is a mix: some intentionally unauthenticated (webhooks), some should be locked down
+
+## 2026-02-12 — US-005
+- Created `src/lib/logger.ts` with structured logging utility
+- Log levels: debug, info, warn, error
+- Accepts context: `{ component: string, action: string, metadata?: Record<string, unknown> }`
+- Production filtering: debug and info are no-ops when `import.meta.env.PROD` is true
+- Development logs include ISO timestamp, level, component, action, and message
+- Exports `logger` (default instance) and `createLogger(component)` factory
+- Created `src/lib/__tests__/logger.test.ts` with 14 test cases covering:
+  - All four log levels in development mode
+  - Context formatting (component, action, timestamp, metadata)
+  - `createLogger` component scoping and override behavior
+  - All log levels on scoped logger
+- Files changed: `src/lib/logger.ts` (new), `src/lib/__tests__/logger.test.ts` (new)
+- All 50 unit tests pass, typecheck passes, lint clean on new files
+- **Learnings for future iterations:**
+  - `console.debug/info/warn/error` map directly to log levels (don't use `console.log` for structured output)
+  - Don't add `eslint-disable-next-line no-console` comments until the `no-console` rule is actually added (US-006) — they cause "unused directive" warnings
+  - The logger is the only file that should use raw console methods — all other files should import from `@/lib/logger`
+  - `import.meta.env.PROD` is `false` in Vitest (DEV is true), so production filtering can't be directly tested in unit tests
+---
+
+## 2026-02-12 — US-006
+- Added `'no-console': 'warn'` rule to `eslint.config.js`
+- Replaced all `console.log/warn/error` calls in 17 `src/lib/` files with structured logger from `@/lib/logger`
+- Added `eslint-disable-next-line no-console` comments to `logger.ts` (4 lines — legitimate console consumer) and `errorSuppression.ts` (4 lines — console method wrapper)
+- Updated `src/lib/__tests__/errorHandler.test.ts` to match new logger output format (metadata wrapped in objects)
+- Files changed: `eslint.config.js`, `src/lib/logger.ts`, `src/lib/analytics-tracker.ts`, `src/lib/deferredLoader.ts`, `src/lib/email-integration.ts`, `src/lib/errorHandler.ts`, `src/lib/errorSuppression.ts`, `src/lib/errorTracking.ts`, `src/lib/eventSubmissionService.ts`, `src/lib/lazyLoad.ts`, `src/lib/performance.ts`, `src/lib/safeStorage.ts`, `src/lib/security/middleware.ts`, `src/lib/security/ownership.ts`, `src/lib/sitemap.ts`, `src/lib/sitemapEnhanced.ts`, `src/lib/timezone.ts`, `src/lib/timezone-PearsonASUS.ts`, `src/lib/tracking.ts`, `src/lib/__tests__/errorHandler.test.ts`
+- All 50 unit tests pass, typecheck passes, lint passes (no console warnings in src/lib/ non-test files)
+- **Learnings for future iterations:**
+  - `errorSuppression.ts` intentionally wraps/overrides `console.warn` and `console.error` — these need `eslint-disable` comments, not logger replacements
+  - When replacing `console.error` calls that tests assert against, the test expectations must be updated to match the logger's formatted output (`log.error(msg, { action, metadata })` passes metadata as the second arg to `console.error`)
+  - For warn/error log levels, keep existing `import.meta.env.DEV` guards since the logger does NOT suppress those in production; for debug/info levels, remove the guards since the logger suppresses them in production
+  - The `no-console` rule is set to `warn` (not `error`) to allow gradual migration in other directories (hooks, components, pages, contexts)
+---
+
+## 2026-02-12 — US-007
+- Replaced all raw `console.log/warn/error` calls in `src/hooks/` with structured logger from `@/lib/logger`
+- Each hook uses `createLogger('hookName')` factory to create a scoped logger instance
+- 89 hook files modified, 717 insertions, 470 deletions
+- Zero `no-console` lint warnings remain in `src/hooks/`
+- All 50 unit tests pass, typecheck passes
+- Files changed: 89 files in `src/hooks/` (all hooks that previously had console calls)
+- **Learnings for future iterations:**
+  - The console calls in `useNLPSearch.ts` were inside JSDoc comments (not actual code) — grep carefully distinguishes real calls from documentation examples
+  - The working tree had all changes pre-applied from a previous incomplete iteration — always check `git diff` before starting work to avoid duplicating effort
+  - Pattern for logger in hooks: `import { createLogger } from '@/lib/logger'; const log = createLogger('useHookName');` at top of file, then `log.error('message', { action: 'methodName', metadata: { error } })` in catch blocks
+  - `console.log` (debug output) → `log.debug()`, `console.warn` → `log.warn()`, `console.error` → `log.error()`
+  - Pre-existing lint errors (117 errors, 95 warnings) are unrelated to console usage — they're `no-explicit-any`, `no-unused-vars`, and `react-hooks/exhaustive-deps` warnings
+---
+
+## 2026-02-12 — US-008
+- Replaced all raw `console.log/warn/error` calls in `src/contexts/` and `src/pages/` with structured logger from `@/lib/logger`
+- `src/contexts/AuthContext.tsx`: 37 console calls replaced with `createLogger('AuthContext')` — covers auth events, login, signup, logout, OAuth, password reset, session management
+- 17 page files modified: Admin.tsx, AdminAI.tsx, AdminAnalyticsPage.tsx, AdminContent.tsx, AdvertiseSuccess.tsx, AuthCallback.tsx, DateNightEvents.tsx, DietaryRestaurants.tsx, EventPromotionPlanner.tsx, EventsByLocation.tsx, EventsToday.tsx, FreeEvents.tsx, KidsEvents.tsx, NotFound.tsx, OpenNowRestaurants.tsx, TripPlanner.tsx, UploadCreatives.tsx
+- Zero `no-console` lint warnings remain in `src/contexts/` or `src/pages/`
+- All 50 unit tests pass, typecheck passes
+- **Learnings for future iterations:**
+  - AuthContext has the highest density of console calls (37) due to detailed auth flow logging — future developers should use `log.debug()` for auth state transitions and `log.error()` for failures
+  - Several pages have inline callback console.log calls (e.g., `onFilter={(filter) => console.log(...)}`), these are placeholder stubs — logger replacements work but these should eventually be replaced with actual filter implementations
+  - The `AdminContent.tsx` `onCreate` for restaurant openings is a stub (`console.log("Create new restaurant opening")`) — now logged but should be implemented as a real action
+  - NotFound.tsx uses `log.error()` for 404 tracking — this is intentional since 404s should be visible in error monitoring even in production
+---
+
+## 2026-02-12 — US-009
+- Replaced all raw `console.log/warn/error` calls in `src/components/` (excluding `src/components/ui/`) with structured logger from `@/lib/logger`
+- 68 component files modified across top-level components, admin/, advertising/, auth/, cms/, and media/ subdirectories
+- Each component uses `createLogger('ComponentName')` factory to create a scoped logger instance
+- 393 insertions, 206 deletions across all files
+- 3 console calls remain in `src/components/ui/error-boundary.tsx` and `route-error-boundary.tsx` — excluded per acceptance criteria (third-party generated)
+- All 50 unit tests pass, typecheck passes
+- **Learnings for future iterations:**
+  - The `src/components/ui/` exclusion is appropriate — error-boundary.tsx and route-error-boundary.tsx use console.error intentionally for error reporting at the boundary level
+  - Many components have placeholder stub console.log calls (e.g., `console.log("Create new...")`) that are now logged but represent unimplemented features
+  - Components in subdirectories (admin/, auth/, cms/, media/, advertising/) follow the same logger pattern as top-level components
+  - With US-006 through US-009 complete, the entire `src/` directory is now clean of raw console calls (except `src/components/ui/`)
+---

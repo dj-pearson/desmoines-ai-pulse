@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { Campaign, CampaignCreative } from "./useCampaigns";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAdminCampaigns');
 
 export interface AdminCampaignFilters {
   status?: string;
@@ -79,7 +82,7 @@ export function useAdminCampaigns() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to fetch campaigns";
       setError(message);
-      console.error("Error fetching admin campaigns:", err);
+      log.error('Error fetching admin campaigns', { action: 'fetchCampaigns', metadata: { error: err } });
     } finally {
       setIsLoading(false);
     }
@@ -112,7 +115,7 @@ export function useAdminCampaigns() {
         user_name: userData?.full_name,
       };
     } catch (err) {
-      console.error("Error fetching campaign:", err);
+      log.error('Error fetching campaign', { action: 'getCampaignById', metadata: { error: err } });
       return null;
     }
   };

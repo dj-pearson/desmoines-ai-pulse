@@ -19,7 +19,8 @@
       "Bash(npx vite build)",
       "Bash(npm run validate:*)",
       "Bash(wc -l:*)",
-      "Bash(powershell -Command:*)"
+      "Bash(powershell -Command:*)",
+      "Bash(bash:*)"
     ],
     "deny": [],
     "ask": []

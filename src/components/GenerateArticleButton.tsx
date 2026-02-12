@@ -14,6 +14,9 @@ import { useArticles } from '@/hooks/useArticles';
 import { useAuth } from '@/hooks/useAuth';
 import { FileText, Sparkles } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('GenerateArticleButton');
 
 interface GenerateArticleButtonProps {
   suggestionId: string;
@@ -66,7 +69,7 @@ const GenerateArticleButton: React.FC<GenerateArticleButtonProps> = ({
         });
       }
     } catch (error) {
-      console.error('Error generating article:', error);
+      log.error('Error generating article', { action: 'handleGenerateArticle', metadata: { error } });
     } finally {
       setIsGenerating(false);
     }

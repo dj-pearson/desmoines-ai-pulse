@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useToast } from "./use-toast";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useGamification');
 
 export interface UserReputation {
   user_id: string;
@@ -85,7 +88,7 @@ export function useGamification() {
       if (error) {
         // Only log unexpected errors
         if (error.code !== '42501' && error.code !== 'PGRST301' && !error.message?.includes('permission denied')) {
-          console.error("Error fetching reputation:", error);
+          log.error("Error fetching reputation", { action: 'fetchUserReputation', metadata: { error } });
         }
         setReputation(null);
         return;
@@ -114,7 +117,7 @@ export function useGamification() {
       const mockBadges = [] as Badge[];
       setBadges(mockBadges);
     } catch (error) {
-      console.error("Error fetching badges:", error);
+      log.error("Error fetching badges", { action: 'fetchUserBadges', metadata: { error } });
     }
   };
 
@@ -124,7 +127,7 @@ export function useGamification() {
       const mockAvailableBadges = [] as Badge[];
       setAvailableBadges(mockAvailableBadges);
     } catch (error) {
-      console.error("Error fetching available badges:", error);
+      log.error("Error fetching available badges", { action: 'fetchAvailableBadges', metadata: { error } });
     }
   };
 
@@ -134,7 +137,7 @@ export function useGamification() {
       const mockChallenges = [] as CommunityChallenge[];
       setChallenges(mockChallenges);
     } catch (error) {
-      console.error("Error fetching challenges:", error);
+      log.error("Error fetching challenges", { action: 'fetchChallenges', metadata: { error } });
     }
   };
 
@@ -146,7 +149,7 @@ export function useGamification() {
       const mockActivities = [] as Activity[];
       setActivities(mockActivities);
     } catch (error) {
-      console.error("Error fetching activities:", error);
+      log.error("Error fetching activities", { action: 'fetchActivities', metadata: { error } });
     }
   };
 
@@ -156,7 +159,7 @@ export function useGamification() {
       const mockLeaderboard: any[] = [];
       setLeaderboard(mockLeaderboard);
     } catch (error) {
-      console.error("Error fetching leaderboard:", error);
+      log.error("Error fetching leaderboard", { action: 'fetchLeaderboard', metadata: { error } });
     }
   };
 
@@ -171,14 +174,14 @@ export function useGamification() {
 
     try {
       // Mock awarding points since function doesn't exist
-      console.log("Points would be awarded:", {
+      log.debug("Points would be awarded", { action: 'awardPoints', metadata: {
         p_user_id: user.id,
         p_activity_type: activityType,
         p_points: points,
         p_content_type: contentType,
         p_content_id: contentId,
         p_metadata: metadata
-      });
+      } });
 
       // Refresh user data
       await fetchUserReputation();
@@ -190,7 +193,7 @@ export function useGamification() {
       });
 
     } catch (error) {
-      console.error("Error awarding points:", error);
+      log.error("Error awarding points", { action: 'awardPoints', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to award points",
@@ -204,12 +207,12 @@ export function useGamification() {
 
     try {
       // Mock joining challenge since table doesn't exist
-      console.log("Challenge join would be recorded:", {
+      log.debug("Challenge join would be recorded", { action: 'joinChallenge', metadata: {
         user_id: user.id,
         challenge_id: challengeId,
         progress: {},
         joined_at: new Date().toISOString()
-      });
+      } });
 
       toast({
         title: "Challenge Joined!",
@@ -218,7 +221,7 @@ export function useGamification() {
 
       await fetchChallenges();
     } catch (error) {
-      console.error("Error joining challenge:", error);
+      log.error("Error joining challenge", { action: 'joinChallenge', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to join challenge",

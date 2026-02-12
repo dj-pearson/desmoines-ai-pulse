@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useGeofencing');
 
 export interface GeofenceRegion {
   id: string;
@@ -83,7 +86,7 @@ export function useGeofencing(options: GeofenceOptions) {
   // Request notification permission
   const requestNotificationPermission = useCallback(async () => {
     if (!('Notification' in window)) {
-      console.warn('Notifications not supported');
+      log.warn('Notifications not supported', { action: 'requestNotificationPermission' });
       return false;
     }
 
@@ -218,7 +221,7 @@ export function useGeofencing(options: GeofenceOptions) {
           setPermissionStatus(result.state);
         });
       } catch (err) {
-        console.warn('Could not query geolocation permission');
+        log.warn('Could not query geolocation permission', { action: 'startTracking' });
       }
     }
 
@@ -320,7 +323,7 @@ export function useGeofenceRegions() {
         active: region.active,
       })));
     } catch (err) {
-      console.error('Error fetching geofence regions:', err);
+      log.error('Error fetching geofence regions', { action: 'fetchRegions', metadata: { error: err } });
       setError(err instanceof Error ? err.message : 'Failed to fetch regions');
     } finally {
       setIsLoading(false);
@@ -347,7 +350,7 @@ export function useGeofenceRegions() {
       await fetchRegions();
       return data;
     } catch (err) {
-      console.error('Error creating geofence region:', err);
+      log.error('Error creating geofence region', { action: 'createRegion', metadata: { error: err } });
       throw err;
     }
   }, [fetchRegions]);
@@ -370,7 +373,7 @@ export function useGeofenceRegions() {
 
       await fetchRegions();
     } catch (err) {
-      console.error('Error updating geofence region:', err);
+      log.error('Error updating geofence region', { action: 'updateRegion', metadata: { error: err } });
       throw err;
     }
   }, [fetchRegions]);
@@ -386,7 +389,7 @@ export function useGeofenceRegions() {
 
       await fetchRegions();
     } catch (err) {
-      console.error('Error deleting geofence region:', err);
+      log.error('Error deleting geofence region', { action: 'deleteRegion', metadata: { error: err } });
       throw err;
     }
   }, [fetchRegions]);
@@ -425,6 +428,6 @@ export async function logGeofenceEvent(event: GeofenceEvent, userId?: string) {
       timestamp: event.timestamp.toISOString(),
     });
   } catch (error) {
-    console.error('Error logging geofence event:', error);
+    log.error('Error logging geofence event', { action: 'logGeofenceEvent', metadata: { error } });
   }
 }

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('usePlaygrounds');
 
 type Playground = Database["public"]["Tables"]["playgrounds"]["Row"];
 type PlaygroundInsert = Database["public"]["Tables"]["playgrounds"]["Insert"];
@@ -71,7 +74,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching playgrounds:", error);
+      log.error("Error fetching playgrounds", { action: 'fetchPlaygrounds', metadata: { error } });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -94,7 +97,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
       fetchPlaygrounds();
       return data;
     } catch (error) {
-      console.error("Error creating playground:", error);
+      log.error("Error creating playground", { action: 'createPlayground', metadata: { error } });
       throw error;
     }
   };
@@ -113,7 +116,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
       fetchPlaygrounds();
       return data;
     } catch (error) {
-      console.error("Error updating playground:", error);
+      log.error("Error updating playground", { action: 'updatePlayground', metadata: { error } });
       throw error;
     }
   };
@@ -126,7 +129,7 @@ export function usePlaygrounds(filters: PlaygroundFilters = {}) {
 
       fetchPlaygrounds();
     } catch (error) {
-      console.error("Error deleting playground:", error);
+      log.error("Error deleting playground", { action: 'deletePlayground', metadata: { error } });
       throw error;
     }
   };

@@ -6,6 +6,9 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { downloadCSV, generateCsvFilename } from '@/lib/csvUtils';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useDataExport');
 
 interface ExportOptions {
   columns?: Array<{ key: string; label: string; type?: string }>;
@@ -41,7 +44,7 @@ export function useDataExport(): UseDataExportReturn {
 
       toast.success(`Exported ${data.length} items to ${filename}`);
     } catch (error) {
-      console.error('Export error:', error);
+      log.error('Export error', { action: 'exportToCSV', metadata: { error } });
       toast.error('Failed to export data');
     }
   };
@@ -55,7 +58,7 @@ export function useDataExport(): UseDataExportReturn {
 
       exportToCSV(data, options);
     } catch (error) {
-      console.error('Export error:', error);
+      log.error('Export error', { action: 'exportData', metadata: { error } });
       toast.error('Failed to export data');
       throw error;
     } finally {

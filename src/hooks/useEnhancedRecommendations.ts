@@ -15,6 +15,9 @@ import {
   ScoredRecommendation,
 } from '@/lib/recommendationAlgorithm';
 import { defaultPreferences } from '@/types/preferences';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useEnhancedRecommendations');
 
 interface UseEnhancedRecommendationsOptions {
   limit?: number;
@@ -80,7 +83,7 @@ export function useEnhancedRecommendations(
           },
         }));
       } catch (error) {
-        console.error('Error generating enhanced recommendations:', error);
+        log.error('Error generating enhanced recommendations', { action: 'fetchRecommendations', metadata: { error } });
         return [];
       }
     },
@@ -218,7 +221,7 @@ export function useRestaurantRecommendations(
 
         return scoredRestaurants.slice(0, limit);
       } catch (error) {
-        console.error('Error generating restaurant recommendations:', error);
+        log.error('Error generating restaurant recommendations', { action: 'fetchRestaurantRecommendations', metadata: { error } });
         return [];
       }
     },

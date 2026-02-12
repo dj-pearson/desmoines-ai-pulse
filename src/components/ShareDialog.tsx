@@ -21,6 +21,9 @@ import {
   Copy,
   LucideIcon,
 } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ShareDialog');
 
 interface ShareOption {
   name: string;
@@ -124,7 +127,7 @@ export default function ShareDialog({
         setIsOpen(false);
       } catch (error) {
         // User cancelled sharing or error occurred
-        console.log("Native share cancelled or failed:", error);
+        log.debug("Native share cancelled or failed", { action: 'handleNativeShare', metadata: { error } });
       }
     }
   };

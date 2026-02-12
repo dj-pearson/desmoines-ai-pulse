@@ -7,6 +7,9 @@ import { CalendarDays, MapPin, Loader2, RefreshCw, Calendar, Sparkles } from "lu
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('WeekendGuide');
 
 interface WeekendGuide {
   id: string;
@@ -60,7 +63,7 @@ export default function WeekendGuide() {
       
       setGuide(mockGuide);
     } catch (error) {
-      console.error('Error fetching weekend guide:', error);
+      log.error('Error fetching weekend guide', { action: 'fetchWeekendGuide', metadata: { error } });
       toast.error('Failed to load weekend guide');
     } finally {
       setLoading(false);
@@ -88,7 +91,7 @@ export default function WeekendGuide() {
         throw new Error(data.error || 'Failed to regenerate guide');
       }
     } catch (error) {
-      console.error('Error regenerating guide:', error);
+      log.error('Error regenerating guide', { action: 'regenerateGuide', metadata: { error } });
       toast.error(error instanceof Error ? error.message : 'Failed to regenerate guide');
     } finally {
       setRegenerating(false);

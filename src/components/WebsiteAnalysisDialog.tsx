@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('WebsiteAnalysisDialog');
 
 interface WebsiteAnalysisDialogProps {
   open: boolean;
@@ -76,7 +79,7 @@ export default function WebsiteAnalysisDialog({
   const analyzeWebsite = async () => {
     setIsAnalyzing(true);
     try {
-      console.log("Starting website analysis for:", scrapingJob.config.url);
+      log.debug("Starting website analysis", { action: 'analyzeWebsite', metadata: { url: scrapingJob.config.url } });
 
       const { data, error } = await supabase.functions.invoke("scrape-events", {
         body: {
@@ -88,11 +91,11 @@ export default function WebsiteAnalysisDialog({
       });
 
       if (error) {
-        console.error("Analysis error:", error);
+        log.error("Analysis error", { action: 'analyzeWebsite', metadata: { error } });
         throw error;
       }
 
-      console.log("Analysis result:", data);
+      log.debug("Analysis result", { action: 'analyzeWebsite', metadata: { data } });
       setAnalysisResult(data);
 
       if (data.success) {
@@ -109,7 +112,7 @@ export default function WebsiteAnalysisDialog({
         });
       }
     } catch (error) {
-      console.error("Analysis failed:", error);
+      log.error("Analysis failed", { action: 'analyzeWebsite', metadata: { error } });
       setAnalysisResult({
         success: false,
         error: error instanceof Error ? error.message : "Analysis failed",
@@ -132,7 +135,7 @@ export default function WebsiteAnalysisDialog({
         description: "Selector copied to clipboard",
       });
     } catch (err) {
-      console.error("Failed to copy:", err);
+      log.error("Failed to copy", { action: 'copySelector', metadata: { error: err } });
     }
   };
 
@@ -172,7 +175,7 @@ export default function WebsiteAnalysisDialog({
         throw new Error(data.error || "Failed to apply selector");
       }
     } catch (error) {
-      console.error("Failed to apply selector:", error);
+      log.error("Failed to apply selector", { action: 'applySelector', metadata: { error, field } });
       toast({
         title: "Update Failed",
         description:
@@ -229,7 +232,7 @@ export default function WebsiteAnalysisDialog({
         throw new Error(data.error || "Failed to apply selectors");
       }
     } catch (error) {
-      console.error("Failed to apply selectors:", error);
+      log.error("Failed to apply selectors", { action: 'applyBestSelectors', metadata: { error } });
       toast({
         title: "Update Failed",
         description:

@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useArticles');
 
 export interface Article {
   id: string;
@@ -66,7 +69,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       setArticles(data || []);
       setError(null);
     } catch (err: any) {
-      console.error('Error loading articles:', err);
+      log.error('Error loading articles', { action: 'loadArticles', metadata: { error: err } });
       setError(err.message);
       toast({
         title: 'Error loading articles',
@@ -98,7 +101,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
 
       return data;
     } catch (err: any) {
-      console.error('Error getting article by slug:', err);
+      log.error('Error getting article by slug', { action: 'getArticleBySlug', metadata: { error: err } });
       setError(err.message);
       return null;
     }
@@ -140,7 +143,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
 
       return data;
     } catch (err: any) {
-      console.error('Error creating article:', err);
+      log.error('Error creating article', { action: 'createArticle', metadata: { error: err } });
       setError(err.message);
       toast({
         title: 'Error creating article',
@@ -174,7 +177,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
 
       return data;
     } catch (err: any) {
-      console.error('Error updating article:', err);
+      log.error('Error updating article', { action: 'updateArticle', metadata: { error: err } });
       setError(err.message);
       toast({
         title: 'Error updating article',
@@ -204,7 +207,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
 
       return true;
     } catch (err: any) {
-      console.error('Error deleting article:', err);
+      log.error('Error deleting article', { action: 'deleteArticle', metadata: { error: err } });
       setError(err.message);
       toast({
         title: 'Error deleting article',
@@ -235,7 +238,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
       await loadArticles();
       return true;
     } catch (err: any) {
-      console.error('Error publishing article:', err);
+      log.error('Error publishing article', { action: 'publishArticle', metadata: { error: err } });
       setError(err.message);
       toast({
         title: 'Error publishing article',
@@ -268,7 +271,7 @@ export const useArticles = (options?: { autoLoad?: boolean }) => {
         throw new Error(data.error || 'Failed to generate article');
       }
     } catch (err: any) {
-      console.error('Error generating article:', err);
+      log.error('Error generating article', { action: 'generateArticle', metadata: { error: err } });
       setError(err.message);
       toast({
         title: 'Error generating article',

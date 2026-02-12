@@ -1,0 +1,1300 @@
+
+<!doctype html>
+<html lang="en">
+
+<head>
+    <title>Code coverage report for src/components/NeighborhoodGuide.tsx</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="../../prettify.css" />
+    <link rel="stylesheet" href="../../base.css" />
+    <link rel="shortcut icon" type="image/x-icon" href="../../favicon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style type='text/css'>
+        .coverage-summary .sorter {
+            background-image: url(../../sort-arrow-sprite.png);
+        }
+    </style>
+</head>
+    
+<body>
+<div class='wrapper'>
+    <div class='pad1'>
+        <h1><a href="../../index.html">All files</a> / <a href="index.html">src/components</a> NeighborhoodGuide.tsx</h1>
+        <div class='clearfix'>
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Statements</span>
+                <span class='fraction'>0/11</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Branches</span>
+                <span class='fraction'>0/49</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Functions</span>
+                <span class='fraction'>0/8</span>
+            </div>
+        
+            
+            <div class='fl pad1y space-right2'>
+                <span class="strong">0% </span>
+                <span class="quiet">Lines</span>
+                <span class='fraction'>0/11</span>
+            </div>
+        
+            
+        </div>
+        <p class="quiet">
+            Press <em>n</em> or <em>j</em> to go to the next uncovered block, <em>b</em>, <em>p</em> or <em>k</em> for the previous block.
+        </p>
+        <template id="filterTemplate">
+            <div class="quiet">
+                Filter:
+                <input type="search" id="fileSearch">
+            </div>
+        </template>
+    </div>
+    <div class='status-line low'></div>
+    <pre><table class="coverage">
+<tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
+<a name='L2'></a><a href='#L2'>2</a>
+<a name='L3'></a><a href='#L3'>3</a>
+<a name='L4'></a><a href='#L4'>4</a>
+<a name='L5'></a><a href='#L5'>5</a>
+<a name='L6'></a><a href='#L6'>6</a>
+<a name='L7'></a><a href='#L7'>7</a>
+<a name='L8'></a><a href='#L8'>8</a>
+<a name='L9'></a><a href='#L9'>9</a>
+<a name='L10'></a><a href='#L10'>10</a>
+<a name='L11'></a><a href='#L11'>11</a>
+<a name='L12'></a><a href='#L12'>12</a>
+<a name='L13'></a><a href='#L13'>13</a>
+<a name='L14'></a><a href='#L14'>14</a>
+<a name='L15'></a><a href='#L15'>15</a>
+<a name='L16'></a><a href='#L16'>16</a>
+<a name='L17'></a><a href='#L17'>17</a>
+<a name='L18'></a><a href='#L18'>18</a>
+<a name='L19'></a><a href='#L19'>19</a>
+<a name='L20'></a><a href='#L20'>20</a>
+<a name='L21'></a><a href='#L21'>21</a>
+<a name='L22'></a><a href='#L22'>22</a>
+<a name='L23'></a><a href='#L23'>23</a>
+<a name='L24'></a><a href='#L24'>24</a>
+<a name='L25'></a><a href='#L25'>25</a>
+<a name='L26'></a><a href='#L26'>26</a>
+<a name='L27'></a><a href='#L27'>27</a>
+<a name='L28'></a><a href='#L28'>28</a>
+<a name='L29'></a><a href='#L29'>29</a>
+<a name='L30'></a><a href='#L30'>30</a>
+<a name='L31'></a><a href='#L31'>31</a>
+<a name='L32'></a><a href='#L32'>32</a>
+<a name='L33'></a><a href='#L33'>33</a>
+<a name='L34'></a><a href='#L34'>34</a>
+<a name='L35'></a><a href='#L35'>35</a>
+<a name='L36'></a><a href='#L36'>36</a>
+<a name='L37'></a><a href='#L37'>37</a>
+<a name='L38'></a><a href='#L38'>38</a>
+<a name='L39'></a><a href='#L39'>39</a>
+<a name='L40'></a><a href='#L40'>40</a>
+<a name='L41'></a><a href='#L41'>41</a>
+<a name='L42'></a><a href='#L42'>42</a>
+<a name='L43'></a><a href='#L43'>43</a>
+<a name='L44'></a><a href='#L44'>44</a>
+<a name='L45'></a><a href='#L45'>45</a>
+<a name='L46'></a><a href='#L46'>46</a>
+<a name='L47'></a><a href='#L47'>47</a>
+<a name='L48'></a><a href='#L48'>48</a>
+<a name='L49'></a><a href='#L49'>49</a>
+<a name='L50'></a><a href='#L50'>50</a>
+<a name='L51'></a><a href='#L51'>51</a>
+<a name='L52'></a><a href='#L52'>52</a>
+<a name='L53'></a><a href='#L53'>53</a>
+<a name='L54'></a><a href='#L54'>54</a>
+<a name='L55'></a><a href='#L55'>55</a>
+<a name='L56'></a><a href='#L56'>56</a>
+<a name='L57'></a><a href='#L57'>57</a>
+<a name='L58'></a><a href='#L58'>58</a>
+<a name='L59'></a><a href='#L59'>59</a>
+<a name='L60'></a><a href='#L60'>60</a>
+<a name='L61'></a><a href='#L61'>61</a>
+<a name='L62'></a><a href='#L62'>62</a>
+<a name='L63'></a><a href='#L63'>63</a>
+<a name='L64'></a><a href='#L64'>64</a>
+<a name='L65'></a><a href='#L65'>65</a>
+<a name='L66'></a><a href='#L66'>66</a>
+<a name='L67'></a><a href='#L67'>67</a>
+<a name='L68'></a><a href='#L68'>68</a>
+<a name='L69'></a><a href='#L69'>69</a>
+<a name='L70'></a><a href='#L70'>70</a>
+<a name='L71'></a><a href='#L71'>71</a>
+<a name='L72'></a><a href='#L72'>72</a>
+<a name='L73'></a><a href='#L73'>73</a>
+<a name='L74'></a><a href='#L74'>74</a>
+<a name='L75'></a><a href='#L75'>75</a>
+<a name='L76'></a><a href='#L76'>76</a>
+<a name='L77'></a><a href='#L77'>77</a>
+<a name='L78'></a><a href='#L78'>78</a>
+<a name='L79'></a><a href='#L79'>79</a>
+<a name='L80'></a><a href='#L80'>80</a>
+<a name='L81'></a><a href='#L81'>81</a>
+<a name='L82'></a><a href='#L82'>82</a>
+<a name='L83'></a><a href='#L83'>83</a>
+<a name='L84'></a><a href='#L84'>84</a>
+<a name='L85'></a><a href='#L85'>85</a>
+<a name='L86'></a><a href='#L86'>86</a>
+<a name='L87'></a><a href='#L87'>87</a>
+<a name='L88'></a><a href='#L88'>88</a>
+<a name='L89'></a><a href='#L89'>89</a>
+<a name='L90'></a><a href='#L90'>90</a>
+<a name='L91'></a><a href='#L91'>91</a>
+<a name='L92'></a><a href='#L92'>92</a>
+<a name='L93'></a><a href='#L93'>93</a>
+<a name='L94'></a><a href='#L94'>94</a>
+<a name='L95'></a><a href='#L95'>95</a>
+<a name='L96'></a><a href='#L96'>96</a>
+<a name='L97'></a><a href='#L97'>97</a>
+<a name='L98'></a><a href='#L98'>98</a>
+<a name='L99'></a><a href='#L99'>99</a>
+<a name='L100'></a><a href='#L100'>100</a>
+<a name='L101'></a><a href='#L101'>101</a>
+<a name='L102'></a><a href='#L102'>102</a>
+<a name='L103'></a><a href='#L103'>103</a>
+<a name='L104'></a><a href='#L104'>104</a>
+<a name='L105'></a><a href='#L105'>105</a>
+<a name='L106'></a><a href='#L106'>106</a>
+<a name='L107'></a><a href='#L107'>107</a>
+<a name='L108'></a><a href='#L108'>108</a>
+<a name='L109'></a><a href='#L109'>109</a>
+<a name='L110'></a><a href='#L110'>110</a>
+<a name='L111'></a><a href='#L111'>111</a>
+<a name='L112'></a><a href='#L112'>112</a>
+<a name='L113'></a><a href='#L113'>113</a>
+<a name='L114'></a><a href='#L114'>114</a>
+<a name='L115'></a><a href='#L115'>115</a>
+<a name='L116'></a><a href='#L116'>116</a>
+<a name='L117'></a><a href='#L117'>117</a>
+<a name='L118'></a><a href='#L118'>118</a>
+<a name='L119'></a><a href='#L119'>119</a>
+<a name='L120'></a><a href='#L120'>120</a>
+<a name='L121'></a><a href='#L121'>121</a>
+<a name='L122'></a><a href='#L122'>122</a>
+<a name='L123'></a><a href='#L123'>123</a>
+<a name='L124'></a><a href='#L124'>124</a>
+<a name='L125'></a><a href='#L125'>125</a>
+<a name='L126'></a><a href='#L126'>126</a>
+<a name='L127'></a><a href='#L127'>127</a>
+<a name='L128'></a><a href='#L128'>128</a>
+<a name='L129'></a><a href='#L129'>129</a>
+<a name='L130'></a><a href='#L130'>130</a>
+<a name='L131'></a><a href='#L131'>131</a>
+<a name='L132'></a><a href='#L132'>132</a>
+<a name='L133'></a><a href='#L133'>133</a>
+<a name='L134'></a><a href='#L134'>134</a>
+<a name='L135'></a><a href='#L135'>135</a>
+<a name='L136'></a><a href='#L136'>136</a>
+<a name='L137'></a><a href='#L137'>137</a>
+<a name='L138'></a><a href='#L138'>138</a>
+<a name='L139'></a><a href='#L139'>139</a>
+<a name='L140'></a><a href='#L140'>140</a>
+<a name='L141'></a><a href='#L141'>141</a>
+<a name='L142'></a><a href='#L142'>142</a>
+<a name='L143'></a><a href='#L143'>143</a>
+<a name='L144'></a><a href='#L144'>144</a>
+<a name='L145'></a><a href='#L145'>145</a>
+<a name='L146'></a><a href='#L146'>146</a>
+<a name='L147'></a><a href='#L147'>147</a>
+<a name='L148'></a><a href='#L148'>148</a>
+<a name='L149'></a><a href='#L149'>149</a>
+<a name='L150'></a><a href='#L150'>150</a>
+<a name='L151'></a><a href='#L151'>151</a>
+<a name='L152'></a><a href='#L152'>152</a>
+<a name='L153'></a><a href='#L153'>153</a>
+<a name='L154'></a><a href='#L154'>154</a>
+<a name='L155'></a><a href='#L155'>155</a>
+<a name='L156'></a><a href='#L156'>156</a>
+<a name='L157'></a><a href='#L157'>157</a>
+<a name='L158'></a><a href='#L158'>158</a>
+<a name='L159'></a><a href='#L159'>159</a>
+<a name='L160'></a><a href='#L160'>160</a>
+<a name='L161'></a><a href='#L161'>161</a>
+<a name='L162'></a><a href='#L162'>162</a>
+<a name='L163'></a><a href='#L163'>163</a>
+<a name='L164'></a><a href='#L164'>164</a>
+<a name='L165'></a><a href='#L165'>165</a>
+<a name='L166'></a><a href='#L166'>166</a>
+<a name='L167'></a><a href='#L167'>167</a>
+<a name='L168'></a><a href='#L168'>168</a>
+<a name='L169'></a><a href='#L169'>169</a>
+<a name='L170'></a><a href='#L170'>170</a>
+<a name='L171'></a><a href='#L171'>171</a>
+<a name='L172'></a><a href='#L172'>172</a>
+<a name='L173'></a><a href='#L173'>173</a>
+<a name='L174'></a><a href='#L174'>174</a>
+<a name='L175'></a><a href='#L175'>175</a>
+<a name='L176'></a><a href='#L176'>176</a>
+<a name='L177'></a><a href='#L177'>177</a>
+<a name='L178'></a><a href='#L178'>178</a>
+<a name='L179'></a><a href='#L179'>179</a>
+<a name='L180'></a><a href='#L180'>180</a>
+<a name='L181'></a><a href='#L181'>181</a>
+<a name='L182'></a><a href='#L182'>182</a>
+<a name='L183'></a><a href='#L183'>183</a>
+<a name='L184'></a><a href='#L184'>184</a>
+<a name='L185'></a><a href='#L185'>185</a>
+<a name='L186'></a><a href='#L186'>186</a>
+<a name='L187'></a><a href='#L187'>187</a>
+<a name='L188'></a><a href='#L188'>188</a>
+<a name='L189'></a><a href='#L189'>189</a>
+<a name='L190'></a><a href='#L190'>190</a>
+<a name='L191'></a><a href='#L191'>191</a>
+<a name='L192'></a><a href='#L192'>192</a>
+<a name='L193'></a><a href='#L193'>193</a>
+<a name='L194'></a><a href='#L194'>194</a>
+<a name='L195'></a><a href='#L195'>195</a>
+<a name='L196'></a><a href='#L196'>196</a>
+<a name='L197'></a><a href='#L197'>197</a>
+<a name='L198'></a><a href='#L198'>198</a>
+<a name='L199'></a><a href='#L199'>199</a>
+<a name='L200'></a><a href='#L200'>200</a>
+<a name='L201'></a><a href='#L201'>201</a>
+<a name='L202'></a><a href='#L202'>202</a>
+<a name='L203'></a><a href='#L203'>203</a>
+<a name='L204'></a><a href='#L204'>204</a>
+<a name='L205'></a><a href='#L205'>205</a>
+<a name='L206'></a><a href='#L206'>206</a>
+<a name='L207'></a><a href='#L207'>207</a>
+<a name='L208'></a><a href='#L208'>208</a>
+<a name='L209'></a><a href='#L209'>209</a>
+<a name='L210'></a><a href='#L210'>210</a>
+<a name='L211'></a><a href='#L211'>211</a>
+<a name='L212'></a><a href='#L212'>212</a>
+<a name='L213'></a><a href='#L213'>213</a>
+<a name='L214'></a><a href='#L214'>214</a>
+<a name='L215'></a><a href='#L215'>215</a>
+<a name='L216'></a><a href='#L216'>216</a>
+<a name='L217'></a><a href='#L217'>217</a>
+<a name='L218'></a><a href='#L218'>218</a>
+<a name='L219'></a><a href='#L219'>219</a>
+<a name='L220'></a><a href='#L220'>220</a>
+<a name='L221'></a><a href='#L221'>221</a>
+<a name='L222'></a><a href='#L222'>222</a>
+<a name='L223'></a><a href='#L223'>223</a>
+<a name='L224'></a><a href='#L224'>224</a>
+<a name='L225'></a><a href='#L225'>225</a>
+<a name='L226'></a><a href='#L226'>226</a>
+<a name='L227'></a><a href='#L227'>227</a>
+<a name='L228'></a><a href='#L228'>228</a>
+<a name='L229'></a><a href='#L229'>229</a>
+<a name='L230'></a><a href='#L230'>230</a>
+<a name='L231'></a><a href='#L231'>231</a>
+<a name='L232'></a><a href='#L232'>232</a>
+<a name='L233'></a><a href='#L233'>233</a>
+<a name='L234'></a><a href='#L234'>234</a>
+<a name='L235'></a><a href='#L235'>235</a>
+<a name='L236'></a><a href='#L236'>236</a>
+<a name='L237'></a><a href='#L237'>237</a>
+<a name='L238'></a><a href='#L238'>238</a>
+<a name='L239'></a><a href='#L239'>239</a>
+<a name='L240'></a><a href='#L240'>240</a>
+<a name='L241'></a><a href='#L241'>241</a>
+<a name='L242'></a><a href='#L242'>242</a>
+<a name='L243'></a><a href='#L243'>243</a>
+<a name='L244'></a><a href='#L244'>244</a>
+<a name='L245'></a><a href='#L245'>245</a>
+<a name='L246'></a><a href='#L246'>246</a>
+<a name='L247'></a><a href='#L247'>247</a>
+<a name='L248'></a><a href='#L248'>248</a>
+<a name='L249'></a><a href='#L249'>249</a>
+<a name='L250'></a><a href='#L250'>250</a>
+<a name='L251'></a><a href='#L251'>251</a>
+<a name='L252'></a><a href='#L252'>252</a>
+<a name='L253'></a><a href='#L253'>253</a>
+<a name='L254'></a><a href='#L254'>254</a>
+<a name='L255'></a><a href='#L255'>255</a>
+<a name='L256'></a><a href='#L256'>256</a>
+<a name='L257'></a><a href='#L257'>257</a>
+<a name='L258'></a><a href='#L258'>258</a>
+<a name='L259'></a><a href='#L259'>259</a>
+<a name='L260'></a><a href='#L260'>260</a>
+<a name='L261'></a><a href='#L261'>261</a>
+<a name='L262'></a><a href='#L262'>262</a>
+<a name='L263'></a><a href='#L263'>263</a>
+<a name='L264'></a><a href='#L264'>264</a>
+<a name='L265'></a><a href='#L265'>265</a>
+<a name='L266'></a><a href='#L266'>266</a>
+<a name='L267'></a><a href='#L267'>267</a>
+<a name='L268'></a><a href='#L268'>268</a>
+<a name='L269'></a><a href='#L269'>269</a>
+<a name='L270'></a><a href='#L270'>270</a>
+<a name='L271'></a><a href='#L271'>271</a>
+<a name='L272'></a><a href='#L272'>272</a>
+<a name='L273'></a><a href='#L273'>273</a>
+<a name='L274'></a><a href='#L274'>274</a>
+<a name='L275'></a><a href='#L275'>275</a>
+<a name='L276'></a><a href='#L276'>276</a>
+<a name='L277'></a><a href='#L277'>277</a>
+<a name='L278'></a><a href='#L278'>278</a>
+<a name='L279'></a><a href='#L279'>279</a>
+<a name='L280'></a><a href='#L280'>280</a>
+<a name='L281'></a><a href='#L281'>281</a>
+<a name='L282'></a><a href='#L282'>282</a>
+<a name='L283'></a><a href='#L283'>283</a>
+<a name='L284'></a><a href='#L284'>284</a>
+<a name='L285'></a><a href='#L285'>285</a>
+<a name='L286'></a><a href='#L286'>286</a>
+<a name='L287'></a><a href='#L287'>287</a>
+<a name='L288'></a><a href='#L288'>288</a>
+<a name='L289'></a><a href='#L289'>289</a>
+<a name='L290'></a><a href='#L290'>290</a>
+<a name='L291'></a><a href='#L291'>291</a>
+<a name='L292'></a><a href='#L292'>292</a>
+<a name='L293'></a><a href='#L293'>293</a>
+<a name='L294'></a><a href='#L294'>294</a>
+<a name='L295'></a><a href='#L295'>295</a>
+<a name='L296'></a><a href='#L296'>296</a>
+<a name='L297'></a><a href='#L297'>297</a>
+<a name='L298'></a><a href='#L298'>298</a>
+<a name='L299'></a><a href='#L299'>299</a>
+<a name='L300'></a><a href='#L300'>300</a>
+<a name='L301'></a><a href='#L301'>301</a>
+<a name='L302'></a><a href='#L302'>302</a>
+<a name='L303'></a><a href='#L303'>303</a>
+<a name='L304'></a><a href='#L304'>304</a>
+<a name='L305'></a><a href='#L305'>305</a>
+<a name='L306'></a><a href='#L306'>306</a>
+<a name='L307'></a><a href='#L307'>307</a>
+<a name='L308'></a><a href='#L308'>308</a>
+<a name='L309'></a><a href='#L309'>309</a>
+<a name='L310'></a><a href='#L310'>310</a>
+<a name='L311'></a><a href='#L311'>311</a>
+<a name='L312'></a><a href='#L312'>312</a>
+<a name='L313'></a><a href='#L313'>313</a>
+<a name='L314'></a><a href='#L314'>314</a>
+<a name='L315'></a><a href='#L315'>315</a>
+<a name='L316'></a><a href='#L316'>316</a>
+<a name='L317'></a><a href='#L317'>317</a>
+<a name='L318'></a><a href='#L318'>318</a>
+<a name='L319'></a><a href='#L319'>319</a>
+<a name='L320'></a><a href='#L320'>320</a>
+<a name='L321'></a><a href='#L321'>321</a>
+<a name='L322'></a><a href='#L322'>322</a>
+<a name='L323'></a><a href='#L323'>323</a>
+<a name='L324'></a><a href='#L324'>324</a>
+<a name='L325'></a><a href='#L325'>325</a>
+<a name='L326'></a><a href='#L326'>326</a>
+<a name='L327'></a><a href='#L327'>327</a>
+<a name='L328'></a><a href='#L328'>328</a>
+<a name='L329'></a><a href='#L329'>329</a>
+<a name='L330'></a><a href='#L330'>330</a>
+<a name='L331'></a><a href='#L331'>331</a>
+<a name='L332'></a><a href='#L332'>332</a>
+<a name='L333'></a><a href='#L333'>333</a>
+<a name='L334'></a><a href='#L334'>334</a>
+<a name='L335'></a><a href='#L335'>335</a>
+<a name='L336'></a><a href='#L336'>336</a>
+<a name='L337'></a><a href='#L337'>337</a>
+<a name='L338'></a><a href='#L338'>338</a>
+<a name='L339'></a><a href='#L339'>339</a>
+<a name='L340'></a><a href='#L340'>340</a>
+<a name='L341'></a><a href='#L341'>341</a>
+<a name='L342'></a><a href='#L342'>342</a>
+<a name='L343'></a><a href='#L343'>343</a>
+<a name='L344'></a><a href='#L344'>344</a>
+<a name='L345'></a><a href='#L345'>345</a>
+<a name='L346'></a><a href='#L346'>346</a>
+<a name='L347'></a><a href='#L347'>347</a>
+<a name='L348'></a><a href='#L348'>348</a>
+<a name='L349'></a><a href='#L349'>349</a>
+<a name='L350'></a><a href='#L350'>350</a>
+<a name='L351'></a><a href='#L351'>351</a>
+<a name='L352'></a><a href='#L352'>352</a>
+<a name='L353'></a><a href='#L353'>353</a>
+<a name='L354'></a><a href='#L354'>354</a>
+<a name='L355'></a><a href='#L355'>355</a>
+<a name='L356'></a><a href='#L356'>356</a>
+<a name='L357'></a><a href='#L357'>357</a>
+<a name='L358'></a><a href='#L358'>358</a>
+<a name='L359'></a><a href='#L359'>359</a>
+<a name='L360'></a><a href='#L360'>360</a>
+<a name='L361'></a><a href='#L361'>361</a>
+<a name='L362'></a><a href='#L362'>362</a>
+<a name='L363'></a><a href='#L363'>363</a>
+<a name='L364'></a><a href='#L364'>364</a>
+<a name='L365'></a><a href='#L365'>365</a>
+<a name='L366'></a><a href='#L366'>366</a>
+<a name='L367'></a><a href='#L367'>367</a>
+<a name='L368'></a><a href='#L368'>368</a>
+<a name='L369'></a><a href='#L369'>369</a>
+<a name='L370'></a><a href='#L370'>370</a>
+<a name='L371'></a><a href='#L371'>371</a>
+<a name='L372'></a><a href='#L372'>372</a>
+<a name='L373'></a><a href='#L373'>373</a>
+<a name='L374'></a><a href='#L374'>374</a>
+<a name='L375'></a><a href='#L375'>375</a>
+<a name='L376'></a><a href='#L376'>376</a>
+<a name='L377'></a><a href='#L377'>377</a>
+<a name='L378'></a><a href='#L378'>378</a>
+<a name='L379'></a><a href='#L379'>379</a>
+<a name='L380'></a><a href='#L380'>380</a>
+<a name='L381'></a><a href='#L381'>381</a>
+<a name='L382'></a><a href='#L382'>382</a>
+<a name='L383'></a><a href='#L383'>383</a>
+<a name='L384'></a><a href='#L384'>384</a>
+<a name='L385'></a><a href='#L385'>385</a>
+<a name='L386'></a><a href='#L386'>386</a>
+<a name='L387'></a><a href='#L387'>387</a>
+<a name='L388'></a><a href='#L388'>388</a>
+<a name='L389'></a><a href='#L389'>389</a>
+<a name='L390'></a><a href='#L390'>390</a>
+<a name='L391'></a><a href='#L391'>391</a>
+<a name='L392'></a><a href='#L392'>392</a>
+<a name='L393'></a><a href='#L393'>393</a>
+<a name='L394'></a><a href='#L394'>394</a>
+<a name='L395'></a><a href='#L395'>395</a>
+<a name='L396'></a><a href='#L396'>396</a>
+<a name='L397'></a><a href='#L397'>397</a>
+<a name='L398'></a><a href='#L398'>398</a>
+<a name='L399'></a><a href='#L399'>399</a>
+<a name='L400'></a><a href='#L400'>400</a>
+<a name='L401'></a><a href='#L401'>401</a>
+<a name='L402'></a><a href='#L402'>402</a>
+<a name='L403'></a><a href='#L403'>403</a>
+<a name='L404'></a><a href='#L404'>404</a>
+<a name='L405'></a><a href='#L405'>405</a>
+<a name='L406'></a><a href='#L406'>406</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span></td><td class="text"><pre class="prettyprint lang-js">import { useState } from "react";
+import { MapPin, Calendar, Users, Star, ExternalLink } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+&nbsp;
+interface NeighborhoodData {
+  description: string;
+  highlights: string[];
+  zipCodes: string[];
+  keywords: string;
+  detailedDescription?: string;
+  demographics?: string;
+  bestFor?: string;
+}
+&nbsp;
+interface NeighborhoodGuideProps {
+  neighborhood: string;
+  events?: any[];
+  restaurants?: any[];
+  attractions?: any[];
+}
+&nbsp;
+export default function <span class="fstat-no" title="function not covered" >NeighborhoodGuide({ </span>
+  neighborhood, 
+  events = <span class="branch-0 cbranch-no" title="branch not covered" >[], </span>
+  restaurants = <span class="branch-0 cbranch-no" title="branch not covered" >[], </span>
+  attractions = <span class="branch-0 cbranch-no" title="branch not covered" >[] </span>
+}: NeighborhoodGuideProps) {
+  
+  const [activeTab, setActiveTab<span class="cstat-no" title="statement not covered" >] = useState&lt;"events" | "dining" | "attractions"&gt;("events");</span>
+&nbsp;
+  // Neighborhood-specific content
+  const neighborhoodData: Record&lt;string, NeighborhoodData&gt; = <span class="cstat-no" title="statement not covered" >{</span>
+    "West Des Moines": {
+      description: "Discover what's happening in West Des Moines, Iowa's premier shopping and dining destination with 400+ monthly events and activities.",
+      highlights: ["Jordan Creek Town Center", "Valley Junction Historic District", "Raccoon River Park"],
+      zipCodes: ["50265", "50266", "50061"],
+      keywords: "West Des Moines events, Jordan Creek shopping, Valley Junction historic district",
+      detailedDescription: `West Des Moines stands as the Des Moines metro area's premier shopping, dining, and family entertainment destination. 
+        Home to Jordan Creek Town Center - Iowa's largest shopping mall - and the historic Valley Junction district, 
+        West Des Moines offers diverse activities from upscale shopping to historic walking tours. The community hosts 200+ 
+        family-friendly events annually, featuring outdoor concerts, farmers markets, and seasonal festivals. Raccoon River Park 
+        provides year-round recreation with trails, playgrounds, and natural areas perfect for family activities.`,
+      demographics: "Population 68,723 | Median household income $82,492 | 23% families with children under 18",
+      bestFor: "Shopping, family dining, suburban events, historic tours, upscale attractions"
+    },
+    "Ankeny": {
+      description: "Find family-friendly events and activities in Ankeny, one of Iowa's fastest-growing communities with 300+ monthly activities.",
+      highlights: ["Ankeny Market &amp; Pavilion", "High Trestle Trail", "Ankeny Art Center"],
+      zipCodes: ["50023", "50021"],
+      keywords: "Ankeny family events, High Trestle Trail activities, Ankeny community center",
+      detailedDescription: `Ankeny represents one of Iowa's most rapidly growing suburban communities, known for exceptional 
+        family amenities and community engagement. The city features the High Trestle Trail bridge - a architectural marvel 
+        and top cycling destination - plus comprehensive community programming through the Ankeny Market &amp; Pavilion. 
+        With 150+ family-focused events annually, Ankeny excels in youth sports, community festivals, and educational programming. 
+        The area attracts families seeking small-town community feel with big-city amenities.`,
+      demographics: "Population 67,887 | Median household income $89,234 | 28% families with children under 18",
+      bestFor: "Family activities, cycling recreation, community events, youth sports, educational programs"
+    },
+    "East Village": {
+      description: "Experience Des Moines' hip East Village district with trendy restaurants, breweries, and cultural events.",
+      highlights: ["Court Avenue Entertainment District", "East Village breweries", "Farmer's Market"],
+      zipCodes: ["50309", "50312"],
+      keywords: "East Village Des Moines, Court Avenue nightlife, downtown Des Moines events",
+      detailedDescription: `The East Village serves as Des Moines' cultural and nightlife hub, featuring eclectic dining, 
+        craft breweries, and vibrant arts scene. Court Avenue anchors the entertainment district with live music venues, 
+        rooftop bars, and late-night dining. The area attracts young professionals and culture enthusiasts with its walkable 
+        urban environment and frequent festivals including the Downtown Farmers Market - Iowa's largest.`,
+      demographics: "Population 8,500+ | Median age 29 | 45% professionals aged 25-40",
+      bestFor: "Urban nightlife, craft breweries, cultural events, downtown dining, young professional scene"
+    },
+    "Urbandale": {
+      description: "Explore Urbandale's community events, parks, and family-friendly activities in this Des Moines suburb.",
+      highlights: ["Living History Farms", "Walker Johnston Park", "Urbandale Community Center"],
+      zipCodes: ["50322", "50323"],
+      keywords: "Urbandale family activities, Living History Farms events, Urbandale parks",
+      detailedDescription: `Urbandale combines suburban comfort with rich historical attractions, anchored by Living History Farms - 
+        one of Iowa's premier educational destinations. The community emphasizes family recreation through extensive park systems 
+        and year-round programming. Walker Johnston Park offers comprehensive athletic facilities while the Urbandale Community Center 
+        hosts 100+ annual events focused on families and seniors.`,
+      demographics: "Population 45,378 | Median household income $76,543 | 31% families with children under 18",
+      bestFor: "Historical education, family recreation, community sports, senior programs, suburban living"
+    },
+    "Johnston": {
+      description: "Discover Johnston's community events, trails, and local attractions in this thriving Des Moines suburb.",
+      highlights: ["Terra Park", "Johnston Commons", "Saylorville Lake"],
+      zipCodes: ["50131"],
+      keywords: "Johnston Iowa events, Terra Park activities, Saylorville Lake recreation",
+      detailedDescription: `Johnston offers exceptional outdoor recreation centered around Saylorville Lake and extensive trail systems. 
+        Terra Park provides state-of-the-art athletic facilities while Johnston Commons serves as the community's social hub. 
+        The city excels in outdoor programming with 150+ annual events focusing on water recreation, cycling, and nature education.`,
+      demographics: "Population 24,375 | Median household income $88,765 | 35% families with children under 18", 
+      bestFor: "Outdoor recreation, water activities, trail systems, youth sports, nature programs"
+    },
+    "Clive": {
+      description: "Find events and activities in Clive, known for its excellent parks and family-friendly community.",
+      highlights: ["Clive Aquatic Center", "Campbell Recreation Area", "Clive Community Center"],
+      zipCodes: ["50325"],
+      keywords: "Clive Iowa activities, Campbell Recreation Area, Clive family events",
+      detailedDescription: `Clive distinguishes itself through premier recreational facilities, headlined by the Clive Aquatic Center - 
+        one of Iowa's most comprehensive aquatic facilities. Campbell Recreation Area offers diverse outdoor activities while 
+        the Clive Community Center hosts year-round programming. The community focuses on family wellness with 120+ annual 
+        events emphasizing fitness, aquatics, and community engagement.`,
+      demographics: "Population 18,597 | Median household income $91,234 | 29% families with children under 18",
+      bestFor: "Aquatic recreation, family fitness, community wellness, outdoor activities, suburban amenities"
+    },
+    "Waukee": {
+      description: "Explore Waukee's rapidly growing community with new restaurants, events, and family activities.",
+      highlights: ["Waukee Family YMCA", "Centennial Park", "Triumph Park"],
+      zipCodes: ["50263"],
+      keywords: "Waukee Iowa events, Centennial Park activities, Waukee family fun",
+      detailedDescription: `Waukee represents one of Iowa's fastest-growing communities, blending small-town charm with modern amenities. 
+        The Waukee Family YMCA anchors community wellness programming while Centennial Park and Triumph Park provide extensive 
+        recreational opportunities. With 180+ family-focused events annually, Waukee excels in youth development, community festivals, 
+        and innovative programming that serves its rapidly expanding population.`,
+      demographics: "Population 24,435 | Median household income $85,123 | 42% families with children under 18",
+      bestFor: "Family development, youth programs, community growth, modern amenities, expanding opportunities"
+    }
+  };
+&nbsp;
+  const currentNeighborhood = <span class="cstat-no" title="statement not covered" >neighborhoodData[neighborhood as keyof typeof neighborhoodData];</span>
+&nbsp;
+<span class="cstat-no" title="statement not covered" >  return (</span>
+    &lt;div className="space-y-6"&gt;
+      {/* Neighborhood Header */}
+      &lt;div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6 rounded-lg"&gt;
+        &lt;div className="flex items-center gap-2 mb-2"&gt;
+          &lt;MapPin className="h-6 w-6" /&gt;
+          &lt;h1 className="text-2xl font-bold"&gt;
+            {neighborhood} Events &amp; Activities
+          &lt;/h1&gt;
+        &lt;/div&gt;
+        &lt;p className="text-blue-100 mb-4"&gt;
+          {currentNeighborhood?.description || `Discover the best events, restaurants, and activities in ${neighborhood}, Des Moines.`}
+        &lt;/p&gt;
+        
+        {/* Local Highlights */}
+        {currentNeighborhood?.highlights &amp;&amp; (
+          &lt;div className="flex flex-wrap gap-2"&gt;
+            {currentNeighborhood.highlights.map(<span class="fstat-no" title="function not covered" >(h</span>ighlight, index) =&gt; (
+<span class="cstat-no" title="statement not covered" >              &lt;Badge key={index} variant="secondary" className="bg-white/20 text-white border-white/30"&gt;</span>
+                {highlight}
+              &lt;/Badge&gt;
+            ))}
+          &lt;/div&gt;
+        )}
+      &lt;/div&gt;
+&nbsp;
+      {/* Navigation Tabs */}
+      &lt;div className="flex space-x-1 bg-muted p-1 rounded-lg"&gt;
+        &lt;Button
+          variant={activeTab === "events" ? "default" : "ghost"}
+          onClick={<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >s</span>etActiveTab("events")}</span>
+          className="flex-1"
+        &gt;
+          &lt;Calendar className="h-4 w-4 mr-2" /&gt;
+          Events ({events.length})
+        &lt;/Button&gt;
+        &lt;Button
+          variant={activeTab === "dining" ? "default" : "ghost"}
+          onClick={<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >s</span>etActiveTab("dining")}</span>
+          className="flex-1"
+        &gt;
+          &lt;Users className="h-4 w-4 mr-2" /&gt;
+          Dining ({restaurants.length})
+        &lt;/Button&gt;
+        &lt;Button
+          variant={activeTab === "attractions" ? "default" : "ghost"}
+          onClick={<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >s</span>etActiveTab("attractions")}</span>
+          className="flex-1"
+        &gt;
+          &lt;Star className="h-4 w-4 mr-2" /&gt;
+          Attractions ({attractions.length})
+        &lt;/Button&gt;
+      &lt;/div&gt;
+&nbsp;
+      {/* Content Sections */}
+      {activeTab === "events" &amp;&amp; (
+        &lt;div className="space-y-4"&gt;
+          &lt;h2 className="text-xl font-semibold"&gt;
+            Upcoming Events in {neighborhood}
+          &lt;/h2&gt;
+          {events.length &gt; 0 ? (
+            &lt;div className="grid gap-4 md:grid-cols-2"&gt;
+              {events.slice(0, 6).map(<span class="fstat-no" title="function not covered" >(e</span>vent, index) =&gt; (
+<span class="cstat-no" title="statement not covered" >                &lt;Card key={index} className="hover:shadow-lg transition-shadow"&gt;</span>
+                  &lt;CardHeader className="pb-2"&gt;
+                    &lt;CardTitle className="text-lg"&gt;{event.title}&lt;/CardTitle&gt;
+                    &lt;div className="flex items-center text-sm text-muted-foreground"&gt;
+                      &lt;Calendar className="h-4 w-4 mr-1" /&gt;
+                      {new Date(event.start_date).toLocaleDateString()}
+                    &lt;/div&gt;
+                  &lt;/CardHeader&gt;
+                  &lt;CardContent&gt;
+                    &lt;p className="text-sm mb-2"&gt;{event.description?.slice(0, 100)}...&lt;/p&gt;
+                    &lt;div className="flex justify-between items-center"&gt;
+                      &lt;Badge variant="outline"&gt;{event.category}&lt;/Badge&gt;
+                      &lt;Button size="sm" variant="outline"&gt;
+                        &lt;ExternalLink className="h-3 w-3 mr-1" /&gt;
+                        Details
+                      &lt;/Button&gt;
+                    &lt;/div&gt;
+                  &lt;/CardContent&gt;
+                &lt;/Card&gt;
+              ))}
+            &lt;/div&gt;
+          ) : (
+            &lt;Card&gt;
+              &lt;CardContent className="text-center p-8"&gt;
+                &lt;Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" /&gt;
+                &lt;p className="text-muted-foreground"&gt;
+                  No events currently listed for {neighborhood}. Check back soon or explore nearby areas!
+                &lt;/p&gt;
+              &lt;/CardContent&gt;
+            &lt;/Card&gt;
+          )}
+        &lt;/div&gt;
+      )}
+&nbsp;
+      {activeTab === "dining" &amp;&amp; (
+        &lt;div className="space-y-4"&gt;
+          &lt;h2 className="text-xl font-semibold"&gt;
+            Best Restaurants in {neighborhood}
+          &lt;/h2&gt;
+          {restaurants.length &gt; 0 ? (
+            &lt;div className="grid gap-4 md:grid-cols-2"&gt;
+              {restaurants.slice(0, 6).map(<span class="fstat-no" title="function not covered" >(r</span>estaurant, index) =&gt; (
+<span class="cstat-no" title="statement not covered" >                &lt;Card key={index} className="hover:shadow-lg transition-shadow"&gt;</span>
+                  &lt;CardHeader className="pb-2"&gt;
+                    &lt;CardTitle className="text-lg"&gt;{restaurant.name}&lt;/CardTitle&gt;
+                    &lt;div className="flex items-center text-sm text-muted-foreground"&gt;
+                      &lt;MapPin className="h-4 w-4 mr-1" /&gt;
+                      {restaurant.location}
+                    &lt;/div&gt;
+                  &lt;/CardHeader&gt;
+                  &lt;CardContent&gt;
+                    &lt;p className="text-sm mb-2"&gt;{restaurant.description?.slice(0, 100)}...&lt;/p&gt;
+                    &lt;div className="flex justify-between items-center"&gt;
+                      &lt;Badge variant="outline"&gt;{restaurant.cuisine_type}&lt;/Badge&gt;
+                      &lt;Button size="sm" variant="outline"&gt;
+                        &lt;ExternalLink className="h-3 w-3 mr-1" /&gt;
+                        Visit
+                      &lt;/Button&gt;
+                    &lt;/div&gt;
+                  &lt;/CardContent&gt;
+                &lt;/Card&gt;
+              ))}
+            &lt;/div&gt;
+          ) : (
+            &lt;Card&gt;
+              &lt;CardContent className="text-center p-8"&gt;
+                &lt;Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" /&gt;
+                &lt;p className="text-muted-foreground"&gt;
+                  Restaurant listings for {neighborhood} coming soon!
+                &lt;/p&gt;
+              &lt;/CardContent&gt;
+            &lt;/Card&gt;
+          )}
+        &lt;/div&gt;
+      )}
+&nbsp;
+      {activeTab === "attractions" &amp;&amp; (
+        &lt;div className="space-y-4"&gt;
+          &lt;h2 className="text-xl font-semibold"&gt;
+            Top Attractions in {neighborhood}
+          &lt;/h2&gt;
+          {attractions.length &gt; 0 ? (
+            &lt;div className="grid gap-4 md:grid-cols-2"&gt;
+              {attractions.slice(0, 6).map(<span class="fstat-no" title="function not covered" >(a</span>ttraction, index) =&gt; (
+<span class="cstat-no" title="statement not covered" >                &lt;Card key={index} className="hover:shadow-lg transition-shadow"&gt;</span>
+                  &lt;CardHeader className="pb-2"&gt;
+                    &lt;CardTitle className="text-lg"&gt;{attraction.name}&lt;/CardTitle&gt;
+                    &lt;div className="flex items-center text-sm text-muted-foreground"&gt;
+                      &lt;MapPin className="h-4 w-4 mr-1" /&gt;
+                      {attraction.location}
+                    &lt;/div&gt;
+                  &lt;/CardHeader&gt;
+                  &lt;CardContent&gt;
+                    &lt;p className="text-sm mb-2"&gt;{attraction.description?.slice(0, 100)}...&lt;/p&gt;
+                    &lt;div className="flex justify-between items-center"&gt;
+                      &lt;Badge variant="outline"&gt;{attraction.category}&lt;/Badge&gt;
+                      &lt;Button size="sm" variant="outline" aria-label={`Learn more about ${attraction.name}`}&gt;
+                        &lt;ExternalLink className="h-3 w-3 mr-1" /&gt;
+                        &lt;span aria-hidden="true"&gt;Learn More&lt;/span&gt;
+                        &lt;span className="sr-only"&gt; about {attraction.name}&lt;/span&gt;
+                      &lt;/Button&gt;
+                    &lt;/div&gt;
+                  &lt;/CardContent&gt;
+                &lt;/Card&gt;
+              ))}
+            &lt;/div&gt;
+          ) : (
+            &lt;Card&gt;
+              &lt;CardContent className="text-center p-8"&gt;
+                &lt;Star className="h-12 w-12 mx-auto mb-4 text-muted-foreground" /&gt;
+                &lt;p className="text-muted-foreground"&gt;
+                  Attraction listings for {neighborhood} coming soon!
+                &lt;/p&gt;
+              &lt;/CardContent&gt;
+            &lt;/Card&gt;
+          )}
+        &lt;/div&gt;
+      )}
+&nbsp;
+      {/* Enhanced Local SEO Content */}
+      &lt;div className="space-y-6"&gt;
+        {/* Neighborhood Overview */}
+        &lt;Card className="bg-muted/50"&gt;
+          &lt;CardContent className="p-6"&gt;
+            &lt;h3 className="font-semibold mb-3"&gt;About {neighborhood}&lt;/h3&gt;
+            &lt;p className="text-sm text-muted-foreground leading-relaxed mb-4"&gt;
+              {currentNeighborhood?.detailedDescription || 
+                `${neighborhood} is a vibrant part of the greater Des Moines metropolitan area, offering residents and visitors 
+                a unique blend of local events, dining options, and community attractions. Whether you're looking for 
+                family-friendly activities, date night restaurants, or weekend events, ${neighborhood} has something for everyone.`
+              }
+            &lt;/p&gt;
+            
+            {currentNeighborhood?.demographics &amp;&amp; (
+              &lt;div className="mb-4 p-3 bg-white rounded-md"&gt;
+                &lt;h4 className="text-sm font-semibold mb-2"&gt;Community Profile&lt;/h4&gt;
+                &lt;p className="text-xs text-muted-foreground"&gt;{currentNeighborhood.demographics}&lt;/p&gt;
+              &lt;/div&gt;
+            )}
+            
+            {currentNeighborhood?.bestFor &amp;&amp; (
+              &lt;div className="mb-4 p-3 bg-blue-50 rounded-md"&gt;
+                &lt;h4 className="text-sm font-semibold mb-2"&gt;Best Known For&lt;/h4&gt;
+                &lt;p className="text-xs text-blue-700"&gt;{currentNeighborhood.bestFor}&lt;/p&gt;
+              &lt;/div&gt;
+            )}
+            
+            {currentNeighborhood?.keywords &amp;&amp; (
+              &lt;div className="mt-4"&gt;
+                &lt;h4 className="text-sm font-medium mb-2"&gt;Popular searches:&lt;/h4&gt;
+                &lt;p className="text-xs text-muted-foreground"&gt;
+                  {currentNeighborhood.keywords}
+                &lt;/p&gt;
+              &lt;/div&gt;
+            )}
+          &lt;/CardContent&gt;
+        &lt;/Card&gt;
+&nbsp;
+        {/* Neighborhood FAQ Section for AI Search Optimization */}
+        &lt;Card&gt;
+          &lt;CardHeader&gt;
+            &lt;CardTitle className="text-lg"&gt;Frequently Asked Questions&lt;/CardTitle&gt;
+          &lt;/CardHeader&gt;
+          &lt;CardContent className="space-y-4"&gt;
+            &lt;div className="space-y-4"&gt;
+              &lt;div className="p-4 bg-gray-50 rounded-lg"&gt;
+                &lt;h4 className="font-semibold mb-2"&gt;What are the best family activities in {neighborhood}?&lt;/h4&gt;
+                &lt;p className="text-sm text-gray-700"&gt;
+                  {neighborhood === "West Des Moines" 
+                    ? "West Des Moines offers Jordan Creek Town Center for shopping and entertainment, Valley Junction for historic tours and antique shopping, plus Raccoon River Park with trails, playgrounds, and year-round outdoor activities perfect for families."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny features the High Trestle Trail for cycling and walking, Ankeny Market &amp; Pavilion for community events, plus numerous parks, sports complexes, and family-friendly festivals throughout the year."
+                    : `${neighborhood} offers various family-friendly activities including parks, community centers, local events, and seasonal festivals that cater to residents of all ages.`
+                  }
+                &lt;/p&gt;
+              &lt;/div&gt;
+              
+              &lt;div className="p-4 bg-gray-50 rounded-lg"&gt;
+                &lt;h4 className="font-semibold mb-2"&gt;Where are the best restaurants in {neighborhood}?&lt;/h4&gt;
+                &lt;p className="text-sm text-gray-700"&gt;
+                  {neighborhood === "West Des Moines"
+                    ? "West Des Moines dining centers around Jordan Creek area with chain restaurants and local favorites, plus Valley Junction's unique local eateries. The area excels in family-friendly dining with diverse cuisine options and competitive pricing."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny's restaurant scene focuses on family-friendly establishments with good value pricing. The community features both chain restaurants and local favorites, with new openings regularly added to serve the growing suburban population."
+                    : `${neighborhood} offers a variety of dining options ranging from casual family restaurants to local specialty eateries, with new establishments regularly opening to serve the community.`
+                  }
+                &lt;/p&gt;
+              &lt;/div&gt;
+              
+              &lt;div className="p-4 bg-gray-50 rounded-lg"&gt;
+                &lt;h4 className="font-semibold mb-2"&gt;What events happen regularly in {neighborhood}?&lt;/h4&gt;
+                &lt;p className="text-sm text-gray-700"&gt;
+                  {neighborhood === "West Des Moines"
+                    ? "Regular events include Valley Junction festivals, Jordan Creek seasonal celebrations, farmers markets, outdoor concerts at Raccoon River Park, and community gatherings. Many events are family-oriented with activities for all ages."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny hosts regular community events at the Market &amp; Pavilion, seasonal festivals, youth sports tournaments, cycling events on the High Trestle Trail, and educational programs throughout the year."
+                    : `${neighborhood} hosts regular community events, seasonal festivals, recreational activities, and local gatherings that bring residents together throughout the year.`
+                  }
+                &lt;/p&gt;
+              &lt;/div&gt;
+              
+              &lt;div className="p-4 bg-gray-50 rounded-lg"&gt;
+                &lt;h4 className="font-semibold mb-2"&gt;How do I get to {neighborhood} from downtown Des Moines?&lt;/h4&gt;
+                &lt;p className="text-sm text-gray-700"&gt;
+                  {neighborhood === "West Des Moines"
+                    ? "West Des Moines is easily accessible via I-235 West to I-35 South, approximately 15-20 minutes from downtown Des Moines. DART bus routes serve major destinations like Jordan Creek Town Center with regular service."
+                    : neighborhood === "Ankeny"
+                    ? "Ankeny is located north of Des Moines, accessible via I-35 North or Highway 69. The drive takes approximately 20-25 minutes from downtown Des Moines, with DART bus service available on major routes."
+                    : `${neighborhood} is accessible from downtown Des Moines via major highways and public transportation options, with typical driving times of 15-30 minutes depending on traffic and destination.`
+                  }
+                &lt;/p&gt;
+              &lt;/div&gt;
+            &lt;/div&gt;
+          &lt;/CardContent&gt;
+        &lt;/Card&gt;
+      &lt;/div&gt;
+    &lt;/div&gt;
+  );
+}
+&nbsp;</pre></td></tr></table></pre>
+
+                <div class='push'></div><!-- for sticky footer -->
+            </div><!-- /wrapper -->
+            <div class='footer quiet pad2 space-top1 center small'>
+                Code coverage generated by
+                <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
+                at 2026-02-12T16:21:55.840Z
+            </div>
+        <script src="../../prettify.js"></script>
+        <script>
+            window.onload = function () {
+                prettyPrint();
+            };
+        </script>
+        <script src="../../sorter.js"></script>
+        <script src="../../block-navigation.js"></script>
+    </body>
+</html>
+    

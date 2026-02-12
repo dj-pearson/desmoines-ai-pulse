@@ -11,6 +11,9 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useArticles } from '@/hooks/useArticles';
 import GenerateArticleButton from '@/components/GenerateArticleButton';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CompetitorAnalysis');
 
 interface ContentSuggestion {
   id: string;
@@ -121,7 +124,7 @@ const CompetitorAnalysis = () => {
       setSuggestions(suggestionsData || []);
 
     } catch (error) {
-      console.error('Error fetching competitor data:', error);
+      log.error('Error fetching competitor data', { action: 'fetchData', metadata: { error } });
       toast.error('Failed to load competitor data');
     } finally {
       setLoading(false);
@@ -147,17 +150,17 @@ const CompetitorAnalysis = () => {
         });
 
         if (error) {
-          console.error(`Error scraping ${competitor.name}:`, error);
+          log.error(`Error scraping ${competitor.name}`, { action: 'handleScrapeContent', metadata: { error } });
           toast.error(`Failed to scrape ${competitor.name}: ${error.message}`);
         } else {
-          console.log(`Successfully scraped ${competitor.name}:`, data);
+          log.debug(`Successfully scraped ${competitor.name}`, { action: 'handleScrapeContent', metadata: { data } });
         }
       }
 
       toast.success('Content scraping completed for all competitors');
       await fetchData(); // Refresh data
     } catch (error) {
-      console.error('Error during content scraping:', error);
+      log.error('Error during content scraping', { action: 'handleScrapeContent', metadata: { error } });
       toast.error('Failed to scrape competitor content');
     } finally {
       setScraping(false);
@@ -201,7 +204,7 @@ const CompetitorAnalysis = () => {
           .insert([analysisData]);
 
         if (error) {
-          console.error(`Error creating analysis for ${competitor.name}:`, error);
+          log.error(`Error creating analysis for ${competitor.name}`, { action: 'handleRunAnalysis', metadata: { error } });
           toast.error(`Failed to analyze ${competitor.name}: ${error.message}`);
         }
       }
@@ -209,7 +212,7 @@ const CompetitorAnalysis = () => {
       toast.success('Competitor analysis completed successfully');
       await fetchData(); // Refresh data
     } catch (error) {
-      console.error('Error during competitor analysis:', error);
+      log.error('Error during competitor analysis', { action: 'handleRunAnalysis', metadata: { error } });
       toast.error('Failed to run competitor analysis');
     } finally {
       setAnalyzing(false);
@@ -237,7 +240,7 @@ const CompetitorAnalysis = () => {
       setIsAddingCompetitor(false);
       await fetchData();
     } catch (error) {
-      console.error('Error adding competitor:', error);
+      log.error('Error adding competitor', { action: 'handleAddCompetitor', metadata: { error } });
       toast.error('Failed to add competitor');
     }
   };

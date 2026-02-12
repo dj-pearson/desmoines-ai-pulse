@@ -59,6 +59,9 @@ import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SocialMediaManager');
 
 const SocialMediaManager = () => {
   const {
@@ -96,7 +99,7 @@ const SocialMediaManager = () => {
           .single();
         
         if (error && error.code !== 'PGRST116') {
-          console.error('Failed to load automation settings:', error);
+          log.error('Failed to load automation settings', { action: 'loadAutomationSettings', metadata: { error } });
           return;
         }
         
@@ -109,10 +112,10 @@ const SocialMediaManager = () => {
           });
         }
       } catch (error) {
-        console.error('Failed to load automation settings:', error);
+        log.error('Failed to load automation settings', { action: 'loadAutomationSettings', metadata: { error } });
       }
     };
-    
+
     loadAutomationSettings();
   }, []);
 
@@ -130,14 +133,14 @@ const SocialMediaManager = () => {
         });
       
       if (error) {
-        console.error('Failed to save automation settings:', error);
+        log.error('Failed to save automation settings', { action: 'saveAutomationSettings', metadata: { error } });
         toast.error(`Failed to save settings: ${error.message}`);
         return;
       }
       
       toast.success("Automation settings saved - Changes will take effect on the next scheduled run");
     } catch (error) {
-      console.error('Failed to save automation settings:', error);
+      log.error('Failed to save automation settings', { action: 'saveAutomationSettings', metadata: { error } });
       toast.error("Failed to save settings - Please try again");
     }
   };
@@ -158,7 +161,7 @@ const SocialMediaManager = () => {
     try {
       await generatePost({ contentType, subjectType });
     } catch (error) {
-      console.error("Failed to generate post:", error);
+      log.error("Failed to generate post", { action: 'handleGeneratePost', metadata: { error } });
     }
   };
 
@@ -166,7 +169,7 @@ const SocialMediaManager = () => {
     try {
       await publishPost(postId);
     } catch (error) {
-      console.error("Failed to publish post:", error);
+      log.error("Failed to publish post", { action: 'handlePublishPost', metadata: { error } });
     }
   };
 
@@ -174,7 +177,7 @@ const SocialMediaManager = () => {
     try {
       await repostPost(postId, "repost");
     } catch (error) {
-      console.error("Failed to repost:", error);
+      log.error("Failed to repost", { action: 'handleRepostPost', metadata: { error } });
     }
   };
 
@@ -190,7 +193,7 @@ const SocialMediaManager = () => {
       });
       setIsAddingWebhook(false);
     } catch (error) {
-      console.error("Failed to add webhook:", error);
+      log.error("Failed to add webhook", { action: 'handleAddWebhook', metadata: { error } });
     }
   };
 
@@ -497,7 +500,7 @@ const SocialMediaManager = () => {
                   try {
                     await debugContent();
                   } catch (error) {
-                    console.error("Debug failed:", error);
+                    log.error("Debug failed", { action: 'debugContent', metadata: { error } });
                   }
                 }}
                 variant="outline"

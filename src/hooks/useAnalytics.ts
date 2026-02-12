@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAnalytics');
 const ENABLE_DIRECT_CONTENT_METRICS = false;
 
 interface AnalyticsData {
@@ -116,9 +119,9 @@ export function useAnalytics() {
       });
 
 
-      console.log('Analytics event tracked:', event);
+      log.debug('Analytics event tracked', { action: 'trackEvent', metadata: { event } });
     } catch (error) {
-      console.error('Error tracking analytics:', error);
+      log.error('Error tracking analytics', { action: 'trackEvent', metadata: { error } });
     }
   };
 
@@ -133,9 +136,9 @@ export function useAnalytics() {
       // Try to insert to enhanced analytics table (graceful fallback if table doesn't exist yet)
       try {
         await supabase.from('user_interactions_enhanced' as any).insert(eventsToFlush);
-        console.log(`Flushed ${eventsToFlush.length} enhanced analytics events`);
+        log.debug(`Flushed ${eventsToFlush.length} enhanced analytics events`, { action: 'flushEventQueue' });
       } catch (enhancedError) {
-        console.log('Enhanced analytics table not available yet, using fallback');
+        log.debug('Enhanced analytics table not available yet, using fallback', { action: 'flushEventQueue' });
         // Fallback to existing user_analytics table with simplified data
         const fallbackEvents = eventsToFlush.map(event => ({
           session_id: event.session_id,
@@ -152,7 +155,7 @@ export function useAnalytics() {
         for (const event of fallbackEvents) {
           await supabase.from('user_analytics').insert(event);
         }
-        console.log(`Flushed ${fallbackEvents.length} analytics events to fallback table`);
+        log.debug(`Flushed ${fallbackEvents.length} analytics events to fallback table`, { action: 'flushEventQueue' });
       }
 
       // Batch content metrics to Edge Function (reduces overhead)
@@ -176,10 +179,10 @@ export function useAnalytics() {
           });
         }
       } catch (e) {
-        console.warn('Batch metrics logging failed (edge function):', e);
+        log.warn('Batch metrics logging failed (edge function)', { action: 'flushEventQueue', metadata: { error: e } });
       }
     } catch (error) {
-      console.error('Error flushing analytics queue:', error);
+      log.error('Error flushing analytics queue', { action: 'flushEventQueue', metadata: { error } });
       // If flush fails, keep events in queue for next attempt
       eventQueue.current = [...eventQueue.current, ...eventQueue.current];
     }
@@ -227,9 +230,9 @@ export function useAnalytics() {
         value: query
       });
 
-      console.log('Search tracked:', { query, resultsCount });
+      log.debug('Search tracked', { action: 'trackSearch', metadata: { query, resultsCount } });
     } catch (error) {
-      console.error('Error tracking search:', error);
+      log.error('Error tracking search', { action: 'trackSearch', metadata: { error } });
     }
   };
 
@@ -248,7 +251,7 @@ export function useAnalytics() {
           onConflict: userId ? 'user_id' : 'session_id'
         });
       } catch (enhancedError) {
-        console.log('Enhanced preference table not available, tracking as analytics event');
+        log.debug('Enhanced preference table not available, tracking as analytics event', { action: 'trackPreference' });
         // Fallback to tracking as a regular analytics event
         await trackEvent({
           eventType: 'click',
@@ -259,7 +262,7 @@ export function useAnalytics() {
         });
       }
     } catch (error) {
-      console.error('Error tracking preference:', error);
+      log.error('Error tracking preference', { action: 'trackPreference', metadata: { error } });
     }
   };
 
@@ -281,7 +284,7 @@ export function useAnalytics() {
           onConflict: 'session_id'
         });
       } catch (enhancedError) {
-        console.log('Enhanced journey table not available, tracking as analytics event');
+        log.debug('Enhanced journey table not available, tracking as analytics event', { action: 'trackConversion' });
       }
 
       // Always track as regular event too
@@ -293,7 +296,7 @@ export function useAnalytics() {
         value: conversionType
       });
     } catch (error) {
-      console.error('Error tracking conversion:', error);
+      log.error('Error tracking conversion', { action: 'trackConversion', metadata: { error } });
     }
   };
 

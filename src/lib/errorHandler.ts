@@ -3,6 +3,10 @@
  * Provides consistent error handling across the application
  */
 
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ErrorHandler');
+
 interface ErrorContext {
   component?: string;
   action?: string;
@@ -51,9 +55,9 @@ export function handleError(
       ? ` [${context.component || ''}${context.component && context.action ? ':' : ''}${context.action || ''}]`
       : '';
 
-    console.error(`${severity.toUpperCase()}${contextStr}:`, errorObj);
+    log.error(`${severity.toUpperCase()}${contextStr}`, { action: 'handleError', metadata: { error: errorObj } });
     if (context.metadata) {
-      console.error('Context:', context.metadata);
+      log.error('Error context', { action: 'handleError', metadata: context.metadata });
     }
   }
 
@@ -112,9 +116,7 @@ function showErrorToUser(message: string, severity: ErrorSeverity): void {
   // This should be implemented with your actual toast/notification system
   // Example: toast.error(message);
 
-  if (import.meta.env.DEV) {
-    console.log(`[User Error] ${severity}: ${message}`);
-  }
+  log.debug(`User error: ${severity}: ${message}`, { action: 'showError' });
 
   // Create a custom event that components can listen to
   if (typeof window !== 'undefined') {
@@ -157,9 +159,7 @@ export function createComponentErrorHandler(componentName: string) {
  * Log information for debugging (only in development)
  */
 export function logDebug(message: string, data?: any): void {
-  if (import.meta.env.DEV) {
-    console.log(`[Debug] ${message}`, data);
-  }
+  log.debug(message, { action: 'debug', metadata: { data } });
 }
 
 /**
@@ -167,7 +167,7 @@ export function logDebug(message: string, data?: any): void {
  */
 export function logWarning(message: string, context?: ErrorContext): void {
   if (import.meta.env.DEV) {
-    console.warn(`[Warning] ${message}`, context);
+    log.warn(message, { action: 'warning', metadata: context as Record<string, unknown> });
   }
 
   if (import.meta.env.PROD && errorTracker) {
@@ -219,7 +219,7 @@ export function safeJsonParse<T>(json: string, fallback: T): T {
     return JSON.parse(json) as T;
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.warn('Failed to parse JSON:', error);
+      log.warn('Failed to parse JSON', { action: 'safeJsonParse', metadata: { error } });
     }
     return fallback;
   }

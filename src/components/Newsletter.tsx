@@ -4,6 +4,9 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Mail, CheckCircle, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Newsletter');
 
 export default function Newsletter() {
   const [email, setEmail] = useState("");
@@ -54,7 +57,7 @@ export default function Newsletter() {
       });
       setEmail("");
     } catch (error) {
-      console.error('Newsletter signup error:', error);
+      log.error('Newsletter signup error', { action: 'handleSubmit', metadata: { error } });
       toast({
         title: "Subscription failed",
         description: "Please try again later.",

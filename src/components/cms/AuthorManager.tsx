@@ -13,6 +13,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { Users, Plus, Edit, Trash2, FileText, Globe, Twitter, Linkedin, Search, UserPlus } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AuthorManager');
 
 interface AuthorProfile {
   id: string;
@@ -77,7 +80,7 @@ export function AuthorManager() {
       if (error) throw error;
       setAuthors(data || []);
     } catch (error: any) {
-      console.error('Error loading authors:', error);
+      log.error('Error loading authors', { action: 'loadAuthors', metadata: { error } });
       toast.error('Failed to load authors');
     } finally {
       setLoading(false);
@@ -162,7 +165,7 @@ export function AuthorManager() {
       handleCloseDialog();
       loadAuthors();
     } catch (error: any) {
-      console.error('Error saving author:', error);
+      log.error('Error saving author', { action: 'handleSave', metadata: { error } });
       toast.error(error.message || 'Failed to save author');
     } finally {
       setIsSaving(false);
@@ -180,7 +183,7 @@ export function AuthorManager() {
       toast.success(`Author "${author.display_name}" deleted`);
       loadAuthors();
     } catch (error: any) {
-      console.error('Error deleting author:', error);
+      log.error('Error deleting author', { action: 'handleDelete', metadata: { error } });
       toast.error('Failed to delete author');
     }
   };

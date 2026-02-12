@@ -10,6 +10,9 @@
  */
 
 import { initErrorTracking as initErrorHandler, ErrorSeverity } from './errorHandler';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ErrorTracking');
 
 // Uncomment when Sentry is installed
 // import * as Sentry from '@sentry/react';
@@ -28,14 +31,14 @@ interface ErrorContext {
 export function initErrorTracking() {
   // Only initialize in production
   if (!import.meta.env.PROD) {
-    console.log('[Dev] Error tracking disabled in development');
+    log.debug('Error tracking disabled in development', { action: 'init' });
     return;
   }
 
   const sentryDSN = import.meta.env.VITE_SENTRY_DSN;
 
   if (!sentryDSN) {
-    console.warn('VITE_SENTRY_DSN not configured. Error tracking disabled.');
+    log.warn('VITE_SENTRY_DSN not configured. Error tracking disabled.');
     return;
   }
 
@@ -135,7 +138,7 @@ export function initErrorTracking() {
 
       // Fallback for when Sentry is not installed
       if (import.meta.env.DEV) {
-        console.error('[ErrorTracking]', error, context);
+        log.error('Tracking error', { action: 'captureException', metadata: { error, context } });
       }
     },
 
@@ -146,16 +149,14 @@ export function initErrorTracking() {
       */
 
       // Fallback
-      if (import.meta.env.DEV) {
-        console.log(`[ErrorTracking] ${level}:`, message);
-      }
+      log.debug(`${level}: ${message}`, { action: 'captureMessage' });
     },
   };
 
   // Register with error handler
   initErrorHandler(errorTracker);
 
-  console.log('✅ Error tracking initialized');
+  log.info('Error tracking initialized', { action: 'init' });
 }
 
 /**
@@ -190,8 +191,8 @@ export function clearUser() {
  * Add breadcrumb for debugging
  */
 export function addBreadcrumb(message: string, data?: Record<string, any>) {
+  log.debug(`Breadcrumb: ${message}`, { action: 'addBreadcrumb', metadata: data });
   if (!import.meta.env.PROD) {
-    console.log('[Breadcrumb]', message, data);
     return;
   }
 
@@ -211,7 +212,7 @@ export function addBreadcrumb(message: string, data?: Record<string, any>) {
  */
 export function captureError(error: Error, context?: ErrorContext) {
   if (!import.meta.env.PROD) {
-    console.error('[CaptureError]', error, context);
+    log.error('Capture error', { action: 'captureError', metadata: { error, context } });
     return;
   }
 
@@ -237,8 +238,8 @@ export function captureError(error: Error, context?: ErrorContext) {
  * Capture message
  */
 export function captureMessage(message: string, level: ErrorSeverity = ErrorSeverity.INFO) {
+  log.debug(`${level}: ${message}`, { action: 'captureMessage' });
   if (!import.meta.env.PROD) {
-    console.log(`[CaptureMessage] ${level}:`, message);
     return;
   }
 

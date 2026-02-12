@@ -1,6 +1,9 @@
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSessionManager');
 
 /**
  * Session Manager Hook
@@ -88,22 +91,20 @@ export function useSessionManager(options: SessionManagerOptions = {}): SessionM
       const { data, error } = await supabase.auth.refreshSession();
 
       if (error) {
-        console.error("[SessionManager] Refresh failed:", error.message);
+        log.error("Refresh failed", { action: 'refreshSession', metadata: { message: error.message } });
         onSessionError?.(new Error(error.message));
         return false;
       }
 
       if (data.session) {
-        if (import.meta.env.DEV) {
-          console.log("[SessionManager] Session refreshed successfully");
-        }
+        log.debug("Session refreshed successfully", { action: 'refreshSession' });
         onSessionRefreshed?.();
         return true;
       }
 
       return false;
     } catch (error) {
-      console.error("[SessionManager] Refresh exception:", error);
+      log.error("Refresh exception", { action: 'refreshSession', metadata: { error } });
       onSessionError?.(error instanceof Error ? error : new Error("Unknown error"));
       return false;
     } finally {
@@ -140,9 +141,7 @@ export function useSessionManager(options: SessionManagerOptions = {}): SessionM
       refreshSession();
     } else {
       // Schedule refresh
-      if (import.meta.env.DEV) {
-        console.log(`[SessionManager] Scheduling refresh in ${Math.floor(timeUntilRefresh / 60)} minutes`);
-      }
+      log.debug(`Scheduling refresh in ${Math.floor(timeUntilRefresh / 60)} minutes`, { action: 'scheduleRefresh' });
 
       refreshTimeoutRef.current = setTimeout(() => {
         refreshSession();

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User } from "@supabase/supabase-js";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAdminAuth');
 
 export type UserRole = 'user' | 'moderator' | 'admin' | 'root_admin';
 
@@ -79,7 +82,7 @@ export function useAdminAuth() {
           });
         }
       } catch (error) {
-        console.error("Admin auth initialization failed:", error);
+        log.error('Admin auth initialization failed', { action: 'initializeAuth', metadata: { error } });
         if (isMounted) {
           setState({
             user: null,

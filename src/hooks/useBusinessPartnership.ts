@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useBusinessPartnership');
 
 interface BusinessProfile {
   id: string;
@@ -109,7 +112,7 @@ export function useBusinessPartnership() {
       setBenefits(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch benefits:', error);
+      log.error('Failed to fetch benefits', { action: 'fetchBenefits', metadata: { error } });
       return [];
     }
   };
@@ -127,7 +130,7 @@ export function useBusinessPartnership() {
       setAdvertisingPackages(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch advertising packages:', error);
+      log.error('Failed to fetch advertising packages', { action: 'fetchAdvertisingPackages', metadata: { error } });
       return [];
     }
   };
@@ -147,7 +150,7 @@ export function useBusinessPartnership() {
       setBusinessProfile(data);
       return data;
     } catch (error) {
-      console.error('Failed to fetch business profile:', error);
+      log.error('Failed to fetch business profile', { action: 'fetchBusinessProfile', metadata: { error } });
       return null;
     }
   };
@@ -167,7 +170,7 @@ export function useBusinessPartnership() {
       setApplications(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch applications:', error);
+      log.error('Failed to fetch applications', { action: 'fetchApplications', metadata: { error } });
       return [];
     }
   };
@@ -195,7 +198,7 @@ export function useBusinessPartnership() {
       setBusinessProfile(data);
       return data;
     } catch (error) {
-      console.error('Failed to create business profile:', error);
+      log.error('Failed to create business profile', { action: 'createBusinessProfile', metadata: { error } });
       toast.error('Failed to create business profile');
       return null;
     } finally {
@@ -223,7 +226,7 @@ export function useBusinessPartnership() {
       setBusinessProfile(data);
       return data;
     } catch (error) {
-      console.error('Failed to update business profile:', error);
+      log.error('Failed to update business profile', { action: 'updateBusinessProfile', metadata: { error } });
       toast.error('Failed to update business profile');
       return null;
     } finally {
@@ -255,7 +258,7 @@ export function useBusinessPartnership() {
       await fetchApplications();
       return data;
     } catch (error) {
-      console.error('Failed to submit application:', error);
+      log.error('Failed to submit application', { action: 'submitApplication', metadata: { error } });
       toast.error('Failed to submit application');
       return null;
     } finally {
@@ -280,7 +283,7 @@ export function useBusinessPartnership() {
       setAnalytics(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch analytics:', error);
+      log.error('Failed to fetch analytics', { action: 'fetchAnalytics', metadata: { error } });
       return [];
     }
   };
@@ -318,7 +321,7 @@ export function useBusinessPartnership() {
           });
       }
     } catch (error) {
-      console.error('Failed to track analytics event:', error);
+      log.error('Failed to track analytics event', { action: 'trackAnalyticsEvent', metadata: { error } });
     }
   };
 

@@ -33,6 +33,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('TrafficOverview');
 
 interface TrafficOverviewProps {
   dateRange: { from: Date; to: Date };
@@ -182,7 +185,7 @@ export function TrafficOverview({ dateRange, selectedProvider }: TrafficOverview
         setCountryData(countryBreakdown);
       }
     } catch (error) {
-      console.error("Error loading traffic data:", error);
+      log.error('Error loading traffic data', { action: 'loadTrafficData', metadata: { error } });
     } finally {
       setLoading(false);
     }

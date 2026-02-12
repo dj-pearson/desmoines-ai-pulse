@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('usePageTracking');
 
 /**
  * Generates or retrieves a persistent session ID for analytics tracking.
@@ -57,7 +60,7 @@ async function recordPageView(params: {
   });
 
   if (error && import.meta.env.DEV) {
-    console.error('[usePageTracking] Failed to record page view:', error.message);
+    log.error('Failed to record page view', { action: 'recordPageView', metadata: { errorMessage: error.message } });
   }
 }
 

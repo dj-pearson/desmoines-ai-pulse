@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { AuthMFAEnrollResponse, AuthMFAVerifyResponse, AuthMFAChallengeResponse } from '@supabase/supabase-js';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useMFA');
 
 export interface MFAFactor {
   id: string;
@@ -64,7 +67,7 @@ export function useMFA() {
 
       return { qrCode, secret, factorId };
     } catch (error) {
-      console.error('MFA enrollment error:', error);
+      log.error('MFA enrollment error', { action: 'enrollTOTP', metadata: { error } });
       toast({
         title: 'Enrollment Failed',
         description: error instanceof Error ? error.message : 'Failed to enroll MFA',
@@ -105,7 +108,7 @@ export function useMFA() {
       await listFactors(); // Refresh factors list
       return true;
     } catch (error) {
-      console.error('MFA verification error:', error);
+      log.error('MFA verification error', { action: 'verifyEnrollment', metadata: { error } });
       toast({
         title: 'Verification Failed',
         description: error instanceof Error ? error.message : 'Invalid verification code',
@@ -132,7 +135,7 @@ export function useMFA() {
 
       return data?.id || null;
     } catch (error) {
-      console.error('MFA challenge error:', error);
+      log.error('MFA challenge error', { action: 'createChallenge', metadata: { error } });
       toast({
         title: 'Challenge Failed',
         description: error instanceof Error ? error.message : 'Failed to create MFA challenge',
@@ -175,7 +178,7 @@ export function useMFA() {
 
       return false;
     } catch (error) {
-      console.error('MFA verification error:', error);
+      log.error('MFA verification error', { action: 'verifyChallenge', metadata: { error } });
       toast({
         title: 'Verification Failed',
         description: error instanceof Error ? error.message : 'Invalid verification code',
@@ -209,7 +212,7 @@ export function useMFA() {
       setFactors(userFactors);
       return userFactors;
     } catch (error) {
-      console.error('List factors error:', error);
+      log.error('List factors error', { action: 'listFactors', metadata: { error } });
       toast({
         title: 'Failed to Load MFA Factors',
         description: error instanceof Error ? error.message : 'Could not retrieve MFA factors',
@@ -241,7 +244,7 @@ export function useMFA() {
       await listFactors(); // Refresh factors list
       return true;
     } catch (error) {
-      console.error('Unenroll error:', error);
+      log.error('Unenroll error', { action: 'unenrollFactor', metadata: { error } });
       toast({
         title: 'Unenroll Failed',
         description: error instanceof Error ? error.message : 'Could not remove MFA factor',
@@ -266,7 +269,7 @@ export function useMFA() {
 
       return data?.currentLevel || null;
     } catch (error) {
-      console.error('Get AAL error:', error);
+      log.error('Get AAL error', { action: 'getAssuranceLevel', metadata: { error } });
       return null;
     }
   }, []);

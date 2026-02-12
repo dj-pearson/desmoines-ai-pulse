@@ -12,6 +12,9 @@ import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("DietaryRestaurants");
 
 const dietaryOptions = [
   { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
@@ -82,7 +85,7 @@ export default function DietaryRestaurants() {
           setRestaurants(data || []);
         }
       } catch (error) {
-        console.error('Error fetching restaurants:', error);
+        log.error("Error fetching restaurants", { action: "fetchRestaurants", metadata: { error } });
         setRestaurants([]);
       } finally {
         setIsLoading(false);

@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { webVitalsConfig } from '@/lib/performanceConfig';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useWebVitals');
 
 interface WebVitalMetric {
   name: string;
@@ -153,7 +156,7 @@ export const useWebVitals = () => {
         });
 
       } catch (error) {
-        console.warn('Web Vitals measurement failed:', error);
+        log.warn('Web Vitals measurement failed', { action: 'measureWebVitals', metadata: { error } });
       }
     };
 

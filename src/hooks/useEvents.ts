@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useEvents');
 
 type Event = Database["public"]["Tables"]["events"]["Row"];
 type EventInsert = Database["public"]["Tables"]["events"]["Insert"];
@@ -34,7 +37,7 @@ export function useEvents(filters: EventFilters = {}) {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
 
       const today = new Date().toISOString().split('T')[0];
-      console.log('useEvents: Fetching events for date >=', today);
+      log.debug('Fetching events for date', { action: 'fetchEvents', metadata: { minDate: today } });
 
       let query = supabase
         .from("events")
@@ -85,13 +88,13 @@ export function useEvents(filters: EventFilters = {}) {
       let { data, error, count } = await query;
 
       if (error) {
-        console.error("useEvents: Database query error:", error);
+        log.error("Database query error", { action: 'fetchEvents', metadata: { error } });
         throw error;
       }
 
       // Fallback to fuzzy search if no results found with full-text search
       if (filters.search && (!data || data.length === 0)) {
-        console.log('useEvents: No results with full-text search, trying fuzzy search...');
+        log.debug('No results with full-text search, trying fuzzy search', { action: 'fetchEvents' });
         try {
           const { data: fuzzyData, error: fuzzyError } = await supabase
             .rpc('fuzzy_search_events', {
@@ -102,15 +105,15 @@ export function useEvents(filters: EventFilters = {}) {
           if (!fuzzyError && fuzzyData) {
             data = fuzzyData as unknown as Event[];
             count = fuzzyData.length;
-            console.log('useEvents: Fuzzy search found', fuzzyData.length, 'events');
+            log.debug('Fuzzy search found events', { action: 'fetchEvents', metadata: { count: fuzzyData.length } });
           }
         } catch (fuzzyErr) {
           // Fuzzy search function not available yet - silently continue
-          console.log('useEvents: Fuzzy search not available, using existing results');
+          log.debug('Fuzzy search not available, using existing results', { action: 'fetchEvents' });
         }
       }
 
-      console.log('useEvents: Found', data?.length, 'events from', today, 'onwards');
+      log.debug('Found events', { action: 'fetchEvents', metadata: { count: data?.length, minDate: today } });
 
       setState({
         events: data || [],
@@ -119,7 +122,7 @@ export function useEvents(filters: EventFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching events:", error);
+      log.error("Error fetching events", { action: 'fetchEvents', metadata: { error } });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -143,7 +146,7 @@ export function useEvents(filters: EventFilters = {}) {
       fetchEvents();
       return data;
     } catch (error) {
-      console.error("Error creating event:", error);
+      log.error("Error creating event", { action: 'createEvent', metadata: { error } });
       throw error;
     }
   };
@@ -163,7 +166,7 @@ export function useEvents(filters: EventFilters = {}) {
       fetchEvents();
       return data;
     } catch (error) {
-      console.error("Error updating event:", error);
+      log.error("Error updating event", { action: 'updateEvent', metadata: { error } });
       throw error;
     }
   };
@@ -177,7 +180,7 @@ export function useEvents(filters: EventFilters = {}) {
       // Refresh events list
       fetchEvents();
     } catch (error) {
-      console.error("Error deleting event:", error);
+      log.error("Error deleting event", { action: 'deleteEvent', metadata: { error } });
       throw error;
     }
   };

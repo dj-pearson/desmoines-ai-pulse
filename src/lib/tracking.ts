@@ -4,6 +4,9 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AdTracking');
 
 const SESSION_STORAGE_KEY = 'ad_session_id';
 const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
@@ -125,13 +128,13 @@ export async function logImpression(
       .single();
 
     if (error) {
-      console.error('Error logging impression:', error);
+      log.error('Error logging impression', { action: 'logImpression', metadata: { error } });
       return { success: false, error: error.message };
     }
 
     return { success: true, impressionId: data.id };
   } catch (err) {
-    console.error('Error logging impression:', err);
+    log.error('Error logging impression', { action: 'logImpression', metadata: { error: err } });
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Unknown error'
@@ -178,13 +181,13 @@ export async function logClick(
       });
 
     if (error) {
-      console.error('Error logging click:', error);
+      log.error('Error logging click', { action: 'logClick', metadata: { error } });
       return { success: false, error: error.message };
     }
 
     return { success: true };
   } catch (err) {
-    console.error('Error logging click:', err);
+    log.error('Error logging click', { action: 'logClick', metadata: { error: err } });
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Unknown error'
@@ -214,7 +217,7 @@ export async function shouldShowAd(
       .limit(3);
 
     if (sessionError) {
-      console.error('Error checking session frequency:', sessionError);
+      log.error('Error checking session frequency', { action: 'shouldShowAd', metadata: { error: sessionError } });
       return true; // Allow ad on error
     }
 
@@ -235,7 +238,7 @@ export async function shouldShowAd(
         .limit(10);
 
       if (userError) {
-        console.error('Error checking user frequency:', userError);
+        log.error('Error checking user frequency', { action: 'shouldShowAd', metadata: { error: userError } });
         return true; // Allow ad on error
       }
 
@@ -246,7 +249,7 @@ export async function shouldShowAd(
 
     return true; // Ad can be shown
   } catch (err) {
-    console.error('Error checking frequency cap:', err);
+    log.error('Error checking frequency cap', { action: 'shouldShowAd', metadata: { error: err } });
     return true; // Allow ad on error
   }
 }
@@ -368,7 +371,7 @@ export async function getCampaignAnalytics(
       uniqueViewers,
     };
   } catch (err) {
-    console.error('Error getting campaign analytics:', err);
+    log.error('Error getting campaign analytics', { action: 'getCampaignAnalytics', metadata: { error: err } });
     return {
       totalImpressions: 0,
       totalClicks: 0,

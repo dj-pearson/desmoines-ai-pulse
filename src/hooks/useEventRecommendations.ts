@@ -2,6 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Event } from '@/lib/types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useEventRecommendations');
 
 interface RecommendedEvent extends Event {
   recommendation_score?: number;
@@ -38,7 +41,7 @@ export function useEventRecommendations(options: UseEventRecommendationsOptions 
         if (error) {
           // Only log unexpected errors (not function not found or schema errors)
           if (error.code !== '42883' && error.code !== '42804' && !error.message?.includes('does not exist')) {
-            console.error('Error fetching personalized recommendations:', error);
+            log.error('Error fetching personalized recommendations', { action: 'fetchPersonalized', metadata: { error } });
           }
           return [] as RecommendedEvent[];
         }
@@ -67,7 +70,7 @@ export function useEventRecommendations(options: UseEventRecommendationsOptions 
         if (error) {
           // Only log unexpected errors (not function not found or schema errors)
           if (error.code !== '42883' && error.code !== '42804' && !error.message?.includes('does not exist')) {
-            console.error('Error fetching trending events:', error);
+            log.error('Error fetching trending events', { action: 'fetchTrending', metadata: { error } });
           }
           return [] as RecommendedEvent[];
         }

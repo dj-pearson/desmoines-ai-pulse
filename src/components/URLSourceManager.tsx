@@ -43,6 +43,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('URLSourceManager');
 
 interface URLSource {
   id: string;
@@ -106,7 +109,7 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
       if (error) throw error;
       setSources(data || []);
     } catch (error) {
-      console.error("Error fetching URL sources:", error);
+      log.error("Error fetching URL sources", { action: 'fetchSources', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to load URL sources",
@@ -150,7 +153,7 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
       setIsDialogOpen(false);
       fetchSources();
     } catch (error) {
-      console.error("Error saving URL source:", error);
+      log.error("Error saving URL source", { action: 'handleSubmit', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to save URL source",
@@ -177,7 +180,7 @@ const URLSourceManager: React.FC<URLSourceManagerProps> = ({
       
       fetchSources();
     } catch (error) {
-      console.error("Error deleting URL source:", error);
+      log.error("Error deleting URL source", { action: 'handleDelete', metadata: { error } });
       toast({
         title: "Error",
         description: "Failed to delete URL source",

@@ -7,6 +7,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { validateContent, autoFixContent, ContentValidationReport } from '@/lib/contentValidation';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useContentQueue');
 
 export interface QueueItem {
   id: string;
@@ -117,7 +120,7 @@ export function useContentQueue(filters?: {
       }
     },
     onError: (error) => {
-      console.error('Failed to submit content:', error);
+      log.error('Failed to submit content', { action: 'submitToQueue', metadata: { error } });
       toast.error('Failed to submit content to queue');
     }
   });
@@ -190,7 +193,7 @@ export function useContentQueue(filters?: {
       toast.success('Content approved and published');
     },
     onError: (error) => {
-      console.error('Failed to approve content:', error);
+      log.error('Failed to approve content', { action: 'approveItem', metadata: { error } });
       toast.error('Failed to approve content');
     }
   });
@@ -227,7 +230,7 @@ export function useContentQueue(filters?: {
       toast.success('Content rejected');
     },
     onError: (error) => {
-      console.error('Failed to reject content:', error);
+      log.error('Failed to reject content', { action: 'rejectItem', metadata: { error } });
       toast.error('Failed to reject content');
     }
   });
@@ -273,7 +276,7 @@ export function useContentQueue(filters?: {
           .single();
 
         if (insertError) {
-          console.error(`Failed to insert ${item.content_type}:`, insertError);
+          log.error(`Failed to insert ${item.content_type}`, { action: 'bulkApproveHighConfidence', metadata: { error: insertError } });
           return null;
         }
 
@@ -305,7 +308,7 @@ export function useContentQueue(filters?: {
       toast.success(`Bulk approved ${result.successful} of ${result.total} items`);
     },
     onError: (error: any) => {
-      console.error('Bulk approval failed:', error);
+      log.error('Bulk approval failed', { action: 'bulkApproveHighConfidence', metadata: { error } });
       toast.error(error.message || 'Bulk approval failed');
     }
   });

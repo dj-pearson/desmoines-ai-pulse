@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger('AdminAI');
 import AdminNav from "@/components/admin/AdminNav";
 import AICrawler from "@/components/AICrawler";
 import { AIConfigurationManager } from "@/components/AIConfigurationManager";
@@ -230,7 +233,7 @@ export default function AdminAI() {
       {showScraperWizard && (
         <ScraperConfigWizard
           onSave={(config) => {
-            console.log("Save scraper config:", config);
+            log.debug('Save scraper config', { action: 'onSave', metadata: { config } });
             setShowScraperWizard(false);
           }}
           onClose={() => setShowScraperWizard(false)}

@@ -37,6 +37,9 @@ import { KeywordAnalytics } from "./SearchTrafficDashboard/KeywordAnalytics";
 import { SEOOpportunities } from "./SearchTrafficDashboard/SEOOpportunities";
 import { SiteHealth } from "./SearchTrafficDashboard/SiteHealth";
 import { ComparativeAnalysis } from "./SearchTrafficDashboard/ComparativeAnalysis";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SearchTrafficDashboard');
 
 interface ConnectedProvider {
   provider_name: string;
@@ -84,7 +87,7 @@ export function SearchTrafficDashboard() {
           .eq("user_id", user.id);
 
         if (error) {
-          console.log("OAuth tokens table not available yet");
+          log.debug('OAuth tokens table not available yet', { action: 'loadConnectedProviders' });
           setConnectedProviders([]);
           return;
         }
@@ -113,11 +116,11 @@ export function SearchTrafficDashboard() {
 
         setConnectedProviders(providers);
       } catch (err) {
-        console.log("Analytics tables not available yet");
+        log.debug('Analytics tables not available yet', { action: 'loadConnectedProviders' });
         setConnectedProviders([]);
       }
     } catch (error) {
-      console.error("Error loading connected providers:", error);
+      log.error('Error loading connected providers', { action: 'loadConnectedProviders', metadata: { error } });
       toast.error("Failed to load connected providers");
     } finally {
       setLoading(false);
@@ -149,7 +152,7 @@ export function SearchTrafficDashboard() {
       // Refresh the dashboard
       loadConnectedProviders();
     } catch (error: any) {
-      console.error("Sync error:", error);
+      log.error('Sync error', { action: 'handleSyncData', metadata: { error } });
       toast.error("Failed to sync data", {
         description: error.message || "Please try again later",
       });
@@ -188,7 +191,7 @@ export function SearchTrafficDashboard() {
 
       toast.success("Export completed!");
     } catch (error: any) {
-      console.error("Export error:", error);
+      log.error('Export error', { action: 'handleExportData', metadata: { error } });
       toast.error("Failed to export data", {
         description: error.message || "Please try again later",
       });

@@ -12,6 +12,9 @@ import { Baby, MapPin, Calendar, Users } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("KidsEvents");
 
 interface EventItem {
   id: string;
@@ -48,13 +51,13 @@ export default function KidsEvents() {
           .limit(100);
 
         if (error) {
-          console.error('Error fetching kids events:', error);
+          log.error("Error fetching kids events", { action: "fetchKidsEvents", metadata: { error } });
           setEvents([]);
         } else {
           setEvents(data || []);
         }
       } catch (error) {
-        console.error('Error in fetchKidsEvents:', error);
+        log.error("Error in fetchKidsEvents", { action: "fetchKidsEvents", metadata: { error } });
         setEvents([]);
       } finally {
         setIsLoading(false);

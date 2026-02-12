@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSearchInsights');
 
 interface PopularSearch {
   query: string;
@@ -45,7 +48,7 @@ export function useSearchInsights() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching search data:', error);
+        log.error('Error fetching search data', { action: 'fetchSearchInsights', metadata: { error } });
         setInsights(generateFallbackInsights());
         setHasRealData(false);
         return;
@@ -63,7 +66,7 @@ export function useSearchInsights() {
       }
 
     } catch (error) {
-      console.error('Error fetching search insights:', error);
+      log.error('Error fetching search insights', { action: 'fetchSearchInsights', metadata: { error } });
       setInsights(generateFallbackInsights());
       setHasRealData(false);
     } finally {

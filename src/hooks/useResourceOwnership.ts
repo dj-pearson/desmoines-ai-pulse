@@ -25,6 +25,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useSecurityContext } from './useSecurityContext';
 import { usePermission, PERMISSIONS } from './usePermission';
+import { createLogger } from '@/lib/logger';
 import {
   type OwnableResource,
   type OwnershipConfig,
@@ -32,6 +33,8 @@ import {
   checkOwnership,
   isAdmin,
 } from '@/lib/security';
+
+const log = createLogger('useResourceOwnership');
 
 interface UseResourceOwnershipOptions extends Partial<OwnershipConfig> {
   /** Skip the ownership check (useful for conditional rendering) */
@@ -97,7 +100,7 @@ export function useResourceOwnership(
       setIsOwner(owned);
       setError(null);
     } catch (err) {
-      console.error(`Error checking ownership for ${resourceType}:${resourceId}:`, err);
+      log.error(`Error checking ownership for ${resourceType}:${resourceId}`, { action: 'checkOwnership', metadata: { error: err } });
       setError(err instanceof Error ? err : new Error('Failed to check ownership'));
       setIsOwner(false);
     } finally {

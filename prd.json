@@ -15,7 +15,7 @@
         "Typecheck passes locally"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "The project currently only has an event-crawler.yml workflow. This is the single most critical gap for enterprise readiness — no code quality gates exist in CI."
     },
     {
@@ -32,7 +32,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Currently the project only has Playwright E2E tests. No unit testing framework exists. Vitest is the natural choice since the project already uses Vite."
     },
     {
@@ -47,7 +47,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Focus on the three most critical library files: errorHandler.ts, safeStorage.ts, and utils.ts. These are used across the entire codebase."
     },
     {
@@ -62,7 +62,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-001 (workflow) and US-002 (vitest setup). This ensures tests are enforced, not just available."
     },
     {
@@ -79,7 +79,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "This replaces the 188 files of raw console.log with a structured alternative. Must be created before the cleanup stories."
     },
     {
@@ -94,7 +94,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Start with src/lib/ because these are the foundational utilities used everywhere. Subsequent stories will clean up hooks and components."
     },
     {
@@ -109,7 +109,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage — skip those."
     },
     {
@@ -123,7 +123,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Contexts are critical (AuthContext handles auth state). Pages are user-facing entry points. Both should have clean logging."
     },
     {
@@ -136,7 +136,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "This is the largest batch — 178 components. Many may already be clean. Focus on files that actually have console.* calls. The shadcn/ui base components in src/components/ui/ can be excluded if they have no console calls."
     },
     {

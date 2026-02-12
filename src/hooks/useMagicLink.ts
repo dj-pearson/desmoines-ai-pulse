@@ -1,6 +1,9 @@
 import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useMagicLink');
 
 interface MagicLinkSettings {
   max_requests_per_hour: number;
@@ -45,7 +48,7 @@ export function useMagicLink() {
         if (error) throw error;
         return data as RateLimitResult;
       } catch (err) {
-        console.error('Error checking magic link rate limit:', err);
+        log.error('Error checking magic link rate limit', { action: 'checkRateLimit', metadata: { error: err } });
         // Fail open - allow the request
         return { allowed: true };
       }
@@ -84,7 +87,7 @@ export function useMagicLink() {
       });
 
       if (error) {
-        console.error('Error sending magic link:', error);
+        log.error('Error sending magic link', { action: 'sendMagicLink', metadata: { error } });
         return {
           success: false,
           message: error.message || 'Failed to send magic link',
@@ -118,7 +121,7 @@ export function useMagicLink() {
       });
 
       if (error) {
-        console.error('Error verifying magic link:', error);
+        log.error('Error verifying magic link', { action: 'verifyMagicLink', metadata: { error } });
         throw error;
       }
 
@@ -198,7 +201,7 @@ export function useMagicLink() {
 
       return !!data;
     } catch (error) {
-      console.error('Error checking email existence:', error);
+      log.error('Error checking email existence', { action: 'checkEmailExists', metadata: { error } });
       return false;
     }
   }, []);

@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSimplePersonalization');
 
 interface SimpleRecommendation {
   id: string;
@@ -54,7 +57,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
 
       setRecommendations(scoredRecommendations);
     } catch (error) {
-      console.error('Error generating recommendations:', error);
+      log.error('Error generating recommendations', { action: 'generateRecommendations', metadata: { error } });
       // Fallback to popular content
       const fallbackRecommendations = await getFallbackRecommendations();
       setRecommendations(fallbackRecommendations);
@@ -209,7 +212,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
           seenContentIds.add(item.content_id);
         }
       } catch (error) {
-        console.log(`Could not fetch content for ${item.content_type}:${item.content_id}`);
+        log.debug(`Could not fetch content for ${item.content_type}:${item.content_id}`, { action: 'combineAndScoreRecommendations' });
       }
     }
 
@@ -253,7 +256,7 @@ export function useSimplePersonalization(options: RecommendationOptions = {}) {
         }
       }
     } catch (error) {
-      console.log('Error getting popular content:', error);
+      log.debug('Error getting popular content', { action: 'getPopularContent', metadata: { error } });
     }
 
     return popular;

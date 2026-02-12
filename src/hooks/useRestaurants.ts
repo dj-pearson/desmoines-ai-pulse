@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useRestaurants');
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 type RestaurantInsert = Database["public"]["Tables"]["restaurants"]["Insert"];
@@ -139,7 +142,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       // Fallback to fuzzy search if no results found with full-text search
       if (filters.search && (!data || data.length === 0)) {
-        console.log('useRestaurants: No results with full-text search, trying fuzzy search...');
+        log.debug('No results with full-text search, trying fuzzy search', { action: 'fetchRestaurants' });
         try {
           const { data: fuzzyData, error: fuzzyError } = await supabase
             .rpc('fuzzy_search_restaurants', {
@@ -150,11 +153,11 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
           if (!fuzzyError && fuzzyData) {
             data = fuzzyData as unknown as Restaurant[];
             count = fuzzyData.length;
-            console.log('useRestaurants: Fuzzy search found', fuzzyData.length, 'restaurants');
+            log.debug('Fuzzy search found restaurants', { action: 'fetchRestaurants', metadata: { count: fuzzyData.length } });
           }
         } catch (fuzzyErr) {
           // Fuzzy search function not available yet - silently continue
-          console.log('useRestaurants: Fuzzy search not available, using existing results');
+          log.debug('Fuzzy search not available, using existing results', { action: 'fetchRestaurants' });
         }
       }
 
@@ -165,7 +168,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching restaurants:", error);
+      log.error("Error fetching restaurants", { action: 'fetchRestaurants', metadata: { error } });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -200,7 +203,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       fetchRestaurants();
       return data;
     } catch (error) {
-      console.error("Error creating restaurant:", error);
+      log.error("Error creating restaurant", { action: 'createRestaurant', metadata: { error } });
       throw error;
     }
   };
@@ -219,7 +222,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       fetchRestaurants();
       return data;
     } catch (error) {
-      console.error("Error updating restaurant:", error);
+      log.error("Error updating restaurant", { action: 'updateRestaurant', metadata: { error } });
       throw error;
     }
   };
@@ -235,7 +238,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
 
       fetchRestaurants();
     } catch (error) {
-      console.error("Error deleting restaurant:", error);
+      log.error("Error deleting restaurant", { action: 'deleteRestaurant', metadata: { error } });
       throw error;
     }
   };
@@ -300,7 +303,7 @@ export function useRestaurantFilterOptions() {
           isLoading: false,
         });
       } catch (error) {
-        console.error("Error fetching filter options:", error);
+        log.error("Error fetching filter options", { action: 'fetchFilterOptions', metadata: { error } });
         setOptions((prev) => ({ ...prev, isLoading: false }));
       }
     };

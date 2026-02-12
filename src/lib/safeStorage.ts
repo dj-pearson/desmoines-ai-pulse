@@ -3,6 +3,10 @@
  * Falls back to in-memory storage when localStorage is unavailable
  */
 
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SafeStorage');
+
 interface StorageInterface {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -49,7 +53,7 @@ class SafeStorage implements StorageInterface {
       return true;
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn('localStorage is not available, falling back to memory storage', e);
+        log.warn('localStorage is not available, falling back to memory storage', { action: 'checkLocalStorage', metadata: { error: e } });
       }
       return false;
     }
@@ -60,7 +64,7 @@ class SafeStorage implements StorageInterface {
       return this.storage.getItem(key);
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn(`Failed to get item "${key}" from storage:`, e);
+        log.warn(`Failed to get item "${key}" from storage`, { action: 'getItem', metadata: { key, error: e } });
       }
       return null;
     }
@@ -71,7 +75,7 @@ class SafeStorage implements StorageInterface {
       this.storage.setItem(key, value);
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn(`Failed to set item "${key}" in storage:`, e);
+        log.warn(`Failed to set item "${key}" in storage`, { action: 'setItem', metadata: { key, error: e } });
       }
       // If localStorage is full, try to clear old items
       if (this.isLocalStorageAvailable && e instanceof DOMException) {
@@ -92,7 +96,7 @@ class SafeStorage implements StorageInterface {
       this.storage.removeItem(key);
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn(`Failed to remove item "${key}" from storage:`, e);
+        log.warn(`Failed to remove item "${key}" from storage`, { action: 'removeItem', metadata: { key, error: e } });
       }
     }
   }
@@ -102,7 +106,7 @@ class SafeStorage implements StorageInterface {
       this.storage.clear();
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn('Failed to clear storage:', e);
+        log.warn('Failed to clear storage', { action: 'clear', metadata: { error: e } });
       }
     }
   }
@@ -151,7 +155,7 @@ export const storage = {
       return JSON.parse(item) as T;
     } catch {
       if (import.meta.env.DEV) {
-        console.warn(`Failed to parse JSON from storage key "${key}"`);
+        log.warn(`Failed to parse JSON from storage key "${key}"`, { action: 'get', metadata: { key } });
       }
       return defaultValue ?? null;
     }
@@ -163,7 +167,7 @@ export const storage = {
       safeStorage.setItem(key, serialized);
     } catch (e) {
       if (import.meta.env.DEV) {
-        console.warn(`Failed to serialize value for storage key "${key}":`, e);
+        log.warn(`Failed to serialize value for storage key "${key}"`, { action: 'set', metadata: { key, error: e } });
       }
     }
   },

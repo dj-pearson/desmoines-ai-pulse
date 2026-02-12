@@ -1,6 +1,9 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useEventClone');
 
 interface CloneEventParams {
   eventId: string;
@@ -35,7 +38,7 @@ export function useEventClone() {
       return newEventId;
     },
     onError: (error: any) => {
-      console.error('Error cloning event:', error);
+      log.error('Error cloning event', { action: 'cloneEvent', metadata: { error } });
       toast({
         title: 'Failed to clone event',
         description: error.message || 'Please try again',

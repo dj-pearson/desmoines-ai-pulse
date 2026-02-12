@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useWriteupGenerator');
 
 export interface WriteupRequest {
   type: "event" | "restaurant";
@@ -29,7 +32,7 @@ export function useWriteupGenerator() {
         throw new Error("Valid URL is required for writeup generation");
       }
 
-      console.log(`Generating writeup for ${request.type}:`, request);
+      log.info(`Generating writeup for ${request.type}`, { action: 'generateWriteup', metadata: { request } });
 
       const { data, error } = await supabase.functions.invoke(
         "generate-writeup",
@@ -48,7 +51,7 @@ export function useWriteupGenerator() {
       );
 
       if (error) {
-        console.error("Supabase function error:", error);
+        log.error("Supabase function error", { action: 'generateWriteup', metadata: { error } });
         throw new Error(error.message || "Failed to generate writeup");
       }
 
@@ -62,15 +65,15 @@ export function useWriteupGenerator() {
         }. Length: ${data.writeup?.length || 0} characters.`,
       });
 
-      console.log("Writeup generation completed:", {
+      log.info("Writeup generation completed", { action: 'generateWriteup', metadata: {
         id: request.id,
         type: request.type,
         writeupLength: data.writeup?.length,
         extractedContentLength: data.extractedContentLength,
         featuresFound: data.featuresFound,
-      });
+      } });
     } catch (error) {
-      console.error("Error generating writeup:", error);
+      log.error("Error generating writeup", { action: 'generateWriteup', metadata: { error } });
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred";
 

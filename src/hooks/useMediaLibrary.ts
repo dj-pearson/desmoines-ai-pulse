@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useMediaLibrary');
 
 export interface MediaAsset {
   id: string;
@@ -219,7 +222,7 @@ export function useDeleteMediaAsset() {
         .remove([asset.file_path]);
 
       if (storageError) {
-        console.error("Failed to delete from storage:", storageError);
+        log.error("Failed to delete from storage", { action: 'deleteMediaAsset', metadata: { error: storageError } });
         // Continue to delete the record even if storage deletion fails
       }
 

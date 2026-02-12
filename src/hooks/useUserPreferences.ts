@@ -1,12 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { createLogger } from '@/lib/logger';
 import {
   UserPreferences,
   defaultPreferences,
   EventCategory,
   DietaryRestriction,
 } from '@/types/preferences';
+
+const log = createLogger('useUserPreferences');
 
 const STORAGE_KEY = 'desmoines_user_preferences';
 
@@ -62,7 +65,7 @@ export function useUserPreferences() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(newPreferences));
       }
     } catch (error) {
-      console.error('Failed to load preferences:', error);
+      log.error('Failed to load preferences', { action: 'loadPreferences', metadata: { error } });
       // Use defaults on error
       const newPreferences: UserPreferences = {
         ...defaultPreferences,
@@ -99,14 +102,14 @@ export function useUserPreferences() {
           });
 
           if (error) {
-            console.debug('Could not sync preferences to Supabase:', error);
+            log.debug('Could not sync preferences to Supabase', { action: 'savePreferences', metadata: { error } });
             // Not critical - localStorage backup exists
           }
         }
 
         return updated;
       } catch (error) {
-        console.error('Failed to save preferences:', error);
+        log.error('Failed to save preferences', { action: 'savePreferences', metadata: { error } });
         throw error;
       } finally {
         setIsSaving(false);

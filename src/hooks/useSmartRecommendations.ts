@@ -4,6 +4,9 @@ import { useAuth } from './useAuth';
 import { useProfile } from './useProfile';
 import { useFeedback } from './useFeedback';
 import { Event } from '@/lib/types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSmartRecommendations');
 
 interface SmartRecommendation {
   event: Event;
@@ -75,7 +78,7 @@ export function useSmartRecommendations() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate recommendations';
       setError(errorMessage);
-      console.error('Smart recommendations error:', err);
+      log.error('Smart recommendations error', { action: 'generateRecommendations', metadata: { error: err } });
       return [];
     } finally {
       setIsLoading(false);
@@ -156,7 +159,7 @@ export function useSmartRecommendations() {
         }));
 
     } catch (error) {
-      console.error('Collaborative filtering error:', error);
+      log.error('Collaborative filtering error', { action: 'collaborativeFiltering', metadata: { error } });
       return [];
     }
   };
@@ -194,7 +197,7 @@ export function useSmartRecommendations() {
       })).sort((a, b) => b.score - a.score);
 
     } catch (error) {
-      console.error('Content-based filtering error:', error);
+      log.error('Content-based filtering error', { action: 'contentBasedFiltering', metadata: { error } });
       return [];
     }
   };
@@ -242,7 +245,7 @@ export function useSmartRecommendations() {
       return eventsToRecommend;
 
     } catch (error) {
-      console.error('Trending recommendations error:', error);
+      log.error('Trending recommendations error', { action: 'trendingRecommendations', metadata: { error } });
       return [];
     }
   };
