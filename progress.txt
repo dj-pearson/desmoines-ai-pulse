@@ -145,3 +145,17 @@
   - The `AdminContent.tsx` `onCreate` for restaurant openings is a stub (`console.log("Create new restaurant opening")`) — now logged but should be implemented as a real action
   - NotFound.tsx uses `log.error()` for 404 tracking — this is intentional since 404s should be visible in error monitoring even in production
 ---
+
+## 2026-02-12 — US-009
+- Replaced all raw `console.log/warn/error` calls in `src/components/` (excluding `src/components/ui/`) with structured logger from `@/lib/logger`
+- 68 component files modified across top-level components, admin/, advertising/, auth/, cms/, and media/ subdirectories
+- Each component uses `createLogger('ComponentName')` factory to create a scoped logger instance
+- 393 insertions, 206 deletions across all files
+- 3 console calls remain in `src/components/ui/error-boundary.tsx` and `route-error-boundary.tsx` — excluded per acceptance criteria (third-party generated)
+- All 50 unit tests pass, typecheck passes
+- **Learnings for future iterations:**
+  - The `src/components/ui/` exclusion is appropriate — error-boundary.tsx and route-error-boundary.tsx use console.error intentionally for error reporting at the boundary level
+  - Many components have placeholder stub console.log calls (e.g., `console.log("Create new...")`) that are now logged but represent unimplemented features
+  - Components in subdirectories (admin/, auth/, cms/, media/, advertising/) follow the same logger pattern as top-level components
+  - With US-006 through US-009 complete, the entire `src/` directory is now clean of raw console calls (except `src/components/ui/`)
+---
