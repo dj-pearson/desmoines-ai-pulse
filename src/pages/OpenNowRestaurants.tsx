@@ -12,6 +12,9 @@ import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("OpenNowRestaurants");
 
 interface Restaurant {
   id: string;
@@ -56,7 +59,7 @@ export default function OpenNowRestaurants() {
           .limit(100);
 
         if (error) {
-          console.error('Error fetching restaurants:', error);
+          log.error("Error fetching restaurants", { action: "fetchOpenRestaurants", metadata: { error } });
           setRestaurants([]);
         } else {
           // Filter restaurants likely open based on current time and opening field
@@ -84,7 +87,7 @@ export default function OpenNowRestaurants() {
           setRestaurants(filtered);
         }
       } catch (error) {
-        console.error('Error in fetchOpenRestaurants:', error);
+        log.error("Error in fetchOpenRestaurants", { action: "fetchOpenRestaurants", metadata: { error } });
         setRestaurants([]);
       } finally {
         setIsLoading(false);

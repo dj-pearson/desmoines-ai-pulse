@@ -12,6 +12,9 @@ import { Link } from "react-router-dom";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("EventsToday");
 
 interface EventItem {
   id: string;
@@ -52,13 +55,13 @@ export default function EventsToday() {
           .order("event_start_utc", { ascending: true, nullsFirst: false });
         
         if (error) {
-          console.error('Error fetching events:', error);
+          log.error("Error fetching events", { action: "fetchEvents", metadata: { error } });
           setEvents([]);
         } else {
           setEvents(data || []);
         }
       } catch (error) {
-        console.error('Error in fetchEvents:', error);
+        log.error("Error in fetchEvents", { action: "fetchEvents", metadata: { error } });
         setEvents([]);
       } finally {
         setIsLoading(false);

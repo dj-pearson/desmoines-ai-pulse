@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger('AdminAnalyticsPage');
 import AdminNav from "@/components/admin/AdminNav";
 import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import { ActivityLogViewer } from "@/components/ActivityLogViewer";
@@ -88,7 +91,7 @@ export default function AdminAnalyticsPage() {
             playgrounds={playgrounds.playgrounds}
             onViewItem={(contentType, itemId) => {
               // Navigate to the content page - simplified from original
-              console.log("View item:", contentType, itemId);
+              log.debug('View item', { action: 'onViewItem', metadata: { contentType, itemId } });
             }}
           />
         )}

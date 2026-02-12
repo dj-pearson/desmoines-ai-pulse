@@ -4,6 +4,9 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 import { SecurityUtils } from "@/lib/securityUtils";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("AuthCallback");
 
 /**
  * AuthCallback Component
@@ -32,13 +35,13 @@ export default function AuthCallback() {
         const errorDescription = searchParams.get("error_description");
 
         if (error) {
-          console.error("[AuthCallback] OAuth error:", error, errorDescription);
+          log.error("OAuth error", { action: "handleAuthCallback", metadata: { error, errorDescription } });
           setStatus("error");
           setErrorMessage(errorDescription || error || "Authentication failed");
           return;
         }
 
-        console.log("[AuthCallback] Waiting for session...");
+        log.debug("Waiting for session", { action: "handleAuthCallback" });
 
         // Don't manually exchange code - Supabase client handles this automatically via onAuthStateChange
         // Just wait for the session to be established
@@ -56,7 +59,7 @@ export default function AuthCallback() {
             const hasSession = await checkSession();
             
             if (hasSession) {
-              console.log("[AuthCallback] Session established");
+              log.debug("Session established", { action: "pollSession" });
               setStatus("success");
 
               // Validate redirect URL to prevent open redirect attacks
@@ -72,14 +75,14 @@ export default function AuthCallback() {
           }
 
           // Timeout - no session found
-          console.error("[AuthCallback] Session timeout");
+          log.error("Session timeout", { action: "pollSession" });
           setStatus("error");
           setErrorMessage("Authentication is taking longer than expected. Please try again.");
         };
 
         await pollSession();
       } catch (error: any) {
-        console.error("[AuthCallback] Exception:", error);
+        log.error("Exception during auth callback", { action: "handleAuthCallback", metadata: { error } });
         setStatus("error");
         setErrorMessage(error.message || "An unexpected error occurred");
       }

@@ -12,6 +12,9 @@ import { MapPin, Calendar, Users, Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
 import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("EventsByLocation");
 
 // Suburb mapping for SEO-friendly URLs and proper names
 const SUBURBS = {
@@ -108,7 +111,7 @@ export default function EventsByLocation() {
           .order("date", { ascending: true });
         
         if (error) {
-          console.error('Error fetching events:', error);
+          log.error("Error fetching events", { action: "fetchEvents", metadata: { error } });
           setEvents([]);
         } else {
           // Filter events that match the suburb
@@ -125,7 +128,7 @@ export default function EventsByLocation() {
           setEvents(filteredData);
         }
       } catch (error) {
-        console.error('Error in fetchEvents:', error);
+        log.error("Error in fetchEvents", { action: "fetchEvents", metadata: { error } });
         setEvents([]);
       } finally {
         setIsLoading(false);

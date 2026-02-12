@@ -12,6 +12,9 @@ import { Heart, MapPin, Calendar, Clock, Sparkles } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("DateNightEvents");
 
 interface EventItem {
   id: string;
@@ -49,13 +52,13 @@ export default function DateNightEvents() {
           .limit(100);
 
         if (error) {
-          console.error('Error fetching date night events:', error);
+          log.error("Error fetching date night events", { action: "fetchDateNightEvents", metadata: { error } });
           setEvents([]);
         } else {
           setEvents(data || []);
         }
       } catch (error) {
-        console.error('Error in fetchDateNightEvents:', error);
+        log.error("Error in fetchDateNightEvents", { action: "fetchDateNightEvents", metadata: { error } });
         setEvents([]);
       } finally {
         setIsLoading(false);

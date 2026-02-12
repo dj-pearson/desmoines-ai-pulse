@@ -132,3 +132,16 @@
   - `console.log` (debug output) → `log.debug()`, `console.warn` → `log.warn()`, `console.error` → `log.error()`
   - Pre-existing lint errors (117 errors, 95 warnings) are unrelated to console usage — they're `no-explicit-any`, `no-unused-vars`, and `react-hooks/exhaustive-deps` warnings
 ---
+
+## 2026-02-12 — US-008
+- Replaced all raw `console.log/warn/error` calls in `src/contexts/` and `src/pages/` with structured logger from `@/lib/logger`
+- `src/contexts/AuthContext.tsx`: 37 console calls replaced with `createLogger('AuthContext')` — covers auth events, login, signup, logout, OAuth, password reset, session management
+- 17 page files modified: Admin.tsx, AdminAI.tsx, AdminAnalyticsPage.tsx, AdminContent.tsx, AdvertiseSuccess.tsx, AuthCallback.tsx, DateNightEvents.tsx, DietaryRestaurants.tsx, EventPromotionPlanner.tsx, EventsByLocation.tsx, EventsToday.tsx, FreeEvents.tsx, KidsEvents.tsx, NotFound.tsx, OpenNowRestaurants.tsx, TripPlanner.tsx, UploadCreatives.tsx
+- Zero `no-console` lint warnings remain in `src/contexts/` or `src/pages/`
+- All 50 unit tests pass, typecheck passes
+- **Learnings for future iterations:**
+  - AuthContext has the highest density of console calls (37) due to detailed auth flow logging — future developers should use `log.debug()` for auth state transitions and `log.error()` for failures
+  - Several pages have inline callback console.log calls (e.g., `onFilter={(filter) => console.log(...)}`), these are placeholder stubs — logger replacements work but these should eventually be replaced with actual filter implementations
+  - The `AdminContent.tsx` `onCreate` for restaurant openings is a stub (`console.log("Create new restaurant opening")`) — now logged but should be implemented as a real action
+  - NotFound.tsx uses `log.error()` for 404 tracking — this is intentional since 404s should be visible in error monitoring even in production
+---

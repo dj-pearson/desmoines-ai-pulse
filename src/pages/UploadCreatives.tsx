@@ -11,6 +11,9 @@ import { CreativeUploadForm } from "@/components/advertising/CreativeUploadForm"
 import { PlacementType } from "@/components/advertising/CreativeUploader";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("UploadCreatives");
 
 interface Campaign {
   id: string;
@@ -67,7 +70,7 @@ export default function UploadCreatives() {
         setActiveTab(data.campaign_placements[0].placement_type);
       }
     } catch (error) {
-      console.error('Error fetching campaign:', error);
+      log.error("Error fetching campaign", { action: "fetchCampaign", metadata: { error } });
       toast({
         variant: "destructive",
         title: "Error loading campaign",
