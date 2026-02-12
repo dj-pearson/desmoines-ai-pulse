@@ -34,11 +34,14 @@
 import { test, expect, type Page, type BrowserContext } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 // ============================================================================
 // Configuration
 // ============================================================================
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const BASE_OUTPUT_DIR = path.resolve(__dirname, '..', 'screenshots');
 const BASE_URL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:8080';
 
@@ -310,9 +313,43 @@ async function waitForPageReady(page: Page, screen: typeof APP_SCREENS[0]): Prom
   }
 }
 
+/**
+ * Pre-seed localStorage to suppress onboarding modals and welcome screens.
+ * Must be called BEFORE navigating to any page so the React app reads the
+ * preferences on mount and skips the modals entirely.
+ */
+async function suppressOnboardingModals(page: Page): Promise<void> {
+  const baseUrl = BASE_URL.replace(/\/$/, '');
+  // Navigate to the origin first to set localStorage (same-origin policy)
+  await page.goto(baseUrl, { waitUntil: 'commit', timeout: 15000 });
+  await page.evaluate(() => {
+    const prefs = {
+      defaultViewMode: 'list',
+      itemsPerPage: 12,
+      compactMode: false,
+      emailNotifications: true,
+      pushNotifications: false,
+      defaultLocation: 'any-location',
+      defaultCategory: 'all',
+      defaultSortOrder: 'date',
+      theme: 'system',
+      reducedMotion: false,
+      fontSize: 'medium',
+      analyticsEnabled: false,
+      onboardingCompleted: true,
+      welcomeSeen: true,
+      tourCompleted: true,
+    };
+    localStorage.setItem('dmi-user-preferences', JSON.stringify(prefs));
+  });
+}
+
 async function dismissOverlays(page: Page): Promise<void> {
-  // Dismiss any welcome modals, cookie banners, etc.
+  // Dismiss any welcome modals, cookie banners, onboarding dialogs, etc.
   const dismissSelectors = [
+    'button:has-text("Skip")',
+    'button:has-text("Skip Tour")',
+    'button:has-text("Get Started")',
     '[aria-label="Close"]',
     '[data-dismiss]',
     'button:has-text("Got it")',
@@ -355,7 +392,7 @@ async function captureScreenshot(
 // Test configuration — runs outside the normal test suite
 // ============================================================================
 
-test.describe.configure({ mode: 'serial', timeout: 300000 });
+test.describe.configure({ mode: 'parallel', timeout: 300000 });
 
 // ============================================================================
 // Apple App Store Screenshots
@@ -378,6 +415,8 @@ test.describe('Apple App Store Screenshots', () => {
           const page = await context.newPage();
 
           try {
+            // Suppress onboarding/welcome modals by pre-seeding localStorage
+            await suppressOnboardingModals(page);
             await page.goto(screen.path, { waitUntil: 'domcontentloaded', timeout: 30000 });
             await waitForPageReady(page, screen);
             await dismissOverlays(page);
@@ -425,6 +464,8 @@ test.describe('Google Play Store Screenshots', () => {
           const page = await context.newPage();
 
           try {
+            // Suppress onboarding/welcome modals by pre-seeding localStorage
+            await suppressOnboardingModals(page);
             await page.goto(screen.path, { waitUntil: 'domcontentloaded', timeout: 30000 });
             await waitForPageReady(page, screen);
             await dismissOverlays(page);
