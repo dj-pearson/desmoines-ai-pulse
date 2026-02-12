@@ -43,7 +43,10 @@
     "validate": "npm run type-check && npm run lint",
     "validate:strict": "npm run type-check:strict && npm run lint",
     "setup:stripe": "node scripts/setup-stripe-products.js",
-    "setup:stripe:dry-run": "node scripts/setup-stripe-products.js --dry-run"
+    "setup:stripe:dry-run": "node scripts/setup-stripe-products.js --dry-run",
+    "screenshots:stores": "playwright test scripts/capture-store-screenshots.ts --project=chromium-desktop --reporter=list",
+    "screenshots:apple": "playwright test scripts/capture-store-screenshots.ts --project=chromium-desktop --reporter=list --grep='Apple'",
+    "screenshots:google": "playwright test scripts/capture-store-screenshots.ts --project=chromium-desktop --reporter=list --grep='Google'"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.19",

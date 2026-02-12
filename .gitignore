@@ -51,6 +51,9 @@ blob-report/
 playwright/.cache/
 supabase-cron-setup.sql
 
+# Generated store screenshots
+screenshots/
+
 # Mobile app build artifacts
 mobile-app/www/
 mobile-app/ios/App/Podfile.lock
