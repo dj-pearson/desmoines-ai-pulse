@@ -1,0 +1,13 @@
+# Appfile — App identifiers for Fastlane
+#
+# Replace these values with your actual credentials before first use.
+
+# iOS
+app_identifier("com.desmoines.aipulse")     # Bundle ID
+apple_id("your-apple-id@example.com")       # Apple ID email
+team_id("TEAM_ID_HERE")                     # Apple Developer Team ID
+itc_team_id("ITC_TEAM_ID_HERE")             # App Store Connect Team ID
+
+# Android
+json_key_file("./fastlane/play-store-key.json")  # Google Play service account key
+package_name("com.desmoines.aipulse")             # Android package name

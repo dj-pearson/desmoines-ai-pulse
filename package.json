@@ -46,7 +46,15 @@
     "setup:stripe:dry-run": "node scripts/setup-stripe-products.js --dry-run",
     "screenshots:stores": "playwright test scripts/capture-store-screenshots.ts --project=chromium-desktop --reporter=list",
     "screenshots:apple": "playwright test scripts/capture-store-screenshots.ts --project=chromium-desktop --reporter=list --grep='Apple'",
-    "screenshots:google": "playwright test scripts/capture-store-screenshots.ts --project=chromium-desktop --reporter=list --grep='Google'"
+    "screenshots:google": "playwright test scripts/capture-store-screenshots.ts --project=chromium-desktop --reporter=list --grep='Google'",
+    "mobile:install": "cd mobile-app && npm install",
+    "mobile:build": "cd mobile-app && npm run build",
+    "mobile:build:ios": "cd mobile-app && npm run build:ios",
+    "mobile:build:android": "cd mobile-app && npm run build:android",
+    "mobile:build:all": "cd mobile-app && npm run build:all",
+    "mobile:dev": "cd mobile-app && npm run dev",
+    "mobile:open:ios": "cd mobile-app && npm run open:ios",
+    "mobile:open:android": "cd mobile-app && npm run open:android"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.19",

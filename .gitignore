@@ -62,6 +62,39 @@ mobile-app/android/app/build/
 mobile-app/android/.gradle/
 mobile-app/android/local.properties
 mobile-app/node_modules/
+
+# Mobile signing keys & secrets
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+*.provisionprofile
+mobile-app/ios/App/ExportOptions.plist
+mobile-app/android/app/google-services.json
+mobile-app/android/app/signing.properties
+mobile-app/fastlane/report.xml
+mobile-app/fastlane/README.md
+mobile-app/fastlane/screenshots/
+mobile-app/fastlane/.env*
+mobile-app/Gemfile.lock
+play-store-key.json
+authkey.p8
+gc_keys.json
+
+# Fastlane build output
+mobile-app/fastlane/test_output/
+mobile-app/fastlane/gym/
+mobile-app/fastlane/logs/
+mobile-app/*.ipa
+mobile-app/*.apk
+mobile-app/*.aab
+
+# Xcode user data
+mobile-app/ios/App/App.xcworkspace/xcuserdata/
+mobile-app/ios/App/App.xcodeproj/xcuserdata/
+*.xcuserstate
+xcuserdata/
+DerivedData/
 generate-apple-secret.js
 CASCADING_VENDOR_ISSUES.md
 events_rows.sql
