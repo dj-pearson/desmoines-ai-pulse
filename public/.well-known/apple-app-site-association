@@ -1,0 +1,25 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "TEAM_ID_HERE.com.desmoines.aipulse",
+        "paths": [
+          "/events/*",
+          "/restaurants/*",
+          "/attractions/*",
+          "/trip-planner",
+          "/articles/*",
+          "/neighborhoods/*",
+          "/search",
+          "/search/*"
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "TEAM_ID_HERE.com.desmoines.aipulse"
+    ]
+  }
+}

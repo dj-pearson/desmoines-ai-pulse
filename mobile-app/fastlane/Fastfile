@@ -1,0 +1,183 @@
+# Fastfile — Automated iOS & Android build, sign, and upload
+#
+# Setup:
+#   gem install fastlane
+#   cd mobile-app && fastlane init
+#
+# Usage:
+#   fastlane ios beta          # Build + upload to TestFlight
+#   fastlane ios release       # Build + upload to App Store
+#   fastlane android beta      # Build + upload to Play Internal Testing
+#   fastlane android release   # Build AAB + upload to Play Production
+#   fastlane build_web         # Build web assets only (both platforms)
+
+default_platform(:ios)
+
+# ============================================================================
+# Shared: Build web assets
+# ============================================================================
+
+desc "Build web assets for mobile"
+lane :build_web do
+  sh("cd .. && npm run build")
+  UI.success("Web assets built successfully")
+end
+
+# ============================================================================
+# iOS
+# ============================================================================
+
+platform :ios do
+  desc "Sync Capacitor and install pods"
+  lane :prepare do
+    build_web
+    sh("cd .. && npx cap sync ios")
+    cocoapods(
+      podfile: "./ios/App/Podfile",
+      clean_install: true
+    )
+  end
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    prepare
+
+    # Increment build number automatically
+    increment_build_number(
+      xcodeproj: "./ios/App/App.xcodeproj"
+    )
+
+    build_app(
+      workspace: "./ios/App/App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build/ios",
+      output_name: "DSMAIPulse.ipa",
+      clean: true
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true
+    )
+
+    UI.success("Successfully uploaded to TestFlight!")
+  end
+
+  desc "Build and upload to App Store for review"
+  lane :release do
+    prepare
+
+    # Increment build number
+    increment_build_number(
+      xcodeproj: "./ios/App/App.xcodeproj"
+    )
+
+    build_app(
+      workspace: "./ios/App/App.xcworkspace",
+      scheme: "App",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "./build/ios",
+      output_name: "DSMAIPulse.ipa",
+      clean: true
+    )
+
+    upload_to_app_store(
+      force: false,
+      submit_for_review: false,
+      automatic_release: false,
+      precheck_include_in_app_purchases: false
+    )
+
+    UI.success("Successfully uploaded to App Store Connect!")
+  end
+
+  desc "Build for local testing (no upload)"
+  lane :build_debug do
+    prepare
+
+    build_app(
+      workspace: "./ios/App/App.xcworkspace",
+      scheme: "App",
+      configuration: "Debug",
+      export_method: "development",
+      output_directory: "./build/ios",
+      clean: true
+    )
+  end
+end
+
+# ============================================================================
+# Android
+# ============================================================================
+
+platform :android do
+  desc "Sync Capacitor for Android"
+  lane :prepare do
+    build_web
+    sh("cd .. && npx cap sync android")
+  end
+
+  desc "Build debug APK"
+  lane :build_debug do
+    prepare
+
+    gradle(
+      project_dir: "./android",
+      task: "assembleDebug"
+    )
+
+    UI.success("Debug APK built at android/app/build/outputs/apk/debug/")
+  end
+
+  desc "Build release AAB and upload to Play Internal Testing"
+  lane :beta do
+    prepare
+
+    # Auto-increment version code
+    android_set_version_code(
+      gradle_file: "./android/app/build.gradle"
+    )
+
+    gradle(
+      project_dir: "./android",
+      task: "bundleRelease"
+    )
+
+    upload_to_play_store(
+      track: "internal",
+      aab: "./android/app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+
+    UI.success("Successfully uploaded to Play Internal Testing!")
+  end
+
+  desc "Build release AAB and upload to Play Production"
+  lane :release do
+    prepare
+
+    # Auto-increment version code
+    android_set_version_code(
+      gradle_file: "./android/app/build.gradle"
+    )
+
+    gradle(
+      project_dir: "./android",
+      task: "bundleRelease"
+    )
+
+    upload_to_play_store(
+      track: "production",
+      aab: "./android/app/build/outputs/bundle/release/app-release.aab",
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true
+    )
+
+    UI.success("Successfully uploaded to Google Play!")
+  end
+end
