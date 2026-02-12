@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAIConfiguration');
 
 export interface AIConfigSetting {
   id: string;
@@ -51,7 +54,7 @@ export function useAIConfiguration() {
       toast.success("AI configuration updated successfully");
     },
     onError: (error) => {
-      console.error("Error updating AI configuration:", error);
+      log.error("Error updating AI configuration", { action: 'updateSetting', metadata: { error } });
       toast.error("Failed to update AI configuration");
     },
   });

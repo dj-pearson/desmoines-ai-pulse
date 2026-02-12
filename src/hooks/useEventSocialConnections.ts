@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useEventSocialConnections');
 
 export interface FriendNearEvent {
   friend_id: string;
@@ -50,7 +53,7 @@ export function useEventSocialConnections(eventId: string, eventLatitude?: numbe
       if (error) throw error;
       setFriendsNearEvent(data || []);
     } catch (error) {
-      console.error('Error fetching friends near event:', error);
+      log.error('Error fetching friends near event', { action: 'fetchFriendsNearEvent', metadata: { error } });
     }
   }, [user, eventLatitude, eventLongitude]);
 

@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useDomainHighlights');
 
 type DomainHighlight = Database["public"]["Tables"]["domain_highlights"]["Row"];
 type DomainHighlightInsert = Database["public"]["Tables"]["domain_highlights"]["Insert"];
@@ -35,7 +38,7 @@ export function useDomainHighlights() {
         error: null,
       });
     } catch (error) {
-      console.error("Error fetching domain highlights:", error);
+      log.error("Error fetching domain highlights", { action: 'fetchDomains', metadata: { error } });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -61,7 +64,7 @@ export function useDomainHighlights() {
       fetchDomains();
       return data;
     } catch (error) {
-      console.error("Error adding domain:", error);
+      log.error("Error adding domain", { action: 'addDomain', metadata: { error } });
       throw error;
     }
   };
@@ -77,7 +80,7 @@ export function useDomainHighlights() {
 
       fetchDomains();
     } catch (error) {
-      console.error("Error removing domain:", error);
+      log.error("Error removing domain", { action: 'removeDomain', metadata: { error } });
       throw error;
     }
   };

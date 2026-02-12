@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useActiveAds');
 
 export interface ActiveAd {
   campaign_id: string;
@@ -29,7 +32,7 @@ export function useActiveAds(placementType: 'top_banner' | 'featured_spot' | 'be
       if (error) throw error;
       setAd(data?.[0] || null);
     } catch (error) {
-      console.error('Error fetching active ad:', error);
+      log.error('Error fetching active ad', { action: 'fetchActiveAd', metadata: { error } });
       setAd(null);
     } finally {
       setIsLoading(false);

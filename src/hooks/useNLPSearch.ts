@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Event, Restaurant, Attraction } from '@/lib/types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useNLPSearch');
 
 /**
  * Parsed search intent from NLP processing
@@ -125,7 +128,7 @@ export function useNLPSearch() {
       queryClient.invalidateQueries({ queryKey: ['search-suggestions'] });
     },
     onError: (error) => {
-      console.error('NLP Search error:', error);
+      log.error('NLP Search error', { action: 'search', metadata: { error } });
       setParsedIntent(null);
       setResults({ events: [], restaurants: [], attractions: [] });
     },

@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useContactForm');
 
 export type InquiryType =
   | 'general'
@@ -75,7 +78,7 @@ export function useContactForm() {
       toast.success("Thank you! Your message has been sent successfully. We'll get back to you soon.");
       return true;
     } catch (error) {
-      console.error('Failed to submit contact form:', error);
+      log.error('Failed to submit contact form', { action: 'submitContactForm', metadata: { error } });
       toast.error('Failed to send message. Please try again or email us directly.');
       return false;
     } finally {
@@ -98,7 +101,7 @@ export function useContactForm() {
       setSubmissions(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch submissions:', error);
+      log.error('Failed to fetch submissions', { action: 'fetchMySubmissions', metadata: { error } });
       return [];
     }
   };
@@ -138,7 +141,7 @@ export function useContactForm() {
       setSubmissions(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch all submissions:', error);
+      log.error('Failed to fetch all submissions', { action: 'fetchAllSubmissions', metadata: { error } });
       return [];
     }
   };
@@ -170,7 +173,7 @@ export function useContactForm() {
       toast.success('Submission status updated');
       return true;
     } catch (error) {
-      console.error('Failed to update submission:', error);
+      log.error('Failed to update submission', { action: 'updateSubmissionStatus', metadata: { error } });
       toast.error('Failed to update submission');
       return false;
     } finally {
@@ -194,7 +197,7 @@ export function useContactForm() {
       toast.success('Submission assigned');
       return true;
     } catch (error) {
-      console.error('Failed to assign submission:', error);
+      log.error('Failed to assign submission', { action: 'assignSubmission', metadata: { error } });
       toast.error('Failed to assign submission');
       return false;
     }

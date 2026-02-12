@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Event, RestaurantOpening, Restaurant, Attraction, Playground } from "@/lib/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSupabase');
 
 // Events hooks
 export function useFeaturedEvents() {
@@ -9,7 +12,7 @@ export function useFeaturedEvents() {
   return useQuery<Event[]>({
     queryKey: ['events', 'featured', today],
     queryFn: async () => {
-      console.log('Fetching featured events for date >= ', today);
+      log.debug('Fetching featured events', { action: 'fetchFeaturedEvents', metadata: { dateFilter: today } });
       const { data, error } = await supabase
         .from('events')
         .select('*')
@@ -19,10 +22,10 @@ export function useFeaturedEvents() {
         .limit(6);
       
       if (error) {
-        console.error('Error fetching featured events:', error);
+        log.error('Error fetching featured events', { action: 'fetchFeaturedEvents', metadata: { error } });
         throw error;
       }
-      console.log('Featured events fetched:', data?.length, 'events');
+      log.debug('Featured events fetched', { action: 'fetchFeaturedEvents', metadata: { count: data?.length } });
       return data?.map(transformEvent) || [];
     },
     staleTime: 60000, // 1 minute
@@ -41,7 +44,7 @@ export function useEvents(filters?: { category?: string; location?: string; date
       let query = supabase.from('events').select('*');
       
       const dateFilter = filters?.date || today;
-      console.log('Fetching events for date >=', dateFilter);
+      log.debug('Fetching events', { action: 'fetchEvents', metadata: { dateFilter } });
       query = query.gte('date', dateFilter);
       
       if (filters?.category) {
@@ -54,10 +57,10 @@ export function useEvents(filters?: { category?: string; location?: string; date
       const { data, error } = await query.order('date', { ascending: true });
       
       if (error) {
-        console.error('Error fetching events:', error);
+        log.error('Error fetching events', { action: 'fetchEvents', metadata: { error } });
         throw error;
       }
-      console.log('Events fetched:', data?.length, 'events');
+      log.debug('Events fetched', { action: 'fetchEvents', metadata: { count: data?.length } });
       return data?.map(transformEvent) || [];
     },
     staleTime: 60000,
@@ -78,10 +81,10 @@ export function useRestaurantOpenings() {
         .order('opening_date', { ascending: true, nullsFirst: false });
       
       if (error) {
-        console.error('Error fetching restaurant openings:', error);
+        log.error('Error fetching restaurant openings', { action: 'fetchRestaurantOpenings', metadata: { error } });
         throw error;
       }
-      console.log('Restaurant openings fetched:', data?.length);
+      log.debug('Restaurant openings fetched', { action: 'fetchRestaurantOpenings', metadata: { count: data?.length } });
       return data?.map(transformRestaurant) || [];
     },
     staleTime: 120000, // 2 minutes
@@ -103,10 +106,10 @@ export function useFeaturedRestaurants() {
         .limit(6);
       
       if (error) {
-        console.error('Error fetching featured restaurants:', error);
+        log.error('Error fetching featured restaurants', { action: 'fetchFeaturedRestaurants', metadata: { error } });
         throw error;
       }
-      console.log('Featured restaurants fetched:', data?.length);
+      log.debug('Featured restaurants fetched', { action: 'fetchFeaturedRestaurants', metadata: { count: data?.length } });
       return data?.map(transformRestaurant) || [];
     },
     staleTime: 120000,

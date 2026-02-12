@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useKnownVenues');
 
 export interface KnownVenue {
   id: string;
@@ -187,7 +190,7 @@ export function useFindMatchingVenue() {
         .rpc("find_matching_venue", { venue_text: venueText });
 
       if (matchError) {
-        console.error("Error finding venue:", matchError);
+        log.error("Error finding venue", { action: 'findMatchingVenue', metadata: { error: matchError } });
         return null;
       }
 
@@ -200,7 +203,7 @@ export function useFindMatchingVenue() {
         .rpc("get_venue_details", { venue_id: venueId });
 
       if (detailsError || !details || details.length === 0) {
-        console.error("Error getting venue details:", detailsError);
+        log.error("Error getting venue details", { action: 'getVenueDetails', metadata: { error: detailsError } });
         return null;
       }
 

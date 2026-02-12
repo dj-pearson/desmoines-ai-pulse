@@ -1,5 +1,8 @@
 import { useCallback, useState } from 'react';
 import { toast } from 'sonner';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useNativeShare');
 
 export interface ShareData {
   title?: string;
@@ -54,7 +57,7 @@ export function useNativeShare(): UseNativeShareReturn {
         }
       }
     } catch (error) {
-      console.error('Copy to clipboard failed:', error);
+      log.error('Copy to clipboard failed', { action: 'copyToClipboard', metadata: { error } });
       toast.error('Failed to copy to clipboard');
     }
   }, []);
@@ -81,9 +84,9 @@ export function useNativeShare(): UseNativeShareReturn {
       if (error instanceof Error) {
         // User cancelled the share
         if (error.name === 'AbortError') {
-          console.log('Share cancelled by user');
+          log.debug('Share cancelled by user', { action: 'share' });
         } else {
-          console.error('Share failed:', error);
+          log.error('Share failed', { action: 'share', metadata: { error } });
           toast.error('Failed to share');
         }
       }

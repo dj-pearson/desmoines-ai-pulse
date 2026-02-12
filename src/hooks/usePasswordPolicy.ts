@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('usePasswordPolicy');
 
 interface PasswordPolicy {
   id: string;
@@ -52,7 +55,7 @@ export function usePasswordPolicy() {
         .rpc('get_active_password_policy');
 
       if (error) {
-        console.error('Error fetching password policy:', error);
+        log.error('Error fetching password policy', { action: 'fetchPolicy', metadata: { error } });
         return null;
       }
 

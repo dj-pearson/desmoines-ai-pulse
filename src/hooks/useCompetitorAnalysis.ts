@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/components/ui/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useCompetitorAnalysis');
 
 export interface Competitor {
   id: string;
@@ -110,7 +113,7 @@ export function useCompetitorAnalysis() {
       setReports(reportsRes.data || []);
 
     } catch (err: any) {
-      console.error('Error loading competitor data:', err);
+      log.error('Error loading competitor data', { action: 'loadData', metadata: { error: err } });
       setError(err.message);
       toast({
         title: "Error",
@@ -147,7 +150,7 @@ export function useCompetitorAnalysis() {
 
       return response.data;
     } catch (err: any) {
-      console.error(`Error running ${type} analysis:`, err);
+      log.error(`Error running ${type} analysis`, { action: 'runAnalysis', metadata: { error: err, type } });
       toast({
         title: "Error",
         description: `${type.charAt(0).toUpperCase() + type.slice(1)} analysis failed: ${err.message}`,
@@ -177,7 +180,7 @@ export function useCompetitorAnalysis() {
 
       return data;
     } catch (err: any) {
-      console.error('Error adding competitor:', err);
+      log.error('Error adding competitor', { action: 'addCompetitor', metadata: { error: err } });
       toast({
         title: "Error",
         description: `Failed to add competitor: ${err.message}`,
@@ -210,7 +213,7 @@ export function useCompetitorAnalysis() {
 
       return data;
     } catch (err: any) {
-      console.error('Error updating competitor:', err);
+      log.error('Error updating competitor', { action: 'updateCompetitor', metadata: { error: err } });
       toast({
         title: "Error",
         description: `Failed to update competitor: ${err.message}`,
@@ -245,7 +248,7 @@ export function useCompetitorAnalysis() {
 
       return data;
     } catch (err: any) {
-      console.error('Error updating suggestion status:', err);
+      log.error('Error updating suggestion status', { action: 'updateSuggestionStatus', metadata: { error: err } });
       toast({
         title: "Error",
         description: `Failed to update suggestion: ${err.message}`,

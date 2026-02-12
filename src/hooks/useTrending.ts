@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useTrending');
 
 interface TrendingItem {
   id: string;
@@ -78,7 +81,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       setHasRealData(false);
       
     } catch (error) {
-      console.error('Error fetching trending data:', error);
+      log.error('Error fetching trending data', { action: 'fetchTrendingData', metadata: { error } });
       // Generate fallback trending on error
       const fallbackTrending = await generateFallbackTrending();
       setTrending(fallbackTrending);
@@ -148,7 +151,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
           });
         }
       } catch (error) {
-        console.error(`Error fetching content for ${score.content_type}:${score.content_id}`, error);
+        log.error(`Error fetching content for ${score.content_type}:${score.content_id}`, { action: 'enrichTrendingWithContent', metadata: { error } });
       }
     }
 
@@ -260,7 +263,7 @@ export function useTrending(config: FallbackConfig = { useRealData: true, minIte
       }));
 
     } catch (error) {
-      console.error('Error generating fallback trending:', error);
+      log.error('Error generating fallback trending', { action: 'generateFallbackTrending', metadata: { error } });
     }
 
     return fallback;

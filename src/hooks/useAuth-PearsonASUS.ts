@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session } from "@supabase/supabase-js";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAuth-PearsonASUS');
 
 interface AuthState {
   user: User | null;
@@ -28,7 +31,7 @@ export function useAuth() {
       } = await supabase.auth.getSession();
 
       if (error) {
-        console.error("Error getting session:", error);
+        log.error("Error getting session", { action: 'getSession', metadata: { error } });
         setAuthState({
           user: null,
           session: null,
@@ -99,7 +102,7 @@ export function useAuth() {
         return data.role === 'admin' || data.role === 'root_admin';
       }
     } catch (error) {
-      console.error("Error checking admin status:", error);
+      log.error("Error checking admin status", { action: 'checkIsAdmin', metadata: { error } });
     }
 
     // No fallback - all admin access must be through database roles
@@ -114,8 +117,8 @@ export function useAuth() {
       });
 
       if (error) {
-        console.error("Login error:", error);
-        
+        log.error("Login error", { action: 'login', metadata: { error } });
+
         // Log failed authentication attempt
         try {
           await supabase.from('failed_auth_attempts').insert({
@@ -125,7 +128,7 @@ export function useAuth() {
             user_agent: navigator.userAgent || 'Unknown'
           });
         } catch (logError) {
-          console.error("Failed to log authentication attempt:", logError);
+          log.error("Failed to log authentication attempt", { action: 'login', metadata: { error: logError } });
         }
         
         return false;
@@ -133,7 +136,7 @@ export function useAuth() {
 
       return !!data.session;
     } catch (error) {
-      console.error("Login failed:", error);
+      log.error("Login failed", { action: 'login', metadata: { error } });
       return false;
     }
   };
@@ -152,8 +155,8 @@ export function useAuth() {
       });
 
       if (error) {
-        console.error("Signup error:", error);
-        
+        log.error("Signup error", { action: 'signup', metadata: { error } });
+
         // Log failed signup attempt
         try {
           await supabase.from('failed_auth_attempts').insert({
@@ -163,7 +166,7 @@ export function useAuth() {
             user_agent: navigator.userAgent || 'Unknown'
           });
         } catch (logError) {
-          console.error("Failed to log signup attempt:", logError);
+          log.error("Failed to log signup attempt", { action: 'signup', metadata: { error: logError } });
         }
         
         return false;
@@ -171,7 +174,7 @@ export function useAuth() {
 
       return !!data.user;
     } catch (error) {
-      console.error("Signup failed:", error);
+      log.error("Signup failed", { action: 'signup', metadata: { error } });
       return false;
     }
   };
@@ -180,7 +183,7 @@ export function useAuth() {
     try {
       await supabase.auth.signOut();
     } catch (error) {
-      console.error("Logout error:", error);
+      log.error("Logout error", { action: 'logout', metadata: { error } });
     }
   };
 

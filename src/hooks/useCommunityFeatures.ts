@@ -2,6 +2,9 @@ import { useState, useEffect } from "react";
 import { useAuth } from "./useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useCommunityFeatures');
 
 interface PhotoUpload {
   id: string;
@@ -128,7 +131,7 @@ export function useCommunityFeatures() {
       toast.success('Photo uploaded successfully!');
       return data;
     } catch (error) {
-      console.error('Failed to upload photo:', error);
+      log.error('Failed to upload photo', { action: 'uploadEventPhoto', metadata: { error } });
       toast.error('Failed to upload photo');
       return null;
     } finally {
@@ -148,7 +151,7 @@ export function useCommunityFeatures() {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch event photos:', error);
+      log.error('Failed to fetch event photos', { action: 'getEventPhotos', metadata: { error } });
       return [];
     }
   };
@@ -173,7 +176,7 @@ export function useCommunityFeatures() {
       toast.success(`Marked as ${status}!`);
       return true;
     } catch (error) {
-      console.error('Failed to update check-in:', error);
+      log.error('Failed to update check-in', { action: 'updateEventCheckIn', metadata: { error } });
       toast.error('Failed to update check-in');
       return false;
     }
@@ -201,7 +204,7 @@ export function useCommunityFeatures() {
         total: data?.length || 0
       };
     } catch (error) {
-      console.error('Failed to fetch check-ins:', error);
+      log.error('Failed to fetch check-ins', { action: 'getEventCheckIns', metadata: { error } });
       return { going: 0, interested: 0, maybe: 0, not_going: 0, total: 0 };
     }
   };
@@ -220,7 +223,7 @@ export function useCommunityFeatures() {
       if (error && error.code !== 'PGRST116') throw error;
       return data?.status || null;
     } catch (error) {
-      console.error('Failed to fetch user check-in:', error);
+      log.error('Failed to fetch user check-in', { action: 'getUserEventCheckIn', metadata: { error } });
       return null;
     }
   };
@@ -238,7 +241,7 @@ export function useCommunityFeatures() {
       setForums(data || []);
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch forums:', error);
+      log.error('Failed to fetch forums', { action: 'fetchForums', metadata: { error } });
       return [];
     }
   };
@@ -262,7 +265,7 @@ export function useCommunityFeatures() {
       await fetchForums();
       return data;
     } catch (error) {
-      console.error('Failed to create forum:', error);
+      log.error('Failed to create forum', { action: 'createForum', metadata: { error } });
       toast.error('Failed to create forum');
       return null;
     }
@@ -280,7 +283,7 @@ export function useCommunityFeatures() {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch threads:', error);
+      log.error('Failed to fetch threads', { action: 'getThreads', metadata: { error } });
       return [];
     }
   };
@@ -304,7 +307,7 @@ export function useCommunityFeatures() {
       toast.success('Thread created successfully!');
       return data;
     } catch (error) {
-      console.error('Failed to create thread:', error);
+      log.error('Failed to create thread', { action: 'createThread', metadata: { error } });
       toast.error('Failed to create thread');
       return null;
     }
@@ -321,7 +324,7 @@ export function useCommunityFeatures() {
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Failed to fetch replies:', error);
+      log.error('Failed to fetch replies', { action: 'getReplies', metadata: { error } });
       return [];
     }
   };
@@ -346,7 +349,7 @@ export function useCommunityFeatures() {
       toast.success('Reply posted successfully!');
       return data;
     } catch (error) {
-      console.error('Failed to create reply:', error);
+      log.error('Failed to create reply', { action: 'createReply', metadata: { error } });
       toast.error('Failed to post reply');
       return null;
     }
@@ -367,7 +370,7 @@ export function useCommunityFeatures() {
       setFriends((data || []) as Friend[]);
       return (data || []) as Friend[];
     } catch (error) {
-      console.error('Failed to fetch friends:', error);
+      log.error('Failed to fetch friends', { action: 'fetchFriends', metadata: { error } });
       return [];
     }
   };
@@ -425,7 +428,7 @@ export function useCommunityFeatures() {
       toast.success('Friend request sent!');
       return true;
     } catch (error) {
-      console.error('Failed to send friend request:', error);
+      log.error('Failed to send friend request', { action: 'sendFriendRequest', metadata: { error } });
       toast.error('Failed to send friend request');
       return false;
     }

@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useTripPlanner');
 
 /**
  * Trip plan preferences
@@ -177,7 +180,7 @@ export function useTripPlanner() {
       queryClient.invalidateQueries({ queryKey: ['trip-plans', user?.id] });
     },
     onError: (error: Error) => {
-      console.error('Failed to generate itinerary:', error);
+      log.error('Failed to generate itinerary', { action: 'generateItinerary', metadata: { error } });
       toast.error(`Failed to generate itinerary: ${error.message}`);
     },
   });
@@ -191,7 +194,7 @@ export function useTripPlanner() {
       .single();
 
     if (tripError) {
-      console.error('Error fetching trip:', tripError);
+      log.error('Error fetching trip', { action: 'fetchTripDetails', metadata: { error: tripError } });
       return null;
     }
 
@@ -200,7 +203,7 @@ export function useTripPlanner() {
       .rpc('get_trip_itinerary', { p_trip_id: tripId });
 
     if (itemsError) {
-      console.error('Error fetching trip items:', itemsError);
+      log.error('Error fetching trip items', { action: 'fetchTripDetails', metadata: { error: itemsError } });
     }
 
     return {
@@ -282,7 +285,7 @@ export function useTripPlanner() {
         fetchTripDetails(selectedTrip.id)
           .then(setSelectedTrip)
           .catch((error) => {
-            console.error('Failed to refresh trip details:', error);
+            log.error('Failed to refresh trip details', { action: 'refreshTripDetails', metadata: { error } });
             toast.error('Failed to refresh trip. Please reload the page.');
           });
       }
@@ -319,7 +322,7 @@ export function useTripPlanner() {
         fetchTripDetails(selectedTrip.id)
           .then(setSelectedTrip)
           .catch((error) => {
-            console.error('Failed to refresh trip details:', error);
+            log.error('Failed to refresh trip details', { action: 'refreshTripDetails', metadata: { error } });
             toast.error('Failed to refresh trip. Please reload the page.');
           });
       }
@@ -345,7 +348,7 @@ export function useTripPlanner() {
         fetchTripDetails(selectedTrip.id)
           .then(setSelectedTrip)
           .catch((error) => {
-            console.error('Failed to refresh trip details:', error);
+            log.error('Failed to refresh trip details', { action: 'refreshTripDetails', metadata: { error } });
             toast.error('Failed to refresh trip. Please reload the page.');
           });
       }
@@ -389,7 +392,7 @@ export function useTripPlanner() {
       .single();
 
     if (error) {
-      console.error('Error fetching shared trip:', error);
+      log.error('Error fetching shared trip', { action: 'fetchSharedTrip', metadata: { error } });
       return null;
     }
 

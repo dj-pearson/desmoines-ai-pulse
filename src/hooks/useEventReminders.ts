@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useEventReminders');
 
 export type ReminderType = '1_day' | '3_hours' | '1_hour';
 
@@ -34,7 +37,7 @@ export function useEventReminders(eventId: string) {
         });
 
       if (error) {
-        console.error('Error fetching reminders:', error);
+        log.error('Error fetching reminders', { action: 'fetchReminders', metadata: { error } });
         throw error;
       }
 
@@ -74,7 +77,7 @@ export function useEventReminders(eventId: string) {
       });
     },
     onError: (error: any) => {
-      console.error('Error toggling reminder:', error);
+      log.error('Error toggling reminder', { action: 'toggleReminder', metadata: { error } });
       toast({
         title: 'Failed to update reminder',
         description: error.message || 'Please try again',

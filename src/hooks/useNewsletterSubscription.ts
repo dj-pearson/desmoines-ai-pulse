@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useNewsletterSubscription');
 
 export interface NewsletterPreferences {
   weekly_digest: boolean;
@@ -62,7 +65,7 @@ export function useNewsletterSubscription() {
       toast.success("Welcome aboard! Check your email for a confirmation.");
       return true;
     } catch (error) {
-      console.error('Failed to subscribe:', error);
+      log.error('Failed to subscribe', { action: 'subscribe', metadata: { error } });
       toast.error('Failed to subscribe. Please try again.');
       return false;
     } finally {
@@ -88,7 +91,7 @@ export function useNewsletterSubscription() {
       toast.success("You've been unsubscribed. We're sorry to see you go!");
       return true;
     } catch (error) {
-      console.error('Failed to unsubscribe:', error);
+      log.error('Failed to unsubscribe', { action: 'unsubscribe', metadata: { error } });
       toast.error('Failed to unsubscribe. Please contact support.');
       return false;
     } finally {
@@ -129,7 +132,7 @@ export function useNewsletterSubscription() {
       toast.success('Preferences updated successfully!');
       return true;
     } catch (error) {
-      console.error('Failed to update preferences:', error);
+      log.error('Failed to update preferences', { action: 'updatePreferences', metadata: { error } });
       toast.error('Failed to update preferences. Please try again.');
       return false;
     } finally {

@@ -7,6 +7,9 @@ import {
   shouldShowAd,
 } from '@/lib/tracking';
 import { useAuth } from './useAuth';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAdTracking');
 
 interface AdTrackingOptions {
   campaignId: string;
@@ -54,7 +57,7 @@ export function useAdTracking(options: AdTrackingOptions): AdTrackingReturn {
       const canShow = await shouldShowAd(campaignId, sessionId, user?.id);
 
       if (!canShow) {
-        console.log('Ad frequency cap reached for campaign:', campaignId);
+        log.debug('Ad frequency cap reached for campaign', { action: 'trackImpression', metadata: { campaignId } });
         return;
       }
 
@@ -64,16 +67,12 @@ export function useAdTracking(options: AdTrackingOptions): AdTrackingReturn {
       if (result.success) {
         setImpressionLogged(true);
         setImpressionId(result.impressionId || null);
-        console.log('Impression logged:', {
-          campaignId,
-          creativeId,
-          impressionId: result.impressionId,
-        });
+        log.debug('Impression logged', { action: 'trackImpression', metadata: { campaignId, creativeId, impressionId: result.impressionId } });
       } else {
-        console.error('Failed to log impression:', result.error);
+        log.error('Failed to log impression', { action: 'trackImpression', metadata: { error: result.error } });
       }
     } catch (error) {
-      console.error('Error tracking impression:', error);
+      log.error('Error tracking impression', { action: 'trackImpression', metadata: { error } });
     }
   }, [campaignId, creativeId, placementType, impressionLogged, user?.id]);
 
@@ -83,12 +82,12 @@ export function useAdTracking(options: AdTrackingOptions): AdTrackingReturn {
       const result = await logClick(campaignId, creativeId, impressionId || undefined);
 
       if (result.success) {
-        console.log('Click logged:', { campaignId, creativeId, impressionId });
+        log.debug('Click logged', { action: 'trackClick', metadata: { campaignId, creativeId, impressionId } });
       } else {
-        console.error('Failed to log click:', result.error);
+        log.error('Failed to log click', { action: 'trackClick', metadata: { error: result.error } });
       }
     } catch (error) {
-      console.error('Error tracking click:', error);
+      log.error('Error tracking click', { action: 'trackClick', metadata: { error } });
     }
   }, [campaignId, creativeId, impressionId]);
 

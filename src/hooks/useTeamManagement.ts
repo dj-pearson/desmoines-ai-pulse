@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useTeamManagement');
 
 export interface TeamMember {
   id: string;
@@ -41,7 +44,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
       setTeamMembers((data as TeamMember[]) || []);
     } catch (err) {
-      console.error("Error fetching team members:", err);
+      log.error("Error fetching team members", { action: 'fetchTeamMembers', metadata: { error: err } });
       toast({
         variant: "destructive",
         title: "Failed to fetch team members",
@@ -101,7 +104,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error inviting team member:", err);
+      log.error("Error inviting team member", { action: 'inviteTeamMember', metadata: { error: err } });
       toast({
         variant: "destructive",
         title: "Failed to send invitation",
@@ -134,7 +137,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error resending invitation:", err);
+      log.error("Error resending invitation", { action: 'resendInvitation', metadata: { error: err } });
       toast({
         variant: "destructive",
         title: "Failed to resend invitation",
@@ -161,7 +164,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error updating role:", err);
+      log.error("Error updating role", { action: 'updateMemberRole', metadata: { error: err } });
       toast({
         variant: "destructive",
         title: "Failed to update role",
@@ -188,7 +191,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
       await fetchTeamMembers();
       return true;
     } catch (err) {
-      console.error("Error removing member:", err);
+      log.error("Error removing member", { action: 'removeMember', metadata: { error: err } });
       toast({
         variant: "destructive",
         title: "Failed to remove member",
@@ -238,7 +241,7 @@ export function useTeamManagement(campaignOwnerId?: string) {
 
       return true;
     } catch (err) {
-      console.error("Error accepting invitation:", err);
+      log.error("Error accepting invitation", { action: 'acceptInvitation', metadata: { error: err } });
       toast({
         variant: "destructive",
         title: "Failed to accept invitation",

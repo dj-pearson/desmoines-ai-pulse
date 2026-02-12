@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAttractions');
 
 type Attraction = Database["public"]["Tables"]["attractions"]["Row"];
 type AttractionInsert = Database["public"]["Tables"]["attractions"]["Insert"];
@@ -81,7 +84,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching attractions:", error);
+      log.error('Error fetching attractions', { action: 'fetchAttractions', metadata: { error } });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -104,7 +107,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
       fetchAttractions();
       return data;
     } catch (error) {
-      console.error("Error creating attraction:", error);
+      log.error('Error creating attraction', { action: 'createAttraction', metadata: { error } });
       throw error;
     }
   };
@@ -123,7 +126,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
       fetchAttractions();
       return data;
     } catch (error) {
-      console.error("Error updating attraction:", error);
+      log.error('Error updating attraction', { action: 'updateAttraction', metadata: { error } });
       throw error;
     }
   };
@@ -136,7 +139,7 @@ export function useAttractions(filters: AttractionFilters = {}) {
 
       fetchAttractions();
     } catch (error) {
-      console.error("Error deleting attraction:", error);
+      log.error('Error deleting attraction', { action: 'deleteAttraction', metadata: { error } });
       throw error;
     }
   };

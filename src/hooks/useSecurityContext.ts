@@ -12,6 +12,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
 import {
   type SecurityContext,
   type UserRole,
@@ -19,6 +20,8 @@ import {
   getRoleLevel,
   getPermissionsForRole,
 } from '@/lib/security';
+
+const log = createLogger('useSecurityContext');
 
 interface UseSecurityContextReturn {
   /** The current security context */
@@ -94,7 +97,7 @@ export function useSecurityContext(): UseSecurityContextReturn {
       });
       setError(null);
     } catch (err) {
-      console.error('Error building security context:', err);
+      log.error('Error building security context', { action: 'buildContext', metadata: { error: err } });
       setError(err instanceof Error ? err : new Error('Failed to build security context'));
       // Still set a basic authenticated context
       setContext({

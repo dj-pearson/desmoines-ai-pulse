@@ -3,6 +3,9 @@ import { useAuth } from './useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useScrollPreservation } from './useScrollPreservation';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSocialMediaManager');
 
 interface SocialMediaPost {
   id: string;
@@ -37,14 +40,14 @@ export function useSocialMediaManager() {
 
   const fetchPosts = async () => {
     if (!isAdmin) {
-      console.log('User does not have admin role, skipping fetch');
+      log.debug('User does not have admin role, skipping fetch', { action: 'fetchPosts' });
       return;
     }
-    
+
     await preserveScrollPosition(async () => {
       setLoading(true);
       try {
-        console.log('Fetching social media posts...');
+        log.debug('Fetching social media posts', { action: 'fetchPosts' });
         const { data, error } = await supabase
           .from('social_media_posts')
           .select('*')
@@ -52,13 +55,13 @@ export function useSocialMediaManager() {
           .limit(20);
 
         if (error) {
-          console.error('Error fetching posts:', error);
+          log.error('Error fetching posts', { action: 'fetchPosts', metadata: { error } });
           throw error;
         }
-        console.log('Fetched posts:', data);
+        log.debug('Fetched posts', { action: 'fetchPosts', metadata: { count: data?.length } });
         setPosts(data || []);
       } catch (error) {
-        console.error('Failed to fetch posts:', error);
+        log.error('Failed to fetch posts', { action: 'fetchPosts', metadata: { error } });
         toast.error('Failed to fetch posts');
       } finally {
         setLoading(false);
@@ -68,25 +71,25 @@ export function useSocialMediaManager() {
 
   const fetchWebhooks = async () => {
     if (!isAdmin) {
-      console.log('User does not have admin role, skipping webhook fetch');
+      log.debug('User does not have admin role, skipping webhook fetch', { action: 'fetchWebhooks' });
       return;
     }
     
     try {
-      console.log('Fetching social media webhooks...');
+      log.debug('Fetching social media webhooks', { action: 'fetchWebhooks' });
       const { data, error } = await supabase
         .from('social_media_webhooks')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching webhooks:', error);
+        log.error('Error fetching webhooks', { action: 'fetchWebhooks', metadata: { error } });
         throw error;
       }
-      console.log('Fetched webhooks:', data);
+      log.debug('Fetched webhooks', { action: 'fetchWebhooks', metadata: { count: data?.length } });
       setWebhooks(data || []);
     } catch (error) {
-      console.error('Failed to fetch webhooks:', error);
+      log.error('Failed to fetch webhooks', { action: 'fetchWebhooks', metadata: { error } });
       toast.error('Failed to fetch webhooks');
     }
   };
@@ -96,7 +99,7 @@ export function useSocialMediaManager() {
     await preserveScrollPosition(async () => {
       setGenerating(true);
       try {
-        console.log('Generating post:', data);
+        log.debug('Generating post', { action: 'generatePost', metadata: { contentType: data.contentType, subjectType: data.subjectType } });
         const { data: responseData, error } = await supabase.functions.invoke('social-media-manager', {
           body: {
             action: 'generate',
@@ -106,16 +109,16 @@ export function useSocialMediaManager() {
         });
 
         if (error) {
-          console.error('Error generating post:', error);
+          log.error('Error generating post', { action: 'generatePost', metadata: { error } });
           throw error;
         }
         
-        console.log('Post generated:', responseData);
+        log.info('Post generated successfully', { action: 'generatePost', metadata: { responseData } });
         toast.success('Post generated successfully!');
         await fetchPosts(); // Refresh posts
         result = { success: true, post: responseData };
       } catch (error) {
-        console.error('Failed to generate post:', error);
+        log.error('Failed to generate post', { action: 'generatePost', metadata: { error } });
         toast.error('Failed to generate post');
         throw error;
       } finally {
@@ -142,7 +145,7 @@ export function useSocialMediaManager() {
         await fetchPosts(); // Refresh posts
         success = true;
       } catch (error) {
-        console.error('Failed to publish post:', error);
+        log.error('Failed to publish post', { action: 'publishPost', metadata: { error } });
         toast.error('Failed to publish post');
         throw error;
       }
@@ -165,7 +168,7 @@ export function useSocialMediaManager() {
         await fetchPosts(); // Refresh posts
         success = true;
       } catch (error) {
-        console.error('Failed to delete post:', error);
+        log.error('Failed to delete post', { action: 'deletePost', metadata: { error } });
         toast.error('Failed to delete post');
         throw error;
       }
@@ -179,7 +182,7 @@ export function useSocialMediaManager() {
       toast.success('Post reposted successfully!');
       return true;
     } catch (error) {
-      console.error('Failed to repost:', error);
+      log.error('Failed to repost', { action: 'repostPost', metadata: { error } });
       toast.error('Failed to repost');
       throw error;
     }
@@ -202,7 +205,7 @@ export function useSocialMediaManager() {
       await fetchWebhooks(); // Refresh webhooks
       return true;
     } catch (error) {
-      console.error('Failed to add webhook:', error);
+      log.error('Failed to add webhook', { action: 'addWebhook', metadata: { error } });
       toast.error('Failed to add webhook');
       throw error;
     }
@@ -221,7 +224,7 @@ export function useSocialMediaManager() {
       await fetchWebhooks(); // Refresh webhooks
       return true;
     } catch (error) {
-      console.error('Failed to update webhook:', error);
+      log.error('Failed to update webhook', { action: 'updateWebhook', metadata: { error } });
       toast.error('Failed to update webhook');
       throw error;
     }
@@ -240,7 +243,7 @@ export function useSocialMediaManager() {
       await fetchWebhooks(); // Refresh webhooks
       return true;
     } catch (error) {
-      console.error('Failed to delete webhook:', error);
+      log.error('Failed to delete webhook', { action: 'deleteWebhook', metadata: { error } });
       toast.error('Failed to delete webhook');
       throw error;
     }
@@ -252,7 +255,7 @@ export function useSocialMediaManager() {
       toast.success('Webhook test successful!');
       return true;
     } catch (error) {
-      console.error('Failed to test webhook:', error);
+      log.error('Failed to test webhook', { action: 'testWebhook', metadata: { error } });
       toast.error('Failed to test webhook');
       throw error;
     }
@@ -268,27 +271,25 @@ export function useSocialMediaManager() {
 
       if (error) throw error;
       
-      console.log('Debug content:', data);
+      log.debug('Debug content', { action: 'debugContent', metadata: { data } });
       toast.success('Check console for debug information');
       return data;
     } catch (error) {
-      console.error('Failed to debug content:', error);
+      log.error('Failed to debug content', { action: 'debugContent', metadata: { error } });
       toast.error('Failed to debug content');
       throw error;
     }
   };
 
   useEffect(() => {
-    console.log('useSocialMediaManager effect running, user:', user, 'isAdmin:', isAdmin);
-    console.log('User object:', JSON.stringify(user, null, 2));
-    console.log('IsAdmin check result:', isAdmin);
-    
+    log.debug('useSocialMediaManager effect running', { action: 'init', metadata: { hasUser: !!user, isAdmin } });
+
     if (user && isAdmin) {
-      console.log('Auth conditions met, fetching data...');
+      log.debug('Auth conditions met, fetching data', { action: 'init' });
       fetchPosts();
       fetchWebhooks();
     } else {
-      console.log('Auth conditions not met. User:', !!user, 'IsAdmin:', isAdmin);
+      log.debug('Auth conditions not met', { action: 'init', metadata: { hasUser: !!user, isAdmin } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, isAdmin]);

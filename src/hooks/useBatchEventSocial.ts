@@ -2,6 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { EventLiveStats, EventAttendee, EventDiscussion } from './useEventSocial';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useBatchEventSocial');
 
 export interface BatchEventSocialData {
   attendees: EventAttendee[];
@@ -119,7 +122,7 @@ export function useBatchEventSocial(eventIds: string[]) {
 
         return result;
       } catch (error) {
-        console.error('Error fetching batch event social data:', error);
+        log.error('Error fetching batch event social data', { action: 'fetchBatchSocial', metadata: { error } });
         return {};
       }
     },

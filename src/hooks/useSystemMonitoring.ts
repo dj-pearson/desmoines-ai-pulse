@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSystemMonitoring');
 
 interface SystemStatus {
   server: 'healthy' | 'warning' | 'critical';
@@ -93,7 +96,7 @@ export function useSystemMonitoring() {
         diskUsage: Math.floor(Math.random() * 15) + 35,
       }));
     } catch (error) {
-      console.error("Failed to load system status:", error);
+      log.error("Failed to load system status", { action: 'loadSystemStatus', metadata: { error } });
       setSystemStatus(prev => ({
         ...prev,
         server: 'warning',
@@ -110,7 +113,7 @@ export function useSystemMonitoring() {
         setSettings(JSON.parse(savedSettings));
       }
     } catch (error) {
-      console.error("Failed to load system settings:", error);
+      log.error("Failed to load system settings", { action: 'loadSystemSettings', metadata: { error } });
     }
   };
 
@@ -121,7 +124,7 @@ export function useSystemMonitoring() {
       localStorage.setItem('adminSystemSettings', JSON.stringify(settings));
       return { success: true };
     } catch (error) {
-      console.error("Failed to save system settings:", error);
+      log.error("Failed to save system settings", { action: 'saveSystemSettings', metadata: { error } });
       return { success: false, error };
     } finally {
       setIsLoading(false);
@@ -139,7 +142,7 @@ export function useSystemMonitoring() {
       if (error) throw error;
       return { success: true };
     } catch (error) {
-      console.error("Failed to clear cache:", error);
+      log.error("Failed to clear cache", { action: 'clearCache', metadata: { error } });
       return { success: false, error };
     } finally {
       setIsLoading(false);
@@ -164,7 +167,7 @@ export function useSystemMonitoring() {
 
       return { success: true };
     } catch (error) {
-      console.error("Failed to run backup:", error);
+      log.error("Failed to run backup", { action: 'runBackup', metadata: { error } });
       return { success: false, error };
     } finally {
       setIsLoading(false);
@@ -180,7 +183,7 @@ export function useSystemMonitoring() {
       if (error) throw error;
       return { success: true, data };
     } catch (error) {
-      console.error("Failed to optimize database:", error);
+      log.error("Failed to optimize database", { action: 'optimizeDatabase', metadata: { error } });
       return { success: false, error };
     } finally {
       setIsLoading(false);
@@ -210,7 +213,7 @@ export function useSystemMonitoring() {
       if (error) throw error;
       return { success: true };
     } catch (error) {
-      console.error(`Failed to restart ${service}:`, error);
+      log.error(`Failed to restart ${service}`, { action: 'restartService', metadata: { service, error } });
       return { success: false, error };
     } finally {
       setIsLoading(false);

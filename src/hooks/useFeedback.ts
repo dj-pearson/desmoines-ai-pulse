@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useFeedback');
 
 export interface UserFeedback {
   id: string;
@@ -44,7 +47,7 @@ export function useFeedback() {
 
       setUserFeedback(feedbackMap);
     } catch (error) {
-      console.error("Error fetching user feedback:", error);
+      log.error("Error fetching user feedback", { action: 'fetchUserFeedback', metadata: { error } });
     } finally {
       setIsLoading(false);
     }
@@ -77,7 +80,7 @@ export function useFeedback() {
 
       return data;
     } catch (error) {
-      console.error("Error submitting feedback:", error);
+      log.error("Error submitting feedback", { action: 'submitFeedback', metadata: { error } });
       throw error;
     }
   };
@@ -95,7 +98,7 @@ export function useFeedback() {
           interaction_type: interactionType,
         });
     } catch (error) {
-      console.error("Error tracking interaction:", error);
+      log.error("Error tracking interaction", { action: 'trackInteraction', metadata: { error } });
     }
   };
 
@@ -119,7 +122,7 @@ export function useFeedback() {
         return newState;
       });
     } catch (error) {
-      console.error("Error removing feedback:", error);
+      log.error("Error removing feedback", { action: 'removeFeedback', metadata: { error } });
       throw error;
     }
   };
@@ -151,7 +154,7 @@ export function useFeedback() {
         not_interested: stats.not_interested || 0,
       };
     } catch (error) {
-      console.error("Error fetching feedback stats:", error);
+      log.error("Error fetching feedback stats", { action: 'getFeedbackStats', metadata: { error } });
       return { thumbs_up: 0, thumbs_down: 0, interested: 0, not_interested: 0 };
     }
   };

@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useEmailPreferences');
 
 interface EmailPreferences {
   id?: string;
@@ -97,7 +100,7 @@ export function useEmailPreferences() {
       });
     },
     onError: (error: any) => {
-      console.error('Error updating email preferences:', error);
+      log.error('Error updating email preferences', { action: 'updatePreferences', metadata: { error } });
       toast({
         title: 'Failed to update preferences',
         description: error.message || 'Please try again',

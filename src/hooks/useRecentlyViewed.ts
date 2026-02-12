@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Event } from '@/lib/types';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useRecentlyViewed');
 
 interface RecentlyViewedItem {
   id: string;
@@ -29,7 +32,7 @@ export function useRecentlyViewed() {
         setRecentlyViewed(sorted);
       }
     } catch (error) {
-      console.error('Failed to load recently viewed items:', error);
+      log.error('Failed to load recently viewed items', { action: 'loadFromStorage', metadata: { error } });
     }
   }, []);
 
@@ -58,13 +61,13 @@ export function useRecentlyViewed() {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
         } catch (error) {
-          console.error('Failed to save recently viewed:', error);
+          log.error('Failed to save recently viewed', { action: 'addToRecentlyViewed', metadata: { error } });
         }
 
         return updated;
       });
     } catch (error) {
-      console.error('Failed to add to recently viewed:', error);
+      log.error('Failed to add to recently viewed', { action: 'addToRecentlyViewed', metadata: { error } });
     }
   }, []);
 
@@ -74,7 +77,7 @@ export function useRecentlyViewed() {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
-      console.error('Failed to clear recently viewed:', error);
+      log.error('Failed to clear recently viewed', { action: 'clearRecentlyViewed', metadata: { error } });
     }
   }, []);
 
@@ -86,7 +89,7 @@ export function useRecentlyViewed() {
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
       } catch (error) {
-        console.error('Failed to update recently viewed:', error);
+        log.error('Failed to update recently viewed', { action: 'removeFromRecentlyViewed', metadata: { error } });
       }
 
       return filtered;
@@ -126,7 +129,7 @@ export function useRecentlyViewedRestaurants() {
         setRecentlyViewed(sorted);
       }
     } catch (error) {
-      console.error('Failed to load recently viewed restaurants:', error);
+      log.error('Failed to load recently viewed restaurants', { action: 'loadFromStorage', metadata: { error } });
     }
   }, []);
 
@@ -149,13 +152,13 @@ export function useRecentlyViewedRestaurants() {
         try {
           localStorage.setItem(RESTAURANT_STORAGE_KEY, JSON.stringify(updated));
         } catch (error) {
-          console.error('Failed to save recently viewed restaurants:', error);
+          log.error('Failed to save recently viewed restaurants', { action: 'addToRecentlyViewed', metadata: { error } });
         }
 
         return updated;
       });
     } catch (error) {
-      console.error('Failed to add restaurant to recently viewed:', error);
+      log.error('Failed to add restaurant to recently viewed', { action: 'addToRecentlyViewed', metadata: { error } });
     }
   }, []);
 
@@ -164,7 +167,7 @@ export function useRecentlyViewedRestaurants() {
     try {
       localStorage.removeItem(RESTAURANT_STORAGE_KEY);
     } catch (error) {
-      console.error('Failed to clear recently viewed restaurants:', error);
+      log.error('Failed to clear recently viewed restaurants', { action: 'clearRecentlyViewed', metadata: { error } });
     }
   }, []);
 

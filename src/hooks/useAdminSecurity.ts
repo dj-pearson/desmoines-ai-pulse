@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAdminSecurity');
 
 interface AdminAction {
   actionType: 'user_management' | 'content_management' | 'system_configuration';
@@ -28,7 +31,7 @@ export function useAdminSecurity(): AdminSecurityHookReturn {
 
   const logAdminAction = async (action: AdminAction): Promise<void> => {
     if (!user || !isAdmin) {
-      console.warn('Attempted to log admin action without proper permissions');
+      log.warn('Attempted to log admin action without proper permissions', { action: 'logAdminAction' });
       return;
     }
 
@@ -44,10 +47,10 @@ export function useAdminSecurity(): AdminSecurityHookReturn {
       });
 
       if (error) {
-        console.error('Failed to log admin action:', error);
+        log.error('Failed to log admin action', { action: 'logAdminAction', metadata: { error } });
       }
     } catch (error) {
-      console.error('Error logging admin action:', error);
+      log.error('Error logging admin action', { action: 'logAdminAction', metadata: { error } });
     }
   };
 
@@ -81,7 +84,7 @@ export function useAdminSecurity(): AdminSecurityHookReturn {
           .limit(10);
 
         if (error) {
-          console.error('Failed to check recent admin actions:', error);
+          log.error('Failed to check recent admin actions', { action: 'validateAdminAction', metadata: { error } });
           // Allow action if we can't check (fail open)
           return { allowed: true };
         }
@@ -94,7 +97,7 @@ export function useAdminSecurity(): AdminSecurityHookReturn {
           };
         }
       } catch (error) {
-        console.error('Error validating admin action:', error);
+        log.error('Error validating admin action', { action: 'validateAdminAction', metadata: { error } });
         // Allow action if validation fails (fail open)
         return { allowed: true };
       }

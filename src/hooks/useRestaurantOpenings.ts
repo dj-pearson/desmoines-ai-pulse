@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useRestaurantOpenings');
 
 type RestaurantOpening = Database["public"]["Tables"]["restaurant_openings"]["Row"] & {
   openingTimeframe?: string;
@@ -77,7 +80,7 @@ export function useRestaurantOpenings(filters: RestaurantOpeningFilters = {}) {
         totalCount: count || 0,
       });
     } catch (error) {
-      console.error("Error fetching restaurant openings:", error);
+      log.error("Error fetching restaurant openings", { action: 'fetchRestaurantOpenings', metadata: { error } });
       setState((prev) => ({
         ...prev,
         isLoading: false,
@@ -100,7 +103,7 @@ export function useRestaurantOpenings(filters: RestaurantOpeningFilters = {}) {
       fetchRestaurantOpenings();
       return data;
     } catch (error) {
-      console.error("Error creating restaurant opening:", error);
+      log.error("Error creating restaurant opening", { action: 'createRestaurantOpening', metadata: { error } });
       throw error;
     }
   };
@@ -119,7 +122,7 @@ export function useRestaurantOpenings(filters: RestaurantOpeningFilters = {}) {
       fetchRestaurantOpenings();
       return data;
     } catch (error) {
-      console.error("Error updating restaurant opening:", error);
+      log.error("Error updating restaurant opening", { action: 'updateRestaurantOpening', metadata: { error } });
       throw error;
     }
   };
@@ -132,7 +135,7 @@ export function useRestaurantOpenings(filters: RestaurantOpeningFilters = {}) {
 
       fetchRestaurantOpenings();
     } catch (error) {
-      console.error("Error deleting restaurant opening:", error);
+      log.error("Error deleting restaurant opening", { action: 'deleteRestaurantOpening', metadata: { error } });
       throw error;
     }
   };
