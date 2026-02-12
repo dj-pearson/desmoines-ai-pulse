@@ -65,9 +65,13 @@ function log(level: LogLevel, message: string, context?: Partial<LogContext>): v
   }
 
   const formatted = formatLog(level, message, context);
+  // eslint-disable-next-line no-console -- logger is the only authorized console consumer
   const consoleFn = level === 'debug' ? console.debug
+    // eslint-disable-next-line no-console
     : level === 'info' ? console.info
+    // eslint-disable-next-line no-console
     : level === 'warn' ? console.warn
+    // eslint-disable-next-line no-console
     : console.error;
 
   if (context?.metadata) {

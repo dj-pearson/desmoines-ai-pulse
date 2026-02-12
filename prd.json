@@ -15,7 +15,7 @@
         "Typecheck passes locally"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "The project currently only has an event-crawler.yml workflow. This is the single most critical gap for enterprise readiness — no code quality gates exist in CI."
     },
     {
@@ -32,7 +32,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Currently the project only has Playwright E2E tests. No unit testing framework exists. Vitest is the natural choice since the project already uses Vite."
     },
     {
@@ -47,7 +47,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Focus on the three most critical library files: errorHandler.ts, safeStorage.ts, and utils.ts. These are used across the entire codebase."
     },
     {
@@ -62,7 +62,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-001 (workflow) and US-002 (vitest setup). This ensures tests are enforced, not just available."
     },
     {
@@ -94,7 +94,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Start with src/lib/ because these are the foundational utilities used everywhere. Subsequent stories will clean up hooks and components."
     },
     {

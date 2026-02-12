@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createEventSlugWithCentralTime } from "./timezone";
 import { BRAND } from "./brandConfig";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EnhancedSitemapGenerator');
 
 interface SitemapUrl {
   loc: string;
@@ -87,7 +90,7 @@ export class EnhancedSitemapGenerator {
         });
       }
     } catch (error) {
-      console.error("Error generating events sitemap:", error);
+      log.error('Error generating events sitemap', { action: 'generateEventsSitemap', metadata: { error } });
     }
 
     return this.generateXML(urls);
@@ -118,7 +121,7 @@ export class EnhancedSitemapGenerator {
         });
       }
     } catch (error) {
-      console.error("Error generating restaurants sitemap:", error);
+      log.error('Error generating restaurants sitemap', { action: 'generateRestaurantsSitemap', metadata: { error } });
     }
 
     return this.generateXML(urls);
@@ -199,24 +202,24 @@ export async function generateAllSitemaps(): Promise<void> {
   try {
     // Generate main sitemap
     const mainSitemap = await generator.generateMainSitemap();
-    console.log("Main sitemap generated");
+    log.info('Main sitemap generated', { action: 'generateAllSitemaps' });
     
     // Generate events sitemap
     const eventsSitemap = await generator.generateEventsSitemap();
-    console.log("Events sitemap generated");
+    log.info('Events sitemap generated', { action: 'generateAllSitemaps' });
     
     // Generate restaurants sitemap
     const restaurantsSitemap = await generator.generateRestaurantsSitemap();
-    console.log("Restaurants sitemap generated");
+    log.info('Restaurants sitemap generated', { action: 'generateAllSitemaps' });
     
     // Generate sitemap index
     const sitemapIndex = await generator.generateSitemapIndex();
-    console.log("Sitemap index generated");
+    log.info('Sitemap index generated', { action: 'generateAllSitemaps' });
     
     // In a real implementation, these would be saved to the public folder
     // For now, we'll log them for debugging
     
   } catch (error) {
-    console.error("Error generating sitemaps:", error);
+    log.error('Error generating sitemaps', { action: 'generateAllSitemaps', metadata: { error } });
   }
 }

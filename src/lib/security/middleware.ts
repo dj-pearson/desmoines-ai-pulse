@@ -33,6 +33,9 @@ import {
 } from './permissions';
 import { checkOwnership, validateResourceAccess } from './ownership';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SecurityMiddleware');
 
 // =============================================================================
 // SECURITY CONTEXT BUILDER
@@ -65,7 +68,7 @@ export async function buildSecurityContext(): Promise<SecurityContext> {
       sessionId: session.access_token?.slice(-8), // Last 8 chars for logging
     };
   } catch (error) {
-    console.error('Error building security context:', error);
+    log.error('Error building security context', { action: 'buildSecurityContext', metadata: { error } });
     return createAnonymousContext();
   }
 }
@@ -102,7 +105,7 @@ async function getUserRole(userId: string): Promise<UserRole> {
 
     return 'user';
   } catch (error) {
-    console.error('Error fetching user role:', error);
+    log.error('Error fetching user role', { action: 'getUserRole', metadata: { error } });
     return 'user';
   }
 }
@@ -490,7 +493,7 @@ export async function logSecurityEvent(entry: SecurityAuditEntry): Promise<void>
     });
   } catch (error) {
     // Don't fail the operation if audit logging fails
-    console.error('Failed to log security event:', error);
+    log.error('Failed to log security event', { action: 'logSecurityEvent', metadata: { error } });
   }
 }
 

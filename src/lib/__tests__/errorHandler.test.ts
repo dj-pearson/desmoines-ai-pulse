@@ -26,7 +26,7 @@ describe('handleError', () => {
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('ERROR'),
-      error
+      expect.objectContaining({ error })
     );
   });
 
@@ -35,7 +35,7 @@ describe('handleError', () => {
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('ERROR'),
-      expect.objectContaining({ message: 'string error' })
+      expect.objectContaining({ error: expect.objectContaining({ message: 'string error' }) })
     );
   });
 
@@ -44,7 +44,7 @@ describe('handleError', () => {
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('[MyComp:doThing]'),
-      expect.any(Error)
+      expect.any(Object)
     );
   });
 
@@ -52,7 +52,10 @@ describe('handleError', () => {
     const metadata = { key: 'value' };
     handleError(new Error('test'), { component: 'Test', metadata });
 
-    expect(console.error).toHaveBeenCalledWith('Context:', metadata);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('Error context'),
+      metadata
+    );
   });
 
   it('dispatches app-error custom event for ERROR severity', () => {
@@ -136,7 +139,7 @@ describe('createComponentErrorHandler', () => {
 
     expect(console.error).toHaveBeenCalledWith(
       expect.stringContaining('[MyComponent:load]'),
-      expect.any(Error)
+      expect.any(Object)
     );
   });
 
@@ -145,7 +148,10 @@ describe('createComponentErrorHandler', () => {
     const meta = { userId: '123' };
     handler(new Error('test'), 'save', meta);
 
-    expect(console.error).toHaveBeenCalledWith('Context:', meta);
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('Error context'),
+      meta
+    );
   });
 });
 

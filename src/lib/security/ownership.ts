@@ -16,6 +16,9 @@ import {
   OWNERSHIP_COLUMNS,
 } from './types';
 import { isAdmin } from './permissions';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SecurityOwnership');
 
 // =============================================================================
 // OWNERSHIP CHECKING
@@ -42,7 +45,7 @@ export async function isResourceOwner(
   const tableName = getTableName(resourceType);
 
   if (!tableName) {
-    console.error(`Unknown resource type: ${resourceType}`);
+    log.error(`Unknown resource type: ${resourceType}`, { action: 'isResourceOwner' });
     return false;
   }
 
@@ -61,7 +64,7 @@ export async function isResourceOwner(
     const ownerId = data[ownerColumn as keyof typeof data];
     return ownerId === context.userId;
   } catch (error) {
-    console.error(`Error checking ownership for ${resourceType}:${resourceId}`, error);
+    log.error(`Error checking ownership for ${resourceType}:${resourceId}`, { action: 'isResourceOwner', metadata: { error } });
     return false;
   }
 }
@@ -139,7 +142,7 @@ async function checkTeamAccess(
         .limit(1);
 
       if (error) {
-        console.error('Error checking team access:', error);
+        log.error('Error checking team access', { action: 'checkTeamAccess', metadata: { error } });
         return false;
       }
 
@@ -164,7 +167,7 @@ async function checkTeamAccess(
         }
       }
     } catch (error) {
-      console.error('Error checking team access for campaign:', error);
+      log.error('Error checking team access for campaign', { action: 'checkTeamAccess', metadata: { error } });
     }
   }
 
@@ -279,7 +282,7 @@ export async function validateResourceAccess<T = Record<string, unknown>>(
 
     return { allowed: true, resource: data as T };
   } catch (error) {
-    console.error(`Error validating resource access for ${resourceType}:${resourceId}`, error);
+    log.error(`Error validating resource access for ${resourceType}:${resourceId}`, { action: 'validateResourceAccess', metadata: { error } });
     return {
       allowed: false,
       error: {

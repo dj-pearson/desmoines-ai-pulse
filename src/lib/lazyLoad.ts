@@ -3,6 +3,10 @@
  * Reduces main thread work by deferring non-critical code
  */
 
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('LazyLoad');
+
 // Track which routes have been prefetched
 const prefetchedRoutes = new Set<string>();
 
@@ -36,7 +40,7 @@ export const lazyWithRetry = <T extends React.ComponentType<any>>(
       return await componentImport();
     } catch (error) {
       // Retry once on failure (network issues)
-      console.warn('Lazy load failed, retrying...', error);
+      log.warn('Lazy load failed, retrying...', { action: 'lazyWithRetry', metadata: { error } });
       return await componentImport();
     }
   });

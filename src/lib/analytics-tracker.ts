@@ -4,6 +4,9 @@
  */
 
 import type { AnalyticsEvent } from '@/types/event-promotion';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AnalyticsTracker');
 
 /**
  * Track an analytics event
@@ -16,7 +19,7 @@ export function trackEvent(event: AnalyticsEvent): void {
   try {
     localStorage.setItem('epp_analytics', JSON.stringify(events));
   } catch (error) {
-    console.error('Failed to store analytics event:', error);
+    log.error('Failed to store analytics event', { action: 'store_event', metadata: { error } });
   }
 
   // Send to analytics service (implement as needed)
@@ -129,7 +132,7 @@ function getStoredEvents(): AnalyticsEvent[] {
     const stored = localStorage.getItem('epp_analytics');
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Failed to retrieve analytics events:', error);
+    log.error('Failed to retrieve analytics events', { action: 'retrieve_events', metadata: { error } });
     return [];
   }
 }
@@ -149,10 +152,8 @@ function sendToAnalytics(event: AnalyticsEvent): void {
     });
   }
 
-  // Log to console in development
-  if (import.meta.env.DEV) {
-    console.log('📊 Analytics Event:', event);
-  }
+  // Log in development (logger handles dev/prod filtering)
+  log.debug('Analytics Event', { action: 'send', metadata: { event } });
 
   // Send to backend API for storage
   fetch('/api/analytics/event-promotion-planner', {
@@ -160,7 +161,7 @@ function sendToAnalytics(event: AnalyticsEvent): void {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(event),
   }).catch((error) => {
-    console.error('Failed to send analytics event:', error);
+    log.error('Failed to send analytics event', { action: 'send_event', metadata: { error } });
   });
 }
 
@@ -206,6 +207,6 @@ export function clearAnalytics(): void {
   try {
     localStorage.removeItem('epp_analytics');
   } catch (error) {
-    console.error('Failed to clear analytics data:', error);
+    log.error('Failed to clear analytics data', { action: 'clear_analytics', metadata: { error } });
   }
 }
