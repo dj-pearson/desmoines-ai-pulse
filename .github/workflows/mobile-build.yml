@@ -1,0 +1,127 @@
+name: Mobile App Build
+
+# Build the mobile app web assets and validate the configuration.
+# Native builds (IPA/APK) require Xcode/Android Studio and are done
+# locally or via a dedicated mobile CI service (Bitrise, Codemagic, etc.)
+
+on:
+  push:
+    branches:
+      - 'mobile/**'
+      - 'claude/build-mobile-*'
+    paths:
+      - 'mobile-app/**'
+      - 'src/**'
+  pull_request:
+    paths:
+      - 'mobile-app/**'
+      - 'src/**'
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ================================================================
+  # Build mobile web assets
+  # ================================================================
+  build-web-assets:
+    name: Build Mobile Web Assets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: mobile-app
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build mobile web assets
+        working-directory: mobile-app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SITE_URL: ${{ secrets.VITE_SITE_URL }}
+
+      - name: Verify build output
+        working-directory: mobile-app
+        run: |
+          echo "=== Build output ==="
+          ls -la www/
+          echo "=== Asset sizes ==="
+          du -sh www/
+          du -sh www/assets/ || true
+          echo "=== Index file check ==="
+          test -f www/index.html && echo "index.html exists" || (echo "MISSING index.html" && exit 1)
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-web-assets
+          path: mobile-app/www/
+          retention-days: 7
+
+  # ================================================================
+  # Validate Capacitor configuration
+  # ================================================================
+  validate-config:
+    name: Validate Mobile Configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate iOS configuration
+        run: |
+          echo "=== iOS Info.plist check ==="
+          test -f mobile-app/ios/App/App/Info.plist && echo "Info.plist exists" || (echo "MISSING" && exit 1)
+
+          echo "=== Privacy Manifest check ==="
+          test -f mobile-app/ios/App/App/PrivacyInfo.xcprivacy && echo "PrivacyInfo.xcprivacy exists" || (echo "MISSING" && exit 1)
+
+          echo "=== Entitlements check ==="
+          test -f mobile-app/ios/App/App/App.entitlements && echo "App.entitlements exists" || (echo "MISSING" && exit 1)
+
+          echo "=== Podfile iOS version check ==="
+          grep -q "platform :ios, '16.0'" mobile-app/ios/App/Podfile && echo "iOS 16.0 minimum set" || (echo "WRONG iOS version" && exit 1)
+
+      - name: Validate Android configuration
+        run: |
+          echo "=== Android Manifest check ==="
+          test -f mobile-app/android/app/src/main/AndroidManifest.xml && echo "AndroidManifest.xml exists" || (echo "MISSING" && exit 1)
+
+          echo "=== Target SDK check ==="
+          grep -q "targetSdkVersion = 35" mobile-app/android/variables.gradle && echo "API 35 target set" || (echo "WRONG target SDK" && exit 1)
+
+          echo "=== Network security config check ==="
+          test -f mobile-app/android/app/src/main/res/xml/network_security_config.xml && echo "Network security config exists" || (echo "MISSING" && exit 1)
+
+          echo "=== Predictive back gesture check ==="
+          grep -q "enableOnBackInvokedCallback" mobile-app/android/app/src/main/AndroidManifest.xml && echo "Predictive back enabled" || (echo "MISSING" && exit 1)
+
+      - name: Validate deep link configuration
+        run: |
+          echo "=== Apple App Site Association check ==="
+          test -f public/.well-known/apple-app-site-association && echo "AASA exists" || (echo "MISSING" && exit 1)
+
+          echo "=== Asset Links check ==="
+          test -f public/.well-known/assetlinks.json && echo "Asset links exists" || (echo "MISSING" && exit 1)
+
+          echo "=== Capacitor config check ==="
+          test -f mobile-app/capacitor.config.ts && echo "Capacitor config exists" || (echo "MISSING" && exit 1)

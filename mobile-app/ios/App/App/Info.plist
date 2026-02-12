@@ -2,10 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- Bundle Configuration -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Des Moines AI Pulse</string>
+	<string>DSM AI Pulse</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,14 +23,24 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<!-- Minimum iOS version (iOS 16 required for new App Store submissions) -->
+	<key>MinimumOSVersion</key>
+	<string>16.0</string>
+
+	<!-- Launch Screen -->
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+
+	<!-- Device Capabilities -->
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
+
+	<!-- Supported Orientations -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -45,5 +56,102 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+
+	<!-- Supports full screen on all device sizes (including Dynamic Island) -->
+	<key>UISupportsFullScreen</key>
+	<true/>
+
+	<!-- ================================================================
+	     Privacy Permission Descriptions (Required by Apple)
+	     Each permission usage MUST have a human-readable description
+	     explaining why the app needs access.
+	     ================================================================ -->
+
+	<!-- Location - for nearby events, restaurants, attractions -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Des Moines AI Pulse uses your location to show nearby events, restaurants, and attractions in the Des Moines area.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Des Moines AI Pulse uses your location to notify you about nearby events and deals even when the app is in the background.</string>
+
+	<!-- Camera - for profile photos and event photo uploads -->
+	<key>NSCameraUsageDescription</key>
+	<string>Des Moines AI Pulse needs camera access so you can take photos for your profile or upload event photos.</string>
+
+	<!-- Photo Library - for selecting photos to upload -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Des Moines AI Pulse needs access to your photo library so you can select photos for your profile or event submissions.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Des Moines AI Pulse would like to save images to your photo library.</string>
+
+	<!-- Face ID / Touch ID - for biometric authentication -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>Des Moines AI Pulse uses Face ID for quick and secure login to your account.</string>
+
+	<!-- App Tracking Transparency -->
+	<key>NSUserTrackingUsageDescription</key>
+	<string>Des Moines AI Pulse may use this to provide you with a more personalized experience and relevant event recommendations.</string>
+
+	<!-- Calendars - for adding events to calendar -->
+	<key>NSCalendarsUsageDescription</key>
+	<string>Des Moines AI Pulse would like to add events to your calendar so you don't miss them.</string>
+
+	<!-- ================================================================
+	     URL Schemes and Universal Links
+	     ================================================================ -->
+
+	<!-- Custom URL scheme for deep linking -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.desmoines.aipulse</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>dmpulse</string>
+			</array>
+		</dict>
+	</array>
+
+	<!-- ================================================================
+	     Network Configuration
+	     ================================================================ -->
+
+	<!-- Allow HTTP for local development only -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<false/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>localhost</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+
+	<!-- ================================================================
+	     Background Modes
+	     ================================================================ -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
+
+	<!-- ================================================================
+	     App Appearance
+	     ================================================================ -->
+
+	<!-- Support both light and dark mode -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Automatic</string>
+
+	<!-- Status bar style -->
+	<key>UIStatusBarStyle</key>
+	<string>UIStatusBarStyleDefault</string>
 </dict>
 </plist>

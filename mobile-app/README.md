@@ -1,416 +1,194 @@
 # Des Moines AI Pulse - Mobile App
 
-This is the **native mobile build** for the Des Moines AI Pulse application, using **Capacitor** to wrap the web app into native iOS and Android apps.
+Native iOS and Android apps built with **Capacitor 6** wrapping the existing React web application. This is an **isolated build** that does not affect the web production deployment.
 
-## 🎯 Why This Folder Exists
-
-This separate mobile build was created to:
-- ✅ Avoid TypeScript compilation issues that caused crashes in Expo builds
-- ✅ Use pure JavaScript configuration (avoiding TS build errors)
-- ✅ Generate native iOS (.ipa) and Android (.apk/.aab) builds
-- ✅ Keep the mobile build completely separate from the main web app
-- ✅ Allow direct submission to Apple App Store and Google Play Store
-
-## 📁 Project Structure
+## Architecture
 
 ```
 mobile-app/
-├── android/          # Native Android project (Gradle/Kotlin)
-├── ios/             # Native iOS project (Xcode/Swift)
-├── www/             # Built web assets (copied from ../dist)
-├── resources/       # App icons and splash screens
-├── node_modules/    # Capacitor dependencies
-├── capacitor.config.json  # Capacitor configuration
-└── package.json     # Mobile app build scripts
+├── src/                        # Mobile-specific TypeScript source
+│   ├── config/                 # Platform detection & configuration
+│   │   └── platform.ts        # Runtime platform detection (iOS/Android/web)
+│   ├── services/               # Native bridge service layer
+│   │   ├── native-bridge.ts    # Core Capacitor plugin initialization
+│   │   ├── push-notifications.ts # APNs (iOS) / FCM (Android) push
+│   │   ├── deep-links.ts      # Universal Links & App Links routing
+│   │   ├── biometrics.ts      # Face ID / Touch ID / Fingerprint
+│   │   ├── native-geolocation.ts # Native GPS location
+│   │   ├── app-tracking.ts    # iOS App Tracking Transparency
+│   │   └── offline-storage.ts # Capacitor Preferences (persisted storage)
+│   ├── hooks/                  # React hooks wrapping native services
+│   │   ├── useNativePlatform.ts
+│   │   ├── usePushNotifications.ts
+│   │   ├── useNativeLocation.ts
+│   │   ├── useBiometricAuth.ts
+│   │   └── useNetworkStatus.ts
+│   ├── components/             # Mobile-specific React components
+│   │   ├── MobileAppProvider.tsx  # Top-level context provider
+│   │   ├── OfflineBanner.tsx      # Network status banner
+│   │   └── MobileStatusBar.tsx    # Safe area spacer
+│   └── styles/
+│       └── mobile.css          # Mobile-only CSS (safe areas, touch, etc.)
+├── ios/                        # Xcode project (iOS 16+ minimum)
+├── android/                    # Android Studio project (API 35 target)
+├── www/                        # Built web assets (generated, gitignored)
+├── resources/                  # App icons and splash screens
+├── docs/                       # Compliance documentation
+├── capacitor.config.ts         # Capacitor plugin configuration
+├── vite.config.mobile.ts       # Isolated Vite build config
+└── package.json                # Mobile-specific dependencies
 ```
 
-## 🚀 Quick Start
+## Build Pipeline (Isolated from Web)
 
-### Prerequisites
+The mobile app uses its **own Vite config** (`vite.config.mobile.ts`) that:
+- Outputs to `mobile-app/www/` (not `dist/`)
+- Uses relative paths for Capacitor's `file://` protocol
+- Has mobile-optimized chunk splitting (fewer chunks = fewer disk reads)
+- Resolves `@/` imports from the parent `src/` directory
+- Adds `@mobile/` alias for mobile-specific code
+- Runs on port 8081 (vs 8080 for web)
 
-**For iOS builds:**
-- macOS computer (required for Xcode)
-- Xcode 14+ installed
-- CocoaPods installed (`sudo gem install cocoapods`)
-- Apple Developer Account ($99/year)
+This means `npm run build` in the web root **does not** affect the mobile app, and vice versa.
 
-**For Android builds:**
-- Android Studio installed
-- Java JDK 17+ installed
-- Android SDK installed
+## Prerequisites
 
-### Initial Setup
+- **Node.js** >= 20
+- **Xcode** >= 15 (for iOS builds)
+- **Android Studio** Hedgehog or later (for Android builds)
+- **CocoaPods** (for iOS dependencies): `sudo gem install cocoapods`
+- **JDK 17** (for Android builds)
 
-1. **Install dependencies:**
-   ```bash
-   cd mobile-app
-   npm install
-   ```
-
-2. **Build the web app and sync:**
-   ```bash
-   npm run build
-   ```
-   This will:
-   - Build the main web app from the parent directory
-   - Copy the built files to `www/`
-   - Sync changes to iOS and Android projects
-
-## 📱 Building for iOS
-
-### Open in Xcode
+## Getting Started
 
 ```bash
-npm run open:ios
+# 1. Install root project dependencies
+cd desmoines-ai-pulse
+npm install
+
+# 2. Install mobile dependencies
+cd mobile-app
+npm install
+
+# 3. Build web assets for mobile
+npm run build
+
+# 4. Sync with native projects
+npm run sync
+
+# 5. Open in IDE
+npm run open:ios      # Opens Xcode
+npm run open:android  # Opens Android Studio
 ```
 
-This opens the iOS project in Xcode.
-
-### Build Steps in Xcode
-
-1. **Select your Team:**
-   - In Xcode, go to: Signing & Capabilities
-   - Select your Apple Developer Team
-
-2. **Update Bundle Identifier:**
-   - Change from `com.desmoines.aipulse` to your unique ID
-   - Example: `com.yourcompany.desmoinesaipulse`
-
-3. **Configure Signing:**
-   - Ensure "Automatically manage signing" is checked
-   - Select your provisioning profile
-
-4. **Connect Device or Simulator:**
-   - Select iPhone device or simulator from the top toolbar
-
-5. **Build and Run:**
-   - Click the Play button (▶️) to build and run
-   - Or: Product → Archive (for App Store submission)
-
-### Testing on Physical Device
-
-1. Connect your iPhone via USB
-2. Trust the computer on your iPhone
-3. In Xcode, select your device from the device menu
-4. Click Run
-
-### Submitting to App Store
-
-1. **Archive the app:**
-   - Product → Archive in Xcode
-   - Wait for build to complete
-
-2. **Validate the archive:**
-   - Click "Validate App"
-   - Fix any issues reported
-
-3. **Upload to App Store Connect:**
-   - Click "Distribute App"
-   - Select "App Store Connect"
-   - Follow the prompts
-
-4. **Create App Store listing:**
-   - Go to [App Store Connect](https://appstoreconnect.apple.com)
-   - Create a new app
-   - Upload screenshots, description, etc.
-   - Submit for review
-
-## 🤖 Building for Android
-
-### Open in Android Studio
-
-```bash
-npm run open:android
-```
-
-This opens the Android project in Android Studio.
-
-### Build Steps in Android Studio
-
-1. **Update Package Name:**
-   - In `android/app/build.gradle`, change:
-     ```gradle
-     applicationId "com.desmoines.aipulse"
-     ```
-   - To your unique package name
-
-2. **Generate Signing Key:**
-   ```bash
-   keytool -genkey -v -keystore my-release-key.keystore -alias my-key-alias -keyalg RSA -keysize 2048 -validity 10000
-   ```
-   - Save the keystore file securely
-   - Remember the passwords!
-
-3. **Configure Signing in build.gradle:**
-   ```gradle
-   android {
-       ...
-       signingConfigs {
-           release {
-               storeFile file("my-release-key.keystore")
-               storePassword "your-store-password"
-               keyAlias "my-key-alias"
-               keyPassword "your-key-password"
-           }
-       }
-       buildTypes {
-           release {
-               signingConfig signingConfigs.release
-               ...
-           }
-       }
-   }
-   ```
-
-4. **Build Release APK:**
-   - In Android Studio: Build → Build Bundle(s) / APK(s) → Build APK(s)
-   - Or via command line:
-     ```bash
-     cd android
-     ./gradlew assembleRelease
-     ```
-
-5. **Build App Bundle (for Play Store):**
-   ```bash
-   cd android
-   ./gradlew bundleRelease
-   ```
-   - Find the .aab file in: `android/app/build/outputs/bundle/release/`
-
-### Testing on Physical Device
-
-1. Enable Developer Mode on Android device
-2. Enable USB Debugging
-3. Connect via USB
-4. In Android Studio, select your device
-5. Click Run
-
-### Submitting to Google Play Store
-
-1. **Create Play Store listing:**
-   - Go to [Google Play Console](https://play.google.com/console)
-   - Create a new app
-
-2. **Upload AAB file:**
-   - Navigate to Release → Production
-   - Create new release
-   - Upload the `.aab` file from `android/app/build/outputs/bundle/release/`
-
-3. **Complete Store Listing:**
-   - Add screenshots, description, icon
-   - Set content rating
-   - Set pricing & distribution
-
-4. **Submit for Review:**
-   - Review and submit
-   - Wait for Google's review (usually 1-3 days)
-
-## 🔧 Development Workflow
-
-### Making Changes to the App
-
-1. **Edit code in the parent directory:**
-   ```bash
-   cd ..
-   # Edit your React components, styles, etc.
-   ```
-
-2. **Rebuild and sync:**
-   ```bash
-   cd mobile-app
-   npm run build
-   ```
-
-3. **Open and test in iOS/Android:**
-   ```bash
-   npm run open:ios
-   # or
-   npm run open:android
-   ```
-
-### Live Reload (Development)
-
-For faster development with live reload:
-
-1. **Start the web dev server:**
-   ```bash
-   cd ..
-   npm run dev
-   ```
-
-2. **Update capacitor.config.json:**
-   ```json
-   {
-     "server": {
-       "url": "http://192.168.1.XXX:5173",
-       "cleartext": true
-     }
-   }
-   ```
-   Replace `192.168.1.XXX` with your computer's IP address
-
-3. **Sync and run:**
-   ```bash
-   npm run sync
-   npm run open:ios
-   ```
-
-4. **Don't forget to remove the server config before production build!**
-
-## 📦 Available NPM Scripts
-
-```bash
-npm run dev              # Copy web assets and sync (development)
-npm run build           # Full build: web app → copy → sync
-npm run build:web       # Build only the parent web app
-npm run copy:web        # Copy ../dist to www/
-npm run sync            # Sync www/ to both iOS and Android
-npm run sync:ios        # Sync only to iOS
-npm run sync:android    # Sync only to Android
-npm run open:ios        # Open iOS project in Xcode
-npm run open:android    # Open Android project in Android Studio
-npm run add:ios         # Add iOS platform (already done)
-npm run add:android     # Add Android platform (already done)
-npm run update          # Update Capacitor dependencies
-```
-
-## 🎨 Customizing App Icon & Splash Screen
-
-See [resources/README.md](./resources/README.md) for detailed instructions on:
-- Creating app icons
-- Creating splash screens
-- Using automated tools to generate all required sizes
-
-## 🔐 App Configuration
-
-Key settings in `capacitor.config.json`:
-
-```json
-{
-  "appId": "com.desmoines.aipulse",        // Change this!
-  "appName": "Des Moines AI Pulse",        // App display name
-  "webDir": "www",                         // Built web assets
-  "bundledWebRuntime": false,
-  "server": {
-    "androidScheme": "https",
-    "iosScheme": "https"
-  }
-}
-```
-
-**Important:** Change `appId` to your own unique identifier before publishing!
-
-## 🐛 Common Issues & Solutions
-
-### iOS Build Issues
-
-**Problem:** "No profiles for 'com.desmoines.aipulse' were found"
-- **Solution:** Change the bundle identifier in Xcode to one that matches your Apple Developer account
-
-**Problem:** "CocoaPods not installed"
-- **Solution:** Install with `sudo gem install cocoapods`, then run `cd ios/App && pod install`
-
-**Problem:** "Unable to boot simulator"
-- **Solution:** Open Xcode → Preferences → Locations → Command Line Tools (select Xcode version)
-
-### Android Build Issues
-
-**Problem:** "SDK location not found"
-- **Solution:** Create `android/local.properties`:
-  ```
-  sdk.dir=/Users/YOUR_USERNAME/Library/Android/sdk
-  ```
-
-**Problem:** "Gradle build failed"
-- **Solution:** Update Gradle wrapper:
-  ```bash
-  cd android
-  ./gradlew wrapper --gradle-version 8.0
-  ```
-
-**Problem:** "Keystore was tampered with, or password was incorrect"
-- **Solution:** Double-check keystore passwords in build.gradle
-
-### General Issues
-
-**Problem:** "White screen on launch"
-- **Solution:**
-  1. Check that `www/` folder has the built files
-  2. Run `npm run build` again
-  3. Check browser console in device inspector
-
-**Problem:** "App crashes immediately"
-- **Solution:**
-  1. Check native logs in Xcode or Android Studio
-  2. Ensure all Capacitor plugins are synced
-  3. Try `npm run sync` again
-
-## 📱 Testing Checklist
-
-Before submitting to app stores:
-
-- [ ] App opens without crashing
-- [ ] All navigation works
-- [ ] Forms submit correctly
-- [ ] Images load properly
-- [ ] Dark mode works (if applicable)
-- [ ] Landscape and portrait orientations work
-- [ ] Deep links work (if applicable)
-- [ ] Push notifications work (if implemented)
-- [ ] App works offline (if applicable)
-- [ ] No console errors in device inspector
-- [ ] Privacy policy linked
-- [ ] Terms of service linked
-- [ ] App icon displays correctly
-- [ ] Splash screen displays correctly
-
-## 🔄 Updating the App
-
-When you need to release an update:
-
-1. **Update version numbers:**
-   - iOS: Update in Xcode (General → Identity → Version)
-   - Android: Update in `android/app/build.gradle`:
-     ```gradle
-     versionCode 2
-     versionName "1.1.0"
-     ```
-
-2. **Rebuild:**
-   ```bash
-   npm run build
-   ```
-
-3. **Test thoroughly**
-
-4. **Submit update following the same process as initial submission**
-
-## 📚 Additional Resources
-
-- [Capacitor Documentation](https://capacitorjs.com/docs)
-- [iOS App Store Submission Guide](https://developer.apple.com/app-store/submissions/)
-- [Google Play Store Submission Guide](https://support.google.com/googleplay/android-developer/answer/9859152)
-- [App Store Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
-- [Google Play Policy](https://play.google.com/about/developer-content-policy/)
-
-## 💡 Pro Tips
-
-1. **Test on real devices:** Simulators/emulators don't catch all issues
-2. **Keep keystores safe:** Losing your Android keystore means you can't update your app!
-3. **Use TestFlight/Internal Testing:** Test with beta users before public release
-4. **Monitor crash reports:** Use App Store Connect and Google Play Console
-5. **Keep dependencies updated:** Run `npm run update` periodically
-6. **Read rejection feedback carefully:** App store reviewers provide helpful feedback
-
-## 🆘 Support
-
-If you encounter issues:
-1. Check the troubleshooting section above
-2. Review [Capacitor Docs](https://capacitorjs.com/docs)
-3. Check platform-specific documentation (iOS/Android)
-4. Search for the error on Stack Overflow
-5. Open an issue in the project repository
-
----
-
-**Good luck with your app store submissions! 🚀**
+## Available Scripts
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Start Vite dev server for mobile (port 8081) |
+| `npm run build` | Build web assets to `www/` |
+| `npm run build:ios` | Build web + sync to iOS |
+| `npm run build:android` | Build web + sync to Android |
+| `npm run build:all` | Build web + sync to both platforms |
+| `npm run sync` | Sync web assets + plugins to native projects |
+| `npm run open:ios` | Open iOS project in Xcode |
+| `npm run open:android` | Open Android project in Android Studio |
+| `npm run run:ios` | Build and run on iOS simulator |
+| `npm run run:android` | Build and run on Android emulator |
+
+## App Store Compliance
+
+### iOS (App Store)
+
+| Requirement | Status |
+|-------------|--------|
+| Minimum iOS 16 | Configured in Podfile and Info.plist |
+| Privacy Manifest (xcprivacy) | `ios/App/App/PrivacyInfo.xcprivacy` |
+| App Tracking Transparency | ATT prompt + `NSUserTrackingUsageDescription` |
+| Push Notifications | APNs configured in AppDelegate + entitlements |
+| Universal Links | `App.entitlements` + AASA file |
+| Face ID / Touch ID | `NSFaceIDUsageDescription` in Info.plist |
+| Location permissions | Usage descriptions for when-in-use and always |
+| Camera permissions | Usage description in Info.plist |
+| Photo Library permissions | Usage descriptions for read and save |
+| arm64 requirement | `UIRequiredDeviceCapabilities` set to arm64 |
+| Background modes | remote-notification, fetch |
+| Dark mode support | `UIUserInterfaceStyle: Automatic` |
+| Network security | ATS enabled, localhost exception only |
+
+### Android (Google Play)
+
+| Requirement | Status |
+|-------------|--------|
+| Target API 35 (Android 15) | `variables.gradle` |
+| Min SDK 24 (Android 7) | `variables.gradle` |
+| Edge-to-edge display | `StatusBar.overlaysWebView: true` + CSS safe areas |
+| Predictive back gesture | `enableOnBackInvokedCallback="true"` |
+| Per-app language | `locales_config.xml` |
+| Network security config | `network_security_config.xml` |
+| App Links (verified) | `autoVerify="true"` intent filters + `assetlinks.json` |
+| Push Notifications | FCM + `POST_NOTIFICATIONS` permission |
+| Data safety declaration | Template in `docs/DATA_SAFETY_DECLARATION.md` |
+| ProGuard / R8 | Enabled for release builds |
+| Java 17 | `compileOptions` in build.gradle |
+| Notification channels | Created programmatically (events, deals, general) |
+
+## Native Features
+
+| Feature | iOS | Android | Hook |
+|---------|-----|---------|------|
+| Push Notifications | APNs | FCM | `usePushNotifications()` |
+| Biometric Auth | Face ID / Touch ID | Fingerprint / Face | `useBiometricAuth()` |
+| Geolocation | CoreLocation | GPS/Fused | `useNativeLocation()` |
+| Deep Links | Universal Links | App Links | Handled by `MobileAppProvider` |
+| Offline Detection | Reachability | ConnectivityManager | `useNetworkStatus()` |
+| Haptic Feedback | UIFeedbackGenerator | Vibrator | Capacitor Haptics |
+| Native Share | UIActivityController | Intent.ACTION_SEND | Capacitor Share |
+| Camera | AVFoundation | CameraX | Capacitor Camera |
+| Secure Storage | Keychain | KeyStore | Capacitor Preferences |
+| App Tracking | ATT Framework | N/A | `requestTrackingAuthorization()` |
+
+## Before Submitting to App Stores
+
+### iOS
+
+1. Replace `TEAM_ID_HERE` in `public/.well-known/apple-app-site-association`
+2. Configure APNs key in Apple Developer Portal
+3. Generate app icons: `npx @capacitor/assets generate`
+4. Set up App Store Connect and create the app listing
+5. Configure code signing with your Apple Developer certificate
+6. Change `aps-environment` to `production` in entitlements
+7. Submit for review
+
+### Android
+
+1. Replace `SHA256_FINGERPRINT_HERE` in `public/.well-known/assetlinks.json`
+2. Add `google-services.json` from Firebase Console to `android/app/`
+3. Generate app icons: `npx @capacitor/assets generate`
+4. Create a release keystore and configure signing
+5. Fill out the Data Safety form (see `docs/DATA_SAFETY_DECLARATION.md`)
+6. Complete the content rating questionnaire
+7. Submit for review
+
+## Development Workflow
+
+### Making Changes
+
+1. Edit code in the parent `src/` directory (shared with web)
+2. Mobile-specific code goes in `mobile-app/src/`
+3. Rebuild: `cd mobile-app && npm run build`
+4. Test: `npm run open:ios` or `npm run open:android`
+
+### Live Reload
+
+For development with live reload, update `capacitor.config.ts` to add a server URL pointing to your dev machine's IP, then `npm run sync` and open in the native IDE. Remove the server config before production builds.
+
+## Common Issues
+
+| Problem | Solution |
+|---------|----------|
+| White screen on launch | Run `npm run build` to ensure `www/` has content |
+| CocoaPods not found | Install: `sudo gem install cocoapods` |
+| Android SDK not found | Create `android/local.properties` with `sdk.dir=<path>` |
+| App crashes on start | Check native logs in Xcode/Android Studio console |
+| Push notifications not working | Ensure `google-services.json` (Android) or APNs key (iOS) is configured |
