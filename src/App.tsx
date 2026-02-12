@@ -13,6 +13,8 @@ import { WelcomeModal } from "@/components/WelcomeModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
+import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
 
 // Lazy load pages for better mobile performance
@@ -144,6 +146,7 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
 };
 
 const App = () => (
+  <AccessibilityProvider>
   <TooltipProvider>
     <BrowserRouter>
       <AuthProvider>
@@ -152,6 +155,7 @@ const App = () => (
           <KeyboardShortcutsProvider>
             <Toaster />
             <Sonner />
+            <AccessibilityWidget />
             <RouteErrorBoundary>
             <main id="main-content" tabIndex={-1}>
             <Suspense fallback={<PageLoader />}>
@@ -274,6 +278,7 @@ const App = () => (
       </AuthProvider>
     </BrowserRouter>
   </TooltipProvider>
+  </AccessibilityProvider>
 );
 
 export default App;
