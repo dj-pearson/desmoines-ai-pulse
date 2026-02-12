@@ -109,7 +109,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage — skip those."
     },
     {
