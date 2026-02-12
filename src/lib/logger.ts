@@ -65,44 +65,15 @@ function log(level: LogLevel, message: string, context?: Partial<LogContext>): v
   }
 
   const formatted = formatLog(level, message, context);
+  const consoleFn = level === 'debug' ? console.debug
+    : level === 'info' ? console.info
+    : level === 'warn' ? console.warn
+    : console.error;
 
-  switch (level) {
-    case 'debug':
-      if (context?.metadata) {
-        // eslint-disable-next-line no-console
-        console.debug(formatted, context.metadata);
-      } else {
-        // eslint-disable-next-line no-console
-        console.debug(formatted);
-      }
-      break;
-    case 'info':
-      if (context?.metadata) {
-        // eslint-disable-next-line no-console
-        console.info(formatted, context.metadata);
-      } else {
-        // eslint-disable-next-line no-console
-        console.info(formatted);
-      }
-      break;
-    case 'warn':
-      if (context?.metadata) {
-        // eslint-disable-next-line no-console
-        console.warn(formatted, context.metadata);
-      } else {
-        // eslint-disable-next-line no-console
-        console.warn(formatted);
-      }
-      break;
-    case 'error':
-      if (context?.metadata) {
-        // eslint-disable-next-line no-console
-        console.error(formatted, context.metadata);
-      } else {
-        // eslint-disable-next-line no-console
-        console.error(formatted);
-      }
-      break;
+  if (context?.metadata) {
+    consoleFn(formatted, context.metadata);
+  } else {
+    consoleFn(formatted);
   }
 }
 
