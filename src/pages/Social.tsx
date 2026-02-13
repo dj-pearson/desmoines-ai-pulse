@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { GroupEventPlanner } from "@/components/GroupEventPlannerSimple";
 import { CommunityForums } from "@/components/CommunityForums";
 import { EnhancedGroupPlanner } from "@/components/EnhancedGroupPlanner";
@@ -29,6 +31,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Social() {
   const { isAuthenticated } = useAuth();
+  useDocumentTitle("Community");
   const { toast } = useToast();
   const [searchEmail, setSearchEmail] = useState("");
   const [groupName, setGroupName] = useState("");
@@ -61,6 +64,13 @@ export default function Social() {
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-16 text-center">
+          <Breadcrumbs
+            className="mb-4 text-left"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Social" },
+            ]}
+          />
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">
             Join the Social Experience
           </h1>
@@ -82,6 +92,14 @@ export default function Social() {
       <Header />
 
       <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Social" },
+          ]}
+        />
+
         <div className="text-center mb-8">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Social Hub</h1>
           <p className="text-xl text-muted-foreground">

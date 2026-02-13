@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App Entitlements
+
+  Declares the app's capabilities. These must also be enabled in the
+  Apple Developer Portal under the app's provisioning profile.
+
+  Capabilities:
+  - Push Notifications (APNs)
+  - Associated Domains (Universal Links)
+-->
+<plist version="1.0">
+<dict>
+	<!-- Push Notifications -->
+	<key>aps-environment</key>
+	<string>development</string>
+
+	<!-- Associated Domains for Universal Links -->
+	<!-- Replace with your actual domain before App Store submission -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:desmoinespulse.com</string>
+		<string>applinks:www.desmoinespulse.com</string>
+	</array>
+</dict>
+</plist>

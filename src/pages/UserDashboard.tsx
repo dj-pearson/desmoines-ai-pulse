@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useFavorites } from "@/hooks/useFavorites";
 import { PremiumBadge } from "@/components/PremiumBadge";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
 import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
 import { format } from "date-fns";
@@ -41,6 +43,7 @@ export default function UserDashboard() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
+  useDocumentTitle("My Dashboard");
   const { data: events, isLoading, refetch } = useUserSubmittedEvents();
   const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
   const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();
@@ -113,6 +116,13 @@ export default function UserDashboard() {
       </div>
 
       <div className="container mx-auto mobile-padding py-6">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Dashboard" },
+          ]}
+        />
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Tab Navigation */}
           <div className="mb-6 overflow-x-auto">

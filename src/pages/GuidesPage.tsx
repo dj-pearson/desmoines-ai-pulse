@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +21,8 @@ import {
   Snowflake
 } from "lucide-react";
 import OptimizedImage from "@/components/OptimizedImage";
+import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 const guides = [
   {
@@ -126,6 +129,7 @@ const faqData = [
 ];
 
 export default function GuidesPage() {
+  useDocumentTitle("City Guides");
   const pageTitle = "Des Moines Local Guides - Best Activities, Dining & Attractions";
   const pageDescription = "Comprehensive guides to the best of Des Moines. Find seasonal activities, dining recommendations, family fun, date night spots, and local insider tips for Des Moines and suburbs.";
   
@@ -138,7 +142,7 @@ export default function GuidesPage() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/guides"
+        canonicalUrl={getCanonicalUrl('/guides')}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -146,7 +150,15 @@ export default function GuidesPage() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Guides" },
+          ]}
+        />
+
         {/* Hero Section */}
         <div className="mb-12">
           <div className="text-center max-w-4xl mx-auto">
@@ -293,7 +305,7 @@ export default function GuidesPage() {
           title="Guide Questions"
           description="Common questions about our Des Moines local guides and recommendations"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

@@ -1,0 +1,161 @@
+/**
+ * Mobile-specific CSS overrides.
+ *
+ * These styles are loaded ONLY in the Capacitor mobile app builds.
+ * They handle native safe areas, platform-specific adjustments,
+ * and mobile UX enhancements that don't apply to the web.
+ */
+
+/* ==========================================================================
+   Safe Area Insets (notch, home indicator, status bar)
+   ========================================================================== */
+
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+}
+
+/* Ensure the viewport extends into safe areas */
+html {
+  padding: 0;
+  margin: 0;
+  /* Enable safe area insets */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Safe area utility classes */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-area-left {
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+.safe-area-right {
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* ==========================================================================
+   Disable Web-Only Behaviors
+   ========================================================================== */
+
+/* Prevent text selection on interactive elements (feels more native) */
+button,
+a,
+[role="button"],
+[role="tab"],
+.touch-feedback {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in content areas */
+p, article, .selectable {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent pull-to-refresh on the whole page (we handle it ourselves) */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Remove the 300ms tap delay */
+html {
+  touch-action: manipulation;
+}
+
+/* Prevent zooming on input focus (iOS) */
+input, select, textarea {
+  font-size: 16px !important;
+}
+
+/* ==========================================================================
+   Native-Like Touch Feedback
+   ========================================================================== */
+
+/* Highlight color for tappable elements */
+* {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Active state for buttons */
+button:active,
+a:active,
+[role="button"]:active {
+  opacity: 0.7;
+  transform: scale(0.98);
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+/* ==========================================================================
+   Platform-Specific Overrides
+   ========================================================================== */
+
+/* iOS: Match system font */
+.ios body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
+}
+
+/* Android: Match system font */
+.android body {
+  font-family: 'Roboto', 'Noto Sans', sans-serif;
+}
+
+/* ==========================================================================
+   Bottom Navigation Adjustments
+   ========================================================================== */
+
+/* Ensure bottom nav respects safe area on devices with home indicators */
+nav[aria-label="Bottom navigation"] {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Add extra bottom padding to page content to prevent overlap with bottom nav */
+main {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ==========================================================================
+   Keyboard Adjustments
+   ========================================================================== */
+
+/* When keyboard is visible, adjust the view */
+body.keyboard-visible main {
+  padding-bottom: 0;
+}
+
+body.keyboard-visible nav[aria-label="Bottom navigation"] {
+  display: none;
+}
+
+/* ==========================================================================
+   Scrollbar Hiding (Native apps don't show scrollbars)
+   ========================================================================== */
+
+::-webkit-scrollbar {
+  display: none;
+}
+
+* {
+  scrollbar-width: none;
+}
+
+/* ==========================================================================
+   Edge-to-Edge Display (Android 15 requirement)
+   ========================================================================== */
+
+.android {
+  /* Content should extend behind the status bar and navigation bar */
+}
+
+.android main {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 16px));
+}

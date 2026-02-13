@@ -27,7 +27,9 @@ const routeMap: Record<string, string> = {
   auth: "Sign In",
   advertise: "Advertise",
   neighborhoods: "Neighborhoods",
-  weekend: "Weekend Guide"
+  weekend: "Weekend Guide",
+  dashboard: "Dashboard",
+  "my-events": "My Events"
 };
 
 function generateBreadcrumbs(pathname: string): BreadcrumbItem[] {

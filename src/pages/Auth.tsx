@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -105,6 +106,8 @@ export default function Auth() {
     logFailedAttempt,
     validateInput
   } = useAuthSecurity();
+
+  useDocumentTitle("Sign In");
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -589,6 +592,8 @@ export default function Auth() {
                       value={formData.email}
                       onChange={(e) => handleInputChange("email", e.target.value)}
                       required
+                      autoComplete="email"
+                      aria-required="true"
                     />
                   </div>
                   <div className="space-y-2">
@@ -609,6 +614,8 @@ export default function Auth() {
                       value={formData.password}
                       onChange={(e) => handleInputChange("password", e.target.value)}
                       required
+                      autoComplete="current-password"
+                      aria-required="true"
                     />
                   </div>
                   <Button type="submit" className="w-full" disabled={isLoading || isBlocked}>
@@ -758,6 +765,8 @@ export default function Auth() {
                       value={formData.firstName}
                       onChange={(e) => handleInputChange("firstName", e.target.value)}
                       required
+                      autoComplete="given-name"
+                      aria-required="true"
                     />
                   </div>
                   <div className="space-y-2">
@@ -768,6 +777,8 @@ export default function Auth() {
                       value={formData.lastName}
                       onChange={(e) => handleInputChange("lastName", e.target.value)}
                       required
+                      autoComplete="family-name"
+                      aria-required="true"
                     />
                   </div>
                 </div>
@@ -781,6 +792,8 @@ export default function Auth() {
                     value={formData.email}
                     onChange={(e) => handleInputChange("email", e.target.value)}
                     required
+                    autoComplete="email"
+                    aria-required="true"
                   />
                 </div>
 
@@ -794,6 +807,8 @@ export default function Auth() {
                     onChange={(e) => handleInputChange("password", e.target.value)}
                     required
                     minLength={8}
+                    autoComplete="new-password"
+                    aria-required="true"
                   />
                   <PasswordStrengthMeter
                     password={formData.password}
@@ -809,6 +824,7 @@ export default function Auth() {
                     placeholder="(515) 555-0123"
                     value={formData.phone}
                     onChange={(e) => handleInputChange("phone", e.target.value)}
+                    autoComplete="tel"
                   />
                 </div>
 

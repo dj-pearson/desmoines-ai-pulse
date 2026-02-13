@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { BackToTop } from "@/components/BackToTop";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -74,7 +75,15 @@ export default function AccessibilityStatement() {
 
       <Header />
 
-      <main id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div id="main-content" className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Accessibility" },
+          ]}
+        />
+
         <article className="prose prose-lg dark:prose-invert max-w-none">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2">
             Accessibility Statement
@@ -442,7 +451,7 @@ export default function AccessibilityStatement() {
             </p>
           </section>
         </article>
-      </main>
+      </div>
 
       <Footer />
       <BackToTop />

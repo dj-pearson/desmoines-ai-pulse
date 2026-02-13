@@ -10,6 +10,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Leaf, Wheat, Beef, MapPin, FilterX } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 const dietaryOptions = [
   { id: "vegan", label: "Vegan", icon: Leaf, color: "text-green-600", keywords: ["vegan"] },
@@ -39,6 +41,7 @@ export default function DietaryRestaurants() {
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDiet, setSelectedDiet] = useState<string>(searchParams.get("diet") || "");
+  useDocumentTitle("Dietary-Friendly Restaurants");
 
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -163,7 +166,15 @@ export default function DietaryRestaurants() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Restaurants", href: "/restaurants" },
+            { label: "Dietary Options" },
+          ]}
+          className="mb-4"
+        />
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -400,7 +411,7 @@ export default function DietaryRestaurants() {
           currentPath="/restaurants/dietary"
           title="Explore More Des Moines Dining"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

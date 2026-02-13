@@ -273,6 +273,7 @@ export function CreativeUploadForm({
                   variant="outline"
                   size="icon"
                   onClick={() => window.open(formData.linkUrl, '_blank')}
+                  aria-label="Open link in new tab"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </Button>

@@ -10,6 +10,8 @@ import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
 import { Baby, MapPin, Calendar, Users } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
   id: string;
@@ -28,6 +30,7 @@ interface EventItem {
 export default function KidsEvents() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  useDocumentTitle("Kids Events");
 
   useEffect(() => {
     const fetchKidsEvents = async () => {
@@ -120,7 +123,15 @@ export default function KidsEvents() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "Kids Events" },
+          ]}
+        />
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -303,7 +314,7 @@ export default function KidsEvents() {
           currentPath="/events/kids"
           title="More Des Moines Activities"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

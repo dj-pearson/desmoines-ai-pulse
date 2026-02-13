@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -266,7 +267,17 @@ export default function Pricing() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main>
+        <div>
+          <div className="container mx-auto px-4">
+            <Breadcrumbs
+              className="mb-4 pt-4"
+              items={[
+                { label: "Home", href: "/" },
+                { label: "Pricing" },
+              ]}
+            />
+          </div>
+
           {/* Hero Section */}
           <section className="py-16 bg-gradient-to-br from-primary/5 via-background to-secondary/5">
             <div className="container mx-auto px-4 text-center">
@@ -554,7 +565,7 @@ export default function Pricing() {
               </div>
             </div>
           </section>
-        </main>
+        </div>
 
         <Footer />
       </div>

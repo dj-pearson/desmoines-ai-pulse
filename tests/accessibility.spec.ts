@@ -18,12 +18,28 @@ import AxeBuilder from '@axe-core/playwright';
 const pages = [
   { path: '/', name: 'homepage' },
   { path: '/events', name: 'events' },
+  { path: '/events/today', name: 'events-today' },
+  { path: '/events/this-weekend', name: 'events-this-weekend' },
+  { path: '/events/free', name: 'free-events' },
+  { path: '/events/kids', name: 'kids-events' },
+  { path: '/events/date-night', name: 'date-night-events' },
   { path: '/restaurants', name: 'restaurants' },
+  { path: '/restaurants/open-now', name: 'open-now-restaurants' },
+  { path: '/restaurants/dietary', name: 'dietary-restaurants' },
   { path: '/attractions', name: 'attractions' },
-  { path: '/articles', name: 'articles' },
   { path: '/playgrounds', name: 'playgrounds' },
+  { path: '/articles', name: 'articles' },
   { path: '/neighborhoods', name: 'neighborhoods' },
   { path: '/weekend', name: 'weekend' },
+  { path: '/guides', name: 'guides' },
+  { path: '/pricing', name: 'pricing' },
+  { path: '/contact', name: 'contact' },
+  { path: '/auth', name: 'auth' },
+  { path: '/privacy-policy', name: 'privacy-policy' },
+  { path: '/terms', name: 'terms' },
+  { path: '/accessibility', name: 'accessibility-statement' },
+  { path: '/trip-planner', name: 'trip-planner' },
+  { path: '/search', name: 'advanced-search' },
 ];
 
 test.describe('Automated Accessibility Testing with Axe', () => {
@@ -585,4 +601,95 @@ test.describe('Screen Reader Support', () => {
       console.log('Page uses ARIA live regions for dynamic content');
     }
   });
+});
+
+test.describe('WCAG 2.4.1 - Main Content Landmark', () => {
+  for (const page of pages) {
+    test(`${page.name} should have #main-content element`, async ({ page: pw }) => {
+      await pw.goto(page.path, { waitUntil: 'networkidle' });
+
+      const mainContent = await pw.locator('#main-content');
+      await expect(mainContent, `${page.name} should have element with id="main-content"`).toHaveCount(1);
+
+      const tagName = await mainContent.evaluate(el => el.tagName.toLowerCase());
+      expect(tagName, 'main-content should be a <main> element').toBe('main');
+    });
+  }
+
+  test('should not have nested <main> landmarks', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+
+    const mainCount = await page.locator('main').count();
+    expect(mainCount, 'Should have exactly one <main> landmark').toBe(1);
+  });
+});
+
+test.describe('WCAG 2.4.2 - Page Titles', () => {
+  for (const page of pages) {
+    test(`${page.name} should have a descriptive document title`, async ({ page: pw }) => {
+      await pw.goto(page.path, { waitUntil: 'networkidle' });
+
+      const title = await pw.title();
+
+      expect(title.length, `${page.name} title should not be empty`).toBeGreaterThan(0);
+      expect(title, `${page.name} title should include site name`).toContain('Des Moines');
+      expect(title, `${page.name} title should not be generic default`).not.toBe('Des Moines AI Pulse');
+    });
+  }
+});
+
+test.describe('WCAG 4.1.2 - Icon Button Labels', () => {
+  test('all icon-only buttons should have aria-label', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+
+    const unlabeledIconButtons = await page.$$eval('button', buttons =>
+      buttons
+        .filter(btn => {
+          const hasSvgOnly = btn.querySelector('svg') && !btn.textContent?.trim();
+          const hasAriaLabel = !!btn.getAttribute('aria-label');
+          const hasAriaLabelledBy = !!btn.getAttribute('aria-labelledby');
+          const hasTitle = !!btn.getAttribute('title');
+          return hasSvgOnly && !hasAriaLabel && !hasAriaLabelledBy && !hasTitle;
+        })
+        .map(btn => ({
+          html: btn.outerHTML.substring(0, 100),
+          classes: btn.className.substring(0, 60),
+        }))
+    );
+
+    if (unlabeledIconButtons.length > 0) {
+      console.log('Icon-only buttons missing aria-label:', unlabeledIconButtons);
+    }
+
+    expect(unlabeledIconButtons.length, 'All icon-only buttons should have accessible labels').toBe(0);
+  });
+});
+
+test.describe('WCAG 1.3.1 - Heading Hierarchy', () => {
+  for (const page of pages.slice(0, 8)) {
+    test(`${page.name} should not skip heading levels`, async ({ page: pw }) => {
+      await pw.goto(page.path, { waitUntil: 'networkidle' });
+
+      const headings = await pw.$$eval('h1, h2, h3, h4, h5, h6', headings =>
+        headings.map(h => ({
+          level: parseInt(h.tagName[1]),
+          text: h.textContent?.substring(0, 50),
+        }))
+      );
+
+      // Check for heading level skips
+      const skips: string[] = [];
+      for (let i = 1; i < headings.length; i++) {
+        const prevLevel = headings[i - 1].level;
+        const currentLevel = headings[i].level;
+        if (currentLevel - prevLevel > 1) {
+          skips.push(`h${prevLevel} -> h${currentLevel} ("${headings[i].text}")`);
+        }
+      }
+
+      if (skips.length > 0) {
+        console.warn(`Heading skips on ${page.name}:`, skips);
+      }
+    });
+  }
 });

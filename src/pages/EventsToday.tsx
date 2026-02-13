@@ -9,6 +9,9 @@ import { Calendar, MapPin, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { Link } from "react-router-dom";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
   id: string;
@@ -27,6 +30,7 @@ interface EventItem {
 export default function EventsToday() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  useDocumentTitle("Events Today");
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -66,7 +70,7 @@ export default function EventsToday() {
 
   const todaysEvents = events || [];
 
-  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | Des Moines Insider`;
+  const pageTitle = `Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")} | ${BRAND.name}`;
   const pageDescription = `Find events happening today, ${format(new Date(), "MMMM d, yyyy")}, in Des Moines and suburbs. See times, locations, and details for today's activities and entertainment.`;
 
   const breadcrumbs = [
@@ -98,7 +102,7 @@ export default function EventsToday() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/events/today"
+        canonicalUrl={getCanonicalUrl('/events/today')}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -107,7 +111,16 @@ export default function EventsToday() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "Today" },
+          ]}
+          className="mb-4"
+        />
+
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -238,7 +251,7 @@ export default function EventsToday() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
 
       <Footer />
     </div>

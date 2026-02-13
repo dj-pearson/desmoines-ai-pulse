@@ -6,9 +6,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Calendar, Users, Star } from "lucide-react";
 import { format, parseISO, isAfter } from "date-fns";
+import { BRAND } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 // Suburb mapping for SEO-friendly URLs and proper names
 const SUBURBS = {
@@ -69,6 +72,8 @@ export default function EventsByLocation() {
   const suburbInfo = location
     ? SUBURBS[location as keyof typeof SUBURBS]
     : null;
+
+  useDocumentTitle(suburbInfo?.name ? `Events in ${suburbInfo.name}` : "Events by Location");
 
   interface EventItem {
     id: string;
@@ -164,7 +169,7 @@ export default function EventsByLocation() {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8">
           <Card>
             <CardContent className="pt-6 text-center">
               <h1 className="text-2xl font-bold mb-4">Location Not Found</h1>
@@ -176,7 +181,7 @@ export default function EventsByLocation() {
               </p>
             </CardContent>
           </Card>
-        </main>
+        </div>
         <Footer />
       </div>
     );
@@ -191,7 +196,7 @@ export default function EventsByLocation() {
       }
     }) || [];
 
-  const pageTitle = `${suburbInfo.name} Events - Things To Do | Des Moines Insider`;
+  const pageTitle = `${suburbInfo.name} Events - Things To Do | ${BRAND.name}`;
   const pageDescription = `Find events in ${suburbInfo.name}, Iowa. ${suburbInfo.description} See dates, times, locations, and get directions.`;
 
   const breadcrumbs = [
@@ -219,7 +224,7 @@ export default function EventsByLocation() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`https://desmoinesinsider.com/events/${location}`}
+        canonicalUrl={`${BRAND.baseUrl}/events/${location}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -228,7 +233,15 @@ export default function EventsByLocation() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: suburbInfo.name },
+          ]}
+        />
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -380,7 +393,7 @@ export default function EventsByLocation() {
             ))}
           </CardContent>
         </Card>
-      </main>
+      </div>
 
       <Footer />
     </div>

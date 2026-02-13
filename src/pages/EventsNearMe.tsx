@@ -72,7 +72,7 @@ export default function EventsNearMe() {
       />
       <div className="min-h-screen flex flex-col">
         <Header />
-        <main className="flex-1 container mx-auto px-4 py-8">
+        <div className="flex-1 container mx-auto px-4 py-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Events Near Me</h1>
@@ -294,7 +294,7 @@ export default function EventsNearMe() {
               </CardContent>
             </Card>
           )}
-        </main>
+        </div>
         <Footer />
       </div>
     </>

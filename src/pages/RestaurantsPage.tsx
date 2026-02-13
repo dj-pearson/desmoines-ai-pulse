@@ -272,7 +272,7 @@ export default function RestaurantsPage() {
           </div>
         </section>
 
-        <main className="container mx-auto px-4 py-8">
+        <div className="container mx-auto px-4 py-8">
           {/* Filters Section */}
           {showFilters && (
             <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">
@@ -491,7 +491,7 @@ export default function RestaurantsPage() {
               )}
             </div>
           )}
-        </main>
+        </div>
 
         <Footer />
       </div>

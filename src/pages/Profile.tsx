@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useProfile } from "@/hooks/useProfile";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,7 @@ import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
 import { useGamification } from "@/hooks/useGamification";
 import { useSearchParams } from "react-router-dom";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -23,6 +25,7 @@ import { CheckCircle, XCircle, AlertTriangle, Clock } from "lucide-react";
 
 export default function Profile() {
   const { profile, updateProfile, isLoading } = useProfile();
+  useDocumentTitle("Profile Settings");
   const { friends, friendGroups } = useSocialFeatures();
   const { data: submittedEvents } = useUserSubmittedEvents();
   const { userLevel, userXP, badges } = useGamification();
@@ -115,6 +118,13 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-6xl mx-auto p-6 space-y-6">
+        <Breadcrumbs
+          className="mb-2"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Profile" },
+          ]}
+        />
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-2">Your Profile</h1>
           <p className="text-muted-foreground">

@@ -10,7 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Trophy, Target, Users, Award, Star, Camera, MapPin, Share2 } from "lucide-react";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 // Sample XP activities for demo
 const XP_ACTIVITIES = [
@@ -54,6 +56,7 @@ const XP_ACTIVITIES = [
 export default function Gamification() {
   const { isAuthenticated, user } = useAuth();
   const { challenges, awardPoints, reputation } = useGamification();
+  useDocumentTitle("Rewards & Achievements");
 
   const handleTestXP = (activityType: string, points: number) => {
     if (user) {
@@ -66,6 +69,13 @@ export default function Gamification() {
       <div className="min-h-screen bg-background">
         <Header />
         <div className="container mx-auto px-4 py-16 text-center">
+          <Breadcrumbs
+            className="mb-4 text-left"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Achievements" },
+            ]}
+          />
           <div className="max-w-2xl mx-auto space-y-6">
             <Trophy className="h-16 w-16 text-primary mx-auto" />
             <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold">Level Up Your Des Moines Experience</h1>
@@ -118,6 +128,14 @@ export default function Gamification() {
       <Header />
       
       <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Achievements" },
+          ]}
+        />
+
         <div className="text-center mb-8">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Your Des Moines Adventure</h1>
           <p className="text-xl text-muted-foreground">

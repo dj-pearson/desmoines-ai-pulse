@@ -137,7 +137,7 @@ export default function Footer() {
             </div>
 
             {/* Explore */}
-            <div>
+            <nav aria-label="Explore links">
               <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Explore</h4>
               <ul className="space-y-2">
                 <li>
@@ -171,10 +171,10 @@ export default function Footer() {
                   </Link>
                 </li>
               </ul>
-            </div>
+            </nav>
 
             {/* For You */}
-            <div>
+            <nav aria-label="Account links">
               <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">For You</h4>
               <ul className="space-y-2">
                 <li>
@@ -198,10 +198,10 @@ export default function Footer() {
                   </Link>
                 </li>
               </ul>
-            </div>
+            </nav>
 
             {/* Business & Legal */}
-            <div>
+            <nav aria-label="Business links">
               <h4 className="text-sm font-semibold mb-4 uppercase tracking-wider text-neutral-300">Business</h4>
               <ul className="space-y-2">
                 <li>
@@ -235,7 +235,7 @@ export default function Footer() {
                   </Link>
                 </li>
               </ul>
-            </div>
+            </nav>
           </div>
         </div>
       </div>

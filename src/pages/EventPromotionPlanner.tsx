@@ -30,6 +30,8 @@ import {
   trackReferralGenerated,
 } from '@/lib/analytics-tracker';
 import { storage } from '@/lib/safeStorage';
+import { getCanonicalUrl } from '@/lib/brandConfig';
+import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 import type { EventFormData, PromotionTimeline, EmailCaptureData } from '@/types/event-promotion';
 
 export default function EventPromotionPlanner() {
@@ -163,10 +165,20 @@ export default function EventPromotionPlanner() {
           name="keywords"
           content="event promotion timeline, event marketing checklist, des moines event promotion, event planning calendar free"
         />
-        <link rel="canonical" href="https://desmoinesinsider.com/tools/event-promotion-planner" />
+        <link rel="canonical" href={getCanonicalUrl('/tools/event-promotion-planner')} />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+        <div className="container mx-auto px-4 pt-4">
+          <Breadcrumbs
+            className="mb-4"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Event Promotion" },
+            ]}
+          />
+        </div>
+
         {/* Hero/Intro Section */}
         {step === 'intro' && (
           <div className="container mx-auto px-4 py-12 max-w-6xl">

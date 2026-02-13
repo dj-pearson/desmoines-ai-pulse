@@ -67,7 +67,7 @@ export default function SubscriptionSuccess() {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <main className="container mx-auto px-4 py-16">
+        <div className="container mx-auto px-4 py-16">
           <div className="max-w-lg mx-auto text-center">
             <Loader2 className="h-12 w-12 animate-spin mx-auto text-primary mb-4" />
             <h1 className="text-2xl font-bold mb-2">Verifying your subscription...</h1>
@@ -75,7 +75,7 @@ export default function SubscriptionSuccess() {
               Please wait while we confirm your payment.
             </p>
           </div>
-        </main>
+        </div>
         <Footer />
       </div>
     );
@@ -94,7 +94,7 @@ export default function SubscriptionSuccess() {
       <div className="min-h-screen bg-background">
         <Header />
 
-        <main className="container mx-auto px-4 py-16">
+        <div className="container mx-auto px-4 py-16">
           <div className="max-w-2xl mx-auto">
             {/* Success Header */}
             <div className="text-center mb-8">
@@ -217,7 +217,7 @@ export default function SubscriptionSuccess() {
               </p>
             </div>
           </div>
-        </main>
+        </div>
 
         <Footer />
       </div>

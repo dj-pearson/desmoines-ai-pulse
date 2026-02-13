@@ -11,6 +11,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { DollarSign, MapPin, Calendar, Gift } from "lucide-react";
 import { format } from "date-fns";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
   id: string;
@@ -29,6 +31,7 @@ interface EventItem {
 export default function FreeEvents() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  useDocumentTitle("Free Events");
 
   useEffect(() => {
     const fetchFreeEvents = async () => {
@@ -126,7 +129,15 @@ export default function FreeEvents() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "Free Events" },
+          ]}
+        />
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -309,7 +320,7 @@ export default function FreeEvents() {
           currentPath="/events/free"
           title="Discover More Des Moines Activities"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

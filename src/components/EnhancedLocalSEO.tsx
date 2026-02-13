@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { BRAND } from "@/lib/brandConfig";
 
 interface BreadcrumbItem {
   name: string;
@@ -125,21 +126,23 @@ export default function EnhancedLocalSEO({
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "Des Moines Insider",
-    url: "https://desmoinesinsider.com",
-    logo: "https://desmoinesinsider.com/logo.png",
+    name: BRAND.name,
+    url: BRAND.baseUrl,
+    logo: `${BRAND.baseUrl}${BRAND.logo}`,
+    description: BRAND.description,
+    email: BRAND.email,
     areaServed: {
       "@type": "City",
-      name: "Des Moines",
+      name: BRAND.city,
       containedInPlace: {
         "@type": "State",
-        name: "Iowa",
+        name: BRAND.state,
       },
     },
     sameAs: [
-      "https://www.instagram.com/desmoinesinsider",
-      "https://www.facebook.com/desmoinesinsider",
-      "https://www.twitter.com/desmoinesinsider",
+      "https://www.instagram.com/desmoinespulse",
+      "https://www.facebook.com/desmoinespulse",
+      "https://www.twitter.com/desmoinespulse",
     ],
   };
 
@@ -147,11 +150,11 @@ export default function EnhancedLocalSEO({
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "Des Moines Insider",
-    url: "https://desmoinesinsider.com",
+    name: BRAND.name,
+    url: BRAND.baseUrl,
     potentialAction: {
       "@type": "SearchAction",
-      target: "https://desmoinesinsider.com/search?q={query}",
+      target: `${BRAND.baseUrl}/search?q={query}`,
       "query-input": "required name=query",
     },
   };
@@ -166,7 +169,7 @@ export default function EnhancedLocalSEO({
             "@type": "ListItem",
             position: index + 1,
             name: crumb.name,
-            item: `https://desmoinesinsider.com${crumb.url}`,
+            item: `${BRAND.baseUrl}${crumb.url}`,
           })),
         }
       : null;
@@ -309,13 +312,13 @@ export default function EnhancedLocalSEO({
       <meta property="og:locale" content="en_US" />
       <meta property="og:region" content="IA" />
       <meta property="og:country-name" content="USA" />
-      <meta property="og:site_name" content="Des Moines Insider" />
+      <meta property="og:site_name" content={BRAND.name} />
 
       {/* Twitter Cards */}
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={pageDescription} />
-      <meta name="twitter:site" content="@desmoinesinsider" />
+      <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Time-sensitive content for AI */}
       {isTimeSensitive && (

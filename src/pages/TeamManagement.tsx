@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTeamManagement } from "@/hooks/useTeamManagement";
 import { useAuth } from "@/hooks/useAuth";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,7 @@ import {
 export default function TeamManagement() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  useDocumentTitle("Team Management");
   const { teamMembers, isLoading, inviteTeamMember, resendInvitation, updateMemberRole, removeMember } = useTeamManagement(user?.id);
 
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
@@ -211,7 +213,7 @@ export default function TeamManagement() {
                     <TableCell>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
+                          <Button variant="ghost" size="icon" aria-label="Member options">
                             <MoreVertical className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

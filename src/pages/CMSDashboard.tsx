@@ -63,7 +63,7 @@ export default function CMSDashboard() {
         </header>
 
         {/* Main Content */}
-        <main className="container mx-auto px-4 py-6">
+        <div className="container mx-auto px-4 py-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
             <TabsList className="grid grid-cols-5 w-full max-w-3xl h-auto gap-0.5 sm:gap-1">
               <TabsTrigger value="articles" className="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2">
@@ -113,7 +113,7 @@ export default function CMSDashboard() {
               <AIArticleGenerator />
             </TabsContent>
           </Tabs>
-        </main>
+        </div>
       </div>
     </>
   );

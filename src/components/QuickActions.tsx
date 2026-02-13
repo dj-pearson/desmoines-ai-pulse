@@ -2,14 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   Calendar,
-  MapPin,
   Utensils,
   Sparkles,
-  TrendingUp,
-  Clock,
   Sun,
-  Moon,
-  Coffee,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -91,39 +86,6 @@ interface QuickActionsProps {
 }
 
 export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
-  const currentHour = new Date().getHours();
-  const isEvening = currentHour >= 17;
-  const isMorning = currentHour < 12;
-  const isAfternoon = currentHour >= 12 && currentHour < 17;
-
-  // Time-based greeting and actions
-  const getTimeBasedAction = () => {
-    if (isMorning) {
-      return {
-        icon: <Coffee className="h-6 w-6" aria-hidden="true" />,
-        label: "Brunch Spots",
-        sublabel: "Open now",
-        href: "/restaurants?filter=brunch",
-      };
-    }
-    if (isAfternoon) {
-      return {
-        icon: <Sun className="h-6 w-6" aria-hidden="true" />,
-        label: "Afternoon Fun",
-        sublabel: "Day activities",
-        href: "/events?time=afternoon",
-      };
-    }
-    return {
-      icon: <Moon className="h-6 w-6" aria-hidden="true" />,
-      label: "Tonight's Events",
-      sublabel: "Happening now",
-      href: "/events?time=tonight",
-    };
-  };
-
-  const timeBasedAction = getTimeBasedAction();
-
   return (
     <div className={cn("w-full", className)}>
       {/* Main Headline */}
@@ -136,8 +98,8 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
         </p>
       </div>
 
-      {/* Quick Action Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-5xl mx-auto">
+      {/* Quick Action Grid - Focused on 4 key actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-4xl mx-auto">
         {/* AI Plan My Night - Featured */}
         <QuickAction
           icon={<Sparkles className="h-6 w-6" aria-hidden="true" />}
@@ -145,72 +107,38 @@ export function QuickActions({ className, onAIPlanClick }: QuickActionsProps) {
           sublabel="Let AI decide"
           variant="primary"
           onClick={onAIPlanClick}
-          className="col-span-2 md:col-span-1"
         />
 
-        {/* Time-based action */}
-        <QuickAction {...timeBasedAction} variant="default" />
-
-        {/* Near Me */}
+        {/* Events Today */}
         <QuickAction
-          icon={<MapPin className="h-6 w-6" aria-hidden="true" />}
-          label="Near Me"
-          sublabel="Within 10 miles"
-          href="/events?nearMe=true"
-          variant="default"
-        />
-
-        {/* Trending Now */}
-        <QuickAction
-          icon={<TrendingUp className="h-6 w-6" aria-hidden="true" />}
-          label="Trending Now"
-          sublabel="Most popular"
-          href="/events?sort=trending"
+          icon={<Calendar className="h-6 w-6" aria-hidden="true" />}
+          label="Events Today"
+          sublabel="Happening now"
+          href="/events/today"
           variant="default"
         />
 
         {/* This Weekend */}
         <QuickAction
-          icon={<Calendar className="h-6 w-6" aria-hidden="true" />}
+          icon={<Sun className="h-6 w-6" aria-hidden="true" />}
           label="This Weekend"
           sublabel="Fri-Sun events"
-          href="/events?time=weekend"
-          variant="secondary"
+          href="/events/this-weekend"
+          variant="default"
         />
 
-        {/* Open Now */}
+        {/* Restaurants */}
         <QuickAction
           icon={<Utensils className="h-6 w-6" aria-hidden="true" />}
-          label="Open Now"
-          sublabel="Restaurants"
-          href="/restaurants?openNow=true"
-          variant="secondary"
-        />
-
-        {/* Last Minute */}
-        <QuickAction
-          icon={<Clock className="h-6 w-6" aria-hidden="true" />}
-          label="Last Minute"
-          sublabel="Tonight's deals"
-          href="/events?time=tonight&sort=availability"
-          variant="secondary"
-        />
-
-        {/* New This Week */}
-        <QuickAction
-          icon={<Sparkles className="h-6 w-6" aria-hidden="true" />}
-          label="New This Week"
-          sublabel="Fresh finds"
-          href="/events?filter=new"
-          variant="secondary"
+          label="Restaurants"
+          sublabel="Dining & drinks"
+          href="/restaurants"
+          variant="default"
         />
       </div>
 
       {/* Secondary CTA */}
       <div className="text-center mt-6">
-        <p className="text-white/70 text-sm mb-3">
-          Not sure what you want? Let AI help you discover
-        </p>
         <Link to="/events">
           <Button
             size="lg"
@@ -230,9 +158,6 @@ export function QuickActionsMobile({
   className,
   onAIPlanClick,
 }: QuickActionsProps) {
-  const currentHour = new Date().getHours();
-  const isEvening = currentHour >= 17;
-
   return (
     <div className={cn("w-full space-y-3", className)}>
       {/* Primary Actions - Large buttons */}
@@ -249,74 +174,44 @@ export function QuickActionsMobile({
           </div>
         </Button>
 
-        <Link to={isEvening ? "/events?time=tonight" : "/events?time=today"}>
+        <Link to="/events/today">
           <Button
             size="lg"
             variant="outline"
             className="h-20 w-full bg-white/10 hover:bg-white/20 text-white border-white/30"
-            aria-label={isEvening ? "View tonight's events" : "View today's events"}
+            aria-label="View today's events"
           >
             <div className="flex flex-col items-center gap-1">
-              {isEvening ? (
-                <Moon className="h-5 w-5" aria-hidden="true" />
-              ) : (
-                <Sun className="h-5 w-5" aria-hidden="true" />
-              )}
-              <span className="text-sm">
-                {isEvening ? "Tonight" : "Today"}
-              </span>
+              <Calendar className="h-5 w-5" aria-hidden="true" />
+              <span className="text-sm">Events Today</span>
             </div>
           </Button>
         </Link>
       </div>
 
       {/* Secondary Actions - Compact */}
-      <div className="grid grid-cols-4 gap-2">
-        <Link to="/events?nearMe=true">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
-            aria-label="Find events near me"
-          >
-            <MapPin className="h-4 w-4" aria-hidden="true" />
-            <span className="text-xs">Near Me</span>
-          </Button>
-        </Link>
-
-        <Link to="/restaurants?openNow=true">
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
-            aria-label="Find restaurants open now"
-          >
-            <Utensils className="h-4 w-4" aria-hidden="true" />
-            <span className="text-xs">Open Now</span>
-          </Button>
-        </Link>
-
-        <Link to="/events?time=weekend">
+      <div className="grid grid-cols-2 gap-2">
+        <Link to="/events/this-weekend">
           <Button
             size="sm"
             variant="ghost"
             className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
             aria-label="View weekend events"
           >
-            <Calendar className="h-4 w-4" aria-hidden="true" />
-            <span className="text-xs">Weekend</span>
+            <Sun className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs">This Weekend</span>
           </Button>
         </Link>
 
-        <Link to="/events?sort=trending">
+        <Link to="/restaurants">
           <Button
             size="sm"
             variant="ghost"
             className="h-16 w-full flex-col gap-1 text-white hover:bg-white/10"
-            aria-label="View trending events"
+            aria-label="Browse restaurants"
           >
-            <TrendingUp className="h-4 w-4" aria-hidden="true" />
-            <span className="text-xs">Trending</span>
+            <Utensils className="h-4 w-4" aria-hidden="true" />
+            <span className="text-xs">Restaurants</span>
           </Button>
         </Link>
       </div>

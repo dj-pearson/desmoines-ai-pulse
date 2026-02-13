@@ -1,4 +1,5 @@
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { XCircle, ArrowLeft, RefreshCw, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 export default function AdvertiseCancel() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  useDocumentTitle("Advertising Cancelled");
 
   const campaignId = searchParams.get('campaign_id');
 

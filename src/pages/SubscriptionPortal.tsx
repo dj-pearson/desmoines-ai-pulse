@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   Card,
   CardContent,
@@ -52,10 +53,12 @@ import { usePayments } from "@/hooks/usePayments";
 import { useSubscription } from "@/hooks/useSubscription";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function SubscriptionPortal() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  useDocumentTitle("Subscription Management");
   const {
     payments,
     invoices,
@@ -190,6 +193,14 @@ export default function SubscriptionPortal() {
       </div>
 
       <div className="container mx-auto px-4 py-6">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Subscription" },
+          ]}
+        />
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="mb-6">
             <TabsTrigger value="overview" className="flex items-center gap-2">

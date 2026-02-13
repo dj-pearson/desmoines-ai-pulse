@@ -7,9 +7,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import LocalSEO from "@/components/LocalSEO";
 import { FAQSection } from "@/components/FAQSection";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function NeighborhoodsPage() {
-  
+  useDocumentTitle("Neighborhoods");
+
   const neighborhoods = [
     {
       name: "East Village",
@@ -110,7 +113,15 @@ export default function NeighborhoodsPage() {
       
       <Header />
       
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Neighborhoods" },
+          ]}
+        />
+
         {/* Hero Section */}
         <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-8 rounded-lg mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -225,7 +236,7 @@ export default function NeighborhoodsPage() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
 
       {/* FAQ Section for SEO and Featured Snippets */}
       <section className="py-16 bg-muted/30">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -7,13 +7,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Switch } from "./ui/switch";
 import { Badge } from "./ui/badge";
-import { CalendarIcon, Save, X, Plus, Trash2 } from "lucide-react";
+import { Alert, AlertDescription } from "./ui/alert";
+import { CalendarIcon, Save, X, Plus, Trash2, MapPin, CheckCircle2 } from "lucide-react";
 import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening";
 
@@ -107,14 +109,57 @@ export default function ContentEditDialog({
   const [formData, setFormData] = useState<any>({});
   const [isLoading, setIsLoading] = useState(false);
   const [newAmenity, setNewAmenity] = useState("");
+  const [matchedVenue, setMatchedVenue] = useState<KnownVenue | null>(null);
+  const [venueAutoFilled, setVenueAutoFilled] = useState(false);
 
   const config = fieldConfigs[contentType];
+  const { findVenue, getAutoFillData, isReady: venuesReady } = useVenueMatcher();
+
+  // Check for venue match when venue field changes (for events)
+  const checkVenueMatch = useCallback((venueText: string) => {
+    if (contentType !== "event" || !venuesReady || !venueText) {
+      setMatchedVenue(null);
+      return;
+    }
+    const venue = findVenue(venueText);
+    setMatchedVenue(venue);
+  }, [contentType, venuesReady, findVenue]);
+
+  // Auto-fill venue data (only fills empty fields)
+  const handleAutoFillVenue = useCallback(() => {
+    if (!matchedVenue) return;
+
+    const autoFillData = getAutoFillData(matchedVenue);
+
+    setFormData((prev: any) => {
+      const updated = { ...prev };
+
+      // Only fill empty fields
+      if (!updated.location && autoFillData.location) {
+        updated.location = autoFillData.location;
+      }
+      if (!updated.venue && autoFillData.venue) {
+        updated.venue = autoFillData.venue;
+      }
+      if (!updated.latitude && autoFillData.latitude) {
+        updated.latitude = autoFillData.latitude;
+      }
+      if (!updated.longitude && autoFillData.longitude) {
+        updated.longitude = autoFillData.longitude;
+      }
+
+      return updated;
+    });
+
+    setVenueAutoFilled(true);
+    toast.success(`Auto-filled venue data from "${matchedVenue.name}"`);
+  }, [matchedVenue, getAutoFillData]);
 
   useEffect(() => {
     if (item && open) {
       // Initialize form data with item values
       const initialData = { ...item };
-      
+
       // Handle date formatting for date/datetime fields
       config.fields.forEach(field => {
         if ((field.type === "date" || field.type === "datetime") && initialData[field.key]) {
@@ -128,17 +173,32 @@ export default function ContentEditDialog({
           initialData[field.key] = null;
         }
       });
-      
+
       console.log('Initialized form data:', initialData);
       setFormData(initialData);
+
+      // Reset venue matching state
+      setMatchedVenue(null);
+      setVenueAutoFilled(false);
+
+      // Check for venue match if this is an event with a venue
+      if (contentType === "event" && initialData.venue) {
+        checkVenueMatch(initialData.venue);
+      }
     }
-  }, [item, open, config.fields]);
+  }, [item, open, config.fields, contentType, checkVenueMatch]);
 
   const handleFieldChange = (fieldKey: string, value: any) => {
-    setFormData(prev => ({
+    setFormData((prev: any) => ({
       ...prev,
       [fieldKey]: value
     }));
+
+    // Check for venue match when venue field changes
+    if (fieldKey === "venue" && contentType === "event") {
+      setVenueAutoFilled(false);
+      checkVenueMatch(value);
+    }
   };
 
   const handleArrayAdd = (fieldKey: string) => {
@@ -488,6 +548,43 @@ export default function ContentEditDialog({
                 {field.required && <span className="text-red-500 ml-1">*</span>}
               </Label>
               {renderField(field)}
+
+              {/* Show venue match alert after venue field */}
+              {field.key === "venue" && matchedVenue && !venueAutoFilled && (
+                <Alert className="mt-2 border-green-200 bg-green-50">
+                  <MapPin className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <div className="text-sm">
+                      <span className="font-medium text-green-800">
+                        Matched: {matchedVenue.name}
+                      </span>
+                      {matchedVenue.address && (
+                        <span className="text-green-600 ml-2">
+                          ({matchedVenue.address}, {matchedVenue.city})
+                        </span>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="ml-4 border-green-300 text-green-700 hover:bg-green-100"
+                      onClick={handleAutoFillVenue}
+                    >
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Auto-fill
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Show confirmation after auto-fill */}
+              {field.key === "venue" && venueAutoFilled && matchedVenue && (
+                <Badge className="mt-2 bg-green-100 text-green-800 w-fit">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Venue data applied from "{matchedVenue.name}"
+                </Badge>
+              )}
             </div>
           ))}
         </div>

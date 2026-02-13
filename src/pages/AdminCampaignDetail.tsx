@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAdminCampaigns, CampaignWithUser } from "@/hooks/useAdminCampaigns";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +25,7 @@ export default function AdminCampaignDetail() {
     updateCampaignStatus,
     createPricingOverride,
   } = useAdminCampaigns();
+  useDocumentTitle("Campaign Details");
 
   const [campaign, setCampaign] = useState<CampaignWithUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);

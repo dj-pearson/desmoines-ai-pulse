@@ -81,7 +81,7 @@ export default function Enhanced404() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-16">
+      <div className="container mx-auto px-4 py-16">
         {/* Hero Section */}
         <div className="text-center mb-12">
           <div className="text-8xl font-bold text-muted-foreground/20 mb-4">404</div>
@@ -278,7 +278,7 @@ export default function Enhanced404() {
             </div>
           </CardContent>
         </Card>
-      </main>
+      </div>
 
       <Footer />
     </div>

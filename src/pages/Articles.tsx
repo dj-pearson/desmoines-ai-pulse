@@ -13,6 +13,7 @@ import Footer from '@/components/Footer';
 import SEOHead from '@/components/SEOHead';
 import { FAQSection } from '@/components/FAQSection';
 import { BackToTop } from '@/components/BackToTop';
+import { Breadcrumbs } from '@/components/ui/breadcrumbs';
 
 const Articles: React.FC = () => {
   const { articles, loading, error, loadArticles } = useArticles();
@@ -136,6 +137,14 @@ const Articles: React.FC = () => {
         </div>
 
         <div className="container mx-auto px-4 py-8">
+          <Breadcrumbs
+            className="mb-4"
+            items={[
+              { label: "Home", href: "/" },
+              { label: "Articles" },
+            ]}
+          />
+
           {/* Search and Filter Controls */}
           <div className="mb-8">
             <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">

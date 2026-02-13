@@ -18,10 +18,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function EventsThisWeekend() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedLocation, setSelectedLocation] = useState<string>("all");
+  useDocumentTitle("Events This Weekend");
 
   const { data: events, isLoading } = useQuery({
     queryKey: ["events-weekend"],
@@ -89,7 +93,7 @@ export default function EventsThisWeekend() {
   const pageTitle = `Des Moines Events This Weekend - ${format(
     new Date(),
     "MMMM d"
-  )} | Des Moines Insider`;
+  )} | ${BRAND.name}`;
   const pageDescription = `Find the best events happening this weekend in Des Moines and suburbs. See dates, times, maps, and tips for ${format(
     new Date(),
     "MMMM d"
@@ -127,7 +131,7 @@ export default function EventsThisWeekend() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl="https://desmoinesinsider.com/events/this-weekend"
+        canonicalUrl={getCanonicalUrl('/events/this-weekend')}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -136,7 +140,15 @@ export default function EventsThisWeekend() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "This Weekend" },
+          ]}
+        />
         {/* Hero Section */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -238,7 +250,7 @@ export default function EventsThisWeekend() {
                       >
                         All
                       </Button>
-                      {categories.slice(0, 6).map((category) => (
+                      {categories.map((category) => (
                         <Button
                           key={category}
                           variant={
@@ -272,7 +284,7 @@ export default function EventsThisWeekend() {
                       >
                         All Areas
                       </Button>
-                      {locations.slice(0, 6).map((location) => (
+                      {locations.map((location) => (
                         <Button
                           key={location}
                           variant={
@@ -401,7 +413,7 @@ export default function EventsThisWeekend() {
             </CardContent>
           </Card>
         )}
-      </main>
+      </div>
 
       <Footer />
     </div>

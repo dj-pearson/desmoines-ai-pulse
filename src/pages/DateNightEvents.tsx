@@ -7,8 +7,11 @@ import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
-import { Heart, MapPin, Calendar, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Heart, MapPin, Calendar, Clock, Sparkles } from "lucide-react";
 import { getCanonicalUrl } from "@/lib/brandConfig";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 interface EventItem {
   id: string;
@@ -27,6 +30,8 @@ interface EventItem {
 export default function DateNightEvents() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [eveningOnly, setEveningOnly] = useState(true);
+  useDocumentTitle("Date Night Events");
 
   useEffect(() => {
     const fetchDateNightEvents = async () => {
@@ -34,7 +39,7 @@ export default function DateNightEvents() {
         setIsLoading(true);
         const now = new Date().toISOString();
 
-        // Filter for evening events and adult-oriented categories
+        // Filter for date-night-friendly categories
         const { data, error } = await supabase
           .from("events")
           .select("id, title, date, location, venue, price, category, enhanced_description, original_description, image_url, event_start_utc")
@@ -47,13 +52,7 @@ export default function DateNightEvents() {
           console.error('Error fetching date night events:', error);
           setEvents([]);
         } else {
-          // Further filter for evening events (after 5 PM)
-          const eveningEvents = (data || []).filter(event => {
-            const eventDate = new Date(event.event_start_utc || event.date);
-            const hour = eventDate.getHours();
-            return hour >= 17 || hour < 2; // 5 PM to 2 AM
-          });
-          setEvents(eveningEvents);
+          setEvents(data || []);
         }
       } catch (error) {
         console.error('Error in fetchDateNightEvents:', error);
@@ -66,7 +65,13 @@ export default function DateNightEvents() {
     fetchDateNightEvents();
   }, []);
 
-  const dateEvents = events || [];
+  const dateEvents = eveningOnly
+    ? (events || []).filter(event => {
+        const eventDate = new Date(event.event_start_utc || event.date);
+        const hour = eventDate.getHours();
+        return hour >= 17 || hour < 2; // 5 PM to 2 AM
+      })
+    : (events || []);
 
   const pageTitle = "Date Night Ideas & Events in Des Moines - Romantic Activities | Des Moines AI Pulse";
   const pageDescription = `Find ${dateEvents.length}+ romantic date night events in Des Moines. From live music to wine tastings, discover perfect couples activities. Evening entertainment, dinner shows, and special events for two.`;
@@ -122,7 +127,15 @@ export default function DateNightEvents() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: "Date Night" },
+          ]}
+        />
         {/* Hero Section - GEO Optimized */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
@@ -221,6 +234,25 @@ export default function DateNightEvents() {
           </CardContent>
         </Card>
 
+        {/* Time Filter Toggle */}
+        <div className="flex items-center gap-3 mb-6">
+          <Button
+            variant={eveningOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setEveningOnly(true)}
+          >
+            <Clock className="h-4 w-4 mr-1" />
+            Evening Only (5 PM+)
+          </Button>
+          <Button
+            variant={!eveningOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setEveningOnly(false)}
+          >
+            All Times
+          </Button>
+        </div>
+
         {/* Events List */}
         {isLoading ? (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -297,7 +329,7 @@ export default function DateNightEvents() {
           currentPath="/events/date-night"
           title="More Des Moines Experiences"
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

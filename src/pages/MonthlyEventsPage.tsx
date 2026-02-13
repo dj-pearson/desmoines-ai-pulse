@@ -6,18 +6,21 @@ import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { FAQSection } from "@/components/FAQSection";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { format, startOfMonth, endOfMonth, parseISO, isValid } from "date-fns";
 import { useState, useEffect } from "react";
+import { BRAND } from "@/lib/brandConfig";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function MonthlyEventsPage() {
   const { monthYear } = useParams<{ monthYear: string }>();
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  
+
   // Parse month-year from URL (e.g., "march-2024")
   const parseMonthYear = (monthYearStr: string) => {
     const [monthName, yearStr] = monthYearStr.split("-");
@@ -71,7 +74,9 @@ export default function MonthlyEventsPage() {
     },
     enabled: isValidDate, // Only run query if date is valid
   });
-  
+
+  useDocumentTitle(isValidDate ? `${format(targetDate, "MMMM yyyy")} Events` : "Monthly Events");
+
   // Check validity AFTER hooks
   if (!isValidDate) {
     return <div>Invalid date format</div>;
@@ -123,7 +128,7 @@ export default function MonthlyEventsPage() {
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
-        canonicalUrl={`https://desmoinesinsider.com/events/${monthYear}`}
+        canonicalUrl={`${BRAND.baseUrl}/events/${monthYear}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
         faqData={faqData}
@@ -132,7 +137,15 @@ export default function MonthlyEventsPage() {
 
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-4 py-8">
+        <Breadcrumbs
+          className="mb-4"
+          items={[
+            { label: "Home", href: "/" },
+            { label: "Events", href: "/events" },
+            { label: monthDisplayName },
+          ]}
+        />
         {/* Header with Navigation */}
         <div className="flex items-center justify-between mb-8">
           <div className="flex items-center gap-4">
@@ -330,7 +343,7 @@ export default function MonthlyEventsPage() {
           title="Monthly Events Questions"
           description={`Common questions about ${monthDisplayName} events in Des Moines`}
         />
-      </main>
+      </div>
 
       <Footer />
     </div>

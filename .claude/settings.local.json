@@ -10,7 +10,16 @@
       "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npx playwright test --project=chromium-desktop tests/performance.spec.ts --reporter=list --max-failures=5 --workers=1)",
       "Bash(PLAYWRIGHT_TEST_BASE_URL=http://localhost:8080 npx playwright test --project=chromium-desktop tests/accessibility.spec.ts --reporter=list --max-failures=5 --workers=1)",
       "Bash(find:*)",
-      "Bash(npm run type-check:*)"
+      "Bash(npm run type-check:*)",
+      "Bash(npx eslint:*)",
+      "Bash(dir:*)",
+      "Bash(ls:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npx vite build)",
+      "Bash(npm run validate:*)",
+      "Bash(wc -l:*)",
+      "Bash(powershell -Command:*)"
     ],
     "deny": [],
     "ask": []
