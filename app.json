@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "aea914e7-32c6-4ab9-9ba5-69dc8aeabfa2"
+      }
+    },
+    "android": {
+      "package": "com.desmoines.aipulse"
+    },
+    "ios": {
+      "bundleIdentifier": "com.desmoines.aipulse",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
+  }
+}
