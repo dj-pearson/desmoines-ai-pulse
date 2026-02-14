@@ -260,25 +260,42 @@ jobs:
           PBXPROJ="App.xcodeproj/project.pbxproj"
 
           # Replace Automatic signing with Manual for the App target
-          # (CODE_SIGN_STYLE only appears in the App target configs, not in the project-level configs)
+          # CODE_SIGN_STYLE only appears in the App target configs, not project-level
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
 
-          # Add signing settings to the App target's Release configuration
-          # Insert after CODE_SIGN_STYLE = Manual in the Release section
-          # We add: CODE_SIGN_IDENTITY, PROVISIONING_PROFILE_SPECIFIER, DEVELOPMENT_TEAM
-          sed -i '' "/504EC3181FED79650016851F \/\* Release \*\//,/name = Release;/{
-            s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\
-				CODE_SIGN_IDENTITY = \"Apple Distribution\";\
-				DEVELOPMENT_TEAM = ${TEAM_ID};\
-				PROVISIONING_PROFILE_SPECIFIER = \"${PP_UUID}\";/
-          }" "$PBXPROJ"
+          # Use python to inject signing settings into the Release config only
+          # This avoids complex sed with tabs that can break YAML parsing
+          python3 -c "
+          import re
+          with open('$PBXPROJ', 'r') as f:
+              content = f.read()
+
+          # Find the App target Release config block (504EC3181FED79650016851F)
+          # and add signing settings after CODE_SIGN_STYLE = Manual
+          old = 'CODE_SIGN_STYLE = Manual;'
+          new_block = '''CODE_SIGN_STYLE = Manual;
+          \t\t\t\tCODE_SIGN_IDENTITY = \"Apple Distribution\";
+          \t\t\t\tDEVELOPMENT_TEAM = $TEAM_ID;
+          \t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";'''
+
+          # Only replace the SECOND occurrence (Release config, not Debug)
+          first_pos = content.find(old)
+          if first_pos >= 0:
+              second_pos = content.find(old, first_pos + len(old))
+              if second_pos >= 0:
+                  content = content[:second_pos] + new_block + content[second_pos + len(old):]
+              else:
+                  content = content[:first_pos] + new_block + content[first_pos + len(old):]
+
+          with open('$PBXPROJ', 'w') as f:
+              f.write(content)
+          "
 
           # Verify the signing configuration
           echo "=== Verifying code signing in project.pbxproj ==="
-          grep -A 2 "CODE_SIGN_STYLE" "$PBXPROJ"
-          echo ""
-          grep "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ" || echo "(not found in Debug config - that's expected)"
-          echo ""
+          grep "CODE_SIGN_STYLE" "$PBXPROJ"
+          grep "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ" || echo "WARNING: PROVISIONING_PROFILE_SPECIFIER not found"
+          grep "DEVELOPMENT_TEAM" "$PBXPROJ" || echo "WARNING: DEVELOPMENT_TEAM not found"
           echo "✅ Code signing configured for App target only"
 
       # ==============================================================
