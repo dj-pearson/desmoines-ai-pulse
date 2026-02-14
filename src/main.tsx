@@ -8,6 +8,57 @@ import App from "./App";
 import "./index.css";
 import { initializeOnInteraction } from "./lib/lazyInit";
 
+// ──────────────────────────────────────────────────────────────
+// Mobile error overlay – shows runtime errors visually on the
+// device when running inside Capacitor.  On the web this is a
+// no-op because uncaught errors already appear in DevTools.
+// ──────────────────────────────────────────────────────────────
+const isCapacitor = !!(window as any).Capacitor;
+
+function showErrorOverlay(message: string, source?: string) {
+  // Always show on Capacitor; on web, only in dev mode
+  if (!isCapacitor && import.meta.env.PROD) return;
+
+  let overlay = document.getElementById('__error_overlay__');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = '__error_overlay__';
+    overlay.style.cssText = `
+      position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.92);
+      color:#ff6b6b;font:14px/1.6 monospace;padding:24px 16px;
+      overflow:auto;-webkit-overflow-scrolling:touch;
+      padding-top:env(safe-area-inset-top, 24px);
+    `;
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML += `
+    <div style="margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px">
+      <strong style="color:#ff4444;font-size:16px">⚠ Runtime Error</strong>
+      <pre style="white-space:pre-wrap;word-break:break-word;margin:8px 0 0;color:#ffa0a0">${
+        String(message).replace(/</g, '&lt;')
+      }</pre>
+      ${source ? `<span style="color:#888;font-size:12px">${String(source).replace(/</g, '&lt;')}</span>` : ''}
+    </div>
+  `;
+}
+
+// Catch synchronous errors
+window.onerror = (msg, src, line, col, err) => {
+  showErrorOverlay(
+    err?.stack || String(msg),
+    src ? `${src}:${line}:${col}` : undefined,
+  );
+};
+
+// Catch unhandled promise rejections
+window.addEventListener('unhandledrejection', (e) => {
+  const reason = e.reason;
+  showErrorOverlay(
+    reason?.stack || reason?.message || String(reason),
+    'Unhandled Promise Rejection',
+  );
+});
+
 // Optimized query client with minimal configuration for faster TTI
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,23 +89,32 @@ function hideSplashScreen() {
 function initializeApp() {
   const rootElement = document.getElementById("root");
   if (!rootElement) {
-    throw new Error("Root element not found");
+    showErrorOverlay("Root element '#root' not found in DOM");
+    return;
   }
 
-  const root = createRoot(rootElement);
+  try {
+    const root = createRoot(rootElement);
 
-  // Render immediately - this is the critical path
-  root.render(
-    <StrictMode>
-      <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
-        <HelmetProvider>
-          <QueryClientProvider client={queryClient}>
-            <App />
-          </QueryClientProvider>
-        </HelmetProvider>
-      </ThemeProvider>
-    </StrictMode>
-  );
+    // Render immediately - this is the critical path
+    root.render(
+      <StrictMode>
+        <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
+          <HelmetProvider>
+            <QueryClientProvider client={queryClient}>
+              <App />
+            </QueryClientProvider>
+          </HelmetProvider>
+        </ThemeProvider>
+      </StrictMode>
+    );
+  } catch (err: any) {
+    // Catch errors thrown synchronously during render setup
+    showErrorOverlay(
+      err?.stack || err?.message || 'Unknown error during app initialization',
+      'initializeApp()',
+    );
+  }
 
   // Hide splash screen now that the app has rendered
   hideSplashScreen();

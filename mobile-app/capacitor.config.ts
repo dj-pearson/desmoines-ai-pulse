@@ -8,7 +8,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'com.desmoines.aipulse',
-  appName: 'DSM AI Pulse',
+  appName: 'Des Moines Insider',
   webDir: 'www',
   bundledWebRuntime: false,
 
@@ -109,7 +109,7 @@ const config: CapacitorConfig = {
 
   ios: {
     contentInset: 'automatic',
-    scheme: 'DSM AI Pulse',
+    scheme: 'Des Moines Insider',
     // Prefer WKWebView (default in Capacitor 6)
     preferredContentMode: 'mobile',
     // Allow inline media playback

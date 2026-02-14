@@ -6,7 +6,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>DSM AI Pulse</string>
+	<string>Des Moines Insider</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -69,31 +69,31 @@
 
 	<!-- Location - for nearby events, restaurants, attractions -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Des Moines AI Pulse uses your location to show nearby events, restaurants, and attractions in the Des Moines area.</string>
+	<string>Des Moines Insider uses your location to show nearby events, restaurants, and attractions in the Des Moines area.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Des Moines AI Pulse uses your location to notify you about nearby events and deals even when the app is in the background.</string>
+	<string>Des Moines Insider uses your location to notify you about nearby events and deals even when the app is in the background.</string>
 
 	<!-- Camera - for profile photos and event photo uploads -->
 	<key>NSCameraUsageDescription</key>
-	<string>Des Moines AI Pulse needs camera access so you can take photos for your profile or upload event photos.</string>
+	<string>Des Moines Insider needs camera access so you can take photos for your profile or upload event photos.</string>
 
 	<!-- Photo Library - for selecting photos to upload -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Des Moines AI Pulse needs access to your photo library so you can select photos for your profile or event submissions.</string>
+	<string>Des Moines Insider needs access to your photo library so you can select photos for your profile or event submissions.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Des Moines AI Pulse would like to save images to your photo library.</string>
+	<string>Des Moines Insider would like to save images to your photo library.</string>
 
 	<!-- Face ID / Touch ID - for biometric authentication -->
 	<key>NSFaceIDUsageDescription</key>
-	<string>Des Moines AI Pulse uses Face ID for quick and secure login to your account.</string>
+	<string>Des Moines Insider uses Face ID for quick and secure login to your account.</string>
 
 	<!-- App Tracking Transparency -->
 	<key>NSUserTrackingUsageDescription</key>
-	<string>Des Moines AI Pulse may use this to provide you with a more personalized experience and relevant event recommendations.</string>
+	<string>Des Moines Insider may use this to provide you with a more personalized experience and relevant event recommendations.</string>
 
 	<!-- Calendars - for adding events to calendar -->
 	<key>NSCalendarsUsageDescription</key>
-	<string>Des Moines AI Pulse would like to add events to your calendar so you don't miss them.</string>
+	<string>Des Moines Insider would like to add events to your calendar so you don't miss them.</string>
 
 	<!-- ================================================================
 	     URL Schemes and Universal Links

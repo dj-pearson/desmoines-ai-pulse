@@ -71,12 +71,12 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'development',
     minify: 'esbuild',
     target: 'es2020',
-    // Drop console in production builds
-    ...(mode === 'production' && {
-      esbuild: {
-        drop: ['console', 'debugger'],
-      },
-    }),
+    // Keep console logs in mobile builds for on-device debugging.
+    // Unlike the web build, mobile errors are invisible without logs.
+    // Only strip 'debugger' statements.
+    esbuild: {
+      drop: ['debugger'],
+    },
     rollupOptions: {
       input: path.resolve(__dirname, '../index.html'),
       output: {

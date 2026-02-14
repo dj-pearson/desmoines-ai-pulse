@@ -502,7 +502,16 @@
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Fallback content - replaced by React when app mounts successfully -->
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:hsl(0 0% 100%)">
+        <div style="text-align:center;color:#666;font-family:system-ui,sans-serif">
+          <div style="width:40px;height:40px;border:3px solid #ddd;border-top-color:#2563eb;border-radius:50%;margin:0 auto 16px;animation:spin 1s linear infinite"></div>
+          <p style="margin:0;font-size:14px">Loading...</p>
+          <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+        </div>
+      </div>
+    </div>
 
     <script type="module" src="/src/main.tsx"></script>
   </body>
