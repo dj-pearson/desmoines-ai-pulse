@@ -252,34 +252,64 @@ jobs:
           echo "   Team: $TEAM_ID"
 
       # ==============================================================
-      # 9. BUILD XCODE ARCHIVE
+      # 9. CONFIGURE CODE SIGNING (App target only)
+      # ==============================================================
+      - name: Configure code signing for App target
+        working-directory: mobile-app/ios/App
+        run: |
+          PBXPROJ="App.xcodeproj/project.pbxproj"
+
+          # Replace Automatic signing with Manual for the App target
+          # (CODE_SIGN_STYLE only appears in the App target configs, not in the project-level configs)
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+
+          # Add signing settings to the App target's Release configuration
+          # Insert after CODE_SIGN_STYLE = Manual in the Release section
+          # We add: CODE_SIGN_IDENTITY, PROVISIONING_PROFILE_SPECIFIER, DEVELOPMENT_TEAM
+          sed -i '' "/504EC3181FED79650016851F \/\* Release \*\//,/name = Release;/{
+            s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\
+				CODE_SIGN_IDENTITY = \"Apple Distribution\";\
+				DEVELOPMENT_TEAM = ${TEAM_ID};\
+				PROVISIONING_PROFILE_SPECIFIER = \"${PP_UUID}\";/
+          }" "$PBXPROJ"
+
+          # Verify the signing configuration
+          echo "=== Verifying code signing in project.pbxproj ==="
+          grep -A 2 "CODE_SIGN_STYLE" "$PBXPROJ"
+          echo ""
+          grep "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ" || echo "(not found in Debug config - that's expected)"
+          echo ""
+          echo "✅ Code signing configured for App target only"
+
+      # ==============================================================
+      # 10. BUILD XCODE ARCHIVE
       # ==============================================================
       - name: Build Xcode archive
         run: |
           set -o pipefail
 
+          # NOTE: Signing settings are NOT passed on the command line because
+          # that would apply them to ALL targets (including CocoaPods frameworks
+          # which don't support provisioning profiles). Instead, signing is
+          # configured directly in the App target's project.pbxproj above.
           xcodebuild archive \
             -workspace "${{ env.WORKSPACE }}" \
             -scheme "${{ env.APP_SCHEME }}" \
             -archivePath "$RUNNER_TEMP/App.xcarchive" \
             -configuration Release \
             -destination "generic/platform=iOS" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
             IPHONEOS_DEPLOYMENT_TARGET=16.0 \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty --color || {
-              echo "::error::Xcode archive failed. Showing last 50 lines of raw output:"
-              tail -50 "$RUNNER_TEMP/xcodebuild.log"
+              echo "::error::Xcode archive failed. Showing last 80 lines of raw output:"
+              tail -80 "$RUNNER_TEMP/xcodebuild.log"
               exit 1
             }
 
           echo "✅ Archive built successfully"
 
       # ==============================================================
-      # 10. EXPORT IPA
+      # 11. EXPORT IPA
       # ==============================================================
       - name: Create ExportOptions.plist
         run: |
@@ -336,7 +366,7 @@ jobs:
           echo "   Size: $(du -h "$IPA_PATH" | cut -f1)"
 
       # ==============================================================
-      # 11. UPLOAD TO TESTFLIGHT
+      # 12. UPLOAD TO TESTFLIGHT
       # ==============================================================
       - name: Setup App Store Connect API key
         env:
@@ -376,7 +406,7 @@ jobs:
           echo "============================================"
 
       # ==============================================================
-      # 12. UPLOAD BUILD ARTIFACT (for records)
+      # 13. UPLOAD BUILD ARTIFACT (for records)
       # ==============================================================
       - name: Upload IPA artifact
         if: success()
@@ -387,7 +417,7 @@ jobs:
           retention-days: 90
 
       # ==============================================================
-      # 13. CLEANUP (always runs, even on failure)
+      # 14. CLEANUP (always runs, even on failure)
       # ==============================================================
       - name: Cleanup signing artifacts
         if: always()

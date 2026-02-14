@@ -37,4 +37,17 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
+
+  # Disable code signing for all Pod targets.
+  # Pod frameworks are re-signed automatically when embedded in the
+  # main app, so they must NOT have their own provisioning profiles.
+  # Without this, CI builds fail because command-line or project-level
+  # signing settings can bleed into Pod targets.
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['CODE_SIGN_IDENTITY'] = ''
+      config.build_settings['CODE_SIGNING_REQUIRED'] = 'NO'
+      config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+    end
+  end
 end
