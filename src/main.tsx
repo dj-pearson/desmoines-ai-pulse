@@ -33,7 +33,7 @@ function showErrorOverlay(message: string, source?: string) {
   }
   overlay.innerHTML += `
     <div style="margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:12px">
-      <strong style="color:#ff4444;font-size:16px">⚠ Runtime Error</strong>
+      <strong style="color:#ff4444;font-size:16px">Runtime Error</strong>
       <pre style="white-space:pre-wrap;word-break:break-word;margin:8px 0 0;color:#ffa0a0">${
         String(message).replace(/</g, '&lt;')
       }</pre>
@@ -42,7 +42,7 @@ function showErrorOverlay(message: string, source?: string) {
   `;
 }
 
-// Catch synchronous errors
+// Catch synchronous errors (upgrades the early handler from index.html)
 window.onerror = (msg, src, line, col, err) => {
   showErrorOverlay(
     err?.stack || String(msg),
@@ -59,6 +59,17 @@ window.addEventListener('unhandledrejection', (e) => {
   );
 });
 
+// Surface any errors that were caught by the early handler in index.html
+// before this module loaded.
+if (Array.isArray((window as any).__earlyErrors) && (window as any).__earlyErrors.length > 0) {
+  for (const earlyErr of (window as any).__earlyErrors) {
+    showErrorOverlay(
+      earlyErr.err?.stack || earlyErr.err?.message || String(earlyErr.msg),
+      earlyErr.src ? `${earlyErr.src}:${earlyErr.line}` : 'Early startup error',
+    );
+  }
+}
+
 // Optimized query client with minimal configuration for faster TTI
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -67,7 +78,10 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       staleTime: 60 * 1000,
       gcTime: 5 * 60 * 1000,
-      networkMode: "online",
+      // Use "always" so queries fire even if Capacitor's Network plugin
+      // hasn't reported online status yet. "online" can silently block
+      // all queries until a network status event arrives.
+      networkMode: "always",
     },
   },
 });
@@ -116,8 +130,11 @@ function initializeApp() {
     );
   }
 
-  // Hide splash screen now that the app has rendered
-  hideSplashScreen();
+  // Hide splash screen now that the app has rendered.
+  // Use a short delay to ensure the first paint has actually
+  // been committed — hiding the splash before content is visible
+  // shows a brief white flash.
+  setTimeout(hideSplashScreen, 50);
 
   // Defer all non-critical features until after interaction
   initializeOnInteraction();
