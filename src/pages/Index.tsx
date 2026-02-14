@@ -16,6 +16,7 @@ import { useEventScraper } from "@/hooks/useSupabase";
 import { Event } from "@/lib/types";
 import { BRAND } from "@/lib/brandConfig";
 import { Link } from "react-router-dom";
+import { openExternalUrl } from "@/lib/capacitorUtils";
 import Header from "@/components/Header";
 import { FAQSection } from "@/components/FAQSection";
 import SEOHead from "@/components/SEOHead";
@@ -858,16 +859,13 @@ export default function Index() {
                   </Button>
 
                   {selectedEvent.source_url && (
-                    <Button asChild variant="outline" className="w-full">
-                      <a
-                        href={selectedEvent.source_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center"
-                      >
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        View Original Event
-                      </a>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => openExternalUrl(selectedEvent.source_url!)}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      View Original Event
                     </Button>
                   )}
                 </div>

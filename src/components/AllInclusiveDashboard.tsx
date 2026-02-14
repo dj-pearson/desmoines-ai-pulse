@@ -42,8 +42,10 @@ import {
   startOfDay,
   endOfDay,
 } from "date-fns";
+import { useNavigate } from "react-router-dom";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { openExternalUrl } from "@/lib/capacitorUtils";
 
 // Type definitions for dashboard items
 type DashboardItem = {
@@ -126,6 +128,7 @@ export default function AllInclusiveDashboard({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 9;
   const { trackEvent } = useAnalytics();
+  const navigate = useNavigate();
   const sectionRef = useRef<HTMLDivElement>(null);
 
   // Reset pagination when filters change
@@ -464,7 +467,7 @@ export default function AllInclusiveDashboard({
           <PaginationContent>
             <PaginationItem>
               <PaginationPrevious
-                href="#"
+                href="javascript:void(0)"
                 onClick={(e) => {
                   e.preventDefault();
                   if (currentPage > 1) setCurrentPage(currentPage - 1);
@@ -496,7 +499,7 @@ export default function AllInclusiveDashboard({
               return (
                 <PaginationItem key={page}>
                   <PaginationLink
-                    href="#"
+                    href="javascript:void(0)"
                     onClick={(e) => {
                       e.preventDefault();
                       setCurrentPage(page);
@@ -511,7 +514,7 @@ export default function AllInclusiveDashboard({
 
             <PaginationItem>
               <PaginationNext
-                href="#"
+                href="javascript:void(0)"
                 onClick={(e) => {
                   e.preventDefault();
                   if (currentPage < totalPages) setCurrentPage(currentPage + 1);
@@ -652,6 +655,13 @@ export default function AllInclusiveDashboard({
     );
   };
 
+  // Generate a URL-friendly slug from a name
+  const createSlug = (name: string): string =>
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
+
   const renderCard = (item: DashboardItem) => {
     // Ensure icon exists, provide default based on type if missing
     const Icon =
@@ -676,6 +686,15 @@ export default function AllInclusiveDashboard({
 
       if (item.type === "event" && onViewEventDetails) {
         onViewEventDetails(item as Event);
+      } else if (item.type === "restaurant") {
+        const slug = createSlug(item.title || item.name || item.id);
+        navigate(`/restaurants/${slug}`);
+      } else if (item.type === "attraction") {
+        const slug = createSlug(item.title || item.name || item.id);
+        navigate(`/attractions/${slug}`);
+      } else if (item.type === "playground") {
+        const slug = createSlug(item.title || item.name || item.id);
+        navigate(`/playgrounds/${slug}`);
       }
     };
 
@@ -692,14 +711,14 @@ export default function AllInclusiveDashboard({
     return (
       <Card
         key={`${item.type}-${item.id}`}
-        className="hover:shadow-lg transition-shadow cursor-pointer"
+        className="hover:shadow-lg transition-shadow cursor-pointer border border-border/60 shadow-sm bg-card"
         onClick={handleCardClick}
       >
         <CardHeader className="pb-3 px-4 py-4 md:px-6">
           <div className="flex items-center justify-between mb-2">
-            <Badge className={getTypeColor(item.type)}>
+            <Badge className={`${getTypeColor(item.type)} text-xs font-medium`}>
               <Icon className="h-3 w-3 mr-1 flex-shrink-0" />
-              <span className="truncate">{item.type}</span>
+              <span className="truncate capitalize">{item.type}</span>
             </Badge>
             {item.type === "event" && (
               <FavoriteButton
@@ -709,7 +728,7 @@ export default function AllInclusiveDashboard({
               />
             )}
           </div>
-          <CardTitle className="text-mobile-title md:text-lg mobile-safe-text pr-2 leading-relaxed">
+          <CardTitle className="text-base md:text-lg pr-2 leading-relaxed line-clamp-2">
             {item.title || item.name}
           </CardTitle>
         </CardHeader>
@@ -745,37 +764,32 @@ export default function AllInclusiveDashboard({
                 item.original_description ||
                 item.description}
             </p>
-            {item.type === "event" && onViewEventDetails && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCardClick();
-                }}
-                className="w-full mt-2"
-              >
-                View Details
-              </Button>
-            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCardClick();
+              }}
+              className="w-full mt-2"
+            >
+              View Details
+            </Button>
             {item.source_url && (
               <Button
                 variant="outline"
                 size="sm"
-                asChild
                 className="w-full mt-2"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleLinkClick(e);
+                  openExternalUrl(item.source_url!);
+                }}
+                aria-label={`Learn more about ${item.title || item.name}`}
               >
-                <a
-                  href={item.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={handleLinkClick}
-                  aria-label={`Learn more about ${item.title || item.name}`}
-                >
-                  <ExternalLink className="h-3 w-3 mr-1" />
-                  <span aria-hidden="true">Learn More</span>
-                  <span className="sr-only"> about {item.title || item.name}</span>
-                </a>
+                <ExternalLink className="h-3 w-3 mr-1" />
+                <span aria-hidden="true">Learn More</span>
+                <span className="sr-only"> about {item.title || item.name}</span>
               </Button>
             )}
           </div>
@@ -803,35 +817,35 @@ export default function AllInclusiveDashboard({
           className="w-full"
         >
           {/* Mobile-optimized scrollable tabs */}
-          <div className="w-full overflow-x-auto mb-6 md:mb-8">
-            <TabsList className="inline-flex w-max min-w-full justify-start h-auto p-1 md:grid md:grid-cols-5 md:w-full">
+          <div className="w-full overflow-x-auto mb-6 md:mb-8 -mx-4 px-4 md:mx-0 md:px-0">
+            <TabsList className="inline-flex w-max min-w-full justify-start h-auto p-1 gap-1 md:grid md:grid-cols-5 md:w-full md:gap-0">
               <TabsTrigger
                 value="all"
-                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+                className="text-xs md:text-sm py-2.5 px-3 md:px-3 whitespace-nowrap flex-shrink-0 rounded-md"
               >
                 All ({allItems.length})
               </TabsTrigger>
               <TabsTrigger
                 value="event"
-                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+                className="text-xs md:text-sm py-2.5 px-3 md:px-3 whitespace-nowrap flex-shrink-0 rounded-md"
               >
                 Events ({events.length})
               </TabsTrigger>
               <TabsTrigger
                 value="restaurant"
-                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+                className="text-xs md:text-sm py-2.5 px-3 md:px-3 whitespace-nowrap flex-shrink-0 rounded-md"
               >
                 Restaurants ({restaurantOpenings.length})
               </TabsTrigger>
               <TabsTrigger
                 value="attraction"
-                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+                className="text-xs md:text-sm py-2.5 px-3 md:px-3 whitespace-nowrap flex-shrink-0 rounded-md"
               >
                 Attractions ({attractions.length})
               </TabsTrigger>
               <TabsTrigger
                 value="playground"
-                className="text-xs md:text-sm py-2 px-2 md:px-3 whitespace-nowrap flex-shrink-0"
+                className="text-xs md:text-sm py-2.5 px-3 md:px-3 whitespace-nowrap flex-shrink-0 rounded-md"
               >
                 Playgrounds ({playgrounds.length})
               </TabsTrigger>

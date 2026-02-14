@@ -15,6 +15,63 @@ import { initializeOnInteraction } from "./lib/lazyInit";
 // ──────────────────────────────────────────────────────────────
 const isCapacitor = !!(window as any).Capacitor;
 
+// ──────────────────────────────────────────────────────────────
+// Global link interceptor for Capacitor
+//
+// In the native WKWebView / Android WebView, <a target="_blank">
+// links do NOT open in the system browser by default – they
+// either silently fail or navigate inside the WebView.
+//
+// This handler catches every click on an <a> element that points
+// to an external URL and routes it through the Capacitor Browser
+// plugin so it opens properly in Safari / Chrome.
+// ──────────────────────────────────────────────────────────────
+if (isCapacitor) {
+  // ---- Intercept <a target="_blank"> clicks ----
+  document.addEventListener('click', (e) => {
+    // Walk up from the event target to find the nearest <a>
+    const anchor = (e.target as Element)?.closest?.('a[href]') as HTMLAnchorElement | null;
+    if (!anchor) return;
+
+    const href = anchor.getAttribute('href') || '';
+
+    // Only intercept external URLs (http/https) and target="_blank"
+    const isExternal = /^https?:\/\//i.test(href);
+    const isBlank = anchor.getAttribute('target') === '_blank';
+
+    // Also intercept any absolute URL not on the app's own origin
+    const isOffOrigin = isExternal && !href.startsWith(window.location.origin);
+
+    if (isExternal && (isBlank || isOffOrigin)) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const cap = (window as any).Capacitor;
+      if (cap?.Plugins?.Browser) {
+        cap.Plugins.Browser.open({ url: href });
+      }
+    }
+  }, true); // Use capture phase to catch before React handlers
+
+  // ---- Override window.open so all code paths use the Browser plugin ----
+  const _originalOpen = window.open.bind(window);
+  (window as any).open = (url?: string | URL, target?: string, features?: string) => {
+    const href = String(url || '');
+    const isExternal = /^https?:\/\//i.test(href);
+
+    if (isExternal) {
+      const cap = (window as any).Capacitor;
+      if (cap?.Plugins?.Browser) {
+        cap.Plugins.Browser.open({ url: href });
+        return null; // Browser plugin handles it
+      }
+    }
+
+    // Fallback to original for non-external or if plugin unavailable
+    return _originalOpen(url, target, features);
+  };
+}
+
 function showErrorOverlay(message: string, source?: string) {
   // Always show on Capacitor; on web, only in dev mode
   if (!isCapacitor && import.meta.env.PROD) return;

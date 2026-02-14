@@ -4,9 +4,18 @@ import { Link } from "react-router-dom";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/utils";
+import { isMobileApp } from "@/lib/capacitorUtils";
 
-// Lazy load the 3D component
-const HeroCityLite = lazy(() => import("./HeroCityLite"));
+// Build-time constant: true in mobile builds, undefined in web builds.
+// Rollup can inline and dead-code-eliminate based on this.
+declare const __MOBILE_APP__: boolean | undefined;
+const IS_NATIVE = typeof __MOBILE_APP__ !== 'undefined' && __MOBILE_APP__;
+
+// Lazy load the 3D component – skip entirely in mobile app builds
+// (Three.js + WebGL is too heavy for the native WKWebView/WebView)
+const HeroCityLite = IS_NATIVE
+  ? null
+  : lazy(() => import("./HeroCityLite"));
 
 interface EnhancedHeroProps {
   eventsToday?: number;
@@ -26,6 +35,7 @@ export function EnhancedHero({
   className,
 }: EnhancedHeroProps) {
   const isMobile = useMediaQuery("(max-width: 768px)");
+  const isNativeApp = isMobileApp();
   const [greeting, setGreeting] = useState("");
   const [subheading, setSubheading] = useState("");
 
@@ -60,14 +70,27 @@ export function EnhancedHero({
   return (
     <section
       className={cn(
-        "relative min-h-screen bg-[#0a0a1a] py-16 overflow-hidden",
+        "relative bg-[#0a0a1a] overflow-hidden",
+        isNativeApp ? "min-h-[70vh] py-10 pt-14" : "min-h-screen py-16",
         className
       )}
     >
-      {/* 3D City Background */}
-      <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
-        <HeroCityLite />
-      </Suspense>
+      {/* 3D City Background – replaced with lightweight gradient in mobile app */}
+      {HeroCityLite ? (
+        <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
+          <HeroCityLite />
+        </Suspense>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-[#071e62] via-[#1a1a2e] to-[#2D1B69]">
+          {/* Subtle animated grid pattern for mobile */}
+          <div className="absolute inset-0 opacity-20" style={{
+            backgroundImage: 'linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+          }} />
+          {/* Glow accent */}
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[300px] h-[300px] rounded-full bg-[#DC143C]/15 blur-[100px]" />
+        </div>
+      )}
 
       {/* Animated background gradient overlay for extra depth */}
       <div className="absolute inset-0 bg-gradient-to-br from-[#2D1B69]/10 via-transparent to-[#8B0000]/10 pointer-events-none" />
