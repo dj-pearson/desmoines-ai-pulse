@@ -29,7 +29,7 @@ const config: CapacitorConfig = {
     // Splash Screen
     SplashScreen: {
       launchShowDuration: 2000,
-      launchAutoHide: false, // We control hiding from JavaScript
+      launchAutoHide: true, // Auto-hide after launchShowDuration
       backgroundColor: '#000000',
       showSpinner: false,
       androidSpinnerStyle: 'small',

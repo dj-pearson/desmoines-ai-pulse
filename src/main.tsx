@@ -21,6 +21,20 @@ const queryClient = new QueryClient({
   },
 });
 
+// Hide the Capacitor splash screen once the app is ready.
+// Uses dynamic import so this is a no-op in web builds where
+// @capacitor/splash-screen is not installed.
+async function hideSplashScreen() {
+  // Only attempt when running inside a Capacitor native shell
+  if (!(window as any).Capacitor) return;
+  try {
+    const { SplashScreen } = await import('@capacitor/splash-screen');
+    await SplashScreen.hide({ fadeOutDuration: 300 });
+  } catch {
+    // Plugin not available – ignore
+  }
+}
+
 // Fast initial render for optimal TTI
 function initializeApp() {
   const rootElement = document.getElementById("root");
@@ -42,6 +56,9 @@ function initializeApp() {
       </ThemeProvider>
     </StrictMode>
   );
+
+  // Hide splash screen now that the app has rendered
+  hideSplashScreen();
 
   // Defer all non-critical features until after interaction
   initializeOnInteraction();
