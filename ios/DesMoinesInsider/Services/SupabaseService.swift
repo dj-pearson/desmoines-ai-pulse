@@ -3,7 +3,6 @@ import Supabase
 
 /// Singleton Supabase client shared across the app.
 /// Mirrors the web app's client setup from src/integrations/supabase/client.ts
-@MainActor
 final class SupabaseService {
     static let shared = SupabaseService()
 

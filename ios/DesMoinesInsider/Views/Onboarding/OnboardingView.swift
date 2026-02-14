@@ -15,7 +15,7 @@ struct OnboardingView: View {
                 "Find the best local restaurants",
                 "Explore attractions and hidden gems"
             ],
-            color: .accent
+            color: .accentColor
         ),
         OnboardingPage(
             icon: "heart.circle.fill",
