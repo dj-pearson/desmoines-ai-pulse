@@ -1,5 +1,4 @@
 import Foundation
-import PostgREST
 
 /// Fetches restaurants from Supabase, matching the web app's useRestaurants hook.
 actor RestaurantsService {
@@ -64,38 +63,58 @@ actor RestaurantsService {
             request = request.eq("is_featured", value: true)
         }
 
-        // Sorting
-        let sortedRequest: PostgrestTransformBuilder
+        // Sorting + Pagination + Execute
+        let offset = query.offset
+        let limit = query.limit
+        let data: Data
+        let count: Int?
+
         switch query.sortBy {
         case .popularity:
-            sortedRequest = request
+            let r = try await request
                 .order("popularity_score", ascending: false)
                 .order("is_featured", ascending: false)
                 .order("created_at", ascending: false)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+            data = r.data; count = r.count
         case .rating:
-            sortedRequest = request
+            let r = try await request
                 .order("rating", ascending: false)
                 .order("popularity_score", ascending: false)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+            data = r.data; count = r.count
         case .newest:
-            sortedRequest = request.order("created_at", ascending: false)
+            let r = try await request
+                .order("created_at", ascending: false)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+            data = r.data; count = r.count
         case .alphabetical:
-            sortedRequest = request.order("name", ascending: true)
+            let r = try await request
+                .order("name", ascending: true)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+            data = r.data; count = r.count
         case .priceLow:
-            sortedRequest = request
+            let r = try await request
                 .order("price_range", ascending: true)
                 .order("popularity_score", ascending: false)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+            data = r.data; count = r.count
         case .priceHigh:
-            sortedRequest = request
+            let r = try await request
                 .order("price_range", ascending: false)
                 .order("popularity_score", ascending: false)
+                .range(from: offset, to: offset + limit - 1)
+                .execute()
+            data = r.data; count = r.count
         }
 
-        // Pagination
-        let response = try await sortedRequest
-            .range(from: query.offset, to: query.offset + query.limit - 1)
-            .execute()
-        let restaurants = try JSONDecoder().decode([Restaurant].self, from: response.data)
-        let total = response.count ?? restaurants.count
+        let restaurants = try JSONDecoder().decode([Restaurant].self, from: data)
+        let total = count ?? restaurants.count
 
         return RestaurantsResponse(
             restaurants: restaurants,
