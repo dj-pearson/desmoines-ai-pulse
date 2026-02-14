@@ -52,6 +52,13 @@ export default defineConfig(({ mode }) => ({
     injectMobilePlatform(),
     react(),
   ],
+  // Explicitly use the mobile PostCSS config so Tailwind resolves
+  // the parent's tailwind.config.ts (Vite's root is '..' so it would
+  // otherwise pick up the parent's postcss.config.js which can't
+  // resolve content paths when CWD is mobile-app/)
+  css: {
+    postcss: path.resolve(__dirname, 'postcss.config.js'),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, '../src'),
