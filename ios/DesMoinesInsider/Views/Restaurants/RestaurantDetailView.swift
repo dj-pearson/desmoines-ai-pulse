@@ -179,7 +179,7 @@ struct RestaurantDetailView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "safari")
                         .font(.title3)
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
 
                     Link("Visit Website", destination: url)
