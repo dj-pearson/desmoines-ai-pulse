@@ -50,6 +50,8 @@ env:
   BUNDLE_ID: 'com.desmoines.aipulse'
   APP_SCHEME: 'App'
   WORKSPACE: 'mobile-app/ios/App/App.xcworkspace'
+  # Use Xcode 26 for iOS 26 SDK (required by Apple starting April 28, 2026)
+  XCODE_VERSION: '26.0'
 
 jobs:
   # ================================================================
@@ -57,7 +59,8 @@ jobs:
   # ================================================================
   build-and-submit:
     name: Build & Submit to TestFlight
-    runs-on: macos-latest
+    # macos-15 is the latest stable runner with Xcode 26 support
+    runs-on: macos-15
     timeout-minutes: 60
 
     steps:
@@ -66,6 +69,26 @@ jobs:
       # ==============================================================
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: |
+          # List available Xcode versions for debugging
+          ls /Applications/ | grep Xcode || true
+
+          # Select Xcode 26 if available, otherwise fall back to latest
+          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          elif [ -d "/Applications/Xcode_26.0.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_26.0.app/Contents/Developer"
+          else
+            echo "::warning::Xcode 26 not found. Using default Xcode version."
+            echo "Available Xcode versions:"
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "None found"
+          fi
+
+          echo "Active Xcode: $(xcode-select -p)"
+          echo "Xcode version: $(xcodebuild -version | head -1)"
+          echo "SDK version: $(xcodebuild -showsdks 2>/dev/null | grep 'iOS' | tail -1 || echo 'unknown')"
 
       - name: Setup Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
@@ -106,7 +129,30 @@ jobs:
           test -f www/index.html || (echo "::error::Missing www/index.html - web build failed!" && exit 1)
           echo "Build output size: $(du -sh www/ | cut -f1)"
           echo "Asset count: $(find www/assets -type f | wc -l | xargs)"
-          echo "✅ Web assets built successfully"
+
+          # Verify critical: env vars were inlined into the JS bundle.
+          # If VITE_SUPABASE_URL is missing, the app will show a loading
+          # screen forever because the Supabase client can't connect.
+          echo "=== Verifying environment variable inlining ==="
+          if grep -r "placeholder.supabase.co" www/assets/*.js 2>/dev/null; then
+            echo "::error::VITE_SUPABASE_URL was NOT inlined! The 'placeholder' fallback was used."
+            echo "::error::Check that VITE_SUPABASE_URL secret is set in GitHub repository settings."
+            exit 1
+          fi
+
+          if grep -r "placeholder-key" www/assets/*.js 2>/dev/null; then
+            echo "::error::VITE_SUPABASE_ANON_KEY was NOT inlined! The 'placeholder' fallback was used."
+            echo "::error::Check that VITE_SUPABASE_ANON_KEY secret is set in GitHub repository settings."
+            exit 1
+          fi
+
+          # Verify the built index.html has transformed script tags (not raw /src/main.tsx)
+          if grep -q 'src="/src/main.tsx"' www/index.html; then
+            echo "::error::index.html still has raw /src/main.tsx - Vite build did not transform it!"
+            exit 1
+          fi
+
+          echo "✅ Web assets built and verified successfully"
 
       # ==============================================================
       # 3. SYNC CAPACITOR & INSTALL IOS DEPENDENCIES

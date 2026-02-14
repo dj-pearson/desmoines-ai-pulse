@@ -6,23 +6,50 @@ import type { Database } from "./types";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validate environment variables are always present
+// Validate environment variables are present.
+// IMPORTANT: Do NOT throw at module level — a throw here crashes the entire
+// import chain (App → AuthContext → client) before React mounts, and the
+// error is completely silent in Capacitor's WKWebView. The user just sees
+// "Loading..." forever with no error message.
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error(
-    'Missing required Supabase environment variables. ' +
-    'Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment.'
+  console.error(
+    '[Supabase] Missing required environment variables. ' +
+    'VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set at build time. ' +
+    'The app will not be able to connect to the backend.'
   );
+}
+
+// Safe localStorage accessor that falls back to in-memory storage
+// when localStorage is unavailable (e.g., restricted WKWebView contexts)
+function getAuthStorage(): Storage {
+  try {
+    const testKey = '__supabase_storage_test__';
+    localStorage.setItem(testKey, 'test');
+    localStorage.removeItem(testKey);
+    return localStorage;
+  } catch {
+    // Fallback to in-memory storage
+    const memoryStore: Record<string, string> = {};
+    return {
+      get length() { return Object.keys(memoryStore).length; },
+      clear() { Object.keys(memoryStore).forEach(k => delete memoryStore[k]); },
+      getItem(key: string) { return memoryStore[key] ?? null; },
+      key(index: number) { return Object.keys(memoryStore)[index] ?? null; },
+      removeItem(key: string) { delete memoryStore[key]; },
+      setItem(key: string, value: string) { memoryStore[key] = value; },
+    };
+  }
 }
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
 export const supabase = createClient<Database>(
-  SUPABASE_URL,
-  SUPABASE_PUBLISHABLE_KEY,
+  SUPABASE_URL || 'https://placeholder.supabase.co',
+  SUPABASE_PUBLISHABLE_KEY || 'placeholder-key',
   {
     auth: {
-      storage: localStorage,
+      storage: getAuthStorage(),
       persistSession: true,
       autoRefreshToken: true,
       // Detect session timeout and force re-authentication
