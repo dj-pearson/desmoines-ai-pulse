@@ -80,50 +80,43 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       input: path.resolve(__dirname, '../index.html'),
       output: {
-        // Mobile-optimized chunking: fewer chunks = fewer file:// reads on device
+        // Mobile-optimized chunking strategy.
+        // Since assets are loaded from disk (not network), we prioritize
+        // avoiding circular dependencies over small chunk sizes.
+        // The previous split of vendor-core / vendor-ui caused a circular
+        // dependency that crashed the app at startup.
         manualChunks: (id) => {
-          // Core React bundle
+          // Single vendor chunk for React + UI framework to avoid circular deps.
+          // React, Radix UI, Lucide, React Router, and TanStack Query all
+          // share cross-references, so they MUST live in the same chunk.
           if (
             id.includes('/react/') ||
             id.includes('/react-dom/') ||
             id.includes('/scheduler/') ||
             id.includes('react-router') ||
-            id.includes('@tanstack/react-query')
+            id.includes('@tanstack/react-query') ||
+            id.includes('@radix-ui/') ||
+            id.includes('lucide-react') ||
+            id.includes('react-hook-form') ||
+            id.includes('zod') ||
+            id.includes('@hookform/')
           ) {
-            return 'vendor-core';
+            return 'vendor';
           }
 
-          // Backend services
+          // Backend services (Supabase has no UI deps, safe to isolate)
           if (id.includes('@supabase/')) {
             return 'vendor-backend';
           }
 
-          // UI framework (Radix + Lucide)
-          if (id.includes('@radix-ui/') || id.includes('lucide-react')) {
-            return 'vendor-ui';
-          }
-
-          // Forms
-          if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform/')) {
-            return 'vendor-forms';
-          }
-
-          // Date utilities
+          // Date utilities (standalone, no circular risk)
           if (id.includes('date-fns')) {
             return 'vendor-dates';
           }
 
-          // Maps - still lazy loaded
-          if (id.includes('leaflet') || id.includes('react-leaflet')) {
-            return undefined;
-          }
-
-          // Heavy optional features - lazy loaded
-          if (id.includes('tiptap') || id.includes('prosemirror')) return undefined;
-          if (id.includes('fullcalendar') || id.includes('@fullcalendar/')) return undefined;
-          if (id.includes('recharts') || id.includes('d3-')) return undefined;
-          if (id.includes('three') || id.includes('@react-three')) return undefined;
-
+          // Heavy optional features - let Rollup handle these naturally
+          // They are lazy-loaded via dynamic import() so they won't
+          // end up in the critical startup path.
           return undefined;
         },
         assetFileNames: 'assets/[name]-[hash][extname]',
