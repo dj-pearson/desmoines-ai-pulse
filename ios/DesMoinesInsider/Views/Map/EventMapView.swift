@@ -133,7 +133,7 @@ struct EventMapView: View {
             } label: {
                 Image(systemName: "chevron.right.circle.fill")
                     .font(.title2)
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
             }
 
             Button {

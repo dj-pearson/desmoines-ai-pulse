@@ -259,7 +259,7 @@ struct HomeView: View {
             } label: {
                 Text("Retry")
                     .font(.caption.bold())
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
             }
         }
         .padding(12)
@@ -285,7 +285,7 @@ struct HomeView: View {
                     withAnimation { viewModel.clearFilters() }
                 }
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
             }
             .padding(.horizontal)
             .padding(.vertical, 6)

@@ -71,7 +71,7 @@ struct FavoritesView: View {
         VStack(spacing: 20) {
             Image(systemName: "heart.circle")
                 .font(.system(size: 64))
-                .foregroundStyle(.accent.opacity(0.6))
+                .foregroundStyle(Color.accentColor.opacity(0.6))
 
             Text("Sign In to Save Events")
                 .font(.title3.bold())

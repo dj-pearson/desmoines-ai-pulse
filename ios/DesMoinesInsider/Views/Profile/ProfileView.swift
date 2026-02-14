@@ -31,7 +31,7 @@ struct ProfileView: View {
                     // Avatar
                     ZStack {
                         Circle()
-                            .fill(Color.accent.gradient)
+                            .fill(Color.accentColor.gradient)
                             .frame(width: 64, height: 64)
                         Text(viewModel.initials)
                             .font(.title2.bold())
@@ -160,7 +160,7 @@ struct ProfileView: View {
 
             Image(systemName: "person.circle")
                 .font(.system(size: 72))
-                .foregroundStyle(.accent.opacity(0.5))
+                .foregroundStyle(Color.accentColor.opacity(0.5))
 
             Text("Welcome to Des Moines Insider")
                 .font(.title3.bold())

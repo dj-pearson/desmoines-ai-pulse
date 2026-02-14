@@ -27,7 +27,7 @@ struct FilterSheet: View {
                                 Spacer()
                                 if selectedCategory == category {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(.accent)
+                                        .foregroundStyle(Color.accentColor)
                                         .fontWeight(.semibold)
                                 }
                             }
@@ -47,7 +47,7 @@ struct FilterSheet: View {
                                 Spacer()
                                 if selectedDatePreset == preset {
                                     Image(systemName: "checkmark")
-                                        .foregroundStyle(.accent)
+                                        .foregroundStyle(Color.accentColor)
                                         .fontWeight(.semibold)
                                 }
                             }
