@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { Home, Calendar, UtensilsCrossed, Star, User } from "lucide-react";
+import { Home, Calendar, UtensilsCrossed, Compass, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { prefetchRoute } from "@/lib/prefetch";
@@ -32,13 +32,13 @@ export default function BottomNav() {
       icon: UtensilsCrossed,
     },
     {
-      href: isAuthenticated ? "/my-events" : "/events/today",
-      label: isAuthenticated ? "Saved" : "Today",
-      icon: Star,
+      href: "/attractions",
+      label: "Explore",
+      icon: Compass,
     },
     {
       href: isAuthenticated ? "/dashboard" : "/auth",
-      label: isAuthenticated ? "Me" : "Sign In",
+      label: isAuthenticated ? "Account" : "Sign In",
       icon: User,
     },
   ];

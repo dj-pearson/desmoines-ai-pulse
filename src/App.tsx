@@ -4,10 +4,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
+import { useLocation } from "react-router-dom";
 import { KeyboardShortcutsModal } from "@/components/KeyboardShortcutsModal";
 import { WelcomeModal } from "@/components/WelcomeModal";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -119,6 +120,16 @@ const PageLoader = () => (
   </div>
 );
 
+// Scroll to top on route changes – essential for Capacitor where
+// the browser's default scroll restoration doesn't kick in.
+function ScrollToTopOnNavigate() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, [pathname]);
+  return null;
+}
+
 const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) => {
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
 
@@ -149,6 +160,7 @@ const App = () => (
   <AccessibilityProvider>
   <TooltipProvider>
     <BrowserRouter>
+      <ScrollToTopOnNavigate />
       <AuthProvider>
         <SessionManager />
         <ErrorBoundary>

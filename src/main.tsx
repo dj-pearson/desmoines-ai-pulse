@@ -15,6 +15,12 @@ import { initializeOnInteraction } from "./lib/lazyInit";
 // ──────────────────────────────────────────────────────────────
 const isCapacitor = !!(window as any).Capacitor;
 
+// Tag the body so CSS can target mobile app vs web
+if (isCapacitor) {
+  document.documentElement.classList.add('capacitor-app');
+  document.body.classList.add('capacitor-app');
+}
+
 // ──────────────────────────────────────────────────────────────
 // Global link interceptor for Capacitor
 //
