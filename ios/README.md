@@ -178,7 +178,64 @@ SUPABASE_ANON_KEY = eyJhbG...your-anon-key
 
 These are injected into Info.plist at build time and read by `Config.swift`.
 
-## Building for Release
+## CI/CD Pipeline
+
+### GitHub Actions Workflows
+
+| Workflow | File | Trigger | Purpose |
+|----------|------|---------|---------|
+| **iOS Native Build** | `.github/workflows/ios-native-build.yml` | Push/PR to `ios/` | Compile check (Simulator build, no signing) |
+| **iOS Native Release** | `.github/workflows/ios-native-release.yml` | Manual / tag `v*-ios-native` | Build, sign, upload to TestFlight |
+
+### Required GitHub Secrets (for Release)
+
+| Secret | Description |
+|--------|-------------|
+| `APPSTORE_ISSUER_ID` | App Store Connect API Issuer ID |
+| `APPSTORE_API_KEY_ID` | App Store Connect API Key ID |
+| `APPSTORE_API_PRIVATE_KEY` | Contents of the `.p8` private key file |
+| `IOS_DISTRIBUTION_CERT_P12` | Base64-encoded `.p12` distribution certificate |
+| `IOS_DISTRIBUTION_CERT_PASSWORD` | Password for the `.p12` certificate |
+| `IOS_PROVISIONING_PROFILE` | Base64-encoded `.mobileprovision` file |
+| `VITE_SUPABASE_URL` | Supabase project URL (reused from web) |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anonymous key (reused from web) |
+
+### Release Process
+
+**Via GitHub Actions (Recommended)**:
+1. Go to Actions > "iOS Native Release - TestFlight"
+2. Click "Run workflow"
+3. Set version (e.g., `1.0.0`) and optionally a build number
+4. Wait for build + upload (~15 min)
+5. Build appears in App Store Connect within 5-15 minutes
+
+**Via Tag**:
+```bash
+git tag ios-native-v1.0.0
+git push origin ios-native-v1.0.0
+# Triggers automatic build + TestFlight upload
+```
+
+**Via Fastlane (Local)**:
+```bash
+cd ios/
+make beta      # Build + upload to TestFlight
+make release   # Build + upload to App Store Connect
+```
+
+### Makefile Commands
+
+```bash
+cd ios/
+make setup     # Install XcodeGen, copy secrets template, generate project
+make build     # Build for Simulator (no signing)
+make open      # Generate project and open in Xcode
+make beta      # Fastlane: build + upload to TestFlight
+make release   # Fastlane: build + upload to App Store Connect
+make clean     # Remove build artifacts
+```
+
+## Building for Release (Manual)
 
 1. Set your **Development Team** in Xcode signing settings
 2. Configure the **Bundle Identifier**: `com.desmoinespulse.app`
@@ -196,3 +253,4 @@ These are injected into Info.plist at build time and read by `Config.swift`.
 - [ ] Location usage descriptions in Info.plist
 - [ ] `ITSAppUsesNonExemptEncryption` set to NO
 - [ ] App Store description and keywords
+- [ ] GitHub Secrets configured (see table above)
