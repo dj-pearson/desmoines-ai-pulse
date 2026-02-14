@@ -300,6 +300,36 @@
     />
     <link rel="manifest" href="/site.webmanifest" />
 
+    <!-- CRITICAL: Early error handler for Capacitor/mobile.
+         Module-level errors in ES modules are silent in WKWebView.
+         This handler runs BEFORE the app's module script loads, so it
+         catches errors during module evaluation (e.g., missing env vars,
+         import failures) that would otherwise leave the user staring
+         at "Loading..." forever. -->
+    <script>
+      (function() {
+        var isCapacitor = typeof window.Capacitor !== 'undefined';
+        window.__earlyErrors = [];
+        window.onerror = function(msg, src, line, col, err) {
+          window.__earlyErrors.push({ msg: msg, src: src, line: line, err: err });
+          if (isCapacitor || location.protocol === 'file:') {
+            var overlay = document.getElementById('__early_error__');
+            if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.id = '__early_error__';
+              overlay.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#111;color:#ff6b6b;font:13px/1.5 monospace;padding:24px 16px;overflow:auto;-webkit-overflow-scrolling:touch;';
+              document.body ? document.body.appendChild(overlay) : document.addEventListener('DOMContentLoaded', function() { document.body.appendChild(overlay); });
+            }
+            overlay.innerHTML += '<div style="margin-bottom:12px;border-bottom:1px solid #333;padding-bottom:8px"><strong style="color:#ff4444">Startup Error</strong><pre style="white-space:pre-wrap;word-break:break-word;margin:4px 0 0;color:#ffa0a0">' + String(err && err.stack || msg).replace(/</g, '&lt;') + '</pre></div>';
+          }
+        };
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e.reason;
+          window.__earlyErrors.push({ msg: reason && reason.message || String(reason), err: reason });
+        });
+      })();
+    </script>
+
     <!-- CRITICAL: Force clear all service worker caches -->
     <script>
       // Unregister ALL service workers and clear ALL caches immediately

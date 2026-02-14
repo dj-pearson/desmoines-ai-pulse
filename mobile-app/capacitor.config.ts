@@ -10,7 +10,6 @@ const config: CapacitorConfig = {
   appId: 'com.desmoines.aipulse',
   appName: 'Des Moines Insider',
   webDir: 'www',
-  bundledWebRuntime: false,
 
   // Server configuration
   server: {
