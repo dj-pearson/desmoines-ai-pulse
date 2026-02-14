@@ -1,2 +1,5 @@
 /build/*
 !/build/.npmkeep
+# Release signing keystore (restored from GitHub secrets during CI)
+release-keystore.jks
+google-services.json

@@ -148,20 +148,108 @@ npm run open:android  # Opens Android Studio
 | Secure Storage | Keychain | KeyStore | Capacitor Preferences |
 | App Tracking | ATT Framework | N/A | `requestTrackingAuthorization()` |
 
-## Before Submitting to App Stores
+## CI/CD: Automated iOS Build & TestFlight Upload
 
-### iOS
+The project includes a GitHub Actions workflow (`.github/workflows/ios-release.yml`) that
+builds the iOS app and uploads it directly to TestFlight. This is completely isolated from
+the web production build.
 
-1. Replace `TEAM_ID_HERE` in `public/.well-known/apple-app-site-association`
+### Required GitHub Secrets (6 iOS Secrets)
+
+| # | Secret Name | What It Is | Where to Get It |
+|---|-------------|------------|-----------------|
+| 1 | `APPSTORE_ISSUER_ID` | App Store Connect API Issuer ID | App Store Connect > Users and Access > Integrations > App Store Connect API |
+| 2 | `APPSTORE_API_KEY_ID` | App Store Connect API Key ID | Same page as above (the Key ID column) |
+| 3 | `APPSTORE_API_PRIVATE_KEY` | Contents of the `.p8` private key file | Downloaded once when you create the API key |
+| 4 | `IOS_DISTRIBUTION_CERT_P12` | Base64-encoded `.p12` distribution certificate | Exported from Keychain Access (see guide below) |
+| 5 | `IOS_DISTRIBUTION_CERT_PASSWORD` | Password for the `.p12` file | The password you set when exporting |
+| 6 | `IOS_PROVISIONING_PROFILE` | Base64-encoded `.mobileprovision` file | Apple Developer > Certificates, IDs & Profiles > Profiles |
+
+**Also required** (should already exist from web builds):
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+- `VITE_SITE_URL`
+
+### Step-by-Step: Gathering Apple Credentials
+
+#### Step 1: App Store Connect API Key
+1. Go to [App Store Connect](https://appstoreconnect.apple.com/) > Users and Access > Integrations > App Store Connect API
+2. Click the **+** button to create a new key
+3. Name it (e.g., "GitHub Actions CI") and set role to **App Manager**
+4. Download the `.p8` file (you can only download it ONCE)
+5. Note the **Key ID** and the **Issuer ID** shown at the top of the page
+6. For the GitHub secret, paste the entire contents of the `.p8` file (including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines)
+
+#### Step 2: Distribution Certificate
+1. Open **Keychain Access** on your Mac
+2. If you don't have a distribution certificate yet:
+   - Go to Apple Developer > Certificates, Identifiers & Profiles > Certificates
+   - Click **+** > **Apple Distribution** > follow the CSR process
+3. Find your "Apple Distribution" certificate in Keychain Access
+4. Right-click > Export as `.p12` and set a password
+5. Base64-encode it: `base64 -i certificate.p12 | pbcopy` (copies to clipboard)
+6. Paste as the `IOS_DISTRIBUTION_CERT_P12` secret
+
+#### Step 3: Provisioning Profile
+1. Go to Apple Developer > Certificates, Identifiers & Profiles
+2. Register the App ID `com.desmoines.aipulse` under Identifiers (if not already done)
+   - Enable capabilities: Push Notifications, Associated Domains
+3. Go to Profiles > click **+**
+4. Select **App Store Connect** distribution type
+5. Select the App ID `com.desmoines.aipulse`
+6. Select your distribution certificate
+7. Name it (e.g., "DSM AI Pulse App Store")
+8. Download the `.mobileprovision` file
+9. Base64-encode it: `base64 -i profile.mobileprovision | pbcopy`
+10. Paste as the `IOS_PROVISIONING_PROFILE` secret
+
+#### Step 4: Create App in App Store Connect
+1. Go to [App Store Connect](https://appstoreconnect.apple.com/) > My Apps > **+** New App
+2. Platform: iOS
+3. Name: DSM AI Pulse
+4. Bundle ID: `com.desmoines.aipulse`
+5. SKU: `com.desmoines.aipulse`
+6. Fill in required metadata (description, screenshots, etc.)
+
+#### Step 5: Set GitHub Secrets
+1. Go to your GitHub repository > Settings > Secrets and variables > Actions
+2. Click "New repository secret" for each of the 6 secrets above
+3. Verify they are all set before running the workflow
+
+### Running the iOS Release Workflow
+
+```bash
+# Option 1: Manual trigger from GitHub Actions tab
+# Go to Actions > "iOS Release - TestFlight" > Run workflow
+# Enter version (e.g., 1.0.0) and optional build number
+
+# Option 2: Push a tag
+git tag ios-v1.0.0
+git push origin ios-v1.0.0
+```
+
+The workflow will:
+1. Build web assets using the isolated mobile Vite config
+2. Sync to the iOS Capacitor project
+3. Install CocoaPods dependencies
+4. Import your code signing certificate and provisioning profile
+5. Build an Xcode archive
+6. Export a signed IPA
+7. Upload to TestFlight
+8. Clean up all signing artifacts
+
+### Before First Submission
+
+#### iOS
+1. Replace `TEAM_ID_HERE` in `public/.well-known/apple-app-site-association` with your Apple Team ID
 2. Configure APNs key in Apple Developer Portal
 3. Generate app icons: `npx @capacitor/assets generate`
-4. Set up App Store Connect and create the app listing
-5. Configure code signing with your Apple Developer certificate
-6. Change `aps-environment` to `production` in entitlements
-7. Submit for review
+4. Create the app listing in App Store Connect (Step 4 above)
+5. Set up the 6 GitHub secrets (Steps 1-5 above)
+6. Run the workflow and verify the build appears in TestFlight
+7. Submit for App Store review from App Store Connect
 
-### Android
-
+#### Android
 1. Replace `SHA256_FINGERPRINT_HERE` in `public/.well-known/assetlinks.json`
 2. Add `google-services.json` from Firebase Console to `android/app/`
 3. Generate app icons: `npx @capacitor/assets generate`

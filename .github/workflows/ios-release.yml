@@ -1,0 +1,405 @@
+# ================================================================
+# iOS Release: Build IPA & Upload to TestFlight
+# ================================================================
+#
+# This workflow builds the Capacitor iOS app and uploads it to
+# Apple TestFlight for testing and App Store submission.
+#
+# ISOLATED BUILD: This does NOT affect the web production build.
+# It uses mobile-app/vite.config.mobile.ts which outputs to
+# mobile-app/www/ (not dist/).
+#
+# REQUIRED GITHUB SECRETS (6 secrets):
+#   1. APPSTORE_ISSUER_ID        - App Store Connect API Issuer ID
+#   2. APPSTORE_API_KEY_ID       - App Store Connect API Key ID
+#   3. APPSTORE_API_PRIVATE_KEY  - Contents of the .p8 private key file
+#   4. IOS_DISTRIBUTION_CERT_P12 - Base64-encoded .p12 distribution certificate
+#   5. IOS_DISTRIBUTION_CERT_PASSWORD - Password for the .p12 certificate
+#   6. IOS_PROVISIONING_PROFILE  - Base64-encoded .mobileprovision file
+#
+# ALSO REQUIRED (should already exist from web builds):
+#   - VITE_SUPABASE_URL
+#   - VITE_SUPABASE_ANON_KEY
+#   - VITE_SITE_URL
+#
+# ================================================================
+
+name: iOS Release - TestFlight
+
+on:
+  # Manual trigger with version inputs
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Marketing version (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+      build_number:
+        description: 'Build number (leave empty to auto-increment using run number)'
+        required: false
+
+  # Auto-trigger on tags
+  push:
+    tags:
+      - 'v*-ios'
+      - 'ios-v*'
+
+env:
+  NODE_VERSION: '20'
+  RUBY_VERSION: '3.2'
+  BUNDLE_ID: 'com.desmoines.aipulse'
+  APP_SCHEME: 'App'
+  WORKSPACE: 'mobile-app/ios/App/App.xcworkspace'
+
+jobs:
+  # ================================================================
+  # Build IPA and Upload to TestFlight
+  # ================================================================
+  build-and-submit:
+    name: Build & Submit to TestFlight
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      # ==============================================================
+      # 1. CHECKOUT & SETUP
+      # ==============================================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Setup Ruby ${{ env.RUBY_VERSION }} (for CocoaPods)
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+
+      - name: Install CocoaPods
+        run: gem install cocoapods
+
+      # ==============================================================
+      # 2. BUILD WEB ASSETS (isolated mobile build)
+      # ==============================================================
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install mobile dependencies
+        working-directory: mobile-app
+        run: npm ci
+
+      - name: Build mobile web assets
+        working-directory: mobile-app
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SITE_URL: ${{ secrets.VITE_SITE_URL }}
+
+      - name: Verify web build output
+        working-directory: mobile-app
+        run: |
+          echo "=== Checking build output ==="
+          test -f www/index.html || (echo "::error::Missing www/index.html - web build failed!" && exit 1)
+          echo "Build output size: $(du -sh www/ | cut -f1)"
+          echo "Asset count: $(find www/assets -type f | wc -l | xargs)"
+          echo "✅ Web assets built successfully"
+
+      # ==============================================================
+      # 3. SYNC CAPACITOR & INSTALL IOS DEPENDENCIES
+      # ==============================================================
+      - name: Sync Capacitor to iOS
+        working-directory: mobile-app
+        run: npx cap sync ios
+
+      - name: Install CocoaPods dependencies
+        working-directory: mobile-app/ios/App
+        run: pod install
+
+      # ==============================================================
+      # 4. CONFIGURE VERSION & BUILD NUMBER
+      # ==============================================================
+      - name: Set version and build number
+        working-directory: mobile-app/ios/App
+        run: |
+          # Determine build number
+          BUILD_NUMBER="${{ github.event.inputs.build_number }}"
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER=${{ github.run_number }}
+          fi
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+
+          # Determine marketing version
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="1.0.0"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          # Update build number (CURRENT_PROJECT_VERSION) in project.pbxproj
+          # Using sed is more reliable than agvtool (doesn't require VERSIONING_SYSTEM setting)
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/g" \
+            App.xcodeproj/project.pbxproj
+
+          # Update marketing version in project.pbxproj
+          sed -i '' "s/MARKETING_VERSION = [0-9][0-9.]*;/MARKETING_VERSION = $VERSION;/g" \
+            App.xcodeproj/project.pbxproj
+
+          # Verify the changes
+          echo "=== Verifying version in project.pbxproj ==="
+          grep "CURRENT_PROJECT_VERSION" App.xcodeproj/project.pbxproj
+          grep "MARKETING_VERSION" App.xcodeproj/project.pbxproj
+
+          echo "✅ Version: $VERSION ($BUILD_NUMBER)"
+
+      # ==============================================================
+      # 5. ENCRYPTION EXPORT COMPLIANCE (safety net)
+      # ==============================================================
+      - name: Verify encryption export compliance
+        run: |
+          INFO_PLIST="mobile-app/ios/App/App/Info.plist"
+
+          # Ensure ITSAppUsesNonExemptEncryption is set (should already be in committed plist)
+          /usr/libexec/PlistBuddy -c "Print :ITSAppUsesNonExemptEncryption" "$INFO_PLIST" 2>/dev/null || {
+            echo "::warning::ITSAppUsesNonExemptEncryption was missing - adding it now"
+            /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" "$INFO_PLIST"
+          }
+
+          echo "✅ Encryption compliance verified"
+
+      # ==============================================================
+      # 6. SET APS ENVIRONMENT TO PRODUCTION
+      # ==============================================================
+      - name: Set push notification environment to production
+        run: |
+          ENTITLEMENTS="mobile-app/ios/App/App/App.entitlements"
+
+          # Change aps-environment from development to production for App Store
+          /usr/libexec/PlistBuddy -c "Set :aps-environment production" "$ENTITLEMENTS"
+
+          echo "✅ Push notification environment set to production"
+
+      # ==============================================================
+      # 7. IMPORT CODE SIGNING CERTIFICATE
+      # ==============================================================
+      - name: Import distribution certificate
+        env:
+          IOS_DISTRIBUTION_CERT_P12: ${{ secrets.IOS_DISTRIBUTION_CERT_P12 }}
+          IOS_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+        run: |
+          # Create a temporary keychain for CI signing
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Decode and import the distribution certificate
+          CERT_PATH="$RUNNER_TEMP/distribution.p12"
+          echo -n "$IOS_DISTRIBUTION_CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security import "$CERT_PATH" \
+            -P "$IOS_DISTRIBUTION_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          # Allow codesign to access the keychain without prompting
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # Add CI keychain to the search list (before login keychain)
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          # Export for later steps and cleanup
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+
+          echo "✅ Distribution certificate imported"
+
+      # ==============================================================
+      # 8. INSTALL PROVISIONING PROFILE
+      # ==============================================================
+      - name: Install provisioning profile
+        env:
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          # Decode provisioning profile
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          echo -n "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
+
+          # Extract profile metadata (UUID, Name, TeamID)
+          security cms -D -i "$PP_PATH" > "$RUNNER_TEMP/pp_info.plist"
+
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$RUNNER_TEMP/pp_info.plist")
+          PP_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$RUNNER_TEMP/pp_info.plist")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :TeamIdentifier:0" "$RUNNER_TEMP/pp_info.plist")
+
+          # Install profile to the standard location
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision"
+
+          # Export for later steps
+          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+          echo "PP_NAME=$PP_NAME" >> $GITHUB_ENV
+          echo "TEAM_ID=$TEAM_ID" >> $GITHUB_ENV
+
+          echo "✅ Provisioning profile installed: $PP_NAME"
+          echo "   UUID: $PP_UUID"
+          echo "   Team: $TEAM_ID"
+
+      # ==============================================================
+      # 9. BUILD XCODE ARCHIVE
+      # ==============================================================
+      - name: Build Xcode archive
+        run: |
+          set -o pipefail
+
+          xcodebuild archive \
+            -workspace "${{ env.WORKSPACE }}" \
+            -scheme "${{ env.APP_SCHEME }}" \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            | xcpretty --color
+
+          echo "✅ Archive built successfully"
+
+      # ==============================================================
+      # 10. EXPORT IPA
+      # ==============================================================
+      - name: Create ExportOptions.plist
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${{ env.BUNDLE_ID }}</key>
+              <string>${PP_NAME}</string>
+            </dict>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>uploadBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          PLIST
+
+          echo "✅ ExportOptions.plist created"
+
+      - name: Export IPA
+        run: |
+          set -o pipefail
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            | xcpretty --color
+
+          # Verify IPA was created
+          IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" -print -quit)
+          if [ -z "$IPA_PATH" ]; then
+            echo "::error::IPA file not found in export directory!"
+            ls -la "$RUNNER_TEMP/export/"
+            exit 1
+          fi
+
+          echo "IPA_PATH=$IPA_PATH" >> $GITHUB_ENV
+          echo "✅ IPA exported: $IPA_PATH"
+          echo "   Size: $(du -h "$IPA_PATH" | cut -f1)"
+
+      # ==============================================================
+      # 11. UPLOAD TO TESTFLIGHT
+      # ==============================================================
+      - name: Setup App Store Connect API key
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          # Place the API key where xcrun altool expects it
+          mkdir -p ~/private_keys
+          echo -n "$APPSTORE_API_PRIVATE_KEY" > ~/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+
+          echo "✅ App Store Connect API key configured"
+
+      - name: Upload to TestFlight
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          echo "Uploading $IPA_PATH to TestFlight..."
+          echo "Version: $VERSION ($BUILD_NUMBER)"
+
+          xcrun altool --upload-app \
+            --file "$IPA_PATH" \
+            --type ios \
+            --apiKey "$APPSTORE_API_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID"
+
+          echo ""
+          echo "============================================"
+          echo "✅ UPLOADED TO TESTFLIGHT SUCCESSFULLY!"
+          echo "============================================"
+          echo "Version: $VERSION"
+          echo "Build:   $BUILD_NUMBER"
+          echo "Bundle:  ${{ env.BUNDLE_ID }}"
+          echo ""
+          echo "The build will appear in App Store Connect"
+          echo "within 5-15 minutes after processing."
+          echo "============================================"
+
+      # ==============================================================
+      # 12. UPLOAD BUILD ARTIFACT (for records)
+      # ==============================================================
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-v${{ env.VERSION }}-build${{ env.BUILD_NUMBER }}
+          path: ${{ env.IPA_PATH }}
+          retention-days: 90
+
+      # ==============================================================
+      # 13. CLEANUP (always runs, even on failure)
+      # ==============================================================
+      - name: Cleanup signing artifacts
+        if: always()
+        run: |
+          # Delete the temporary keychain
+          if [ -n "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          fi
+
+          # Remove provisioning profile
+          if [ -n "$PP_UUID" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision" 2>/dev/null || true
+          fi
+
+          # Remove API key
+          rm -rf ~/private_keys 2>/dev/null || true
+
+          # Remove decoded certificate
+          rm -f "$RUNNER_TEMP/distribution.p12" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/build_pp.mobileprovision" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/pp_info.plist" 2>/dev/null || true
+
+          echo "✅ Cleaned up all signing artifacts"

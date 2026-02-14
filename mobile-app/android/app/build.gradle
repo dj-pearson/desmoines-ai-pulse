@@ -17,11 +17,31 @@ android {
         }
     }
 
+    // Signing configuration for CI/CD release builds
+    // Keystore is restored from GitHub secrets during the build pipeline.
+    // For local development, signing uses debug keystore automatically.
+    signingConfigs {
+        release {
+            def keystoreFile = file("release-keystore.jks")
+            if (keystoreFile.exists()) {
+                storeFile keystoreFile
+                storePassword System.getenv("ANDROID_KEYSTORE_PASSWORD") ?: ""
+                keyAlias System.getenv("ANDROID_KEY_ALIAS") ?: ""
+                keyPassword System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Use release signing config if keystore exists, otherwise fall back to debug
+            def keystoreFile = file("release-keystore.jks")
+            if (keystoreFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
         debug {
             minifyEnabled false

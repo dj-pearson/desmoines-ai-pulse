@@ -153,5 +153,15 @@
 	<!-- Status bar style -->
 	<key>UIStatusBarStyle</key>
 	<string>UIStatusBarStyleDefault</string>
+
+	<!-- ================================================================
+	     Encryption Export Compliance (REQUIRED for App Store)
+	     App uses standard HTTPS only (no custom encryption algorithms).
+	     Setting to false avoids the manual compliance questionnaire
+	     that blocks TestFlight distribution.
+	     Reference: https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations
+	     ================================================================ -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
