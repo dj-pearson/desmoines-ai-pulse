@@ -141,7 +141,7 @@ private struct DateBadge: View {
         VStack(spacing: 1) {
             Text(date.formatted(.dateTime.weekday(.short)).uppercased())
                 .font(.system(size: 9, weight: .bold))
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
 
             Text(date.formatted(.dateTime.day()))
                 .font(.system(size: 18, weight: .bold))
