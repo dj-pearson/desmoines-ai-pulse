@@ -22,14 +22,13 @@ const queryClient = new QueryClient({
 });
 
 // Hide the Capacitor splash screen once the app is ready.
-// Uses dynamic import so this is a no-op in web builds where
-// @capacitor/splash-screen is not installed.
-async function hideSplashScreen() {
-  // Only attempt when running inside a Capacitor native shell
-  if (!(window as any).Capacitor) return;
+// Uses the global Capacitor bridge (injected by the native shell) so
+// there is zero import overhead and no build-time resolution issues.
+function hideSplashScreen() {
+  const cap = (window as any).Capacitor;
+  if (!cap?.Plugins?.SplashScreen) return;
   try {
-    const { SplashScreen } = await import('@capacitor/splash-screen');
-    await SplashScreen.hide({ fadeOutDuration: 300 });
+    cap.Plugins.SplashScreen.hide({ fadeOutDuration: 300 });
   } catch {
     // Plugin not available – ignore
   }
