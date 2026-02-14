@@ -25,7 +25,6 @@ actor AttractionsService {
         var request = supabase
             .from("attractions")
             .select("*", head: false, count: .exact)
-            .order("created_at", ascending: false)
 
         // Search (multi-field ILIKE — matches web pattern)
         if let search = query.searchText, !search.isEmpty {
@@ -47,10 +46,12 @@ actor AttractionsService {
             request = request.eq("is_featured", value: true)
         }
 
-        // Pagination
-        request = request.range(from: query.offset, to: query.offset + query.limit - 1)
+        // Order and pagination (transforms must come after all filters)
+        let finalRequest = request
+            .order("created_at", ascending: false)
+            .range(from: query.offset, to: query.offset + query.limit - 1)
 
-        let response = try await request.execute()
+        let response = try await finalRequest.execute()
         let attractions = try JSONDecoder().decode([Attraction].self, from: response.data)
         let total = response.count ?? attractions.count
 

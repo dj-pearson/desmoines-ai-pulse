@@ -15,7 +15,7 @@ final class AuthService {
     private(set) var isAdmin = false
     private(set) var isLoading = true
 
-    private var authListener: Task<Void, Never>?
+    nonisolated(unsafe) private var authListener: Task<Void, Never>?
     private let supabase = SupabaseService.shared.client
 
     private init() {
@@ -74,16 +74,15 @@ final class AuthService {
             ]
         )
 
-        if let user = response.user {
-            // Create profile
-            try await createProfile(
-                userId: user.id.uuidString,
-                email: email,
-                firstName: firstName,
-                lastName: lastName,
-                interests: interests
-            )
-        }
+        // Create profile (response.user is non-optional in Supabase Swift SDK 2.x)
+        let user = response.user
+        try await createProfile(
+            userId: user.id.uuidString,
+            email: email,
+            firstName: firstName,
+            lastName: lastName,
+            interests: interests
+        )
     }
 
     func signOut() async throws {

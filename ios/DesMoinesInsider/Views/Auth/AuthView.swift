@@ -14,7 +14,7 @@ struct AuthView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "building.2.crop.circle.fill")
                         .font(.system(size: 56))
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(Color.accentColor)
 
                     Text("Des Moines Insider")
                         .font(.title2.bold())
@@ -98,7 +98,7 @@ struct AuthView: View {
                     } label: {
                         Text("Forgot Password?")
                             .font(.subheadline)
-                            .foregroundStyle(.accent)
+                            .foregroundStyle(Color.accentColor)
                     }
                 }
 
@@ -172,8 +172,8 @@ struct AuthView: View {
                             )
                             .foregroundStyle(
                                 viewModel.selectedInterests.contains(interest)
-                                    ? .accent
-                                    : .primary
+                                    ? Color.accentColor
+                                    : Color.primary
                             )
                             .clipShape(Capsule())
                     }

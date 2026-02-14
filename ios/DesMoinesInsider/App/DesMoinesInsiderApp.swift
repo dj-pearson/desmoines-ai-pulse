@@ -38,14 +38,14 @@ private struct LaunchScreenView: View {
             VStack(spacing: 16) {
                 Image(systemName: "building.2.crop.circle.fill")
                     .font(.system(size: 72))
-                    .foregroundStyle(.accent)
+                    .foregroundStyle(Color.accentColor)
 
                 Text("Des Moines Insider")
                     .font(.title.bold())
                     .foregroundStyle(.white)
 
                 ProgressView()
-                    .tint(.accent)
+                    .tint(Color.accentColor)
             }
         }
     }
