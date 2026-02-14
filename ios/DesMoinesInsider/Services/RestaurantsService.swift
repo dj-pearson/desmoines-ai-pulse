@@ -1,4 +1,5 @@
 import Foundation
+import PostgREST
 
 /// Fetches restaurants from Supabase, matching the web app's useRestaurants hook.
 actor RestaurantsService {
@@ -64,34 +65,35 @@ actor RestaurantsService {
         }
 
         // Sorting
+        let sortedRequest: PostgrestTransformBuilder
         switch query.sortBy {
         case .popularity:
-            request = request
+            sortedRequest = request
                 .order("popularity_score", ascending: false)
                 .order("is_featured", ascending: false)
                 .order("created_at", ascending: false)
         case .rating:
-            request = request
+            sortedRequest = request
                 .order("rating", ascending: false)
                 .order("popularity_score", ascending: false)
         case .newest:
-            request = request.order("created_at", ascending: false)
+            sortedRequest = request.order("created_at", ascending: false)
         case .alphabetical:
-            request = request.order("name", ascending: true)
+            sortedRequest = request.order("name", ascending: true)
         case .priceLow:
-            request = request
+            sortedRequest = request
                 .order("price_range", ascending: true)
                 .order("popularity_score", ascending: false)
         case .priceHigh:
-            request = request
+            sortedRequest = request
                 .order("price_range", ascending: false)
                 .order("popularity_score", ascending: false)
         }
 
         // Pagination
-        request = request.range(from: query.offset, to: query.offset + query.limit - 1)
-
-        let response = try await request.execute()
+        let response = try await sortedRequest
+            .range(from: query.offset, to: query.offset + query.limit - 1)
+            .execute()
         let restaurants = try JSONDecoder().decode([Restaurant].self, from: response.data)
         let total = response.count ?? restaurants.count
 

@@ -36,7 +36,7 @@ struct EventCardView: View {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                             let wasFavorited = favorites.isFavorited(event.id)
                             Task {
-                                try? await favorites.toggleFavorite(eventId: event.id)
+                                _ = try? await favorites.toggleFavorite(eventId: event.id)
                                 toast = wasFavorited
                                     ? .info("Removed from saved", icon: "heart")
                                     : .success("Saved!", icon: "heart.fill")

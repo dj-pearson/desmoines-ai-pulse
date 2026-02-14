@@ -32,7 +32,7 @@ struct RestaurantsView: View {
                             } label: {
                                 Text("Retry")
                                     .font(.caption.bold())
-                                    .foregroundStyle(.accent)
+                                    .foregroundStyle(Color.accentColor)
                             }
                         }
                         .padding(12)
@@ -152,7 +152,7 @@ struct RestaurantsView: View {
                 viewModel.clearFilters()
             }
             .font(.caption.weight(.semibold))
-            .foregroundStyle(.accent)
+            .foregroundStyle(Color.accentColor)
         }
     }
 }
