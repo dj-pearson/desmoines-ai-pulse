@@ -3,8 +3,14 @@ import SwiftUI
 /// Card component for displaying an event in the list.
 struct EventCardView: View {
     let event: Event
+    @Binding var toast: ToastMessage?
 
     @State private var favorites = FavoritesService.shared
+
+    init(event: Event, toast: Binding<ToastMessage?> = .constant(nil)) {
+        self.event = event
+        self._toast = toast
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -27,7 +33,14 @@ struct EventCardView: View {
                     // Favorite button
                     if AuthService.shared.isAuthenticated {
                         Button {
-                            Task { try? await favorites.toggleFavorite(eventId: event.id) }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            let wasFavorited = favorites.isFavorited(event.id)
+                            Task {
+                                try? await favorites.toggleFavorite(eventId: event.id)
+                                toast = wasFavorited
+                                    ? .info("Removed from saved", icon: "heart")
+                                    : .success("Saved!", icon: "heart.fill")
+                            }
                         } label: {
                             Image(systemName: favorites.isFavorited(event.id) ? "heart.fill" : "heart")
                                 .font(.body.weight(.semibold))
@@ -35,6 +48,7 @@ struct EventCardView: View {
                                 .frame(width: 36, height: 36)
                                 .background(.ultraThinMaterial, in: Circle())
                         }
+                        .accessibilityLabel(favorites.isFavorited(event.id) ? "Remove from saved" : "Save event")
                     }
 
                     Spacer()
@@ -113,6 +127,8 @@ struct EventCardView: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(event.title), \(event.displayLocation)")
     }
 }
 

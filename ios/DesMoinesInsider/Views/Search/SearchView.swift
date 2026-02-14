@@ -35,6 +35,12 @@ struct SearchView: View {
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
+            .navigationDestination(for: Restaurant.self) { restaurant in
+                RestaurantDetailView(restaurant: restaurant)
+            }
+            .navigationDestination(for: Attraction.self) { attraction in
+                AttractionDetailView(attraction: attraction)
+            }
         }
     }
 
@@ -44,6 +50,7 @@ struct SearchView: View {
         HStack(spacing: 0) {
             ForEach(SearchViewModel.SearchTab.allCases) { tab in
                 Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     withAnimation(.snappy) { viewModel.selectedTab = tab }
                 } label: {
                     VStack(spacing: 6) {
@@ -78,6 +85,7 @@ struct SearchView: View {
                 }
                 .foregroundStyle(viewModel.selectedTab == tab ? .primary : .secondary)
                 .frame(maxWidth: .infinity)
+                .accessibilityLabel("\(tab.rawValue), \(countFor(tab)) results")
             }
         }
         .padding(.horizontal)
@@ -98,6 +106,7 @@ struct SearchView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)], spacing: 10) {
                         ForEach(EventCategory.allCases.prefix(8)) { category in
                             Button {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                                 viewModel.searchText = category.displayName
                             } label: {
                                 VStack(spacing: 8) {
@@ -113,6 +122,7 @@ struct SearchView: View {
                                 .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 12))
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel("Search \(category.displayName)")
                         }
                     }
                     .padding(.horizontal)
@@ -126,6 +136,7 @@ struct SearchView: View {
 
                     ForEach(["Live music tonight", "Family friendly", "Free events", "Downtown restaurants", "Outdoor activities"], id: \.self) { suggestion in
                         Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
                             viewModel.searchText = suggestion
                         } label: {
                             HStack {
@@ -168,12 +179,22 @@ struct SearchView: View {
 
                 case .restaurants:
                     ForEach(viewModel.restaurantResults) { restaurant in
-                        RestaurantCardView(restaurant: restaurant)
+                        Button {
+                            navigationPath.append(restaurant)
+                        } label: {
+                            RestaurantCardView(restaurant: restaurant)
+                        }
+                        .buttonStyle(.plain)
                     }
 
                 case .attractions:
                     ForEach(viewModel.attractionResults) { attraction in
-                        AttractionCardView(attraction: attraction)
+                        Button {
+                            navigationPath.append(attraction)
+                        } label: {
+                            AttractionCardView(attraction: attraction)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -261,6 +282,8 @@ struct AttractionCardView: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 1)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(attraction.name), \(attraction.type)")
     }
 }
 

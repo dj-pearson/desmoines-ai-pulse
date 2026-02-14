@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Main home/feed view with featured events, date presets, category filters, and event list.
+/// Main home/feed view with featured events, popular restaurants, date presets, category filters, and event list.
 struct HomeView: View {
     @State private var viewModel = EventsViewModel()
+    @State private var restaurantsVM = RestaurantsViewModel()
     @State private var showFilters = false
     @State private var navigationPath = NavigationPath()
+    @State private var toast: ToastMessage?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -14,8 +16,18 @@ struct HomeView: View {
                     datePresetsSection
                     categoryChipsSection
 
+                    // Error banner
+                    if let error = viewModel.errorMessage {
+                        errorBanner(error)
+                    }
+
                     if !viewModel.featuredEvents.isEmpty {
                         featuredSection
+                    }
+
+                    // Popular Restaurants
+                    if !restaurantsVM.restaurants.isEmpty {
+                        restaurantsSection
                     }
 
                     activeFiltersBar
@@ -23,7 +35,9 @@ struct HomeView: View {
                 }
             }
             .refreshable {
-                await viewModel.refresh()
+                async let eventsRefresh: () = viewModel.refresh()
+                async let restaurantsRefresh: () = restaurantsVM.refresh()
+                _ = await (eventsRefresh, restaurantsRefresh)
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
@@ -45,9 +59,15 @@ struct HomeView: View {
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
-            .task {
-                await viewModel.loadInitialData()
+            .navigationDestination(for: Restaurant.self) { restaurant in
+                RestaurantDetailView(restaurant: restaurant)
             }
+            .task {
+                async let eventsLoad: () = viewModel.loadInitialData()
+                async let restaurantsLoad: () = restaurantsVM.loadInitialData()
+                _ = await (eventsLoad, restaurantsLoad)
+            }
+            .toastOverlay(message: $toast)
         }
     }
 
@@ -77,6 +97,7 @@ struct HomeView: View {
             HStack(spacing: 10) {
                 ForEach(DateFilterPreset.allCases) { preset in
                     Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation(.snappy) {
                             if viewModel.selectedDatePreset == preset {
                                 viewModel.selectedDatePreset = nil
@@ -102,6 +123,7 @@ struct HomeView: View {
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Filter by \(preset.rawValue)")
                 }
             }
             .padding(.horizontal)
@@ -116,6 +138,7 @@ struct HomeView: View {
             HStack(spacing: 10) {
                 ForEach(EventCategory.allCases.prefix(8)) { category in
                     Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation(.snappy) {
                             if viewModel.selectedCategory == category {
                                 viewModel.selectedCategory = nil
@@ -154,6 +177,7 @@ struct HomeView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Filter by \(category.displayName)")
                 }
             }
             .padding(.horizontal)
@@ -190,6 +214,62 @@ struct HomeView: View {
         .padding(.vertical, 8)
     }
 
+    // MARK: - Popular Restaurants Section
+
+    private var restaurantsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Popular Restaurants", systemImage: "fork.knife")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Spacer()
+            }
+            .padding(.horizontal)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    ForEach(restaurantsVM.restaurants.prefix(10)) { restaurant in
+                        Button {
+                            navigationPath.append(restaurant)
+                        } label: {
+                            CompactRestaurantCard(restaurant: restaurant)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Error Banner
+
+    private func errorBanner(_ message: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+            Text(message)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Spacer()
+            Button {
+                Task { await viewModel.refresh() }
+            } label: {
+                Text("Retry")
+                    .font(.caption.bold())
+                    .foregroundStyle(.accent)
+            }
+        }
+        .padding(12)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal)
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Error: \(message). Tap retry to try again.")
+    }
+
     // MARK: - Active Filters Bar
 
     @ViewBuilder
@@ -201,6 +281,7 @@ struct HomeView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Clear All") {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     withAnimation { viewModel.clearFilters() }
                 }
                 .font(.caption.weight(.semibold))
@@ -236,7 +317,7 @@ struct HomeView: View {
                         Button {
                             navigationPath.append(event)
                         } label: {
-                            EventCardView(event: event)
+                            EventCardView(event: event, toast: $toast)
                         }
                         .buttonStyle(.plain)
                         .task {
@@ -260,6 +341,7 @@ struct HomeView: View {
 
     private var filterButton: some View {
         Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
             showFilters = true
         } label: {
             ZStack(alignment: .topTrailing) {
@@ -276,6 +358,62 @@ struct HomeView: View {
                 }
             }
         }
+        .accessibilityLabel("Filters")
+        .accessibilityHint(viewModel.activeFilterCount > 0 ? "\(viewModel.activeFilterCount) active" : "No active filters")
+    }
+}
+
+// MARK: - Compact Restaurant Card (for home feed horizontal scroll)
+
+private struct CompactRestaurantCard: View {
+    let restaurant: Restaurant
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CachedAsyncImage(url: restaurant.imageUrl) {
+                ZStack {
+                    Rectangle().fill(Color.orange.opacity(0.15).gradient)
+                    Image(systemName: "fork.knife")
+                        .font(.title2)
+                        .foregroundStyle(.orange.opacity(0.3))
+                }
+            }
+            .frame(width: 180, height: 110)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            Text(restaurant.name)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+
+            HStack(spacing: 6) {
+                if let cuisine = restaurant.cuisine {
+                    Text(cuisine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let price = restaurant.priceRange {
+                    Text(price)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.green)
+                }
+
+                Spacer()
+
+                if let rating = restaurant.rating {
+                    HStack(spacing: 2) {
+                        Image(systemName: "star.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.yellow)
+                        Text(String(format: "%.1f", rating))
+                            .font(.caption2.weight(.medium))
+                    }
+                }
+            }
+        }
+        .frame(width: 180)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(restaurant.name), \(restaurant.cuisine ?? "restaurant"), rated \(restaurant.ratingText)")
     }
 }
 
@@ -329,6 +467,8 @@ private struct FeaturedEventCard: View {
             .foregroundStyle(.secondary)
         }
         .frame(width: 260)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(event.title), \(event.eventCategory.displayName)")
     }
 }
 

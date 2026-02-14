@@ -4,7 +4,6 @@ import SwiftUI
 struct RestaurantsView: View {
     @State private var viewModel = RestaurantsViewModel()
     @State private var showFilters = false
-    @State private var selectedRestaurant: Restaurant?
 
     var body: some View {
         NavigationStack {
@@ -16,6 +15,28 @@ struct RestaurantsView: View {
                     // Active filters
                     if viewModel.activeFilterCount > 0 {
                         activeFiltersBar
+                    }
+
+                    // Error banner
+                    if let error = viewModel.errorMessage {
+                        HStack(spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                            Spacer()
+                            Button {
+                                Task { await viewModel.refresh() }
+                            } label: {
+                                Text("Retry")
+                                    .font(.caption.bold())
+                                    .foregroundStyle(.accent)
+                            }
+                        }
+                        .padding(12)
+                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
                     }
 
                     // Content
@@ -35,9 +56,7 @@ struct RestaurantsView: View {
                     } else {
                         LazyVStack(spacing: 12) {
                             ForEach(viewModel.restaurants) { restaurant in
-                                Button {
-                                    selectedRestaurant = restaurant
-                                } label: {
+                                NavigationLink(value: restaurant) {
                                     RestaurantCardView(restaurant: restaurant)
                                 }
                                 .buttonStyle(.plain)
@@ -63,6 +82,7 @@ struct RestaurantsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         showFilters = true
                     } label: {
                         ZStack(alignment: .topTrailing) {
@@ -77,6 +97,7 @@ struct RestaurantsView: View {
                             }
                         }
                     }
+                    .accessibilityLabel("Filters")
                 }
             }
             .sheet(isPresented: $showFilters) {
@@ -84,10 +105,8 @@ struct RestaurantsView: View {
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(item: $selectedRestaurant) { restaurant in
-                RestaurantDetailSheet(restaurant: restaurant)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
+            .navigationDestination(for: Restaurant.self) { restaurant in
+                RestaurantDetailView(restaurant: restaurant)
             }
             .task {
                 await viewModel.loadInitialData()
@@ -128,9 +147,12 @@ struct RestaurantsView: View {
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             Spacer()
-            Button("Clear All") { viewModel.clearFilters() }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.accent)
+            Button("Clear All") {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                viewModel.clearFilters()
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.accent)
         }
     }
 }
@@ -215,119 +237,6 @@ private struct RestaurantFilterSheet: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                         .fontWeight(.semibold)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Restaurant Detail Sheet
-
-private struct RestaurantDetailSheet: View {
-    let restaurant: Restaurant
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    // Hero
-                    CachedAsyncImage(url: restaurant.imageUrl) {
-                        ZStack {
-                            Rectangle().fill(Color.orange.opacity(0.15).gradient)
-                            Image(systemName: "fork.knife")
-                                .font(.system(size: 48))
-                                .foregroundStyle(.orange.opacity(0.3))
-                        }
-                    }
-                    .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .padding(.horizontal)
-
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Name & rating
-                        HStack {
-                            Text(restaurant.name)
-                                .font(.title2.bold())
-                            Spacer()
-                            if let rating = restaurant.rating {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "star.fill")
-                                        .foregroundStyle(.yellow)
-                                    Text(String(format: "%.1f", rating))
-                                        .fontWeight(.semibold)
-                                }
-                            }
-                        }
-
-                        // Cuisine & Price
-                        HStack(spacing: 12) {
-                            if let cuisine = restaurant.cuisine {
-                                Label(cuisine, systemImage: "fork.knife")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if let price = restaurant.priceRange {
-                                Text(price)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.green)
-                            }
-                        }
-
-                        Divider()
-
-                        // Location
-                        if !restaurant.displayLocation.isEmpty {
-                            Label(restaurant.displayLocation, systemImage: "mappin.circle.fill")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        // Phone
-                        if let phone = restaurant.phone, !phone.isEmpty {
-                            if let url = restaurant.callURL {
-                                Link(destination: url) {
-                                    Label(phone, systemImage: "phone.fill")
-                                        .font(.subheadline)
-                                }
-                            }
-                        }
-
-                        // Website
-                        if let url = restaurant.websiteURL {
-                            Link(destination: url) {
-                                Label("Visit Website", systemImage: "safari")
-                                    .font(.subheadline)
-                            }
-                        }
-
-                        // Status
-                        if let status = restaurant.status, !status.isEmpty {
-                            Label(status.capitalized, systemImage: "info.circle")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Divider()
-
-                        // Description
-                        if !restaurant.displayDescription.isEmpty {
-                            Text("About")
-                                .font(.headline)
-                            Text(restaurant.displayDescription)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .lineSpacing(4)
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-            }
-            .navigationTitle(restaurant.name)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
                 }
             }
         }

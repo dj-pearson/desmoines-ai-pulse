@@ -146,12 +146,14 @@ private struct FavoriteEventRow: View {
             Spacer()
 
             Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 withAnimation { onRemove() }
             } label: {
                 Image(systemName: "heart.fill")
                     .foregroundStyle(.red)
                     .font(.title3)
             }
+            .accessibilityLabel("Remove from saved")
         }
         .padding(10)
         .background(Color(.systemBackground))

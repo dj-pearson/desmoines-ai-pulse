@@ -26,17 +26,21 @@ struct EventDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
                     Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         showShareSheet = true
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
+                    .accessibilityLabel("Share event")
 
                     Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         Task { await viewModel.toggleFavorite() }
                     } label: {
                         Image(systemName: viewModel.isFavorited ? "heart.fill" : "heart")
                             .foregroundStyle(viewModel.isFavorited ? .red : .primary)
                     }
+                    .accessibilityLabel(viewModel.isFavorited ? "Remove from saved" : "Save event")
                 }
             }
         }
@@ -145,12 +149,14 @@ struct EventDetailView: View {
 
                 if event.coordinate != nil {
                     Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         openInMaps()
                     } label: {
                         Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
                             .font(.title2)
                             .foregroundStyle(.blue)
                     }
+                    .accessibilityLabel("Get directions")
                 }
             }
 
