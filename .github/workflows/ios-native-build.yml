@@ -1,0 +1,144 @@
+# ================================================================
+# iOS Native Build: Validate Swift Project Compiles
+# ================================================================
+#
+# Runs on every push/PR that touches the ios/ directory.
+# Resolves SPM dependencies, generates the Xcode project via
+# XcodeGen, and builds for the iOS Simulator.
+#
+# This does NOT sign or archive — it's a fast compilation check.
+#
+# ================================================================
+
+name: iOS Native Build
+
+on:
+  push:
+    branches:
+      - 'mobile/**'
+      - 'claude/*'
+      - 'feature/ios-*'
+    paths:
+      - 'ios/**'
+  pull_request:
+    paths:
+      - 'ios/**'
+  workflow_dispatch:
+
+env:
+  XCODE_VERSION: '26.0'
+  PROJECT_DIR: 'ios'
+  SCHEME: 'DesMoinesInsider'
+
+jobs:
+  # ================================================================
+  # Build & validate the Swift project
+  # ================================================================
+  build:
+    name: Build iOS (Simulator)
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: |
+          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          else
+            echo "::warning::Xcode ${XCODE_VERSION} not found. Using default."
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
+          fi
+          echo "Xcode: $(xcodebuild -version | head -1)"
+          echo "Swift: $(swift --version | head -1)"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodegen generate
+          echo "✅ Xcode project generated"
+          ls -la DesMoinesInsider.xcodeproj/
+
+      - name: Resolve Swift Package Manager dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache"
+          echo "✅ SPM dependencies resolved"
+
+      - name: Build for iOS Simulator
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+
+          xcodebuild build \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            SUPABASE_URL="https://placeholder.supabase.co" \
+            SUPABASE_ANON_KEY="placeholder-key-for-ci-build" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | xcpretty --color || {
+              echo "::error::Build failed!"
+              exit 1
+            }
+
+          echo "✅ iOS Simulator build succeeded"
+
+  # ================================================================
+  # Validate project configuration
+  # ================================================================
+  validate-config:
+    name: Validate iOS Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate project structure
+        run: |
+          echo "=== Checking project structure ==="
+
+          # Core files
+          test -f ios/project.yml && echo "✅ project.yml" || (echo "❌ MISSING project.yml" && exit 1)
+          test -f ios/DesMoinesInsider/App/DesMoinesInsiderApp.swift && echo "✅ App entry point" || (echo "❌ MISSING app entry" && exit 1)
+          test -f ios/DesMoinesInsider/Resources/Info.plist && echo "✅ Info.plist" || (echo "❌ MISSING Info.plist" && exit 1)
+          test -f ios/DesMoinesInsider/Configuration/Config.swift && echo "✅ Config.swift" || (echo "❌ MISSING Config.swift" && exit 1)
+          test -f ios/DesMoinesInsider/App/DesMoinesInsider.entitlements && echo "✅ Entitlements" || (echo "❌ MISSING entitlements" && exit 1)
+
+          # Secrets safety
+          test -f ios/Secrets.xcconfig.example && echo "✅ Secrets.xcconfig.example" || (echo "❌ MISSING secrets example" && exit 1)
+          test -f ios/.gitignore && echo "✅ .gitignore" || (echo "❌ MISSING .gitignore" && exit 1)
+          grep -q "Secrets.xcconfig" ios/.gitignore && echo "✅ Secrets.xcconfig is gitignored" || (echo "❌ Secrets.xcconfig NOT in .gitignore" && exit 1)
+
+          echo ""
+          echo "=== Checking Info.plist keys ==="
+          grep -q "NSLocationWhenInUseUsageDescription" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ Location usage description" || echo "⚠️ Missing location description"
+          grep -q "ITSAppUsesNonExemptEncryption" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ Encryption compliance" || echo "⚠️ Missing encryption compliance"
+          grep -q "SUPABASE_URL" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ SUPABASE_URL in plist" || echo "⚠️ Missing SUPABASE_URL"
+          grep -q "SUPABASE_ANON_KEY" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ SUPABASE_ANON_KEY in plist" || echo "⚠️ Missing SUPABASE_ANON_KEY"
+
+          echo ""
+          echo "=== Checking Assets ==="
+          test -f ios/DesMoinesInsider/Resources/Assets.xcassets/AccentColor.colorset/Contents.json && echo "✅ Accent color" || echo "⚠️ Missing accent color"
+          test -f ios/DesMoinesInsider/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json && echo "✅ App icon config" || echo "⚠️ Missing app icon"
+
+          echo ""
+          echo "=== Swift file count ==="
+          SWIFT_COUNT=$(find ios/DesMoinesInsider -name "*.swift" | wc -l | xargs)
+          echo "Found $SWIFT_COUNT Swift files"
+
+          echo ""
+          echo "✅ Configuration validation passed"

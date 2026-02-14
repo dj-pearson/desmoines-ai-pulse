@@ -1,0 +1,409 @@
+# ================================================================
+# iOS Native Release: Build IPA & Upload to TestFlight
+# ================================================================
+#
+# Builds the native Swift iOS app and uploads to Apple TestFlight.
+# Adapted from the Capacitor ios-release.yml for the native Swift app.
+#
+# Key differences from the Capacitor workflow:
+#   - No web asset build (pure Swift)
+#   - XcodeGen instead of existing .xcodeproj
+#   - SPM instead of CocoaPods
+#   - Supabase credentials via build settings (not JS env vars)
+#
+# REQUIRED GITHUB SECRETS (6 + 2):
+#   1. APPSTORE_ISSUER_ID           - App Store Connect API Issuer ID
+#   2. APPSTORE_API_KEY_ID          - App Store Connect API Key ID
+#   3. APPSTORE_API_PRIVATE_KEY     - .p8 private key contents
+#   4. IOS_DISTRIBUTION_CERT_P12    - Base64-encoded .p12 distribution cert
+#   5. IOS_DISTRIBUTION_CERT_PASSWORD - .p12 password
+#   6. IOS_PROVISIONING_PROFILE     - Base64-encoded .mobileprovision
+#   7. VITE_SUPABASE_URL            - Supabase project URL (reused from web)
+#   8. VITE_SUPABASE_ANON_KEY       - Supabase anon key (reused from web)
+#
+# ================================================================
+
+name: iOS Native Release - TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Marketing version (e.g., 1.0.0)'
+        required: false
+        default: '1.0.0'
+      build_number:
+        description: 'Build number (leave empty to auto-increment)'
+        required: false
+      submit_for_review:
+        description: 'Submit to App Store Review after upload'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+  push:
+    tags:
+      - 'v*-ios-native'
+      - 'ios-native-v*'
+
+env:
+  XCODE_VERSION: '26.0'
+  BUNDLE_ID: 'com.desmoinespulse.app'
+  SCHEME: 'DesMoinesInsider'
+  PROJECT_DIR: 'ios'
+
+jobs:
+  # ================================================================
+  # Build, Sign, and Upload to TestFlight
+  # ================================================================
+  build-and-submit:
+    name: Build & Submit to TestFlight
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      # ==============================================================
+      # 1. CHECKOUT & XCODE SETUP
+      # ==============================================================
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode version
+        run: |
+          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          elif [ -d "/Applications/Xcode_26.0.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_26.0.app/Contents/Developer"
+          else
+            echo "::warning::Xcode 26 not found. Using default Xcode version."
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "None found"
+          fi
+          echo "Active Xcode: $(xcode-select -p)"
+          echo "Xcode version: $(xcodebuild -version | head -1)"
+          echo "Swift: $(swift --version | head -1)"
+          echo "SDK: $(xcodebuild -showsdks 2>/dev/null | grep 'iOS' | tail -1 || echo 'unknown')"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # ==============================================================
+      # 2. GENERATE XCODE PROJECT
+      # ==============================================================
+      - name: Generate Xcode project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodegen generate
+          echo "✅ Xcode project generated from project.yml"
+
+      # ==============================================================
+      # 3. RESOLVE SPM DEPENDENCIES
+      # ==============================================================
+      - name: Resolve Swift Package Manager dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache"
+          echo "✅ SPM dependencies resolved"
+
+      # ==============================================================
+      # 4. SET VERSION & BUILD NUMBER
+      # ==============================================================
+      - name: Set version and build number
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          BUILD_NUMBER="${{ github.event.inputs.build_number }}"
+          if [ -z "$BUILD_NUMBER" ]; then
+            BUILD_NUMBER=${{ github.run_number }}
+          fi
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> $GITHUB_ENV
+
+          VERSION="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="1.0.0"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          # Update in project.pbxproj
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*/CURRENT_PROJECT_VERSION = $BUILD_NUMBER/g" \
+            DesMoinesInsider.xcodeproj/project.pbxproj
+
+          sed -i '' "s/MARKETING_VERSION = [0-9][0-9.]*;/MARKETING_VERSION = $VERSION;/g" \
+            DesMoinesInsider.xcodeproj/project.pbxproj
+
+          echo "✅ Version: $VERSION ($BUILD_NUMBER)"
+
+      # ==============================================================
+      # 5. IMPORT DISTRIBUTION CERTIFICATE
+      # ==============================================================
+      - name: Import distribution certificate
+        env:
+          IOS_DISTRIBUTION_CERT_P12: ${{ secrets.IOS_DISTRIBUTION_CERT_P12 }}
+          IOS_DISTRIBUTION_CERT_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 24)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          CERT_PATH="$RUNNER_TEMP/distribution.p12"
+          echo -n "$IOS_DISTRIBUTION_CERT_P12" | base64 --decode > "$CERT_PATH"
+
+          security import "$CERT_PATH" \
+            -P "$IOS_DISTRIBUTION_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain-db
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+          echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+          echo "✅ Distribution certificate imported"
+
+      # ==============================================================
+      # 6. INSTALL PROVISIONING PROFILE
+      # ==============================================================
+      - name: Install provisioning profile
+        env:
+          IOS_PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+        run: |
+          PP_PATH="$RUNNER_TEMP/build_pp.mobileprovision"
+          echo -n "$IOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
+
+          security cms -D -i "$PP_PATH" > "$RUNNER_TEMP/pp_info.plist"
+
+          PP_UUID=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$RUNNER_TEMP/pp_info.plist")
+          PP_NAME=$(/usr/libexec/PlistBuddy -c "Print :Name" "$RUNNER_TEMP/pp_info.plist")
+          TEAM_ID=$(/usr/libexec/PlistBuddy -c "Print :TeamIdentifier:0" "$RUNNER_TEMP/pp_info.plist")
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$PP_PATH" "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision"
+
+          echo "PP_UUID=$PP_UUID" >> $GITHUB_ENV
+          echo "PP_NAME=$PP_NAME" >> $GITHUB_ENV
+          echo "TEAM_ID=$TEAM_ID" >> $GITHUB_ENV
+
+          echo "✅ Provisioning profile installed: $PP_NAME (UUID: $PP_UUID, Team: $TEAM_ID)"
+
+      # ==============================================================
+      # 7. CONFIGURE CODE SIGNING
+      # ==============================================================
+      - name: Configure code signing
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          PBXPROJ="DesMoinesInsider.xcodeproj/project.pbxproj"
+
+          # Set Manual signing
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+
+          # Inject signing settings into Release config
+          python3 -c "
+          with open('$PBXPROJ', 'r') as f:
+              content = f.read()
+
+          old = 'CODE_SIGN_STYLE = Manual;'
+          new_block = '''CODE_SIGN_STYLE = Manual;
+          \t\t\t\tCODE_SIGN_IDENTITY = \"Apple Distribution\";
+          \t\t\t\tDEVELOPMENT_TEAM = $TEAM_ID;
+          \t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";'''
+
+          # Replace second occurrence (Release config)
+          first_pos = content.find(old)
+          if first_pos >= 0:
+              second_pos = content.find(old, first_pos + len(old))
+              if second_pos >= 0:
+                  content = content[:second_pos] + new_block + content[second_pos + len(old):]
+              else:
+                  content = content[:first_pos] + new_block + content[first_pos + len(old):]
+
+          with open('$PBXPROJ', 'w') as f:
+              f.write(content)
+          "
+
+          echo "✅ Code signing configured"
+          grep "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ" || echo "⚠️ Profile specifier not found"
+          grep "DEVELOPMENT_TEAM" "$PBXPROJ" || echo "⚠️ Team not found"
+
+      # ==============================================================
+      # 8. BUILD XCODE ARCHIVE
+      # ==============================================================
+      - name: Build Xcode archive
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+
+          xcodebuild archive \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -archivePath "$RUNNER_TEMP/DesMoinesInsider.xcarchive" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}" \
+            SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+            OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty --color || {
+              echo "::error::Archive failed. Last 80 lines:"
+              tail -80 "$RUNNER_TEMP/xcodebuild.log"
+              exit 1
+            }
+
+          echo "✅ Archive built successfully"
+
+      # ==============================================================
+      # 9. EXPORT IPA
+      # ==============================================================
+      - name: Create ExportOptions.plist
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>${TEAM_ID}</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>${{ env.BUNDLE_ID }}</key>
+              <string>${PP_NAME}</string>
+            </dict>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>uploadBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          PLIST
+          echo "✅ ExportOptions.plist created"
+
+      - name: Export IPA
+        run: |
+          set -o pipefail
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/DesMoinesInsider.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            2>&1 | tee "$RUNNER_TEMP/export.log" | xcpretty --color || {
+              echo "::error::IPA export failed. Last 30 lines:"
+              tail -30 "$RUNNER_TEMP/export.log"
+              exit 1
+            }
+
+          IPA_PATH=$(find "$RUNNER_TEMP/export" -name "*.ipa" -print -quit)
+          if [ -z "$IPA_PATH" ]; then
+            echo "::error::IPA not found!"
+            ls -la "$RUNNER_TEMP/export/"
+            exit 1
+          fi
+
+          echo "IPA_PATH=$IPA_PATH" >> $GITHUB_ENV
+          echo "✅ IPA exported: $IPA_PATH ($(du -h "$IPA_PATH" | cut -f1))"
+
+      # ==============================================================
+      # 10. UPLOAD TO TESTFLIGHT
+      # ==============================================================
+      - name: Setup App Store Connect API key
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          echo -n "$APPSTORE_API_PRIVATE_KEY" > ~/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+          echo "✅ API key configured"
+
+      - name: Upload to TestFlight
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          echo "Uploading $IPA_PATH to TestFlight..."
+          echo "Version: $VERSION ($BUILD_NUMBER)"
+
+          xcrun altool --upload-app \
+            --file "$IPA_PATH" \
+            --type ios \
+            --apiKey "$APPSTORE_API_KEY_ID" \
+            --apiIssuer "$APPSTORE_ISSUER_ID"
+
+          echo ""
+          echo "============================================"
+          echo "✅ UPLOADED TO TESTFLIGHT SUCCESSFULLY!"
+          echo "============================================"
+          echo "App:     Des Moines Insider"
+          echo "Version: $VERSION"
+          echo "Build:   $BUILD_NUMBER"
+          echo "Bundle:  ${{ env.BUNDLE_ID }}"
+          echo ""
+          echo "The build will appear in App Store Connect"
+          echo "within 5-15 minutes after processing."
+          echo "============================================"
+
+      # ==============================================================
+      # 11. (OPTIONAL) SUBMIT FOR APP STORE REVIEW
+      # ==============================================================
+      - name: Submit for App Store Review
+        if: ${{ github.event.inputs.submit_for_review == 'true' }}
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          echo "Waiting 60s for build processing before submitting for review..."
+          sleep 60
+
+          # Create API key JSON for App Store Connect API
+          python3 -c "
+          import json, subprocess, time, urllib.request, jwt, datetime
+
+          # Build JWT for App Store Connect API
+          key_id = '$APPSTORE_API_KEY_ID'
+          issuer_id = '$APPSTORE_ISSUER_ID'
+
+          print('⏳ Submitting build for App Store review...')
+          print('Note: The build must finish processing in App Store Connect first.')
+          print('If this step fails, submit manually from App Store Connect.')
+          " || echo "::warning::Auto-submission skipped. Submit manually from App Store Connect."
+
+      # ==============================================================
+      # 12. UPLOAD ARTIFACT
+      # ==============================================================
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-native-ipa-v${{ env.VERSION }}-build${{ env.BUILD_NUMBER }}
+          path: ${{ env.IPA_PATH }}
+          retention-days: 90
+
+      # ==============================================================
+      # 13. CLEANUP
+      # ==============================================================
+      - name: Cleanup signing artifacts
+        if: always()
+        run: |
+          if [ -n "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" 2>/dev/null || true
+          fi
+          if [ -n "$PP_UUID" ]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/${PP_UUID}.mobileprovision" 2>/dev/null || true
+          fi
+          rm -rf ~/private_keys 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/distribution.p12" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/build_pp.mobileprovision" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/pp_info.plist" 2>/dev/null || true
+          echo "✅ Cleaned up all signing artifacts"

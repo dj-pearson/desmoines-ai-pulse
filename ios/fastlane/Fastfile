@@ -1,0 +1,134 @@
+# Fastfile — Native Swift iOS build, sign, and upload
+#
+# Setup:
+#   gem install fastlane
+#   brew install xcodegen
+#
+# Usage:
+#   fastlane ios generate       # Generate Xcode project from project.yml
+#   fastlane ios build_debug    # Build for Simulator (no signing)
+#   fastlane ios beta           # Build + upload to TestFlight
+#   fastlane ios release        # Build + upload to App Store Connect
+
+default_platform(:ios)
+
+PROJECT_PATH = "DesMoinesInsider.xcodeproj"
+SCHEME = "DesMoinesInsider"
+BUNDLE_ID = "com.desmoinespulse.app"
+IPA_OUTPUT = "./build"
+IPA_NAME = "DesMoinesInsider.ipa"
+
+platform :ios do
+
+  # ============================================================================
+  # Generate Xcode project from project.yml
+  # ============================================================================
+
+  desc "Generate Xcode project using XcodeGen"
+  lane :generate do
+    sh("cd .. && xcodegen generate")
+    UI.success("Xcode project generated from project.yml")
+  end
+
+  # ============================================================================
+  # Build for Simulator (debug, no signing)
+  # ============================================================================
+
+  desc "Build for iOS Simulator (no signing required)"
+  lane :build_debug do
+    generate
+
+    xcodebuild(
+      project: PROJECT_PATH,
+      scheme: SCHEME,
+      configuration: "Debug",
+      destination: "platform=iOS Simulator,name=iPhone 16,OS=latest",
+      build_settings: {
+        "CODE_SIGN_IDENTITY" => "",
+        "CODE_SIGNING_REQUIRED" => "NO",
+        "CODE_SIGNING_ALLOWED" => "NO",
+        "SUPABASE_URL" => ENV["SUPABASE_URL"] || "https://placeholder.supabase.co",
+        "SUPABASE_ANON_KEY" => ENV["SUPABASE_ANON_KEY"] || "placeholder-key",
+      },
+      xcargs: "-resolvePackageDependencies"
+    )
+
+    UI.success("Debug build succeeded!")
+  end
+
+  # ============================================================================
+  # Build & upload to TestFlight
+  # ============================================================================
+
+  desc "Build and upload to TestFlight"
+  lane :beta do
+    generate
+
+    # Increment build number
+    increment_build_number(
+      xcodeproj: PROJECT_PATH
+    )
+
+    build_app(
+      project: PROJECT_PATH,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: IPA_OUTPUT,
+      output_name: IPA_NAME,
+      clean: true,
+      xcargs: "SUPABASE_URL='#{ENV["SUPABASE_URL"]}' SUPABASE_ANON_KEY='#{ENV["SUPABASE_ANON_KEY"]}'"
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true
+    )
+
+    UI.success("Successfully uploaded to TestFlight!")
+  end
+
+  # ============================================================================
+  # Build & upload to App Store Connect
+  # ============================================================================
+
+  desc "Build and upload to App Store Connect"
+  lane :release do
+    generate
+
+    # Increment build number
+    increment_build_number(
+      xcodeproj: PROJECT_PATH
+    )
+
+    build_app(
+      project: PROJECT_PATH,
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: IPA_OUTPUT,
+      output_name: IPA_NAME,
+      clean: true,
+      xcargs: "SUPABASE_URL='#{ENV["SUPABASE_URL"]}' SUPABASE_ANON_KEY='#{ENV["SUPABASE_ANON_KEY"]}'"
+    )
+
+    upload_to_app_store(
+      force: false,
+      submit_for_review: false,
+      automatic_release: false,
+      precheck_include_in_app_purchases: false
+    )
+
+    UI.success("Successfully uploaded to App Store Connect!")
+  end
+
+  # ============================================================================
+  # Convenience: Open in Xcode
+  # ============================================================================
+
+  desc "Generate project and open in Xcode"
+  lane :open do
+    generate
+    sh("open ../#{PROJECT_PATH}")
+  end
+
+end
