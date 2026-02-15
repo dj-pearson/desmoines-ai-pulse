@@ -131,7 +131,6 @@ platform :ios do
   #   - iPhone 6.9" (iPhone 16 Pro Max)
   #   - iPhone 6.7" (iPhone 15 Pro Max)
   #   - iPhone 6.5" (iPhone 14 Plus)
-  #   - iPhone 5.5" (iPhone 8 Plus)
   #   - iPad Pro 12.9" (6th gen)
   #   - iPad Pro 13" (M4)
   #
@@ -148,7 +147,7 @@ platform :ios do
     capture_screenshots(
       project: PROJECT_PATH,
       scheme: "DesMoinesInsiderUITests",
-      output_directory: "./fastlane/screenshots",
+      output_directory: "./screenshots",
       clear_previous_screenshots: true,
       override_status_bar: true,
       override_status_bar_arguments: "--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4",
@@ -157,14 +156,13 @@ platform :ios do
         "iPhone 16 Pro Max",
         "iPhone 15 Pro Max",
         "iPhone 14 Plus",
-        "iPhone 8 Plus",
         "iPad Pro (12.9-inch) (6th generation)",
         "iPad Pro 13-inch (M4)",
       ],
       languages: ["en-US"],
       launch_arguments: ["--uitesting"],
       derived_data_path: "./DerivedData",
-      buildlog_path: "./fastlane/logs",
+      buildlog_path: "./logs",
       xcargs: "CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO",
       reinstall_app: false,
       clean: true
