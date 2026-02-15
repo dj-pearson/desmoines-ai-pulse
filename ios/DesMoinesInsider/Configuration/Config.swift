@@ -23,7 +23,7 @@ enum Config {
     // MARK: - App
 
     static let appName = "Des Moines Insider"
-    static let appBundleId = "com.desmoinespulse.app"
+    static let appBundleId = "com.desmoines.aipulse"
     static let siteURL = URL(string: "https://desmoinesinsider.com")!
     static let supportEmail = "support@desmoinesinsider.com"
 

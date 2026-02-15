@@ -1,6 +1,6 @@
 name: DesMoinesInsider
 options:
-  bundleIdPrefix: com.desmoinespulse
+  bundleIdPrefix: com.desmoines
   deploymentTarget:
     iOS: "17.0"
   xcodeVersion: "15.0"
@@ -29,7 +29,7 @@ targets:
     settings:
       base:
         INFOPLIST_FILE: DesMoinesInsider/Resources/Info.plist
-        PRODUCT_BUNDLE_IDENTIFIER: com.desmoinespulse.app
+        PRODUCT_BUNDLE_IDENTIFIER: com.desmoines.aipulse
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         DEVELOPMENT_TEAM: ""
