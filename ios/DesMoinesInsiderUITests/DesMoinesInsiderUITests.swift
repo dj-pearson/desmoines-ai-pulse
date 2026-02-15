@@ -19,6 +19,7 @@
 
 import XCTest
 
+@MainActor
 final class DesMoinesInsiderUITests: XCTestCase {
 
     var app: XCUIApplication!
