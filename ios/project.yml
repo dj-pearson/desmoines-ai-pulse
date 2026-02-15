@@ -60,6 +60,30 @@ targets:
         com.apple.developer.applesignin:
           - Default
 
+  # ──────────────────────────────────────────────────
+  # UI Test Target — Used by Fastlane Snapshot for
+  # automated App Store screenshot generation.
+  # ──────────────────────────────────────────────────
+  DesMoinesInsiderUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: DesMoinesInsiderUITests
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        INFOPLIST_FILE: DesMoinesInsiderUITests/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.desmoines.aipulse.uitests
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+        TEST_HOST: ""
+        TEST_TARGET_NAME: DesMoinesInsider
+    dependencies:
+      - target: DesMoinesInsider
+
 schemes:
   DesMoinesInsider:
     build:
@@ -71,3 +95,14 @@ schemes:
       config: Release
     archive:
       config: Release
+
+  # Scheme for running UI tests / Fastlane Snapshot
+  DesMoinesInsiderUITests:
+    build:
+      targets:
+        DesMoinesInsider: all
+        DesMoinesInsiderUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - DesMoinesInsiderUITests

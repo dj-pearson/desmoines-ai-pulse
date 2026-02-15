@@ -1,0 +1,336 @@
+# ================================================================
+# iOS App Store Screenshots via Fastlane Snapshot
+# ================================================================
+#
+# Automatically generates App Store screenshots for all required
+# device sizes using Fastlane Snapshot + XCUITest.
+#
+# Devices captured:
+#   - iPhone 16 Pro Max (6.9")
+#   - iPhone 15 Pro Max (6.7")
+#   - iPhone 14 Plus (6.5")
+#   - iPhone 8 Plus (5.5")
+#   - iPad Pro 12.9" (6th gen)
+#   - iPad Pro 13" (M4)
+#
+# Screens captured (8 per device):
+#   01. Home feed
+#   02. Restaurants
+#   03. Search
+#   04. Map
+#   05. Favorites
+#   06. Profile
+#   07. Event Detail
+#   08. Restaurant Detail
+#
+# Total: ~48 screenshots per run (6 devices x 8 screens)
+#
+# Triggers:
+#   - Manual dispatch (workflow_dispatch) with optional device filter
+#   - Push to ios/ on release tags (v*-screenshots)
+#
+# Output: Uploaded as a GitHub Actions artifact (screenshots.zip)
+#
+# ================================================================
+
+name: iOS App Store Screenshots
+
+on:
+  # Manual trigger with optional parameters
+  workflow_dispatch:
+    inputs:
+      devices:
+        description: 'Devices to capture (comma-separated, or "all")'
+        required: false
+        default: 'all'
+        type: string
+      locale:
+        description: 'Locale for screenshots'
+        required: false
+        default: 'en-US'
+        type: string
+
+  # Auto-trigger on screenshot-related tags
+  push:
+    tags:
+      - 'v*-screenshots'
+
+env:
+  XCODE_VERSION: '26.0'
+  PROJECT_DIR: 'ios'
+  SCHEME: 'DesMoinesInsiderUITests'
+  RUBY_VERSION: '3.2'
+
+jobs:
+  # ================================================================
+  # Generate App Store screenshots
+  # ================================================================
+  screenshots:
+    name: Generate App Store Screenshots
+    runs-on: macos-15
+    timeout-minutes: 60
+
+    steps:
+      # ────────────────────────────────────────────
+      # 1. Checkout
+      # ────────────────────────────────────────────
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # ────────────────────────────────────────────
+      # 2. Select Xcode
+      # ────────────────────────────────────────────
+      - name: Select Xcode version
+        run: |
+          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          else
+            echo "::warning::Xcode ${XCODE_VERSION} not found. Using default."
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
+          fi
+          echo "Xcode: $(xcodebuild -version | head -1)"
+          echo "Swift: $(swift --version | head -1)"
+
+      # ────────────────────────────────────────────
+      # 3. Install tools
+      # ────────────────────────────────────────────
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+          bundler-cache: true
+          working-directory: ${{ env.PROJECT_DIR }}/fastlane
+
+      - name: Install Fastlane
+        working-directory: ${{ env.PROJECT_DIR }}/fastlane
+        run: bundle install
+
+      # ────────────────────────────────────────────
+      # 4. Generate secrets & project
+      # ────────────────────────────────────────────
+      - name: Generate placeholder secrets for CI
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          chmod +x scripts/generate-secrets.sh
+          SUPABASE_URL="https://placeholder.supabase.co" \
+          SUPABASE_ANON_KEY="placeholder-key-for-ci-screenshots" \
+          bash scripts/generate-secrets.sh
+
+      - name: Generate Xcode project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodegen generate
+          echo "Xcode project generated"
+          ls -la DesMoinesInsider.xcodeproj/
+
+      # ────────────────────────────────────────────
+      # 5. Resolve dependencies
+      # ────────────────────────────────────────────
+      - name: Resolve Swift Package Manager dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme DesMoinesInsider \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache"
+          echo "SPM dependencies resolved"
+
+      # ────────────────────────────────────────────
+      # 6. Boot simulators
+      # ────────────────────────────────────────────
+      - name: List available simulators
+        run: |
+          xcrun simctl list devices available --json | \
+            python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get('devices', {}).items():
+            for d in devices:
+              if d.get('isAvailable'):
+                print(f\"  {d['name']} ({d['udid']}) - {runtime}\")
+          " | head -40
+          echo "---"
+
+      - name: Create missing simulators
+        run: |
+          # Ensure all required simulators exist.
+          # macOS runners may not have every device type pre-created.
+          DEVICES=(
+            "iPhone 16 Pro Max"
+            "iPhone 15 Pro Max"
+            "iPhone 14 Plus"
+            "iPhone 8 Plus"
+            "iPad Pro (12.9-inch) (6th generation)"
+            "iPad Pro 13-inch (M4)"
+          )
+
+          # Get the latest iOS runtime
+          LATEST_RUNTIME=$(xcrun simctl list runtimes --json | \
+            python3 -c "
+          import json, sys
+          runtimes = json.load(sys.stdin).get('runtimes', [])
+          ios = [r for r in runtimes if 'iOS' in r.get('name', '') and r.get('isAvailable')]
+          if ios:
+            print(ios[-1]['identifier'])
+          ")
+
+          echo "Latest iOS runtime: $LATEST_RUNTIME"
+
+          if [ -z "$LATEST_RUNTIME" ]; then
+            echo "::warning::No iOS runtime found. Snapshot may fail."
+            exit 0
+          fi
+
+          for DEVICE in "${DEVICES[@]}"; do
+            # Check if simulator already exists
+            EXISTS=$(xcrun simctl list devices --json | \
+              python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          found = False
+          for runtime, devices in data.get('devices', {}).items():
+            for d in devices:
+              if d['name'] == '$DEVICE' and d.get('isAvailable'):
+                found = True
+                break
+          print('yes' if found else 'no')
+          ")
+
+            if [ "$EXISTS" = "yes" ]; then
+              echo "Simulator exists: $DEVICE"
+            else
+              echo "Creating simulator: $DEVICE"
+              # Get the device type identifier
+              DEVICE_TYPE=$(xcrun simctl list devicetypes --json | \
+                python3 -c "
+          import json, sys
+          types = json.load(sys.stdin).get('devicetypes', [])
+          name = '$DEVICE'
+          for t in types:
+            if t['name'] == name:
+              print(t['identifier'])
+              break
+          ")
+
+              if [ -n "$DEVICE_TYPE" ]; then
+                xcrun simctl create "$DEVICE" "$DEVICE_TYPE" "$LATEST_RUNTIME" || \
+                  echo "::warning::Failed to create simulator: $DEVICE"
+              else
+                echo "::warning::Device type not found: $DEVICE"
+              fi
+            fi
+          done
+
+      # ────────────────────────────────────────────
+      # 7. Run Fastlane Snapshot
+      # ────────────────────────────────────────────
+      - name: Capture screenshots
+        working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          SNAPSHOT_DEVICES: ${{ github.event.inputs.devices || 'all' }}
+          SNAPSHOT_LOCALE: ${{ github.event.inputs.locale || 'en-US' }}
+        run: |
+          set -o pipefail
+
+          echo "=== Starting Fastlane Snapshot ==="
+          echo "Devices: $SNAPSHOT_DEVICES"
+          echo "Locale: $SNAPSHOT_LOCALE"
+          echo ""
+
+          # Run the snapshot lane
+          bundle exec fastlane ios screenshots \
+            2>&1 | tee "$RUNNER_TEMP/snapshot.log" || {
+              echo ""
+              echo "::warning::Fastlane snapshot encountered errors."
+              echo "Check the logs for details."
+              echo "---"
+              tail -50 "$RUNNER_TEMP/snapshot.log"
+              echo "---"
+              # Don't fail the job — partial screenshots are still useful
+            }
+
+          # Report results
+          echo ""
+          echo "=== Screenshot Results ==="
+          if [ -d "fastlane/screenshots" ]; then
+            TOTAL=$(find fastlane/screenshots -name "*.png" | wc -l | xargs)
+            echo "Total screenshots captured: $TOTAL"
+            echo ""
+            echo "Screenshots by device:"
+            find fastlane/screenshots -name "*.png" -exec dirname {} \; | sort -u | while read dir; do
+              COUNT=$(find "$dir" -name "*.png" | wc -l | xargs)
+              echo "  $dir: $COUNT screenshots"
+            done
+          else
+            echo "::warning::No screenshots directory found"
+          fi
+
+      # ────────────────────────────────────────────
+      # 8. Upload screenshots as artifact
+      # ────────────────────────────────────────────
+      - name: Upload screenshots artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-store-screenshots
+          path: ${{ env.PROJECT_DIR }}/fastlane/screenshots/
+          retention-days: 30
+          if-no-files-found: warn
+
+      # ────────────────────────────────────────────
+      # 9. Upload logs on failure
+      # ────────────────────────────────────────────
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshot-logs
+          path: |
+            ${{ env.PROJECT_DIR }}/fastlane/logs/
+            ${{ env.PROJECT_DIR }}/fastlane/report.xml
+            ${{ env.RUNNER_TEMP }}/snapshot.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # ────────────────────────────────────────────
+      # 10. Summary
+      # ────────────────────────────────────────────
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## App Store Screenshots" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -d "${{ env.PROJECT_DIR }}/fastlane/screenshots" ]; then
+            TOTAL=$(find "${{ env.PROJECT_DIR }}/fastlane/screenshots" -name "*.png" 2>/dev/null | wc -l | xargs)
+            echo "**Total screenshots captured:** $TOTAL" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Devices" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Device | Size | Screenshots |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|------|-------------|" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 16 Pro Max | 6.9\" | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 15 Pro Max | 6.7\" | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 14 Plus | 6.5\" | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 8 Plus | 5.5\" | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPad Pro 12.9\" (6th gen) | 12.9\" | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPad Pro 13\" (M4) | 13\" | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Screens" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "1. Home Feed" >> $GITHUB_STEP_SUMMARY
+            echo "2. Restaurants" >> $GITHUB_STEP_SUMMARY
+            echo "3. Search" >> $GITHUB_STEP_SUMMARY
+            echo "4. Map" >> $GITHUB_STEP_SUMMARY
+            echo "5. Favorites" >> $GITHUB_STEP_SUMMARY
+            echo "6. Profile" >> $GITHUB_STEP_SUMMARY
+            echo "7. Event Detail" >> $GITHUB_STEP_SUMMARY
+            echo "8. Restaurant Detail" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Download the **app-store-screenshots** artifact to get all images." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No screenshots were generated." >> $GITHUB_STEP_SUMMARY
+          fi

@@ -124,6 +124,56 @@ platform :ios do
   end
 
   # ============================================================================
+  # Automated App Store Screenshots via Fastlane Snapshot
+  # ============================================================================
+  #
+  # Generates screenshots for all required App Store device sizes:
+  #   - iPhone 6.9" (iPhone 16 Pro Max)
+  #   - iPhone 6.7" (iPhone 15 Pro Max)
+  #   - iPhone 6.5" (iPhone 14 Plus)
+  #   - iPhone 5.5" (iPhone 8 Plus)
+  #   - iPad Pro 12.9" (6th gen)
+  #   - iPad Pro 13" (M4)
+  #
+  # The XCUITest target (DesMoinesInsiderUITests) navigates each screen
+  # and captures screenshots via the SnapshotHelper.
+  #
+  # Output: ios/fastlane/screenshots/<locale>/<device>/
+  # ============================================================================
+
+  desc "Generate App Store screenshots for all required device sizes"
+  lane :screenshots do
+    generate
+
+    capture_screenshots(
+      project: PROJECT_PATH,
+      scheme: "DesMoinesInsiderUITests",
+      output_directory: "./fastlane/screenshots",
+      clear_previous_screenshots: true,
+      override_status_bar: true,
+      override_status_bar_arguments: "--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4",
+      stop_after_first_error: false,
+      devices: [
+        "iPhone 16 Pro Max",
+        "iPhone 15 Pro Max",
+        "iPhone 14 Plus",
+        "iPhone 8 Plus",
+        "iPad Pro (12.9-inch) (6th generation)",
+        "iPad Pro 13-inch (M4)",
+      ],
+      languages: ["en-US"],
+      launch_arguments: ["--uitesting"],
+      derived_data_path: "./DerivedData",
+      buildlog_path: "./fastlane/logs",
+      xcargs: "CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO",
+      reinstall_app: false,
+      clean: true
+    )
+
+    UI.success("Screenshots generated in ./fastlane/screenshots/")
+  end
+
+  # ============================================================================
   # Convenience: Open in Xcode
   # ============================================================================
 
