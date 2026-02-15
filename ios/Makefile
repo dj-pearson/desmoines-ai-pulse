@@ -9,7 +9,7 @@
 #   make release        # Ship to App Store Connect
 # ──────────────────────────────────────────────────
 
-.PHONY: help setup secrets generate build open clean beta release
+.PHONY: help setup secrets generate build open clean beta release screenshots
 
 SHELL := /bin/bash
 PROJECT := DesMoinesInsider.xcodeproj
@@ -76,6 +76,16 @@ release: ## Build and upload to App Store Connect
 		fastlane ios release; \
 	else \
 		echo "⚠️  Fastlane not found. Install with: gem install fastlane"; \
+	fi
+
+# ─── Screenshots ────────────────────────────────
+screenshots: ## Generate App Store screenshots via Fastlane Snapshot
+	@if command -v bundle &> /dev/null; then \
+		bundle exec fastlane ios screenshots; \
+	elif command -v fastlane &> /dev/null; then \
+		fastlane ios screenshots; \
+	else \
+		echo "Fastlane not found. Install with: gem install fastlane"; \
 	fi
 
 # ─── Clean ──────────────────────────────────────
