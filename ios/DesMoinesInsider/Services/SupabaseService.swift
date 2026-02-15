@@ -32,8 +32,8 @@ final class SupabaseService {
             supabaseKey: key,
             options: SupabaseClientOptions(
                 auth: SupabaseClientOptions.AuthOptions(
-                    flowType: .pkce,
-                    redirectToURL: URL(string: "\(Config.appBundleId)://auth-callback")
+                    redirectToURL: URL(string: "\(Config.appBundleId)://auth-callback"),
+                    flowType: .pkce
                 ),
                 global: SupabaseClientOptions.GlobalOptions(
                     headers: ["X-Client-Info": "desmoines-insider-ios"]
