@@ -67,7 +67,7 @@ jobs:
   screenshots:
     name: Generate App Store Screenshots
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 30
 
     steps:
       # ────────────────────────────────────────────
@@ -239,16 +239,8 @@ jobs:
           echo ""
 
           # Run the snapshot lane (Fastlane runs from ios/fastlane/)
-          bundle exec fastlane ios screenshots \
-            2>&1 | tee "$RUNNER_TEMP/snapshot.log" || {
-              echo ""
-              echo "::warning::Fastlane snapshot encountered errors."
-              echo "Check the logs for details."
-              echo "---"
-              tail -50 "$RUNNER_TEMP/snapshot.log"
-              echo "---"
-              # Don't fail the job — partial screenshots are still useful
-            }
+          # Fail hard on errors so we get fast feedback instead of hour-long retry loops.
+          bundle exec fastlane ios screenshots 2>&1 | tee "$RUNNER_TEMP/snapshot.log"
 
           # Report results
           echo ""
@@ -281,8 +273,8 @@ jobs:
       # ────────────────────────────────────────────
       # 9. Upload logs on failure
       # ────────────────────────────────────────────
-      - name: Upload logs on failure
-        if: failure()
+      - name: Upload logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: snapshot-logs

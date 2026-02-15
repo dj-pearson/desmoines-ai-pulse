@@ -151,6 +151,22 @@ platform :ios do
   lane :screenshots do
     generate
 
+    # Dynamically detect the latest available iOS simulator runtime.
+    # Fastlane auto-derives OS from the Xcode SDK (e.g. "26.0"), but
+    # the actual runtime may be "26.0.1" or "26.2", causing
+    # "Unable to find a device matching the provided destination specifier".
+    require 'json'
+    runtimes_json = `xcrun simctl list runtimes -j`
+    runtimes = JSON.parse(runtimes_json)['runtimes']
+    ios_runtimes = runtimes.select { |r| r['name'].include?('iOS') && r['isAvailable'] }
+    latest_ios = ios_runtimes.last
+    if latest_ios
+      detected_ios_version = latest_ios['version']
+      UI.important("Detected latest iOS runtime: #{detected_ios_version} (#{latest_ios['name']})")
+    else
+      UI.user_error!("No available iOS simulator runtime found. Cannot capture screenshots.")
+    end
+
     capture_screenshots(
       project: PROJECT_PATH,
       scheme: "DesMoinesInsiderUITests",
@@ -158,7 +174,9 @@ platform :ios do
       clear_previous_screenshots: true,
       override_status_bar: true,
       override_status_bar_arguments: "--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4",
-      stop_after_first_error: false,
+      stop_after_first_error: true,
+      number_of_retries: 0,
+      ios_version: detected_ios_version,
       devices: [
         "iPhone 16 Pro Max",
         "iPhone 15 Pro Max",

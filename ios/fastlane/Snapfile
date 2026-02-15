@@ -57,7 +57,8 @@ xcargs("CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO")
 # ──────────────────────────────────────────────────
 # Behavior
 # ──────────────────────────────────────────────────
-stop_after_first_error(false)
+stop_after_first_error(true)
+number_of_retries(0)
 override_status_bar(true)
 override_status_bar_arguments("--time 9:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4")
 
