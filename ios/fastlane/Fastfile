@@ -33,6 +33,8 @@ platform :ios do
     # Generate Secrets.generated.swift from env vars / Secrets.xcconfig
     sh("cd .. && bash scripts/generate-secrets.sh")
     sh("cd .. && xcodegen generate")
+    # Keep SnapshotHelper.swift in sync with the installed Fastlane version
+    sh("cd .. && fastlane snapshot update")
     UI.success("Xcode project generated from project.yml")
   end
 
