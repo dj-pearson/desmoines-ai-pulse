@@ -40,7 +40,7 @@ languages([
 # ──────────────────────────────────────────────────
 # Xcode Project
 # ──────────────────────────────────────────────────
-project("../DesMoinesInsider.xcodeproj")
+project("DesMoinesInsider.xcodeproj")
 scheme("DesMoinesInsiderUITests")
 
 # ──────────────────────────────────────────────────
