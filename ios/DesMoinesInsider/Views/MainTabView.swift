@@ -1,15 +1,16 @@
 import SwiftUI
 
-/// Root tab navigation. 5 tabs: Home, Search, Map, Favorites, Profile.
+/// Root tab navigation. 6 tabs: Home, Restaurants, Search, Map, Favorites, Profile.
 struct MainTabView: View {
     @State private var selectedTab = Tab.home
 
     enum Tab: String, CaseIterable {
-        case home, search, map, favorites, profile
+        case home, restaurants, search, map, favorites, profile
 
         var title: String {
             switch self {
             case .home: return "Home"
+            case .restaurants: return "Dining"
             case .search: return "Search"
             case .map: return "Map"
             case .favorites: return "Saved"
@@ -20,6 +21,7 @@ struct MainTabView: View {
         var icon: String {
             switch self {
             case .home: return "house.fill"
+            case .restaurants: return "fork.knife"
             case .search: return "magnifyingglass"
             case .map: return "map.fill"
             case .favorites: return "heart.fill"
@@ -35,6 +37,12 @@ struct MainTabView: View {
                     Label(Tab.home.title, systemImage: Tab.home.icon)
                 }
                 .tag(Tab.home)
+
+            RestaurantsView()
+                .tabItem {
+                    Label(Tab.restaurants.title, systemImage: Tab.restaurants.icon)
+                }
+                .tag(Tab.restaurants)
 
             SearchView()
                 .tabItem {

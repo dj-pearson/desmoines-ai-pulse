@@ -129,10 +129,10 @@ struct AuthView: View {
             .padding(.bottom, 40)
         }
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Notice", isPresented: $viewModel.showError) {
+        .alert("Sign In Error", isPresented: $viewModel.showError) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(viewModel.errorMessage ?? "")
+            Text(viewModel.errorMessage ?? "Something went wrong.")
         }
         .alert("Check Your Email", isPresented: $viewModel.showVerificationAlert) {
             Button("OK", role: .cancel) { dismiss() }

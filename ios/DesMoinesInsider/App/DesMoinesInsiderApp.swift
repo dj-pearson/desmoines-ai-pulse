@@ -26,6 +26,10 @@ struct DesMoinesInsiderApp: App {
                     MainTabView()
                 }
             }
+            .onOpenURL { url in
+                // Handle auth callbacks (email verification, OAuth redirects, etc.)
+                SupabaseService.shared.client?.handle(url)
+            }
             .task {
                 if authService.isAuthenticated {
                     await favoritesService.loadFavorites()
