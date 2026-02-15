@@ -341,7 +341,10 @@ jobs:
             --file "$IPA_PATH" \
             --type ios \
             --apiKey "$APPSTORE_API_KEY_ID" \
-            --apiIssuer "$APPSTORE_ISSUER_ID"
+            --apiIssuer "$APPSTORE_ISSUER_ID" || {
+              echo "::error::TestFlight upload failed! Check altool output above."
+              exit 1
+            }
 
           echo ""
           echo "============================================"
