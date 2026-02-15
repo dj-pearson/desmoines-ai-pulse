@@ -205,7 +205,10 @@ jobs:
           # Set Manual signing
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
 
-          # Inject signing settings into Release config
+          # Set DEVELOPMENT_TEAM in ALL build configs (XcodeGen generates empty values)
+          sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = '"$TEAM_ID"';/g' "$PBXPROJ"
+
+          # Inject remaining signing settings into Release config
           python3 -c "
           with open('$PBXPROJ', 'r') as f:
               content = f.read()
@@ -213,7 +216,6 @@ jobs:
           old = 'CODE_SIGN_STYLE = Manual;'
           new_block = '''CODE_SIGN_STYLE = Manual;
           \t\t\t\tCODE_SIGN_IDENTITY = \"Apple Distribution\";
-          \t\t\t\tDEVELOPMENT_TEAM = $TEAM_ID;
           \t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";'''
 
           # Replace second occurrence (Release config)
@@ -251,6 +253,7 @@ jobs:
             SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}" \
             SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
             IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty --color || {
               echo "::error::Archive failed. Last 80 lines:"
