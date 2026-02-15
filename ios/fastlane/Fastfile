@@ -14,7 +14,7 @@ default_platform(:ios)
 
 PROJECT_PATH = "DesMoinesInsider.xcodeproj"
 SCHEME = "DesMoinesInsider"
-BUNDLE_ID = "com.desmoinespulse.app"
+BUNDLE_ID = "com.desmoines.aipulse"
 IPA_OUTPUT = "./build"
 IPA_NAME = "DesMoinesInsider.ipa"
 

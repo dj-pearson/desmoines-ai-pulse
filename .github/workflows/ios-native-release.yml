@@ -51,7 +51,7 @@ on:
 
 env:
   XCODE_VERSION: '26.0'
-  BUNDLE_ID: 'com.desmoinespulse.app'
+  BUNDLE_ID: 'com.desmoines.aipulse'
   SCHEME: 'DesMoinesInsider'
   PROJECT_DIR: 'ios'
 
