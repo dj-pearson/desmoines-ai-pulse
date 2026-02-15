@@ -34,7 +34,12 @@ platform :ios do
     sh("cd .. && bash scripts/generate-secrets.sh")
     sh("cd .. && xcodegen generate")
     # Keep SnapshotHelper.swift in sync with the installed Fastlane version
-    sh("cd .. && fastlane snapshot update")
+    # Copy directly from the gem assets (fastlane snapshot update requires interactive confirmation)
+    fastlane_gem = Gem::Specification.find_by_name('fastlane').gem_dir
+    source = File.join(fastlane_gem, "snapshot", "lib", "assets", "SnapshotHelper.swift")
+    dest = File.expand_path("../DesMoinesInsiderUITests/SnapshotHelper.swift", Dir.pwd)
+    FileUtils.cp(source, dest)
+    UI.success("Updated SnapshotHelper.swift from Fastlane #{Fastlane::VERSION}")
     UI.success("Xcode project generated from project.yml")
   end
 
