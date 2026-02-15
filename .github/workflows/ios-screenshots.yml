@@ -9,7 +9,6 @@
 #   - iPhone 16 Pro Max (6.9")
 #   - iPhone 15 Pro Max (6.7")
 #   - iPhone 14 Plus (6.5")
-#   - iPhone 8 Plus (5.5")
 #   - iPad Pro 12.9" (6th gen)
 #   - iPad Pro 13" (M4)
 #
@@ -23,7 +22,7 @@
 #   07. Event Detail
 #   08. Restaurant Detail
 #
-# Total: ~48 screenshots per run (6 devices x 8 screens)
+# Total: ~40 screenshots per run (5 devices x 8 screens)
 #
 # Triggers:
 #   - Manual dispatch (workflow_dispatch) with optional device filter
@@ -162,7 +161,6 @@ jobs:
             "iPhone 16 Pro Max"
             "iPhone 15 Pro Max"
             "iPhone 14 Plus"
-            "iPhone 8 Plus"
             "iPad Pro (12.9-inch) (6th generation)"
             "iPad Pro 13-inch (M4)"
           )
@@ -228,7 +226,7 @@ jobs:
       # 7. Run Fastlane Snapshot
       # ────────────────────────────────────────────
       - name: Capture screenshots
-        working-directory: ${{ env.PROJECT_DIR }}
+        working-directory: ${{ env.PROJECT_DIR }}/fastlane
         env:
           SNAPSHOT_DEVICES: ${{ github.event.inputs.devices || 'all' }}
           SNAPSHOT_LOCALE: ${{ github.event.inputs.locale || 'en-US' }}
@@ -240,7 +238,7 @@ jobs:
           echo "Locale: $SNAPSHOT_LOCALE"
           echo ""
 
-          # Run the snapshot lane
+          # Run the snapshot lane (Fastlane runs from ios/fastlane/)
           bundle exec fastlane ios screenshots \
             2>&1 | tee "$RUNNER_TEMP/snapshot.log" || {
               echo ""
@@ -255,12 +253,12 @@ jobs:
           # Report results
           echo ""
           echo "=== Screenshot Results ==="
-          if [ -d "fastlane/screenshots" ]; then
-            TOTAL=$(find fastlane/screenshots -name "*.png" | wc -l | xargs)
+          if [ -d "screenshots" ]; then
+            TOTAL=$(find screenshots -name "*.png" | wc -l | xargs)
             echo "Total screenshots captured: $TOTAL"
             echo ""
             echo "Screenshots by device:"
-            find fastlane/screenshots -name "*.png" -exec dirname {} \; | sort -u | while read dir; do
+            find screenshots -name "*.png" -exec dirname {} \; | sort -u | while read dir; do
               COUNT=$(find "$dir" -name "*.png" | wc -l | xargs)
               echo "  $dir: $COUNT screenshots"
             done
@@ -291,7 +289,6 @@ jobs:
           path: |
             ${{ env.PROJECT_DIR }}/fastlane/logs/
             ${{ env.PROJECT_DIR }}/fastlane/report.xml
-            ${{ env.RUNNER_TEMP }}/snapshot.log
           retention-days: 7
           if-no-files-found: ignore
 
@@ -304,8 +301,9 @@ jobs:
           echo "## App Store Screenshots" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [ -d "${{ env.PROJECT_DIR }}/fastlane/screenshots" ]; then
-            TOTAL=$(find "${{ env.PROJECT_DIR }}/fastlane/screenshots" -name "*.png" 2>/dev/null | wc -l | xargs)
+          SCREENSHOT_DIR="${{ env.PROJECT_DIR }}/fastlane/screenshots"
+          if [ -d "$SCREENSHOT_DIR" ]; then
+            TOTAL=$(find "$SCREENSHOT_DIR" -name "*.png" 2>/dev/null | wc -l | xargs)
             echo "**Total screenshots captured:** $TOTAL" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Devices" >> $GITHUB_STEP_SUMMARY
@@ -315,7 +313,6 @@ jobs:
             echo "| iPhone 16 Pro Max | 6.9\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPhone 15 Pro Max | 6.7\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPhone 14 Plus | 6.5\" | Required |" >> $GITHUB_STEP_SUMMARY
-            echo "| iPhone 8 Plus | 5.5\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPad Pro 12.9\" (6th gen) | 12.9\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPad Pro 13\" (M4) | 13\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
