@@ -1,4 +1,5 @@
 import Foundation
+import Supabase
 
 /// Manages user favorites via the user_event_interactions table.
 /// Matches the web app's useFavorites hook pattern.
@@ -10,7 +11,12 @@ final class FavoritesService {
     private(set) var favoriteEventIds: Set<String> = []
     private(set) var isLoading = false
 
-    private let supabase = SupabaseService.shared.client
+    private let supabase: SupabaseClient? = SupabaseService.shared.client
+
+    private func db() throws -> SupabaseClient {
+        guard let supabase else { throw FavoritesError.notConfigured }
+        return supabase
+    }
 
     // MARK: - Load Favorites
 
@@ -24,10 +30,11 @@ final class FavoritesService {
         defer { isLoading = false }
 
         do {
+            let client = try db()
             struct FavoriteRow: Decodable {
                 let event_id: String
             }
-            let rows: [FavoriteRow] = try await supabase
+            let rows: [FavoriteRow] = try await client
                 .from("user_event_interactions")
                 .select("event_id")
                 .eq("user_id", value: userId)
@@ -70,7 +77,8 @@ final class FavoritesService {
             let interaction_type: String
         }
 
-        try await supabase
+        let client = try db()
+        try await client
             .from("user_event_interactions")
             .insert(InsertRow(user_id: userId, event_id: eventId, interaction_type: "favorite"))
             .execute()
@@ -80,7 +88,8 @@ final class FavoritesService {
     }
 
     private func removeFavorite(userId: String, eventId: String) async throws -> Bool {
-        try await supabase
+        let client = try db()
+        try await client
             .from("user_event_interactions")
             .delete()
             .eq("user_id", value: userId)
@@ -96,8 +105,9 @@ final class FavoritesService {
 
     func fetchFavoriteEvents() async throws -> [Event] {
         guard !favoriteEventIds.isEmpty else { return [] }
+        let client = try db()
 
-        let events: [Event] = try await supabase
+        let events: [Event] = try await client
             .from("events")
             .select()
             .in("id", values: Array(favoriteEventIds))
@@ -119,6 +129,7 @@ final class FavoritesService {
     enum FavoritesError: LocalizedError {
         case notAuthenticated
         case limitReached(max: Int)
+        case notConfigured
 
         var errorDescription: String? {
             switch self {
@@ -126,6 +137,8 @@ final class FavoritesService {
                 return "Please sign in to save favorites."
             case .limitReached(let max):
                 return "You've reached the limit of \(max) favorites. Upgrade to Insider for unlimited saves."
+            case .notConfigured:
+                return "Supabase is not configured."
             }
         }
     }

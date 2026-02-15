@@ -16,10 +16,18 @@ final class AuthService {
     private(set) var isLoading = true
 
     nonisolated(unsafe) private var authListener: Task<Void, Never>?
-    private let supabase = SupabaseService.shared.client
+    private let supabase: SupabaseClient?
 
     private init() {
-        startAuthListener()
+        supabase = SupabaseService.shared.client
+
+        // Only start listening if Supabase is configured
+        if supabase != nil {
+            startAuthListener()
+        } else {
+            // No Supabase client — stop loading so the app can show the error UI
+            isLoading = false
+        }
     }
 
     deinit {
@@ -29,9 +37,10 @@ final class AuthService {
     // MARK: - Auth State Listener
 
     private func startAuthListener() {
+        guard let supabase else { return }
         authListener = Task { [weak self] in
             guard let self else { return }
-            for await (event, session) in self.supabase.auth.authStateChanges {
+            for await (event, session) in supabase.auth.authStateChanges {
                 switch event {
                 case .initialSession, .signedIn, .tokenRefreshed:
                     self.currentUser = session?.user
@@ -56,6 +65,7 @@ final class AuthService {
     // MARK: - Email/Password Auth
 
     func signIn(email: String, password: String) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
         let session = try await supabase.auth.signIn(
             email: email,
             password: password
@@ -65,6 +75,7 @@ final class AuthService {
     }
 
     func signUp(email: String, password: String, firstName: String?, lastName: String?, interests: [String]?) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
         let response = try await supabase.auth.signUp(
             email: email,
             password: password,
@@ -86,6 +97,7 @@ final class AuthService {
     }
 
     func signOut() async throws {
+        guard let supabase else { throw AuthError.notConfigured }
         try await supabase.auth.signOut()
         currentUser = nil
         currentProfile = nil
@@ -94,12 +106,14 @@ final class AuthService {
     }
 
     func resetPassword(email: String) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
         try await supabase.auth.resetPasswordForEmail(email)
     }
 
     // MARK: - Apple Sign-In
 
     func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
         guard let identityToken = credential.identityToken,
               let tokenString = String(data: identityToken, encoding: .utf8) else {
             throw AuthError.invalidToken
@@ -115,6 +129,7 @@ final class AuthService {
     // MARK: - Profile Management
 
     private func fetchProfile(userId: String) async {
+        guard let supabase else { return }
         do {
             let profile: UserProfile = try await supabase
                 .from("profiles")
@@ -131,6 +146,7 @@ final class AuthService {
     }
 
     private func createProfile(userId: String, email: String, firstName: String?, lastName: String?, interests: [String]?) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
         struct NewProfile: Encodable {
             let user_id: String
             let email: String
@@ -152,6 +168,7 @@ final class AuthService {
     }
 
     func updateProfile(firstName: String?, lastName: String?, phone: String?, location: String?, interests: [String]?) async throws {
+        guard let supabase else { throw AuthError.notConfigured }
         guard let userId = currentUser?.id.uuidString else { return }
 
         struct ProfileUpdate: Encodable {
@@ -180,6 +197,7 @@ final class AuthService {
     // MARK: - Admin Check
 
     private func checkAdminRole(userId: String) async {
+        guard let supabase else { return }
         // Check user_roles table first (matches web AuthContext pattern)
         do {
             struct RoleRow: Decodable {
@@ -207,11 +225,13 @@ final class AuthService {
     enum AuthError: LocalizedError {
         case invalidToken
         case noUser
+        case notConfigured
 
         var errorDescription: String? {
             switch self {
             case .invalidToken: return "Invalid authentication token."
             case .noUser: return "No user session found."
+            case .notConfigured: return "Supabase is not configured. Please contact support."
             }
         }
     }

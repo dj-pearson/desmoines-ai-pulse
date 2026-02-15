@@ -1,11 +1,23 @@
 import Foundation
+import Supabase
 
 /// Fetches events from Supabase, matching the web app's useEvents hook patterns.
 /// Supports full-text search, category filtering, date ranges, and pagination.
 actor EventsService {
     static let shared = EventsService()
 
-    private let supabase = SupabaseService.shared.client
+    private let supabase: SupabaseClient?  = SupabaseService.shared.client
+
+    enum ServiceError: LocalizedError {
+        case notConfigured
+        var errorDescription: String? { "Supabase is not configured." }
+    }
+
+    /// Unwrap the optional client or throw.
+    private func db() throws -> SupabaseClient {
+        guard let supabase else { throw ServiceError.notConfigured }
+        return supabase
+    }
 
     // MARK: - Fetch Events
 
@@ -26,9 +38,10 @@ actor EventsService {
     }
 
     func fetchEvents(query: EventsQuery = EventsQuery()) async throws -> EventsResponse {
+        let client = try db()
         let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
 
-        var request = supabase
+        var request = client
             .from("events")
             .select("*", head: false, count: .exact)
             .gte("date", value: today)
@@ -76,7 +89,8 @@ actor EventsService {
     // MARK: - Fetch Single Event
 
     func fetchEvent(id: String) async throws -> Event {
-        let event: Event = try await supabase
+        let client = try db()
+        let event: Event = try await client
             .from("events")
             .select()
             .eq("id", value: id)
@@ -94,7 +108,8 @@ actor EventsService {
             let search_limit: Int
         }
 
-        let events: [Event] = try await supabase
+        let client = try db()
+        let events: [Event] = try await client
             .rpc("fuzzy_search_events", params: FuzzyParams(search_query: query, search_limit: limit))
             .execute()
             .value
@@ -111,7 +126,8 @@ actor EventsService {
             let search_limit: Int
         }
 
-        let events: [Event] = try await supabase
+        let client = try db()
+        let events: [Event] = try await client
             .rpc("search_events_near_location", params: NearbyParams(
                 user_lat: latitude,
                 user_lon: longitude,
@@ -126,9 +142,10 @@ actor EventsService {
     // MARK: - Featured Events
 
     func fetchFeaturedEvents(limit: Int = 10) async throws -> [Event] {
+        let client = try db()
         let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
 
-        let events: [Event] = try await supabase
+        let events: [Event] = try await client
             .from("events")
             .select()
             .eq("is_featured", value: true)
@@ -143,9 +160,10 @@ actor EventsService {
     // MARK: - Related Events
 
     func fetchRelatedEvents(eventId: String, category: String, limit: Int = 6) async throws -> [Event] {
+        let client = try db()
         let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
 
-        let events: [Event] = try await supabase
+        let events: [Event] = try await client
             .from("events")
             .select()
             .eq("category", value: category)

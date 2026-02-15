@@ -57,6 +57,17 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Generate placeholder secrets for CI build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          # For CI build validation, we just need the file to exist and compile.
+          # The placeholder values will cause Config.isConfigured == false,
+          # but the build will succeed (no more fatalError).
+          chmod +x scripts/generate-secrets.sh
+          SUPABASE_URL="https://placeholder.supabase.co" \
+          SUPABASE_ANON_KEY="placeholder-key-for-ci-build" \
+          bash scripts/generate-secrets.sh
+
       - name: Generate Xcode project
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
@@ -78,14 +89,14 @@ jobs:
         run: |
           set -o pipefail
 
+          # Supabase credentials are injected via Secrets.generated.swift
+          # (generated in the placeholder secrets step above).
           xcodebuild build \
             -project DesMoinesInsider.xcodeproj \
             -scheme "${{ env.SCHEME }}" \
             -configuration Debug \
             -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
-            SUPABASE_URL="https://placeholder.supabase.co" \
-            SUPABASE_ANON_KEY="placeholder-key-for-ci-build" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
@@ -124,15 +135,15 @@ jobs:
 
           # Secrets safety
           test -f ios/Secrets.xcconfig.example && echo "✅ Secrets.xcconfig.example" || (echo "❌ MISSING secrets example" && exit 1)
+          test -f ios/scripts/generate-secrets.sh && echo "✅ generate-secrets.sh" || (echo "❌ MISSING generate-secrets.sh" && exit 1)
           test -f ios/.gitignore && echo "✅ .gitignore" || (echo "❌ MISSING .gitignore" && exit 1)
           grep -q "Secrets.xcconfig" ios/.gitignore && echo "✅ Secrets.xcconfig is gitignored" || (echo "❌ Secrets.xcconfig NOT in .gitignore" && exit 1)
+          grep -q "Secrets.generated.swift" ios/.gitignore && echo "✅ Secrets.generated.swift is gitignored" || (echo "❌ Secrets.generated.swift NOT in .gitignore" && exit 1)
 
           echo ""
           echo "=== Checking Info.plist keys ==="
           grep -q "NSLocationWhenInUseUsageDescription" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ Location usage description" || echo "⚠️ Missing location description"
           grep -q "ITSAppUsesNonExemptEncryption" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ Encryption compliance" || echo "⚠️ Missing encryption compliance"
-          grep -q "SUPABASE_URL" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ SUPABASE_URL in plist" || echo "⚠️ Missing SUPABASE_URL"
-          grep -q "SUPABASE_ANON_KEY" ios/DesMoinesInsider/Resources/Info.plist && echo "✅ SUPABASE_ANON_KEY in plist" || echo "⚠️ Missing SUPABASE_ANON_KEY"
 
           echo ""
           echo "=== Checking Assets ==="

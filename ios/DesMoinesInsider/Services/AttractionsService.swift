@@ -1,10 +1,21 @@
 import Foundation
+import Supabase
 
 /// Fetches attractions from Supabase, matching the web app's useAttractions hook.
 actor AttractionsService {
     static let shared = AttractionsService()
 
-    private let supabase = SupabaseService.shared.client
+    private let supabase: SupabaseClient? = SupabaseService.shared.client
+
+    enum ServiceError: LocalizedError {
+        case notConfigured
+        var errorDescription: String? { "Supabase is not configured." }
+    }
+
+    private func db() throws -> SupabaseClient {
+        guard let supabase else { throw ServiceError.notConfigured }
+        return supabase
+    }
 
     struct AttractionsQuery {
         var searchText: String?
@@ -22,7 +33,8 @@ actor AttractionsService {
     }
 
     func fetchAttractions(query: AttractionsQuery = AttractionsQuery()) async throws -> AttractionsResponse {
-        var request = supabase
+        let client = try db()
+        var request = client
             .from("attractions")
             .select("*", head: false, count: .exact)
 
@@ -63,7 +75,8 @@ actor AttractionsService {
     }
 
     func fetchAttraction(id: String) async throws -> Attraction {
-        let attraction: Attraction = try await supabase
+        let client = try db()
+        let attraction: Attraction = try await client
             .from("attractions")
             .select()
             .eq("id", value: id)

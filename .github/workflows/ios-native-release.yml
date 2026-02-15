@@ -9,7 +9,7 @@
 #   - No web asset build (pure Swift)
 #   - XcodeGen instead of existing .xcodeproj
 #   - SPM instead of CocoaPods
-#   - Supabase credentials via build settings (not JS env vars)
+#   - Supabase credentials via generated Swift file (not build settings — avoids :// xcconfig bug)
 #
 # REQUIRED GITHUB SECRETS (6 + 2):
 #   1. APPSTORE_ISSUER_ID           - App Store Connect API Issuer ID
@@ -90,7 +90,20 @@ jobs:
         run: brew install xcodegen
 
       # ==============================================================
-      # 2. GENERATE XCODE PROJECT
+      # 2. INJECT SUPABASE SECRETS INTO GENERATED SWIFT FILE
+      # ==============================================================
+      - name: Generate Supabase secrets file
+        working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          chmod +x scripts/generate-secrets.sh
+          bash scripts/generate-secrets.sh
+          echo "✅ Secrets.generated.swift written"
+
+      # ==============================================================
+      # 3. GENERATE XCODE PROJECT
       # ==============================================================
       - name: Generate Xcode project
         working-directory: ${{ env.PROJECT_DIR }}
@@ -99,7 +112,7 @@ jobs:
           echo "✅ Xcode project generated from project.yml"
 
       # ==============================================================
-      # 3. RESOLVE SPM DEPENDENCIES
+      # 4. RESOLVE SPM DEPENDENCIES
       # ==============================================================
       - name: Resolve Swift Package Manager dependencies
         working-directory: ${{ env.PROJECT_DIR }}
@@ -111,7 +124,7 @@ jobs:
           echo "✅ SPM dependencies resolved"
 
       # ==============================================================
-      # 4. SET VERSION & BUILD NUMBER
+      # 5. SET VERSION & BUILD NUMBER
       # ==============================================================
       - name: Set version and build number
         working-directory: ${{ env.PROJECT_DIR }}
@@ -138,7 +151,7 @@ jobs:
           echo "✅ Version: $VERSION ($BUILD_NUMBER)"
 
       # ==============================================================
-      # 5. IMPORT DISTRIBUTION CERTIFICATE
+      # 6. IMPORT DISTRIBUTION CERTIFICATE
       # ==============================================================
       - name: Import distribution certificate
         env:
@@ -170,7 +183,7 @@ jobs:
           echo "✅ Distribution certificate imported"
 
       # ==============================================================
-      # 6. INSTALL PROVISIONING PROFILE
+      # 7. INSTALL PROVISIONING PROFILE
       # ==============================================================
       - name: Install provisioning profile
         env:
@@ -195,7 +208,7 @@ jobs:
           echo "✅ Provisioning profile installed: $PP_NAME (UUID: $PP_UUID, Team: $TEAM_ID)"
 
       # ==============================================================
-      # 7. CONFIGURE CODE SIGNING
+      # 8. CONFIGURE CODE SIGNING
       # ==============================================================
       - name: Configure code signing
         working-directory: ${{ env.PROJECT_DIR }}
@@ -236,13 +249,16 @@ jobs:
           grep "DEVELOPMENT_TEAM" "$PBXPROJ" || echo "⚠️ Team not found"
 
       # ==============================================================
-      # 8. BUILD XCODE ARCHIVE
+      # 9. BUILD XCODE ARCHIVE
       # ==============================================================
       - name: Build Xcode archive
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
           set -o pipefail
 
+          # NOTE: Supabase credentials are injected via Secrets.generated.swift
+          # (step 2), NOT via build settings. Passing URLs as build settings
+          # is fragile because :// is treated as a comment in xcconfig context.
           xcodebuild archive \
             -project DesMoinesInsider.xcodeproj \
             -scheme "${{ env.SCHEME }}" \
@@ -250,8 +266,6 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
-            SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}" \
-            SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
             IPHONEOS_DEPLOYMENT_TARGET=17.0 \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
@@ -264,7 +278,7 @@ jobs:
           echo "✅ Archive built successfully"
 
       # ==============================================================
-      # 9. EXPORT IPA
+      # 10. EXPORT IPA
       # ==============================================================
       - name: Create ExportOptions.plist
         run: |
@@ -318,7 +332,7 @@ jobs:
           echo "✅ IPA exported: $IPA_PATH ($(du -h "$IPA_PATH" | cut -f1))"
 
       # ==============================================================
-      # 10. UPLOAD TO TESTFLIGHT
+      # 11. UPLOAD TO TESTFLIGHT
       # ==============================================================
       - name: Setup App Store Connect API key
         env:
@@ -360,7 +374,7 @@ jobs:
           echo "============================================"
 
       # ==============================================================
-      # 11. (OPTIONAL) SUBMIT FOR APP STORE REVIEW
+      # 12. (OPTIONAL) SUBMIT FOR APP STORE REVIEW
       # ==============================================================
       - name: Submit for App Store Review
         if: ${{ github.event.inputs.submit_for_review == 'true' }}
@@ -386,7 +400,7 @@ jobs:
           " || echo "::warning::Auto-submission skipped. Submit manually from App Store Connect."
 
       # ==============================================================
-      # 12. UPLOAD ARTIFACT
+      # 13. UPLOAD ARTIFACT
       # ==============================================================
       - name: Upload IPA artifact
         if: success()
@@ -397,7 +411,7 @@ jobs:
           retention-days: 90
 
       # ==============================================================
-      # 13. CLEANUP
+      # 14. CLEANUP
       # ==============================================================
       - name: Cleanup signing artifacts
         if: always()

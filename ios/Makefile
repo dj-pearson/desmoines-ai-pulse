@@ -9,7 +9,7 @@
 #   make release        # Ship to App Store Connect
 # ──────────────────────────────────────────────────
 
-.PHONY: help setup generate build open clean beta release
+.PHONY: help setup secrets generate build open clean beta release
 
 SHELL := /bin/bash
 PROJECT := DesMoinesInsider.xcodeproj
@@ -32,8 +32,12 @@ setup: ## First-time project setup (install tools + generate project)
 	@echo ""
 	@echo "✅ Setup complete. Run 'make open' to open in Xcode."
 
+# ─── Generate Secrets ────────────────────────────
+secrets: ## Generate Secrets.generated.swift from env vars or Secrets.xcconfig
+	@bash scripts/generate-secrets.sh
+
 # ─── Generate ────────────────────────────────────
-generate: ## Generate Xcode project from project.yml
+generate: secrets ## Generate Xcode project from project.yml (runs secrets first)
 	xcodegen generate
 	@echo "✅ $(PROJECT) generated"
 

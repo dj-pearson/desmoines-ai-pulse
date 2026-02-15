@@ -1,24 +1,50 @@
 import Foundation
 
 /// Central configuration for the Des Moines Insider iOS app.
-/// Reads Supabase credentials from Info.plist (set via xcconfig or build settings).
+///
+/// Credentials are resolved in this order:
+///   1. `GeneratedSecrets` (written by `scripts/generate-secrets.sh` at build time)
+///   2. Info.plist build-setting substitution (`$(SUPABASE_URL)`)
+///   3. If both are empty the app displays a configuration-error screen instead of crashing.
 enum Config {
     // MARK: - Supabase
 
-    static let supabaseURL: URL = {
-        guard let urlString = Bundle.main.infoDictionary?["SUPABASE_URL"] as? String,
-              let url = URL(string: urlString) else {
-            fatalError("SUPABASE_URL not set in Info.plist. Add it to your xcconfig or build settings.")
+    /// Resolved Supabase project URL, or `nil` when credentials are missing.
+    static let supabaseURL: URL? = {
+        // 1. Generated secrets (most reliable — avoids xcconfig :// comment bug)
+        if !GeneratedSecrets.supabaseURL.isEmpty,
+           let url = URL(string: GeneratedSecrets.supabaseURL) {
+            return url
         }
-        return url
+        // 2. Fallback: Info.plist build-setting substitution
+        if let plistValue = Bundle.main.infoDictionary?["SUPABASE_URL"] as? String,
+           !plistValue.isEmpty,
+           !plistValue.hasPrefix("$("),        // still a build-setting variable reference
+           let url = URL(string: plistValue) {
+            return url
+        }
+        return nil
     }()
 
-    static let supabaseAnonKey: String = {
-        guard let key = Bundle.main.infoDictionary?["SUPABASE_ANON_KEY"] as? String, !key.isEmpty else {
-            fatalError("SUPABASE_ANON_KEY not set in Info.plist. Add it to your xcconfig or build settings.")
+    /// Resolved Supabase anonymous key, or `nil` when credentials are missing.
+    static let supabaseAnonKey: String? = {
+        // 1. Generated secrets
+        if !GeneratedSecrets.supabaseAnonKey.isEmpty {
+            return GeneratedSecrets.supabaseAnonKey
         }
-        return key
+        // 2. Fallback: Info.plist
+        if let plistValue = Bundle.main.infoDictionary?["SUPABASE_ANON_KEY"] as? String,
+           !plistValue.isEmpty,
+           !plistValue.hasPrefix("$(") {
+            return plistValue
+        }
+        return nil
     }()
+
+    /// `true` when both Supabase credentials are present and valid.
+    static var isConfigured: Bool {
+        supabaseURL != nil && supabaseAnonKey != nil
+    }
 
     // MARK: - App
 

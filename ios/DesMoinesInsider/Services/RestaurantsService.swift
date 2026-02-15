@@ -1,10 +1,21 @@
 import Foundation
+import Supabase
 
 /// Fetches restaurants from Supabase, matching the web app's useRestaurants hook.
 actor RestaurantsService {
     static let shared = RestaurantsService()
 
-    private let supabase = SupabaseService.shared.client
+    private let supabase: SupabaseClient? = SupabaseService.shared.client
+
+    enum ServiceError: LocalizedError {
+        case notConfigured
+        var errorDescription: String? { "Supabase is not configured." }
+    }
+
+    private func db() throws -> SupabaseClient {
+        guard let supabase else { throw ServiceError.notConfigured }
+        return supabase
+    }
 
     // MARK: - Query Parameters
 
@@ -29,7 +40,8 @@ actor RestaurantsService {
     // MARK: - Fetch Restaurants
 
     func fetchRestaurants(query: RestaurantsQuery = RestaurantsQuery()) async throws -> RestaurantsResponse {
-        var request = supabase
+        let client = try db()
+        var request = client
             .from("restaurants")
             .select("*", head: false, count: .exact)
 
@@ -126,7 +138,8 @@ actor RestaurantsService {
     // MARK: - Single Restaurant
 
     func fetchRestaurant(id: String) async throws -> Restaurant {
-        let restaurant: Restaurant = try await supabase
+        let client = try db()
+        let restaurant: Restaurant = try await client
             .from("restaurants")
             .select()
             .eq("id", value: id)
@@ -146,7 +159,8 @@ actor RestaurantsService {
             let limit_count: Int
         }
 
-        let restaurants: [Restaurant] = try await supabase
+        let client = try db()
+        let restaurants: [Restaurant] = try await client
             .rpc("restaurants_within_radius", params: NearbyParams(
                 center_lat: latitude,
                 center_lng: longitude,
@@ -166,7 +180,8 @@ actor RestaurantsService {
             let search_limit: Int
         }
 
-        let restaurants: [Restaurant] = try await supabase
+        let client = try db()
+        let restaurants: [Restaurant] = try await client
             .rpc("fuzzy_search_restaurants", params: FuzzyParams(search_query: query, search_limit: limit))
             .execute()
             .value
@@ -179,7 +194,8 @@ actor RestaurantsService {
         struct CuisineRow: Decodable {
             let cuisine: String?
         }
-        let rows: [CuisineRow] = try await supabase
+        let client = try db()
+        let rows: [CuisineRow] = try await client
             .from("restaurants")
             .select("cuisine")
             .not("cuisine", operator: .is, value: "null")

@@ -48,10 +48,6 @@
 	<string>Des Moines Insider uses your location to show events and restaurants near you.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>Des Moines Insider uses your location to send you notifications about nearby events.</string>
-	<key>SUPABASE_URL</key>
-	<string>$(SUPABASE_URL)</string>
-	<key>SUPABASE_ANON_KEY</key>
-	<string>$(SUPABASE_ANON_KEY)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

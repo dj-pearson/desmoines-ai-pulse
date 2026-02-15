@@ -9,6 +9,10 @@
 #   fastlane ios build_debug    # Build for Simulator (no signing)
 #   fastlane ios beta           # Build + upload to TestFlight
 #   fastlane ios release        # Build + upload to App Store Connect
+#
+# IMPORTANT: Supabase credentials are injected via Secrets.generated.swift,
+# NOT via build settings. Run scripts/generate-secrets.sh before building.
+# The generate lane does this automatically.
 
 default_platform(:ios)
 
@@ -21,11 +25,13 @@ IPA_NAME = "DesMoinesInsider.ipa"
 platform :ios do
 
   # ============================================================================
-  # Generate Xcode project from project.yml
+  # Generate secrets + Xcode project from project.yml
   # ============================================================================
 
-  desc "Generate Xcode project using XcodeGen"
+  desc "Generate Xcode project using XcodeGen (also runs secrets script)"
   lane :generate do
+    # Generate Secrets.generated.swift from env vars / Secrets.xcconfig
+    sh("cd .. && bash scripts/generate-secrets.sh")
     sh("cd .. && xcodegen generate")
     UI.success("Xcode project generated from project.yml")
   end
@@ -47,8 +53,6 @@ platform :ios do
         "CODE_SIGN_IDENTITY" => "",
         "CODE_SIGNING_REQUIRED" => "NO",
         "CODE_SIGNING_ALLOWED" => "NO",
-        "SUPABASE_URL" => ENV["SUPABASE_URL"] || "https://placeholder.supabase.co",
-        "SUPABASE_ANON_KEY" => ENV["SUPABASE_ANON_KEY"] || "placeholder-key",
       },
       xcargs: "-resolvePackageDependencies"
     )
@@ -76,8 +80,7 @@ platform :ios do
       export_method: "app-store",
       output_directory: IPA_OUTPUT,
       output_name: IPA_NAME,
-      clean: true,
-      xcargs: "SUPABASE_URL='#{ENV["SUPABASE_URL"]}' SUPABASE_ANON_KEY='#{ENV["SUPABASE_ANON_KEY"]}'"
+      clean: true
     )
 
     upload_to_testflight(
@@ -107,8 +110,7 @@ platform :ios do
       export_method: "app-store",
       output_directory: IPA_OUTPUT,
       output_name: IPA_NAME,
-      clean: true,
-      xcargs: "SUPABASE_URL='#{ENV["SUPABASE_URL"]}' SUPABASE_ANON_KEY='#{ENV["SUPABASE_ANON_KEY"]}'"
+      clean: true
     )
 
     upload_to_app_store(

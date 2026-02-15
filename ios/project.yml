@@ -34,14 +34,24 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         DEVELOPMENT_TEAM: ""
         CODE_SIGN_STYLE: Automatic
-        SUPABASE_URL: $(SUPABASE_URL)
-        SUPABASE_ANON_KEY: $(SUPABASE_ANON_KEY)
       configs:
         Debug:
           SWIFT_OPTIMIZATION_LEVEL: -Onone
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
         Release:
           SWIFT_OPTIMIZATION_LEVEL: -O
+    preBuildScripts:
+      - name: Generate Supabase Secrets
+        script: |
+          # Generate Secrets.generated.swift from environment variables.
+          # In CI, SUPABASE_URL and SUPABASE_ANON_KEY are set by the workflow.
+          # For local development, create ios/Secrets.xcconfig or set env vars.
+          if [ -f "$PROJECT_DIR/scripts/generate-secrets.sh" ]; then
+            bash "$PROJECT_DIR/scripts/generate-secrets.sh"
+          else
+            echo "warning: generate-secrets.sh not found — using placeholder secrets"
+          fi
+        basedOnDependencyAnalysis: false
     dependencies:
       - package: Supabase
     entitlements:
@@ -57,13 +67,6 @@ schemes:
         DesMoinesInsider: all
     run:
       config: Debug
-      environmentVariables:
-        - variable: SUPABASE_URL
-          value: "https://your-project.supabase.co"
-          isEnabled: true
-        - variable: SUPABASE_ANON_KEY
-          value: "your-anon-key"
-          isEnabled: true
     profile:
       config: Release
     archive:
