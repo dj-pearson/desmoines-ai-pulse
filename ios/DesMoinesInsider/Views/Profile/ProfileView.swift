@@ -141,7 +141,7 @@ struct ProfileView: View {
         }
         .alert("Error", isPresented: .init(
             get: { viewModel.errorMessage != nil },
-            set: { if !$0 { viewModel.errorMessage = nil } }
+            set: { if !$0 { viewModel.clearError() } }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
