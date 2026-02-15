@@ -1,12 +1,17 @@
 #!/bin/bash
 # generate-secrets.sh
 # Generates Secrets.generated.swift from environment variables.
-# Called by the Xcode build phase or CI before building.
+# Called by CI before building, or manually for local development.
 #
 # Usage:
 #   SUPABASE_URL="https://xxx.supabase.co" SUPABASE_ANON_KEY="eyJ..." ./scripts/generate-secrets.sh
 #
 # The generated file is gitignored and should never be committed.
+#
+# IMPORTANT: If the file already contains real (non-empty) secrets and no
+# environment variables are provided, the script will SKIP overwriting.
+# This prevents the Xcode pre-build phase from clobbering secrets that
+# were injected by CI before the build started.
 
 set -euo pipefail
 
@@ -25,6 +30,20 @@ if [ -z "$SUPABASE_URL_VALUE" ] && [ -f "$XCCONFIG_FILE" ]; then
 fi
 if [ -z "$SUPABASE_ANON_KEY_VALUE" ] && [ -f "$XCCONFIG_FILE" ]; then
     SUPABASE_ANON_KEY_VALUE=$(grep "^SUPABASE_ANON_KEY" "$XCCONFIG_FILE" | head -1 | sed 's/^SUPABASE_ANON_KEY[[:space:]]*=[[:space:]]*//' | sed 's/[[:space:]]*$//')
+fi
+
+# ──────────────────────────────────────────────────────────────────────
+# GUARD: If no new values are available but the file already has real
+# secrets, do NOT overwrite. This protects against the Xcode pre-build
+# script clobbering secrets that CI wrote before xcodegen/xcodebuild.
+# ──────────────────────────────────────────────────────────────────────
+if [ -z "$SUPABASE_URL_VALUE" ] && [ -z "$SUPABASE_ANON_KEY_VALUE" ] && [ -f "$OUTPUT_FILE" ]; then
+    # Check if the existing file has non-empty values
+    EXISTING_URL=$(grep 'supabaseURL' "$OUTPUT_FILE" 2>/dev/null | sed 's/.*= "\(.*\)"/\1/' || true)
+    if [ -n "$EXISTING_URL" ] && [ "$EXISTING_URL" != "" ]; then
+        echo "✅ Secrets.generated.swift already has values — skipping (no env vars set)"
+        exit 0
+    fi
 fi
 
 # Warn if values are missing (build will succeed but app will show config error)

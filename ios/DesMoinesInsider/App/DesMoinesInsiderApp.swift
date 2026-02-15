@@ -42,14 +42,11 @@ private struct LaunchScreenView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 16) {
-                Image(systemName: "building.2.crop.circle.fill")
-                    .font(.system(size: 72))
-                    .foregroundStyle(Color.accentColor)
-
-                Text("Des Moines Insider")
-                    .font(.title.bold())
-                    .foregroundStyle(.white)
+            VStack(spacing: 24) {
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 220)
 
                 ProgressView()
                     .tint(Color.accentColor)

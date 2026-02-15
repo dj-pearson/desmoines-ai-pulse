@@ -8,6 +8,7 @@ struct OnboardingView: View {
     private let pages: [OnboardingPage] = [
         OnboardingPage(
             icon: "building.2.crop.circle.fill",
+            assetImage: "AppLogo",
             title: "Welcome to Des Moines Insider",
             subtitle: "Your guide to the best events, restaurants, and attractions in the Des Moines area.",
             highlights: [
@@ -123,9 +124,16 @@ struct OnboardingView: View {
         VStack(spacing: 24) {
             Spacer()
 
-            Image(systemName: page.icon)
-                .font(.system(size: 80))
-                .foregroundStyle(page.color.gradient)
+            if let assetImage = page.assetImage {
+                Image(assetImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 160)
+            } else {
+                Image(systemName: page.icon)
+                    .font(.system(size: 80))
+                    .foregroundStyle(page.color.gradient)
+            }
 
             Text(page.title)
                 .font(.title2.bold())
@@ -161,6 +169,8 @@ struct OnboardingView: View {
 
 private struct OnboardingPage {
     let icon: String
+    /// If set, uses a bundled image from the asset catalog instead of an SF Symbol.
+    var assetImage: String? = nil
     let title: String
     let subtitle: String
     let highlights: [String]

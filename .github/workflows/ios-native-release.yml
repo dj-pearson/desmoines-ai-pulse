@@ -95,12 +95,20 @@ jobs:
       - name: Generate Supabase secrets file
         working-directory: ${{ env.PROJECT_DIR }}
         env:
-          SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
-          SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Try both secret naming conventions (VITE_ prefix from web, plain from iOS)
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
           chmod +x scripts/generate-secrets.sh
           bash scripts/generate-secrets.sh
-          echo "✅ Secrets.generated.swift written"
+
+          # Verify secrets were actually written (fail fast if empty)
+          if grep -q 'supabaseURL = ""' DesMoinesInsider/Configuration/Secrets.generated.swift; then
+            echo "::error::SUPABASE_URL is empty in Secrets.generated.swift! Check GitHub Secrets."
+            echo "Available secret names: SUPABASE_URL or VITE_SUPABASE_URL"
+            exit 1
+          fi
+          echo "✅ Secrets.generated.swift written and verified"
 
       # ==============================================================
       # 3. GENERATE XCODE PROJECT

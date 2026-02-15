@@ -12,12 +12,10 @@ struct AuthView: View {
             VStack(spacing: 24) {
                 // Logo / Header
                 VStack(spacing: 10) {
-                    Image(systemName: "building.2.crop.circle.fill")
-                        .font(.system(size: 56))
-                        .foregroundStyle(Color.accentColor)
-
-                    Text("Des Moines Insider")
-                        .font(.title2.bold())
+                    Image("AppLogo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 180)
 
                     Text(isSignUpMode ? "Create your account" : "Welcome back")
                         .font(.subheadline)
