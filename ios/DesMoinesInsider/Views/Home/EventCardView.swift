@@ -31,25 +31,27 @@ struct EventCardView: View {
                 // Overlays
                 VStack(alignment: .trailing, spacing: 6) {
                     // Favorite button
-                    if AuthService.shared.isAuthenticated {
-                        Button {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            let wasFavorited = favorites.isFavorited(event.id)
-                            Task {
-                                _ = try? await favorites.toggleFavorite(eventId: event.id)
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        let wasFavorited = favorites.isFavorited(event.id)
+                        Task {
+                            do {
+                                try await favorites.toggleFavorite(eventId: event.id)
                                 toast = wasFavorited
                                     ? .info("Removed from saved", icon: "heart")
                                     : .success("Saved!", icon: "heart.fill")
+                            } catch {
+                                toast = .error(error.localizedDescription, icon: "exclamationmark.triangle")
                             }
-                        } label: {
-                            Image(systemName: favorites.isFavorited(event.id) ? "heart.fill" : "heart")
-                                .font(.body.weight(.semibold))
-                                .foregroundStyle(favorites.isFavorited(event.id) ? .red : .white)
-                                .frame(width: 36, height: 36)
-                                .background(.ultraThinMaterial, in: Circle())
                         }
-                        .accessibilityLabel(favorites.isFavorited(event.id) ? "Remove from saved" : "Save event")
+                    } label: {
+                        Image(systemName: favorites.isFavorited(event.id) ? "heart.fill" : "heart")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(favorites.isFavorited(event.id) ? .red : .white)
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial, in: Circle())
                     }
+                    .accessibilityLabel(favorites.isFavorited(event.id) ? "Remove from saved" : "Save event")
 
                     Spacer()
 

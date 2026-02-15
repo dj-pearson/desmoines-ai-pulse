@@ -3,6 +3,14 @@ import SwiftUI
 /// Compact card for restaurant listings.
 struct RestaurantCardView: View {
     let restaurant: Restaurant
+    @Binding var toast: ToastMessage?
+
+    @State private var favorites = FavoritesService.shared
+
+    init(restaurant: Restaurant, toast: Binding<ToastMessage?> = .constant(nil)) {
+        self.restaurant = restaurant
+        self._toast = toast
+    }
 
     var body: some View {
         HStack(spacing: 14) {
@@ -19,7 +27,7 @@ struct RestaurantCardView: View {
 
             // Content
             VStack(alignment: .leading, spacing: 6) {
-                // Name
+                // Name + Favorite
                 HStack {
                     Text(restaurant.name)
                         .font(.subheadline.weight(.semibold))
@@ -27,11 +35,27 @@ struct RestaurantCardView: View {
 
                     Spacer()
 
-                    if restaurant.isFeatured == true {
-                        Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                    // Favorite button
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        let wasFavorited = favorites.isRestaurantFavorited(restaurant.id)
+                        Task {
+                            do {
+                                try await favorites.toggleRestaurantFavorite(restaurantId: restaurant.id)
+                                toast = wasFavorited
+                                    ? .info("Removed from saved", icon: "heart")
+                                    : .success("Saved!", icon: "heart.fill")
+                            } catch {
+                                toast = .error(error.localizedDescription, icon: "exclamationmark.triangle")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: favorites.isRestaurantFavorited(restaurant.id) ? "heart.fill" : "heart")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(favorites.isRestaurantFavorited(restaurant.id) ? .red : .secondary)
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(favorites.isRestaurantFavorited(restaurant.id) ? "Remove from saved" : "Save restaurant")
                 }
 
                 // Cuisine & Price
@@ -79,7 +103,7 @@ struct RestaurantCardView: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel("\(restaurant.name), \(restaurant.cuisine ?? "restaurant"), \(restaurant.ratingText)")
     }
 }

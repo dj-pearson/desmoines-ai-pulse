@@ -241,7 +241,7 @@ enum SubscriptionTier: String, Codable {
 
     var maxFavorites: Int {
         switch self {
-        case .free: return 5
+        case .free: return 50
         case .insider, .vip: return -1  // unlimited
         }
     }

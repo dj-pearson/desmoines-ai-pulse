@@ -5,6 +5,7 @@ struct RestaurantDetailView: View {
     let restaurant: Restaurant
 
     @State private var showShareSheet = false
+    @State private var favorites = FavoritesService.shared
 
     var body: some View {
         ScrollView {
@@ -19,13 +20,26 @@ struct RestaurantDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    showShareSheet = true
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
+                HStack(spacing: 12) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        showShareSheet = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("Share restaurant")
+
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        Task {
+                            try? await favorites.toggleRestaurantFavorite(restaurantId: restaurant.id)
+                        }
+                    } label: {
+                        Image(systemName: favorites.isRestaurantFavorited(restaurant.id) ? "heart.fill" : "heart")
+                            .foregroundStyle(favorites.isRestaurantFavorited(restaurant.id) ? .red : .primary)
+                    }
+                    .accessibilityLabel(favorites.isRestaurantFavorited(restaurant.id) ? "Remove from saved" : "Save restaurant")
                 }
-                .accessibilityLabel("Share restaurant")
             }
         }
         .sheet(isPresented: $showShareSheet) {

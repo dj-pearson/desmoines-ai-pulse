@@ -4,6 +4,7 @@ import SwiftUI
 struct RestaurantsView: View {
     @State private var viewModel = RestaurantsViewModel()
     @State private var showFilters = false
+    @State private var toast: ToastMessage?
 
     var body: some View {
         NavigationStack {
@@ -57,7 +58,7 @@ struct RestaurantsView: View {
                         LazyVStack(spacing: 12) {
                             ForEach(viewModel.restaurants) { restaurant in
                                 NavigationLink(value: restaurant) {
-                                    RestaurantCardView(restaurant: restaurant)
+                                    RestaurantCardView(restaurant: restaurant, toast: $toast)
                                 }
                                 .buttonStyle(.plain)
                                 .task {
@@ -111,6 +112,7 @@ struct RestaurantsView: View {
             .task {
                 await viewModel.loadInitialData()
             }
+            .toastOverlay(message: $toast)
         }
     }
 
