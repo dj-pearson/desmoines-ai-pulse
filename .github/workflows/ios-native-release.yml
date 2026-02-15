@@ -359,14 +359,25 @@ jobs:
           echo "Uploading $IPA_PATH to TestFlight..."
           echo "Version: $VERSION ($BUILD_NUMBER)"
 
+          # Capture altool output — it can return exit 0 even on validation errors
+          UPLOAD_LOG="$RUNNER_TEMP/altool-upload.log"
           xcrun altool --upload-app \
             --file "$IPA_PATH" \
             --type ios \
             --apiKey "$APPSTORE_API_KEY_ID" \
-            --apiIssuer "$APPSTORE_ISSUER_ID" || {
-              echo "::error::TestFlight upload failed! Check altool output above."
-              exit 1
-            }
+            --apiIssuer "$APPSTORE_ISSUER_ID" 2>&1 | tee "$UPLOAD_LOG"
+          ALTOOL_EXIT=${PIPESTATUS[0]}
+
+          # Check for failure: non-zero exit OR "ERROR" in output
+          if [ $ALTOOL_EXIT -ne 0 ] || grep -qi "ERROR.*UPLOAD FAILED\|Validation failed" "$UPLOAD_LOG"; then
+            echo ""
+            echo "::error::TestFlight upload FAILED! See altool output above."
+            echo "Common causes:"
+            echo "  - App icon has transparency/alpha channel"
+            echo "  - Bundle version already exists in App Store Connect"
+            echo "  - Provisioning profile mismatch"
+            exit 1
+          fi
 
           echo ""
           echo "============================================"
