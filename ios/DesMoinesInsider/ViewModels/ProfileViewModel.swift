@@ -56,6 +56,12 @@ final class ProfileViewModel {
         isSaving = false
     }
 
+    // MARK: - Clear Error
+
+    func clearError() {
+        errorMessage = nil
+    }
+
     // MARK: - Sign Out
 
     func signOut() async {
