@@ -15,7 +15,7 @@ final class AuthService {
     private(set) var isAdmin = false
     private(set) var isLoading = true
 
-    nonisolated private var authListener: Task<Void, Never>?
+    nonisolated(unsafe) private var authListener: Task<Void, Never>?
     private let supabase = SupabaseService.shared.client
 
     private init() {

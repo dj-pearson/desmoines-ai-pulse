@@ -32,7 +32,6 @@ actor EventsService {
             .from("events")
             .select("*", head: false, count: .exact)
             .gte("date", value: today)
-            .order("date", ascending: true)
 
         // Full-text search
         if let search = query.searchText, !search.isEmpty {
@@ -59,10 +58,11 @@ actor EventsService {
             request = request.eq("is_featured", value: true)
         }
 
-        // Pagination
-        request = request.range(from: query.offset, to: query.offset + query.limit - 1)
-
-        let response = try await request.execute()
+        // Sort + Paginate + Execute (transforms must come after all filters)
+        let response = try await request
+            .order("date", ascending: true)
+            .range(from: query.offset, to: query.offset + query.limit - 1)
+            .execute()
         let events = try JSONDecoder().decode([Event].self, from: response.data)
         let total = response.count ?? events.count
 

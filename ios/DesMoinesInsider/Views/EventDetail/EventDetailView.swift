@@ -97,7 +97,7 @@ struct EventDetailView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "calendar")
                         .font(.title3)
-                        .foregroundStyle(.accent)
+                        .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
 
                     VStack(alignment: .leading, spacing: 2) {
