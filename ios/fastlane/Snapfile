@@ -11,7 +11,7 @@
 # See: https://docs.fastlane.tools/actions/snapshot/
 
 # ──────────────────────────────────────────────────
-# Devices — All required App Store Connect sizes
+# Devices — Key App Store Connect sizes (reduced for CI reliability)
 # ──────────────────────────────────────────────────
 devices([
   # iPhone 6.9" (required) — iPhone 16 Pro Max
@@ -19,12 +19,6 @@ devices([
 
   # iPhone 6.7" (required) — iPhone 15 Pro Max
   "iPhone 15 Pro Max",
-
-  # iPhone 6.5" (required) — iPhone 14 Plus
-  "iPhone 14 Plus",
-
-  # iPad Pro 12.9" (required) — 6th generation
-  "iPad Pro (12.9-inch) (6th generation)",
 
   # iPad Pro 13" (required) — M4
   "iPad Pro 13-inch (M4)",
