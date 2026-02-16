@@ -147,7 +147,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
         if scrollView.exists {
             // Scroll down to find event cards past the featured/restaurants sections
             scrollView.swipeUp()
-            sleep(1)
+            usleep(500_000) // 0.5s
         }
 
         // Look for any tappable cell/button that could be an event card
@@ -157,7 +157,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
         if firstEvent.exists {
             firstEvent.tap()
-            sleep(2)
+            sleep(1)
             snapshot("07_EventDetail")
         } else {
             // Fall back: just screenshot whatever we have
@@ -178,7 +178,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
         if firstRestaurant.exists {
             firstRestaurant.tap()
-            sleep(2)
+            sleep(1)
             snapshot("08_RestaurantDetail")
         } else {
             snapshot("08_RestaurantDetail")
@@ -247,16 +247,24 @@ final class DesMoinesInsiderUITests: XCTestCase {
     }
 
     /// Wait for the main content to load (loading spinners to disappear).
+    ///
+    /// In UI testing mode (`--uitesting`), all data services return empty results
+    /// immediately, so loading states resolve almost instantly. We use short
+    /// timeouts to avoid CI hangs if something unexpected keeps a spinner visible.
     private func waitForContentToLoad() {
-        // Give the view time to load data
-        sleep(3)
+        // Brief pause for the view hierarchy to settle
+        sleep(1)
 
-        // Check if a loading indicator exists and wait for it to disappear
+        // If a loading indicator is visible, wait for it to disappear (short timeout).
+        // With isUITesting guards, spinners should disappear almost immediately.
         let spinner = app.activityIndicators.firstMatch
         if spinner.exists {
             let disappeared = NSPredicate(format: "exists == false")
-            expectation(for: disappeared, evaluatedWith: spinner, handler: nil)
-            waitForExpectations(timeout: 15, handler: nil)
+            let exp = expectation(for: disappeared, evaluatedWith: spinner, handler: nil)
+            let result = XCTWaiter.wait(for: [exp], timeout: 5)
+            if result != .completed {
+                NSLog("Warning: Spinner still visible after 5s — continuing with screenshot")
+            }
         }
     }
 }

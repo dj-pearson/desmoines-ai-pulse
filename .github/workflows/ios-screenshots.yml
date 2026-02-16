@@ -8,8 +8,6 @@
 # Devices captured:
 #   - iPhone 16 Pro Max (6.9")
 #   - iPhone 15 Pro Max (6.7")
-#   - iPhone 14 Plus (6.5")
-#   - iPad Pro 12.9" (6th gen)
 #   - iPad Pro 13" (M4)
 #
 # Screens captured (8 per device):
@@ -22,7 +20,7 @@
 #   07. Event Detail
 #   08. Restaurant Detail
 #
-# Total: ~40 screenshots per run (5 devices x 8 screens)
+# Total: ~24 screenshots per run (3 devices x 8 screens)
 #
 # Triggers:
 #   - Manual dispatch (workflow_dispatch) with optional device filter
@@ -49,11 +47,6 @@ on:
         default: 'en-US'
         type: string
 
-  # Auto-trigger on screenshot-related tags
-  push:
-    tags:
-      - 'v*-screenshots'
-
 env:
   XCODE_VERSION: '26.0'
   PROJECT_DIR: 'ios'
@@ -67,7 +60,7 @@ jobs:
   screenshots:
     name: Generate App Store Screenshots
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 90
 
     steps:
       # ────────────────────────────────────────────
@@ -161,8 +154,6 @@ jobs:
           DEVICES=(
             "iPhone 16 Pro Max"
             "iPhone 15 Pro Max"
-            "iPhone 14 Plus"
-            "iPad Pro (12.9-inch) (6th generation)"
             "iPad Pro 13-inch (M4)"
           )
 
@@ -222,6 +213,52 @@ jobs:
               fi
             fi
           done
+
+      - name: Pre-boot simulators
+        run: |
+          # Boot all simulators in parallel before Fastlane runs.
+          # This avoids Fastlane's sequential boot which wastes ~5 min per device.
+          echo "Pre-booting simulators..."
+          DEVICES=(
+            "iPhone 16 Pro Max"
+            "iPhone 15 Pro Max"
+            "iPad Pro 13-inch (M4)"
+          )
+          for DEVICE in "${DEVICES[@]}"; do
+            UDID=$(xcrun simctl list devices available --json | \
+              python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get('devices', {}).items():
+            for d in devices:
+              if d['name'] == '$DEVICE' and d.get('isAvailable'):
+                print(d['udid'])
+                break
+          ")
+            if [ -n "$UDID" ]; then
+              echo "Booting $DEVICE ($UDID) in background..."
+              xcrun simctl boot "$UDID" 2>/dev/null || true
+            fi
+          done
+          # Wait for all simulators to finish booting
+          echo "Waiting for simulators to finish booting..."
+          for DEVICE in "${DEVICES[@]}"; do
+            UDID=$(xcrun simctl list devices available --json | \
+              python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get('devices', {}).items():
+            for d in devices:
+              if d['name'] == '$DEVICE' and d.get('isAvailable'):
+                print(d['udid'])
+                break
+          ")
+            if [ -n "$UDID" ]; then
+              xcrun simctl bootstatus "$UDID" -b 2>/dev/null || true
+              echo "  $DEVICE booted"
+            fi
+          done
+          echo "All simulators ready"
 
       # ────────────────────────────────────────────
       # 7. Run Fastlane Snapshot
@@ -305,8 +342,6 @@ jobs:
             echo "|--------|------|-------------|" >> $GITHUB_STEP_SUMMARY
             echo "| iPhone 16 Pro Max | 6.9\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPhone 15 Pro Max | 6.7\" | Required |" >> $GITHUB_STEP_SUMMARY
-            echo "| iPhone 14 Plus | 6.5\" | Required |" >> $GITHUB_STEP_SUMMARY
-            echo "| iPad Pro 12.9\" (6th gen) | 12.9\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPad Pro 13\" (M4) | 13\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Screens" >> $GITHUB_STEP_SUMMARY

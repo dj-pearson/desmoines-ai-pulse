@@ -33,6 +33,9 @@ actor AttractionsService {
     }
 
     func fetchAttractions(query: AttractionsQuery = AttractionsQuery()) async throws -> AttractionsResponse {
+        if Config.isUITesting {
+            return AttractionsResponse(attractions: [], totalCount: 0, hasMore: false)
+        }
         let client = try db()
         var request = client
             .from("attractions")
@@ -75,6 +78,7 @@ actor AttractionsService {
     }
 
     func fetchAttraction(id: String) async throws -> Attraction {
+        if Config.isUITesting { throw ServiceError.notConfigured }
         let client = try db()
         let attraction: Attraction = try await client
             .from("attractions")

@@ -44,10 +44,6 @@ on:
           - 'false'
           - 'true'
 
-  push:
-    tags:
-      - 'v*-ios-native'
-      - 'ios-native-v*'
 
 env:
   XCODE_VERSION: '26.0'

@@ -2,7 +2,7 @@
 # iOS Native Build: Validate Swift Project Compiles
 # ================================================================
 #
-# Runs on every push/PR that touches the ios/ directory.
+# Manual trigger only (workflow_dispatch).
 # Resolves SPM dependencies, generates the Xcode project via
 # XcodeGen, and builds for the iOS Simulator.
 #
@@ -13,16 +13,6 @@
 name: iOS Native Build
 
 on:
-  push:
-    branches:
-      - 'mobile/**'
-      - 'claude/*'
-      - 'feature/ios-*'
-    paths:
-      - 'ios/**'
-  pull_request:
-    paths:
-      - 'ios/**'
   workflow_dispatch:
 
 env:

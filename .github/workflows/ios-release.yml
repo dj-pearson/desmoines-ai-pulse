@@ -38,12 +38,6 @@ on:
         description: 'Build number (leave empty to auto-increment using run number)'
         required: false
 
-  # Auto-trigger on tags
-  push:
-    tags:
-      - 'v*-ios'
-      - 'ios-v*'
-
 env:
   NODE_VERSION: '20'
   RUBY_VERSION: '3.2'

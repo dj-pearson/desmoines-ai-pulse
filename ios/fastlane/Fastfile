@@ -137,8 +137,6 @@ platform :ios do
   # Generates screenshots for all required App Store device sizes:
   #   - iPhone 6.9" (iPhone 16 Pro Max)
   #   - iPhone 6.7" (iPhone 15 Pro Max)
-  #   - iPhone 6.5" (iPhone 14 Plus)
-  #   - iPad Pro 12.9" (6th gen)
   #   - iPad Pro 13" (M4)
   #
   # The XCUITest target (DesMoinesInsiderUITests) navigates each screen
@@ -180,10 +178,9 @@ platform :ios do
       devices: [
         "iPhone 16 Pro Max",
         "iPhone 15 Pro Max",
-        "iPhone 14 Plus",
-        "iPad Pro (12.9-inch) (6th generation)",
         "iPad Pro 13-inch (M4)",
       ],
+      concurrent_simulators: false,
       languages: ["en-US"],
       launch_arguments: ["--uitesting"],
       derived_data_path: "./DerivedData",

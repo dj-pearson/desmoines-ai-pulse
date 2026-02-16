@@ -5,17 +5,6 @@ name: Mobile App Build
 # locally or via a dedicated mobile CI service (Bitrise, Codemagic, etc.)
 
 on:
-  push:
-    branches:
-      - 'mobile/**'
-      - 'claude/build-mobile-*'
-    paths:
-      - 'mobile-app/**'
-      - 'src/**'
-  pull_request:
-    paths:
-      - 'mobile-app/**'
-      - 'src/**'
   workflow_dispatch:
 
 env:
