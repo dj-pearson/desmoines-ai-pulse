@@ -47,11 +47,6 @@ on:
         default: 'en-US'
         type: string
 
-  # Auto-trigger on screenshot-related tags
-  push:
-    tags:
-      - 'v*-screenshots'
-
 env:
   XCODE_VERSION: '26.0'
   PROJECT_DIR: 'ios'
