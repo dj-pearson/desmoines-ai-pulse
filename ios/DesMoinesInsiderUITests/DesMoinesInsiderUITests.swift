@@ -40,6 +40,26 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
         app.launch()
 
+        // Dismiss any system alerts (e.g. location permission) that may appear
+        addUIInterruptionMonitor(withDescription: "System Alert") { alert in
+            let allowButton = alert.buttons["Allow While Using App"]
+            if allowButton.exists {
+                allowButton.tap()
+                return true
+            }
+            let allowOnceButton = alert.buttons["Allow Once"]
+            if allowOnceButton.exists {
+                allowOnceButton.tap()
+                return true
+            }
+            let dontAllowButton = alert.buttons["Don't Allow"]
+            if dontAllowButton.exists {
+                dontAllowButton.tap()
+                return true
+            }
+            return false
+        }
+
         // Wait for the app to fully load (tab bar should appear)
         let tabBar = app.tabBars.firstMatch
         let launched = tabBar.waitForExistence(timeout: 15)
@@ -87,8 +107,11 @@ final class DesMoinesInsiderUITests: XCTestCase {
     func test04_MapScreen() throws {
         navigateToTab("Map")
 
-        // Give the map extra time to render tiles
-        sleep(3)
+        // Tap the app to trigger any pending interruption monitors (e.g. location dialog)
+        app.tap()
+
+        // Wait for content to load (loading overlay to disappear) + map tile rendering
+        waitForContentToLoad()
 
         snapshot("04_Map")
     }
