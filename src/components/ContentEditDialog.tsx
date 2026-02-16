@@ -186,7 +186,8 @@ export default function ContentEditDialog({
         checkVenueMatch(initialData.venue);
       }
     }
-  }, [item, open, config.fields, contentType, checkVenueMatch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, open, config.fields, contentType]);
 
   const handleFieldChange = (fieldKey: string, value: any) => {
     setFormData((prev: any) => ({
