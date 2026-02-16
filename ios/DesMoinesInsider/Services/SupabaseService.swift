@@ -16,6 +16,13 @@ final class SupabaseService {
     let configurationError: String?
 
     private init() {
+        // Skip all networking when running under XCUITest (screenshot automation).
+        if Config.isUITesting {
+            client = nil
+            configurationError = nil
+            return
+        }
+
         guard let url = Config.supabaseURL else {
             client = nil
             configurationError = "SUPABASE_URL is missing or invalid. Ensure secrets are injected at build time."
