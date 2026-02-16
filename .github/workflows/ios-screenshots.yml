@@ -110,12 +110,13 @@ jobs:
       # ────────────────────────────────────────────
       # 4. Generate secrets & project
       # ────────────────────────────────────────────
-      - name: Generate placeholder secrets for CI
+      - name: Generate Supabase secrets for screenshots
         working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
           chmod +x scripts/generate-secrets.sh
-          SUPABASE_URL="https://placeholder.supabase.co" \
-          SUPABASE_ANON_KEY="placeholder-key-for-ci-screenshots" \
           bash scripts/generate-secrets.sh
 
       - name: Generate Xcode project
