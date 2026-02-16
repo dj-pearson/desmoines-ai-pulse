@@ -92,6 +92,9 @@ const HotelDetails = lazy(() => import("./pages/HotelDetails"));
 // AI-powered features
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
 
+// Affiliate disclosure
+const AffiliateDisclosure = lazy(() => import("./pages/AffiliateDisclosure"));
+
 // Legal pages
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -279,6 +282,8 @@ const App = () => (
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* AI-powered features */}
             <Route path="/trip-planner" element={<TripPlanner />} />
+            {/* Affiliate disclosure */}
+            <Route path="/affiliate-disclosure" element={<AffiliateDisclosure />} />
             {/* Legal pages */}
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />

@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, ExternalLink, MapPin, Star } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Database } from "@/integrations/supabase/types";
+import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 
 type Hotel = Database["public"]["Tables"]["hotels"]["Row"];
 
@@ -118,13 +119,14 @@ export default function EventHotelCallout({ eventId, eventArea }: EventHotelCall
           />
         ))}
       </div>
-      <div className="mt-3 text-center">
+      <div className="mt-3 flex flex-col items-center gap-2">
         <Link
           to="/stay"
           className="text-sm text-primary hover:text-primary/80 font-medium"
         >
           View all hotels &rarr;
         </Link>
+        <AffiliateDisclosureBanner variant="inline" />
       </div>
     </section>
   );

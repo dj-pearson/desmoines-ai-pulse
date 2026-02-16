@@ -19,6 +19,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -133,6 +134,11 @@ export default function HotelDetails() {
               Back to Hotels
             </Button>
           </Link>
+        </div>
+
+        {/* Affiliate disclosure - FTC compliance */}
+        <div className="container mx-auto px-4 mb-4">
+          <AffiliateDisclosureBanner />
         </div>
 
         {/* Hero image */}

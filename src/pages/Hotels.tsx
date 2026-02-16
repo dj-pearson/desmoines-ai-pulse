@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 
 const AREAS = [
   "Downtown",
@@ -285,6 +286,11 @@ export default function Hotels() {
         </section>
 
         <div className="container mx-auto px-4 py-8">
+          {/* Affiliate disclosure - FTC compliance */}
+          <div className="mb-6">
+            <AffiliateDisclosureBanner />
+          </div>
+
           {/* Filter controls */}
           <div className="flex flex-wrap items-center gap-3 mb-6">
             {/* Mobile filter trigger */}
