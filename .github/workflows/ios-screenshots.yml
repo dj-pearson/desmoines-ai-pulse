@@ -67,7 +67,7 @@ jobs:
   screenshots:
     name: Generate App Store Screenshots
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       # ────────────────────────────────────────────
@@ -242,20 +242,20 @@ jobs:
           # Fail hard on errors so we get fast feedback instead of hour-long retry loops.
           bundle exec fastlane ios screenshots 2>&1 | tee "$RUNNER_TEMP/snapshot.log"
 
-          # Report results
+          # Report results (Fastlane outputs to ios/screenshots/, one level up)
           echo ""
           echo "=== Screenshot Results ==="
-          if [ -d "screenshots" ]; then
-            TOTAL=$(find screenshots -name "*.png" | wc -l | xargs)
+          if [ -d "../screenshots" ]; then
+            TOTAL=$(find ../screenshots -name "*.png" | wc -l | xargs)
             echo "Total screenshots captured: $TOTAL"
             echo ""
             echo "Screenshots by device:"
-            find screenshots -name "*.png" -exec dirname {} \; | sort -u | while read dir; do
+            find ../screenshots -name "*.png" -exec dirname {} \; | sort -u | while read dir; do
               COUNT=$(find "$dir" -name "*.png" | wc -l | xargs)
               echo "  $dir: $COUNT screenshots"
             done
           else
-            echo "::warning::No screenshots directory found"
+            echo "::warning::No screenshots directory found at ../screenshots"
           fi
 
       # ────────────────────────────────────────────
@@ -266,7 +266,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: app-store-screenshots
-          path: ${{ env.PROJECT_DIR }}/fastlane/screenshots/
+          path: ${{ env.PROJECT_DIR }}/screenshots/
           retention-days: 30
           if-no-files-found: warn
 
@@ -293,7 +293,7 @@ jobs:
           echo "## App Store Screenshots" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          SCREENSHOT_DIR="${{ env.PROJECT_DIR }}/fastlane/screenshots"
+          SCREENSHOT_DIR="${{ env.PROJECT_DIR }}/screenshots"
           if [ -d "$SCREENSHOT_DIR" ]; then
             TOTAL=$(find "$SCREENSHOT_DIR" -name "*.png" 2>/dev/null | wc -l | xargs)
             echo "**Total screenshots captured:** $TOTAL" >> $GITHUB_STEP_SUMMARY

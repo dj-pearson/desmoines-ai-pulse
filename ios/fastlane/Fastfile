@@ -190,7 +190,7 @@ platform :ios do
       buildlog_path: "./logs",
       xcargs: "CODE_SIGN_IDENTITY='' CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO",
       reinstall_app: false,
-      clean: true
+      clean: false
     )
 
     UI.success("Screenshots generated in ./fastlane/screenshots/")
