@@ -47,7 +47,6 @@ const CONTENT_TABS = [
 export default function AdminContent() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("Content Management");
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("events");
 
