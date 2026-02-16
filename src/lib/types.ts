@@ -91,17 +91,48 @@ export interface Playground {
   updatedAt?: string;
 }
 
+export interface Hotel {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  short_description?: string;
+  address: string;
+  city: string;
+  state: string;
+  zip?: string;
+  area?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
+  affiliate_url?: string;
+  affiliate_provider?: string;
+  image_url?: string;
+  star_rating?: number;
+  price_range?: string;
+  avg_nightly_rate?: number;
+  amenities?: string[];
+  hotel_type?: string;
+  chain_name?: string;
+  is_featured?: boolean;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 // Union type for admin content management
 export type ContentItem =
   | Event
   | Restaurant
   | Attraction
   | Playground
-  | RestaurantOpening;
+  | RestaurantOpening
+  | Hotel;
 
 export type ContentType =
   | "event"
   | "restaurant"
   | "attraction"
   | "playground"
-  | "restaurant_opening";
+  | "restaurant_opening"
+  | "hotel";

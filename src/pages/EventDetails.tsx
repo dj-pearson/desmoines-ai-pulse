@@ -14,6 +14,7 @@ import AIWriteup from "@/components/AIWriteup";
 import { EventPhotoUpload } from "@/components/EventPhotoUpload";
 import { EventCheckIn } from "@/components/EventCheckIn";
 import EventCard from "@/components/EventCard";
+import EventHotelCallout from "@/components/EventHotelCallout";
 import { EventReminderSettings } from "@/components/EventReminderSettings";
 import {
   createEventSlugWithCentralTime,
@@ -501,6 +502,9 @@ export default function EventDetails() {
                 </Card>
               </aside>
             </div>
+
+            {/* Hotel Callout */}
+            <EventHotelCallout eventId={event.id} eventArea={event.city || undefined} />
 
             {/* Related Events Section */}
             {relatedEvents.length > 0 && (
