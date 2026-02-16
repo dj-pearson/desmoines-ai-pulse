@@ -17,6 +17,7 @@ import {
   Calendar,
   Utensils,
   Building,
+  Building2,
   Camera,
   Play,
   MapPin,
@@ -28,6 +29,7 @@ import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { useRestaurantOpenings } from "@/hooks/useRestaurantOpenings";
+import { useHotels } from "@/hooks/useHotels";
 import { ContentItem, ContentType } from "@/lib/types";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -37,6 +39,7 @@ const CONTENT_TABS = [
   { id: "events", label: "Events", icon: Calendar },
   { id: "restaurants", label: "Restaurants", icon: Utensils },
   { id: "restaurant-openings", label: "Restaurant Openings", icon: Building },
+  { id: "hotels", label: "Hotels", icon: Building2 },
   { id: "attractions", label: "Attractions", icon: Camera },
   { id: "playgrounds", label: "Playgrounds", icon: Play },
   { id: "venues", label: "Known Venues", icon: MapPin },
@@ -57,6 +60,7 @@ export default function AdminContent() {
     attractions: "",
     playgrounds: "",
     restaurantOpenings: "",
+    hotels: "",
   });
 
   const [inputValues, setInputValues] = useState({
@@ -65,6 +69,7 @@ export default function AdminContent() {
     attractions: "",
     playgrounds: "",
     restaurantOpenings: "",
+    hotels: "",
   });
 
   // Debounce the search term updates
@@ -88,6 +93,10 @@ export default function AdminContent() {
       ),
       restaurantOpenings: setTimeout(
         () => setSearchTerms((prev) => ({ ...prev, restaurantOpenings: inputValues.restaurantOpenings })),
+        300
+      ),
+      hotels: setTimeout(
+        () => setSearchTerms((prev) => ({ ...prev, hotels: inputValues.hotels })),
         300
       ),
     };
@@ -115,6 +124,10 @@ export default function AdminContent() {
 
   const handleRestaurantOpeningsSearch = useCallback((search: string) => {
     setInputValues((prev) => ({ ...prev, restaurantOpenings: search }));
+  }, []);
+
+  const handleHotelsSearch = useCallback((search: string) => {
+    setInputValues((prev) => ({ ...prev, hotels: search }));
   }, []);
 
   // Edit dialog state
@@ -145,6 +158,7 @@ export default function AdminContent() {
   const restaurantOpenings = useRestaurantOpenings({
     search: searchTerms.restaurantOpenings,
   });
+  const hotels = useHotels({ search: searchTerms.hotels, activeOnly: false });
 
   const canManageContent = () =>
     ["moderator", "admin", "root_admin"].includes(userRole);
@@ -199,6 +213,26 @@ export default function AdminContent() {
         rating: null,
         isFeatured: false,
       };
+    } else if (contentType === "hotel") {
+      emptyItem = {
+        name: "",
+        slug: "",
+        description: "",
+        short_description: "",
+        address: "",
+        city: "Des Moines",
+        state: "IA",
+        area: "Downtown",
+        phone: "",
+        website: "",
+        affiliate_url: "",
+        image_url: "",
+        hotel_type: "Hotel",
+        price_range: "$$",
+        amenities: [],
+        is_featured: false,
+        is_active: true,
+      } as any;
     }
 
     setEditDialog({
@@ -246,12 +280,13 @@ export default function AdminContent() {
     try {
       const tableNameMap: Record<
         string,
-        "events" | "restaurants" | "attractions" | "playgrounds"
+        "events" | "restaurants" | "attractions" | "playgrounds" | "hotels"
       > = {
         event: "events",
         restaurant: "restaurants",
         attraction: "attractions",
         playground: "playgrounds",
+        hotel: "hotels",
       };
 
       const tableName = tableNameMap[contentType];
@@ -268,6 +303,7 @@ export default function AdminContent() {
       else if (contentType === "restaurant") restaurants.refetch();
       else if (contentType === "attraction") attractions.refetch();
       else if (contentType === "playground") playgrounds.refetch();
+      else if (contentType === "hotel") hotels.refetch();
       restaurantOpenings.refetch();
     } catch (error) {
       console.error("Delete error:", error);
@@ -292,6 +328,9 @@ export default function AdminContent() {
       } else if (contentType === "playground") {
         await playgrounds.refetch();
         await queryClient.invalidateQueries({ queryKey: ["playgrounds"] });
+      } else if (contentType === "hotel") {
+        await hotels.refetch();
+        await queryClient.invalidateQueries({ queryKey: ["hotels"] });
       }
     } catch (error) {
       console.error("Error during save:", error);
@@ -434,6 +473,21 @@ export default function AdminContent() {
               onSearch={handleRestaurantOpeningsSearch}
               onFilter={(filter) => console.log("Filter restaurant openings:", filter)}
               onCreate={() => console.log("Create new restaurant opening")}
+            />
+          )}
+
+          {activeTab === "hotels" && (
+            <ContentTable
+              type="hotel"
+              items={hotels.hotels}
+              isLoading={hotels.isLoading}
+              totalCount={hotels.hotels.length}
+              searchValue={inputValues.hotels}
+              onEdit={(item) => handleEdit("hotel", item)}
+              onDelete={(id) => handleDelete("hotel", id)}
+              onSearch={handleHotelsSearch}
+              onFilter={(filter) => console.log("Filter hotels:", filter)}
+              onCreate={() => handleCreate("hotel")}
             />
           )}
 

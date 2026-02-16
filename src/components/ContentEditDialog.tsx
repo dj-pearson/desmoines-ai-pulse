@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
 
-type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening";
+type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening" | "hotel";
 
 interface ContentEditDialogProps {
   open: boolean;
@@ -95,6 +95,36 @@ const fieldConfigs = {
       { key: "status", label: "Status", type: "select", options: ["open", "opening_soon", "newly_opened", "announced", "closed"] },
       { key: "description", label: "Description", type: "textarea" },
       { key: "source_url", label: "Source URL", type: "url" },
+    ]
+  },
+  hotel: {
+    fields: [
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "slug", label: "Slug", type: "text", required: true },
+      { key: "short_description", label: "Short Description", type: "text" },
+      { key: "description", label: "Description", type: "textarea" },
+      { key: "address", label: "Address", type: "text", required: true },
+      { key: "city", label: "City", type: "text" },
+      { key: "state", label: "State", type: "text" },
+      { key: "zip", label: "ZIP", type: "text" },
+      { key: "area", label: "Area", type: "select", options: ["Downtown", "West Des Moines", "Waukee", "Ankeny", "Urbandale", "Altoona", "Johnston", "Clive", "Ames", "Other"] },
+      { key: "phone", label: "Phone", type: "text" },
+      { key: "email", label: "Email", type: "text" },
+      { key: "website", label: "Website", type: "url" },
+      { key: "affiliate_url", label: "Affiliate URL", type: "url" },
+      { key: "affiliate_provider", label: "Affiliate Provider", type: "select", options: ["Booking.com", "Hotels.com", "TripAdvisor", "Direct", "Other"] },
+      { key: "image_url", label: "Image URL", type: "url" },
+      { key: "star_rating", label: "Star Rating", type: "number", min: 1, max: 5, step: 0.5 },
+      { key: "price_range", label: "Price Range", type: "select", options: ["$", "$$", "$$$", "$$$$"] },
+      { key: "avg_nightly_rate", label: "Avg Nightly Rate ($)", type: "number", min: 0, max: 9999, step: 1 },
+      { key: "hotel_type", label: "Hotel Type", type: "select", options: ["Hotel", "Boutique Hotel", "Motel", "Resort", "B&B", "Extended Stay"] },
+      { key: "chain_name", label: "Chain Name", type: "text" },
+      { key: "total_rooms", label: "Total Rooms", type: "number", min: 0, max: 9999, step: 1 },
+      { key: "check_in_time", label: "Check-in Time", type: "text" },
+      { key: "check_out_time", label: "Check-out Time", type: "text" },
+      { key: "amenities", label: "Amenities", type: "array" },
+      { key: "is_featured", label: "Featured", type: "boolean" },
+      { key: "is_active", label: "Active", type: "boolean" },
     ]
   }
 };
@@ -219,15 +249,16 @@ export default function ContentEditDialog({
     }));
   };
 
-  const getTableName = (type: ContentType): 
-    "restaurants" | "events" | "attractions" | "playgrounds" | "restaurant_openings" => {
+  const getTableName = (type: ContentType):
+    "restaurants" | "events" | "attractions" | "playgrounds" | "restaurant_openings" | "hotels" => {
     switch (type) {
       case 'restaurant': return 'restaurants';
       case 'event': return 'events';
       case 'attraction': return 'attractions';
       case 'playground': return 'playgrounds';
       case 'restaurant_opening': return 'restaurants'; // Restaurant openings are stored in restaurants table
-      default: 
+      case 'hotel': return 'hotels';
+      default:
         throw new Error(`Unknown content type: ${type}`);
     }
   };
