@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Root tab navigation. 6 tabs: Home, Restaurants, Search, Map, Favorites, Profile.
+/// Root tab navigation. 6 tabs: Home, Dining, Search, Map (Explore), Saved, Profile.
 struct MainTabView: View {
     @State private var selectedTab = Tab.home
 
