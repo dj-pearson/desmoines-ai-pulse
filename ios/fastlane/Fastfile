@@ -135,9 +135,13 @@ platform :ios do
   # ============================================================================
   #
   # Generates screenshots for all required App Store device sizes:
-  #   - iPhone 6.9" (iPhone 16 Pro Max)
-  #   - iPhone 6.7" (iPhone 15 Pro Max)
+  #   - iPhone 6.5" (iPhone 11 Pro Max)  → 1242×2688px
+  #   - iPhone 6.7" (iPhone 16 Plus)     → 1284×2778px
   #   - iPad Pro 13" (M4)
+  #
+  # NOTE: Pro Max models produce non-standard dimensions (1290×2796, 1320×2868)
+  # that App Store Connect rejects. Use Plus/Max models from the correct
+  # generation instead.
   #
   # The XCUITest target (DesMoinesInsiderUITests) navigates each screen
   # and captures screenshots via the SnapshotHelper.
@@ -176,8 +180,8 @@ platform :ios do
       number_of_retries: 0,
       ios_version: detected_ios_version,
       devices: [
-        "iPhone 16 Pro Max",
-        "iPhone 15 Pro Max",
+        "iPhone 11 Pro Max",
+        "iPhone 16 Plus",
         "iPad Pro 13-inch (M4)",
       ],
       concurrent_simulators: false,

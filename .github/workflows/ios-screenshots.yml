@@ -5,9 +5,9 @@
 # Automatically generates App Store screenshots for all required
 # device sizes using Fastlane Snapshot + XCUITest.
 #
-# Devices captured:
-#   - iPhone 16 Pro Max (6.9")
-#   - iPhone 15 Pro Max (6.7")
+# Devices captured (App Store-compliant dimensions):
+#   - iPhone 11 Pro Max (6.5")  → 1242×2688px
+#   - iPhone 16 Plus (6.7")     → 1284×2778px
 #   - iPad Pro 13" (M4)
 #
 # Screens captured (8 per device):
@@ -161,8 +161,8 @@ jobs:
           # Ensure all required simulators exist.
           # macOS runners may not have every device type pre-created.
           DEVICES=(
-            "iPhone 16 Pro Max"
-            "iPhone 15 Pro Max"
+            "iPhone 11 Pro Max"
+            "iPhone 16 Plus"
             "iPad Pro 13-inch (M4)"
           )
 
@@ -229,8 +229,8 @@ jobs:
           # This avoids Fastlane's sequential boot which wastes ~5 min per device.
           echo "Pre-booting simulators..."
           DEVICES=(
-            "iPhone 16 Pro Max"
-            "iPhone 15 Pro Max"
+            "iPhone 11 Pro Max"
+            "iPhone 16 Plus"
             "iPad Pro 13-inch (M4)"
           )
           for DEVICE in "${DEVICES[@]}"; do
@@ -349,8 +349,8 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "| Device | Size | Screenshots |" >> $GITHUB_STEP_SUMMARY
             echo "|--------|------|-------------|" >> $GITHUB_STEP_SUMMARY
-            echo "| iPhone 16 Pro Max | 6.9\" | Required |" >> $GITHUB_STEP_SUMMARY
-            echo "| iPhone 15 Pro Max | 6.7\" | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 11 Pro Max | 6.5\" (1242×2688) | Required |" >> $GITHUB_STEP_SUMMARY
+            echo "| iPhone 16 Plus | 6.7\" (1284×2778) | Required |" >> $GITHUB_STEP_SUMMARY
             echo "| iPad Pro 13\" (M4) | 13\" | Required |" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### Screens" >> $GITHUB_STEP_SUMMARY
