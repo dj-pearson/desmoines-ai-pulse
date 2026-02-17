@@ -23,7 +23,9 @@
       "Bash(grep:*)",
       "Bash(git status:*)",
       "Bash(git add:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(git hash-object:*)",
+      "Bash(git ls-tree:*)"
     ],
     "deny": [],
     "ask": []
