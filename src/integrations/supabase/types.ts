@@ -3098,6 +3098,7 @@ export type Database = {
           amenities: string[] | null
           hotel_type: string | null
           chain_name: string | null
+          brand_parent: string | null
           total_rooms: number | null
           check_in_time: string | null
           check_out_time: string | null
@@ -3133,6 +3134,7 @@ export type Database = {
           amenities?: string[] | null
           hotel_type?: string | null
           chain_name?: string | null
+          brand_parent?: string | null
           total_rooms?: number | null
           check_in_time?: string | null
           check_out_time?: string | null
@@ -3168,6 +3170,7 @@ export type Database = {
           amenities?: string[] | null
           hotel_type?: string | null
           chain_name?: string | null
+          brand_parent?: string | null
           total_rooms?: number | null
           check_in_time?: string | null
           check_out_time?: string | null

@@ -178,8 +178,13 @@ export default function HotelDetails() {
                   )}
                 </div>
 
-                {hotel.chain_name && (
-                  <p className="text-muted-foreground mb-2">{hotel.chain_name}</p>
+                {(hotel.chain_name || hotel.brand_parent) && (
+                  <p className="text-muted-foreground mb-2">
+                    {hotel.chain_name || hotel.brand_parent}
+                    {hotel.chain_name && hotel.brand_parent && hotel.chain_name !== hotel.brand_parent && (
+                      <span className="text-muted-foreground/60"> by {hotel.brand_parent}</span>
+                    )}
+                  </p>
                 )}
 
                 {hotel.star_rating && (

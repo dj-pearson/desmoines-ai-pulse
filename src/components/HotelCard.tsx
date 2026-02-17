@@ -103,9 +103,14 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
             {renderStars(hotel.star_rating)}
           </div>
 
-          {/* Chain name */}
-          {hotel.chain_name && (
-            <p className="text-xs text-muted-foreground">{hotel.chain_name}</p>
+          {/* Brand info */}
+          {(hotel.chain_name || hotel.brand_parent) && (
+            <p className="text-xs text-muted-foreground">
+              {hotel.chain_name || hotel.brand_parent}
+              {hotel.chain_name && hotel.brand_parent && hotel.chain_name !== hotel.brand_parent && (
+                <span className="text-muted-foreground/60"> by {hotel.brand_parent}</span>
+              )}
+            </p>
           )}
 
           {/* Area / location */}
