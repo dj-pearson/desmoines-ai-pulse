@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -48,6 +50,7 @@ export default function HotelDetails() {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background pb-24">
+        <Header />
         <div className="container mx-auto px-4 py-8">
           <Skeleton className="h-8 w-48 mb-4" />
           <Skeleton className="h-64 w-full rounded-lg mb-6" />
@@ -59,23 +62,28 @@ export default function HotelDetails() {
             <Skeleton className="h-40" />
           </div>
         </div>
+        <Footer />
       </div>
     );
   }
 
   if (error || !hotel) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center pb-24">
-        <div className="text-center">
-          <Building2 className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Hotel Not Found</h1>
-          <p className="text-muted-foreground mb-6">
-            The hotel you're looking for doesn't exist or has been removed.
-          </p>
-          <Link to="/stay">
-            <Button>Browse All Hotels</Button>
-          </Link>
+      <div className="min-h-screen bg-background pb-24">
+        <Header />
+        <div className="flex items-center justify-center flex-1 py-24">
+          <div className="text-center">
+            <Building2 className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
+            <h1 className="text-2xl font-bold mb-2">Hotel Not Found</h1>
+            <p className="text-muted-foreground mb-6">
+              The hotel you're looking for doesn't exist or has been removed.
+            </p>
+            <Link to="/stay">
+              <Button>Browse All Hotels</Button>
+            </Link>
+          </div>
         </div>
+        <Footer />
       </div>
     );
   }
@@ -115,6 +123,8 @@ export default function HotelDetails() {
       />
 
       <div className="min-h-screen bg-background pb-24">
+        <Header />
+
         {/* Breadcrumbs */}
         <div className="container mx-auto px-4 py-4">
           <nav className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -355,6 +365,8 @@ export default function HotelDetails() {
             </div>
           </div>
         </div>
+
+        <Footer />
       </div>
     </>
   );

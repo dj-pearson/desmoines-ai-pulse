@@ -31,6 +31,8 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 const AREAS = [
   "Downtown",
@@ -249,6 +251,8 @@ export default function Hotels() {
       </Helmet>
 
       <div className="min-h-screen bg-background pb-24">
+        <Header />
+
         {/* Hero Section */}
         <section className="relative bg-gradient-to-br from-[#1a0f3c] via-[#2D1B69] to-[#DC143C] text-white py-12 md:py-20">
           <div className="container mx-auto px-4">
@@ -483,6 +487,8 @@ export default function Hotels() {
             </div>
           </div>
         </div>
+
+        <Footer />
       </div>
     </>
   );
