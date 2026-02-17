@@ -228,6 +228,8 @@ export default function AdminContent() {
         affiliate_url: "",
         image_url: "",
         hotel_type: "Hotel",
+        chain_name: "",
+        brand_parent: "",
         price_range: "$$",
         amenities: [],
         is_featured: false,

@@ -114,6 +114,7 @@ export interface Hotel {
   amenities?: string[];
   hotel_type?: string;
   chain_name?: string;
+  brand_parent?: string;
   is_featured?: boolean;
   is_active?: boolean;
   created_at?: string;

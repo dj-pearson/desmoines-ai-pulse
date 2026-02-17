@@ -34,13 +34,15 @@ import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 
 const AREAS = [
   "Downtown",
+  "Airport",
   "West Des Moines",
+  "Clive",
   "Waukee",
+  "Grimes",
   "Ankeny",
   "Urbandale",
-  "Altoona",
   "Johnston",
-  "Clive",
+  "Altoona",
   "Ames",
 ];
 

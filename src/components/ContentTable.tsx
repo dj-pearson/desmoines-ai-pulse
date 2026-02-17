@@ -371,7 +371,8 @@ const tableConfigs = {
       { key: "hotel_type", label: "Type", type: "badge" },
       { key: "price_range", label: "Price", type: "badge" },
       { key: "star_rating", label: "Rating", type: "rating" },
-      { key: "chain_name", label: "Chain", type: "text" },
+      { key: "chain_name", label: "Sub-Brand", type: "text" },
+      { key: "brand_parent", label: "Parent Co.", type: "badge" },
       { key: "address", label: "Address", type: "text" },
       { key: "phone", label: "Phone", type: "text" },
       { key: "website", label: "Website", type: "link" },
@@ -383,7 +384,7 @@ const tableConfigs = {
       {
         key: "area",
         label: "Area",
-        options: ["All", "Downtown", "West Des Moines", "Waukee", "Ankeny", "Urbandale", "Altoona"],
+        options: ["All", "Downtown", "Airport", "West Des Moines", "Clive", "Waukee", "Grimes", "Ankeny", "Urbandale", "Johnston", "Altoona", "Ames"],
       },
       {
         key: "hotel_type",
@@ -395,11 +396,17 @@ const tableConfigs = {
         label: "Price",
         options: ["All", "$", "$$", "$$$", "$$$$"],
       },
+      {
+        key: "brand_parent",
+        label: "Brand",
+        options: ["All", "Hilton", "Marriott", "IHG", "Hyatt", "Choice", "Wyndham", "Best Western", "Drury", "Independent"],
+      },
     ],
     sortOptions: [
       { key: "name", label: "Name (A-Z)" },
       { key: "area", label: "Area" },
       { key: "hotel_type", label: "Type" },
+      { key: "brand_parent", label: "Brand Parent" },
       { key: "price_range", label: "Price Range" },
       { key: "star_rating", label: "Star Rating" },
       { key: "is_featured", label: "Featured First" },
