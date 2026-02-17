@@ -66,7 +66,7 @@ struct SubscriptionView: View {
                     Button {
                         Task {
                             await storeKit.restorePurchases()
-                            toast = ToastMessage(text: "Purchases restored", icon: "checkmark.circle")
+                            toast = ToastMessage(text: "Purchases restored", icon: "checkmark.circle", style: .success)
                         }
                     } label: {
                         Text("Restore Purchases")
@@ -219,7 +219,7 @@ struct SubscriptionView: View {
                     Task {
                         do {
                             try await storeKit.purchase(product)
-                            toast = ToastMessage(text: "Welcome to \(product.displayName)!", icon: "party.popper")
+                            toast = ToastMessage(text: "Welcome to \(product.displayName)!", icon: "party.popper", style: .success)
                         } catch {
                             // Error is set on storeKit.errorMessage
                         }
