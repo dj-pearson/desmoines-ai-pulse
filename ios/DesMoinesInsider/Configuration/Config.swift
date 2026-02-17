@@ -77,6 +77,5 @@ enum Config {
     // MARK: - Testing
 
     /// `true` when the app is launched by XCUITest (Fastlane Snapshot, etc.).
-    /// Network calls are skipped so the UI renders instantly with empty states.
     static let isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--uitesting")
 }

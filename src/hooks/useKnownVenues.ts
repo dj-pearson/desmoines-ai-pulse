@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -227,7 +228,7 @@ export function useFindMatchingVenue() {
 export function useVenueMatcher() {
   const { data: venues } = useKnownVenues();
 
-  const findVenue = (venueText: string): KnownVenue | null => {
+  const findVenue = useCallback((venueText: string): KnownVenue | null => {
     if (!venues || !venueText) return null;
 
     const searchText = venueText.toLowerCase().trim();
@@ -262,9 +263,9 @@ export function useVenueMatcher() {
     );
 
     return match || null;
-  };
+  }, [venues]);
 
-  const getAutoFillData = (venue: KnownVenue) => {
+  const getAutoFillData = useCallback((venue: KnownVenue) => {
     const fullLocation = venue.address
       ? `${venue.address}, ${venue.city || ""}, ${venue.state || ""} ${venue.zip || ""}`.trim()
       : `${venue.city || ""}, ${venue.state || ""}`.trim();
@@ -279,7 +280,7 @@ export function useVenueMatcher() {
       venue_email: venue.email,
       venue_website: venue.website,
     };
-  };
+  }, []);
 
   return {
     venues,

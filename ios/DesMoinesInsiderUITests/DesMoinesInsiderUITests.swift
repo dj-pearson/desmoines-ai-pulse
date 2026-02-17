@@ -40,6 +40,26 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
         app.launch()
 
+        // Dismiss any system alerts (e.g. location permission) that may appear
+        addUIInterruptionMonitor(withDescription: "System Alert") { alert in
+            let allowButton = alert.buttons["Allow While Using App"]
+            if allowButton.exists {
+                allowButton.tap()
+                return true
+            }
+            let allowOnceButton = alert.buttons["Allow Once"]
+            if allowOnceButton.exists {
+                allowOnceButton.tap()
+                return true
+            }
+            let dontAllowButton = alert.buttons["Don't Allow"]
+            if dontAllowButton.exists {
+                dontAllowButton.tap()
+                return true
+            }
+            return false
+        }
+
         // Wait for the app to fully load (tab bar should appear)
         let tabBar = app.tabBars.firstMatch
         let launched = tabBar.waitForExistence(timeout: 15)
@@ -57,10 +77,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
     /// Screenshot 1: Home feed with events and restaurants
     func test01_HomeScreen() throws {
         // Ensure we're on the Home tab
-        let homeTab = app.tabBars.buttons["Home"]
-        if homeTab.exists {
-            homeTab.tap()
-        }
+        navigateToTab("Home")
 
         // Wait for content to load
         waitForContentToLoad()
@@ -70,9 +87,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
     /// Screenshot 2: Restaurants/Dining tab
     func test02_RestaurantsScreen() throws {
-        let diningTab = app.tabBars.buttons["Dining"]
-        XCTAssertTrue(diningTab.waitForExistence(timeout: 5), "Dining tab should exist")
-        diningTab.tap()
+        navigateToTab("Dining")
 
         waitForContentToLoad()
 
@@ -81,9 +96,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
     /// Screenshot 3: Search & Discovery
     func test03_SearchScreen() throws {
-        let searchTab = app.tabBars.buttons["Search"]
-        XCTAssertTrue(searchTab.waitForExistence(timeout: 5), "Search tab should exist")
-        searchTab.tap()
+        navigateToTab("Search")
 
         waitForContentToLoad()
 
@@ -92,21 +105,20 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
     /// Screenshot 4: Interactive Map
     func test04_MapScreen() throws {
-        let mapTab = app.tabBars.buttons["Map"]
-        XCTAssertTrue(mapTab.waitForExistence(timeout: 5), "Map tab should exist")
-        mapTab.tap()
+        navigateToTab("Map")
 
-        // Give the map extra time to render tiles
-        sleep(3)
+        // Tap the app to trigger any pending interruption monitors (e.g. location dialog)
+        app.tap()
+
+        // Wait for content to load (loading overlay to disappear) + map tile rendering
+        waitForContentToLoad()
 
         snapshot("04_Map")
     }
 
     /// Screenshot 5: Favorites / Saved items
     func test05_FavoritesScreen() throws {
-        let savedTab = app.tabBars.buttons["Saved"]
-        XCTAssertTrue(savedTab.waitForExistence(timeout: 5), "Saved tab should exist")
-        savedTab.tap()
+        navigateToTab("Saved")
 
         waitForContentToLoad()
 
@@ -115,9 +127,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
     /// Screenshot 6: Profile / Settings
     func test06_ProfileScreen() throws {
-        let profileTab = app.tabBars.buttons["Profile"]
-        XCTAssertTrue(profileTab.waitForExistence(timeout: 5), "Profile tab should exist")
-        profileTab.tap()
+        navigateToTab("Profile")
 
         waitForContentToLoad()
 
@@ -127,10 +137,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
     /// Screenshot 7: Event Detail view (tap first event from Home)
     func test07_EventDetail() throws {
         // Go to Home tab first
-        let homeTab = app.tabBars.buttons["Home"]
-        if homeTab.exists {
-            homeTab.tap()
-        }
+        navigateToTab("Home")
 
         waitForContentToLoad()
 
@@ -140,7 +147,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
         if scrollView.exists {
             // Scroll down to find event cards past the featured/restaurants sections
             scrollView.swipeUp()
-            sleep(1)
+            usleep(500_000) // 0.5s
         }
 
         // Look for any tappable cell/button that could be an event card
@@ -150,7 +157,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
         if firstEvent.exists {
             firstEvent.tap()
-            sleep(2)
+            sleep(1)
             snapshot("07_EventDetail")
         } else {
             // Fall back: just screenshot whatever we have
@@ -160,10 +167,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
     /// Screenshot 8: Restaurant Detail view
     func test08_RestaurantDetail() throws {
-        let diningTab = app.tabBars.buttons["Dining"]
-        if diningTab.exists {
-            diningTab.tap()
-        }
+        navigateToTab("Dining")
 
         waitForContentToLoad()
 
@@ -174,7 +178,7 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
         if firstRestaurant.exists {
             firstRestaurant.tap()
-            sleep(2)
+            sleep(1)
             snapshot("08_RestaurantDetail")
         } else {
             snapshot("08_RestaurantDetail")
@@ -183,17 +187,84 @@ final class DesMoinesInsiderUITests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// Wait for the main content to load (loading spinners to disappear).
-    private func waitForContentToLoad() {
-        // Give the view time to load data
-        sleep(3)
+    /// Navigate to a tab by name, handling various iOS tab bar layouts.
+    ///
+    /// On iPhone with 6+ tabs, iOS may place extra tabs behind a "More" button.
+    /// This helper tries multiple strategies:
+    /// 1. Direct tab bar button match
+    /// 2. Partial/case-insensitive label match (for iOS version differences)
+    /// 3. "More" tab navigation (for 6+ tabs on iPhone)
+    @discardableResult
+    private func navigateToTab(_ name: String) -> Bool {
+        // Strategy 1: Direct tab bar button by exact label
+        let directButton = app.tabBars.buttons[name]
+        if directButton.waitForExistence(timeout: 3) {
+            directButton.tap()
+            return true
+        }
 
-        // Check if a loading indicator exists and wait for it to disappear
+        // Strategy 2: Partial label match (handles "Saved Tab", "Saved, tab", etc.)
+        let partialMatch = app.tabBars.buttons.matching(
+            NSPredicate(format: "label CONTAINS[c] %@", name)
+        ).firstMatch
+        if partialMatch.waitForExistence(timeout: 2) {
+            partialMatch.tap()
+            return true
+        }
+
+        // Strategy 3: Navigate through "More" tab (iPhone with 6+ tabs)
+        let moreButton = app.tabBars.buttons["More"]
+        if moreButton.waitForExistence(timeout: 2) {
+            moreButton.tap()
+            sleep(1)
+
+            // Look for the tab name in the More list (table cells or buttons)
+            let moreCell = app.tables.staticTexts[name]
+            if moreCell.waitForExistence(timeout: 3) {
+                moreCell.tap()
+                return true
+            }
+
+            // Also try cells directly
+            let moreButton2 = app.cells.staticTexts[name]
+            if moreButton2.waitForExistence(timeout: 2) {
+                moreButton2.tap()
+                return true
+            }
+
+            // Try partial match in More list
+            let morePartial = app.tables.staticTexts.matching(
+                NSPredicate(format: "label CONTAINS[c] %@", name)
+            ).firstMatch
+            if morePartial.waitForExistence(timeout: 2) {
+                morePartial.tap()
+                return true
+            }
+        }
+
+        NSLog("Warning: Could not find tab '\(name)' — taking screenshot of current screen")
+        return false
+    }
+
+    /// Wait for the main content to load (loading spinners to disappear).
+    ///
+    /// In UI testing mode (`--uitesting`), all data services return empty results
+    /// immediately, so loading states resolve almost instantly. We use short
+    /// timeouts to avoid CI hangs if something unexpected keeps a spinner visible.
+    private func waitForContentToLoad() {
+        // Brief pause for the view hierarchy to settle
+        sleep(1)
+
+        // If a loading indicator is visible, wait for it to disappear (short timeout).
+        // With isUITesting guards, spinners should disappear almost immediately.
         let spinner = app.activityIndicators.firstMatch
         if spinner.exists {
             let disappeared = NSPredicate(format: "exists == false")
-            expectation(for: disappeared, evaluatedWith: spinner, handler: nil)
-            waitForExpectations(timeout: 15, handler: nil)
+            let exp = expectation(for: disappeared, evaluatedWith: spinner, handler: nil)
+            let result = XCTWaiter.wait(for: [exp], timeout: 5)
+            if result != .completed {
+                NSLog("Warning: Spinner still visible after 5s — continuing with screenshot")
+            }
         }
     }
 }

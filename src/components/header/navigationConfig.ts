@@ -5,6 +5,7 @@ import {
   Clock,
   Gift,
   Baby,
+  Building2,
   Camera,
   Gamepad2,
   FileText,
@@ -57,6 +58,7 @@ export const navigationGroups: Record<string, NavGroup> = {
     items: [
       { href: "/trip-planner", label: "AI Trip Planner", icon: Sparkles, featured: true },
       { href: "/weekend", label: "Weekend Guide", icon: CalendarDays, featured: true },
+      { href: "/stay", label: "Hotels & Stay", icon: Building2, featured: true },
       { href: "/attractions", label: "Attractions", icon: Camera },
       { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
     ],
@@ -81,6 +83,7 @@ export const navigationLinks: NavItem[] = [
   { href: "/weekend", label: "Weekend Guide", icon: CalendarDays },
   { href: "/restaurants", label: "Restaurants", icon: Utensils },
   { href: "/restaurants/open-now", label: "Open Now", icon: Clock },
+  { href: "/stay", label: "Hotels & Stay", icon: Building2 },
   { href: "/attractions", label: "Attractions", icon: Camera },
   { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
   { href: "/articles", label: "Articles", icon: FileText },

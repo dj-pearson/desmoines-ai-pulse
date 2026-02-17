@@ -21,8 +21,11 @@ final class AuthService {
     private init() {
         supabase = SupabaseService.shared.client
 
-        // Only start listening if Supabase is configured
-        if supabase != nil {
+        // In UI testing mode, skip the auth listener so the app loads instantly.
+        // The Supabase client remains available for data fetching (events, restaurants).
+        if Config.isUITesting {
+            isLoading = false
+        } else if supabase != nil {
             startAuthListener()
         } else {
             // No Supabase client — stop loading so the app can show the error UI

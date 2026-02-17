@@ -85,8 +85,15 @@ const DietaryRestaurants = lazy(() => import("./pages/DietaryRestaurants"));
 // Lead magnet tools
 const EventPromotionPlanner = lazy(() => import("./pages/EventPromotionPlanner"));
 
+// Hotels / Stay pages
+const Hotels = lazy(() => import("./pages/Hotels"));
+const HotelDetails = lazy(() => import("./pages/HotelDetails"));
+
 // AI-powered features
 const TripPlanner = lazy(() => import("./pages/TripPlanner"));
+
+// Affiliate disclosure
+const AffiliateDisclosure = lazy(() => import("./pages/AffiliateDisclosure"));
 
 // Legal pages
 const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
@@ -237,6 +244,9 @@ const App = () => (
             <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
             <Route path="/attractions/:slug" element={<AttractionDetails />} />
             <Route path="/playgrounds/:slug" element={<PlaygroundDetails />} />
+            {/* Hotels / Stay pages */}
+            <Route path="/stay" element={<Hotels />} />
+            <Route path="/stay/:slug" element={<HotelDetails />} />
             <Route path="/advertise" element={<Advertise />} />
             <Route path="/advertise/success" element={<AdvertiseSuccess />} />
             <Route path="/advertise/cancel" element={<AdvertiseCancel />} />
@@ -272,6 +282,8 @@ const App = () => (
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* AI-powered features */}
             <Route path="/trip-planner" element={<TripPlanner />} />
+            {/* Affiliate disclosure */}
+            <Route path="/affiliate-disclosure" element={<AffiliateDisclosure />} />
             {/* Legal pages */}
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />

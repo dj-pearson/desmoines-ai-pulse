@@ -2714,6 +2714,51 @@ export type Database = {
           },
         ]
       }
+      event_hotels: {
+        Row: {
+          id: string
+          event_id: string | null
+          hotel_id: string | null
+          distance_miles: number | null
+          notes: string | null
+          sort_order: number | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          event_id?: string | null
+          hotel_id?: string | null
+          distance_miles?: number | null
+          notes?: string | null
+          sort_order?: number | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          event_id?: string | null
+          hotel_id?: string | null
+          distance_miles?: number | null
+          notes?: string | null
+          sort_order?: number | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_hotels_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_hotels_hotel_id_fkey"
+            columns: ["hotel_id"]
+            isOneToOne: false
+            referencedRelation: "hotels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           ai_writeup: string | null
@@ -3025,6 +3070,114 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      hotels: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          description: string | null
+          short_description: string | null
+          address: string
+          city: string
+          state: string
+          zip: string | null
+          latitude: number | null
+          longitude: number | null
+          area: string | null
+          phone: string | null
+          email: string | null
+          website: string | null
+          affiliate_url: string | null
+          affiliate_provider: string | null
+          image_url: string | null
+          gallery_urls: string[] | null
+          star_rating: number | null
+          price_range: string | null
+          avg_nightly_rate: number | null
+          amenities: string[] | null
+          hotel_type: string | null
+          chain_name: string | null
+          total_rooms: number | null
+          check_in_time: string | null
+          check_out_time: string | null
+          is_featured: boolean | null
+          is_active: boolean | null
+          sort_order: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          description?: string | null
+          short_description?: string | null
+          address: string
+          city?: string
+          state?: string
+          zip?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          area?: string | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          affiliate_url?: string | null
+          affiliate_provider?: string | null
+          image_url?: string | null
+          gallery_urls?: string[] | null
+          star_rating?: number | null
+          price_range?: string | null
+          avg_nightly_rate?: number | null
+          amenities?: string[] | null
+          hotel_type?: string | null
+          chain_name?: string | null
+          total_rooms?: number | null
+          check_in_time?: string | null
+          check_out_time?: string | null
+          is_featured?: boolean | null
+          is_active?: boolean | null
+          sort_order?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          description?: string | null
+          short_description?: string | null
+          address?: string
+          city?: string
+          state?: string
+          zip?: string | null
+          latitude?: number | null
+          longitude?: number | null
+          area?: string | null
+          phone?: string | null
+          email?: string | null
+          website?: string | null
+          affiliate_url?: string | null
+          affiliate_provider?: string | null
+          image_url?: string | null
+          gallery_urls?: string[] | null
+          star_rating?: number | null
+          price_range?: string | null
+          avg_nightly_rate?: number | null
+          amenities?: string[] | null
+          hotel_type?: string | null
+          chain_name?: string | null
+          total_rooms?: number | null
+          check_in_time?: string | null
+          check_out_time?: string | null
+          is_featured?: boolean | null
+          is_active?: boolean | null
+          sort_order?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
       }
       import_jobs: {
         Row: {

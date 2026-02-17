@@ -62,7 +62,8 @@ type ContentType =
   | "restaurant"
   | "attraction"
   | "playground"
-  | "restaurant_opening";
+  | "restaurant_opening"
+  | "hotel";
 
 type ViewMode = "table" | "card";
 
@@ -359,6 +360,50 @@ const tableConfigs = {
       { key: "location", label: "Location" },
       { key: "opening_date", label: "Opening Date" },
       { key: "status", label: "Status" },
+    ],
+  },
+  hotel: {
+    title: "Hotels",
+    searchPlaceholder: "Search hotels...",
+    columns: [
+      { key: "name", label: "Name", type: "text" },
+      { key: "area", label: "Area", type: "text" },
+      { key: "hotel_type", label: "Type", type: "badge" },
+      { key: "price_range", label: "Price", type: "badge" },
+      { key: "star_rating", label: "Rating", type: "rating" },
+      { key: "chain_name", label: "Chain", type: "text" },
+      { key: "address", label: "Address", type: "text" },
+      { key: "phone", label: "Phone", type: "text" },
+      { key: "website", label: "Website", type: "link" },
+      { key: "affiliate_url", label: "Affiliate", type: "link" },
+      { key: "is_featured", label: "Featured", type: "boolean" },
+      { key: "is_active", label: "Active", type: "boolean" },
+    ],
+    filters: [
+      {
+        key: "area",
+        label: "Area",
+        options: ["All", "Downtown", "West Des Moines", "Waukee", "Ankeny", "Urbandale", "Altoona"],
+      },
+      {
+        key: "hotel_type",
+        label: "Type",
+        options: ["All", "Hotel", "Boutique Hotel", "Motel", "Resort", "B&B", "Extended Stay"],
+      },
+      {
+        key: "price_range",
+        label: "Price",
+        options: ["All", "$", "$$", "$$$", "$$$$"],
+      },
+    ],
+    sortOptions: [
+      { key: "name", label: "Name (A-Z)" },
+      { key: "area", label: "Area" },
+      { key: "hotel_type", label: "Type" },
+      { key: "price_range", label: "Price Range" },
+      { key: "star_rating", label: "Star Rating" },
+      { key: "is_featured", label: "Featured First" },
+      { key: "is_active", label: "Active First" },
     ],
   },
 };

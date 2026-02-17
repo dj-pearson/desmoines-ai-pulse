@@ -27,6 +27,13 @@ final class MapViewModel {
     // MARK: - Load Data
 
     func loadNearbyContent() async {
+        // In UI testing mode, skip location services entirely to avoid
+        // permission dialogs and network delays on CI simulators.
+        if Config.isUITesting {
+            await loadDefaultArea()
+            return
+        }
+
         isLoading = true
         errorMessage = nil
 
