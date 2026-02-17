@@ -51,9 +51,11 @@ private struct LaunchScreenView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 220)
+                    .accessibilityLabel("Des Moines Insider")
 
                 ProgressView()
                     .tint(Color.accentColor)
+                    .accessibilityLabel("Loading")
             }
         }
     }
@@ -74,6 +76,7 @@ private struct ConfigurationErrorView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 64))
                     .foregroundStyle(.yellow)
+                    .accessibilityHidden(true)
 
                 Text("Configuration Error")
                     .font(.title2.bold())

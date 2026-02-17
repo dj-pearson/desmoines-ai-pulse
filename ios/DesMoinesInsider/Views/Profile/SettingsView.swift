@@ -43,12 +43,14 @@ struct SettingsView: View {
                     }
                 }
 
+                #if DEBUG
                 Section("Debug") {
                     Button("Reset Onboarding") {
                         hasCompletedOnboarding = false
                         dismiss()
                     }
                 }
+                #endif
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)

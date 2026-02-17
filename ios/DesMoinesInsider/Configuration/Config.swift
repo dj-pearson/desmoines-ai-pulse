@@ -72,7 +72,7 @@ enum Config {
     // MARK: - Feature Flags
 
     static let enableAIFeatures = true
-    static let enablePushNotifications = true
+    static let enablePushNotifications = false
 
     // MARK: - Testing
 

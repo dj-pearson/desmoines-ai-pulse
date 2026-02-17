@@ -46,10 +46,10 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Des Moines Insider uses your location to show events and restaurants near you.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Des Moines Insider uses your location to send you notifications about nearby events.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

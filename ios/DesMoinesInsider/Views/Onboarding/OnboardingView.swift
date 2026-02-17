@@ -65,6 +65,8 @@ struct OnboardingView: View {
                             .animation(.spring(response: 0.3), value: currentPage)
                     }
                 }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Page \(currentPage + 1) of \(pages.count)")
 
                 // Buttons
                 HStack(spacing: 16) {
