@@ -1,13 +1,49 @@
 import SwiftUI
+import StoreKit
 
-/// App settings view.
+/// App settings view with account management, subscription, and about sections.
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = true
 
+    @State private var auth = AuthService.shared
+    @State private var storeKit = StoreKitService.shared
+    @State private var showSubscription = false
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+    @State private var errorMessage: String?
+
     var body: some View {
         NavigationStack {
             List {
+                // Account section (authenticated users only)
+                if auth.isAuthenticated {
+                    Section("Account") {
+                        Button {
+                            showSubscription = true
+                        } label: {
+                            HStack {
+                                Label("Subscription", systemImage: "star.circle")
+                                Spacer()
+                                Text(storeKit.currentTier.displayName)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+
+                        Button {
+                            Task {
+                                await storeKit.restorePurchases()
+                            }
+                        } label: {
+                            Label("Restore Purchases", systemImage: "arrow.clockwise")
+                        }
+                    }
+                }
+
                 Section("General") {
                     HStack {
                         Text("Version")
@@ -15,6 +51,8 @@ struct SettingsView: View {
                         Text(appVersion)
                             .foregroundStyle(.secondary)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Version \(appVersion)")
                 }
 
                 Section("Notifications") {
@@ -34,12 +72,54 @@ struct SettingsView: View {
                         Label("Contact Support", systemImage: "envelope")
                     }
 
-                    Link(destination: Config.siteURL.appendingPathComponent("privacy-policy")) {
+                    NavigationLink {
+                        WebViewPage(
+                            title: "Privacy Policy",
+                            url: Config.siteURL.appendingPathComponent("privacy-policy")
+                        )
+                    } label: {
                         Label("Privacy Policy", systemImage: "hand.raised")
                     }
 
-                    Link(destination: Config.siteURL.appendingPathComponent("terms")) {
+                    NavigationLink {
+                        WebViewPage(
+                            title: "Terms of Service",
+                            url: Config.siteURL.appendingPathComponent("terms")
+                        )
+                    } label: {
                         Label("Terms of Service", systemImage: "doc.text")
+                    }
+
+                    Button {
+                        requestAppReview()
+                    } label: {
+                        Label("Rate Des Moines Insider", systemImage: "star.bubble")
+                    }
+                }
+
+                // Data & Privacy section (authenticated users only)
+                if auth.isAuthenticated {
+                    Section("Data & Privacy") {
+                        Button(role: .destructive) {
+                            showDeleteConfirmation = true
+                        } label: {
+                            Label {
+                                if isDeleting {
+                                    Text("Deleting Account...")
+                                } else {
+                                    Text("Delete Account")
+                                }
+                            } icon: {
+                                if isDeleting {
+                                    ProgressView()
+                                } else {
+                                    Image(systemName: "trash")
+                                }
+                            }
+                            .foregroundStyle(.red)
+                        }
+                        .disabled(isDeleting)
+                        .accessibilityLabel("Delete your account")
                     }
                 }
 
@@ -59,8 +139,29 @@ struct SettingsView: View {
                     Button("Done") { dismiss() }
                 }
             }
+            .sheet(isPresented: $showSubscription) {
+                SubscriptionView()
+            }
+            .alert("Delete Account?", isPresented: $showDeleteConfirmation) {
+                Button("Delete", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
+            }
+            .alert("Error", isPresented: .init(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
         }
     }
+
+    // MARK: - Helpers
 
     private var appVersion: String {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
@@ -72,6 +173,44 @@ struct SettingsView: View {
         if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
             UIApplication.shared.open(url)
         }
+    }
+
+    private func requestAppReview() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+            return
+        }
+        AppStore.requestReview(in: scene)
+    }
+
+    private func deleteAccount() async {
+        isDeleting = true
+        errorMessage = nil
+
+        do {
+            guard let client = SupabaseService.shared.client else {
+                throw NSError(domain: "Settings", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "Supabase is not configured."])
+            }
+
+            let response = try await client.functions.invoke(
+                "delete-user-account",
+                options: .init(method: .post)
+            )
+
+            let data = try response.decode(as: [String: Bool].self)
+            guard data["success"] == true else {
+                throw NSError(domain: "Settings", code: -2,
+                              userInfo: [NSLocalizedDescriptionKey: "Account deletion failed."])
+            }
+
+            try await auth.signOut()
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isDeleting = false
     }
 }
 

@@ -4,6 +4,7 @@ import SwiftUI
 struct SearchView: View {
     @State private var viewModel = SearchViewModel()
     @State private var navigationPath = NavigationPath()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -18,6 +19,14 @@ struct SearchView: View {
                     searchSuggestions
                 } else if viewModel.isSearching {
                     loadingView
+                } else if viewModel.isEmpty && !NetworkMonitor.shared.isConnected {
+                    EmptyStateView(
+                        icon: "wifi.slash",
+                        title: "You're Offline",
+                        message: "Check your internet connection and try again.",
+                        actionTitle: "Retry",
+                        action: { viewModel.clearSearch() }
+                    )
                 } else if viewModel.isEmpty {
                     EmptyStateView(
                         icon: "magnifyingglass",
@@ -29,6 +38,9 @@ struct SearchView: View {
                 } else {
                     resultsList
                 }
+            }
+            .refreshable {
+                await viewModel.refresh()
             }
             .searchable(text: $viewModel.searchText, prompt: "Search events, restaurants, attractions...")
             .navigationTitle("Search")
@@ -51,7 +63,7 @@ struct SearchView: View {
             ForEach(SearchViewModel.SearchTab.allCases) { tab in
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation(.snappy) { viewModel.selectedTab = tab }
+                    withAnimation(reduceMotion ? nil : .snappy) { viewModel.selectedTab = tab }
                 } label: {
                     VStack(spacing: 6) {
                         HStack(spacing: 4) {
@@ -86,6 +98,7 @@ struct SearchView: View {
                 .foregroundStyle(viewModel.selectedTab == tab ? .primary : .secondary)
                 .frame(maxWidth: .infinity)
                 .accessibilityLabel("\(tab.rawValue), \(countFor(tab)) results")
+                .accessibilityAddTraits(viewModel.selectedTab == tab ? .isSelected : [])
             }
         }
         .padding(.horizontal)

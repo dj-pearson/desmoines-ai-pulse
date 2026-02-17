@@ -12,8 +12,10 @@ final class ProfileViewModel {
     var selectedInterests: Set<String> = []
 
     private(set) var isSaving = false
+    private(set) var isDeleting = false
     private(set) var errorMessage: String?
     var showSaveSuccess = false
+    var showDeleteConfirmation = false
 
     private let auth = AuthService.shared
 
@@ -60,6 +62,38 @@ final class ProfileViewModel {
 
     func clearError() {
         errorMessage = nil
+    }
+
+    // MARK: - Delete Account
+
+    func deleteAccount() async {
+        isDeleting = true
+        errorMessage = nil
+
+        do {
+            guard let client = SupabaseService.shared.client else {
+                throw NSError(domain: "ProfileViewModel", code: -1,
+                              userInfo: [NSLocalizedDescriptionKey: "Supabase is not configured."])
+            }
+
+            let response = try await client.functions.invoke(
+                "delete-user-account",
+                options: .init(method: .post)
+            )
+
+            // Verify success response
+            let data = try response.decode(as: [String: Bool].self)
+            guard data["success"] == true else {
+                throw NSError(domain: "ProfileViewModel", code: -2,
+                              userInfo: [NSLocalizedDescriptionKey: "Account deletion failed. Please try again."])
+            }
+
+            try await auth.signOut()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isDeleting = false
     }
 
     // MARK: - Sign Out

@@ -46,6 +46,8 @@
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Des Moines Insider uses your location to show events and restaurants near you.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Des Moines Insider can add events directly to your calendar so you never miss out.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

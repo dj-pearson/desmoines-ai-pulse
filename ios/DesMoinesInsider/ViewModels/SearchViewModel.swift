@@ -126,4 +126,11 @@ final class SearchViewModel {
         searchText = ""
         clearResults()
     }
+
+    func refresh() async {
+        guard !searchText.isEmpty else { return }
+        let current = searchText
+        clearResults()
+        searchText = current
+    }
 }

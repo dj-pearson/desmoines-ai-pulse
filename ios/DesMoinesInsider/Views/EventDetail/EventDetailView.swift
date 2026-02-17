@@ -47,6 +47,14 @@ struct EventDetailView: View {
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [viewModel.shareText])
         }
+        .alert("Calendar", isPresented: .init(
+            get: { viewModel.calendarError != nil },
+            set: { if !$0 { viewModel.resetCalendarState() } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(viewModel.calendarError ?? "")
+        }
         .task {
             await viewModel.loadEvent(event)
         }
@@ -206,16 +214,27 @@ struct EventDetailView: View {
 
     private var actionsSection: some View {
         HStack(spacing: 12) {
-            // Add to Calendar
-            if let url = viewModel.calendarURL {
-                Link(destination: url) {
-                    Label("Add to Calendar", systemImage: "calendar.badge.plus")
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(.white)
+            // Add to Calendar (native EventKit)
+            if event.parsedDate != nil {
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    Task { await viewModel.addToCalendar() }
+                } label: {
+                    Label(
+                        viewModel.calendarAdded ? "Added to Calendar" : "Add to Calendar",
+                        systemImage: viewModel.calendarAdded ? "checkmark.circle.fill" : "calendar.badge.plus"
+                    )
+                    .font(.subheadline.weight(.medium))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        viewModel.calendarAdded ? Color.green : Color.accentColor,
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
+                    .foregroundStyle(.white)
                 }
+                .disabled(viewModel.calendarAdded)
+                .accessibilityLabel(viewModel.calendarAdded ? "Event added to calendar" : "Add event to your calendar")
             }
 
             // External Link

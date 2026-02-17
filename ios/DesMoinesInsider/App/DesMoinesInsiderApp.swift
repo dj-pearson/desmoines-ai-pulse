@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit
 
 @main
 struct DesMoinesInsiderApp: App {
@@ -7,6 +8,7 @@ struct DesMoinesInsiderApp: App {
     @State private var locationService = LocationService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @AppStorage("appLaunchCount") private var launchCount = 0
 
     var body: some Scene {
         WindowGroup {
@@ -31,10 +33,37 @@ struct DesMoinesInsiderApp: App {
                 SupabaseService.shared.client?.handle(url)
             }
             .task {
+                launchCount += 1
+
                 if authService.isAuthenticated {
                     await favoritesService.loadFavorites()
+
+                    // Request review after engagement thresholds
+                    requestReviewIfEligible()
                 }
             }
+        }
+    }
+
+    // MARK: - App Review
+
+    private func requestReviewIfEligible() {
+        // Require at least 3 launches and 1+ favorites before prompting
+        guard launchCount >= 3,
+              favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count >= 1
+        else { return }
+
+        // Only prompt once (AppStore rate-limits this, but we gate on our side too)
+        guard !UserDefaults.standard.bool(forKey: "hasRequestedReview") else { return }
+        UserDefaults.standard.set(true, forKey: "hasRequestedReview")
+
+        // Delay slightly so the app is fully visible
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            guard let scene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene else {
+                return
+            }
+            AppStore.requestReview(in: scene)
         }
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import EventKit
 
 /// ViewModel for the event detail screen.
 @MainActor
@@ -80,6 +81,45 @@ final class EventDetailViewModel {
             URLQueryItem(name: "details", value: event.displayDescription),
         ]
         return components.url
+    }
+
+    private(set) var calendarAdded = false
+    private(set) var calendarError: String?
+
+    /// Add the event to the user's native iOS Calendar using EventKit.
+    func addToCalendar() async {
+        guard let event, let date = event.parsedDate else {
+            calendarError = "Event date is not available."
+            return
+        }
+
+        let store = EKEventStore()
+
+        do {
+            let granted = try await store.requestWriteOnlyAccessToEvents()
+            guard granted else {
+                calendarError = "Calendar access was denied. You can enable it in Settings."
+                return
+            }
+
+            let calEvent = EKEvent(eventStore: store)
+            calEvent.title = event.title
+            calEvent.startDate = date
+            calEvent.endDate = date.addingTimeInterval(7200) // 2h default
+            calEvent.location = event.displayLocation
+            calEvent.notes = event.displayDescription
+            calEvent.calendar = store.defaultCalendarForNewEvents
+
+            try store.save(calEvent, span: .thisEvent)
+            calendarAdded = true
+        } catch {
+            calendarError = error.localizedDescription
+        }
+    }
+
+    func resetCalendarState() {
+        calendarAdded = false
+        calendarError = nil
     }
 
     // MARK: - Share

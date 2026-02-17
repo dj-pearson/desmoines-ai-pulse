@@ -24,12 +24,13 @@ struct AuthView: View {
                 .padding(.top, 20)
 
                 // Toggle
-                Picker("", selection: $isSignUpMode) {
+                Picker("Authentication mode", selection: $isSignUpMode) {
                     Text("Sign In").tag(false)
                     Text("Sign Up").tag(true)
                 }
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
+                .accessibilityLabel("Choose sign in or sign up")
 
                 // Form
                 VStack(spacing: 14) {
@@ -53,6 +54,7 @@ struct AuthView: View {
                     SecureField("Password", text: $viewModel.password)
                         .textContentType(isSignUpMode ? .newPassword : .password)
                         .textFieldStyle(.roundedInput)
+                        .accessibilityHint(isSignUpMode ? "Must be at least 6 characters" : "")
 
                     if isSignUpMode {
                         interestsSection
@@ -176,6 +178,8 @@ struct AuthView: View {
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(viewModel.selectedInterests.contains(interest) ? .isSelected : [])
+                    .accessibilityLabel(interest)
                 }
             }
         }

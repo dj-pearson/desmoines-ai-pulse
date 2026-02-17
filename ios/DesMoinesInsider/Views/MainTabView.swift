@@ -68,6 +68,9 @@ struct MainTabView: View {
                 }
                 .tag(Tab.profile)
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            OfflineBanner()
+        }
         .tint(Color.accentColor)
     }
 }

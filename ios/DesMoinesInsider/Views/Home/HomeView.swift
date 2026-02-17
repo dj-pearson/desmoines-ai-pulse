@@ -7,6 +7,7 @@ struct HomeView: View {
     @State private var showFilters = false
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -98,7 +99,7 @@ struct HomeView: View {
                 ForEach(DateFilterPreset.allCases) { preset in
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.snappy) {
+                        withAnimation(reduceMotion ? nil : .snappy) {
                             if viewModel.selectedDatePreset == preset {
                                 viewModel.selectedDatePreset = nil
                             } else {
@@ -139,7 +140,7 @@ struct HomeView: View {
                 ForEach(EventCategory.allCases.prefix(8)) { category in
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(.snappy) {
+                        withAnimation(reduceMotion ? nil : .snappy) {
                             if viewModel.selectedCategory == category {
                                 viewModel.selectedCategory = nil
                             } else {
@@ -302,6 +303,15 @@ struct HomeView: View {
                         .padding(.horizontal)
                         .padding(.vertical, 4)
                 }
+            } else if viewModel.events.isEmpty && !NetworkMonitor.shared.isConnected {
+                EmptyStateView(
+                    icon: "wifi.slash",
+                    title: "You're Offline",
+                    message: "Check your internet connection and try again.",
+                    actionTitle: "Retry",
+                    action: { Task { await viewModel.refresh() } }
+                )
+                .padding(.top, 40)
             } else if viewModel.events.isEmpty {
                 EmptyStateView(
                     icon: "calendar.badge.exclamationmark",

@@ -12,6 +12,14 @@ struct FavoritesView: View {
                     signInPrompt
                 } else if viewModel.isLoading {
                     loadingView
+                } else if !viewModel.hasAnyFavorites && !NetworkMonitor.shared.isConnected {
+                    EmptyStateView(
+                        icon: "wifi.slash",
+                        title: "You're Offline",
+                        message: "Your saved items couldn't be loaded. Check your internet connection and try again.",
+                        actionTitle: "Retry",
+                        action: { Task { await viewModel.refresh() } }
+                    )
                 } else if !viewModel.hasAnyFavorites {
                     EmptyStateView(
                         icon: "heart",
@@ -156,6 +164,7 @@ struct FavoritesView: View {
             Image(systemName: "heart.circle")
                 .font(.system(size: 64))
                 .foregroundStyle(Color.accentColor.opacity(0.6))
+                .accessibilityHidden(true)
 
             Text("Sign In to Save Items")
                 .font(.title3.bold())
@@ -180,6 +189,7 @@ struct FavoritesView: View {
 
             Spacer()
         }
+        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Loading
@@ -200,6 +210,7 @@ private struct FavoriteEventRow: View {
     let event: Event
     let isPast: Bool
     let onRemove: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 14) {
@@ -242,7 +253,7 @@ private struct FavoriteEventRow: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                withAnimation { onRemove() }
+                if reduceMotion { onRemove() } else { withAnimation { onRemove() } }
             } label: {
                 Image(systemName: "heart.fill")
                     .foregroundStyle(.red)
@@ -262,6 +273,7 @@ private struct FavoriteEventRow: View {
 private struct FavoriteRestaurantRow: View {
     let restaurant: Restaurant
     let onRemove: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 14) {
@@ -316,7 +328,7 @@ private struct FavoriteRestaurantRow: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                withAnimation { onRemove() }
+                if reduceMotion { onRemove() } else { withAnimation { onRemove() } }
             } label: {
                 Image(systemName: "heart.fill")
                     .foregroundStyle(.red)

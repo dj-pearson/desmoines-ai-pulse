@@ -89,6 +89,8 @@ struct ProfileView: View {
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                    .accessibilityAddTraits(viewModel.selectedInterests.contains(interest) ? .isSelected : [])
+                    .accessibilityLabel(interest)
                     }
                 }
                 .padding(.vertical, 4)
@@ -134,10 +136,39 @@ struct ProfileView: View {
                     Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                         .foregroundStyle(.red)
                 }
+
+                Button(role: .destructive) {
+                    viewModel.showDeleteConfirmation = true
+                } label: {
+                    Label {
+                        if viewModel.isDeleting {
+                            Text("Deleting Account...")
+                        } else {
+                            Text("Delete Account")
+                        }
+                    } icon: {
+                        if viewModel.isDeleting {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "trash")
+                        }
+                    }
+                    .foregroundStyle(.red)
+                }
+                .disabled(viewModel.isDeleting)
+                .accessibilityLabel("Delete your account")
             }
         }
         .alert("Profile Updated", isPresented: $viewModel.showSaveSuccess) {
             Button("OK", role: .cancel) {}
+        }
+        .alert("Delete Account?", isPresented: $viewModel.showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                Task { await viewModel.deleteAccount() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently delete your account, favorites, and all associated data. This action cannot be undone.")
         }
         .alert("Error", isPresented: .init(
             get: { viewModel.errorMessage != nil },
