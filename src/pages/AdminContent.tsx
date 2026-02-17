@@ -182,15 +182,15 @@ export default function AdminContent() {
         description: "",
         location: "",
         cuisine: "",
-        priceRange: "$$",
+        price_range: "$$",
         phone: "",
         website: "",
         rating: null,
         image_url: "",
         status: "open",
-        openingDate: null,
-        openingTimeframe: "",
-        isFeatured: false,
+        opening_date: null,
+        opening_timeframe: "",
+        is_featured: false,
       };
     } else if (contentType === "attraction") {
       emptyItem = {
@@ -201,18 +201,18 @@ export default function AdminContent() {
         website: "",
         image_url: "",
         rating: null,
-        isFeatured: false,
+        is_featured: false,
       };
     } else if (contentType === "playground") {
       emptyItem = {
         name: "",
         description: "",
         location: "",
-        ageRange: "",
+        age_range: "",
         amenities: [],
         image_url: "",
         rating: null,
-        isFeatured: false,
+        is_featured: false,
       };
     } else if (contentType === "hotel") {
       emptyItem = {

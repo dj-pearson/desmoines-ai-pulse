@@ -198,8 +198,9 @@ struct SettingsView: View {
                 options: .init(method: .post)
             )
 
-            let data = try response.decode(as: [String: Bool].self)
-            guard data["success"] == true else {
+            struct DeleteResponse: Decodable { let success: Bool? }
+            let decoded = try JSONDecoder().decode(DeleteResponse.self, from: response.data)
+            guard decoded.success == true else {
                 throw NSError(domain: "Settings", code: -2,
                               userInfo: [NSLocalizedDescriptionKey: "Account deletion failed."])
             }
