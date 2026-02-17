@@ -193,17 +193,11 @@ struct SettingsView: View {
                               userInfo: [NSLocalizedDescriptionKey: "Supabase is not configured."])
             }
 
-            let response = try await client.functions.invoke(
+            // invoke returns Void in supabase-swift 2.x; throws on failure
+            try await client.functions.invoke(
                 "delete-user-account",
                 options: .init(method: .post)
             )
-
-            struct DeleteResponse: Decodable { let success: Bool? }
-            let decoded = try JSONDecoder().decode(DeleteResponse.self, from: response.data)
-            guard decoded.success == true else {
-                throw NSError(domain: "Settings", code: -2,
-                              userInfo: [NSLocalizedDescriptionKey: "Account deletion failed."])
-            }
 
             try await auth.signOut()
             dismiss()

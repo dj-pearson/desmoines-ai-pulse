@@ -68,8 +68,8 @@ final class PushNotificationService: NSObject {
             _ = try await client.functions.invoke(
                 "register-device-token",
                 options: .init(
-                    body: TokenPayload(deviceToken: token, platform: "ios"),
-                    method: .post
+                    method: .post,
+                    body: TokenPayload(deviceToken: token, platform: "ios")
                 )
             )
         } catch {
