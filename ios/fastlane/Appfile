@@ -1,8 +1,14 @@
 # Appfile — App identifiers for Fastlane (Native Swift)
 #
-# Replace these with your actual credentials before first use.
+# CI/CD uses App Store Connect API keys (APPSTORE_API_KEY_ID,
+# APPSTORE_ISSUER_ID, APPSTORE_API_PRIVATE_KEY) set as GitHub Secrets.
+# These environment-based overrides take precedence.
+#
+# For local use, set APPLE_ID, TEAM_ID, and ITC_TEAM_ID as env vars
+# or replace the fallback values below.
 
-app_identifier("com.desmoines.aipulse")       # Bundle ID
-apple_id("your-apple-id@example.com")          # Apple ID email
-team_id("TEAM_ID_HERE")                        # Apple Developer Team ID
-itc_team_id("ITC_TEAM_ID_HERE")                # App Store Connect Team ID
+app_identifier("com.desmoines.aipulse")
+
+apple_id(ENV["APPLE_ID"] || ENV["FASTLANE_USER"] || "your-apple-id@example.com")
+team_id(ENV["TEAM_ID"] || ENV["FASTLANE_TEAM_ID"] || "")
+itc_team_id(ENV["ITC_TEAM_ID"] || ENV["FASTLANE_ITC_TEAM_ID"] || "")

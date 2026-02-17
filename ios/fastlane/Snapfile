@@ -13,17 +13,19 @@
 # ──────────────────────────────────────────────────
 # Devices — App Store Connect required screenshot sizes
 # ──────────────────────────────────────────────────
-# App Store accepts: 1242×2688 (6.5") and 1284×2778 (6.7")
-# Pro Max models (1290×2796, 1320×2868) are NOT accepted for these slots.
-# Use Plus/Max models that produce the correct dimensions.
+# These must match the Fastfile screenshots lane and the
+# ios-screenshots.yml GitHub Actions workflow.
+#
+# Note: The Fastfile's capture_screenshots overrides this list,
+# but keeping them in sync avoids confusion when running locally.
 devices([
-  # iPhone 6.5" — 1242×2688px (required by App Store)
-  "iPhone 11 Pro Max",
+  # iPhone 6.9" (required by App Store)
+  "iPhone 16 Pro Max",
 
-  # iPhone 6.7" — 1284×2778px (required by App Store)
-  "iPhone 16 Plus",
+  # iPhone 6.7" (required by App Store)
+  "iPhone 15 Pro Max",
 
-  # iPad Pro 13" (required) — M4
+  # iPad Pro 13" (required by App Store)
   "iPad Pro 13-inch (M4)",
 ])
 
