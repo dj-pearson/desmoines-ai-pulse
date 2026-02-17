@@ -150,6 +150,9 @@ struct ProfileView: View {
         .task {
             viewModel.loadProfile()
         }
+        .onChange(of: viewModel.profile?.userId) { _, _ in
+            viewModel.loadProfile()
+        }
     }
 
     // MARK: - Guest Content

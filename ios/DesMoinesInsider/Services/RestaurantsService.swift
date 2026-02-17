@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import Supabase
 
 /// Fetches restaurants from Supabase, matching the web app's useRestaurants hook.
@@ -152,6 +153,16 @@ actor RestaurantsService {
     // MARK: - Nearby Restaurants
 
     func fetchNearbyRestaurants(latitude: Double, longitude: Double, radiusMiles: Double = 25, limit: Int = 100) async throws -> [Restaurant] {
+        // Try PostGIS RPC first for optimal performance
+        if let rpcResults = try? await fetchNearbyRestaurantsViaRPC(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit),
+           !rpcResults.isEmpty {
+            return rpcResults
+        }
+        // Fallback: direct table query with client-side distance filtering
+        return try await fetchNearbyRestaurantsViaTable(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit)
+    }
+
+    private func fetchNearbyRestaurantsViaRPC(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Restaurant] {
         struct NearbyParams: Encodable {
             let center_lat: Double
             let center_lng: Double
@@ -170,6 +181,26 @@ actor RestaurantsService {
             .execute()
             .value
         return restaurants
+    }
+
+    private func fetchNearbyRestaurantsViaTable(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Restaurant] {
+        let client = try db()
+        let restaurants: [Restaurant] = try await client
+            .from("restaurants")
+            .select()
+            .not("latitude", operator: .is, value: "null")
+            .not("longitude", operator: .is, value: "null")
+            .limit(limit)
+            .execute()
+            .value
+
+        let center = CLLocation(latitude: latitude, longitude: longitude)
+        let radiusMeters = radiusMiles * 1609.34
+        return restaurants.filter { restaurant in
+            guard let coord = restaurant.coordinate else { return false }
+            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            return center.distance(from: loc) <= radiusMeters
+        }
     }
 
     // MARK: - Fuzzy Search Fallback
