@@ -5,7 +5,7 @@ struct Event: Identifiable, Codable, Hashable {
     let id: String
     let title: String
     let date: String
-    let location: String
+    var location: String?
     var venue: String?
     var city: String?
     var category: String?
@@ -93,8 +93,8 @@ struct Event: Identifiable, Codable, Hashable {
     }
 
     var displayLocation: String {
-        [venue, city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
-            .isEmpty ? location : [venue, city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        let venueCityStr = [venue, city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        return venueCityStr.isEmpty ? (location ?? "Des Moines") : venueCityStr
     }
 
     var urgencyLabel: String? {

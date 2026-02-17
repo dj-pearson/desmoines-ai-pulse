@@ -135,9 +135,11 @@ struct EventDetailView: View {
                         Text(venue)
                             .font(.subheadline.weight(.semibold))
                     }
-                    Text(event.location)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    if let location = event.location, !location.isEmpty {
+                        Text(location)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
                     if let city = event.city {
                         Text(city)
                             .font(.caption)

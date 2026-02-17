@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import Supabase
 
 /// Fetches attractions from Supabase, matching the web app's useAttractions hook.
@@ -72,6 +73,28 @@ actor AttractionsService {
             totalCount: total,
             hasMore: query.offset + query.limit < total
         )
+    }
+
+    // MARK: - Nearby Attractions
+
+    func fetchNearbyAttractions(latitude: Double, longitude: Double, limit: Int = 50) async throws -> [Attraction] {
+        let client = try db()
+        let attractions: [Attraction] = try await client
+            .from("attractions")
+            .select()
+            .not("latitude", operator: .is, value: "null")
+            .not("longitude", operator: .is, value: "null")
+            .limit(limit)
+            .execute()
+            .value
+        // Filter by distance client-side since attractions don't have a PostGIS RPC yet
+        let center = CLLocation(latitude: latitude, longitude: longitude)
+        let radiusMeters = Config.defaultSearchRadiusMiles * 1609.34
+        return attractions.filter { attraction in
+            guard let coord = attraction.coordinate else { return false }
+            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            return center.distance(from: loc) <= radiusMeters
+        }
     }
 
     func fetchAttraction(id: String) async throws -> Attraction {
