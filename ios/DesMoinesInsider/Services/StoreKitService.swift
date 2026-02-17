@@ -196,7 +196,7 @@ final class StoreKitService {
 
             _ = try await client.functions.invoke(
                 "verify-apple-receipt",
-                options: .init(body: payload, method: .post)
+                options: .init(method: .post, body: payload)
             )
         } catch {
             // Log but don't surface to user - entitlement is already granted locally
