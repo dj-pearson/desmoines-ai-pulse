@@ -174,6 +174,17 @@ final class AuthService {
         guard let supabase else { throw AuthError.notConfigured }
         guard let userId = currentUser?.id.uuidString else { return }
 
+        // Ensure the profile row exists before updating
+        if currentProfile == nil {
+            try await createProfile(
+                userId: userId,
+                email: currentUser?.email ?? "",
+                firstName: firstName,
+                lastName: lastName,
+                interests: interests
+            )
+        }
+
         struct ProfileUpdate: Encodable {
             let first_name: String?
             let last_name: String?

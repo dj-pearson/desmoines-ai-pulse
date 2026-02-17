@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 import Supabase
 
 /// Fetches events from Supabase, matching the web app's useEvents hook patterns.
@@ -119,10 +120,20 @@ actor EventsService {
     // MARK: - Nearby Events
 
     func fetchNearbyEvents(latitude: Double, longitude: Double, radiusMiles: Double = 30, limit: Int = 50) async throws -> [Event] {
+        // Try PostGIS RPC first for optimal performance
+        if let rpcResults = try? await fetchNearbyEventsViaRPC(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit),
+           !rpcResults.isEmpty {
+            return rpcResults
+        }
+        // Fallback: direct table query with client-side distance filtering
+        return try await fetchNearbyEventsViaTable(latitude: latitude, longitude: longitude, radiusMiles: radiusMiles, limit: limit)
+    }
+
+    private func fetchNearbyEventsViaRPC(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Event] {
         struct NearbyParams: Encodable {
             let user_lat: Double
             let user_lon: Double
-            let radius_meters: Double
+            let radius_meters: Int
             let search_limit: Int
         }
 
@@ -131,12 +142,36 @@ actor EventsService {
             .rpc("search_events_near_location", params: NearbyParams(
                 user_lat: latitude,
                 user_lon: longitude,
-                radius_meters: radiusMiles * 1609.34,
+                radius_meters: Int(radiusMiles * 1609.34),
                 search_limit: limit
             ))
             .execute()
             .value
         return events
+    }
+
+    private func fetchNearbyEventsViaTable(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Event] {
+        let client = try db()
+        let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
+
+        let events: [Event] = try await client
+            .from("events")
+            .select()
+            .gte("date", value: today)
+            .not("latitude", operator: .is, value: "null")
+            .not("longitude", operator: .is, value: "null")
+            .order("date", ascending: true)
+            .limit(limit)
+            .execute()
+            .value
+
+        let center = CLLocation(latitude: latitude, longitude: longitude)
+        let radiusMeters = radiusMiles * 1609.34
+        return events.filter { event in
+            guard let coord = event.coordinate else { return false }
+            let loc = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+            return center.distance(from: loc) <= radiusMeters
+        }
     }
 
     // MARK: - Featured Events
