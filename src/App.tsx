@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { lazy, Suspense, useState, useEffect } from "react";
+import { lazy, Suspense, useState, useEffect, ComponentType } from "react";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
@@ -18,98 +18,120 @@ import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
 
+/**
+ * Wrapper around React.lazy that retries once on chunk load failure,
+ * then does a hard page reload to pick up the latest deployment.
+ * Prevents "Loading..." forever when Cloudflare purges old JS chunks.
+ */
+function lazyWithRetry(
+  importFn: () => Promise<{ default: ComponentType<any> }>
+) {
+  return lazy(() =>
+    importFn().catch((error) => {
+      const hasReloaded = sessionStorage.getItem("chunk_reload");
+      if (!hasReloaded) {
+        sessionStorage.setItem("chunk_reload", "1");
+        window.location.reload();
+        return new Promise(() => {}); // never resolves; reload will take over
+      }
+      sessionStorage.removeItem("chunk_reload");
+      throw error; // let the error boundary handle it
+    })
+  );
+}
+
 // Lazy load pages for better mobile performance
-const Index = lazy(() => import("./pages/Index"));
-const Auth = lazy(() => import("./pages/Auth"));
-const AuthCallback = lazy(() => import("./pages/AuthCallback"));
-const AuthVerified = lazy(() => import("./pages/AuthVerified"));
-const Profile = lazy(() => import("./pages/Profile"));
-const ProfilePage = lazy(() => import("./pages/ProfilePage"));
-const UserDashboard = lazy(() => import("./pages/UserDashboard"));
-const NotFound = lazy(() => import("./pages/NotFound"));
-const Admin = lazy(() => import("./pages/Admin"));
-const Restaurants = lazy(() => import("./pages/Restaurants"));
-const Attractions = lazy(() => import("./pages/Attractions"));
-const Playgrounds = lazy(() => import("./pages/Playgrounds"));
-const EventDetails = lazy(() => import("./pages/EventDetails"));
-const RestaurantDetails = lazy(() => import("./pages/RestaurantDetails"));
-const AttractionDetails = lazy(() => import("./pages/AttractionDetails"));
-const PlaygroundDetails = lazy(() => import("./pages/PlaygroundDetails"));
-const EventsPage = lazy(() => import("./pages/EventsPage"));
-const Articles = lazy(() => import("./pages/Articles"));
-const ArticleDetails = lazy(() => import("./pages/ArticleDetails"));
-const AdminArticleEditor = lazy(() => import("./pages/AdminArticleEditor"));
-const CMSDashboard = lazy(() => import("./pages/CMSDashboard"));
-const Advertise = lazy(() => import("./pages/Advertise"));
-const AdvertiseSuccess = lazy(() => import("./pages/AdvertiseSuccess"));
-const AdvertiseCancel = lazy(() => import("./pages/AdvertiseCancel"));
-const WeekendPage = lazy(() => import("./pages/WeekendPage"));
-const NeighborhoodsPage = lazy(() => import("./pages/NeighborhoodsPage"));
-const NeighborhoodPage = lazy(() => import("./pages/NeighborhoodPage"));
-const IowaStateFairPage = lazy(() => import("./pages/IowaStateFairPage"));
-const CampaignDashboard = lazy(() => import("./pages/CampaignDashboard"));
-const CampaignDetail = lazy(() => import("./pages/CampaignDetail"));
-const UploadCreatives = lazy(() => import("./pages/UploadCreatives"));
-const AdminCampaigns = lazy(() => import("./pages/AdminCampaigns"));
-const AdminCampaignDetail = lazy(() => import("./pages/AdminCampaignDetail"));
-const CampaignAnalytics = lazy(() => import("./pages/CampaignAnalytics"));
-const TeamManagement = lazy(() => import("./pages/TeamManagement"));
-const Social = lazy(() => import("./pages/Social"));
-const SmartCalendarIntegration = lazy(
+const Index = lazyWithRetry(() => import("./pages/Index"));
+const Auth = lazyWithRetry(() => import("./pages/Auth"));
+const AuthCallback = lazyWithRetry(() => import("./pages/AuthCallback"));
+const AuthVerified = lazyWithRetry(() => import("./pages/AuthVerified"));
+const Profile = lazyWithRetry(() => import("./pages/Profile"));
+const ProfilePage = lazyWithRetry(() => import("./pages/ProfilePage"));
+const UserDashboard = lazyWithRetry(() => import("./pages/UserDashboard"));
+const NotFound = lazyWithRetry(() => import("./pages/NotFound"));
+const Admin = lazyWithRetry(() => import("./pages/Admin"));
+const Restaurants = lazyWithRetry(() => import("./pages/Restaurants"));
+const Attractions = lazyWithRetry(() => import("./pages/Attractions"));
+const Playgrounds = lazyWithRetry(() => import("./pages/Playgrounds"));
+const EventDetails = lazyWithRetry(() => import("./pages/EventDetails"));
+const RestaurantDetails = lazyWithRetry(() => import("./pages/RestaurantDetails"));
+const AttractionDetails = lazyWithRetry(() => import("./pages/AttractionDetails"));
+const PlaygroundDetails = lazyWithRetry(() => import("./pages/PlaygroundDetails"));
+const EventsPage = lazyWithRetry(() => import("./pages/EventsPage"));
+const Articles = lazyWithRetry(() => import("./pages/Articles"));
+const ArticleDetails = lazyWithRetry(() => import("./pages/ArticleDetails"));
+const AdminArticleEditor = lazyWithRetry(() => import("./pages/AdminArticleEditor"));
+const CMSDashboard = lazyWithRetry(() => import("./pages/CMSDashboard"));
+const Advertise = lazyWithRetry(() => import("./pages/Advertise"));
+const AdvertiseSuccess = lazyWithRetry(() => import("./pages/AdvertiseSuccess"));
+const AdvertiseCancel = lazyWithRetry(() => import("./pages/AdvertiseCancel"));
+const WeekendPage = lazyWithRetry(() => import("./pages/WeekendPage"));
+const NeighborhoodsPage = lazyWithRetry(() => import("./pages/NeighborhoodsPage"));
+const NeighborhoodPage = lazyWithRetry(() => import("./pages/NeighborhoodPage"));
+const IowaStateFairPage = lazyWithRetry(() => import("./pages/IowaStateFairPage"));
+const CampaignDashboard = lazyWithRetry(() => import("./pages/CampaignDashboard"));
+const CampaignDetail = lazyWithRetry(() => import("./pages/CampaignDetail"));
+const UploadCreatives = lazyWithRetry(() => import("./pages/UploadCreatives"));
+const AdminCampaigns = lazyWithRetry(() => import("./pages/AdminCampaigns"));
+const AdminCampaignDetail = lazyWithRetry(() => import("./pages/AdminCampaignDetail"));
+const CampaignAnalytics = lazyWithRetry(() => import("./pages/CampaignAnalytics"));
+const TeamManagement = lazyWithRetry(() => import("./pages/TeamManagement"));
+const Social = lazyWithRetry(() => import("./pages/Social"));
+const SmartCalendarIntegration = lazyWithRetry(
   () => import("./components/SmartCalendarIntegration")
 );
-const Gamification = lazy(() => import("./pages/Gamification"));
-const Pricing = lazy(() => import("./pages/Pricing"));
-const SubscriptionSuccess = lazy(() => import("./pages/SubscriptionSuccess"));
-const SubscriptionPortal = lazy(() => import("./pages/SubscriptionPortal"));
-const AdminRefunds = lazy(() => import("./pages/AdminRefunds"));
-const BusinessPartnership = lazy(() => import("./pages/BusinessPartnership"));
-const BusinessHub = lazy(() => import("./pages/BusinessHub"));
-const GuidesPage = lazy(() => import("./pages/GuidesPage"));
-const MonthlyEventsPage = lazy(() => import("./pages/MonthlyEventsPage"));
-const AdvancedSearchPage = lazy(() => import("./components/AdvancedSearchPage"));
-const RealTimePage = lazy(() => import("./components/RealTimePage"));
+const Gamification = lazyWithRetry(() => import("./pages/Gamification"));
+const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
+const SubscriptionSuccess = lazyWithRetry(() => import("./pages/SubscriptionSuccess"));
+const SubscriptionPortal = lazyWithRetry(() => import("./pages/SubscriptionPortal"));
+const AdminRefunds = lazyWithRetry(() => import("./pages/AdminRefunds"));
+const BusinessPartnership = lazyWithRetry(() => import("./pages/BusinessPartnership"));
+const BusinessHub = lazyWithRetry(() => import("./pages/BusinessHub"));
+const GuidesPage = lazyWithRetry(() => import("./pages/GuidesPage"));
+const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"));
+const AdvancedSearchPage = lazyWithRetry(() => import("./components/AdvancedSearchPage"));
+const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 
 // SEO-focused time-sensitive pages
-const EventsToday = lazy(() => import("./pages/EventsToday"));
-const EventsThisWeekend = lazy(() => import("./pages/EventsThisWeekend"));
-const EventsByLocation = lazy(() => import("./pages/EventsByLocation"));
+const EventsToday = lazyWithRetry(() => import("./pages/EventsToday"));
+const EventsThisWeekend = lazyWithRetry(() => import("./pages/EventsThisWeekend"));
+const EventsByLocation = lazyWithRetry(() => import("./pages/EventsByLocation"));
 
 // SEO hub pages - new category pages
-const FreeEvents = lazy(() => import("./pages/FreeEvents"));
-const KidsEvents = lazy(() => import("./pages/KidsEvents"));
-const DateNightEvents = lazy(() => import("./pages/DateNightEvents"));
-const OpenNowRestaurants = lazy(() => import("./pages/OpenNowRestaurants"));
-const DietaryRestaurants = lazy(() => import("./pages/DietaryRestaurants"));
+const FreeEvents = lazyWithRetry(() => import("./pages/FreeEvents"));
+const KidsEvents = lazyWithRetry(() => import("./pages/KidsEvents"));
+const DateNightEvents = lazyWithRetry(() => import("./pages/DateNightEvents"));
+const OpenNowRestaurants = lazyWithRetry(() => import("./pages/OpenNowRestaurants"));
+const DietaryRestaurants = lazyWithRetry(() => import("./pages/DietaryRestaurants"));
 
 // Lead magnet tools
-const EventPromotionPlanner = lazy(() => import("./pages/EventPromotionPlanner"));
+const EventPromotionPlanner = lazyWithRetry(() => import("./pages/EventPromotionPlanner"));
 
 // Hotels / Stay pages
-const Hotels = lazy(() => import("./pages/Hotels"));
-const HotelDetails = lazy(() => import("./pages/HotelDetails"));
+const Hotels = lazyWithRetry(() => import("./pages/Hotels"));
+const HotelDetails = lazyWithRetry(() => import("./pages/HotelDetails"));
 
 // AI-powered features
-const TripPlanner = lazy(() => import("./pages/TripPlanner"));
+const TripPlanner = lazyWithRetry(() => import("./pages/TripPlanner"));
 
 // Affiliate disclosure
-const AffiliateDisclosure = lazy(() => import("./pages/AffiliateDisclosure"));
+const AffiliateDisclosure = lazyWithRetry(() => import("./pages/AffiliateDisclosure"));
 
-// Legal pages
-const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
-const Terms = lazy(() => import("./pages/Terms"));
-const AccessibilityStatement = lazy(() => import("./pages/AccessibilityStatement"));
+// Legal pages — direct imports (small static content, must always be reachable)
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import Terms from "./pages/Terms";
+import AccessibilityStatement from "./pages/AccessibilityStatement";
 
 // Contact page
-const Contact = lazy(() => import("./pages/Contact"));
+const Contact = lazyWithRetry(() => import("./pages/Contact"));
 
 // Admin sub-pages
-const AdminContent = lazy(() => import("./pages/AdminContent"));
-const AdminAI = lazy(() => import("./pages/AdminAI"));
-const AdminTools = lazy(() => import("./pages/AdminTools"));
-const AdminAnalyticsPage = lazy(() => import("./pages/AdminAnalyticsPage"));
-const AdminSecurity = lazy(() => import("./pages/AdminSecurity"));
-const AdminSystem = lazy(() => import("./pages/AdminSystem"));
+const AdminContent = lazyWithRetry(() => import("./pages/AdminContent"));
+const AdminAI = lazyWithRetry(() => import("./pages/AdminAI"));
+const AdminTools = lazyWithRetry(() => import("./pages/AdminTools"));
+const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
+const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
+const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
 
 // Mobile-optimized loading component with accessibility support
 const PageLoader = () => (
