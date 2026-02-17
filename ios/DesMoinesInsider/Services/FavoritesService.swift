@@ -27,7 +27,6 @@ final class FavoritesService {
     // ================================================================
 
     func loadFavorites() async {
-        if Config.isUITesting { return }
         await loadEventFavorites()
         await loadRestaurantFavorites()
     }
@@ -109,7 +108,6 @@ final class FavoritesService {
 
     /// Fetch the full Event objects for all favorited event IDs.
     func fetchFavoriteEvents() async throws -> [Event] {
-        if Config.isUITesting { return [] }
         guard !favoriteEventIds.isEmpty else { return [] }
         let client = try db()
 
@@ -219,7 +217,6 @@ final class FavoritesService {
 
     /// Fetch the full Restaurant objects for all favorited restaurant IDs.
     func fetchFavoriteRestaurants() async throws -> [Restaurant] {
-        if Config.isUITesting { return [] }
         guard !favoriteRestaurantIds.isEmpty else { return [] }
         let client = try db()
 

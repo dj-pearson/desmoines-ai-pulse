@@ -38,10 +38,6 @@ actor EventsService {
     }
 
     func fetchEvents(query: EventsQuery = EventsQuery()) async throws -> EventsResponse {
-        // In UI testing mode, return empty results to avoid network calls that hang on CI.
-        if Config.isUITesting {
-            return EventsResponse(events: [], totalCount: 0, hasMore: false)
-        }
         let client = try db()
         let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
 
@@ -93,7 +89,6 @@ actor EventsService {
     // MARK: - Fetch Single Event
 
     func fetchEvent(id: String) async throws -> Event {
-        if Config.isUITesting { throw ServiceError.notConfigured }
         let client = try db()
         let event: Event = try await client
             .from("events")
@@ -108,7 +103,6 @@ actor EventsService {
     // MARK: - Search Events (Fuzzy Fallback)
 
     func fuzzySearchEvents(query: String, limit: Int = 20) async throws -> [Event] {
-        if Config.isUITesting { return [] }
         struct FuzzyParams: Encodable {
             let search_query: String
             let search_limit: Int
@@ -125,7 +119,6 @@ actor EventsService {
     // MARK: - Nearby Events
 
     func fetchNearbyEvents(latitude: Double, longitude: Double, radiusMiles: Double = 30, limit: Int = 50) async throws -> [Event] {
-        if Config.isUITesting { return [] }
         struct NearbyParams: Encodable {
             let user_lat: Double
             let user_lon: Double
@@ -149,7 +142,6 @@ actor EventsService {
     // MARK: - Featured Events
 
     func fetchFeaturedEvents(limit: Int = 10) async throws -> [Event] {
-        if Config.isUITesting { return [] }
         let client = try db()
         let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
 
@@ -168,7 +160,6 @@ actor EventsService {
     // MARK: - Related Events
 
     func fetchRelatedEvents(eventId: String, category: String, limit: Int = 6) async throws -> [Event] {
-        if Config.isUITesting { return [] }
         let client = try db()
         let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
 

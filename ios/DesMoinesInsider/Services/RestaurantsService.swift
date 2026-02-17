@@ -40,10 +40,6 @@ actor RestaurantsService {
     // MARK: - Fetch Restaurants
 
     func fetchRestaurants(query: RestaurantsQuery = RestaurantsQuery()) async throws -> RestaurantsResponse {
-        // In UI testing mode, return empty results to avoid network calls that hang on CI.
-        if Config.isUITesting {
-            return RestaurantsResponse(restaurants: [], totalCount: 0, hasMore: false)
-        }
         let client = try db()
         var request = client
             .from("restaurants")
@@ -142,7 +138,6 @@ actor RestaurantsService {
     // MARK: - Single Restaurant
 
     func fetchRestaurant(id: String) async throws -> Restaurant {
-        if Config.isUITesting { throw ServiceError.notConfigured }
         let client = try db()
         let restaurant: Restaurant = try await client
             .from("restaurants")
@@ -157,7 +152,6 @@ actor RestaurantsService {
     // MARK: - Nearby Restaurants
 
     func fetchNearbyRestaurants(latitude: Double, longitude: Double, radiusMiles: Double = 25, limit: Int = 100) async throws -> [Restaurant] {
-        if Config.isUITesting { return [] }
         struct NearbyParams: Encodable {
             let center_lat: Double
             let center_lng: Double
@@ -181,7 +175,6 @@ actor RestaurantsService {
     // MARK: - Fuzzy Search Fallback
 
     func fuzzySearchRestaurants(query: String, limit: Int = 20) async throws -> [Restaurant] {
-        if Config.isUITesting { return [] }
         struct FuzzyParams: Encodable {
             let search_query: String
             let search_limit: Int
@@ -198,7 +191,6 @@ actor RestaurantsService {
     // MARK: - Cuisine List
 
     func fetchAvailableCuisines() async throws -> [String] {
-        if Config.isUITesting { return [] }
         struct CuisineRow: Decodable {
             let cuisine: String?
         }
