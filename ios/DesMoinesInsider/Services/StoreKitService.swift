@@ -48,7 +48,7 @@ final class StoreKitService {
 
     // MARK: - Private
 
-    private var transactionListener: Task<Void, Never>?
+    nonisolated(unsafe) private var transactionListener: Task<Void, Never>?
     private let supabase = SupabaseService.shared.client
 
     // MARK: - Init
@@ -167,7 +167,7 @@ final class StoreKitService {
 
     // MARK: - Verify Transaction
 
-    private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    nonisolated private func checkVerified<T>(_ result: VerificationResult<T>) throws -> T {
         switch result {
         case .unverified(_, let error):
             throw StoreError.verificationFailed(error)
