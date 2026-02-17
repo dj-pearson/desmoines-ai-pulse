@@ -8,6 +8,7 @@ import ContentTable from "@/components/ContentTable";
 import ArticlesManager from "@/components/ArticlesManager";
 import VenuesManager from "@/components/admin/VenuesManager";
 import GooglePlacesRestaurantTools from "@/components/GooglePlacesRestaurantTools";
+import GooglePlacesHotelTools from "@/components/GooglePlacesHotelTools";
 import { RestaurantBulkUpdaterSimple } from "@/components/RestaurantBulkUpdaterSimple";
 import CatchDesmoinUrlExtractor from "@/components/CatchDesmoinUrlExtractor";
 import FixBrokenEventUrls from "@/components/FixBrokenEventUrls";
@@ -479,18 +480,21 @@ export default function AdminContent() {
           )}
 
           {activeTab === "hotels" && (
-            <ContentTable
-              type="hotel"
-              items={hotels.hotels}
-              isLoading={hotels.isLoading}
-              totalCount={hotels.hotels.length}
-              searchValue={inputValues.hotels}
-              onEdit={(item) => handleEdit("hotel", item)}
-              onDelete={(id) => handleDelete("hotel", id)}
-              onSearch={handleHotelsSearch}
-              onFilter={(filter) => console.log("Filter hotels:", filter)}
-              onCreate={() => handleCreate("hotel")}
-            />
+            <div className="space-y-6">
+              <GooglePlacesHotelTools />
+              <ContentTable
+                type="hotel"
+                items={hotels.hotels}
+                isLoading={hotels.isLoading}
+                totalCount={hotels.hotels.length}
+                searchValue={inputValues.hotels}
+                onEdit={(item) => handleEdit("hotel", item)}
+                onDelete={(id) => handleDelete("hotel", id)}
+                onSearch={handleHotelsSearch}
+                onFilter={(filter) => console.log("Filter hotels:", filter)}
+                onCreate={() => handleCreate("hotel")}
+              />
+            </div>
           )}
 
           {activeTab === "attractions" && (

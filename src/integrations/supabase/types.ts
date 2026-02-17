@@ -3099,6 +3099,7 @@ export type Database = {
           hotel_type: string | null
           chain_name: string | null
           brand_parent: string | null
+          google_place_id: string | null
           total_rooms: number | null
           check_in_time: string | null
           check_out_time: string | null
@@ -3135,6 +3136,7 @@ export type Database = {
           hotel_type?: string | null
           chain_name?: string | null
           brand_parent?: string | null
+          google_place_id?: string | null
           total_rooms?: number | null
           check_in_time?: string | null
           check_out_time?: string | null
@@ -3171,6 +3173,7 @@ export type Database = {
           hotel_type?: string | null
           chain_name?: string | null
           brand_parent?: string | null
+          google_place_id?: string | null
           total_rooms?: number | null
           check_in_time?: string | null
           check_out_time?: string | null
@@ -3181,6 +3184,56 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      hotel_blacklist: {
+        Row: {
+          id: string
+          google_place_id: string | null
+          hotel_name: string
+          reason: string
+          reason_category: string
+          formatted_address: string | null
+          blocked_at: string | null
+          blocked_by: string | null
+          expires_at: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          google_place_id?: string | null
+          hotel_name: string
+          reason: string
+          reason_category: string
+          formatted_address?: string | null
+          blocked_at?: string | null
+          blocked_by?: string | null
+          expires_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          google_place_id?: string | null
+          hotel_name?: string
+          reason?: string
+          reason_category?: string
+          formatted_address?: string | null
+          blocked_at?: string | null
+          blocked_by?: string | null
+          expires_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hotel_blacklist_blocked_by_fkey"
+            columns: ["blocked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       import_jobs: {
         Row: {
