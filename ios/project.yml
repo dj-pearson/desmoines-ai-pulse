@@ -59,8 +59,6 @@ targets:
       properties:
         com.apple.developer.applesignin:
           - Default
-        com.apple.developer.in-app-payments:
-          - merchant.com.desmoines.aipulse
         com.apple.developer.associated-domains:
           - applinks:desmoinesinsider.com
           - webcredentials:desmoinesinsider.com
