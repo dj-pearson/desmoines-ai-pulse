@@ -18,6 +18,9 @@ import {
 import { format } from "date-fns";
 import { useFavorites } from "@/hooks/useFavorites";
 import { Badge } from "@/components/ui/badge";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('FavoritesView');
 
 export function FavoritesView() {
   const { user } = useAuth();
@@ -55,13 +58,13 @@ export function FavoritesView() {
           .eq("interaction_type", "favorite");
 
         if (error) {
-          console.log("Restaurant favorites not available yet");
+          log.debug('fetchRestaurants', 'Restaurant favorites not available yet');
           return [];
         }
 
         return (data || []).map((item: any) => item.restaurants).filter(Boolean);
       } catch (err) {
-        console.log("Restaurant favorites table not available");
+        log.debug('fetchRestaurants', 'Restaurant favorites table not available');
         return [];
       }
     },
@@ -82,13 +85,13 @@ export function FavoritesView() {
           .eq("interaction_type", "favorite");
 
         if (error) {
-          console.log("Attraction favorites not available yet");
+          log.debug('fetchAttractions', 'Attraction favorites not available yet');
           return [];
         }
 
         return (data || []).map((item: any) => item.attractions).filter(Boolean);
       } catch (err) {
-        console.log("Attraction favorites table not available");
+        log.debug('fetchAttractions', 'Attraction favorites table not available');
         return [];
       }
     },

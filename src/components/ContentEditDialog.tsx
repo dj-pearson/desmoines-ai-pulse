@@ -16,6 +16,9 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useVenueMatcher, KnownVenue } from "@/hooks/useKnownVenues";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ContentEditDialog');
 
 type ContentType = "event" | "restaurant" | "attraction" | "playground" | "restaurant_opening" | "hotel";
 
@@ -205,7 +208,7 @@ export default function ContentEditDialog({
         }
       });
 
-      console.log('Initialized form data:', initialData);
+      log.debug('initForm', 'Initialized form data', { data: initialData });
       setFormData(initialData);
 
       // Reset venue matching state
@@ -270,9 +273,7 @@ export default function ContentEditDialog({
       // Prepare data for save
       const saveData = { ...formData };
       
-      console.log('Original form data:', formData);
-      console.log('Content type:', contentType);
-      console.log('Is new item:', item.isNew);
+      log.debug('save', 'Original form data', { formData, contentType, isNew: item.isNew });
       
       // Format dates properly
       config.fields.forEach(field => {
@@ -291,16 +292,16 @@ export default function ContentEditDialog({
       delete saveData.updated_at;
       delete saveData.isNew; // Remove the isNew flag
 
-      console.log('Save data after processing:', saveData);
+      log.debug('save', 'Save data after processing', { data: saveData });
 
       const tableName = getTableName(contentType);
-      console.log('Table name:', tableName);
+      log.debug('save', 'Table name', { tableName });
 
       let result, error;
 
       if (item.isNew) {
         // Creating a new item
-        console.log('Creating new item...');
+        log.debug('save', 'Creating new item');
         const createResult = await supabase
           .from(tableName)
           .insert(saveData)
@@ -310,7 +311,7 @@ export default function ContentEditDialog({
         error = createResult.error;
       } else {
         // Updating existing item
-        console.log('Updating existing item with ID:', item.id);
+        log.debug('save', 'Updating existing item', { itemId: item.id });
         
         // First check if the record exists
         const { data: existingRecord, error: checkError } = await supabase
@@ -319,16 +320,14 @@ export default function ContentEditDialog({
           .eq('id', item.id)
           .maybeSingle();
 
-        console.log('Existing record check:', { existingRecord, checkError });
+        log.debug('save', 'Existing record check', { existingRecord, checkError });
 
         if (!existingRecord) {
-          console.error('Record not found in table:', tableName);
+          log.error('save', 'Record not found in table', { tableName });
           throw new Error(`Record with ID ${item.id} not found in ${tableName} table`);
         }
 
-        console.log('Full existing record:', existingRecord);
-        console.log('Fields we are trying to update:', Object.keys(saveData));
-        console.log('Update values:', saveData);
+        log.debug('save', 'Full existing record and update fields', { existingRecord, fields: Object.keys(saveData), saveData });
 
         const updateResult = await supabase
           .from(tableName)
@@ -340,25 +339,25 @@ export default function ContentEditDialog({
         error = updateResult.error;
       }
 
-      console.log('Supabase response:', { result, error });
+      log.debug('save', 'Supabase response', { result, error });
 
       if (error) {
-        console.error('Supabase error details:', error);
+        log.error('save', 'Supabase error details', { data: error });
         throw error;
       }
 
       if (!result || result.length === 0) {
-        console.error('No rows were affected!');
+        log.error('save', 'No rows were affected');
         throw new Error(`No rows were ${item.isNew ? 'created' : 'updated'}.`);
       }
 
-      console.log('Save successful! Result data:', result);
+      log.info('save', 'Save successful', { data: result });
       const action = item.isNew ? 'created' : 'updated';
       toast.success(`${contentType.charAt(0).toUpperCase() + contentType.slice(1)} ${action} successfully!`);
       onSave();
       onOpenChange(false);
     } catch (error) {
-      console.error('Save error:', error);
+      log.error('save', 'Save error', { data: error });
       toast.error('Failed to save: ' + (error as Error).message);
     } finally {
       setIsLoading(false);

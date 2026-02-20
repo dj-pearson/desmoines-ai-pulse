@@ -21,6 +21,9 @@ import {
   Clock,
   Database
 } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('RestaurantBulkUpdater');
 
 export function RestaurantBulkUpdater() {
   const { updateRestaurants, isLoading, progress, result, clearResult } = useBulkRestaurantUpdate();
@@ -34,7 +37,7 @@ export function RestaurantBulkUpdater() {
         forceUpdate
       });
     } catch (error) {
-      console.error('Update failed:', error);
+      log.error('update', 'Update failed', { data: error });
     }
   };
 

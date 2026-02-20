@@ -6,6 +6,9 @@ import { useFeedback } from "@/hooks/useFeedback";
 import { useAuth } from "@/hooks/useAuth";
 import { ThumbsUp, ThumbsDown, Heart, HeartOff, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventFeedback');
 
 interface EventFeedbackProps {
   eventId: string;
@@ -115,7 +118,7 @@ export default function EventFeedback({ eventId, className, showStats = false }:
       getFeedbackStats(eventId)
         .then(setStats)
         .catch((error) => {
-          console.error('Failed to load feedback stats:', error);
+          log.error('loadStats', 'Failed to load feedback stats', { data: error });
           // Set default stats on error to avoid UI issues
           setStats({ thumbs_up: 0, thumbs_down: 0, interested: 0, not_interested: 0 });
         });

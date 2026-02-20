@@ -17,6 +17,9 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('GroupEventPlanner');
 
 interface FriendGroup {
   id: string;
@@ -65,7 +68,7 @@ export function GroupEventPlanner({ group, onClose }: GroupEventPlannerProps) {
       setEvents(mockEvents);
       toast.success('Found sample events');
     } catch (error) {
-      console.error('Failed to search events:', error);
+      log.error('search', 'Failed to search events', { data: error });
       toast.error('Failed to search events');
     }
   };

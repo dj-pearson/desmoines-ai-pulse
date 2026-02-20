@@ -4,6 +4,9 @@ import { Button } from '@/components/ui/button';
 import { MapPin, Loader2, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('LocationAutocomplete');
 
 // Nominatim API for address autocomplete
 const NOMINATIM_API = 'https://nominatim.openstreetmap.org/search';
@@ -117,7 +120,7 @@ export function LocationAutocomplete({
         setSuggestions(data || []);
         setShowSuggestions(true);
       } catch (error) {
-        console.error('Error fetching address suggestions:', error);
+        log.error('fetchSuggestions', 'Error fetching address suggestions', { data: error });
         setSuggestions([]);
       } finally {
         setIsLoading(false);
@@ -191,13 +194,13 @@ export function LocationAutocomplete({
             onChange?.(data.display_name, data);
           }
         } catch (error) {
-          console.error('Error reverse geocoding:', error);
+          log.error('reverseGeocode', 'Error reverse geocoding', { data: error });
         }
 
         setIsGettingLocation(false);
       },
       (error) => {
-        console.error('Error getting location:', error);
+        log.error('getLocation', 'Error getting location', { data: error });
         alert('Failed to get your location. Please check your browser permissions.');
         setIsGettingLocation(false);
       },
@@ -333,7 +336,7 @@ export function useGeocoding() {
         longitude: data.longitude,
       };
     } catch (err) {
-      console.error('Geocoding error:', err);
+      log.error('geocode', 'Geocoding error', { data: err });
       setError(err instanceof Error ? err.message : 'Failed to geocode address');
       setIsLoading(false);
       return null;

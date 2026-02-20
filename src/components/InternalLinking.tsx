@@ -12,6 +12,9 @@ import {
   Theater,
   PartyPopper,
 } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('InternalLinking');
 
 interface InternalLinkingProps {
   currentType?: "event" | "restaurant" | "attraction" | "playground";
@@ -66,10 +69,7 @@ export function InternalLinking({
     queryKey: ["featured-content", new Date().toDateString()], // Force cache refresh daily
     queryFn: async () => {
       const today = new Date().toISOString().split("T")[0];
-      console.log(
-        "InternalLinking: Fetching featured content for date >=",
-        today
-      );
+      log.debug('fetchFeatured', 'Fetching featured content', { date: today });
 
       const [eventsResult, restaurantsResult] = await Promise.all([
         supabase
@@ -86,10 +86,7 @@ export function InternalLinking({
           .limit(2),
       ]);
 
-      console.log(
-        "InternalLinking: Featured events found:",
-        eventsResult.data?.length
-      );
+      log.debug('fetchFeatured', 'Featured events found', { count: eventsResult.data?.length });
       return {
         events: eventsResult.data || [],
         restaurants: restaurantsResult.data || [],

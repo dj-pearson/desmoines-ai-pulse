@@ -59,6 +59,9 @@ import { useSocialMediaManager } from "@/hooks/useSocialMediaManager";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SocialMediaManager');
 
 const SocialMediaManager = () => {
   const {
@@ -96,7 +99,7 @@ const SocialMediaManager = () => {
           .single();
         
         if (error && error.code !== 'PGRST116') {
-          console.error('Failed to load automation settings:', error);
+          log.error('loadSettings', 'Failed to load automation settings', { data: error });
           return;
         }
         
@@ -109,10 +112,10 @@ const SocialMediaManager = () => {
           });
         }
       } catch (error) {
-        console.error('Failed to load automation settings:', error);
+        log.error('loadSettings', 'Failed to load automation settings', { data: error });
       }
     };
-    
+
     loadAutomationSettings();
   }, []);
 
@@ -130,14 +133,14 @@ const SocialMediaManager = () => {
         });
       
       if (error) {
-        console.error('Failed to save automation settings:', error);
+        log.error('saveSettings', 'Failed to save automation settings', { data: error });
         toast.error(`Failed to save settings: ${error.message}`);
         return;
       }
       
       toast.success("Automation settings saved - Changes will take effect on the next scheduled run");
     } catch (error) {
-      console.error('Failed to save automation settings:', error);
+      log.error('saveSettings', 'Failed to save automation settings', { data: error });
       toast.error("Failed to save settings - Please try again");
     }
   };
@@ -158,7 +161,7 @@ const SocialMediaManager = () => {
     try {
       await generatePost({ contentType, subjectType });
     } catch (error) {
-      console.error("Failed to generate post:", error);
+      log.error('generatePost', 'Failed to generate post', { data: error });
     }
   };
 
@@ -166,7 +169,7 @@ const SocialMediaManager = () => {
     try {
       await publishPost(postId);
     } catch (error) {
-      console.error("Failed to publish post:", error);
+      log.error('publishPost', 'Failed to publish post', { data: error });
     }
   };
 
@@ -174,7 +177,7 @@ const SocialMediaManager = () => {
     try {
       await repostPost(postId, "repost");
     } catch (error) {
-      console.error("Failed to repost:", error);
+      log.error('repost', 'Failed to repost', { data: error });
     }
   };
 
@@ -190,7 +193,7 @@ const SocialMediaManager = () => {
       });
       setIsAddingWebhook(false);
     } catch (error) {
-      console.error("Failed to add webhook:", error);
+      log.error('addWebhook', 'Failed to add webhook', { data: error });
     }
   };
 
@@ -497,7 +500,7 @@ const SocialMediaManager = () => {
                   try {
                     await debugContent();
                   } catch (error) {
-                    console.error("Debug failed:", error);
+                    log.error('debug', 'Debug failed', { data: error });
                   }
                 }}
                 variant="outline"

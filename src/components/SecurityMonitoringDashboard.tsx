@@ -5,6 +5,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Shield, AlertTriangle, Activity, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SecurityMonitoringDashboard');
 
 interface SecurityEvent {
   id: string;
@@ -45,7 +48,7 @@ export function SecurityMonitoringDashboard() {
           .limit(50);
 
         if (eventsError) {
-          console.error('Failed to fetch security events:', eventsError);
+          log.error('fetchEvents', 'Failed to fetch security events', { data: eventsError });
         } else {
           setSecurityEvents(events || []);
         }
@@ -58,12 +61,12 @@ export function SecurityMonitoringDashboard() {
           .limit(50);
 
         if (attemptsError) {
-          console.error('Failed to fetch failed attempts:', attemptsError);
+          log.error('fetchAttempts', 'Failed to fetch failed attempts', { data: attemptsError });
         } else {
           setFailedAttempts(attempts || []);
         }
       } catch (error) {
-        console.error('Error fetching security data:', error);
+        log.error('fetchSecurityData', 'Error fetching security data', { data: error });
       } finally {
         setIsLoading(false);
       }

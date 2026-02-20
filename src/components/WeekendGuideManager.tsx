@@ -16,6 +16,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('WeekendGuideManager');
 
 interface WeekendGuide {
   id: string;
@@ -53,7 +56,7 @@ export default function WeekendGuideManager() {
 
       setGuides(transformedData);
     } catch (error) {
-      console.error('Error fetching weekend guides:', error);
+      log.error('fetchGuides', 'Error fetching weekend guides', { data: error });
       toast.error('Failed to load weekend guides');
     } finally {
       setLoading(false);
@@ -79,7 +82,7 @@ export default function WeekendGuideManager() {
         throw new Error(data.error || 'Failed to generate guide');
       }
     } catch (error) {
-      console.error('Error generating guide:', error);
+      log.error('generateGuide', 'Error generating guide', { data: error });
       toast.error(error instanceof Error ? error.message : 'Failed to generate guide');
     } finally {
       setGenerating(false);

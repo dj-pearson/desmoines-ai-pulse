@@ -5,6 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('UserGeneratedContent');
 
 interface UserReview {
   id: string;
@@ -426,7 +429,7 @@ export const QuickUpdateWidget = () => {
   const handleQuickUpdate = () => {
     if (updateText.trim() && selectedBusiness) {
       // Submit quick update to community feed
-      console.log('Quick update submitted:', { selectedBusiness, updateText });
+      log.debug('quickUpdate', 'Quick update submitted', { data: { selectedBusiness, updateText } });
       setUpdateText('');
       setSelectedBusiness('');
     }

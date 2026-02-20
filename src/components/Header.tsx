@@ -9,6 +9,9 @@ import { OptimizedLogo } from "./OptimizedLogo";
 import { DesktopNav } from "./header/DesktopNav";
 import { MobileNav } from "./header/MobileNav";
 import { UserMenu } from "./header/UserMenu";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Header');
 
 export default function Header() {
   const { isAuthenticated, isAdmin, logout } = useAuth();
@@ -36,7 +39,7 @@ export default function Header() {
       // Use React Router navigate instead of window.location to prevent potential open redirect
       navigate("/", { replace: true });
     } catch (error) {
-      console.error("[Header] Logout failed:", error);
+      log.error('logout', 'Logout failed', { data: error });
       announceToScreenReader("Logout failed", "assertive");
     }
   };

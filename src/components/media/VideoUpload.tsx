@@ -15,6 +15,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('VideoUpload');
 
 // Supported video formats
 const SUPPORTED_VIDEO_TYPES = [
@@ -227,7 +230,7 @@ export function VideoUpload({
           setThumbnailUrl(URL.createObjectURL(thumbnail));
         }
       } catch (err) {
-        console.error("Error processing video:", err);
+        log.error('processVideo', 'Error processing video', { data: err });
         toast({
           title: "Error processing video",
           description: "Failed to read video file. Please try another file.",
@@ -295,7 +298,7 @@ export function VideoUpload({
             uploadedThumbnailUrl = thumbUrlData.publicUrl;
           }
         } catch (thumbErr) {
-          console.error("Failed to upload thumbnail:", thumbErr);
+          log.error('uploadThumbnail', 'Failed to upload thumbnail', { data: thumbErr });
         }
       }
 
@@ -335,7 +338,7 @@ export function VideoUpload({
         onVideoUploaded(videoUrl, uploadedThumbnailUrl, caption || undefined);
       }
     } catch (error) {
-      console.error("Error uploading video:", error);
+      log.error('upload', 'Error uploading video', { data: error });
       toast({
         title: "Upload failed",
         description: "Failed to upload video. Please try again.",

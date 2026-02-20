@@ -39,6 +39,9 @@ import { useAttractions } from "@/hooks/useAttractions";
 import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SEOTools');
 
 interface SEOGenerator {
   id: string;
@@ -522,7 +525,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
         });
       }
     } catch (error) {
-      console.error(`Generation error for ${generatorId}:`, error);
+      log.error('generate', `Generation error for ${generatorId}`, { data: error });
       toast({
         title: "Generation Failed",
         description: error instanceof Error ? error.message : "Failed to generate content. Please try again.",
@@ -605,7 +608,7 @@ ${JSON.stringify(eventListSchema, null, 2)}
       }
       
     } catch (error) {
-      console.error('SEO generation error:', error);
+      log.error('seoGeneration', 'SEO generation error', { data: error });
       toast({
         title: 'Failed to generate SEO content',
         description: error instanceof Error ? error.message : 'Unknown error occurred',

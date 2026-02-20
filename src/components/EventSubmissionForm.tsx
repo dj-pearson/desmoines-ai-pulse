@@ -15,6 +15,9 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSubmitEvent } from "@/hooks/useUserSubmittedEvents";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventSubmissionForm');
 
 const EVENT_CATEGORIES = [
   "Art & Culture",
@@ -96,7 +99,7 @@ export default function EventSubmissionForm({ onSuccess }: EventSubmissionFormPr
       toast.success("Event submitted successfully!");
       onSuccess?.();
     } catch (error) {
-      console.error("Error submitting event:", error);
+      log.error('submit', 'Error submitting event', { data: error });
       toast.error("Failed to submit event. Please try again.");
     }
   };

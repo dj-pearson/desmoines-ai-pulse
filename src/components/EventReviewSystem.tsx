@@ -25,6 +25,9 @@ import {
 import { useAllSubmittedEvents, useReviewEvent } from "@/hooks/useUserSubmittedEvents";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EventReviewSystem');
 
 export default function EventReviewSystem() {
   const [selectedEvent, setSelectedEvent] = useState<any>(null);
@@ -76,7 +79,7 @@ export default function EventReviewSystem() {
       setReviewAction(null);
       refetch();
     } catch (error) {
-      console.error('Error reviewing event:', error);
+      log.error('review', 'Error reviewing event', { data: error });
       toast.error('Failed to review event');
     }
   };

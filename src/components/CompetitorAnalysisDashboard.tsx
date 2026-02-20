@@ -8,6 +8,9 @@ import { AlertCircle, TrendingUp, Target, Lightbulb, ExternalLink, RefreshCw } f
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CompetitorAnalysisDashboard');
 
 interface Competitor {
   id: string;
@@ -79,7 +82,7 @@ export function CompetitorAnalysisDashboard() {
       setSuggestions(suggestionsRes.data || []);
       setReports(reportsRes.data || []);
     } catch (error) {
-      console.error('Error loading data:', error);
+      log.error('loadData', 'Error loading data', { data: error });
       toast({
         title: "Error",
         description: "Failed to load competitor analysis data",
@@ -107,7 +110,7 @@ export function CompetitorAnalysisDashboard() {
       // Reload data to show updates
       await loadData();
     } catch (error) {
-      console.error(`Error running ${type}:`, error);
+      log.error('runAction', `Error running ${type}`, { data: error });
       toast({
         title: "Error",
         description: `Failed to run ${type} analysis`,

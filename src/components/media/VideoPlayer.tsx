@@ -19,6 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('VideoPlayer');
 
 export interface VideoCaption {
   src: string;
@@ -171,7 +174,7 @@ export function VideoPlayer({
         await containerRef.current.requestFullscreen();
       }
     } catch (err) {
-      console.error("Fullscreen error:", err);
+      log.error('fullscreen', 'Fullscreen error', { data: err });
     }
   }, [isFullscreen]);
 

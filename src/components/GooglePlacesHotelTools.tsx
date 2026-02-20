@@ -43,6 +43,9 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('GooglePlacesHotelTools');
 
 interface GooglePlacesHotelResult {
   place_id: string;
@@ -156,7 +159,7 @@ export default function GooglePlacesHotelTools() {
       if (error) throw error;
       setBlacklist(data || []);
     } catch (error) {
-      console.error("Error loading hotel blacklist:", error);
+      log.error('loadBlacklist', 'Error loading hotel blacklist', { data: error });
       toast({
         title: "Error",
         description: "Failed to load blacklist",
@@ -204,7 +207,7 @@ export default function GooglePlacesHotelTools() {
 
       if (showBlacklist) loadBlacklist();
     } catch (error) {
-      console.error("Error adding to blacklist:", error);
+      log.error('addToBlacklist', 'Error adding to blacklist', { data: error });
       toast({
         title: "Error",
         description: "Failed to add to blacklist",
@@ -229,7 +232,7 @@ export default function GooglePlacesHotelTools() {
 
       setBlacklist((prev) => prev.filter((b) => b.id !== entry.id));
     } catch (error) {
-      console.error("Error removing from blacklist:", error);
+      log.error('removeFromBlacklist', 'Error removing from blacklist', { data: error });
       toast({
         title: "Error",
         description: "Failed to remove from blacklist",
@@ -296,7 +299,7 @@ export default function GooglePlacesHotelTools() {
         });
       }
     } catch (error) {
-      console.error("Error searching hotels:", error);
+      log.error('search', 'Error searching hotels', { data: error });
       setSearchResults("Error occurred during search");
       toast({
         title: "Search Failed",
@@ -353,7 +356,7 @@ export default function GooglePlacesHotelTools() {
         prev.filter((h) => h.place_id !== hotel.place_id)
       );
     } catch (error) {
-      console.error("Error adding hotel:", error);
+      log.error('addHotel', 'Error adding hotel', { data: error });
       toast({
         title: "Failed to Add Hotel",
         description: "Could not add hotel to database",
