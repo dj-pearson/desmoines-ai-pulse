@@ -7,12 +7,9 @@ import { visualizer } from "rollup-plugin-visualizer";
 // Custom plugin to inject build timestamp for cache busting
 function injectBuildTimestamp(): Plugin {
   return {
-    name: 'inject-build-timestamp',
+    name: "inject-build-timestamp",
     transformIndexHtml(html) {
-      return html.replace(
-        '__BUILD_TIMESTAMP__',
-        new Date().toISOString()
-      );
+      return html.replace("__BUILD_TIMESTAMP__", new Date().toISOString());
     },
   };
 }
@@ -20,13 +17,13 @@ function injectBuildTimestamp(): Plugin {
 // Custom plugin to remove vendor-maps from preload list
 function removeMapPreload(): Plugin {
   return {
-    name: 'remove-map-preload',
-    enforce: 'post',
+    name: "remove-map-preload",
+    enforce: "post",
     transformIndexHtml(html) {
       // Remove modulepreload for vendor-maps to prevent it loading before React
       return html.replace(
         /<link rel="modulepreload"[^>]*vendor-maps[^>]*>/g,
-        ''
+        "",
       );
     },
   };
@@ -55,12 +52,13 @@ export default defineConfig(({ command, mode }) => ({
     }),
     command === "serve" && componentTagger(),
     // Bundle analyzer - run with ANALYZE=true npm run build
-    process.env.ANALYZE === 'true' && visualizer({
-      open: true,
-      filename: 'dist/stats.html',
-      gzipSize: true,
-      brotliSize: true,
-    }),
+    process.env.ANALYZE === "true" &&
+      visualizer({
+        open: true,
+        filename: "dist/stats.html",
+        gzipSize: true,
+        brotliSize: true,
+      }),
   ].filter(Boolean),
   resolve: {
     alias: {
@@ -70,16 +68,16 @@ export default defineConfig(({ command, mode }) => ({
   build: {
     // Generate hidden sourcemaps for production debugging
     // Upload to error tracking service but don't deploy publicly
-    sourcemap: mode === 'production' ? 'hidden' : true,
+    sourcemap: mode === "production" ? "hidden" : true,
     outDir: "dist",
     assetsDir: "assets",
     cssCodeSplit: true,
     minify: "esbuild", // Use esbuild - faster and more reliable than terser
     target: "es2020",
     // Drop console.* and debugger statements in production
-    ...(mode === 'production' && {
+    ...(mode === "production" && {
       esbuild: {
-        drop: ['console', 'debugger'],
+        drop: ["console", "debugger"],
       },
     }),
     rollupOptions: {
@@ -89,67 +87,79 @@ export default defineConfig(({ command, mode }) => ({
         manualChunks: (id) => {
           // React core - MUST be first, highest priority
           // This ensures React is always available before any other code
-          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/')) {
-            return 'vendor-react';
+          if (
+            id.includes("/react/") ||
+            id.includes("/react-dom/") ||
+            id.includes("/scheduler/")
+          ) {
+            return "vendor-react";
           }
 
           // React ecosystem - depends on vendor-react
-          if (id.includes('react-router') || id.includes('@tanstack/react-query')) {
-            return 'vendor-react-ecosystem';
+          if (
+            id.includes("react-router") ||
+            id.includes("@tanstack/react-query")
+          ) {
+            return "vendor-react-ecosystem";
           }
 
           // Supabase - auth and database
-          if (id.includes('@supabase/')) {
-            return 'vendor-supabase';
+          if (id.includes("@supabase/")) {
+            return "vendor-supabase";
           }
 
           // UI Framework - Radix UI primitives (heavily used)
-          if (id.includes('@radix-ui/')) {
-            return 'vendor-ui';
+          if (id.includes("@radix-ui/")) {
+            return "vendor-ui";
           }
 
           // Maps - Leaflet (DO NOT BUNDLE - causes preload issues)
           // By returning undefined, we let each lazy-loaded map component
           // have its own chunk, preventing premature loading
-          if (id.includes('leaflet') || id.includes('react-leaflet')) {
+          if (id.includes("leaflet") || id.includes("react-leaflet")) {
             // Don't bundle - let dynamic imports create separate chunks
             return undefined;
           }
 
           // Charts - Don't bundle together to avoid circular deps
           // Let Vite handle them naturally
-          if (id.includes('recharts') && !id.includes('d3')) {
-            return 'vendor-recharts';
-          }
-          
-          // D3 utilities - separate from recharts
-          if (id.includes('d3-')) {
-            return 'vendor-d3';
+          if (id.includes("recharts") && !id.includes("d3")) {
+            return "vendor-recharts";
           }
 
-          // Forms and validation
-          if (id.includes('react-hook-form') || id.includes('zod') || id.includes('@hookform/')) {
-            return 'vendor-forms';
+          // D3 utilities - separate from recharts
+          if (id.includes("d3-")) {
+            return "vendor-d3";
           }
+
+          // Forms and validation - DO NOT manually chunk these
+          // react-hook-form, zod, and @hookform/resolvers have circular dependency
+          // issues when bundled together, causing TDZ (Temporal Dead Zone) errors
+          // at runtime ("Cannot access 'X' before initialization").
+          // Let Vite handle them automatically via its own code-splitting.
 
           // Rich text editing
-          if (id.includes('tiptap') || id.includes('@tiptap/') || id.includes('prosemirror')) {
-            return 'vendor-editor';
+          if (
+            id.includes("tiptap") ||
+            id.includes("@tiptap/") ||
+            id.includes("prosemirror")
+          ) {
+            return "vendor-editor";
           }
 
           // Calendar functionality
-          if (id.includes('fullcalendar') || id.includes('@fullcalendar/')) {
-            return 'vendor-calendar';
+          if (id.includes("fullcalendar") || id.includes("@fullcalendar/")) {
+            return "vendor-calendar";
           }
 
           // Date utilities
-          if (id.includes('date-fns')) {
-            return 'vendor-dates';
+          if (id.includes("date-fns")) {
+            return "vendor-dates";
           }
 
           // Icons - lucide
-          if (id.includes('lucide-react')) {
-            return 'vendor-icons';
+          if (id.includes("lucide-react")) {
+            return "vendor-icons";
           }
 
           // DON'T create vendor-misc - let Vite handle remaining node_modules automatically
@@ -172,23 +182,23 @@ export default defineConfig(({ command, mode }) => ({
   // Optimize dependencies
   optimizeDeps: {
     include: [
-      'react',
-      'react-dom',
-      'react/jsx-runtime',
-      'react-router-dom',
-      '@tanstack/react-query',
-      '@supabase/supabase-js',
-      'lucide-react', // Pre-bundle icons for faster dev
-      'react-reconciler',
+      "react",
+      "react-dom",
+      "react/jsx-runtime",
+      "react-router-dom",
+      "@tanstack/react-query",
+      "@supabase/supabase-js",
+      "lucide-react", // Pre-bundle icons for faster dev
+      "react-reconciler",
     ],
     exclude: [
-      'react-leaflet', // Exclude to prevent pre-bundling issues AND loading order problems
-      'leaflet', // Exclude to load with maps chunk
-      'recharts', // Exclude due to circular dependency issues
-      'd3-scale', // Exclude d3 modules to prevent TDZ errors
-      'd3-array',
-      'd3-shape',
-      'd3-interpolate',
+      "react-leaflet", // Exclude to prevent pre-bundling issues AND loading order problems
+      "leaflet", // Exclude to load with maps chunk
+      "recharts", // Exclude due to circular dependency issues
+      "d3-scale", // Exclude d3 modules to prevent TDZ errors
+      "d3-array",
+      "d3-shape",
+      "d3-interpolate",
     ],
     // Force React to be bundled first
     force: true,
