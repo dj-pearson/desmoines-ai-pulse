@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAdvancedSearch');
 
 export interface AdvancedSearchFilters {
   query: string;
@@ -84,7 +87,7 @@ export function useAdvancedSearch() {
           });
         },
         (error) => {
-          console.log('Location access denied:', error);
+          log.debug('init', 'Location access denied', { error });
         }
       );
     }
@@ -114,7 +117,7 @@ export function useAdvancedSearch() {
       
       setSavedSearches(formattedSearches);
     } catch (error) {
-      console.error('Error loading saved searches:', error);
+      log.error('loadSavedSearches', 'Error loading saved searches', { error });
       setSavedSearches([]);
     }
   }, [user]);
@@ -176,7 +179,7 @@ export function useAdvancedSearch() {
 
       setResults(sortedResults);
     } catch (error) {
-      console.error('Search error:', error);
+      log.error('performSearch', 'Search error', { error });
       toast.error('Search failed. Please try again.');
     } finally {
       setLoading(false);
@@ -417,7 +420,7 @@ export function useAdvancedSearch() {
       setSavedSearches(prev => [newSearch, ...prev]);
       toast.success('Search saved successfully');
     } catch (error) {
-      console.error('Error saving search:', error);
+      log.error('saveSearch', 'Error saving search', { error });
       toast.error('Failed to save search');
     }
   };
@@ -445,7 +448,7 @@ export function useAdvancedSearch() {
       setFilters(search.filters);
       await performSearch(search.filters);
     } catch (error) {
-      console.error('Error loading search:', error);
+      log.error('loadSearch', 'Error loading search', { error });
       setFilters(search.filters);
       await performSearch(search.filters);
     }
@@ -463,7 +466,7 @@ export function useAdvancedSearch() {
       setSavedSearches(prev => prev.filter(s => s.id !== searchId));
       toast.success('Search deleted successfully');
     } catch (error) {
-      console.error('Error deleting search:', error);
+      log.error('deleteSearch', 'Error deleting search', { error });
       toast.error('Failed to delete search');
     }
   };

@@ -19,6 +19,9 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { BarChart3, TrendingUp, Activity } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ComparativeAnalysis');
 
 interface ComparativeAnalysisProps {
   dateRange: { from: Date; to: Date };
@@ -93,7 +96,7 @@ export function ComparativeAnalysis({ dateRange, connectedProviders }: Comparati
 
       setRadarData(radar);
     } catch (error) {
-      console.error("Error loading comparative data:", error);
+      log.error('loadData', 'Error loading comparative data', { data: error });
     } finally {
       setLoading(false);
     }

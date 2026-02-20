@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { createLogger } from '@/lib/logger';
 import { useAdminAuth } from "@/hooks/useAdminAuth";
+
+const log = createLogger('AdminContent');
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AdminNav from "@/components/admin/AdminNav";
 import ContentEditDialog from "@/components/ContentEditDialog";
@@ -309,7 +312,7 @@ export default function AdminContent() {
       else if (contentType === "hotel") hotels.refetch();
       restaurantOpenings.refetch();
     } catch (error) {
-      console.error("Delete error:", error);
+      log.error('handleDelete', 'Delete error', { error });
       toast.error("Failed to delete: " + (error as Error).message);
     }
   };
@@ -336,7 +339,7 @@ export default function AdminContent() {
         await queryClient.invalidateQueries({ queryKey: ["hotels"] });
       }
     } catch (error) {
-      console.error("Error during save:", error);
+      log.error('handleSave', 'Error during save', { error });
     }
   };
 
@@ -394,7 +397,7 @@ export default function AdminContent() {
                 onEdit={(item) => handleEdit("event", item)}
                 onDelete={(id) => handleDelete("event", id)}
                 onSearch={handleEventsSearch}
-                onFilter={(filter) => console.log("Filter events:", filter)}
+                onFilter={(filter) => log.debug('filter', 'Filter events', { filter })}
                 onCreate={() => handleCreate("event")}
                 onRefresh={events.refetch}
               />
@@ -414,7 +417,7 @@ export default function AdminContent() {
                 onEdit={(item) => handleEdit("restaurant", item)}
                 onDelete={(id) => handleDelete("restaurant", id)}
                 onSearch={handleRestaurantsSearch}
-                onFilter={(filter) => console.log("Filter restaurants:", filter)}
+                onFilter={(filter) => log.debug('filter', 'Filter restaurants', { filter })}
                 onCreate={() => handleCreate("restaurant")}
               />
             </div>
@@ -474,8 +477,8 @@ export default function AdminContent() {
               onEdit={(item) => handleEdit("restaurant", item)}
               onDelete={(id) => handleDelete("restaurant", id)}
               onSearch={handleRestaurantOpeningsSearch}
-              onFilter={(filter) => console.log("Filter restaurant openings:", filter)}
-              onCreate={() => console.log("Create new restaurant opening")}
+              onFilter={(filter) => log.debug('filter', 'Filter restaurant openings', { filter })}
+              onCreate={() => log.debug('create', 'Create new restaurant opening')}
             />
           )}
 
@@ -491,7 +494,7 @@ export default function AdminContent() {
                 onEdit={(item) => handleEdit("hotel", item)}
                 onDelete={(id) => handleDelete("hotel", id)}
                 onSearch={handleHotelsSearch}
-                onFilter={(filter) => console.log("Filter hotels:", filter)}
+                onFilter={(filter) => log.debug('filter', 'Filter hotels', { filter })}
                 onCreate={() => handleCreate("hotel")}
               />
             </div>
@@ -507,7 +510,7 @@ export default function AdminContent() {
               onEdit={(item) => handleEdit("attraction", item)}
               onDelete={(id) => handleDelete("attraction", id)}
               onSearch={handleAttractionsSearch}
-              onFilter={(filter) => console.log("Filter attractions:", filter)}
+              onFilter={(filter) => log.debug('filter', 'Filter attractions', { filter })}
               onCreate={() => handleCreate("attraction")}
             />
           )}
@@ -522,7 +525,7 @@ export default function AdminContent() {
               onEdit={(item) => handleEdit("playground", item)}
               onDelete={(id) => handleDelete("playground", id)}
               onSearch={handlePlaygroundsSearch}
-              onFilter={(filter) => console.log("Filter playgrounds:", filter)}
+              onFilter={(filter) => log.debug('filter', 'Filter playgrounds', { filter })}
               onCreate={() => handleCreate("playground")}
             />
           )}

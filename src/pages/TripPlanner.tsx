@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
+import { createLogger } from '@/lib/logger';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+
+const log = createLogger('TripPlanner');
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -104,7 +107,7 @@ export default function TripPlanner() {
     try {
       await generateItinerary({ startDate, endDate, preferences });
     } catch (error) {
-      console.error('Error generating itinerary:', error);
+      log.error('generateItinerary', 'Error generating itinerary', { error });
     }
   };
 

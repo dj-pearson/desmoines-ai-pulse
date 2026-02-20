@@ -3,6 +3,10 @@
  * Falls back to in-memory storage when localStorage is unavailable
  */
 
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('safeStorage');
+
 interface StorageInterface {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
@@ -48,9 +52,7 @@ class SafeStorage implements StorageInterface {
       window.localStorage.removeItem(test);
       return true;
     } catch (e) {
-      if (import.meta.env.DEV) {
-        console.warn('localStorage is not available, falling back to memory storage', e);
-      }
+      logger.warn('checkLocalStorage', 'localStorage is not available, falling back to memory storage', { error: String(e) });
       return false;
     }
   }
@@ -59,9 +61,7 @@ class SafeStorage implements StorageInterface {
     try {
       return this.storage.getItem(key);
     } catch (e) {
-      if (import.meta.env.DEV) {
-        console.warn(`Failed to get item "${key}" from storage:`, e);
-      }
+      logger.warn('getItem', `Failed to get item "${key}" from storage`, { error: String(e) });
       return null;
     }
   }
@@ -70,9 +70,7 @@ class SafeStorage implements StorageInterface {
     try {
       this.storage.setItem(key, value);
     } catch (e) {
-      if (import.meta.env.DEV) {
-        console.warn(`Failed to set item "${key}" in storage:`, e);
-      }
+      logger.warn('setItem', `Failed to set item "${key}" in storage`, { error: String(e) });
       // If localStorage is full, try to clear old items
       if (this.isLocalStorageAvailable && e instanceof DOMException) {
         if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
@@ -91,9 +89,7 @@ class SafeStorage implements StorageInterface {
     try {
       this.storage.removeItem(key);
     } catch (e) {
-      if (import.meta.env.DEV) {
-        console.warn(`Failed to remove item "${key}" from storage:`, e);
-      }
+      logger.warn('removeItem', `Failed to remove item "${key}" from storage`, { error: String(e) });
     }
   }
 
@@ -101,9 +97,7 @@ class SafeStorage implements StorageInterface {
     try {
       this.storage.clear();
     } catch (e) {
-      if (import.meta.env.DEV) {
-        console.warn('Failed to clear storage:', e);
-      }
+      logger.warn('clear', 'Failed to clear storage', { error: String(e) });
     }
   }
 
@@ -150,9 +144,7 @@ export const storage = {
     try {
       return JSON.parse(item) as T;
     } catch {
-      if (import.meta.env.DEV) {
-        console.warn(`Failed to parse JSON from storage key "${key}"`);
-      }
+      logger.warn('get', `Failed to parse JSON from storage key "${key}"`);
       return defaultValue ?? null;
     }
   },
@@ -162,9 +154,7 @@ export const storage = {
       const serialized = JSON.stringify(value);
       safeStorage.setItem(key, serialized);
     } catch (e) {
-      if (import.meta.env.DEV) {
-        console.warn(`Failed to serialize value for storage key "${key}":`, e);
-      }
+      logger.warn('set', `Failed to serialize value for storage key "${key}"`, { error: String(e) });
     }
   },
 

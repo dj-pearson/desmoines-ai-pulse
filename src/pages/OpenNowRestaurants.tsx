@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+
+const log = createLogger('OpenNowRestaurants');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -56,7 +59,7 @@ export default function OpenNowRestaurants() {
           .limit(100);
 
         if (error) {
-          console.error('Error fetching restaurants:', error);
+          log.error('fetchOpenRestaurants', 'Error fetching restaurants', { error });
           setRestaurants([]);
         } else {
           // Filter restaurants likely open based on current time and opening field
@@ -84,7 +87,7 @@ export default function OpenNowRestaurants() {
           setRestaurants(filtered);
         }
       } catch (error) {
-        console.error('Error in fetchOpenRestaurants:', error);
+        log.error('fetchOpenRestaurants', 'Unexpected error in fetchOpenRestaurants', { error });
         setRestaurants([]);
       } finally {
         setIsLoading(false);

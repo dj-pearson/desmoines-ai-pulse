@@ -4,7 +4,10 @@
  */
 
 import { useState, useEffect } from 'react';
+import { createLogger } from '@/lib/logger';
 import { Helmet } from 'react-helmet-async';
+
+const log = createLogger('EventPromotionPlanner');
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Calendar, Download, Share2, TrendingUp, Users, Zap, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -52,7 +55,7 @@ export default function EventPromotionPlanner() {
     // Check for referral code
     const ref = searchParams.get('ref');
     if (ref) {
-      console.log('Referral code:', ref);
+      log.debug('init', 'Referral code detected', { ref });
     }
 
     // Load completed tasks from secure storage
@@ -109,7 +112,7 @@ export default function EventPromotionPlanner() {
         }, 1000);
       }
     } catch (error) {
-      console.error('Failed to capture email:', error);
+      log.error('handleEmailCapture', 'Failed to capture email', { error });
       toast.error('Something went wrong. Please try again.');
     }
   };
@@ -129,7 +132,7 @@ export default function EventPromotionPlanner() {
         setShowEmailModal(true);
       }
     } catch (error) {
-      console.error('Failed to generate PDF:', error);
+      log.error('handleDownloadPDF', 'Failed to generate PDF', { error });
       toast.error('Failed to generate PDF. Please try again.');
     }
   };

@@ -4,6 +4,9 @@
  */
 
 import type { AnalyticsEvent } from '@/types/event-promotion';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('analyticsTracker');
 
 /**
  * Track an analytics event
@@ -16,7 +19,7 @@ export function trackEvent(event: AnalyticsEvent): void {
   try {
     localStorage.setItem('epp_analytics', JSON.stringify(events));
   } catch (error) {
-    console.error('Failed to store analytics event:', error);
+    logger.error('trackEvent', 'Failed to store analytics event', { error: String(error) });
   }
 
   // Send to analytics service (implement as needed)
@@ -129,7 +132,7 @@ function getStoredEvents(): AnalyticsEvent[] {
     const stored = localStorage.getItem('epp_analytics');
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
-    console.error('Failed to retrieve analytics events:', error);
+    logger.error('getStoredEvents', 'Failed to retrieve analytics events', { error: String(error) });
     return [];
   }
 }
@@ -149,10 +152,8 @@ function sendToAnalytics(event: AnalyticsEvent): void {
     });
   }
 
-  // Log to console in development
-  if (import.meta.env.DEV) {
-    console.log('📊 Analytics Event:', event);
-  }
+  // Log in development
+  logger.debug('sendToAnalytics', 'Analytics event', { eventType: event.eventType, data: event.data });
 
   // Send to backend API for storage
   fetch('/api/analytics/event-promotion-planner', {
@@ -160,7 +161,7 @@ function sendToAnalytics(event: AnalyticsEvent): void {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(event),
   }).catch((error) => {
-    console.error('Failed to send analytics event:', error);
+    logger.error('sendToAnalytics', 'Failed to send analytics event', { error: String(error) });
   });
 }
 
@@ -206,6 +207,6 @@ export function clearAnalytics(): void {
   try {
     localStorage.removeItem('epp_analytics');
   } catch (error) {
-    console.error('Failed to clear analytics data:', error);
+    logger.error('clearAnalytics', 'Failed to clear analytics data', { error: String(error) });
   }
 }

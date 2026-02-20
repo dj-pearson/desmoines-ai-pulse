@@ -24,6 +24,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SearchPerformance');
 
 interface SearchPerformanceProps {
   dateRange: { from: Date; to: Date };
@@ -142,7 +145,7 @@ export function SearchPerformance({ dateRange, selectedProvider }: SearchPerform
 
       setTopPages(topPages);
     } catch (error) {
-      console.error("Error loading search data:", error);
+      log.error('loadData', 'Error loading search data', { data: error });
     } finally {
       setLoading(false);
     }

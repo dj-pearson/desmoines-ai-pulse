@@ -1,5 +1,9 @@
 // Performance optimization utilities
 
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('performance');
+
 // Preload critical resources
 export const preloadResource = (href: string, as: string, type?: string) => {
   const link = document.createElement('link');
@@ -55,27 +59,23 @@ export const trackWebVitals = () => {
   if (typeof window !== 'undefined' && 'performance' in window) {
     // Track Core Web Vitals using dynamic import with modern API
     import('web-vitals').then(({ onCLS, onINP, onFCP, onLCP, onTTFB }) => {
-      // Only log in development mode to reduce console noise
-      const logMetric = import.meta.env.DEV ? console.log : () => {};
+      const logMetric = (metric: unknown) => logger.debug('webVitals', 'metric', { metric });
       onCLS(logMetric);
       onINP(logMetric); // replaces FID in web-vitals v3+
       onFCP(logMetric);
       onLCP(logMetric);
       onTTFB(logMetric);
     }).catch(() => {
-      // Silent fallback to avoid console noise
-      if (import.meta.env.DEV) {
-        console.log('Web Vitals tracking not available');
-      }
+      logger.debug('trackWebVitals', 'Web Vitals tracking not available');
     });
   }
 };
 
 // Memory usage monitoring
 export const monitorMemoryUsage = () => {
-  if (import.meta.env.DEV && 'memory' in performance) {
+  if ('memory' in performance) {
     const memory = (performance as any).memory;
-    console.log('Memory usage:', {
+    logger.debug('monitorMemoryUsage', 'Memory usage', {
       usedJSHeapSize: memory.usedJSHeapSize,
       totalJSHeapSize: memory.totalJSHeapSize,
       jsHeapSizeLimit: memory.jsHeapSizeLimit,
@@ -112,9 +112,7 @@ export const registerServiceWorker = async () => {
   const isSecureContext = location.protocol === 'https:' || location.hostname === 'localhost';
 
   if (!('serviceWorker' in navigator)) {
-    if (import.meta.env.DEV) {
-      console.log('Service Worker not supported');
-    }
+    logger.debug('registerServiceWorker', 'Service Worker not supported');
     return;
   }
 
@@ -131,13 +129,9 @@ export const registerServiceWorker = async () => {
         await Promise.all(keys.map((k) => caches.delete(k)));
       }
 
-      if (import.meta.env.DEV) {
-        console.log('Service Workers disabled for development/insecure context');
-      }
+      logger.debug('registerServiceWorker', 'Service Workers disabled for development/insecure context');
     } catch (err) {
-      if (import.meta.env.DEV) {
-        console.warn('Failed to clear service workers/caches:', err);
-      }
+      logger.warn('registerServiceWorker', 'Failed to clear service workers/caches', { error: String(err) });
     }
     return;
   }
@@ -146,18 +140,14 @@ export const registerServiceWorker = async () => {
     // Check if service worker script exists before registering
     const response = await fetch('/sw.js', { method: 'HEAD' });
     if (!response.ok) {
-      if (import.meta.env.DEV) {
-        console.warn('Service Worker script not found, skipping registration');
-      }
+      logger.warn('registerServiceWorker', 'Service Worker script not found, skipping registration');
       return;
     }
 
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/'
     });
-    if (import.meta.env.DEV) {
-      console.log('Service Worker registered successfully:', registration);
-    }
+    logger.debug('registerServiceWorker', 'Service Worker registered successfully');
 
     // Handle updates
     registration.addEventListener('updatefound', () => {
@@ -165,18 +155,14 @@ export const registerServiceWorker = async () => {
       if (newWorker) {
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            if (import.meta.env.DEV) {
-              console.log('New content available, please refresh.');
-            }
+            logger.info('registerServiceWorker', 'New content available, please refresh.');
           }
         });
       }
     });
     return registration;
   } catch (error) {
-    if (import.meta.env.DEV) {
-      console.error('Service Worker registration failed:', error);
-    }
+    logger.error('registerServiceWorker', 'Service Worker registration failed', { error: String(error) });
     // Don't let SW registration failures break the app
     return null;
   }
@@ -213,10 +199,7 @@ export const addResourceHints = () => {
 
 // Bundle size analyzer (development only)
 export const analyzeBundleSize = () => {
-  if (import.meta.env.DEV) {
-    // Log bundle information
-    console.log('Bundle analysis would run here in development');
-  }
+  logger.debug('analyzeBundleSize', 'Bundle analysis would run here in development');
 };
 
 // Image format detection

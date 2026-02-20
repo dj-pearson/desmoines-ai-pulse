@@ -1,5 +1,8 @@
 // Utility to clear all event-related caches and force fresh data
 import { useQueryClient } from "@tanstack/react-query";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useClearEventCache');
 
 export function useClearEventCache() {
   const queryClient = useQueryClient();
@@ -17,7 +20,7 @@ export function useClearEventCache() {
     queryClient.removeQueries({ queryKey: ['featured-content'] });
     queryClient.removeQueries({ queryKey: ['event-categories'] });
     
-    console.log('Event cache cleared at', new Date().toLocaleString());
+    log.debug('clearCache', 'Event cache cleared');
   };
   
   return { clearEventCache };

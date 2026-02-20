@@ -34,6 +34,9 @@ import {
   Zap,
   BarChart3,
 } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SEOManager');
 
 interface AuditResult {
   url: string;
@@ -67,7 +70,7 @@ export function SEOManager() {
       setAuditResult(data.audit);
       toast.success(`Audit completed! Score: ${data.audit.overallScore}/100`);
     } catch (error: any) {
-      console.error("Audit error:", error);
+      log.error('audit', 'Audit error', { data: error });
       toast.error(error.message || "Failed to run audit");
     } finally {
       setLoading(false);
@@ -89,7 +92,7 @@ export function SEOManager() {
       );
       return data;
     } catch (error: any) {
-      console.error("Core Web Vitals error:", error);
+      log.error('coreWebVitals', 'Core Web Vitals error', { data: error });
       toast.error(error.message || "Failed to check Core Web Vitals");
     } finally {
       setLoading(false);
@@ -111,7 +114,7 @@ export function SEOManager() {
       );
       return data;
     } catch (error: any) {
-      console.error("Crawl error:", error);
+      log.error('crawl', 'Crawl error', { data: error });
       toast.error(error.message || "Failed to crawl site");
     } finally {
       setLoading(false);
@@ -133,7 +136,7 @@ export function SEOManager() {
       );
       return data;
     } catch (error: any) {
-      console.error("Content analysis error:", error);
+      log.error('analyzeContent', 'Content analysis error', { data: error });
       toast.error(error.message || "Failed to analyze content");
     } finally {
       setLoading(false);
@@ -155,7 +158,7 @@ export function SEOManager() {
       );
       return data;
     } catch (error: any) {
-      console.error("Image analysis error:", error);
+      log.error('analyzeImages', 'Image analysis error', { data: error });
       toast.error(error.message || "Failed to analyze images");
     } finally {
       setLoading(false);

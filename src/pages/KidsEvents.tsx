@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+
+const log = createLogger('KidsEvents');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
@@ -48,13 +51,13 @@ export default function KidsEvents() {
           .limit(100);
 
         if (error) {
-          console.error('Error fetching kids events:', error);
+          log.error('fetchKidsEvents', 'Error fetching kids events', { error });
           setEvents([]);
         } else {
           setEvents(data || []);
         }
       } catch (error) {
-        console.error('Error in fetchKidsEvents:', error);
+        log.error('fetchKidsEvents', 'Unexpected error in fetchKidsEvents', { error });
         setEvents([]);
       } finally {
         setIsLoading(false);

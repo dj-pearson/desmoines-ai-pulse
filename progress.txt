@@ -60,7 +60,7 @@
 - No unit tests (only Playwright E2E)
 - No CI/CD PR validation (only event-crawler workflow)
 - Error tracking placeholder (Sentry not configured)
-- PearsonASUS file naming artifacts from merge
+- ~~PearsonASUS file naming artifacts from merge~~ (RESOLVED: deleted in US-018)
 - SearchTrafficDashboard commented out (missing migrations)
 - TODOs: user preferences server-side, scraping job persistence, distance calculation
 

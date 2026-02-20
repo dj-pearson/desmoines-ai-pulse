@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
 import { useSearchParams, Link } from "react-router-dom";
+
+const log = createLogger('DietaryRestaurants');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -82,7 +85,7 @@ export default function DietaryRestaurants() {
           setRestaurants(data || []);
         }
       } catch (error) {
-        console.error('Error fetching restaurants:', error);
+        log.error('fetchRestaurants', 'Error fetching restaurants', { error });
         setRestaurants([]);
       } finally {
         setIsLoading(false);

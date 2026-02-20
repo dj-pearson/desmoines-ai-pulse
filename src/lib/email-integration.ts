@@ -5,6 +5,9 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import type { EmailCaptureData, ReferralData } from '@/types/event-promotion';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('emailIntegration');
 
 /**
  * Save email capture to database
@@ -21,7 +24,7 @@ export async function saveEmailCapture(data: EmailCaptureData): Promise<void> {
   });
 
   if (error) {
-    console.error('Error saving email capture:', error);
+    logger.error('saveEmailCapture', 'Error saving email capture', { error: String(error) });
     throw new Error('Failed to save email capture');
   }
 
@@ -48,7 +51,7 @@ async function createReferral(email: string, code: string): Promise<void> {
   });
 
   if (error && !error.message.includes('duplicate')) {
-    console.error('Error creating referral:', error);
+    logger.error('createReferral', 'Error creating referral', { error: String(error) });
   }
 }
 
@@ -67,7 +70,7 @@ export async function trackReferralUsage(code: string, referredEmail: string): P
     .is('used', false);
 
   if (error) {
-    console.error('Error tracking referral usage:', error);
+    logger.error('trackReferralUsage', 'Error tracking referral usage', { error: String(error) });
   }
 }
 
@@ -95,7 +98,7 @@ async function initializeEmailSequence(data: EmailCaptureData): Promise<void> {
   const { error } = await supabase.from('event_promotion_email_sequences').insert(records);
 
   if (error) {
-    console.error('Error initializing email sequence:', error);
+    logger.error('initializeEmailSequence', 'Error initializing email sequence', { error: String(error) });
   }
 }
 
@@ -130,7 +133,7 @@ async function sendWelcomeEmail(data: EmailCaptureData): Promise<void> {
       .eq('email', data.email)
       .eq('sequence_day', 0);
   } catch (error) {
-    console.error('Error sending welcome email:', error);
+    logger.error('sendWelcomeEmail', 'Error sending welcome email', { error: String(error) });
   }
 }
 
@@ -161,7 +164,7 @@ export async function sendEmail(config: {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ message: 'Unknown error' }));
-    console.error('Email send error:', error);
+    logger.error('sendEmail', 'Email send error', { error: String(error) });
     throw new Error('Failed to send email');
   }
 }
@@ -210,7 +213,7 @@ export async function getPendingEmails(): Promise<any[]> {
     .limit(100);
 
   if (error) {
-    console.error('Error fetching pending emails:', error);
+    logger.error('getPendingEmails', 'Error fetching pending emails', { error: String(error) });
     return [];
   }
 

@@ -15,6 +15,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AIConfigurationManager');
 
 export function AIConfigurationManager() {
   const { settings, isLoading, updateSetting, isUpdating, getSetting } = useAIConfiguration();
@@ -112,7 +115,7 @@ export function AIConfigurationManager() {
         throw new Error(data.error || data.message || 'Test failed');
       }
     } catch (error: any) {
-      console.error('Error testing AI model:', error);
+      log.error('testModel', 'Error testing AI model', { data: error });
       setTestResult({
         success: false,
         message: error.message || 'Test failed'

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+
+const log = createLogger('EventsByLocation');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
@@ -108,7 +111,7 @@ export default function EventsByLocation() {
           .order("date", { ascending: true });
         
         if (error) {
-          console.error('Error fetching events:', error);
+          log.error('fetchEvents', 'Error fetching events', { error });
           setEvents([]);
         } else {
           // Filter events that match the suburb
@@ -125,7 +128,7 @@ export default function EventsByLocation() {
           setEvents(filteredData);
         }
       } catch (error) {
-        console.error('Error in fetchEvents:', error);
+        log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
         setEvents([]);
       } finally {
         setIsLoading(false);

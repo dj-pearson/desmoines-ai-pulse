@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useCampaignAnalytics');
 
 export interface CampaignAnalyticsSummary {
   totalImpressions: number;
@@ -160,7 +163,7 @@ export function useCampaignAnalytics(campaignId: string) {
       creativePerf.sort((a, b) => b.impressions - a.impressions);
       setCreativePerformance(creativePerf);
     } catch (err) {
-      console.error("Error fetching campaign analytics:", err);
+      log.error('fetchAnalytics', 'Error fetching campaign analytics', { error: err });
       toast({
         variant: "destructive",
         title: "Failed to load analytics",
@@ -220,7 +223,7 @@ export function useCampaignAnalytics(campaignId: string) {
         description: "Analytics data has been exported to CSV.",
       });
     } catch (err) {
-      console.error("Error exporting CSV:", err);
+      log.error('exportCSV', 'Error exporting CSV', { error: err });
       toast({
         variant: "destructive",
         title: "Export failed",

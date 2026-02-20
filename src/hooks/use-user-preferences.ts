@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useUserPreferences');
 
 export interface UserPreferences {
   // Display preferences
@@ -64,7 +67,7 @@ export function useUserPreferences() {
         return { ...DEFAULT_PREFERENCES, ...parsed };
       }
     } catch (error) {
-      console.error('Failed to load preferences:', error);
+      log.error('init', 'Failed to load preferences', { error });
     }
     return DEFAULT_PREFERENCES;
   });
@@ -83,7 +86,7 @@ export function useUserPreferences() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs));
     } catch (error) {
-      console.error('Failed to save preferences to localStorage:', error);
+      log.error('saveToLocalStorage', 'Failed to save preferences to localStorage', { error });
     }
   }, []);
 

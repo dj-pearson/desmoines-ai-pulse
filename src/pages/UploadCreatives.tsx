@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('UploadCreatives');
 import { ArrowLeft, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,7 +70,7 @@ export default function UploadCreatives() {
         setActiveTab(data.campaign_placements[0].placement_type);
       }
     } catch (error) {
-      console.error('Error fetching campaign:', error);
+      log.error('fetchCampaign', 'Error fetching campaign', { error });
       toast({
         variant: "destructive",
         title: "Error loading campaign",

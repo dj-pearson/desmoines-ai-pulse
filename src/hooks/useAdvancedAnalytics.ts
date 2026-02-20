@@ -1,6 +1,9 @@
 import { useCallback, useRef, useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAdvancedAnalytics');
 const ENABLE_DIRECT_CONTENT_METRICS = false;
 
 interface AnalyticsData {
@@ -82,7 +85,7 @@ export function useAdvancedAnalytics() {
         });
       }
     } catch (e) {
-      console.warn('Batch metrics logging failed (edge function):', e);
+      log.warn('flushMetricsQueue', 'Batch metrics logging failed (edge function)', { error: e });
     }
   }, []);
 
@@ -127,10 +130,10 @@ export function useAdvancedAnalytics() {
           });
 
         if (error) {
-          console.error('Error tracking interaction:', error);
+          log.error('trackInteraction', 'Error tracking interaction', { error });
         }
       } catch (error) {
-        console.error("Error tracking interaction:", error);
+        log.error('trackInteraction', 'Error tracking interaction', { error });
       }
     },
     [analyticsData, userId]
@@ -204,13 +207,9 @@ export function useAdvancedAnalytics() {
           value: query,
         });
 
-        console.log("Enhanced search tracked:", {
-          query,
-          resultsCount,
-          contextualData,
-        });
+        log.debug('trackSearchWithContext', 'Enhanced search tracked', { query, resultsCount });
       } catch (error) {
-        console.error("Error tracking search:", error);
+        log.error('trackSearchWithContext', 'Error tracking search', { error });
       }
     },
     [userId, getContextualData, trackInteraction]
@@ -244,7 +243,7 @@ export function useAdvancedAnalytics() {
           });
 
         if (error) {
-          console.error('Error tracking click:', error);
+          log.error('trackClickWithContext', 'Error tracking click', { error });
         }
 
         // Queue metric for batching (Edge Function)
@@ -256,7 +255,7 @@ export function useAdvancedAnalytics() {
         });
 
       } catch (error) {
-        console.error('Error tracking enhanced click:', error);
+        log.error('trackClickWithContext', 'Error tracking enhanced click', { error });
       }
     },
     [userId, getContextualData]
@@ -318,7 +317,7 @@ export function useAdvancedAnalytics() {
         searchQueries: searches?.map(s => s.query) || [],
       };
     } catch (error) {
-      console.error("Error fetching analytics summary:", error);
+      log.error('getAnalyticsSummary', 'Error fetching analytics summary', { error });
       return null;
     }
   }, []);

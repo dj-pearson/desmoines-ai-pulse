@@ -12,6 +12,9 @@ import { Link } from "react-router-dom";
 import { ArticleWebhookConfig } from "./ArticleWebhookConfig";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ArticlesManager');
 
 export default function ArticlesManager() {
   const { articles, loading, error, deleteArticle, publishArticle, loadArticles } = useArticles();
@@ -74,7 +77,7 @@ export default function ArticlesManager() {
       await deleteArticle(id);
       toast.success(`Article "${title}" deleted successfully`);
     } catch (error) {
-      console.error('Error deleting article:', error);
+      log.error('delete', 'Error deleting article', { data: error });
       toast.error("Failed to delete article");
     }
   };
@@ -84,7 +87,7 @@ export default function ArticlesManager() {
       await publishArticle(id);
       toast.success(`Article "${title}" published successfully`);
     } catch (error) {
-      console.error('Error publishing article:', error);
+      log.error('publish', 'Error publishing article', { data: error });
       toast.error("Failed to publish article");
     }
   };

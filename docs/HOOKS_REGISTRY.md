@@ -417,8 +417,7 @@ Utility hooks for system-level functionality.
 
 | Hook | Description | Returns |
 |------|-------------|---------|
-| `useAuth-PearsonASUS` | Legacy auth hook (deprecated) | - |
-| `useUserRole-PearsonASUS` | Legacy role hook (deprecated) | - |
+| *(Cleaned up)* | *PearsonASUS legacy hooks removed in US-018* | - |
 
 ---
 

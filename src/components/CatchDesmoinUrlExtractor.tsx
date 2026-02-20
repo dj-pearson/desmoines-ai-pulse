@@ -9,6 +9,9 @@ import { Label } from "@/components/ui/label";
 import { ExternalLink, AlertTriangle, CheckCircle2, XCircle, Loader2, Link, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CatchDesmoinUrlExtractor');
 
 interface ExtractionResult {
   success: boolean;
@@ -46,7 +49,7 @@ export default function CatchDesmoinUrlExtractor() {
         setRemainingCount(data.remaining);
       }
     } catch (error) {
-      console.error('Failed to fetch count:', error);
+      log.error('fetchCount', 'Failed to fetch count', { data: error });
     } finally {
       setIsLoadingCount(false);
     }
@@ -118,7 +121,7 @@ export default function CatchDesmoinUrlExtractor() {
       }
 
     } catch (error) {
-      console.error('URL extraction error:', error);
+      log.error('extract', 'URL extraction error', { data: error });
       toast.error(`Failed to extract URLs: ${error instanceof Error ? error.message : 'Unknown error'}`);
       const errorResult = {
         success: false,

@@ -30,6 +30,9 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AIArticleGenerator');
 
 interface GenerationSettings {
   topic: string;
@@ -154,7 +157,7 @@ const AIArticleGenerator: React.FC = () => {
       });
 
       if (error) {
-        console.error('Generation error:', error);
+        log.error('generate', 'Generation error', { data: error });
         throw new Error(error.message || 'Failed to generate article');
       }
 
@@ -167,7 +170,7 @@ const AIArticleGenerator: React.FC = () => {
         throw new Error(data.error || 'Generation failed');
       }
     } catch (error) {
-      console.error('Error generating article:', error);
+      log.error('generate', 'Error generating article', { data: error });
       toast.error('Failed to generate article', {
         description: error instanceof Error ? error.message : 'Unknown error occurred'
       });
@@ -198,7 +201,7 @@ const AIArticleGenerator: React.FC = () => {
       });
 
       if (error) {
-        console.error('Suggestions error:', error);
+        log.error('loadSuggestions', 'Suggestions error', { data: error });
         throw new Error(error.message || 'Failed to load suggestions');
       }
 
@@ -208,7 +211,7 @@ const AIArticleGenerator: React.FC = () => {
         throw new Error(data.error || 'Failed to load suggestions');
       }
     } catch (error) {
-      console.error('Error loading suggestions:', error);
+      log.error('loadSuggestions', 'Error loading suggestions', { data: error });
       toast.error('Failed to load topic suggestions', {
         description: error instanceof Error ? error.message : 'Unknown error occurred'
       });

@@ -29,6 +29,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import URLSourceManager from "./URLSourceManager";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AICrawler');
 
 interface CrawlResult {
   success: boolean;
@@ -125,7 +128,7 @@ const AICrawler: React.FC = () => {
     setResult(null);
 
     try {
-      console.log("Starting AI crawl...", { url, category });
+      log.info('crawl', 'Starting AI crawl', { url, category });
 
       const { data, error } = await supabase.functions.invoke(
         "firecrawl-scraper",
@@ -134,7 +137,7 @@ const AICrawler: React.FC = () => {
         }
       );
 
-      console.log("AI crawl response:", { data, error });
+      log.debug('crawl', 'AI crawl response', { data, error });
 
       if (error) {
         throw error;
@@ -142,7 +145,7 @@ const AICrawler: React.FC = () => {
 
       setResult(data);
     } catch (error: unknown) {
-      console.error("AI crawl error:", error);
+      log.error('crawl', 'AI crawl error', { data: error });
       setResult({
         success: false,
         totalFound: 0,

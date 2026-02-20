@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createEventSlugWithCentralTime } from "./timezone";
 import { BRAND } from "./brandConfig";
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('sitemapEnhanced');
 
 interface SitemapUrl {
   loc: string;
@@ -87,7 +90,7 @@ export class EnhancedSitemapGenerator {
         });
       }
     } catch (error) {
-      console.error("Error generating events sitemap:", error);
+      logger.error("generateEventsSitemap", "Error generating events sitemap", { error: String(error) });
     }
 
     return this.generateXML(urls);
@@ -118,7 +121,7 @@ export class EnhancedSitemapGenerator {
         });
       }
     } catch (error) {
-      console.error("Error generating restaurants sitemap:", error);
+      logger.error("generateRestaurantsSitemap", "Error generating restaurants sitemap", { error: String(error) });
     }
 
     return this.generateXML(urls);
@@ -199,24 +202,24 @@ export async function generateAllSitemaps(): Promise<void> {
   try {
     // Generate main sitemap
     const mainSitemap = await generator.generateMainSitemap();
-    console.log("Main sitemap generated");
+    logger.info("generateAllSitemaps", "Main sitemap generated");
     
     // Generate events sitemap
     const eventsSitemap = await generator.generateEventsSitemap();
-    console.log("Events sitemap generated");
+    logger.info("generateAllSitemaps", "Events sitemap generated");
     
     // Generate restaurants sitemap
     const restaurantsSitemap = await generator.generateRestaurantsSitemap();
-    console.log("Restaurants sitemap generated");
+    logger.info("generateAllSitemaps", "Restaurants sitemap generated");
     
     // Generate sitemap index
     const sitemapIndex = await generator.generateSitemapIndex();
-    console.log("Sitemap index generated");
+    logger.info("generateAllSitemaps", "Sitemap index generated");
     
     // In a real implementation, these would be saved to the public folder
     // For now, we'll log them for debugging
     
   } catch (error) {
-    console.error("Error generating sitemaps:", error);
+    logger.error("generateAllSitemaps", "Error generating sitemaps", { error: String(error) });
   }
 }

@@ -6,6 +6,9 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMFA } from '@/hooks/useMFA';
 import { Loader2, Shield, AlertCircle } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('MFAVerificationDialog');
 
 interface MFAVerificationDialogProps {
   open: boolean;
@@ -41,7 +44,7 @@ export function MFAVerificationDialog({
       createChallenge(factorId)
         .then(setChallengeId)
         .catch((error) => {
-          console.error('Failed to create MFA challenge:', error);
+          log.error('createChallenge', 'Failed to create MFA challenge', { data: error });
           setError('Failed to initialize authentication. Please try again.');
         });
     }
@@ -105,7 +108,7 @@ export function MFAVerificationDialog({
               }
             })
             .catch((error) => {
-              console.error('MFA verification failed:', error);
+              log.error('verify', 'MFA verification failed', { data: error });
               setAttempts(prev => prev + 1);
               setVerificationCode('');
               setError('Verification failed. Please try again.');

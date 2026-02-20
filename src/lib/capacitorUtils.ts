@@ -89,6 +89,10 @@ export function getPlatform(): string {
   }
 }
 
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('capacitorUtils');
+
 /* ------------------------------------------------------------------ */
 /* External link helper                                               */
 /* ------------------------------------------------------------------ */
@@ -110,9 +114,7 @@ export async function openExternalUrl(url: string): Promise<boolean> {
       return true;
     }
   } catch (err) {
-    if (import.meta.env.DEV) {
-      console.warn('[capacitorUtils] Browser.open failed, falling back:', err);
-    }
+    logger.warn('openExternalUrl', 'Browser.open failed, falling back', { error: String(err) });
   }
 
   // Fallback – works everywhere
@@ -150,9 +152,7 @@ export async function nativeShare(opts: {
       return true;
     }
   } catch (err) {
-    if (import.meta.env.DEV) {
-      console.warn('[capacitorUtils] share failed:', err);
-    }
+    logger.warn('nativeShare', 'share failed', { error: String(err) });
   }
 
   return false;

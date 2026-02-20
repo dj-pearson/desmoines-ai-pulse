@@ -1,5 +1,9 @@
 // Error suppression utilities to reduce console noise from external libraries
 
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('errorSuppression');
+
 // Suppress common SES warnings from browser extensions
 export const suppressSESWarnings = () => {
   if (typeof window !== 'undefined') {
@@ -45,7 +49,7 @@ export const handleGitHubPagesRouting = () => {
       }
     } catch (error) {
       // Silently fail if history manipulation fails
-      console.warn('GitHub Pages routing failed:', error);
+      logger.warn('handleGitHubPagesRouting', 'GitHub Pages routing failed', { error: String(error) });
     }
   }
 };
@@ -61,14 +65,14 @@ export const initializeRuntimeErrorHandling = () => {
         // Suppress Google Analytics loading errors
         if (script.src && (script.src.includes('googletagmanager.com') || script.src.includes('google-analytics.com'))) {
           event.preventDefault();
-          console.warn('Google Analytics failed to load - continuing without analytics');
+          logger.warn('initializeRuntimeErrorHandling', 'Google Analytics failed to load - continuing without analytics');
           return;
         }
         
         // Handle generic script loading errors
         if (script.src) {
           event.preventDefault();
-          console.warn(`Script failed to load: ${script.src} - continuing without this resource`);
+          logger.warn('initializeRuntimeErrorHandling', `Script failed to load: ${script.src} - continuing without this resource`);
         }
       }
       

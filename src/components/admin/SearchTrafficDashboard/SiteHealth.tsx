@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('SiteHealth');
 
 interface SiteHealthProps {
   dateRange: { from: Date; to: Date };
@@ -61,7 +64,7 @@ export function SiteHealth({ dateRange, selectedProvider }: SiteHealthProps) {
 
       setSummary({ critical, warning, info });
     } catch (error) {
-      console.error("Error loading health data:", error);
+      log.error('loadData', 'Error loading health data', { data: error });
     } finally {
       setLoading(false);
     }

@@ -4,6 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Home, Calendar, MapPin, Search } from "lucide-react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('NotFound');
 
 const NotFound = () => {
   const location = useLocation();
@@ -11,10 +14,7 @@ const NotFound = () => {
   useDocumentTitle("Page Not Found");
 
   useEffect(() => {
-    console.error(
-      "404 Error: User attempted to access non-existent route:",
-      location.pathname
-    );
+    log.warn('navigation', '404 Error: User attempted to access non-existent route', { pathname: location.pathname });
   }, [location.pathname]);
 
   return (

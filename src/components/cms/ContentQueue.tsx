@@ -25,6 +25,9 @@ import {
   FileText,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('ContentQueue');
 
 interface QueueItem {
   id: string;
@@ -129,7 +132,7 @@ export function ContentQueue() {
       if (error) throw error;
       setQueueItems(data || []);
     } catch (error: any) {
-      console.error('Error loading queue:', error);
+      log.error('loadQueue', 'Error loading queue', { data: error });
       toast.error('Failed to load content queue');
     } finally {
       setLoading(false);
@@ -147,7 +150,7 @@ export function ContentQueue() {
       if (error) throw error;
       setComments(data || []);
     } catch (error: any) {
-      console.error('Error loading comments:', error);
+      log.error('loadComments', 'Error loading comments', { data: error });
     }
   };
 
@@ -195,7 +198,7 @@ export function ContentQueue() {
       loadQueueItems();
       setSelectedItem((prev) => (prev ? { ...prev, status: newStatus } : null));
     } catch (error: any) {
-      console.error('Error updating status:', error);
+      log.error('updateStatus', 'Error updating status', { data: error });
       toast.error('Failed to update status');
     }
   };
@@ -220,7 +223,7 @@ export function ContentQueue() {
       setCommentType('general');
       loadComments(selectedItem.id);
     } catch (error: any) {
-      console.error('Error adding comment:', error);
+      log.error('addComment', 'Error adding comment', { data: error });
       toast.error('Failed to add comment');
     }
   };
@@ -240,7 +243,7 @@ export function ContentQueue() {
       loadQueueItems();
       setSelectedItem((prev) => (prev ? { ...prev, priority } : null));
     } catch (error: any) {
-      console.error('Error updating priority:', error);
+      log.error('updatePriority', 'Error updating priority', { data: error });
       toast.error('Failed to update priority');
     }
   };

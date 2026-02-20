@@ -5,7 +5,7 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  { ignores: ["dist", "tools"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
@@ -23,6 +23,18 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+      "@typescript-eslint/no-explicit-any": "warn",
+      "@typescript-eslint/no-empty-object-type": "warn",
+      "@typescript-eslint/no-unsafe-function-type": "warn",
+      "@typescript-eslint/no-unused-expressions": "warn",
+      "@typescript-eslint/no-require-imports": "warn",
+      "@typescript-eslint/ban-ts-comment": "warn",
+      "no-case-declarations": "warn",
+      "no-useless-escape": "warn",
+      "no-empty": "warn",
+      "no-control-regex": "warn",
+      "prefer-const": "warn",
+      "no-console": "warn",
       "@typescript-eslint/no-unused-vars": [
         "warn",
         {

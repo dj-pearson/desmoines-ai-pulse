@@ -21,6 +21,9 @@ import {
   Clock,
   UserX,
 } from "lucide-react";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AdminSecurityManager');
 
 interface SecuritySettings {
   rateLimit: number;
@@ -75,7 +78,7 @@ export default function AdminSecurityManager() {
         setSettings(JSON.parse(savedSettings));
       }
     } catch (error) {
-      console.error("Failed to load security settings:", error);
+      log.error('loadSettings', 'Failed to load security settings', { data: error });
     }
   };
 
@@ -112,7 +115,7 @@ export default function AdminSecurityManager() {
       ];
       setSecurityLogs(mockLogs);
     } catch (error) {
-      console.error("Failed to load security logs:", error);
+      log.error('loadLogs', 'Failed to load security logs', { data: error });
     }
   };
 
@@ -121,7 +124,7 @@ export default function AdminSecurityManager() {
       // Mock blocked IPs - in real implementation, fetch from blocked_ips table
       setBlockedIPs(["192.168.1.100", "10.0.0.50"]);
     } catch (error) {
-      console.error("Failed to load blocked IPs:", error);
+      log.error('loadBlockedIPs', 'Failed to load blocked IPs', { data: error });
     }
   };
 

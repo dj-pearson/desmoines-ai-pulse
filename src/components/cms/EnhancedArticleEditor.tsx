@@ -35,6 +35,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('EnhancedArticleEditor');
 
 // Lazy load the rich text editor
 const RichTextEditor = lazy(() => import('./RichTextEditor'));
@@ -241,7 +244,7 @@ export default function EnhancedArticleEditor() {
         toast.success(`Article ${shouldPublish ? 'published' : 'updated'} successfully!`);
       }
     } catch (error) {
-      console.error('Error saving article:', error);
+      log.error('save', 'Error saving article', { data: error });
       toast.error('Failed to save article');
     } finally {
       setIsSaving(false);
@@ -299,7 +302,7 @@ export default function EnhancedArticleEditor() {
       toast.success('Article submitted for review!');
       navigate('/admin/cms?tab=queue');
     } catch (error) {
-      console.error('Error submitting for review:', error);
+      log.error('submitReview', 'Error submitting for review', { data: error });
       toast.error('Failed to submit for review');
     } finally {
       setIsSubmittingForReview(false);
@@ -314,7 +317,7 @@ export default function EnhancedArticleEditor() {
       toast.success('Article deleted successfully');
       navigate('/admin/cms');
     } catch (error) {
-      console.error('Error deleting article:', error);
+      log.error('delete', 'Error deleting article', { data: error });
       toast.error('Failed to delete article');
     }
   };

@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useApiKeys');
 
 interface ApiKey {
   id: string;
@@ -108,7 +111,7 @@ export function useApiKeys() {
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error fetching API keys:', error);
+        log.error('fetchKeys', 'Error fetching API keys', { error });
         throw error;
       }
 
@@ -128,7 +131,7 @@ export function useApiKeys() {
       .limit(limit);
 
     if (error) {
-      console.error('Error fetching API key usage:', error);
+      log.error('fetchKeyUsage', 'Error fetching API key usage', { error });
       return [];
     }
 
@@ -148,7 +151,7 @@ export function useApiKeys() {
         });
 
       if (error) {
-        console.error('Error creating API key:', error);
+        log.error('createKey', 'Error creating API key', { error });
         throw error;
       }
 
@@ -166,7 +169,7 @@ export function useApiKeys() {
         .rpc('revoke_api_key', { p_key_id: keyId });
 
       if (error) {
-        console.error('Error revoking API key:', error);
+        log.error('revokeKey', 'Error revoking API key', { error });
         throw error;
       }
 
@@ -198,7 +201,7 @@ export function useApiKeys() {
         .single();
 
       if (error) {
-        console.error('Error updating API key:', error);
+        log.error('updateKey', 'Error updating API key', { error });
         throw error;
       }
 
@@ -252,7 +255,7 @@ export function useApiKeys() {
       await navigator.clipboard.writeText(text);
       return true;
     } catch (err) {
-      console.error('Failed to copy to clipboard:', err);
+      log.error('copyToClipboard', 'Failed to copy to clipboard', { error: err });
       return false;
     }
   };

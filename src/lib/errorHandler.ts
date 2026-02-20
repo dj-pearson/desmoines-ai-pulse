@@ -3,6 +3,10 @@
  * Provides consistent error handling across the application
  */
 
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('errorHandler');
+
 interface ErrorContext {
   component?: string;
   action?: string;
@@ -45,17 +49,12 @@ export function handleError(
 ): void {
   const errorObj = error instanceof Error ? error : new Error(String(error));
 
-  // Log to console in development
-  if (import.meta.env.DEV) {
-    const contextStr = context.component || context.action
-      ? ` [${context.component || ''}${context.component && context.action ? ':' : ''}${context.action || ''}]`
-      : '';
+  // Log via structured logger (debug/info suppressed in production)
+  const contextStr = context.component || context.action
+    ? `${context.component || ''}${context.component && context.action ? ':' : ''}${context.action || ''}`
+    : 'unknown';
 
-    console.error(`${severity.toUpperCase()}${contextStr}:`, errorObj);
-    if (context.metadata) {
-      console.error('Context:', context.metadata);
-    }
-  }
+  logger.error(contextStr, `${severity.toUpperCase()}: ${errorObj.message}`, context.metadata);
 
   // Send to error tracking service in production
   if (import.meta.env.PROD && errorTracker) {
@@ -112,9 +111,7 @@ function showErrorToUser(message: string, severity: ErrorSeverity): void {
   // This should be implemented with your actual toast/notification system
   // Example: toast.error(message);
 
-  if (import.meta.env.DEV) {
-    console.log(`[User Error] ${severity}: ${message}`);
-  }
+  logger.debug('showErrorToUser', `${severity}: ${message}`);
 
   // Create a custom event that components can listen to
   if (typeof window !== 'undefined') {
@@ -157,18 +154,14 @@ export function createComponentErrorHandler(componentName: string) {
  * Log information for debugging (only in development)
  */
 export function logDebug(message: string, data?: any): void {
-  if (import.meta.env.DEV) {
-    console.log(`[Debug] ${message}`, data);
-  }
+  logger.debug('logDebug', message, data ? { data } : undefined);
 }
 
 /**
  * Log warning
  */
 export function logWarning(message: string, context?: ErrorContext): void {
-  if (import.meta.env.DEV) {
-    console.warn(`[Warning] ${message}`, context);
-  }
+  logger.warn('logWarning', message, context ? { component: context.component, action: context.action } : undefined);
 
   if (import.meta.env.PROD && errorTracker) {
     errorTracker.captureMessage(message, 'warning');
@@ -218,9 +211,7 @@ export function safeJsonParse<T>(json: string, fallback: T): T {
   try {
     return JSON.parse(json) as T;
   } catch (error) {
-    if (import.meta.env.DEV) {
-      console.warn('Failed to parse JSON:', error);
-    }
+    logger.warn('safeJsonParse', 'Failed to parse JSON', { error: String(error) });
     return fallback;
   }
 }

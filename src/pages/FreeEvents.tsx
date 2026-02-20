@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+
+const log = createLogger('FreeEvents');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
@@ -48,13 +51,13 @@ export default function FreeEvents() {
           .limit(100);
 
         if (error) {
-          console.error('Error fetching free events:', error);
+          log.error('fetchFreeEvents', 'Error fetching free events', { error });
           setEvents([]);
         } else {
           setEvents(data || []);
         }
       } catch (error) {
-        console.error('Error in fetchFreeEvents:', error);
+        log.error('fetchFreeEvents', 'Unexpected error in fetchFreeEvents', { error });
         setEvents([]);
       } finally {
         setIsLoading(false);

@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+
+const log = createLogger('EventsToday');
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
@@ -52,13 +55,13 @@ export default function EventsToday() {
           .order("event_start_utc", { ascending: true, nullsFirst: false });
         
         if (error) {
-          console.error('Error fetching events:', error);
+          log.error('fetchEvents', 'Error fetching events', { error });
           setEvents([]);
         } else {
           setEvents(data || []);
         }
       } catch (error) {
-        console.error('Error in fetchEvents:', error);
+        log.error('fetchEvents', 'Unexpected error in fetchEvents', { error });
         setEvents([]);
       } finally {
         setIsLoading(false);

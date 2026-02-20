@@ -209,21 +209,6 @@ export default function EventDataEnhancer({ open, onOpenChange, events, onSucces
     }
   }, [filteredEvents]);
 
-  const searchWithGoogle = async (query: string): Promise<string[]> => {
-    // This is now handled by the Supabase function
-    throw new Error('This method is deprecated - use processEvents instead');
-  };
-
-  const analyzeWithClaude = async (searchResults: string[], fields: string[], eventData: Partial<Event>): Promise<Partial<Event>> => {
-    // This is now handled by the Supabase function
-    throw new Error('This method is deprecated - use processEvents instead');
-  };
-
-  const updateEventInDatabase = async (eventId: string, updates: Partial<Event>): Promise<void> => {
-    // This is now handled by the Supabase function
-    throw new Error('This method is deprecated - use processEvents instead');
-  };
-
   const processEvents = async () => {
     if (selectedEvents.size === 0 || selectedFields.size === 0) {
       toast.error("Please select events and fields to process");

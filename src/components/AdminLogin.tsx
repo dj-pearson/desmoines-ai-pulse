@@ -12,6 +12,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { LoadingButton } from "@/components/ui/loading-button";
 import { Shield, LogIn, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AdminLogin');
 
 interface AdminLoginProps {
   onLoginSuccess: () => void;
@@ -41,7 +44,7 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
         );
       }
     } catch (err) {
-      console.error("AdminLogin: Login exception:", err);
+      log.error('login', 'Login exception', { data: err });
       setError("Login failed. Please try again.");
     } finally {
       setIsLoading(false);

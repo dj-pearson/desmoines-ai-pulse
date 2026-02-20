@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
 import {
   BarChart,
   Bar,
@@ -45,6 +46,8 @@ interface AnalyticsData {
     avgSessionDuration: string;
   };
 }
+
+const log = createLogger('AdminAnalyticsDashboard');
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
@@ -195,7 +198,7 @@ export default function AdminAnalyticsDashboard() {
       });
 
     } catch (error) {
-      console.error("Failed to load analytics data:", error);
+      log.error('loadAnalytics', 'Failed to load analytics data', { data: error });
       toast({
         title: "Error",
         description: "Failed to load analytics data.",

@@ -2,6 +2,9 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback, Re
 import { supabase } from "@/integrations/supabase/client";
 import { User, Session, AuthChangeEvent } from "@supabase/supabase-js";
 import { SecurityUtils } from "@/lib/securityUtils";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AuthContext');
 
 interface AuthState {
   user: User | null;
@@ -91,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         adminStatusCache.set(user.id, { isAdmin: false, timestamp: Date.now() });
         return false;
       } catch (error) {
-        console.error("[AuthContext] Admin check error:", error);
+        log.error('checkIsAdmin', 'Admin check error', { error });
         return false;
       } finally {
         pendingChecks.delete(user.id);
@@ -106,17 +109,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null, isMounted: boolean) => {
     // Skip processing if we're logging out
     if (isLoggingOutRef.current) {
-      console.log('[AuthContext] Skipping auth event during logout:', event);
+      log.debug('handleAuthChange', 'Skipping auth event during logout', { event });
       return;
     }
 
     if (!isMounted) return;
 
-    console.log('[AuthContext] Auth event:', event, session?.user?.email || 'none');
+    log.debug('handleAuthChange', 'Auth event received', { event, email: session?.user?.email || 'none' });
 
     // Handle specific events
     if (event === 'SIGNED_OUT') {
-      console.log('[AuthContext] User signed out via event');
+      log.info('handleAuthChange', 'User signed out via event');
       adminStatusCache.clear();
       setAuthState({
         user: null,
@@ -132,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     if (event === 'TOKEN_REFRESHED') {
-      console.log('[AuthContext] Token refreshed');
+      log.debug('handleAuthChange', 'Token refreshed');
       // Just update the session, don't re-check admin
       if (session) {
         setAuthState(prev => ({
@@ -160,14 +163,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (needsAdminCheck) {
       const isAdmin = await checkIsAdmin(session.user);
       if (isMounted && !isLoggingOutRef.current) {
-        console.log('[AuthContext] Admin check result:', isAdmin);
+        log.debug('handleAuthChange', 'Admin check result', { isAdmin });
         setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
       }
     }
   }, [checkIsAdmin]);
 
   useEffect(() => {
-    console.log('[AuthContext] Initializing...');
+    log.info('init', 'Initializing auth context');
     let isMounted = true;
 
     // Get initial session
@@ -176,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (error) {
-          console.error('[AuthContext] Error getting session:', error);
+          log.error('init', 'Error getting session', { error });
           if (isMounted) {
             setAuthState(prev => ({ ...prev, isLoading: false }));
           }
@@ -184,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (!isMounted) return;
-        console.log('[AuthContext] Initial session:', !!session, session?.user?.email);
+        log.debug('init', 'Initial session', { hasSession: !!session, email: session?.user?.email });
 
         setAuthState({
           user: session?.user || null,
@@ -200,12 +203,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           const isAdmin = await checkIsAdmin(session.user);
           if (isMounted) {
-            console.log('[AuthContext] Initial admin check:', isAdmin);
+            log.debug('init', 'Initial admin check', { isAdmin });
             setAuthState(prev => ({ ...prev, isAdmin, isAdminLoading: false }));
           }
         }
       } catch (error) {
-        console.error('[AuthContext] Init error:', error);
+        log.error('init', 'Initialization error', { error });
         if (isMounted) {
           setAuthState(prev => ({ ...prev, isLoading: false }));
         }
@@ -225,18 +228,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isMounted = false;
       subscription.unsubscribe();
       subscriptionRef.current = null;
-      console.log('[AuthContext] Cleanup');
+      log.debug('cleanup', 'Auth context cleanup');
     };
   }, [checkIsAdmin, handleAuthChange]);
 
   // Login with email/password
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }> => {
     try {
-      console.log("[AuthContext] Attempting login for:", email);
+      log.info('login', 'Attempting login', { email });
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
-        console.error("[AuthContext] Login error:", error.message);
+        log.error('login', 'Login error', { message: error.message });
         return { success: false, error: error.message };
       }
 
@@ -247,7 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       // If user has MFA enabled but hasn't verified it yet this session
       if (currentLevel === 'aal1' && nextLevel === 'aal2' && data.session) {
-        console.log("[AuthContext] MFA verification required");
+        log.info('login', 'MFA verification required');
 
         // Get the first verified TOTP factor
         const { data: factorsData } = await supabase.auth.mfa.listFactors();
@@ -268,10 +271,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      console.log("[AuthContext] Login successful");
+      log.info('login', 'Login successful');
       return { success: !!data.session };
     } catch (error: any) {
-      console.error("[AuthContext] Login exception:", error);
+      log.error('login', 'Login exception', { error });
       return { success: false, error: error.message || "An unexpected error occurred" };
     }
   }, []);
@@ -279,7 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Signup with email/password
   const signup = useCallback(async (email: string, password: string, metadata?: any): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
     try {
-      console.log("[AuthContext] Attempting signup for:", email);
+      log.info('signup', 'Attempting signup', { email });
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -290,17 +293,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error("[AuthContext] Signup error:", error.message);
+        log.error('signup', 'Signup error', { message: error.message });
         return { success: false, error: error.message };
       }
 
       // Check if email confirmation is required
       const needsVerification = data.user && !data.session;
-      console.log("[AuthContext] Signup successful, needs verification:", needsVerification);
+      log.info('signup', 'Signup successful', { needsVerification });
 
       return { success: true, needsVerification };
     } catch (error: any) {
-      console.error("[AuthContext] Signup exception:", error);
+      log.error('signup', 'Signup exception', { error });
       return { success: false, error: error.message || "An unexpected error occurred" };
     }
   }, []);
@@ -309,11 +312,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     // Prevent race conditions - set flag before any async operations
     if (isLoggingOutRef.current) {
-      console.log("[AuthContext] Logout already in progress, skipping");
+      log.debug('logout', 'Logout already in progress, skipping');
       return;
     }
 
-    console.log("[AuthContext] Starting logout...");
+    log.info('logout', 'Starting logout');
     isLoggingOutRef.current = true;
 
     // Clear admin cache first
@@ -342,9 +345,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         supabase.auth.signOut({ scope: 'global' }),
         timeoutPromise
       ]);
-      console.log("[AuthContext] signOut completed successfully");
+      log.info('logout', 'signOut completed successfully');
     } catch (error: any) {
-      console.warn("[AuthContext] signOut failed or timed out:", error.message);
+      log.warn('logout', 'signOut failed or timed out', { message: error.message });
       // Continue with cleanup anyway
     }
 
@@ -357,10 +360,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           keysToRemove.push(key);
         }
       }
-      console.log("[AuthContext] Clearing localStorage keys:", keysToRemove);
+      log.debug('logout', 'Clearing localStorage keys', { keys: keysToRemove });
       keysToRemove.forEach(key => localStorage.removeItem(key));
     } catch (error) {
-      console.error("[AuthContext] Error clearing localStorage:", error);
+      log.error('logout', 'Error clearing localStorage', { error });
     }
 
     // Clear sessionStorage as well
@@ -377,7 +380,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ignore sessionStorage errors
     }
 
-    console.log("[AuthContext] Logout complete");
+    log.info('logout', 'Logout complete');
 
     // Reset the flag after a short delay to allow any pending events to be ignored
     setTimeout(() => {
@@ -390,7 +393,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const { data, error } = await supabase.auth.refreshSession();
       if (error) {
-        console.error("[AuthContext] Session refresh error:", error);
+        log.error('refreshSession', 'Session refresh error', { error });
         return false;
       }
       if (data.session) {
@@ -403,7 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       return false;
     } catch (error) {
-      console.error("[AuthContext] Session refresh exception:", error);
+      log.error('refreshSession', 'Session refresh exception', { error });
       return false;
     }
   }, []);
@@ -429,13 +432,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error("[AuthContext] Google sign-in error:", error.message);
+        log.error('signInWithGoogle', 'Google sign-in error', { message: error.message });
         return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error("[AuthContext] Google sign-in exception:", error);
+      log.error('signInWithGoogle', 'Google sign-in exception', { error });
       return { success: false, error: error.message || "Failed to sign in with Google" };
     }
   }, []);
@@ -457,13 +460,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error("[AuthContext] Apple sign-in error:", error.message);
+        log.error('signInWithApple', 'Apple sign-in error', { message: error.message });
         return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error("[AuthContext] Apple sign-in exception:", error);
+      log.error('signInWithApple', 'Apple sign-in exception', { error });
       return { success: false, error: error.message || "Failed to sign in with Apple" };
     }
   }, []);
@@ -476,13 +479,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error("[AuthContext] Password reset error:", error.message);
+        log.error('resetPassword', 'Password reset error', { message: error.message });
         return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error("[AuthContext] Password reset exception:", error);
+      log.error('resetPassword', 'Password reset exception', { error });
       return { success: false, error: error.message || "Failed to send reset email" };
     }
   }, []);
@@ -493,13 +496,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
 
       if (error) {
-        console.error("[AuthContext] Password update error:", error.message);
+        log.error('updatePassword', 'Password update error', { message: error.message });
         return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error("[AuthContext] Password update exception:", error);
+      log.error('updatePassword', 'Password update exception', { error });
       return { success: false, error: error.message || "Failed to update password" };
     }
   }, []);
@@ -513,13 +516,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error("[AuthContext] Resend verification error:", error.message);
+        log.error('resendVerification', 'Resend verification error', { message: error.message });
         return { success: false, error: error.message };
       }
 
       return { success: true };
     } catch (error: any) {
-      console.error("[AuthContext] Resend verification exception:", error);
+      log.error('resendVerification', 'Resend verification exception', { error });
       return { success: false, error: error.message || "Failed to resend verification email" };
     }
   }, []);

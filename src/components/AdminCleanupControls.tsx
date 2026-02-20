@@ -8,6 +8,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { Trash2, AlertTriangle, CheckCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AdminCleanupControls');
 
 interface CleanupResult {
   success: boolean;
@@ -47,7 +50,7 @@ export default function AdminCleanupControls() {
       });
 
     } catch (error) {
-      console.error('Error running cleanup:', error);
+      log.error('cleanup', 'Error running cleanup', { data: error });
       toast({
         title: "Error",
         description: error.message || "Failed to run cleanup",

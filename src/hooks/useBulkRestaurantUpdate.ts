@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useBulkRestaurantUpdate');
 
 interface BulkUpdateResult {
   success: boolean;
@@ -58,7 +61,7 @@ export function useBulkRestaurantUpdate() {
       return data;
 
     } catch (error) {
-      console.error('Bulk restaurant update error:', error);
+      log.error('bulkUpdate', 'Bulk restaurant update error', { error });
       const errorResult: BulkUpdateResult = {
         success: false,
         message: error instanceof Error ? error.message : 'Unknown error occurred',

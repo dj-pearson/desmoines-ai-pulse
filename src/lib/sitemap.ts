@@ -1,6 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
 import { createEventSlugWithCentralTime } from "./timezone";
 import { BRAND } from "./brandConfig";
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('sitemap');
 
 interface SitemapUrl {
   loc: string;
@@ -72,7 +75,7 @@ export class SitemapGenerator {
         });
       }
     } catch (error) {
-      console.error("Error fetching events for sitemap:", error);
+      logger.error("generateSitemap", "Error fetching events for sitemap", { error: String(error) });
     }
 
     // Add restaurants
@@ -98,7 +101,7 @@ export class SitemapGenerator {
         });
       }
     } catch (error) {
-      console.error("Error fetching restaurants for sitemap:", error);
+      logger.error("generateSitemap", "Error fetching restaurants for sitemap", { error: String(error) });
     }
 
     return this.generateXML(urls);
@@ -156,7 +159,7 @@ export class SitemapGenerator {
 
     // In a real implementation, you would save this to a file
     // For now, we'll just log it or return it
-    console.log("Generated sitemap:", sitemap);
+    logger.info("saveSitemap", "Generated sitemap", { length: sitemap.length });
 
     // You can implement file writing logic here if needed
     // For example, using Node.js fs module or a build script

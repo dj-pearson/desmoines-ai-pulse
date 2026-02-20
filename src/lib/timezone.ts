@@ -1,5 +1,8 @@
 import { format, parseISO } from "date-fns";
 import { toZonedTime, fromZonedTime, formatInTimeZone } from "date-fns-tz";
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('timezone');
 
 // Des Moines, Iowa timezone (Central Time)
 export const CENTRAL_TIMEZONE = "America/Chicago";
@@ -80,7 +83,7 @@ export function createEventSlugWithCentralTime(
 
     return `${titleSlug}-${year}-${month}-${day}`;
   } catch (error) {
-    console.error("Error creating event slug with Central Time:", error);
+    logger.error("createEventSlugWithCentralTime", "Error creating event slug with Central Time", { error: String(error) });
     return titleSlug;
   }
 }
@@ -94,7 +97,7 @@ export function isEventInFuture(eventDate: string | Date): boolean {
     const nowCentralTime = nowInCentralTime();
     return eventCentralTime > nowCentralTime;
   } catch (error) {
-    console.error("Error checking if event is in future:", error);
+    logger.error("isEventInFuture", "Error checking if event is in future", { error: String(error) });
     return false;
   }
 }
@@ -149,7 +152,7 @@ export function formatEventDate(event: any): string {
     
     return "Date and time to be announced";
   } catch (error) {
-    console.error("Error formatting event date:", error);
+    logger.error("formatEventDate", "Error formatting event date", { error: String(error) });
     return "Date and time to be announced";
   }
 }
@@ -180,7 +183,7 @@ export function formatEventDateShort(event: any): string {
     
     return "Date TBA";
   } catch (error) {
-    console.error("Error formatting short event date:", error);
+    logger.error("formatEventDateShort", "Error formatting short event date", { error: String(error) });
     return "Date TBA";
   }
 }

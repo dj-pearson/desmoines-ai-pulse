@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAccountLockout');
 
 interface LockoutStatus {
   locked: boolean;
@@ -48,7 +51,7 @@ export function useAccountLockout() {
         .rpc('is_account_locked', { p_email: email.toLowerCase() });
 
       if (error) {
-        console.error('Error checking lockout status:', error);
+        log.error('checkLockout', 'Error checking lockout status', { error });
         throw error;
       }
 
@@ -81,7 +84,7 @@ export function useAccountLockout() {
         });
 
       if (error) {
-        console.error('Error recording login attempt:', error);
+        log.error('recordAttempt', 'Error recording login attempt', { error });
         throw error;
       }
 
@@ -100,7 +103,7 @@ export function useAccountLockout() {
         .single();
 
       if (error) {
-        console.error('Error fetching lockout settings:', error);
+        log.error('fetchSettings', 'Error fetching lockout settings', { error });
         return null;
       }
 

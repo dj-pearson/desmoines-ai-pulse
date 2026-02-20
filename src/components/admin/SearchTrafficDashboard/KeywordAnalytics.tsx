@@ -13,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TrendingUp, TrendingDown, Minus, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('KeywordAnalytics');
 import { format } from "date-fns";
 
 interface KeywordAnalyticsProps {
@@ -65,7 +68,7 @@ export function KeywordAnalytics({ dateRange, selectedProvider }: KeywordAnalyti
 
       setKeywords(enrichedKeywords);
     } catch (error) {
-      console.error("Error loading keyword data:", error);
+      log.error('loadKeywords', 'Error loading keyword data', { data: error });
     } finally {
       setLoading(false);
     }

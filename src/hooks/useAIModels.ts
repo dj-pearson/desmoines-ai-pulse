@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useAIModels');
 
 export interface AIModel {
   id: string;
@@ -47,7 +50,7 @@ export function useAIModels() {
       toast.success("Model added successfully");
     },
     onError: (error: Error) => {
-      console.error("Error adding model:", error);
+      log.error('addModel', 'Error adding model', { error });
       toast.error(error.message || "Failed to add model");
     },
   });
@@ -66,7 +69,7 @@ export function useAIModels() {
       toast.success("Model updated successfully");
     },
     onError: (error: Error) => {
-      console.error("Error updating model:", error);
+      log.error('updateModel', 'Error updating model', { error });
       toast.error(error.message || "Failed to update model");
     },
   });
@@ -85,7 +88,7 @@ export function useAIModels() {
       toast.success("Model deleted successfully");
     },
     onError: (error: Error) => {
-      console.error("Error deleting model:", error);
+      log.error('deleteModel', 'Error deleting model', { error });
       toast.error(error.message || "Failed to delete model");
     },
   });

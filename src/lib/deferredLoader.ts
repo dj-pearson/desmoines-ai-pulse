@@ -3,6 +3,10 @@
  * Implements progressive enhancement and lazy data fetching
  */
 
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('deferredLoader');
+
 type LoadPriority = 'critical' | 'high' | 'normal' | 'low';
 
 interface DeferredTask {
@@ -75,7 +79,7 @@ class DeferredLoader {
       try {
         await task.fn();
       } catch (error) {
-        console.warn(`Deferred task failed (${priority}):`, error);
+        logger.warn('processPriority', `Deferred task failed (${priority})`, { error: String(error) });
       }
     }
 
@@ -114,14 +118,14 @@ class DeferredLoader {
         const result = task.fn();
         if (result instanceof Promise) {
           result.then(scheduleNext).catch(error => {
-            console.warn(`Idle task failed (${priority}):`, error);
+            logger.warn('scheduleIdleTasks', `Idle task failed (${priority})`, { error: String(error) });
             scheduleNext();
           });
         } else {
           scheduleNext();
         }
       } catch (error) {
-        console.warn(`Idle task failed (${priority}):`, error);
+        logger.warn('scheduleIdleTasks', `Idle task failed (${priority})`, { error: String(error) });
         scheduleNext();
       }
     };

@@ -66,6 +66,9 @@ import {
   KnownVenue,
   VenueFormData,
 } from "@/hooks/useKnownVenues";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('VenuesManager');
 
 const VENUE_TYPES = [
   { value: "music_hall", label: "Music Hall" },
@@ -570,7 +573,7 @@ function BackfillDialog({ open, onOpenChange, venues }: BackfillDialogProps) {
         toast.success(`Found ${matches.length} events to update`);
       }
     } catch (error) {
-      console.error("Scan error:", error);
+      log.error('scan', 'Scan error', { data: error });
       toast.error("Failed to scan events: " + (error as Error).message);
     } finally {
       setIsScanning(false);
@@ -622,7 +625,7 @@ function BackfillDialog({ open, onOpenChange, venues }: BackfillDialogProps) {
             .eq("id", event.id);
 
           if (error) {
-            console.error(`Failed to update event ${event.id}:`, error);
+            log.error('backfill', `Failed to update event ${event.id}`, { data: error });
             errorCount++;
           } else {
             successCount++;
@@ -646,7 +649,7 @@ function BackfillDialog({ open, onOpenChange, venues }: BackfillDialogProps) {
         onOpenChange(false);
       }
     } catch (error) {
-      console.error("Backfill error:", error);
+      log.error('backfill', 'Backfill error', { data: error });
       toast.error("Backfill failed: " + (error as Error).message);
     } finally {
       setIsApplying(false);

@@ -60,13 +60,7 @@ class RouteErrorBoundary extends React.Component<RouteErrorBoundaryProps, RouteE
 }
 
 function RouteErrorFallback({ error, resetError }: { error?: Error; resetError: () => void }) {
-  // useNavigate is safe here because RouteErrorBoundary is always inside BrowserRouter
-  let navigate: ReturnType<typeof useNavigate> | null = null;
-  try {
-    navigate = useNavigate();
-  } catch {
-    // Fallback if somehow outside router context
-  }
+  const navigate = useNavigate();
 
   return (
     <div
@@ -94,19 +88,17 @@ function RouteErrorFallback({ error, resetError }: { error?: Error; resetError: 
           )}
 
           <div className="flex gap-2">
-            {navigate && (
-              <Button
-                onClick={() => {
-                  resetError();
-                  navigate!(-1);
-                }}
-                variant="outline"
-                className="flex-1"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Go Back
-              </Button>
-            )}
+            <Button
+              onClick={() => {
+                resetError();
+                navigate(-1);
+              }}
+              variant="outline"
+              className="flex-1"
+            >
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Go Back
+            </Button>
             <Button onClick={resetError} className="flex-1">
               <RefreshCw className="w-4 h-4 mr-2" />
               Try Again

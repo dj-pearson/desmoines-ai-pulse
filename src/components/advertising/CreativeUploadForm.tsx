@@ -10,6 +10,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, ExternalLink, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('CreativeUploadForm');
 
 interface CreativeUploadFormProps {
   campaignId: string;
@@ -167,7 +170,7 @@ export function CreativeUploadForm({
         navigate(`/campaigns/${campaignId}`);
       }
     } catch (error) {
-      console.error('Error uploading creative:', error);
+      log.error('upload', 'Error uploading creative', { data: error });
       toast({
         variant: "destructive",
         title: "Upload failed",

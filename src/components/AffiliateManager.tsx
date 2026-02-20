@@ -27,6 +27,9 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AffiliateManager');
 
 interface UniqueURL {
   domain: string;
@@ -73,7 +76,7 @@ export default function AffiliateManager() {
       ];
 
       for (const config of tableConfigs) {
-        console.log(`Scanning table: ${config.table} for columns: ${config.urlColumns.join(', ')}`);
+        log.debug('fetchUrls', `Scanning table: ${config.table} for columns: ${config.urlColumns.join(', ')}`);
         
         // Fetch all records from each table
         const { data, error } = await supabase
@@ -81,12 +84,12 @@ export default function AffiliateManager() {
           .select(config.urlColumns.join(','));
 
         if (error) {
-          console.error(`Error fetching from ${config.table}:`, error);
+          log.error('fetchUrls', `Error fetching from ${config.table}`, { data: error });
           continue;
         }
 
         if (data) {
-          console.log(`Found ${data.length} records in ${config.table}`);
+          log.debug('fetchUrls', `Found ${data.length} records in ${config.table}`);
           let urlsFoundInTable = 0;
           data.forEach((record: any) => {
             config.urlColumns.forEach(column => {
@@ -115,14 +118,14 @@ export default function AffiliateManager() {
               }
             });
           });
-          console.log(`Found ${urlsFoundInTable} URLs in ${config.table}`);
+          log.debug('fetchUrls', `Found ${urlsFoundInTable} URLs in ${config.table}`);
         }
       }
 
       const urls = Array.from(urlMap.values()).sort((a, b) => b.count - a.count);
       setUniqueUrls(urls);
     } catch (error) {
-      console.error('Error fetching URLs:', error);
+      log.error('fetchUrls', 'Error fetching URLs', { data: error });
       toast.error('Failed to fetch URLs');
     } finally {
       setIsLoading(false);
@@ -158,7 +161,7 @@ export default function AffiliateManager() {
       
       return url.toString();
     } catch (error) {
-      console.error('Error appending UTM parameters:', error);
+      log.error('appendUtm', 'Error appending UTM parameters', { data: error });
       return originalUrl;
     }
   };
@@ -205,7 +208,7 @@ export default function AffiliateManager() {
             .not(column, 'is', null);
 
           if (error) {
-            console.error(`Error fetching from ${config.table}.${column}:`, error);
+            log.error('processUtm', `Error fetching from ${config.table}.${column}`, { data: error });
             continue;
           }
 
@@ -227,7 +230,7 @@ export default function AffiliateManager() {
                 .eq('id', (record as any).id);
 
               if (updateError) {
-                console.error(`Error updating ${config.table}.${column}:`, updateError);
+                log.error('processUtm', `Error updating ${config.table}.${column}`, { data: updateError });
               } else {
                 totalUpdated++;
               }
@@ -249,7 +252,7 @@ export default function AffiliateManager() {
       await fetchUniqueUrls();
 
     } catch (error) {
-      console.error('Error processing UTM parameter addition:', error);
+      log.error('processUtm', 'Error processing UTM parameter addition', { data: error });
       toast.error('Failed to add UTM parameters');
       
       setProcessingStats(prev => ({

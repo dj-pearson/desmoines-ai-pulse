@@ -1,5 +1,8 @@
 import { useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useKeyboardShortcuts');
 
 export interface KeyboardShortcut {
   key: string;
@@ -63,7 +66,7 @@ export function useKeyboardShortcuts({
       if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
         event.preventDefault();
         // Open command palette (future feature)
-        console.log('Command palette shortcut triggered');
+        log.debug('handleKeyDown', 'Command palette shortcut triggered');
         return;
       }
 
@@ -144,7 +147,7 @@ export const defaultShortcuts: KeyboardShortcut[] = [
     key: '?',
     description: 'Show keyboard shortcuts',
     action: () => {
-      console.log('Show shortcuts modal');
+      log.debug('action', 'Show shortcuts modal');
     },
   },
   {
@@ -173,7 +176,7 @@ export const defaultShortcuts: KeyboardShortcut[] = [
     ctrlKey: true,
     description: 'Open command palette',
     action: () => {
-      console.log('Command palette (future feature)');
+      log.debug('action', 'Command palette (future feature)');
     },
   },
   {

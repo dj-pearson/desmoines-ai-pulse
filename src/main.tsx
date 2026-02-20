@@ -3,10 +3,31 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { initSentry, Sentry } from "@/lib/sentry";
+import { initErrorTracking } from "@/lib/errorHandler";
+import '@/lib/env'; // Validate environment variables at startup
 
 import App from "./App";
 import "./index.css";
 import { initializeOnInteraction } from "./lib/lazyInit";
+
+// Initialize Sentry before anything else (only when DSN is configured)
+initSentry();
+
+// Wire Sentry into the centralized error handler
+if (import.meta.env.VITE_SENTRY_DSN) {
+  initErrorTracking({
+    captureException(error, context) {
+      Sentry.captureException(error, {
+        tags: { component: context.component, action: context.action },
+        extra: context.metadata,
+      });
+    },
+    captureMessage(message, level) {
+      Sentry.captureMessage(message, level as 'info' | 'warning' | 'error');
+    },
+  });
+}
 
 // ──────────────────────────────────────────────────────────────
 // Mobile error overlay – shows runtime errors visually on the
@@ -176,13 +197,15 @@ function initializeApp() {
     // Render immediately - this is the critical path
     root.render(
       <StrictMode>
-        <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
-          <HelmetProvider>
-            <QueryClientProvider client={queryClient}>
-              <App />
-            </QueryClientProvider>
-          </HelmetProvider>
-        </ThemeProvider>
+        <Sentry.ErrorBoundary fallback={<p>An unexpected error occurred.</p>}>
+          <ThemeProvider defaultTheme="system" storageKey="dmi-theme">
+            <HelmetProvider>
+              <QueryClientProvider client={queryClient}>
+                <App />
+              </QueryClientProvider>
+            </HelmetProvider>
+          </ThemeProvider>
+        </Sentry.ErrorBoundary>
       </StrictMode>
     );
   } catch (err: any) {

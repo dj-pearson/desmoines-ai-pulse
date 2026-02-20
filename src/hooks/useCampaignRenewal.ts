@@ -2,6 +2,9 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { Campaign } from "./useCampaigns";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useCampaignRenewal');
 
 export function useCampaignRenewal() {
   const [isRenewing, setIsRenewing] = useState(false);
@@ -115,7 +118,7 @@ export function useCampaignRenewal() {
 
       return { success: true, campaignId: newCampaign.id };
     } catch (err) {
-      console.error("Error renewing campaign:", err);
+      log.error('renewCampaign', 'Error renewing campaign', { error: err });
       toast({
         variant: "destructive",
         title: "Renewal failed",
@@ -143,7 +146,7 @@ export function useCampaignRenewal() {
 
       return true;
     } catch (err) {
-      console.error("Error enabling auto-renew:", err);
+      log.error('enableAutoRenew', 'Error enabling auto-renew', { error: err });
       toast({
         variant: "destructive",
         title: "Failed to enable auto-renewal",
@@ -169,7 +172,7 @@ export function useCampaignRenewal() {
 
       return true;
     } catch (err) {
-      console.error("Error disabling auto-renew:", err);
+      log.error('disableAutoRenew', 'Error disabling auto-renew', { error: err });
       toast({
         variant: "destructive",
         title: "Failed to disable auto-renewal",

@@ -20,6 +20,9 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AIEnhancementManager');
 
 interface EnhancementStats {
   totalEvents: number;
@@ -100,7 +103,7 @@ export default function AIEnhancementManager() {
         enhancementRate
       });
     } catch (error) {
-      console.error('Error fetching enhancement stats:', error);
+      log.error('fetchStats', 'Error fetching enhancement stats', { data: error });
       toast.error('Failed to load enhancement statistics');
     }
   };
@@ -123,7 +126,7 @@ export default function AIEnhancementManager() {
         setHistory(historyData);
       }
     } catch (error) {
-      console.error('Error fetching enhancement history:', error);
+      log.error('fetchHistory', 'Error fetching enhancement history', { data: error });
     }
   };
 
@@ -164,7 +167,7 @@ export default function AIEnhancementManager() {
       await Promise.all([fetchStats(), fetchHistory()]);
       
     } catch (error) {
-      console.error('Error triggering enhancement:', error);
+      log.error('triggerEnhancement', 'Error triggering enhancement', { data: error });
       toast.error('Failed to trigger enhancement', {
         description: error.message
       });

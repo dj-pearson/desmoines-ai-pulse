@@ -25,6 +25,9 @@ import {
   Palette,
   RefreshCw
 } from 'lucide-react';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('AdminApplicationSettings');
 
 interface ApplicationSettings {
   // Site-wide settings
@@ -173,7 +176,7 @@ export default function AdminApplicationSettings() {
       try {
         setSettings(JSON.parse(savedSettings));
       } catch (error) {
-        console.error('Failed to load saved settings:', error);
+        log.error('loadSettings', 'Failed to load saved settings', { data: error });
       }
     }
   }, []);

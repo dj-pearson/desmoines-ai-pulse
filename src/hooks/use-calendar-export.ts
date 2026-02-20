@@ -1,5 +1,8 @@
 import { useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useCalendarExport');
 
 interface EventData {
   id: string;
@@ -90,7 +93,7 @@ export function useCalendarExport() {
           description: 'Open the file to add the event to your calendar',
         });
       } catch (error) {
-        console.error('Failed to download ICS file:', error);
+        log.error('downloadIcsFile', 'Failed to download ICS file', { error });
         toast({
           title: 'Download Failed',
           description: 'Unable to download calendar file',
@@ -131,7 +134,7 @@ export function useCalendarExport() {
           description: 'Complete the process in the new tab',
         });
       } catch (error) {
-        console.error('Failed to open Google Calendar:', error);
+        log.error('addToGoogleCalendar', 'Failed to open Google Calendar', { error });
         toast({
           title: 'Failed to Open',
           description: 'Unable to open Google Calendar',
@@ -168,7 +171,7 @@ export function useCalendarExport() {
           description: 'Complete the process in the new tab',
         });
       } catch (error) {
-        console.error('Failed to open Outlook Calendar:', error);
+        log.error('addToOutlookCalendar', 'Failed to open Outlook Calendar', { error });
         toast({
           title: 'Failed to Open',
           description: 'Unable to open Outlook Calendar',

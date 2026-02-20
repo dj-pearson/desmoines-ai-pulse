@@ -1,5 +1,8 @@
 import { useAdminAuth } from "@/hooks/useAdminAuth";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('Admin');
 import {
   Card,
   CardContent,
@@ -99,7 +102,7 @@ export default function Admin() {
     try {
       await events.refetch();
     } catch (error) {
-      console.error("Error during save:", error);
+      log.error('handleSave', 'Error during save', { error });
     }
   };
 
