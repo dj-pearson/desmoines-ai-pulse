@@ -640,6 +640,375 @@
       "priority": 40,
       "passes": false,
       "notes": "Depends on US-028 (feature flags). A/B testing is the key enabler for data-driven product decisions. Without it, all UI/UX changes are based on gut feeling."
+    },
+    {
+      "id": "US-041",
+      "title": "Build 'Des Best' crowdsourced local voting system",
+      "description": "As a local resident, I need the ability to vote on 'Best Of' categories (Best Pizza, Best Coffee, Best Date Night, Best Hidden Gem, etc.) so that the platform reflects authentic local opinions and becomes the go-to source for crowdsourced recommendations — not Catch Des Moines.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for voting_categories table: id (UUID PK), name (text), slug (text UNIQUE), description (text), icon (text), is_active (boolean), voting_start (timestamptz), voting_end (timestamptz), created_at",
+        "Create a Supabase migration for votes table: id (UUID PK), category_id (UUID FK), entity_type (text: restaurant/event/attraction/custom), entity_id (UUID nullable FK), custom_entry (text for write-in votes), user_id (UUID FK to auth.users), created_at, with UNIQUE constraint on (category_id, user_id) to prevent double-voting",
+        "Create /best-of route page with category grid showing all active voting categories with vote counts",
+        "Create /best-of/:category detail page showing ranked results with vote percentages and entity cards",
+        "Create src/components/VotingBooth.tsx component with search-to-vote UX — user searches for a place, selects it, and casts vote",
+        "Allow write-in votes for places not yet in the database",
+        "Add RLS policies: authenticated users can vote once per category, public read for results",
+        "Display 'Des Best' badge on winning entities across the platform (event cards, restaurant cards, etc.)",
+        "Seed initial categories: Best Pizza, Best Coffee Shop, Best Happy Hour, Best Brunch, Best Date Night Spot, Best Hidden Gem, Best Food Truck, Best Brewery, Best Ice Cream, Best Live Music Venue",
+        "Typecheck passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines runs 'Des Best' with crowdsourced local voting that drives massive engagement. CITYVIEW's 'Best of Des Moines' gets 22,969+ votes across 271 categories annually. We have zero community voting. This is the single biggest engagement feature we're missing — locals vote, share results, and return to see who won. It turns passive readers into active participants."
+    },
+    {
+      "id": "US-042",
+      "title": "Create curated editorial itineraries with printable checklists",
+      "description": "As a visitor planning a trip to Des Moines, I need pre-built themed itineraries (Weekend Getaway, Date Day, Family Fun, Art Walk, Craft Beer Trail, Foodie Tour) with printable checklists so that I can plan a trip without needing AI — just browse, pick, and go.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for curated_itineraries table: id (UUID PK), title (text), slug (text UNIQUE), description (text), duration (text: 'half-day'/'full-day'/'weekend'/'3-day'), theme (text), cover_image (text), stops (JSONB array of {order, entity_type, entity_id, name, description, time_suggestion, tips}), seo_title, seo_description, created_at, updated_at, is_published (boolean)",
+        "Create /itineraries route page with itinerary cards organized by theme (Romance, Family, Adventure, Food & Drink, Arts & Culture, Sports)",
+        "Create /itineraries/:slug detail page with step-by-step stop cards, embedded map showing route, time estimates between stops, and insider tips per stop",
+        "Add print-friendly CSS with @media print styles that render a clean checklist version of the itinerary",
+        "Add 'Download PDF' button that generates a printable itinerary using browser print-to-PDF",
+        "Add 'Add All to Calendar' button that creates ICS entries for each stop with suggested times",
+        "Seed at least 6 itineraries: Quintessential Weekend Getaway, Perfect Date Day, Family Fun Day, Craft Beer Trail, Downtown Art Walk, Foodie Tour",
+        "Add Schema.org TouristTrip structured data to itinerary pages for SEO",
+        "Typecheck passes"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has a full 'Catch List' itinerary system with downloadable/printable themed itineraries for Date Day, Family Fun, Quintessential Weekend, and more. Our AI Trip Planner is dynamic but many users just want to browse pre-built plans and print a checklist. Both approaches serve different user intents and should coexist."
+    },
+    {
+      "id": "US-043",
+      "title": "Build deals, coupons, and special offers section",
+      "description": "As a budget-conscious visitor or local, I need a dedicated deals and coupons section so that I can find current discounts on restaurants, attractions, hotels, and activities — giving me a reason to check the platform before every outing.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for deals table: id (UUID PK), title (text), description (text), business_name (text), entity_type (text: restaurant/attraction/hotel/event), entity_id (UUID nullable FK), deal_type (text: percentage/dollar_off/bogo/free_item/package), discount_value (text), code (text nullable for promo codes), terms (text), start_date (timestamptz), end_date (timestamptz), image_url (text), is_verified (boolean), is_featured (boolean), redemption_count (integer default 0), created_at",
+        "Create /deals route page with filterable deal cards organized by category (Dining, Attractions, Hotels, Activities)",
+        "Add deal expiration countdown badges ('Expires in 3 days', 'Last day!', 'New this week')",
+        "Add 'Claim Deal' button that reveals the promo code or instructions (increment redemption_count on claim)",
+        "Allow business owners to submit deals via a self-service form at /deals/submit (requires authentication)",
+        "Create src/components/DealCard.tsx with deal type badge, discount amount, business name, and expiry",
+        "Add a 'Deals Near You' section to the homepage that shows 3-4 featured deals",
+        "Add RLS policies: public read, business_owner/admin write",
+        "Typecheck passes"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has a dedicated deals/coupons section for attractions, hotels, and restaurants. We have zero deals functionality. Deals create urgency, repeat visits, and direct business value for partners. This also creates a monetization path — businesses pay to feature deals prominently."
+    },
+    {
+      "id": "US-044",
+      "title": "Create interactive city discovery map with all content layers",
+      "description": "As a visitor or local exploring Des Moines, I need a full-screen interactive map showing events, restaurants, attractions, and playgrounds as toggleable layers so that I can visually discover what's near me or plan a route through the city.",
+      "acceptanceCriteria": [
+        "Create /map route page with a full-screen Leaflet map centered on Des Moines (41.5868, -93.6250)",
+        "Add toggleable map layers: Events (calendar icon), Restaurants (fork icon), Attractions (star icon), Playgrounds (swing icon), Hotels (bed icon)",
+        "Each marker shows a popup card with entity name, image thumbnail, key info (rating, price, date), and 'View Details' link",
+        "Add cluster markers when zoomed out to prevent marker overload (use Leaflet.markercluster)",
+        "Add 'Near Me' button that centers map on user's geolocation and highlights nearby entities within configurable radius (0.5mi, 1mi, 5mi)",
+        "Add category filter sidebar/bottom sheet (mobile) to filter markers by type, price range, rating, cuisine, etc.",
+        "Add 'Get Directions' button on each popup that opens Google Maps/Apple Maps with the destination",
+        "Lazy load the map component and marker data to avoid impacting initial page load",
+        "Typecheck passes"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Best-in-class tourism sites (Zurich, NYCGo, Visit Australia) all feature prominent interactive maps as primary discovery tools. We have Leaflet maps embedded in individual pages but no central 'explore by map' experience. Catch Des Moines doesn't have this either — this is an opportunity to leapfrog them."
+    },
+    {
+      "id": "US-045",
+      "title": "Build dedicated live music and concert hub with 'The Setlist' monthly feature",
+      "description": "As a music fan in Des Moines, I need a dedicated live music section with venue guides, tonight's shows, and a curated monthly 'Setlist' feature so that I never miss a great show — and I stop going to Catch Des Moines for their concert calendar.",
+      "acceptanceCriteria": [
+        "Create /music route page with sections: Tonight's Shows, This Weekend's Shows, Upcoming Concerts, Venue Guide",
+        "Create a Supabase migration for venues table: id (UUID PK), name (text), slug (text UNIQUE), description (text), address (text), capacity (integer), venue_type (text: arena/theater/bar/club/outdoor), image_url (text), website (text), latitude (numeric), longitude (numeric), created_at",
+        "Create /music/venues/:slug venue detail page showing upcoming events at that venue, venue info, photos, and map",
+        "Add 'The Setlist' monthly feature section — an editable curated list of the top 10-15 must-see shows each month, stored as a JSONB column in a monthly_features table",
+        "Filter events by category='Music' or category='Concert' with additional genre tags (Rock, Country, Jazz, Hip-Hop, Electronic, Classical)",
+        "Add venue map showing all music venues in Des Moines with tonight's shows highlighted",
+        "Add 'Set Reminder' button on each show that triggers the existing EventReminderSettings flow",
+        "Seed venue data for major Des Moines venues: Wells Fargo Arena, Hoyt Sherman Place, Wooly's, xBk, Lefty's, Val Air Ballroom, Des Moines Civic Center, Simon Estes Amphitheater",
+        "Typecheck passes"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has 'The Setlist' — a monthly curated feature highlighting the best concerts each month, plus dedicated venue pages and a concert calendar. We lump music into general events with no venue context, no curation, and no genre filtering. Des Moines has a thriving music scene and this deserves its own hub."
+    },
+    {
+      "id": "US-046",
+      "title": "Build dedicated sports hub with team schedules and tailgating guides",
+      "description": "As a sports fan visiting or living in Des Moines, I need a dedicated sports section with team schedules, venue guides, and tailgating tips so that I can plan my gameday experience — Des Moines is the #1 minor league market in the country and we should own that narrative.",
+      "acceptanceCriteria": [
+        "Create /sports route page with sections: Today's Games, This Week's Schedule, Teams & Venues, Tailgating Guide",
+        "Create a Supabase migration for teams table: id (UUID PK), name (text), slug (text UNIQUE), sport (text), league (text), venue_name (text), venue_id (UUID nullable FK to venues), logo_url (text), website (text), schedule_url (text), description (text), created_at",
+        "Create /sports/:slug team detail page with upcoming games, venue info, fan tips, and nearby restaurants/bars",
+        "Add 'Gameday Guide' content blocks for each venue with parking tips, best food options, pre-game bars, and post-game hangouts",
+        "Seed team data: Iowa Cubs (AAA Baseball), Iowa Wild (AHL Hockey), Iowa Wolves (NBA G-League), Iowa Barnstormers (IFL), Des Moines Menace (USL League Two), Drake Bulldogs, Grand View Vikings",
+        "Add sports-specific event filtering to pull games from the events table by category",
+        "Add Schema.org SportsEvent structured data to game event pages",
+        "Typecheck passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has a dedicated sports section positioning Des Moines as the #1 minor league market in the US. They cover Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves, and Des Moines Menace with venue guides and fan experiences. Our events include sports but there's no dedicated sports hub, no team pages, no gameday guides. Sports fans need a specialized experience."
+    },
+    {
+      "id": "US-047",
+      "title": "Create trails and outdoor recreation hub",
+      "description": "As an outdoor enthusiast in Des Moines, I need a dedicated trails and outdoor recreation section with trail maps, difficulty ratings, and seasonal recommendations so that I can explore the 800+ miles of trails in the metro area.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for trails table: id (UUID PK), name (text), slug (text UNIQUE), description (text), length_miles (numeric), difficulty (text: easy/moderate/difficult), surface_type (text: paved/gravel/dirt), activities (text[] for hiking/biking/running/walking), highlights (text), trailhead_address (text), latitude (numeric), longitude (numeric), image_url (text), website (text), is_featured (boolean), created_at",
+        "Create /outdoors route page with sections: Featured Trails, Trail Map, Outdoor Activities, Seasonal Guides",
+        "Create /outdoors/:slug trail detail page with trail info, photos, difficulty badge, map with trail overlay, nearby amenities",
+        "Add an interactive trail map showing all trails with color-coded difficulty and activity type filters",
+        "Seed trail data for major trails: High Trestle Trail, Raccoon River Valley Trail, Gray's Lake Loop, Clive Greenbelt Trail, Sycamore Trails, Neal Smith Trail, Great Western Trail, Bill Riley Trail",
+        "Add seasonal outdoor activity guides (Spring: biking season openers, Summer: water activities, Fall: foliage hikes, Winter: cross-country skiing)",
+        "Add 'Trail Conditions' section with weather integration showing current conditions and best time to visit",
+        "Typecheck passes"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has extensive hiking/biking trail content. DSM Partnership promotes 800+ miles of trails. Explore Des Moines publishes seasonal trail guides. We have attractions but zero dedicated trail/outdoor content. Des Moines' trail system (especially High Trestle Trail) is a nationally recognized attraction that deserves its own hub."
+    },
+    {
+      "id": "US-048",
+      "title": "Build brewery and craft beer trail experience",
+      "description": "As a craft beer enthusiast, I need a brewery trail feature with a digital passport so that I can discover Des Moines breweries, track my visits, earn rewards, and complete the trail — turning brewery hopping into a gamified adventure.",
+      "acceptanceCriteria": [
+        "Create /breweries route page filtering restaurants where cuisine includes 'Brewery' or 'Craft Beer', with additional brewery-specific fields",
+        "Create a Supabase migration for brewery_trail_checkins table: id (UUID PK), user_id (UUID FK), restaurant_id (UUID FK), checked_in_at (timestamptz), photo_url (text nullable), beer_name (text nullable), rating (integer 1-5 nullable)",
+        "Create a digital 'Brewery Passport' component showing all trail breweries as stamps — filled when checked in, empty when not visited",
+        "Add check-in functionality with optional photo upload and beer rating",
+        "Award gamification XP (40 XP) for each brewery check-in, plus bonus badge for completing the full trail",
+        "Create /breweries/trail map page showing all breweries on an interactive map with check-in status overlay",
+        "Add 'Brewery Trail Progress' widget to user dashboard showing X of Y breweries visited",
+        "Seed brewery data: Confluence Brewing, Exile Brewing, Peace Tree Brewing, Firetrucker Brewery, Brightside Aleworks, 515 Brewing, Mistress Brewing, Fox Brewing, Kinship Brewing",
+        "Typecheck passes"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines promotes craft beer trails. Des Moines has a booming craft beer scene. We list restaurants but have no brewery-specific experience and no 'trail' gamification. The digital passport concept combines our existing gamification system with brewery discovery — something no competitor does digitally."
+    },
+    {
+      "id": "US-049",
+      "title": "Build transportation and getting around guide",
+      "description": "As a visitor to Des Moines, I need a comprehensive transportation guide covering parking, the skywalk system, bike share, rideshare, airport info, and transit so that I can navigate the city confidently without a car or know exactly where to park if I drive.",
+      "acceptanceCriteria": [
+        "Create /getting-around route page with sections: Parking & ParkDSM, Skywalk System, Bike Share (BCycle), Rideshare, Airport (DSM), Public Transit (DART), Walking Distances",
+        "Add an interactive downtown parking map showing garage locations, rates, and hours using Leaflet markers",
+        "Add skywalk system map showing connected buildings and walkable routes (important for Iowa winters)",
+        "Add BCycle station locations on the map with station info",
+        "Include airport guide section: terminal info, airline list, ground transportation options, drive time to downtown",
+        "Add 'Distance From Downtown' reference table for popular destinations with drive times and transit options",
+        "Add Schema.org FAQ structured data for common transportation questions ('Is there Uber in Des Moines?', 'Where to park downtown?', 'Does Des Moines have a subway?')",
+        "Typecheck passes"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has detailed transportation pages covering ParkDSM app, skywalk system (4+ miles of enclosed walkways), BCycle, airport info, and transit. We have zero transportation content. This is essential visitor info — especially the skywalk system which is unique to Des Moines and critical during winter months."
+    },
+    {
+      "id": "US-050",
+      "title": "Create downloadable and requestable digital visitor guide",
+      "description": "As a visitor planning a trip to Des Moines, I need a downloadable digital visitor guide (PDF) and the option to request a physical copy so that I have a comprehensive offline reference for my trip.",
+      "acceptanceCriteria": [
+        "Create /visitors-guide route page with hero image, guide description, and download/request options",
+        "Generate a PDF visitor guide using the platform's content: top events, restaurant picks, attraction highlights, neighborhood guides, maps, and insider tips",
+        "Add 'Download Digital Guide' button that serves the PDF and captures email address (lead generation)",
+        "Add 'Request Free Guide' form that collects name, email, and mailing address for physical guide fulfillment",
+        "Store guide requests in a Supabase guide_requests table for fulfillment tracking",
+        "Create a seasonal/annual refresh process — guide content should pull from current platform data",
+        "Add Schema.org TouristInformationCenter structured data",
+        "Track downloads and requests in analytics for conversion metrics",
+        "Typecheck passes"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines offers a beautiful annual Visitors Guide (2026 edition now available) as both digital download and free mailed copy. It's a massive lead generation and brand credibility tool. We have no equivalent. Even a well-designed PDF guide auto-generated from our content would be valuable."
+    },
+    {
+      "id": "US-051",
+      "title": "Build meeting planner and group travel portal",
+      "description": "As a meeting planner or group travel organizer, I need a dedicated portal with venue search by capacity, RFP submission, and group itinerary tools so that I can plan conferences, weddings, and group trips to Des Moines through our platform.",
+      "acceptanceCriteria": [
+        "Create /group-travel route page with sections: Meeting Venues, Wedding Venues, Group Itineraries, Submit RFP, Why Des Moines",
+        "Create a Supabase migration for meeting_venues table: id (UUID PK), name (text), venue_type (text: conference_center/hotel/unique_venue/outdoor), max_capacity (integer), min_capacity (integer), sq_footage (integer nullable), amenities (text[]), catering (text: in_house/external/both), av_equipment (boolean), website (text), contact_email (text), image_url (text), latitude, longitude, created_at",
+        "Add venue search with filters: capacity range, venue type, amenities, catering options",
+        "Create /group-travel/rfp page with an RFP submission form: event name, dates, expected attendance, venue requirements, budget range, contact info",
+        "Store RFP submissions in a Supabase rfp_submissions table and send email notification to admin",
+        "Add group-specific itinerary suggestions linking to curated itineraries from US-042",
+        "Add 'Why Des Moines' section with stats: central location, affordable, award-winning food scene, 800+ miles of trails",
+        "Typecheck passes"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has an entire Meeting Planners section with RFP submission, venue search by capacity, destination services, and wedding planning. This is a major B2B revenue driver for them. We have zero B2B meeting/convention features. The Des Moines convention business is significant — Iowa Events Center, Community Choice Credit Union Convention Center, etc."
+    },
+    {
+      "id": "US-052",
+      "title": "Add seasonal and holiday event guides with editorial curation",
+      "description": "As a local or visitor, I need seasonal and holiday-specific event guides (Summer Activities, Fall Festivals, Holiday Lights, Valentine's Day, St. Patrick's Day, etc.) so that I can find the best seasonal experiences without scrolling through the full events calendar.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for seasonal_guides table: id (UUID PK), title (text), slug (text UNIQUE), season (text: spring/summer/fall/winter/holiday), description (text), cover_image (text), content (JSONB with sections for featured_events, activities, tips), is_published (boolean), publish_date (timestamptz), seo_title, seo_description, created_at",
+        "Create /guides/:slug route page with editorial content, featured events grid, curated activity lists, and insider tips",
+        "Update the existing /guides page to dynamically pull from seasonal_guides table instead of hardcoded content",
+        "Add seasonal banner to homepage that promotes the current season's guide",
+        "Seed at least 4 guides: Summer in Des Moines, Fall Festivals & Foliage, Holiday Lights & Markets, Iowa State Fair Survival Guide",
+        "Add event tagging for seasonal association (events can be tagged with seasonal_guide_id)",
+        "Add Schema.org Article structured data to guide pages",
+        "Typecheck passes"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines publishes seasonal content heavily — summer activity guides, fall festival roundups, holiday event guides. We have a guides page but it's mostly static. Seasonal editorial content drives massive organic traffic from searches like 'things to do in Des Moines this summer' and 'Des Moines holiday events 2026'."
+    },
+    {
+      "id": "US-053",
+      "title": "Create neighborhood deep-dive pages with local insider content",
+      "description": "As someone exploring Des Moines neighborhoods, I need rich neighborhood pages with walking tour routes, local business spotlights, history, and 'insider secrets' so that I can experience each neighborhood like a local — not just see a list of restaurants.",
+      "acceptanceCriteria": [
+        "Enhance existing /neighborhoods/:slug pages with: neighborhood history section, walking tour route (map with numbered stops), 'Insider Secrets' tips from locals, photo gallery, demographic/vibe description",
+        "Add a Supabase migration for neighborhood_content table: id (UUID PK), neighborhood_slug (text), content_type (text: history/walking_tour/insider_tip/photo), content (JSONB), author (text nullable), created_at",
+        "Add walking tour functionality with ordered stops plotted on a Leaflet map with step-by-step directions",
+        "Add 'Local's Pick' badge on businesses that are neighborhood favorites (based on ratings or editorial selection)",
+        "Add cross-linking between neighborhoods and their events, restaurants, and attractions using location data",
+        "Create a 'Neighborhood Spotlight' rotating feature on the homepage highlighting one neighborhood per week",
+        "Add content for at least 4 neighborhoods: East Village, Historic Valley Junction, Drake Neighborhood, Beaverdale",
+        "Typecheck passes"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: DSM Partnership publishes neighborhood guides with near-neighborhood deep-dives. Catch Des Moines features neighborhood-specific content. Explore Des Moines runs neighborhood events like 'Eat.Drink.Architecture' walking tours. Our neighborhood pages exist but are thin — mostly entity counts. Rich neighborhood content is a massive SEO play for hyper-local searches."
+    },
+    {
+      "id": "US-054",
+      "title": "Build food and drink editorial hub with 'Restaurant Week' and curated lists",
+      "description": "As a foodie in Des Moines, I need a dedicated food and drink editorial hub with curated 'Best Of' lists, Restaurant Week coverage, chef spotlights, and food scene news so that this platform becomes the definitive Des Moines dining resource — not dsm Magazine or Catch Des Moines.",
+      "acceptanceCriteria": [
+        "Create /food-drink route page with sections: Best Of Lists, Restaurant Week, Chef Spotlights, New Openings, Food Trucks, Dining Guides",
+        "Create a Supabase migration for food_lists table: id (UUID PK), title (text), slug (text UNIQUE), description (text), list_type (text: best_of/new_openings/closing/chef_spotlight), items (JSONB array of {restaurant_id, name, description, why_its_great, image_url}), cover_image (text), author (text), is_published (boolean), publish_date (timestamptz), seo_title, seo_description",
+        "Seed curated lists: Best Pizza in Des Moines, Best Coffee Shops, Best Brunch Spots, Best Happy Hours, Best Food Trucks, Best Hidden Gem Restaurants, Best Date Night Restaurants",
+        "Create /food-drink/new-openings page that auto-generates from restaurants added in the last 30 days",
+        "Add 'Restaurant Week' event section that links featured participating restaurants during active Restaurant Week periods",
+        "Add internal cross-linking from curated lists to individual restaurant pages for SEO link juice",
+        "Typecheck passes"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has extensive 'Des Best' food content (Best Pizza, Best Ice Cream, Best Coffee, Best Happy Hours, Best Food Trucks). dsm Magazine runs Restaurant Week with dozens of participating venues. We have restaurant listings but zero editorial food content — no curated lists, no new opening alerts, no chef spotlights. Food content is the #1 traffic driver for city guide sites."
+    },
+    {
+      "id": "US-055",
+      "title": "Implement real-time weather integration with activity suggestions",
+      "description": "As a visitor or local checking the platform, I need to see current weather conditions with smart activity suggestions so that I can plan my day based on what's actually happening outside — rainy day indoor activities, perfect patio weather alerts, etc.",
+      "acceptanceCriteria": [
+        "Create src/hooks/useWeather.ts that fetches current weather and 5-day forecast from a free weather API (OpenWeatherMap or WeatherAPI) for Des Moines",
+        "Create src/components/WeatherWidget.tsx displaying current temp, conditions, and icon in the header or homepage hero",
+        "Add 'Perfect For Today' activity suggestions based on weather: rainy day -> indoor attractions/museums, sunny warm -> patios/trails/outdoor events, cold -> skywalk activities/indoor venues",
+        "Create a weather-aware filter on event and attraction pages: 'Show indoor only' toggle when weather is poor",
+        "Cache weather data for 30 minutes to minimize API calls (use TanStack Query staleTime)",
+        "Add weather context to AI Trip Planner so generated itineraries account for forecast conditions",
+        "Add VITE_WEATHER_API_KEY to .env.example",
+        "Typecheck passes"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: No Des Moines competitor currently does this well, but best-in-class tourism sites worldwide integrate weather with activity suggestions. This is especially valuable in Iowa where weather varies dramatically and impacts plans. Our AI mentions weather context but we don't display actual weather data or adapt recommendations to current conditions."
+    },
+    {
+      "id": "US-056",
+      "title": "Build loyalty rewards program with partner business redemption",
+      "description": "As a regular platform user, I need the ability to redeem my earned XP and badges for real rewards (discounts at partner restaurants, free attraction tickets, exclusive experiences) so that my engagement has tangible value beyond virtual points.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for rewards table: id (UUID PK), title (text), description (text), partner_business (text), reward_type (text: discount/free_item/experience/early_access), xp_cost (integer), quantity_available (integer nullable), quantity_redeemed (integer default 0), terms (text), expiry_date (timestamptz nullable), image_url (text), is_active (boolean), created_at",
+        "Create a Supabase migration for reward_redemptions table: id (UUID PK), reward_id (UUID FK), user_id (UUID FK), redeemed_at (timestamptz), redemption_code (text UNIQUE), status (text: pending/used/expired)",
+        "Create /rewards route page showing available rewards with XP cost, organized by category",
+        "Add 'Redeem' button that deducts XP from user account, generates a unique redemption code, and displays it to the user",
+        "Create src/components/RewardCard.tsx showing reward details, XP cost, availability, and partner branding",
+        "Add 'My Rewards' section to user dashboard showing active redemption codes and history",
+        "Add RLS policies: public read for rewards, authenticated users can redeem, admin can manage",
+        "Seed example rewards to demonstrate the system (even if partner agreements aren't yet in place)",
+        "Typecheck passes"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Industry trend — Viator and Booking.com have loyalty programs with real rewards. Our gamification system awards XP and badges but they're purely cosmetic. Adding real redemption value transforms gamification from a novelty into a retention driver. This also creates a compelling pitch for business partnerships — 'get your offer in front of our most engaged users.'"
+    },
+    {
+      "id": "US-057",
+      "title": "Add food truck tracker with real-time locations",
+      "description": "As a food truck fan in Des Moines, I need a real-time food truck tracker showing where trucks are today, their menus, and their weekly schedules so that I can find my favorites without hunting through social media.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for food_trucks table: id (UUID PK), name (text), slug (text UNIQUE), description (text), cuisine (text), phone (text nullable), website (text nullable), social_media (JSONB), image_url (text), menu_url (text nullable), is_active (boolean), created_at",
+        "Create a Supabase migration for food_truck_locations table: id (UUID PK), truck_id (UUID FK), date (date), location_name (text), address (text), latitude (numeric), longitude (numeric), start_time (time), end_time (time), notes (text nullable), created_at",
+        "Create /food-trucks route page with today's active trucks on a map and a list view",
+        "Create /food-trucks/:slug detail page with truck info, menu, weekly schedule, and location history",
+        "Add map view with truck markers showing today's locations with popup cards",
+        "Allow food truck owners to self-update their daily locations via authenticated form",
+        "Add 'Follow' button to get notified when a favorite truck posts a new location",
+        "Typecheck passes"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has a 'Best Food Trucks' feature. Food truck culture is huge in Des Moines (especially at events like Downtown Farmers Market). No competitor offers real-time food truck tracking. Most truck fans currently rely on following individual trucks on Instagram/Facebook. Centralizing this creates a unique utility that competitors can't match."
+    },
+    {
+      "id": "US-058",
+      "title": "Create 'What's New in DSM' feed with new openings, closings, and scene updates",
+      "description": "As a local who wants to stay in the loop, I need a news feed of what's new in Des Moines — new restaurant openings, business closings, construction updates, and scene changes — so that I have a reason to check the platform daily.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for scene_updates table: id (UUID PK), title (text), body (text), update_type (text: new_opening/closing/renovation/expansion/news), entity_type (text: restaurant/attraction/venue/neighborhood nullable), entity_id (UUID nullable FK), image_url (text nullable), source_url (text nullable), neighborhood (text nullable), is_published (boolean), publish_date (timestamptz), author (text), created_at",
+        "Create /whats-new route page with a chronological feed of scene updates, filterable by type and neighborhood",
+        "Create src/components/SceneUpdateCard.tsx with update type badge (New!, Closing, Under Renovation), entity link, and timestamp",
+        "Add 'What's New' section to homepage showing the 3 most recent updates",
+        "Auto-generate 'New Opening' updates when a new restaurant or attraction is added to the database (via Supabase trigger or edge function)",
+        "Add email digest integration — include recent scene updates in weekly newsletter",
+        "Add RSS feed endpoint at /whats-new/feed.xml for syndication",
+        "Typecheck passes"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: This is a gap across ALL competitors. None of them do real-time scene tracking well. dsm Magazine covers new openings editorially but not in real-time. We already detect new restaurant openings within 48 hours via our scrapers — we should surface this intelligence to users directly. A daily-updated 'What's New' feed creates habitual platform usage."
+    },
+    {
+      "id": "US-059",
+      "title": "Build comprehensive hotel and lodging section with booking integration",
+      "description": "As a visitor looking for accommodation in Des Moines, I need a hotel section with comparison filters, neighborhood guides, package deals, and booking links so that I can find and book the right place to stay without leaving the platform.",
+      "acceptanceCriteria": [
+        "Enhance existing /stay page with richer hotel cards: star rating, price range indicator, neighborhood, amenities badges, distance from downtown",
+        "Add filters: price range, star rating, neighborhood, amenities (pool, fitness, parking, pet-friendly, restaurant on-site)",
+        "Add 'Hotels by Neighborhood' grouping so visitors can choose based on where they want to be",
+        "Add 'Book Now' affiliate links to booking platforms (Booking.com, Hotels.com, or direct hotel sites) — this creates affiliate revenue",
+        "Add 'Hotel + Event' package suggestion: when viewing an event, suggest nearby hotels with 'Stay nearby' call-to-action",
+        "Add hotel comparison feature: select 2-3 hotels and see a side-by-side comparison table",
+        "Add Schema.org Hotel structured data with priceRange and aggregateRating",
+        "Typecheck passes"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Catch Des Moines has robust hotel content with featured hotels, packages, and deals. Our /stay page exists but is thin compared to what visitors need when planning a trip. Hotel affiliate links are a proven revenue stream for city guide sites. The 'Hotel + Event' pairing suggestion is something no competitor does and leverages our event data advantage."
+    },
+    {
+      "id": "US-060",
+      "title": "Add multilingual support starting with Spanish",
+      "description": "As a Spanish-speaking visitor or resident of Des Moines, I need the platform available in Spanish so that I can discover events, restaurants, and activities in my preferred language — reflecting the growing Latino community in Des Moines.",
+      "acceptanceCriteria": [
+        "Install and configure react-i18next with language detection (browser language, URL parameter, user preference)",
+        "Create src/i18n/ directory with en.json and es.json translation files",
+        "Translate core UI strings: navigation, buttons, labels, error messages, filter options, footer (approximately 200-300 strings)",
+        "Add language toggle button to the header/nav (EN | ES)",
+        "Store language preference in user profile (authenticated) or safeStorage (anonymous)",
+        "Add hreflang meta tags for SEO: <link rel='alternate' hreflang='es' href='...' />",
+        "Use translation keys in at least 10 core pages: homepage, events, restaurants, attractions, search, auth, profile, pricing, contact, about",
+        "AI-generated content (event descriptions, restaurant descriptions) remains in source language with a 'Translate' button that uses browser translation API",
+        "Typecheck passes"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": "COMPETITIVE GAP: Best-in-class tourism sites offer multilingual support. No Des Moines competitor currently offers Spanish language support despite Des Moines' significant and growing Latino population (~13% of Polk County). This is both a competitive differentiator and an accessibility/inclusion win. Start with Spanish, architect for future language additions."
     }
   ]
 }
