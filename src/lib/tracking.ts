@@ -5,6 +5,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { createLogger } from '@/lib/logger';
+import { safeStorage } from '@/lib/safeStorage';
 
 const logger = createLogger('tracking');
 
@@ -16,7 +17,7 @@ const SESSION_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
  * Session expires after 30 minutes of inactivity
  */
 export function getOrCreateSessionId(): string {
-  const stored = localStorage.getItem(SESSION_STORAGE_KEY);
+  const stored = safeStorage.getItem(SESSION_STORAGE_KEY);
 
   if (stored) {
     try {
@@ -26,7 +27,7 @@ export function getOrCreateSessionId(): string {
       // Check if session is still valid
       if (now - timestamp < SESSION_DURATION) {
         // Update timestamp to extend session
-        localStorage.setItem(
+        safeStorage.setItem(
           SESSION_STORAGE_KEY,
           JSON.stringify({ sessionId, timestamp: now })
         );
@@ -39,7 +40,7 @@ export function getOrCreateSessionId(): string {
 
   // Create new session
   const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-  localStorage.setItem(
+  safeStorage.setItem(
     SESSION_STORAGE_KEY,
     JSON.stringify({ sessionId: newSessionId, timestamp: Date.now() })
   );
@@ -114,7 +115,7 @@ export async function logImpression(
       .insert({
         campaign_id: campaignId,
         creative_id: creativeId,
-        placement_type: placementType,
+        placement_type: placementType as any,
         user_id: user?.id || null,
         session_id: sessionId,
         user_agent: navigator.userAgent,
@@ -122,7 +123,7 @@ export async function logImpression(
         referrer_url: document.referrer || null,
         device_type: deviceType,
         browser: browser,
-        date: new Date().toISOString().split('T')[0],
+        date: new Date().toISOString().split('T')[0]!,
       })
       .select('id')
       .single();
@@ -167,7 +168,7 @@ export async function logClick(
         .limit(1);
 
       if (impressions && impressions.length > 0) {
-        linkedImpressionId = impressions[0].id;
+        linkedImpressionId = impressions[0]!.id;
       }
     }
 
@@ -227,7 +228,7 @@ export async function shouldShowAd(
 
     // Check user-based frequency cap (max 10 per day)
     if (userId) {
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toISOString().split('T')[0]!;
 
       const { data: userImpressions, error: userError } = await supabase
         .from('ad_impressions')

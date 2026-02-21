@@ -91,9 +91,10 @@ function calculateInterestScore(
   }
 
   // Check tags/themes
-  if (event.tags && preferences.interests.tags.length > 0) {
-    const matchingTags = event.tags.filter((tag: string) =>
-      preferences.interests.tags.some((userTag) =>
+  const eventAny = event as any;
+  if (eventAny.tags && preferences.interests.tags.length > 0) {
+    const matchingTags = eventAny.tags.filter((tag: string) =>
+      preferences.interests.tags.some((userTag: string) =>
         tag.toLowerCase().includes(userTag.toLowerCase())
       )
     );
@@ -104,12 +105,12 @@ function calculateInterestScore(
   }
 
   // Activity level match
-  if (event.metadata?.activityLevel === preferences.interests.activityLevel) {
+  if (eventAny.metadata?.activityLevel === preferences.interests.activityLevel) {
     score += 10;
   }
 
   // Environment preference
-  const eventEnvironment = event.metadata?.environment || 'both';
+  const eventEnvironment = eventAny.metadata?.environment || 'both';
   if (
     preferences.interests.environmentPreference === 'both' ||
     eventEnvironment === preferences.interests.environmentPreference ||
@@ -171,23 +172,19 @@ function calculateTimeScore(
     (eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   );
 
-  let isWithinHorizon = false;
   if (preferences.time.planningHorizon === 'spontaneous' && daysUntilEvent <= 3) {
-    isWithinHorizon = true;
     score += 15;
     reasons.push('Happening soon');
   } else if (
     preferences.time.planningHorizon === 'week-ahead' &&
     daysUntilEvent <= 7
   ) {
-    isWithinHorizon = true;
     score += 10;
     reasons.push('Perfect for your planning timeline');
   } else if (
     preferences.time.planningHorizon === 'month-ahead' &&
     daysUntilEvent <= 30
   ) {
-    isWithinHorizon = true;
     score += 5;
   }
 
@@ -198,8 +195,9 @@ function calculateTimeScore(
   }
 
   // Time of day matching (if event has time info)
-  if (event.time) {
-    const eventHour = parseInt(event.time.split(':')[0]);
+  const eventTimeField = (event as any).time;
+  if (eventTimeField) {
+    const eventHour = parseInt(eventTimeField.split(':')[0]);
     let eventTimeOfDay: string;
     if (eventHour < 11) eventTimeOfDay = 'morning';
     else if (eventHour < 17) eventTimeOfDay = 'afternoon';
@@ -235,8 +233,9 @@ function calculatePopularityBoost(event: Event): { score: number; reasons: strin
   }
 
   // View count (if available from analytics)
-  if (event.metadata?.viewCount) {
-    const viewCount = event.metadata.viewCount;
+  const eventMeta = (event as any).metadata;
+  if (eventMeta?.viewCount) {
+    const viewCount = eventMeta.viewCount;
     if (viewCount > 500) {
       score += 20;
       reasons.push('Very popular');
@@ -249,8 +248,8 @@ function calculatePopularityBoost(event: Event): { score: number; reasons: strin
   }
 
   // RSVP count
-  if (event.metadata?.rsvpCount) {
-    const rsvpCount = event.metadata.rsvpCount;
+  if (eventMeta?.rsvpCount) {
+    const rsvpCount = eventMeta.rsvpCount;
     if (rsvpCount > 100) {
       score += 15;
       reasons.push('Highly attended');

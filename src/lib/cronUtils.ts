@@ -83,7 +83,11 @@ export function cronToFriendly(cronExpression: string): string {
   // Try to parse common patterns
   const parts = cronExpression.split(' ');
   if (parts.length === 5) {
-    const [minute, hour, day, month, weekday] = parts;
+    const minute = parts[0];
+    const hour = parts[1]!;
+    const day = parts[2];
+    const month = parts[3];
+    const weekday = parts[4]!;
 
     // Every X hours pattern: "0 */X * * *"
     if (minute === '0' && hour.startsWith('*/') && day === '*' && month === '*' && weekday === '*') {
@@ -94,9 +98,9 @@ export function cronToFriendly(cronExpression: string): string {
     // Daily pattern: "0 X * * *"
     if (minute === '0' && !hour.includes('*') && day === '*' && month === '*' && weekday === '*') {
       const hourNum = parseInt(hour);
-      const time = hourNum === 0 ? '12:00 AM' : 
-                   hourNum < 12 ? `${hourNum}:00 AM` : 
-                   hourNum === 12 ? '12:00 PM' : 
+      const time = hourNum === 0 ? '12:00 AM' :
+                   hourNum < 12 ? `${hourNum}:00 AM` :
+                   hourNum === 12 ? '12:00 PM' :
                    `${hourNum - 12}:00 PM`;
       return `Daily at ${time}`;
     }
@@ -106,9 +110,9 @@ export function cronToFriendly(cronExpression: string): string {
       const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const dayName = days[parseInt(weekday)] || 'Unknown';
       const hourNum = parseInt(hour);
-      const time = hourNum === 0 ? '12:00 AM' : 
-                   hourNum < 12 ? `${hourNum}:00 AM` : 
-                   hourNum === 12 ? '12:00 PM' : 
+      const time = hourNum === 0 ? '12:00 AM' :
+                   hourNum < 12 ? `${hourNum}:00 AM` :
+                   hourNum === 12 ? '12:00 PM' :
                    `${hourNum - 12}:00 PM`;
       return `Weekly on ${dayName} at ${time}`;
     }
@@ -133,7 +137,11 @@ export function getNextRunTime(cronExpression: string): Date | null {
   const parts = cronExpression.split(' ');
   
   if (parts.length === 5) {
-    const [minute, hour, day, month, weekday] = parts;
+    const minute = parts[0];
+    const hour = parts[1]!;
+    const day = parts[2];
+    const month = parts[3];
+    const weekday = parts[4];
 
     // Every X hours pattern: "0 */X * * *"
     if (minute === '0' && hour.startsWith('*/') && day === '*' && month === '*' && weekday === '*') {

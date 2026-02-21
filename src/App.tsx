@@ -17,6 +17,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { AccessibilityProvider } from "@/contexts/AccessibilityContext";
 import { AccessibilityWidget } from "@/components/AccessibilityWidget";
 import { SessionManager } from "@/components/auth/SessionManager";
+import { OfflineBanner } from "@/components/OfflineBanner";
 
 /**
  * Wrapper around React.lazy that retries once on chunk load failure,
@@ -192,6 +193,7 @@ const App = () => (
       <ScrollToTopOnNavigate />
       <AuthProvider>
         <SessionManager />
+        <OfflineBanner />
         <ErrorBoundary>
           <KeyboardShortcutsProvider>
             <Toaster />

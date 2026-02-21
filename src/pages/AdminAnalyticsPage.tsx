@@ -9,6 +9,7 @@ import AdminAnalyticsDashboard from "@/components/AdminAnalyticsDashboard";
 import { ActivityLogViewer } from "@/components/ActivityLogViewer";
 import { DataQualityDashboard } from "@/components/DataQualityDashboard";
 import { CrmDashboard } from "@/components/crm";
+import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -18,10 +19,12 @@ import {
   ScrollText,
   CheckCircle,
   Contact,
+  TrendingUp,
 } from "lucide-react";
 
 const ANALYTICS_TABS = [
   { id: "analytics", label: "Advanced Analytics", icon: BarChart3 },
+  { id: "search-traffic", label: "Search Traffic", icon: TrendingUp },
   { id: "activity-logs", label: "Activity Logs", icon: ScrollText },
   { id: "data-quality", label: "Data Quality", icon: CheckCircle },
   { id: "crm", label: "CRM Dashboard", icon: Contact },
@@ -80,6 +83,8 @@ export default function AdminAnalyticsPage() {
 
         {/* Tab Content */}
         {activeTab === "analytics" && <AdminAnalyticsDashboard />}
+
+        {activeTab === "search-traffic" && <SearchTrafficDashboard />}
 
         {activeTab === "activity-logs" && <ActivityLogViewer />}
 

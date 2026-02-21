@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: One-time data population function to seed playground data, not intended for regular user access
+ * Alternative measures: Google Places API key required for searches, results geofenced to Des Moines area only
+ * Risk level: MEDIUM
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts'
 

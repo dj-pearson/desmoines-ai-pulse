@@ -98,8 +98,8 @@ class DeferredLoader {
         return;
       }
 
-      const task = tasks[index];
-      
+      const task = tasks[index]!;
+
       // Check condition
       if (task.condition && !task.condition()) {
         processTask(index + 1);

@@ -1,5 +1,5 @@
 import { format, parseISO } from "date-fns";
-import { BRAND, getCanonicalUrl } from "./brandConfig";
+import { BRAND } from "./brandConfig";
 
 export interface SEOData {
   title: string;

@@ -21,7 +21,7 @@ interface SitemapUrl {
 
 export class SitemapGenerator {
   private baseUrl = BRAND.baseUrl;
-  private currentDate = new Date().toISOString().split("T")[0];
+  private currentDate = new Date().toISOString().split("T")[0]!;
 
   async generateSitemap(): Promise<string> {
     const urls: SitemapUrl[] = [];
@@ -68,7 +68,7 @@ export class SitemapGenerator {
             event.updated_at || event.created_at || this.currentDate;
           urls.push({
             loc: `${this.baseUrl}/events/${slug}`,
-            lastmod: lastmod.split("T")[0],
+            lastmod: lastmod.split("T")[0]!,
             changefreq: "weekly",
             priority: 0.7,
           });
@@ -94,7 +94,7 @@ export class SitemapGenerator {
 
           urls.push({
             loc: `${this.baseUrl}/restaurants/${slug}`,
-            lastmod: lastmod.split("T")[0],
+            lastmod: lastmod.split("T")[0]!,
             changefreq: "monthly",
             priority,
           });

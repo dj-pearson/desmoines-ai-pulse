@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { storage } from '@/lib/safeStorage';
+import { createLogger } from '@/lib/logger';
 import {
   UserPreferences,
   defaultPreferences,
   EventCategory,
   DietaryRestriction,
 } from '@/types/preferences';
+
+const log = createLogger('useUserPreferences');
 
 const STORAGE_KEY = 'desmoines_user_preferences';
 
@@ -40,18 +44,17 @@ export function useUserPreferences() {
 
         if (data && !error) {
           setPreferences(data as UserPreferences);
-          // Also save to localStorage as backup
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+          // Also save to safeStorage as backup
+          storage.set(STORAGE_KEY, data);
           setIsLoading(false);
           return;
         }
       }
 
-      // Fallback to localStorage
-      const stored = localStorage.getItem(STORAGE_KEY);
+      // Fallback to safeStorage
+      const stored = storage.get<UserPreferences>(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setPreferences(parsed);
+        setPreferences(stored);
       } else {
         // Create default preferences for new users
         const newPreferences: UserPreferences = {
@@ -59,10 +62,10 @@ export function useUserPreferences() {
           userId: user?.id || 'anonymous',
         };
         setPreferences(newPreferences);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newPreferences));
+        storage.set(STORAGE_KEY, newPreferences);
       }
     } catch (error) {
-      console.error('Failed to load preferences:', error);
+      log.error('loadPreferences', 'Failed to load preferences', { error: String(error) });
       // Use defaults on error
       const newPreferences: UserPreferences = {
         ...defaultPreferences,
@@ -88,8 +91,8 @@ export function useUserPreferences() {
 
         setPreferences(updated);
 
-        // Save to localStorage immediately
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+        // Save to safeStorage immediately
+        storage.set(STORAGE_KEY, updated);
 
         // Try to save to Supabase if authenticated
         if (user) {
@@ -99,14 +102,14 @@ export function useUserPreferences() {
           });
 
           if (error) {
-            console.debug('Could not sync preferences to Supabase:', error);
+            log.debug('savePreferences', 'Could not sync preferences to Supabase', { error: String(error) });
             // Not critical - localStorage backup exists
           }
         }
 
         return updated;
       } catch (error) {
-        console.error('Failed to save preferences:', error);
+        log.error('savePreferences', 'Failed to save preferences', { error: String(error) });
         throw error;
       } finally {
         setIsSaving(false);
@@ -183,7 +186,7 @@ export function useUserPreferences() {
       userId: user?.id || 'anonymous',
     };
     setPreferences(newPreferences);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(newPreferences));
+    storage.set(STORAGE_KEY, newPreferences);
   }, [user]);
 
   return {

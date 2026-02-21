@@ -11,9 +11,9 @@ describe('createLogger', () => {
     const log = createLogger('EventList');
     log.info('load', 'Loading events');
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toContain('EventList');
-    expect(spy.mock.calls[0][0]).toContain('load');
-    expect(spy.mock.calls[0][0]).toContain('Loading events');
+    expect(spy.mock.calls[0]?.[0]).toContain('EventList');
+    expect(spy.mock.calls[0]?.[0]).toContain('load');
+    expect(spy.mock.calls[0]?.[0]).toContain('Loading events');
   });
 });
 
@@ -23,7 +23,7 @@ describe('Logger levels', () => {
     const log = createLogger('Test');
     log.debug('init', 'Starting up');
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toContain('DEBUG');
+    expect(spy.mock.calls[0]?.[0]).toContain('DEBUG');
   });
 
   it('logs warn with console.warn', () => {
@@ -31,7 +31,7 @@ describe('Logger levels', () => {
     const log = createLogger('Test');
     log.warn('cache', 'Cache miss');
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toContain('WARN');
+    expect(spy.mock.calls[0]?.[0]).toContain('WARN');
   });
 
   it('logs error with console.error', () => {
@@ -39,7 +39,7 @@ describe('Logger levels', () => {
     const log = createLogger('Test');
     log.error('fetch', 'Request failed');
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(spy.mock.calls[0][0]).toContain('ERROR');
+    expect(spy.mock.calls[0]?.[0]).toContain('ERROR');
   });
 });
 
@@ -64,6 +64,6 @@ describe('default logger', () => {
   it('uses App as default component', () => {
     const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
     logger.info('boot', 'Started');
-    expect(spy.mock.calls[0][0]).toContain('App');
+    expect(spy.mock.calls[0]?.[0]).toContain('App');
   });
 });

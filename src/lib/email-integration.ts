@@ -4,7 +4,7 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
-import type { EmailCaptureData, ReferralData } from '@/types/event-promotion';
+import type { EmailCaptureData } from '@/types/event-promotion';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('emailIntegration');
@@ -18,7 +18,7 @@ export async function saveEmailCapture(data: EmailCaptureData): Promise<void> {
     event_name: data.eventName,
     organization_name: data.organizationName,
     event_type: data.eventType,
-    event_date: data.eventDate.toISOString().split('T')[0],
+    event_date: data.eventDate.toISOString().split('T')[0] ?? '',
     send_reminders: data.sendReminders,
     referral_code: data.referralCode,
   });
@@ -226,7 +226,7 @@ export async function getPendingEmails(): Promise<any[]> {
 export const EMAIL_TEMPLATES = {
   immediate_welcome: {
     subject: 'Your Event Promotion Timeline + Critical First Step',
-    getHtml: (data: any) => `
+    getHtml: (_data: any) => `
       <h1>Your Event Promotion Playbook is Ready! 🎉</h1>
       <p>Hi there,</p>
       <p>Thanks for using our Event Promotion Timeline Generator! Your customized 8-week plan is attached as a PDF.</p>
@@ -245,7 +245,7 @@ export const EMAIL_TEMPLATES = {
   },
   channel_focus: {
     subject: 'The promotion channel everyone ignores (but shouldn\'t)',
-    getHtml: (data: any) => `
+    getHtml: (_data: any) => `
       <h1>Day 1: Master This Often-Overlooked Channel</h1>
       <p>Most event organizers focus only on social media. But here's what they miss:</p>
       <h2>Email Marketing for Events</h2>

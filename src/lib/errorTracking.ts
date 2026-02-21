@@ -35,7 +35,7 @@ export function initErrorTracking() {
     return;
   }
 
-  const sentryDSN = import.meta.env.VITE_SENTRY_DSN;
+  const sentryDSN = import.meta.env['VITE_SENTRY_DSN'];
 
   if (!sentryDSN) {
     logger.warn('initErrorTracking', 'VITE_SENTRY_DSN not configured. Error tracking disabled.');
@@ -160,7 +160,7 @@ export function initErrorTracking() {
 /**
  * Set user context for error tracking
  */
-export function setUser(userId: string, email?: string) {
+export function setUser(_userId: string, _email?: string) {
   if (!import.meta.env.PROD) return;
 
   // Uncomment when Sentry is installed

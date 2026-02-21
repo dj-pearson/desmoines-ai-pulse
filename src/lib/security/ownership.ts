@@ -50,9 +50,9 @@ export async function isResourceOwner(
   }
 
   try {
-    const { data, error } = await supabase
-      .from(tableName)
-      .select(ownerColumn)
+    const { data, error } = await (supabase
+      .from(tableName as any)
+      .select(ownerColumn) as any)
       .eq('id', resourceId)
       .single();
 
@@ -61,7 +61,7 @@ export async function isResourceOwner(
     }
 
     // Check direct ownership
-    const ownerId = data[ownerColumn as keyof typeof data];
+    const ownerId = (data as any)[ownerColumn];
     return ownerId === context.userId;
   } catch (error) {
     logger.error('isResourceOwner', 'Error checking ownership', { resourceType, resourceId, error: String(error) });
@@ -256,9 +256,9 @@ export async function validateResourceAccess<T = Record<string, unknown>>(
 
   try {
     // Fetch the resource
-    const { data, error } = await supabase
-      .from(tableName)
-      .select(config?.select || '*')
+    const { data, error } = await (supabase
+      .from(tableName as any)
+      .select(config?.select || '*') as any)
       .eq('id', resourceId)
       .single();
 

@@ -5,6 +5,7 @@
 
 import type { AnalyticsEvent } from '@/types/event-promotion';
 import { createLogger } from '@/lib/logger';
+import { safeStorage } from '@/lib/safeStorage';
 
 const logger = createLogger('analyticsTracker');
 
@@ -17,7 +18,7 @@ export function trackEvent(event: AnalyticsEvent): void {
   events.push(event);
 
   try {
-    localStorage.setItem('epp_analytics', JSON.stringify(events));
+    safeStorage.setItem('epp_analytics', JSON.stringify(events));
   } catch (error) {
     logger.error('trackEvent', 'Failed to store analytics event', { error: String(error) });
   }
@@ -129,7 +130,7 @@ export function trackReferralGenerated(code: string): void {
  */
 function getStoredEvents(): AnalyticsEvent[] {
   try {
-    const stored = localStorage.getItem('epp_analytics');
+    const stored = safeStorage.getItem('epp_analytics');
     return stored ? JSON.parse(stored) : [];
   } catch (error) {
     logger.error('getStoredEvents', 'Failed to retrieve analytics events', { error: String(error) });
@@ -196,7 +197,7 @@ export function getAnalyticsSummary(): {
   return {
     totalEvents: events.length,
     eventsByType,
-    lastEventTime: events.length > 0 ? new Date(events[events.length - 1].timestamp) : undefined,
+    lastEventTime: events.length > 0 ? new Date(events[events.length - 1]!.timestamp) : undefined,
   };
 }
 
@@ -205,7 +206,7 @@ export function getAnalyticsSummary(): {
  */
 export function clearAnalytics(): void {
   try {
-    localStorage.removeItem('epp_analytics');
+    safeStorage.removeItem('epp_analytics');
   } catch (error) {
     logger.error('clearAnalytics', 'Failed to clear analytics data', { error: String(error) });
   }

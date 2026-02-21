@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Public utility function that geocodes addresses using a free public API, no sensitive data involved
+ * Alternative measures: Input validation on location strings, uses only public Nominatim API with no privileged access
+ * Risk level: LOW
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const NOMINATIM_API = "https://nominatim.openstreetmap.org/search";

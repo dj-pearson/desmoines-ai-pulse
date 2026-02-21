@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Must accept metrics from unauthenticated visitors to track page views and content engagement
+ * Alternative measures: Enum whitelist validation restricts metric types to known safe values
+ * Risk level: LOW
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

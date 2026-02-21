@@ -22,6 +22,7 @@ import {
   UserX,
 } from "lucide-react";
 import { createLogger } from '@/lib/logger';
+import { storage } from '@/lib/safeStorage';
 
 const log = createLogger('AdminSecurityManager');
 
@@ -73,9 +74,9 @@ export default function AdminSecurityManager() {
   const loadSecuritySettings = async () => {
     try {
       // In a real implementation, this would fetch from a security_settings table
-      const savedSettings = localStorage.getItem('adminSecuritySettings');
+      const savedSettings = storage.get<typeof settings>('adminSecuritySettings');
       if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+        setSettings(savedSettings);
       }
     } catch (error) {
       log.error('loadSettings', 'Failed to load security settings', { data: error });
@@ -132,7 +133,7 @@ export default function AdminSecurityManager() {
     setIsLoading(true);
     try {
       // In real implementation, save to database
-      localStorage.setItem('adminSecuritySettings', JSON.stringify(settings));
+      storage.set('adminSecuritySettings', settings);
       toast({
         title: "Security Settings Updated",
         description: "All security settings have been saved successfully.",

@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { storage } from '@/lib/safeStorage';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useSystemMonitoring');
 
 interface SystemStatus {
   server: 'healthy' | 'warning' | 'critical';
@@ -104,24 +108,24 @@ export function useSystemMonitoring() {
 
   const loadSystemSettings = async () => {
     try {
-      // For now, use localStorage (in production this would be from database)
-      const savedSettings = localStorage.getItem('adminSystemSettings');
+      // For now, use safeStorage (in production this would be from database)
+      const savedSettings = storage.get<typeof settings>('adminSystemSettings');
       if (savedSettings) {
-        setSettings(JSON.parse(savedSettings));
+        setSettings(savedSettings);
       }
     } catch (error) {
-      console.error("Failed to load system settings:", error);
+      log.error('loadSystemSettings', 'Failed to load system settings', { error: String(error) });
     }
   };
 
   const saveSystemSettings = async () => {
     setIsLoading(true);
     try {
-      // Save to localStorage (in production this would also save to database)
-      localStorage.setItem('adminSystemSettings', JSON.stringify(settings));
+      // Save to safeStorage (in production this would also save to database)
+      storage.set('adminSystemSettings', settings);
       return { success: true };
     } catch (error) {
-      console.error("Failed to save system settings:", error);
+      log.error('saveSystemSettings', 'Failed to save system settings', { error: String(error) });
       return { success: false, error };
     } finally {
       setIsLoading(false);

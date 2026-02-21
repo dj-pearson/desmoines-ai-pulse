@@ -35,9 +35,8 @@
    * Update "include" below to add directories that are fully strict-compliant
    */
   "include": [
-    // Add directories here as they become strict-mode compliant
-    // Example: "src/lib/safeStorage.ts"
-    // Example: "src/lib/errorHandler.ts"
+    "src/vite-env.d.ts",
+    "src/lib/**/*.ts"
   ],
   "exclude": [
     "node_modules",

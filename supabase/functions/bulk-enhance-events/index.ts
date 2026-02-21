@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Background batch processing job that enhances events in bulk without user session context
+ * Alternative measures: Service role key required for database access, Claude API key validated, batch size limits enforced
+ * Risk level: MEDIUM
+ */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.43.1";

@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Admin data processing function invoked by internal tools, not by end-user browser sessions
+ * Alternative measures: Service role key required for database writes, Claude API key validated before AI processing
+ * Risk level: HIGH
+ */
 /// <reference types="https://esm.sh/@supabase/functions-js/src/edge-runtime.d.ts" />
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";

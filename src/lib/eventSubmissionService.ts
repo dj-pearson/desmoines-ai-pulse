@@ -1,6 +1,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Event } from '@/lib/types';
 import { createLogger } from '@/lib/logger';
+import { safeStorage } from '@/lib/safeStorage';
 
 const logger = createLogger('EventSubmissionService');
 
@@ -30,7 +31,7 @@ class EventSubmissionService {
   }
 
   private loadConfiguration() {
-    const config = localStorage.getItem('eventSubmissionConfig');
+    const config = safeStorage.getItem('eventSubmissionConfig');
     if (config) {
       const parsed = JSON.parse(config);
       this.webhookUrl = parsed.masterWebhook || null;
@@ -98,7 +99,7 @@ class EventSubmissionService {
   }
 
   private async submitToWebhook(url: string, data: EventSubmissionData) {
-    const response = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -112,7 +113,7 @@ class EventSubmissionService {
   }
 
   private async submitToIndividualPlatforms(data: EventSubmissionData) {
-    const config = localStorage.getItem('eventSubmissionConfig');
+    const config = safeStorage.getItem('eventSubmissionConfig');
     if (!config) return;
 
     const parsed = JSON.parse(config);
@@ -159,7 +160,7 @@ class EventSubmissionService {
 
       if (error) throw error;
 
-      return this.buildRSSXML(events || []);
+      return this.buildRSSXML((events || []) as unknown as Event[]);
     } catch (error) {
       logger.error('generateRSSFeed', 'RSS feed generation error', { error: String(error) });
       throw error;
@@ -168,7 +169,7 @@ class EventSubmissionService {
 
   private buildRSSXML(events: Event[]): string {
     const baseUrl = window.location.origin;
-    const feedUrl = `${baseUrl}/api/events/feed.xml`;
+    // Feed URL: `${baseUrl}/api/events/feed.xml`
     
     const rssItems = events.map(event => {
       const eventUrl = `${baseUrl}/events/${this.createEventSlug(event.title, event)}`;

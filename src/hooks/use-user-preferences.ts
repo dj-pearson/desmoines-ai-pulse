@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
+import { storage } from '@/lib/safeStorage';
 
 const log = createLogger('useUserPreferences');
 
@@ -59,15 +60,10 @@ const STORAGE_KEY = 'dmi-user-preferences';
 export function useUserPreferences() {
   const { toast } = useToast();
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
-    // Load from localStorage on initialization
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return { ...DEFAULT_PREFERENCES, ...parsed };
-      }
-    } catch (error) {
-      log.error('init', 'Failed to load preferences', { error });
+    // Load from safeStorage on initialization
+    const stored = storage.get<Partial<UserPreferences>>(STORAGE_KEY);
+    if (stored) {
+      return { ...DEFAULT_PREFERENCES, ...stored };
     }
     return DEFAULT_PREFERENCES;
   });
@@ -81,13 +77,9 @@ export function useUserPreferences() {
     setIsLoading(false);
   }, []);
 
-  // Save preferences to localStorage
+  // Save preferences to safeStorage
   const saveToLocalStorage = useCallback((newPrefs: UserPreferences) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newPrefs));
-    } catch (error) {
-      log.error('saveToLocalStorage', 'Failed to save preferences to localStorage', { error });
-    }
+    storage.set(STORAGE_KEY, newPrefs);
   }, []);
 
   // Sync preferences to server if authenticated
