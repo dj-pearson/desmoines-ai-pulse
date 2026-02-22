@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 import { useState } from "react";
@@ -54,19 +54,19 @@ export function useSubscription() {
   // Fetch available subscription plans
   const { data: plans = [], isLoading: plansLoading } = useQuery({
     queryKey: ["subscription-plans"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("subscription_plans")
-        .select("*")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+    queryFn: async (): Promise<SubscriptionPlan[]> => {
+      // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
+      const query = supabase.from("subscription_plans");
+      // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
+      const { data, error } = await query.select("*").eq("is_active", true).order("sort_order", { ascending: true });
 
       if (error) throw error;
-      return data.map((plan) => ({
+      // Supabase returns JSONB columns as unknown; cast to expected types
+      return (data as unknown as Array<Record<string, unknown>>).map((plan) => ({
         ...plan,
-        features: plan.features as string[],
-        limits: plan.limits as SubscriptionLimits,
-      })) as SubscriptionPlan[];
+        features: plan['features'] as string[],
+        limits: plan['limits'] as SubscriptionLimits,
+      })) as unknown as SubscriptionPlan[];
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -74,18 +74,13 @@ export function useSubscription() {
   // Fetch user's current subscription
   const { data: subscription, isLoading: subscriptionLoading } = useQuery({
     queryKey: ["user-subscription", user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<UserSubscription | null> => {
       if (!user) return null;
 
-      const { data, error } = await supabase
-        .from("user_subscriptions")
-        .select(`
-          *,
-          plan:subscription_plans(*)
-        `)
-        .eq("user_id", user.id)
-        .eq("status", "active")
-        .single();
+      // @ts-ignore -- Supabase SDK TS2589: deep type instantiation under strict mode
+      const subQuery = supabase.from("user_subscriptions");
+      // @ts-ignore -- Supabase SDK TS2769: overload resolution under strict mode
+      const { data, error } = await subQuery.select('*, plan:subscription_plans(*)').eq("user_id", user.id).eq("status", "active").single();
 
       if (error) {
         if (error.code === "PGRST116") {
@@ -95,16 +90,20 @@ export function useSubscription() {
         throw error;
       }
 
+      // Cast through unknown to handle Supabase's join types
+      const row = data as unknown as Record<string, unknown>;
+      const joinedPlan = row['plan'] as Record<string, unknown> | null;
+
       return {
-        ...data,
-        plan: data.plan
+        ...row,
+        plan: joinedPlan
           ? {
-              ...data.plan,
-              features: data.plan.features as string[],
-              limits: data.plan.limits as SubscriptionLimits,
+              ...joinedPlan,
+              features: joinedPlan['features'] as string[],
+              limits: joinedPlan['limits'] as SubscriptionLimits,
             }
           : undefined,
-      } as UserSubscription;
+      } as unknown as UserSubscription;
     },
     enabled: !!user,
   });

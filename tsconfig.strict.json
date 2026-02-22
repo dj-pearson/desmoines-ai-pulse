@@ -36,7 +36,14 @@
    */
   "include": [
     "src/vite-env.d.ts",
-    "src/lib/**/*.ts"
+    "src/lib/**/*.ts",
+    "src/contexts/AuthContext.tsx",
+    "src/hooks/useEvents.ts",
+    "src/hooks/useRestaurants.ts",
+    "src/hooks/useAttractions.ts",
+    "src/hooks/useSubscription.ts",
+    "src/hooks/useTripPlanner.ts",
+    "src/hooks/useAuth.ts"
   ],
   "exclude": [
     "node_modules",

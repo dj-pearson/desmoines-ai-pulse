@@ -1,5 +1,5 @@
 import { ReactNode, useEffect } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermission } from "@/hooks/usePermission";
 import { type Permission, type UserRole } from "@/lib/security";
@@ -184,6 +184,7 @@ export function ProtectedRoute({
  * Shown when a user lacks required permissions
  */
 function AccessDeniedPage({ message }: { message: string }) {
+  const navigate = useNavigate();
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-card border rounded-lg p-6 text-center">
@@ -195,14 +196,14 @@ function AccessDeniedPage({ message }: { message: string }) {
         <div className="flex gap-3 justify-center">
           <Button
             variant="outline"
-            onClick={() => window.history.back()}
+            onClick={() => navigate(-1)}
             className="gap-2"
           >
             <ArrowLeft className="h-4 w-4" />
             Go Back
           </Button>
           <Button
-            onClick={() => (window.location.href = "/")}
+            onClick={() => navigate("/")}
           >
             Go Home
           </Button>
