@@ -3,7 +3,7 @@
  * Generates customized 8-week promotion timelines based on event characteristics
  */
 
-import { addWeeks, subWeeks, format, differenceInDays } from 'date-fns';
+import { subWeeks } from 'date-fns';
 import type {
   EventFormData,
   PromotionTimeline,
@@ -11,7 +11,6 @@ import type {
   TimelineTask,
   ChannelRecommendation,
   BudgetAllocation,
-  PromotionChannel,
 } from '@/types/event-promotion';
 
 /**
@@ -47,7 +46,7 @@ export function generatePromotionTimeline(
 function generateChannelRecommendations(
   eventData: EventFormData
 ): ChannelRecommendation[] {
-  const { eventType, budget, socialFollowing, expectedAttendance } = eventData;
+  const { eventType, budget, expectedAttendance } = eventData;
   const recommendations: ChannelRecommendation[] = [];
 
   // Base recommendations for all events
@@ -222,7 +221,7 @@ function generateWeeklyMilestone(
   daysOut: number,
   eventData: EventFormData
 ): WeeklyMilestone {
-  const { eventType, budget, expectedAttendance } = eventData;
+  const { eventType, budget } = eventData;
   const tasks: TimelineTask[] = [];
 
   // Week 8 (56 days out) - Foundation
@@ -696,7 +695,7 @@ function getWeekTitle(week: number, daysOut: number): string {
 /**
  * Get description for each week
  */
-function getWeekDescription(week: number, eventType: string): string {
+function getWeekDescription(week: number, _eventType: string): string {
   const descriptions: Record<number, string> = {
     1: 'Lay the groundwork for successful promotion. Create your brand identity, set up platforms, and identify key partners.',
     2: 'Start generating buzz and awareness. Let people know your event exists and get them excited.',

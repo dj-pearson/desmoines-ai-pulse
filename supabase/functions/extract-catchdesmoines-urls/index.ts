@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Background data enrichment job that extracts URLs from external sources without user session context
+ * Alternative measures: URL format validation on all extracted links, domain exclusion list prevents following restricted domains
+ * Risk level: LOW
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";

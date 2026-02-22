@@ -1464,8 +1464,6 @@ export default function ContentTable({
             // Refresh the events data
             if (onRefresh) {
               onRefresh();
-            } else {
-              window.location.reload();
             }
           }}
         />

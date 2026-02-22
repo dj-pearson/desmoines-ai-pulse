@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -21,6 +22,7 @@ interface AdminLoginProps {
 }
 
 export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -36,8 +38,8 @@ export default function AdminLogin({ onLoginSuccess }: AdminLoginProps) {
       const success = await login(email, password);
 
       if (success) {
-        // Force reload to update auth state and redirect to admin
-        window.location.reload();
+        // Navigate to refresh route state after login
+        navigate(0);
       } else {
         setError(
           "Invalid credentials or insufficient permissions. Please ensure you have admin access."

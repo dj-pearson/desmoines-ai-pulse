@@ -26,6 +26,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { createLogger } from '@/lib/logger';
+import { storage } from '@/lib/safeStorage';
 
 const log = createLogger('AdminApplicationSettings');
 
@@ -143,8 +144,8 @@ export default function AdminApplicationSettings() {
   const handleSave = async (section?: string) => {
     setLoading(true);
     try {
-      // Save settings to localStorage for now (in production, this would save to database)
-      localStorage.setItem('adminApplicationSettings', JSON.stringify(settings));
+      // Save settings to safeStorage for now (in production, this would save to database)
+      storage.set('adminApplicationSettings', settings);
       
       toast({
         title: "Settings Saved",
@@ -170,11 +171,11 @@ export default function AdminApplicationSettings() {
   };
 
   useEffect(() => {
-    // Load settings from localStorage on mount
-    const savedSettings = localStorage.getItem('adminApplicationSettings');
+    // Load settings from safeStorage on mount
+    const savedSettings = storage.get<typeof settings>('adminApplicationSettings');
     if (savedSettings) {
       try {
-        setSettings(JSON.parse(savedSettings));
+        setSettings(savedSettings);
       } catch (error) {
         log.error('loadSettings', 'Failed to load saved settings', { data: error });
       }

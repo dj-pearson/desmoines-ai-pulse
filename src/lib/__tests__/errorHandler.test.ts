@@ -7,7 +7,6 @@ import {
   safeParseInt,
   safeParseFloat,
   ErrorSeverity,
-  initErrorTracking,
 } from '../errorHandler';
 
 beforeEach(() => {
@@ -19,7 +18,7 @@ describe('handleError', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     handleError('string error');
     expect(consoleSpy).toHaveBeenCalled();
-    const loggedMessage = consoleSpy.mock.calls[0][0];
+    const loggedMessage = consoleSpy.mock.calls[0]?.[0];
     expect(loggedMessage).toContain('string error');
   });
 

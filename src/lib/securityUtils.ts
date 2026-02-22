@@ -5,7 +5,6 @@ import DOMPurify from "dompurify";
  * Security utilities for input validation and sanitization
  */
 export class SecurityUtils {
-  private static readonly MAX_STRING_LENGTH = 10000;
   private static readonly MAX_EMAIL_LENGTH = 254;
   private static readonly MAX_URL_LENGTH = 2048;
 
@@ -224,7 +223,7 @@ export class SecurityUtils {
       window.crypto.getRandomValues(array);
       
       for (let i = 0; i < length; i++) {
-        result += charset[array[i] % charset.length];
+        result += charset[array[i]! % charset.length];
       }
     } else {
       // Fallback for environments without crypto API

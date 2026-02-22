@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
+import { safeStorage } from '@/lib/safeStorage';
 
 type Theme = "dark" | "light" | "system";
 
@@ -18,21 +19,13 @@ interface ThemeProviderProps {
   storageKey?: string;
 }
 
-// Safe localStorage helpers that never throw (WKWebView can restrict storage)
-function safeGetItem(key: string): string | null {
-  try { return localStorage.getItem(key); } catch { return null; }
-}
-function safeSetItem(key: string, value: string): void {
-  try { localStorage.setItem(key, value); } catch { /* ignored */ }
-}
-
 export function ThemeProvider({
   children,
   defaultTheme = "system",
   storageKey = "dmi-theme",
 }: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(
-    () => (safeGetItem(storageKey) as Theme) || defaultTheme
+    () => (safeStorage.getItem(storageKey) as Theme) || defaultTheme
   );
 
   const [actualTheme, setActualTheme] = useState<"dark" | "light">("light");
@@ -54,7 +47,7 @@ export function ThemeProvider({
     setActualTheme(systemTheme as "dark" | "light");
 
     // Store theme preference
-    safeSetItem(storageKey, theme);
+    safeStorage.setItem(storageKey, theme);
   }, [theme, storageKey]);
 
   // Listen for system theme changes

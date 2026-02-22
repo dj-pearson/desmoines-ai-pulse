@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createLogger } from '@/lib/logger';
+import { storage } from '@/lib/safeStorage';
 
 const log = createLogger('EventSubmissionManager');
 
@@ -106,9 +107,9 @@ export default function EventSubmissionManager() {
 
   // Load saved configuration
   useEffect(() => {
-    const savedConfig = localStorage.getItem('eventSubmissionConfig');
+    const savedConfig = storage.get<{ platforms?: typeof DEFAULT_PLATFORMS; masterWebhook?: string; rssEnabled?: boolean; autoSubmit?: boolean }>('eventSubmissionConfig');
     if (savedConfig) {
-      const config = JSON.parse(savedConfig);
+      const config = savedConfig;
       setPlatforms(config.platforms || DEFAULT_PLATFORMS);
       setMasterWebhook(config.masterWebhook || '');
       setRssEnabled(config.rssEnabled ?? true);
@@ -124,7 +125,7 @@ export default function EventSubmissionManager() {
       autoSubmit,
       lastUpdated: new Date().toISOString()
     };
-    localStorage.setItem('eventSubmissionConfig', JSON.stringify(config));
+    storage.set('eventSubmissionConfig', config);
     toast({
       title: "Configuration Saved",
       description: "Event submission settings have been saved successfully.",

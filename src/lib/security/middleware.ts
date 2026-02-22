@@ -31,7 +31,7 @@ import {
   isAdmin,
   getPermissionsForRole,
 } from './permissions';
-import { checkOwnership, validateResourceAccess } from './ownership';
+import { checkOwnership } from './ownership';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
 
@@ -483,12 +483,13 @@ export async function logSecurityEvent(entry: SecurityAuditEntry): Promise<void>
     // This is a fire-and-forget operation
     await supabase.from('security_audit_logs').insert({
       event_type: entry.eventType,
-      user_id: entry.userId,
-      ip_address: entry.ipAddress,
-      user_agent: entry.userAgent,
-      resource_type: entry.resourceType,
-      resource_id: entry.resourceId,
-      metadata: entry.metadata,
+      user_id: entry.userId ?? null,
+      ip_address: entry.ipAddress ?? null,
+      user_agent: entry.userAgent ?? null,
+      resource: entry.resourceType ? `${entry.resourceType}:${entry.resourceId ?? ''}` : null,
+      details: entry.metadata as any ?? null,
+      identifier: entry.userId ?? 'anonymous',
+      severity: 'info',
       created_at: entry.timestamp?.toISOString() || new Date().toISOString(),
     });
   } catch (error) {

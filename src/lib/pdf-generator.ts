@@ -104,7 +104,7 @@ export async function generatePDFPlaybook(timeline: PromotionTimeline): Promise<
   });
 
   // Weekly Timeline Pages
-  timeline.weeks.forEach((week, weekIndex) => {
+  timeline.weeks.forEach((week, _weekIndex) => {
     doc.addPage();
     yPos = margin;
 
@@ -146,7 +146,7 @@ export async function generatePDFPlaybook(timeline: PromotionTimeline): Promise<
     doc.text('Tasks for This Week:', margin, yPos);
     yPos += 10;
 
-    week.tasks.forEach((task, taskIndex) => {
+    week.tasks.forEach((task, _taskIndex) => {
       checkPageBreak(40);
 
       // Task Box
@@ -246,7 +246,7 @@ export async function generatePDFPlaybook(timeline: PromotionTimeline): Promise<
 
   yPos += 15;
 
-  timeline.channels.slice(0, 5).forEach((channel, index) => {
+  timeline.channels.slice(0, 5).forEach((channel, _index) => {
     checkPageBreak(50);
 
     // Channel Box
@@ -379,7 +379,7 @@ export async function generatePDFPlaybook(timeline: PromotionTimeline): Promise<
 /**
  * Generate a quick preview PDF with limited content (for free tier)
  */
-export async function generatePreviewPDF(timeline: PromotionTimeline): Promise<void> {
+export async function generatePreviewPDF(_timeline: PromotionTimeline): Promise<void> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;

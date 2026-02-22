@@ -108,7 +108,7 @@ export default function Restaurants() {
   const [activeCuisineQuick, setActiveCuisineQuick] = useState("");
   const { toast } = useToast();
 
-  const { restaurants, isLoading, error, totalCount } = useRestaurants(filters);
+  const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
 
   // Debounced search
@@ -725,7 +725,7 @@ export default function Restaurants() {
                   actions={[
                     {
                       label: "Try Again",
-                      onClick: () => window.location.reload(),
+                      onClick: () => refetch(),
                       variant: "default",
                     },
                   ]}

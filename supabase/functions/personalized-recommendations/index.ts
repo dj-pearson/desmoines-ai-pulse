@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Serves personalized recommendations without requiring JWT to support both authenticated and anonymous visitors
+ * Alternative measures: userId parameter validation, row-level filtering ensures users can only access their own recommendation data
+ * Risk level: MEDIUM
+ */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';

@@ -254,7 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Get the first verified TOTP factor
         const { data: factorsData } = await supabase.auth.mfa.listFactors();
-        const verifiedFactor = factorsData?.totp?.find((f: any) => f.status === 'verified');
+        const verifiedFactor = factorsData?.totp?.find((f) => f.status === 'verified');
 
         if (verifiedFactor) {
           setAuthState(prev => ({
@@ -273,14 +273,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       log.info('login', 'Login successful');
       return { success: !!data.session };
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('login', 'Login exception', { error });
-      return { success: false, error: error.message || "An unexpected error occurred" };
+      const message = error instanceof Error ? error.message : "An unexpected error occurred";
+      return { success: false, error: message };
     }
   }, []);
 
   // Signup with email/password
-  const signup = useCallback(async (email: string, password: string, metadata?: any): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
+  const signup = useCallback(async (email: string, password: string, metadata?: Record<string, unknown>): Promise<{ success: boolean; error?: string; needsVerification?: boolean }> => {
     try {
       log.info('signup', 'Attempting signup', { email });
       const { data, error } = await supabase.auth.signUp({
@@ -298,13 +299,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Check if email confirmation is required
-      const needsVerification = data.user && !data.session;
+      const needsVerification = !!data.user && !data.session;
       log.info('signup', 'Signup successful', { needsVerification });
 
       return { success: true, needsVerification };
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('signup', 'Signup exception', { error });
-      return { success: false, error: error.message || "An unexpected error occurred" };
+      const message = error instanceof Error ? error.message : "An unexpected error occurred";
+      return { success: false, error: message };
     }
   }, []);
 
@@ -346,8 +348,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         timeoutPromise
       ]);
       log.info('logout', 'signOut completed successfully');
-    } catch (error: any) {
-      log.warn('logout', 'signOut failed or timed out', { message: error.message });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      log.warn('logout', 'signOut failed or timed out', { message });
       // Continue with cleanup anyway
     }
 
@@ -437,9 +440,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('signInWithGoogle', 'Google sign-in exception', { error });
-      return { success: false, error: error.message || "Failed to sign in with Google" };
+      const message = error instanceof Error ? error.message : "Failed to sign in with Google";
+      return { success: false, error: message };
     }
   }, []);
 
@@ -465,9 +469,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('signInWithApple', 'Apple sign-in exception', { error });
-      return { success: false, error: error.message || "Failed to sign in with Apple" };
+      const message = error instanceof Error ? error.message : "Failed to sign in with Apple";
+      return { success: false, error: message };
     }
   }, []);
 
@@ -484,9 +489,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('resetPassword', 'Password reset exception', { error });
-      return { success: false, error: error.message || "Failed to send reset email" };
+      const message = error instanceof Error ? error.message : "Failed to send reset email";
+      return { success: false, error: message };
     }
   }, []);
 
@@ -501,9 +507,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('updatePassword', 'Password update exception', { error });
-      return { success: false, error: error.message || "Failed to update password" };
+      const message = error instanceof Error ? error.message : "Failed to update password";
+      return { success: false, error: message };
     }
   }, []);
 
@@ -521,9 +528,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       return { success: true };
-    } catch (error: any) {
+    } catch (error: unknown) {
       log.error('resendVerification', 'Resend verification exception', { error });
-      return { success: false, error: error.message || "Failed to resend verification email" };
+      const message = error instanceof Error ? error.message : "Failed to resend verification email";
+      return { success: false, error: message };
     }
   }, []);
 

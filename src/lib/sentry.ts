@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/react';
  * Only initializes when VITE_SENTRY_DSN is set.
  */
 export function initSentry(): void {
-  const dsn = import.meta.env.VITE_SENTRY_DSN;
+  const dsn = import.meta.env['VITE_SENTRY_DSN'];
   if (!dsn) return;
 
   Sentry.init({

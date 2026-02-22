@@ -1,5 +1,4 @@
 import { useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('useKeyboardShortcuts');

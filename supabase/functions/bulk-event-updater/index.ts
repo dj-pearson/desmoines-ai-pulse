@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Background batch processing job that updates events in bulk without user session context
+ * Alternative measures: Google Places API key required for geocoding, service role key required for database access
+ * Risk level: MEDIUM
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts'
 

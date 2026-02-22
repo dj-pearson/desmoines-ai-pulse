@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Admin webhook testing utility used to verify webhook configurations without requiring auth flow
+ * Alternative measures: URL validation on webhook targets, sends only dummy/test data with no real content
+ * Risk level: MEDIUM
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {

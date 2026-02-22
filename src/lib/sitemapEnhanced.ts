@@ -14,7 +14,7 @@ interface SitemapUrl {
 
 export class EnhancedSitemapGenerator {
   private baseUrl = BRAND.baseUrl;
-  private currentDate = new Date().toISOString().split("T")[0];
+  private currentDate = new Date().toISOString().split("T")[0]!;
 
   async generateMainSitemap(): Promise<string> {
     const urls: SitemapUrl[] = [];
@@ -70,7 +70,7 @@ export class EnhancedSitemapGenerator {
       const { data: events, error } = await supabase
         .from("events")
         .select("id, title, date, updated_at, created_at, event_start_utc")
-        .gte("date", new Date().toISOString().split("T")[0])
+        .gte("date", new Date().toISOString().split("T")[0]!)
         .order("date", { ascending: true })
         .limit(50000);
 
@@ -78,12 +78,12 @@ export class EnhancedSitemapGenerator {
         events.forEach((event) => {
           const slug = createEventSlugWithCentralTime(event.title, event);
           const lastmod = event.updated_at || event.created_at || this.currentDate;
-          const eventDate = new Date(event.date || event.event_start_utc);
+          const eventDate = new Date(event.date || event.event_start_utc || new Date());
           const isUpcoming = eventDate > new Date();
-          
+
           urls.push({
             loc: `${this.baseUrl}/events/${slug}`,
-            lastmod: lastmod.split("T")[0],
+            lastmod: lastmod.split("T")[0]!,
             changefreq: isUpcoming ? "weekly" : "monthly",
             priority: isUpcoming ? 0.8 : 0.6,
           });
@@ -114,7 +114,7 @@ export class EnhancedSitemapGenerator {
 
           urls.push({
             loc: `${this.baseUrl}/restaurants/${slug}`,
-            lastmod: lastmod.split("T")[0],
+            lastmod: lastmod.split("T")[0]!,
             changefreq: "monthly",
             priority,
           });
@@ -201,19 +201,19 @@ export async function generateAllSitemaps(): Promise<void> {
   
   try {
     // Generate main sitemap
-    const mainSitemap = await generator.generateMainSitemap();
+    await generator.generateMainSitemap();
     logger.info("generateAllSitemaps", "Main sitemap generated");
-    
+
     // Generate events sitemap
-    const eventsSitemap = await generator.generateEventsSitemap();
+    await generator.generateEventsSitemap();
     logger.info("generateAllSitemaps", "Events sitemap generated");
-    
+
     // Generate restaurants sitemap
-    const restaurantsSitemap = await generator.generateRestaurantsSitemap();
+    await generator.generateRestaurantsSitemap();
     logger.info("generateAllSitemaps", "Restaurants sitemap generated");
-    
+
     // Generate sitemap index
-    const sitemapIndex = await generator.generateSitemapIndex();
+    await generator.generateSitemapIndex();
     logger.info("generateAllSitemaps", "Sitemap index generated");
     
     // In a real implementation, these would be saved to the public folder

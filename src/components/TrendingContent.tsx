@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTrending } from '@/hooks/useTrendingContent';
 import { useSimplePersonalization } from '@/hooks/useSimplePersonalization';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,10 +22,11 @@ export default function TrendingContent({
   showPersonalized = true,
   className = ''
 }: TrendingContentProps) {
-  const { 
-    trendingItems, 
-    isLoading: trendingLoading, 
-    error: trendingError 
+  const navigate = useNavigate();
+  const {
+    trendingItems,
+    isLoading: trendingLoading,
+    error: trendingError
   } = useTrending({ contentType, timeWindow, limit: Math.ceil(limit / 2) });
   
   const { 
@@ -123,7 +125,7 @@ export default function TrendingContent({
     const path = `/${item.contentType === 'event' ? 'events' : 
                     item.contentType === 'restaurant' ? 'restaurants' :
                     item.contentType === 'attraction' ? 'attractions' : 'playgrounds'}/${item.contentId}`;
-    window.location.href = path;
+    navigate(path);
   };
 
   return (

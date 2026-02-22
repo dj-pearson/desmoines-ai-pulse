@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Background scraping job that runs without user context to collect restaurant opening data
+ * Alternative measures: Service role key required for database access, API key validation for external services
+ * Risk level: MEDIUM
+ */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";

@@ -1,5 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Event } from '@/lib/types';
+import { storage } from '@/lib/safeStorage';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('useRecentlyViewed');
 
 interface RecentlyViewedItem {
   id: string;
@@ -18,18 +22,12 @@ const MAX_ITEMS = 10;
 export function useRecentlyViewed() {
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedItem[]>([]);
 
-  // Load from localStorage on mount
+  // Load from storage on mount
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const items: RecentlyViewedItem[] = JSON.parse(stored);
-        // Sort by most recent first
-        const sorted = items.sort((a, b) => b.viewedAt - a.viewedAt);
-        setRecentlyViewed(sorted);
-      }
-    } catch (error) {
-      console.error('Failed to load recently viewed items:', error);
+    const items = storage.get<RecentlyViewedItem[]>(STORAGE_KEY);
+    if (items) {
+      const sorted = items.sort((a, b) => b.viewedAt - a.viewedAt);
+      setRecentlyViewed(sorted);
     }
   }, []);
 
@@ -54,41 +52,26 @@ export function useRecentlyViewed() {
         // Add to front and limit to MAX_ITEMS
         const updated = [newItem, ...filtered].slice(0, MAX_ITEMS);
 
-        // Save to localStorage
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-        } catch (error) {
-          console.error('Failed to save recently viewed:', error);
-        }
+        storage.set(STORAGE_KEY, updated);
 
         return updated;
       });
     } catch (error) {
-      console.error('Failed to add to recently viewed:', error);
+      log.error('addToRecentlyViewed', 'Failed to add to recently viewed', { error: String(error) });
     }
   }, []);
 
   // Clear all recently viewed items
   const clearRecentlyViewed = useCallback(() => {
     setRecentlyViewed([]);
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch (error) {
-      console.error('Failed to clear recently viewed:', error);
-    }
+    storage.remove(STORAGE_KEY);
   }, []);
 
   // Remove a specific item
   const removeFromRecentlyViewed = useCallback((id: string) => {
     setRecentlyViewed((prev) => {
       const filtered = prev.filter((item) => item.id !== id);
-
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-      } catch (error) {
-        console.error('Failed to update recently viewed:', error);
-      }
-
+      storage.set(STORAGE_KEY, filtered);
       return filtered;
     });
   }, []);
@@ -118,15 +101,10 @@ export function useRecentlyViewedRestaurants() {
   const [recentlyViewed, setRecentlyViewed] = useState<RecentlyViewedRestaurant[]>([]);
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RESTAURANT_STORAGE_KEY);
-      if (stored) {
-        const items: RecentlyViewedRestaurant[] = JSON.parse(stored);
-        const sorted = items.sort((a, b) => b.viewedAt - a.viewedAt);
-        setRecentlyViewed(sorted);
-      }
-    } catch (error) {
-      console.error('Failed to load recently viewed restaurants:', error);
+    const items = storage.get<RecentlyViewedRestaurant[]>(RESTAURANT_STORAGE_KEY);
+    if (items) {
+      const sorted = items.sort((a, b) => b.viewedAt - a.viewedAt);
+      setRecentlyViewed(sorted);
     }
   }, []);
 
@@ -146,26 +124,18 @@ export function useRecentlyViewedRestaurants() {
         const filtered = prev.filter((item) => item.id !== restaurant.id);
         const updated = [newItem, ...filtered].slice(0, MAX_ITEMS);
 
-        try {
-          localStorage.setItem(RESTAURANT_STORAGE_KEY, JSON.stringify(updated));
-        } catch (error) {
-          console.error('Failed to save recently viewed restaurants:', error);
-        }
+        storage.set(RESTAURANT_STORAGE_KEY, updated);
 
         return updated;
       });
     } catch (error) {
-      console.error('Failed to add restaurant to recently viewed:', error);
+      log.error('addToRecentlyViewed', 'Failed to add restaurant to recently viewed', { error: String(error) });
     }
   }, []);
 
   const clearRecentlyViewed = useCallback(() => {
     setRecentlyViewed([]);
-    try {
-      localStorage.removeItem(RESTAURANT_STORAGE_KEY);
-    } catch (error) {
-      console.error('Failed to clear recently viewed restaurants:', error);
-    }
+    storage.remove(RESTAURANT_STORAGE_KEY);
   }, []);
 
   return {

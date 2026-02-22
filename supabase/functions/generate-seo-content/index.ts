@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Background batch processing job that generates SEO content for listings without user session context
+ * Alternative measures: Claude API key validation required for AI calls, database locking prevents concurrent processing conflicts
+ * Risk level: MEDIUM
+ */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';

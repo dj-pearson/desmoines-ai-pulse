@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Background data enrichment job that backfills missing coordinates without user session context
+ * Alternative measures: Service role key required for database access, per-record error handling prevents partial corruption
+ * Risk level: LOW
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

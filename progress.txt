@@ -54,19 +54,31 @@
 
 ## Known Technical Debt (as of PRD creation)
 - 682 instances of 'any' type (TypeScript relaxed mode)
-- 188 files with raw console.log/error/warn
-- 14 files use localStorage directly (should use safeStorage)
-- 18 unauthenticated edge functions (need audit)
-- No unit tests (only Playwright E2E)
-- No CI/CD PR validation (only event-crawler workflow)
-- Error tracking placeholder (Sentry not configured)
+- ~~188 files with raw console.log/error/warn~~ (RESOLVED: US-006 through US-009)
+- ~~14 files use localStorage directly (should use safeStorage)~~ (RESOLVED: US-015)
+- ~~18 unauthenticated edge functions (need audit)~~ (RESOLVED: US-012, see docs/SECURITY_AUDIT.md)
+- ~~No unit tests (only Playwright E2E)~~ (RESOLVED: US-002/US-003, vitest with 50 tests)
+- ~~No CI/CD PR validation (only event-crawler workflow)~~ (RESOLVED: US-001/US-004)
+- ~~Error tracking placeholder (Sentry not configured)~~ (RESOLVED: US-010)
 - ~~PearsonASUS file naming artifacts from merge~~ (RESOLVED: deleted in US-018)
-- SearchTrafficDashboard commented out (missing migrations)
-- TODOs: user preferences server-side, scraping job persistence, distance calculation
+- ~~SearchTrafficDashboard commented out (missing migrations)~~ (RESOLVED: US-021)
+- ~~TODOs: distance calculation~~ (RESOLVED: US-022, see src/lib/geo.ts)
+- TODOs: user preferences server-side, scraping job persistence
 
 ---
 
 ## Progress Log
+
+## 2026-02-21 — PRD Stories Batch Implementation
+- **US-012**: Security audit of unauthenticated edge functions; created docs/SECURITY_AUDIT.md with risk classification for all 18 verify_jwt=false functions; added security documentation comments to each function
+- **US-013**: Created API key auth middleware (supabase/functions/_shared/apiKeyAuth.ts) with timing-safe comparison and X-API-Key header support
+- **US-014**: Verified rate limiting infrastructure already standardized in _shared/rateLimit.ts (100 req/15min default)
+- **US-015**: Migrated all direct localStorage usage to safeStorage wrapper across 11 files (hooks, components, lib); only legitimate exceptions remain (AuthContext cleanup, Supabase SDK adapter, safeStorage internal)
+- **US-016**: Enabled TypeScript strict mode for src/lib/ directory; fixed ~80 strict mode errors (null checks, unused imports, type assertions, index signature access); tsconfig.strict.json now includes src/lib/**/*.ts with zero errors
+- **US-021**: Enabled SearchTrafficDashboard in AdminAnalyticsPage with new "Search Traffic" tab
+- **US-022**: Created src/lib/geo.ts with Haversine distance calculation, sortByDistance, distanceScore, isWithinRadius utilities; 12 unit tests all passing
+- **US-035**: Created useNetworkStatus hook and OfflineBanner component; integrated into App.tsx
+- **US-036**: Created useDebouncedValue hook with configurable delay
 
 ## 2026-02-06 — PRD Created
 - Created prd.json with 30 user stories for enterprise readiness

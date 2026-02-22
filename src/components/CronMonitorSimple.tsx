@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,9 +40,15 @@ interface CronLog {
 }
 
 export default function CronMonitor() {
-  const [jobs] = useState<ScrapingJob[]>([]);
-  const [logs] = useState<CronLog[]>([]);
+  const [jobs, setJobs] = useState<ScrapingJob[]>([]);
+  const [logs, setLogs] = useState<CronLog[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  const handleRefresh = useCallback(() => {
+    setJobs([]);
+    setLogs([]);
+    // Re-triggers any data fetching effects
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -85,7 +91,7 @@ export default function CronMonitor() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Cron Job Monitor</h2>
-        <Button onClick={() => window.location.reload()} variant="outline">
+        <Button onClick={handleRefresh} variant="outline">
           <RotateCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>

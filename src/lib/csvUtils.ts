@@ -77,7 +77,7 @@ export function convertToCSV<T extends Record<string, any>>(
   // If columns not specified, use all keys from first object
   const keys = columns
     ? columns.map(col => col.key as string)
-    : Object.keys(data[0]);
+    : Object.keys(data[0]!);
 
   const headers = columns
     ? columns.map(col => col.label)
@@ -135,7 +135,7 @@ export function parseCSV(
 
   // Use first row as headers if not provided
   if (!headers) {
-    const firstLine = lines[0];
+    const firstLine = lines[0]!;
     headers = parseCsvLine(firstLine);
   }
 
@@ -143,14 +143,14 @@ export function parseCSV(
   const results: Record<string, string>[] = [];
 
   for (let i = startIndex; i < lines.length; i++) {
-    const values = parseCsvLine(lines[i]);
+    const values = parseCsvLine(lines[i]!);
 
     if (values.length === 0) continue;
 
     const obj: Record<string, string> = {};
 
     for (let j = 0; j < headers.length; j++) {
-      obj[headers[j]] = values[j] || '';
+      obj[headers[j]!] = values[j] || '';
     }
 
     results.push(obj);
@@ -247,7 +247,7 @@ export function validateCSVData(
   }
 
   // Check if all required fields are present in first row
-  const firstRow = data[0];
+  const firstRow = data[0]!;
   const missingFields = requiredFields.filter(field => !(field in firstRow));
 
   if (missingFields.length > 0) {

@@ -1,3 +1,9 @@
+/**
+ * SECURITY: verify_jwt = false
+ * Reason: Public image proxy that must serve transformed images to all visitors including unauthenticated users
+ * Alternative measures: SSRF protection via URL validation, output format restricted to whitelist, dimension limits enforced
+ * Risk level: MEDIUM
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 
