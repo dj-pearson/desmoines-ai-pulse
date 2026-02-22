@@ -1,8 +1,8 @@
-import { useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { createLogger } from '@/lib/logger';
+import { useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { createLogger } from "@/lib/logger";
 
-const log = createLogger('useKeyboardShortcuts');
+const log = createLogger("useKeyboardShortcuts");
 
 export interface KeyboardShortcut {
   key: string;
@@ -24,10 +24,10 @@ interface UseKeyboardShortcutsOptions {
 const isInputElement = (element: Element): boolean => {
   const tagName = element.tagName.toLowerCase();
   return (
-    tagName === 'input' ||
-    tagName === 'textarea' ||
-    tagName === 'select' ||
-    element.getAttribute('contenteditable') === 'true'
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    element.getAttribute("contenteditable") === "true"
   );
 };
 
@@ -49,8 +49,14 @@ export function useKeyboardShortcuts({
       for (const shortcut of shortcuts) {
         const ctrlMatch = shortcut.ctrlKey ? event.ctrlKey : true;
         const metaMatch = shortcut.metaKey ? event.metaKey : true;
-        const shiftMatch = shortcut.shiftKey !== undefined ? event.shiftKey === shortcut.shiftKey : true;
-        const altMatch = shortcut.altKey !== undefined ? event.altKey === shortcut.altKey : true;
+        const shiftMatch =
+          shortcut.shiftKey !== undefined
+            ? event.shiftKey === shortcut.shiftKey
+            : true;
+        const altMatch =
+          shortcut.altKey !== undefined
+            ? event.altKey === shortcut.altKey
+            : true;
         const keyMatch = event.key.toLowerCase() === shortcut.key.toLowerCase();
 
         if (keyMatch && ctrlMatch && metaMatch && shiftMatch && altMatch) {
@@ -63,10 +69,10 @@ export function useKeyboardShortcuts({
       }
 
       // Global shortcuts (work even when typing in inputs)
-      if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+      if ((event.ctrlKey || event.metaKey) && event.key === "k") {
         event.preventDefault();
         // Open command palette (future feature)
-        log.debug('handleKeyDown', 'Command palette shortcut triggered');
+        log.debug("handleKeyDown", "Command palette shortcut triggered");
         return;
       }
 
@@ -74,17 +80,17 @@ export function useKeyboardShortcuts({
       if (isTyping) return;
 
       // Show keyboard shortcuts help
-      if (event.key === '?' && !event.shiftKey) {
+      if (event.key === "?" && !event.shiftKey) {
         event.preventDefault();
         onShowHelp?.();
         return;
       }
 
       // Focus search
-      if (event.key === '/') {
+      if (event.key === "/") {
         event.preventDefault();
         const searchInput = document.querySelector<HTMLInputElement>(
-          'input[type="search"], input[role="searchbox"]'
+          'input[type="search"], input[role="searchbox"]',
         );
         if (searchInput) {
           searchInput.focus();
@@ -94,38 +100,38 @@ export function useKeyboardShortcuts({
       }
 
       // Navigation shortcuts
-      if (event.key === 'h' && !event.ctrlKey && !event.metaKey) {
+      if (event.key === "h" && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
-        navigate('/');
+        navigate("/");
         return;
       }
 
-      if (event.key === 'e' && !event.ctrlKey && !event.metaKey) {
+      if (event.key === "e" && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
-        navigate('/events');
+        navigate("/events");
         return;
       }
 
-      if (event.key === 'r' && !event.ctrlKey && !event.metaKey) {
+      if (event.key === "r" && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
-        navigate('/restaurants');
+        navigate("/restaurants");
         return;
       }
 
       // Escape to close modals/dialogs
-      if (event.key === 'Escape') {
+      if (event.key === "Escape") {
         // Let the dialog/modal components handle this
         return;
       }
     },
-    [enabled, shortcuts, onShowHelp, navigate]
+    [enabled, shortcuts, onShowHelp, navigate],
   );
 
   useEffect(() => {
     if (!enabled) return;
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [enabled, handleKeyDown]);
 
   return null;
@@ -134,54 +140,54 @@ export function useKeyboardShortcuts({
 // Default shortcuts configuration
 export const defaultShortcuts: KeyboardShortcut[] = [
   {
-    key: '/',
-    description: 'Focus search',
+    key: "/",
+    description: "Focus search",
     action: () => {
       const searchInput = document.querySelector<HTMLInputElement>(
-        'input[type="search"], input[role="searchbox"]'
+        'input[type="search"], input[role="searchbox"]',
       );
       searchInput?.focus();
     },
   },
   {
-    key: '?',
-    description: 'Show keyboard shortcuts',
+    key: "?",
+    description: "Show keyboard shortcuts",
     action: () => {
-      log.debug('action', 'Show shortcuts modal');
+      log.debug("action", "Show shortcuts modal");
     },
   },
   {
-    key: 'h',
-    description: 'Go to home',
+    key: "h",
+    description: "Go to home",
     action: () => {
-      window.location.href = '/';
+      window.location.href = "/";
     },
   },
   {
-    key: 'e',
-    description: 'Go to events',
+    key: "e",
+    description: "Go to events",
     action: () => {
-      window.location.href = '/events';
+      window.location.href = "/events";
     },
   },
   {
-    key: 'r',
-    description: 'Go to restaurants',
+    key: "r",
+    description: "Go to restaurants",
     action: () => {
-      window.location.href = '/restaurants';
+      window.location.href = "/restaurants";
     },
   },
   {
-    key: 'k',
+    key: "k",
     ctrlKey: true,
-    description: 'Open command palette',
+    description: "Open command palette",
     action: () => {
-      log.debug('action', 'Command palette (future feature)');
+      log.debug("action", "Command palette (future feature)");
     },
   },
   {
-    key: 'Escape',
-    description: 'Close modal/dialog',
+    key: "Escape",
+    description: "Close modal/dialog",
     action: () => {
       // Handled by individual components
     },
