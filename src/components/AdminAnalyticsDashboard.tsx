@@ -90,10 +90,10 @@ export default function AdminAnalyticsDashboard() {
 
       if (pageViewsError) throw pageViewsError;
 
-      // Get user sessions data
+      // Get user sessions data (include device_type for device breakdown)
       const { data: sessionsData, error: sessionsError } = await supabase
         .from('user_analytics')
-        .select('created_at, session_id, user_id')
+        .select('created_at, session_id, user_id, device_type')
         .gte('created_at', startDate.toISOString());
 
       if (sessionsError) throw sessionsError;
@@ -152,47 +152,116 @@ export default function AdminAnalyticsDashboard() {
         engagement: Math.min(100, (data.engagement / Math.max(1, data.views)) * 100), // Convert to percentage
       }));
 
-      // Calculate top pages
+      // Calculate top pages with per-page session duration
       const topPages = (pageViewsData || []).reduce((acc: any, item) => {
         const url = new URL(item.page_url || '', window.location.origin);
         const path = url.pathname;
-        acc[path] = (acc[path] || 0) + 1;
+        if (!acc[path]) acc[path] = { count: 0, timestamps: [] };
+        acc[path].count += 1;
+        acc[path].timestamps.push(new Date(item.created_at).getTime());
         return acc;
       }, {});
 
       const topPagesArray = Object.entries(topPages)
-        .map(([page, views]: [string, any]) => ({
-          page,
-          views,
-          avgTime: "2m 30s", // Would need session duration tracking for real data
-        }))
+        .map(([page, data]: [string, any]) => {
+          // Estimate avg time on page from timestamps within the same page
+          const sorted = data.timestamps.sort((a: number, b: number) => a - b);
+          let avgMs = 0;
+          if (sorted.length >= 2) {
+            const diffs: number[] = [];
+            for (let i = 1; i < sorted.length; i++) {
+              const diff = sorted[i] - sorted[i - 1];
+              // Only count gaps under 30 minutes (reasonable session gap)
+              if (diff < 30 * 60 * 1000) diffs.push(diff);
+            }
+            avgMs = diffs.length > 0 ? diffs.reduce((s: number, d: number) => s + d, 0) / diffs.length : 0;
+          }
+          const mins = Math.floor(avgMs / 60000);
+          const secs = Math.floor((avgMs % 60000) / 1000);
+          return {
+            page,
+            views: data.count,
+            avgTime: avgMs > 0 ? `${mins}m ${secs}s` : '-',
+          };
+        })
         .sort((a, b) => b.views - a.views)
         .slice(0, 5);
 
+      // Compute bounce rate: sessions with only 1 page view / total sessions
+      const sessionPageCounts = (sessionsData || []).reduce((acc: Record<string, number>, item) => {
+        acc[item.session_id] = (acc[item.session_id] || 0) + 1;
+        return acc;
+      }, {});
+      const totalSessions = Object.keys(sessionPageCounts).length;
+      const bouncedSessions = Object.values(sessionPageCounts).filter((c) => c === 1).length;
+      const bounceRate = totalSessions >= 10
+        ? Math.round((bouncedSessions / totalSessions) * 1000) / 10
+        : 0;
+
+      // Compute avg session duration from first/last event per session
+      const sessionTimestamps = (sessionsData || []).reduce((acc: Record<string, number[]>, item) => {
+        if (!acc[item.session_id]) acc[item.session_id] = [];
+        acc[item.session_id].push(new Date(item.created_at).getTime());
+        return acc;
+      }, {});
+      const durations = Object.values(sessionTimestamps)
+        .map((ts) => {
+          if (ts.length < 2) return 0;
+          return Math.max(...ts) - Math.min(...ts);
+        })
+        .filter((d) => d > 0);
+      const avgDurationMs = durations.length > 0
+        ? durations.reduce((s, d) => s + d, 0) / durations.length
+        : 0;
+      const avgMins = Math.floor(avgDurationMs / 60000);
+      const avgSecs = Math.floor((avgDurationMs % 60000) / 1000);
+      const avgSessionDuration = totalSessions >= 10
+        ? `${avgMins}m ${avgSecs}s`
+        : 'Insufficient data';
+
+      // Compute device breakdown from device_type field
+      const deviceCounts = (sessionsData || []).reduce((acc: Record<string, number>, item) => {
+        const device = item.device_type || 'Unknown';
+        const normalized = device.charAt(0).toUpperCase() + device.slice(1).toLowerCase();
+        acc[normalized] = (acc[normalized] || 0) + 1;
+        return acc;
+      }, {});
+      const deviceColorMap: Record<string, string> = {
+        Mobile: '#0088FE',
+        Desktop: '#00C49F',
+        Tablet: '#FFBB28',
+        Unknown: '#FF8042',
+      };
+      const deviceBreakdownArray = Object.entries(deviceCounts)
+        .map(([name, value]) => ({
+          name,
+          value,
+          color: deviceColorMap[name] || '#8884D8',
+        }))
+        .sort((a, b) => b.value - a.value);
+
       // Real-time metrics (last 24 hours)
       const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-      const recent24hData = (pageViewsData || []).filter(item => 
+      const recent24hData = (pageViewsData || []).filter(item =>
         new Date(item.created_at) >= last24h
       );
 
       const realTimeMetrics = {
-        activeUsers: new Set(sessionsData?.filter(s => 
+        activeUsers: new Set(sessionsData?.filter(s =>
           new Date(s.created_at) >= new Date(now.getTime() - 60 * 60 * 1000)
         )?.map(s => s.session_id)).size || 0,
         pageViews24h: recent24hData.length,
-        bounceRate: 42.5, // Would need session tracking for real calculation
-        avgSessionDuration: "3m 28s", // Would need session duration tracking
+        bounceRate: totalSessions >= 10 ? bounceRate : 0,
+        avgSessionDuration: totalSessions >= 10 ? avgSessionDuration : 'Insufficient data',
       };
 
       setAnalyticsData({
         pageViews: pageViews.length ? pageViews : [{ name: "No data", value: 0 }],
         userSessions: userSessions.length ? userSessions : [],
         contentPerformance: contentPerformanceArray.length ? contentPerformanceArray : [],
-        deviceBreakdown: [
-          { name: "Mobile", value: 68, color: "#0088FE" },
-          { name: "Desktop", value: 24, color: "#00C49F" },
-          { name: "Tablet", value: 8, color: "#FFBB28" },
-        ], // Would need device tracking for real data
+        deviceBreakdown: deviceBreakdownArray.length ? deviceBreakdownArray : [
+          { name: "No data", value: 1, color: "#ccc" },
+        ],
         topPages: topPagesArray.length ? topPagesArray : [],
         realTimeMetrics,
       });
@@ -308,9 +377,11 @@ export default function AdminAnalyticsDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {analyticsData.realTimeMetrics.bounceRate}%
+              {analyticsData.realTimeMetrics.bounceRate > 0
+                ? `${analyticsData.realTimeMetrics.bounceRate}%`
+                : 'Insufficient data'}
             </div>
-            <p className="text-xs text-muted-foreground">-3% vs last week</p>
+            <p className="text-xs text-muted-foreground">Single-page sessions / total</p>
           </CardContent>
         </Card>
 
@@ -325,7 +396,7 @@ export default function AdminAnalyticsDashboard() {
             <div className="text-2xl font-bold">
               {analyticsData.realTimeMetrics.avgSessionDuration}
             </div>
-            <p className="text-xs text-muted-foreground">+15% vs last week</p>
+            <p className="text-xs text-muted-foreground">First to last event per session</p>
           </CardContent>
         </Card>
       </div>

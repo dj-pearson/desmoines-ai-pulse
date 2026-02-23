@@ -42,6 +42,7 @@ import { downloadICS, getGoogleCalendarUrl } from "@/lib/calendar";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
+import { useContentTracking } from "@/hooks/useContentTracking";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -52,6 +53,9 @@ export default function EventDetails() {
     const eventSlug = createEventSlugWithCentralTime(e.title, e);
     return eventSlug === slug;
   });
+
+  // Track page view and content interactions
+  const { trackShare } = useContentTracking(event?.id, 'event');
 
   const relatedEvents = event
     ? events
@@ -325,6 +329,7 @@ export default function EventDetails() {
                         title={event.title}
                         description={event.enhanced_description || event.original_description || `Check out ${event.title} in Des Moines`}
                         url={window.location.href}
+                        onShare={trackShare}
                       />
                     </div>
                   </div>

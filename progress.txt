@@ -63,11 +63,33 @@
 - ~~PearsonASUS file naming artifacts from merge~~ (RESOLVED: deleted in US-018)
 - ~~SearchTrafficDashboard commented out (missing migrations)~~ (RESOLVED: US-021)
 - ~~TODOs: distance calculation~~ (RESOLVED: US-022, see src/lib/geo.ts)
-- TODOs: user preferences server-side, scraping job persistence
+- ~~No content interaction tracking~~ (RESOLVED: US-032, see src/hooks/useContentTracking.ts)
+- ~~Hardcoded metrics in AdminAnalyticsDashboard~~ (RESOLVED: US-033, computed from real data)
+- ~~No email capture for free tool users~~ (RESOLVED: US-034, see src/components/EmailCaptureModal.tsx)
+- TODOs: user preferences server-side (US-019), scraping job persistence (US-020)
 
 ---
 
 ## Progress Log
+
+## 2026-02-23 — PRD Stories: Content Tracking, Email Capture, Analytics
+
+- **US-032**: Created `src/hooks/useContentTracking.ts` — fire-and-forget hook that tracks views, shares, favorites, and clicks to the `content_metrics` table. Integrated into EventDetails, RestaurantDetails, and AttractionDetails pages with automatic view tracking on mount and share tracking via ShareDialog `onShare` callback.
+- **US-034**: Created `src/components/EmailCaptureModal.tsx` — dismissible email capture modal with consent checkbox, name field, and safeStorage "don't show again" support. Integrated into TripPlanner (shown after itinerary generation). EventPromotionPlanner already had its own email capture.
+- **US-033**: Replaced all hardcoded metrics in AdminAnalyticsDashboard with real computed data:
+  - Bounce rate: computed from sessions with single page view / total sessions
+  - Avg session duration: computed from first-to-last event timestamps per session_id
+  - Device breakdown: computed from `device_type` field in `user_analytics`
+  - Top pages avgTime: estimated from inter-event gaps per page path
+  - Removed fake "+12%", "-3%", "+15%" comparison labels with accurate descriptions
+- **US-026**: Verified complete — skip navigation link in Header.tsx, `main#main-content` target in App.tsx, focus indicators in index.css, sr-only utility, AccessibleSkipLink component, and aria-labels on key interactive elements
+- **US-027**: Verified complete — `useReducedMotion` hook exists, `@media (prefers-reduced-motion: reduce)` CSS rules in index.css (global animation disable), `.a11y-reduced-motion` class for programmatic toggle
+- **US-011**: Verified complete — `public/_headers` with CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and comprehensive cache headers for Cloudflare Pages
+- **US-023**: Verified complete — `src/lib/env.ts` with environment variable validation
+- **US-038**: Verified complete — `src/lib/fetchWithRetry.ts` with exponential backoff
+- Added `onShare` callback prop to ShareDialog component for tracking integration
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 6369 modules, 55s)
 
 ## 2026-02-21 — PRD Stories Batch Implementation
 - **US-012**: Security audit of unauthenticated edge functions; created docs/SECURITY_AUDIT.md with risk classification for all 18 verify_jwt=false functions; added security documentation comments to each function
