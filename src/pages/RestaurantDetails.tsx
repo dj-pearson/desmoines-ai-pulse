@@ -35,6 +35,7 @@ import {
   Check,
 } from "lucide-react";
 import { useState } from "react";
+import { useContentTracking } from "@/hooks/useContentTracking";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -67,6 +68,9 @@ export default function RestaurantDetails() {
       return data;
     },
   });
+
+  // Track page view and content interactions
+  const { trackShare } = useContentTracking(restaurant?.id, 'restaurant');
 
   const { data: relatedRestaurants } = useQuery({
     queryKey: ["related-restaurants", restaurant?.cuisine, restaurant?.id],
@@ -356,6 +360,7 @@ export default function RestaurantDetails() {
                 title={restaurant.name}
                 description={restaurant.description || `Check out ${restaurant.name} - ${restaurant.cuisine} cuisine in Des Moines`}
                 url={typeof window !== 'undefined' ? window.location.href : ''}
+                onShare={trackShare}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
                     <Share2 className="h-4 w-4 mr-1.5" />

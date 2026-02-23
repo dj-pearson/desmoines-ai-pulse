@@ -22,6 +22,7 @@ import { useTripPlanner, TripPlan, TripPlanItem, TripPreferences } from "@/hooks
 import { useAuth } from "@/hooks/useAuth";
 import { Link, useNavigate } from "react-router-dom";
 import { format, addDays, differenceInDays } from "date-fns";
+import { EmailCaptureModal } from "@/components/EmailCaptureModal";
 import {
   Calendar,
   MapPin,
@@ -84,6 +85,7 @@ export default function TripPlanner() {
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>([]);
   const [accessibilityNeeds, setAccessibilityNeeds] = useState<string[]>([]);
   const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({});
+  const [showEmailCapture, setShowEmailCapture] = useState(false);
 
   const numDays = differenceInDays(new Date(endDate), new Date(startDate)) + 1;
 
@@ -106,6 +108,8 @@ export default function TripPlanner() {
 
     try {
       await generateItinerary({ startDate, endDate, preferences });
+      // Show email capture after successful generation
+      setShowEmailCapture(true);
     } catch (error) {
       log.error('generateItinerary', 'Error generating itinerary', { error });
     }
@@ -746,6 +750,11 @@ export default function TripPlanner() {
         </div>
 
         <Footer />
+        <EmailCaptureModal
+          open={showEmailCapture}
+          onOpenChange={setShowEmailCapture}
+          source="trip_planner"
+        />
       </div>
     </>
   );
