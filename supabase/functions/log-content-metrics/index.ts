@@ -1,3 +1,18 @@
+/**
+ * SECURITY: verify_jwt = false (intentionally unauthenticated)
+ *
+ * Reason: This function tracks page views, clicks, and shares for ALL visitors,
+ * including unauthenticated users. Requiring auth would lose analytics data for
+ * the majority of traffic.
+ *
+ * Mitigations:
+ * - Input validation via ALLOWED_METRIC_TYPES and ALLOWED_CONTENT_TYPES allowlists
+ * - UUID format validation on content_id
+ * - Write-only (upsert to content_metrics) — no data read/exfiltration risk
+ *
+ * Recommended: Add rate limiting to prevent analytics poisoning.
+ * See: docs/SECURITY_AUDIT.md
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 

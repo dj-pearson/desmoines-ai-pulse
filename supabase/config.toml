@@ -1,61 +1,69 @@
 project_id = "wtkhfqpmcegzcbngroui"
 
+# --- Admin-only functions (require JWT authentication) ---
+
 [functions.restaurant-opening-scraper]
-verify_jwt = false
+verify_jwt = true
 
 [functions.firecrawl-scraper]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ai-crawler]
-verify_jwt = false
+verify_jwt = true
 
 [functions.analyze-competitor]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bulk-enhance-events]
-verify_jwt = false
-
-[functions.log-content-metrics]
-verify_jwt = false
+verify_jwt = true
 
 [functions.test-ai-model]
 verify_jwt = true
 
 [functions.publish-article-webhook]
-verify_jwt = false
+verify_jwt = true
 
 [functions.test-article-webhook]
-verify_jwt = false
+verify_jwt = true
 
 [functions.scrape-events]
-verify_jwt = false
+verify_jwt = true
 
 [functions.personalized-recommendations]
-verify_jwt = false
-
-[functions.geocode-location]
-verify_jwt = false
+verify_jwt = true
 
 [functions.bulk-event-updater]
-verify_jwt = false
+verify_jwt = true
 
 [functions.backfill-all-coordinates-force]
-verify_jwt = false
+verify_jwt = true
 
 [functions.populate-playgrounds]
-verify_jwt = false
+verify_jwt = true
 
 [functions.extract-catchdesmoines-urls]
-verify_jwt = false
+verify_jwt = true
 
 [functions.backfill-coordinates]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-seo-content]
-verify_jwt = false
-
-[functions.image-transform]
-verify_jwt = false
+verify_jwt = true
 
 [functions.batch-process-images]
 verify_jwt = true
+
+# --- Public-facing functions (intentionally unauthenticated) ---
+# See docs/SECURITY_AUDIT.md for justification
+
+[functions.log-content-metrics]
+# Public: tracks page views/clicks for all visitors including unauthenticated
+verify_jwt = false
+
+[functions.geocode-location]
+# Public: frontend map features need geocoding for all users
+verify_jwt = false
+
+[functions.image-transform]
+# Public: image proxy for frontend rendering; has SSRF validation
+verify_jwt = false

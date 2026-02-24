@@ -1,3 +1,21 @@
+/**
+ * SECURITY: verify_jwt = false (intentionally unauthenticated)
+ *
+ * Reason: Image proxy/transform is used for frontend image rendering across
+ * the entire site, including for unauthenticated visitors viewing event
+ * and restaurant images.
+ *
+ * Mitigations:
+ * - SSRF protection via validateURLForSSRF (blocks private IPs, validates protocols)
+ * - GET-only (rejects other HTTP methods)
+ * - Format allowlist: only jpeg, jpg, png, webp, avif
+ * - Dimension limits: MAX_WIDTH=3840, MAX_HEIGHT=2160
+ * - Quality/blur parameter clamping
+ * - Response caching: Cache-Control: public, max-age=604800
+ *
+ * Recommended: Add rate limiting to prevent abuse as an open image proxy.
+ * See: docs/SECURITY_AUDIT.md
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
 

@@ -1,3 +1,19 @@
+/**
+ * SECURITY: verify_jwt = false (intentionally unauthenticated)
+ *
+ * Reason: Frontend map features (location search, geocoding) are available to
+ * all visitors including unauthenticated users. Requiring auth would break
+ * the public-facing map experience.
+ *
+ * Mitigations:
+ * - Read-only: queries Nominatim API, no database writes
+ * - Nominatim has its own rate limiting (1 req/sec per IP)
+ * - Input validation: checks that location parameter is non-empty
+ *
+ * Recommended: Add rate limiting from _shared/rateLimit.ts to prevent
+ * upstream Nominatim abuse and IP banning.
+ * See: docs/SECURITY_AUDIT.md
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 
 const NOMINATIM_API = "https://nominatim.openstreetmap.org/search";
