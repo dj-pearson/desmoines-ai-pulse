@@ -89,3 +89,14 @@ Started: Thu Feb 12 10:13:04 CST 2026
   - The `errorTracker` in `errorHandler.ts` auto-activates when `VITE_SENTRY_DSN` env var exists
   - `Sentry.captureException` in `componentDidCatch` ensures errors caught by the inner ErrorBoundary are still reported to Sentry
 ---
+
+## 2026-02-23 - US-011
+- Security headers already existed in `public/_headers` from a previous iteration
+- Added `https://*.ingest.sentry.io` to CSP `connect-src` to support Sentry error reporting (added in US-010)
+- All acceptance criteria already met: CSP, HSTS, X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy
+- Files changed: `public/_headers` (updated connect-src)
+- **Learnings for future iterations:**
+  - `public/_headers` is the Cloudflare Pages mechanism for HTTP headers — it gets copied to `dist/` on build
+  - When adding new external services (like Sentry), remember to update CSP connect-src
+  - The _headers file also handles caching strategy (immutable for hashed assets, no-cache for HTML)
+---
