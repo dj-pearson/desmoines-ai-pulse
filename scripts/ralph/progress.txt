@@ -72,3 +72,20 @@ Started: Thu Feb 12 10:13:04 CST 2026
   - `needs: [job1, job2]` ensures a job only runs after its dependencies pass — useful for making build depend on lint+tests
   - Splitting into parallel jobs (lint+typecheck vs unit tests) is faster than sequential steps in one job
 ---
+
+## 2026-02-23 - US-010
+- Integrated Sentry error tracking into the application
+- Installed `@sentry/react` as a dependency
+- Created `src/lib/sentry.ts` with `initSentry()` and Sentry re-export
+- Updated `src/main.tsx` to call `initSentry()` before React renders
+- Updated `src/lib/errorHandler.ts` to use Sentry-backed `ErrorTrackingService` when `VITE_SENTRY_DSN` is set
+- Updated `src/components/ui/error-boundary.tsx` to report errors via `Sentry.captureException` in `componentDidCatch`
+- Wrapped root App component with `Sentry.ErrorBoundary` as outermost error boundary in `src/App.tsx`
+- Added `VITE_SENTRY_DSN` to `.env.example` with setup instructions
+- Files changed: `src/lib/sentry.ts` (new), `src/main.tsx`, `src/lib/errorHandler.ts`, `src/App.tsx`, `src/components/ui/error-boundary.tsx`, `.env.example`, `package.json`, `package-lock.json`
+- **Learnings for future iterations:**
+  - `Sentry.ErrorBoundary` wraps outside `BrowserRouter`, so its fallback can't use react-router `Link` — use plain `<a>` tags instead
+  - Sentry init is a no-op when DSN is not set (`if (!dsn) return`)
+  - The `errorTracker` in `errorHandler.ts` auto-activates when `VITE_SENTRY_DSN` env var exists
+  - `Sentry.captureException` in `componentDidCatch` ensures errors caught by the inner ErrorBoundary are still reported to Sentry
+---

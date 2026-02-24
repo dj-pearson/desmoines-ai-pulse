@@ -154,8 +154,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "The codebase already has an ErrorTrackingService interface and initErrorTracking placeholder. This story fills in the actual implementation. The DSN will be configured per-environment at deploy time."
+      "passes": true,
+      "notes": "Completed: @sentry/react installed, src/lib/sentry.ts created with init + re-export, main.tsx calls initSentry() before render, errorHandler.ts uses Sentry-backed tracker when DSN is set, App.tsx wrapped with Sentry.ErrorBoundary, error-boundary.tsx reports to Sentry in componentDidCatch, VITE_SENTRY_DSN added to .env.example."
     },
     {
       "id": "US-011",
