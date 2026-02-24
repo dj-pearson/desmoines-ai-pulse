@@ -1,0 +1,17 @@
+# Ralph Progress Log
+Started: (first run will populate this)
+---
+
+## Codebase Patterns
+- Stack: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Supabase + React Router v6
+- Mobile app lives in mobile-app/ using Capacitor
+- Always use import.meta.env.VITE_* for environment variables (not process.env)
+- Always use @/lib/safeStorage instead of localStorage directly
+- Use @/lib/errorHandler for error handling
+- Use @/lib/capacitorUtils for platform detection and external link handling
+- Database types are in src/integrations/supabase/types.ts
+- Auth is accessed via useAuth() from @/contexts/AuthContext
+- Icons: Lucide React only
+- Quality checks: npm run type-check && npm run lint
+
+---

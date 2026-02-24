@@ -1,0 +1,35 @@
+{
+  "project": "Des Moines Insider",
+  "branchName": "ralph/example-feature",
+  "description": "Example Feature - Brief description of what this PRD implements",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Example: Add a Supabase schema change",
+      "description": "As a developer, I need to add a new column so it persists in the database.",
+      "acceptanceCriteria": [
+        "New column added to the relevant table via a migration in supabase/migrations/",
+        "Types updated in src/integrations/supabase/types.ts if needed",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Example: Add a UI component",
+      "description": "As a user, I want to see the new feature in the interface.",
+      "acceptanceCriteria": [
+        "Component created in src/components/",
+        "Component uses shadcn/ui primitives and Tailwind CSS",
+        "Component is responsive (mobile-first)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

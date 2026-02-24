@@ -57,7 +57,10 @@
     "mobile:build:all": "cd mobile-app && npm run build:all",
     "mobile:dev": "cd mobile-app && npm run dev",
     "mobile:open:ios": "cd mobile-app && npm run open:ios",
-    "mobile:open:android": "cd mobile-app && npm run open:android"
+    "mobile:open:android": "cd mobile-app && npm run open:android",
+    "ralph": "node scripts/ralph/ralph.mjs --tool claude",
+    "ralph:amp": "node scripts/ralph/ralph.mjs --tool amp",
+    "ralph:resume": "node scripts/ralph/ralph.mjs --tool claude --resume"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.19",
