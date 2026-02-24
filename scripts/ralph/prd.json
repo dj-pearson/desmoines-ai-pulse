@@ -79,7 +79,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "This replaces the 188 files of raw console.log with a structured alternative. Must be created before the cleanup stories."
     },
     {
@@ -94,7 +94,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Start with src/lib/ because these are the foundational utilities used everywhere. Subsequent stories will clean up hooks and components."
     },
     {
@@ -109,7 +109,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage — skip those."
     },
     {
@@ -123,7 +123,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Contexts are critical (AuthContext handles auth state). Pages are user-facing entry points. Both should have clean logging."
     },
     {
@@ -136,7 +136,7 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "This is the largest batch — 178 components. Many may already be clean. Focus on files that actually have console.* calls. The shadcn/ui base components in src/components/ui/ can be excluded if they have no console calls."
     },
     {
@@ -154,7 +154,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "The codebase already has an ErrorTrackingService interface and initErrorTracking placeholder. This story fills in the actual implementation. The DSN will be configured per-environment at deploy time."
     },
     {
@@ -172,7 +172,7 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Cloudflare Pages supports a _headers file in the output directory (public/ gets copied to dist/). CSP must be carefully crafted to not break Supabase realtime, Stripe checkout, Leaflet maps, or inline Tailwind styles."
     },
     {
@@ -187,7 +187,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "18 of 76 edge functions have verify_jwt=false. Many are background jobs (scrapers, crawlers) which is acceptable. But some may be misconfigured. The audit creates accountability."
     },
     {
@@ -203,7 +203,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "These functions process external data and modify the database. Without API key auth, anyone who discovers the function URL can trigger bulk data operations."
     },
     {
