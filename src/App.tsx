@@ -14,6 +14,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import BottomNav from "@/components/BottomNav";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SessionManager } from "@/components/auth/SessionManager";
+import { Sentry } from "@/lib/sentry";
 
 // Lazy load pages for better mobile performance
 const Index = lazy(() => import("./pages/Index"));
@@ -143,7 +144,21 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   );
 };
 
+const SentryFallback = ({ resetError }: { error: Error; resetError: () => void }) => (
+  <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="text-center space-y-4">
+      <h1 className="text-xl font-semibold">Something went wrong</h1>
+      <p className="text-muted-foreground">An unexpected error occurred. Please try again.</p>
+      <div className="flex gap-2 justify-center">
+        <button onClick={resetError} className="px-4 py-2 border rounded">Try Again</button>
+        <a href="/" className="px-4 py-2 bg-primary text-primary-foreground rounded">Go Home</a>
+      </div>
+    </div>
+  </div>
+);
+
 const App = () => (
+  <Sentry.ErrorBoundary fallback={SentryFallback}>
   <TooltipProvider>
     <BrowserRouter>
       <AuthProvider>
@@ -274,6 +289,7 @@ const App = () => (
       </AuthProvider>
     </BrowserRouter>
   </TooltipProvider>
+  </Sentry.ErrorBoundary>
 );
 
 export default App;

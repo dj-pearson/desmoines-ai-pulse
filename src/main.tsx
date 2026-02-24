@@ -7,6 +7,10 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import App from "./App";
 import "./index.css";
 import { initializeOnInteraction } from "./lib/lazyInit";
+import { initSentry } from "./lib/sentry";
+
+// Initialize Sentry before React renders (no-op when DSN is not set)
+initSentry();
 
 // Optimized query client with minimal configuration for faster TTI
 const queryClient = new QueryClient({

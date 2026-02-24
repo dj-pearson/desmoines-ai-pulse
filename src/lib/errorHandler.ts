@@ -4,6 +4,7 @@
  */
 
 import { createLogger } from '@/lib/logger';
+import { Sentry } from '@/lib/sentry';
 
 const log = createLogger('ErrorHandler');
 
@@ -19,11 +20,29 @@ interface ErrorTrackingService {
   captureMessage(message: string, level: 'info' | 'warning' | 'error'): void;
 }
 
-// Placeholder for error tracking service (e.g., Sentry)
-let errorTracker: ErrorTrackingService | null = null;
+// Sentry-backed error tracking service
+const sentryTracker: ErrorTrackingService = {
+  captureException(error: Error, context: ErrorContext) {
+    Sentry.captureException(error, {
+      tags: {
+        component: context.component,
+        action: context.action,
+      },
+      extra: context.metadata,
+      user: context.userId ? { id: context.userId } : undefined,
+    });
+  },
+  captureMessage(message: string, level: 'info' | 'warning' | 'error') {
+    Sentry.captureMessage(message, level);
+  },
+};
+
+// Use Sentry tracker when DSN is configured, otherwise null
+let errorTracker: ErrorTrackingService | null =
+  import.meta.env.VITE_SENTRY_DSN ? sentryTracker : null;
 
 /**
- * Initialize error tracking service
+ * Initialize error tracking service (override with a custom service if needed)
  */
 export function initErrorTracking(service: ErrorTrackingService) {
   errorTracker = service;

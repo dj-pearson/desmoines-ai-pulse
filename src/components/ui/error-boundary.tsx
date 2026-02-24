@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 import { Link } from "react-router-dom";
+import { Sentry } from "@/lib/sentry";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -40,11 +41,14 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
       userAgent: navigator.userAgent,
     };
 
-    // Log detailed error information
-    console.error('🔴 Error Boundary caught an error:', errorDetails);
+    // Log detailed error information in development
+    if (import.meta.env.DEV) {
+      // eslint-disable-next-line no-console
+      console.error('Error Boundary caught an error:', errorDetails);
+    }
 
-    // In production, you would send this to an error tracking service
-    // Example: Sentry.captureException(error, { contexts: { react: errorInfo } });
+    // Report to Sentry in production
+    Sentry.captureException(error, { contexts: { react: { componentStack: errorInfo.componentStack } } });
 
     // Store error in sessionStorage for debugging (cleared on successful navigation)
     try {
