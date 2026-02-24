@@ -2,11 +2,12 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { validateApiKey, apiKeyAuthError } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-trigger-source, x-endpoint",
+    "authorization, x-client-info, apikey, content-type, x-trigger-source, x-endpoint, x-api-key",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
@@ -1751,6 +1752,12 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Validate API key
+  const authResult = validateApiKey(req);
+  if (!authResult.valid) {
+    return apiKeyAuthError(authResult.error);
   }
 
   try {

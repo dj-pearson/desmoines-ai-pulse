@@ -13,11 +13,12 @@ import {
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
+import { validateApiKey, apiKeyAuthError } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-api-key",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
@@ -1286,6 +1287,12 @@ Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Validate API key
+  const authResult = validateApiKey(req);
+  if (!authResult.valid) {
+    return apiKeyAuthError(authResult.error);
   }
 
   try {

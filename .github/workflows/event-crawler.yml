@@ -1,0 +1,53 @@
+name: Event Crawler
+
+on:
+  schedule:
+    # Run daily at 6:00 AM UTC (midnight CST)
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      function:
+        description: 'Edge function to invoke'
+        required: true
+        default: 'scrape-events'
+        type: choice
+        options:
+          - scrape-events
+          - ai-crawler
+          - firecrawl-scraper
+          - restaurant-opening-scraper
+          - bulk-enhance-events
+          - bulk-event-updater
+
+jobs:
+  crawl:
+    name: Run Event Crawler
+    runs-on: ubuntu-latest
+    steps:
+      - name: Invoke edge function
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          WORKER_API_KEY: ${{ secrets.WORKER_API_KEY }}
+        run: |
+          FUNCTION="${{ github.event.inputs.function || 'scrape-events' }}"
+          echo "Invoking edge function: ${FUNCTION}"
+
+          RESPONSE=$(curl -s -w "\n%{http_code}" \
+            -X POST \
+            "${SUPABASE_URL}/functions/v1/${FUNCTION}" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "X-API-Key: ${WORKER_API_KEY}" \
+            -d '{"triggerSource": "github-actions"}')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: ${HTTP_CODE}"
+          echo "Response: ${BODY}"
+
+          if [ "$HTTP_CODE" -ge 400 ]; then
+            echo "::error::Edge function returned HTTP ${HTTP_CODE}"
+            exit 1
+          fi

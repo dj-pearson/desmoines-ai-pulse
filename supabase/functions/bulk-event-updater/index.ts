@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { serve } from 'https://deno.land/std@0.131.0/http/server.ts'
+import { validateApiKey, apiKeyAuthError } from '../_shared/apiKeyAuth.ts'
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -32,6 +33,12 @@ async function getStandardizedAddress(venue: string): Promise<string | null> {
 }
 
 serve(async (req) => {
+  // Validate API key
+  const authResult = validateApiKey(req)
+  if (!authResult.valid) {
+    return apiKeyAuthError(authResult.error)
+  }
+
   try {
     const { data: events, error } = await supabase
       .from('events')

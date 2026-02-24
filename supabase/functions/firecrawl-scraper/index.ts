@@ -5,6 +5,7 @@ import { parseISO } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { validateApiKey, apiKeyAuthError } from "../_shared/apiKeyAuth.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -249,7 +250,7 @@ const DEFAULT_BATCH_SIZE = 5;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 };
 
 // Initialize Supabase client
@@ -551,6 +552,12 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Validate API key
+  const authResult = validateApiKey(req);
+  if (!authResult.valid) {
+    return apiKeyAuthError(authResult.error);
   }
 
   try {

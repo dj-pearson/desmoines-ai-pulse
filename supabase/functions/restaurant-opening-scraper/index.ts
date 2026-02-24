@@ -2,10 +2,11 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";
+import { validateApiKey, apiKeyAuthError } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 };
 
 // Initialize Supabase client
@@ -57,6 +58,12 @@ const DEFAULT_SOURCES: ScraperSource[] = [
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Validate API key
+  const authResult = validateApiKey(req);
+  if (!authResult.valid) {
+    return apiKeyAuthError(authResult.error);
   }
 
   try {
