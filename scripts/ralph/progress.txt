@@ -100,3 +100,17 @@ Started: Thu Feb 12 10:13:04 CST 2026
   - When adding new external services (like Sentry), remember to update CSP connect-src
   - The _headers file also handles caching strategy (immutable for hashed assets, no-cache for HTML)
 ---
+
+## 2026-02-23 - US-012
+- Audited all 18 edge functions with verify_jwt=false
+- Changed 15 functions to verify_jwt=true (admin-only scrapers, crawlers, bulk operations)
+- Kept 3 functions unauthenticated with justification: log-content-metrics, geocode-location, image-transform
+- Added security comment blocks to the 3 intentionally unauthenticated functions
+- Created docs/SECURITY_AUDIT.md with risk levels (HIGH/MEDIUM/LOW), remediation recommendations
+- Files changed: supabase/config.toml, docs/SECURITY_AUDIT.md (new), 3 edge function index.ts files
+- **Learnings for future iterations:**
+  - Edge function auth is configured in supabase/config.toml via `[functions.name] verify_jwt = true/false`
+  - 15 of 18 unauthenticated functions were admin-only jobs that should have required auth
+  - SSRF is the most critical risk pattern — functions accepting caller-supplied URLs need domain allowlists
+  - Functions using service role key bypass RLS — extra dangerous without auth
+---

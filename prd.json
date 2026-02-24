@@ -187,8 +187,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "18 of 76 edge functions have verify_jwt=false. Many are background jobs (scrapers, crawlers) which is acceptable. But some may be misconfigured. The audit creates accountability."
+      "passes": true,
+      "notes": "Completed: All 18 functions audited. 15 changed to verify_jwt=true (admin-only scrapers, crawlers, bulk ops). 3 remain unauthenticated with justification (log-content-metrics, geocode-location, image-transform). docs/SECURITY_AUDIT.md created with risk levels and remediation recommendations. Comment blocks added to the 3 intentionally unauthenticated functions."
     },
     {
       "id": "US-013",
