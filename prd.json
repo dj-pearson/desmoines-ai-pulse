@@ -203,8 +203,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "These functions process external data and modify the database. Without API key auth, anyone who discovers the function URL can trigger bulk data operations."
+      "passes": true,
+      "notes": "Completed: Created apiKeyAuth.ts with X-API-Key header validation against WORKER_API_KEY secret (includes constant-time comparison). Applied to all 6 functions: ai-crawler, scrape-events, restaurant-opening-scraper, firecrawl-scraper, bulk-enhance-events, bulk-event-updater. Functions return 401 without valid key. Created event-crawler.yml GitHub Action with API key support via secrets.WORKER_API_KEY."
     },
     {
       "id": "US-014",

@@ -71,6 +71,9 @@ Started: Thu Feb 12 10:13:04 CST 2026
   - GitHub Actions parallel jobs each need their own checkout/setup/install steps (no shared state between jobs)
   - `needs: [job1, job2]` ensures a job only runs after its dependencies pass — useful for making build depend on lint+tests
   - Splitting into parallel jobs (lint+typecheck vs unit tests) is faster than sequential steps in one job
+- jsdom 28.x is broken (missing `generated/utils.js`); use jsdom 25.x with vitest
+- After switching branches, run `npm install` to restore dependencies that may have been partially committed
+- Previous iterations may complete stories but fail to mark `passes: true` in prd.json — always check git log for completed work before starting
 ---
 
 ## 2026-02-23 - US-010
@@ -113,4 +116,32 @@ Started: Thu Feb 12 10:13:04 CST 2026
   - 15 of 18 unauthenticated functions were admin-only jobs that should have required auth
   - SSRF is the most critical risk pattern — functions accepting caller-supplied URLs need domain allowlists
   - Functions using service role key bypass RLS — extra dangerous without auth
+---
+
+## 2026-02-23 - US-013
+- Created `supabase/functions/_shared/apiKeyAuth.ts` with `validateApiKey()` and `apiKeyAuthError()` exports
+- Validates `X-API-Key` header against `WORKER_API_KEY` Deno env secret
+- Includes constant-time string comparison (`timingSafeEqual`) to prevent timing attacks
+- Applied API key check to 6 data processing edge functions: ai-crawler, scrape-events, restaurant-opening-scraper, firecrawl-scraper, bulk-enhance-events, bulk-event-updater
+- Updated CORS `Access-Control-Allow-Headers` in each function to include `x-api-key`
+- Created `.github/workflows/event-crawler.yml` with `workflow_dispatch` (manual trigger + cron) passing `X-API-Key` from `secrets.WORKER_API_KEY`
+- Files changed: `supabase/functions/_shared/apiKeyAuth.ts` (new), `.github/workflows/event-crawler.yml` (new), 6 edge function `index.ts` files (updated)
+- **Learnings for future iterations:**
+  - These functions already have `verify_jwt=true` (from US-012), but API key auth provides an alternative path for automated triggers (GitHub Actions, cron) that don't have a JWT
+  - `Deno.env.get()` is the way to access secrets in edge functions (set via `supabase secrets set`)
+  - The `corsHeaders` object in each function uses `"*"` for origin — acceptable for server-to-server calls but ideally should use `_shared/cors.ts` for browser-facing endpoints
+  - `bulk-event-updater` uses an older Deno std library (`@0.131.0` vs `@0.168.0` elsewhere) and has no CORS headers or OPTIONS handling
+---
+
+## 2026-02-23 - US-005, US-006, US-007, US-008, US-009, US-010, US-011, US-012 (PRD reconciliation)
+- Verified that US-005 through US-012 were all implemented in previous iterations but PRD was not updated
+- Fixed broken test environment: downgraded jsdom from 28.x to 25.x (28.x missing `generated/utils.js`)
+- Installed missing `@sentry/react` dependency (code existed but package wasn't installed)
+- All 50 unit tests passing, typecheck clean
+- Marked all 8 stories as `passes: true` in prd.json
+- Files changed: `scripts/ralph/prd.json`, `scripts/ralph/progress.txt`, `package.json`, `package-lock.json`
+- **Learnings for future iterations:**
+  - jsdom 28.x has a known issue where `lib/generated/utils.js` is not distributed — always use 25.x
+  - Previous iterations sometimes commit code but fail to update `prd.json` passes status — always verify git log
+  - `npm install` may be needed after switching branches if node_modules is stale
 ---
