@@ -305,8 +305,10 @@ export default function EnhancedEventSEO({
       <meta property="og:locality" content={event.city || BRAND.city} />
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
-      {event.image_url && <meta property="og:image" content={event.image_url} />}
-      {event.image_url && <meta property="og:image:alt" content={`${event.title} - ${event.category} event in ${BRAND.city}`} />}
+      <meta property="og:image" content={event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content={`${event.title} - ${event.category} event in ${BRAND.city}`} />
       <meta property="og:url" content={eventUrl} />
       <meta property="og:site_name" content={BRAND.name} />
 
@@ -314,7 +316,7 @@ export default function EnhancedEventSEO({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={getOptimizedTitle()} />
       <meta name="twitter:description" content={getGEODescription()} />
-      {event.image_url && <meta name="twitter:image" content={event.image_url} />}
+      <meta name="twitter:image" content={event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data */}

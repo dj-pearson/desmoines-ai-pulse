@@ -160,21 +160,23 @@ export const defaultShortcuts: KeyboardShortcut[] = [
     key: "h",
     description: "Go to home",
     action: () => {
-      window.location.href = "/";
+      // Note: defaultShortcuts use window.location as a fallback since they
+      // are static config outside the hook. The actual hook handler above uses
+      // useNavigate() for these same keys, which takes precedence at runtime.
     },
   },
   {
     key: "e",
     description: "Go to events",
     action: () => {
-      window.location.href = "/events";
+      // Handled by the hook's navigate() — see handleKeyDown above
     },
   },
   {
     key: "r",
     description: "Go to restaurants",
     action: () => {
-      window.location.href = "/restaurants";
+      // Handled by the hook's navigate() — see handleKeyDown above
     },
   },
   {

@@ -66,11 +66,42 @@
 - ~~No content interaction tracking~~ (RESOLVED: US-032, see src/hooks/useContentTracking.ts)
 - ~~Hardcoded metrics in AdminAnalyticsDashboard~~ (RESOLVED: US-033, computed from real data)
 - ~~No email capture for free tool users~~ (RESOLVED: US-034, see src/components/EmailCaptureModal.tsx)
+- ~~AI/LLM edge functions unprotected from abuse~~ (RESOLVED: US-061, rate limiting at 10 req/15min)
+- ~~backfill-images edge function has no auth~~ (RESOLVED: US-062, API key middleware added)
+- ~~og:image missing on HotelDetails and conditional on Enhanced SEO components~~ (RESOLVED: US-063)
+- ~~MediaLibrary component not wired into admin panel~~ (RESOLVED: US-064, /admin/media route)
 - TODOs: user preferences server-side (US-019), scraping job persistence (US-020)
 
 ---
 
 ## Progress Log
+
+## 2026-02-25 — Ralph Loop: Security, SEO, Admin, Code Quality
+
+- **US-001 through US-010**: Verified all 10 stories as complete in codebase; marked `passes: true` in prd.json (CI/CD, Vitest, unit tests, structured logger, console cleanup, Sentry)
+- **US-017**: Fixed `metadata?: any` → `Record<string, unknown>` in AuthContext.tsx for strict mode compliance
+- **US-031**: Replaced `window.location.href` with no-ops in `defaultShortcuts` (runtime already uses `useNavigate()` in the hook handler); replaced `window.location.href = 'mailto:...'` with `<a href="mailto:...">` via `asChild` in AdvertiseSuccess.tsx and AdvertiseCancel.tsx
+- **US-061**: Added rate limiting (10 req/15min) to 5 AI/LLM edge functions:
+  - `generate-itinerary` (Claude trip planner)
+  - `generate-seo-content` (Claude SEO batch)
+  - `personalized-recommendations` (OpenAI recommendations)
+  - `generate-writeup` (Claude writeups)
+  - `analyze-competitor` (Claude competitor analysis)
+  - Documented rate limit tiers in `_shared/rateLimit.ts` header comment
+- **US-062**: Added `requireApiKey()` middleware to `backfill-images` edge function; added `x-api-key` to CORS allowed headers
+- **US-063**: Guaranteed dynamic `og:image` with fallback on all content detail pages:
+  - HotelDetails: Added full og:image, og:image:width/height/alt, and twitter:image tags (was completely missing)
+  - EnhancedEventSEO: Changed conditional `{event.image_url && ...}` to always-present with brand fallback, added width/height
+  - EnhancedAttractionSEO: Same pattern — unconditional og:image with fallback, added width/height
+  - EnhancedPlaygroundSEO: Same pattern — unconditional og:image with fallback, added width/height
+- **US-064**: Wired MediaLibrary admin component into the Admin panel:
+  - Created `src/pages/AdminMedia.tsx` page wrapper
+  - Added lazy import and `/admin/media` route in App.tsx with ProtectedRoute
+  - Added "Media" nav item with Image icon to AdminNav.tsx
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 6374 modules, 46s)
+
+**PRD Status**: 34/71 stories complete (48%)
 
 ## 2026-02-23 — PRD Stories: Content Tracking, Email Capture, Analytics
 
