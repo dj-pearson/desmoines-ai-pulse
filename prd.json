@@ -1,7 +1,7 @@
 {
   "project": "Des Moines AI Pulse",
   "branchName": "ralph/enterprise-readiness",
-  "description": "Enterprise & Production Readiness — Comprehensive hardening of the Des Moines AI Pulse platform across CI/CD, testing, security, observability, code quality, performance, accessibility, and documentation to achieve enterprise-grade production standards.",
+  "description": "Enterprise & Production Readiness \u2014 Comprehensive hardening of the Des Moines AI Pulse platform across CI/CD, testing, security, observability, code quality, performance, accessibility, and documentation to achieve enterprise-grade production standards.",
   "userStories": [
     {
       "id": "US-001",
@@ -15,8 +15,8 @@
         "Typecheck passes locally"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "The project currently only has an event-crawler.yml workflow. This is the single most critical gap for enterprise readiness — no code quality gates exist in CI."
+      "passes": true,
+      "notes": "The project currently only has an event-crawler.yml workflow. This is the single most critical gap for enterprise readiness \u2014 no code quality gates exist in CI."
     },
     {
       "id": "US-002",
@@ -32,7 +32,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Currently the project only has Playwright E2E tests. No unit testing framework exists. Vitest is the natural choice since the project already uses Vite."
     },
     {
@@ -47,7 +47,7 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Focus on the three most critical library files: errorHandler.ts, safeStorage.ts, and utils.ts. These are used across the entire codebase."
     },
     {
@@ -62,7 +62,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-001 (workflow) and US-002 (vitest setup). This ensures tests are enforced, not just available."
     },
     {
@@ -79,7 +79,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "This replaces the 188 files of raw console.log with a structured alternative. Must be created before the cleanup stories."
     },
     {
@@ -94,7 +94,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Start with src/lib/ because these are the foundational utilities used everywhere. Subsequent stories will clean up hooks and components."
     },
     {
@@ -109,8 +109,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage — skip those."
+      "passes": true,
+      "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage \u2014 skip those."
     },
     {
       "id": "US-008",
@@ -123,7 +123,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Contexts are critical (AuthContext handles auth state). Pages are user-facing entry points. Both should have clean logging."
     },
     {
@@ -136,8 +136,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "This is the largest batch — 178 components. Many may already be clean. Focus on files that actually have console.* calls. The shadcn/ui base components in src/components/ui/ can be excluded if they have no console calls."
+      "passes": true,
+      "notes": "This is the largest batch \u2014 178 components. Many may already be clean. Focus on files that actually have console.* calls. The shadcn/ui base components in src/components/ui/ can be excluded if they have no console calls."
     },
     {
       "id": "US-010",
@@ -154,7 +154,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "The codebase already has an ErrorTrackingService interface and initErrorTracking placeholder. This story fills in the actual implementation. The DSN will be configured per-environment at deploy time."
     },
     {
@@ -228,7 +228,7 @@
       "acceptanceCriteria": [
         "Search all source files for direct localStorage.getItem, localStorage.setItem, localStorage.removeItem calls",
         "Replace each with the equivalent safeStorage (storage.get, storage.set, storage.remove) from @/lib/safeStorage",
-        "Verify no sensitive data (tokens, passwords, PII) is stored in localStorage — if found, remove it or move to session-only storage",
+        "Verify no sensitive data (tokens, passwords, PII) is stored in localStorage \u2014 if found, remove it or move to session-only storage",
         "No direct localStorage.* calls remain in src/ (excluding node_modules and test files)",
         "Typecheck passes"
       ],
@@ -250,7 +250,7 @@
       ],
       "priority": 16,
       "passes": true,
-      "notes": "The project has 682 instances of 'any' type. Starting with src/lib/ is strategic because these utilities are imported everywhere — fixing them improves downstream type safety."
+      "notes": "The project has 682 instances of 'any' type. Starting with src/lib/ is strategic because these utilities are imported everywhere \u2014 fixing them improves downstream type safety."
     },
     {
       "id": "US-017",
@@ -265,7 +265,7 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "These are the most commonly referenced hooks in CLAUDE.md. Strict typing here cascades type safety to all consumers."
     },
     {
@@ -297,7 +297,7 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Currently marked as TODO in use-user-preferences.ts. The profiles table has a preferences JSONB column that can be used."
     },
     {
@@ -447,7 +447,7 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Feature flags are essential for enterprise deployments. They allow progressive rollouts and instant rollbacks without redeploying code."
     },
     {
@@ -490,13 +490,13 @@
       "acceptanceCriteria": [
         "Search for all instances of window.location.href, window.location.reload(), and window.location.replace() in src/",
         "Replace each with useNavigate() from react-router-dom (navigate() for href, navigate(0) for reload where truly necessary)",
-        "Remove any window.location.reload() calls that exist only to force state refresh — use React state or query invalidation instead",
+        "Remove any window.location.reload() calls that exist only to force state refresh \u2014 use React state or query invalidation instead",
         "Verify no runtime navigation errors by testing key flows: login, logout, admin panel, content table actions",
         "Typecheck passes",
         "npm run build passes"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": "78+ instances of direct window.location usage bypass React Router, causing full page reloads that lose component state. Highest impact in AdminLogin, ContentTable, ProtectedRoute, and TrendingContent."
     },
     {
@@ -509,7 +509,7 @@
         "Integrate tracking into favorite/unfavorite actions for 'favorite' events",
         "Integrate tracking into share actions for 'share' events",
         "Events are inserted into the content_metrics Supabase table",
-        "Fire-and-forget pattern — tracking errors never block the UI",
+        "Fire-and-forget pattern \u2014 tracking errors never block the UI",
         "Typecheck passes"
       ],
       "priority": 32,
@@ -593,7 +593,7 @@
         "Typecheck passes"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": "Currently there is no record of who deleted content or changed user roles. This is critical for multi-admin environments and incident investigation."
     },
     {
@@ -623,7 +623,7 @@
         "Typecheck passes"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "The subscription system exists but there's no visibility into conversion rates. Without funnel data, optimizing the pricing page or checkout flow is guesswork."
     },
     {
@@ -644,13 +644,13 @@
     {
       "id": "US-041",
       "title": "Build 'Des Best' crowdsourced local voting system",
-      "description": "As a local resident, I need the ability to vote on 'Best Of' categories (Best Pizza, Best Coffee, Best Date Night, Best Hidden Gem, etc.) so that the platform reflects authentic local opinions and becomes the go-to source for crowdsourced recommendations — not Catch Des Moines.",
+      "description": "As a local resident, I need the ability to vote on 'Best Of' categories (Best Pizza, Best Coffee, Best Date Night, Best Hidden Gem, etc.) so that the platform reflects authentic local opinions and becomes the go-to source for crowdsourced recommendations \u2014 not Catch Des Moines.",
       "acceptanceCriteria": [
         "Create a Supabase migration for voting_categories table: id (UUID PK), name (text), slug (text UNIQUE), description (text), icon (text), is_active (boolean), voting_start (timestamptz), voting_end (timestamptz), created_at",
         "Create a Supabase migration for votes table: id (UUID PK), category_id (UUID FK), entity_type (text: restaurant/event/attraction/custom), entity_id (UUID nullable FK), custom_entry (text for write-in votes), user_id (UUID FK to auth.users), created_at, with UNIQUE constraint on (category_id, user_id) to prevent double-voting",
         "Create /best-of route page with category grid showing all active voting categories with vote counts",
         "Create /best-of/:category detail page showing ranked results with vote percentages and entity cards",
-        "Create src/components/VotingBooth.tsx component with search-to-vote UX — user searches for a place, selects it, and casts vote",
+        "Create src/components/VotingBooth.tsx component with search-to-vote UX \u2014 user searches for a place, selects it, and casts vote",
         "Allow write-in votes for places not yet in the database",
         "Add RLS policies: authenticated users can vote once per category, public read for results",
         "Display 'Des Best' badge on winning entities across the platform (event cards, restaurant cards, etc.)",
@@ -659,12 +659,12 @@
       ],
       "priority": 41,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines runs 'Des Best' with crowdsourced local voting that drives massive engagement. CITYVIEW's 'Best of Des Moines' gets 22,969+ votes across 271 categories annually. We have zero community voting. This is the single biggest engagement feature we're missing — locals vote, share results, and return to see who won. It turns passive readers into active participants."
+      "notes": "COMPETITIVE GAP: Catch Des Moines runs 'Des Best' with crowdsourced local voting that drives massive engagement. CITYVIEW's 'Best of Des Moines' gets 22,969+ votes across 271 categories annually. We have zero community voting. This is the single biggest engagement feature we're missing \u2014 locals vote, share results, and return to see who won. It turns passive readers into active participants."
     },
     {
       "id": "US-042",
       "title": "Create curated editorial itineraries with printable checklists",
-      "description": "As a visitor planning a trip to Des Moines, I need pre-built themed itineraries (Weekend Getaway, Date Day, Family Fun, Art Walk, Craft Beer Trail, Foodie Tour) with printable checklists so that I can plan a trip without needing AI — just browse, pick, and go.",
+      "description": "As a visitor planning a trip to Des Moines, I need pre-built themed itineraries (Weekend Getaway, Date Day, Family Fun, Art Walk, Craft Beer Trail, Foodie Tour) with printable checklists so that I can plan a trip without needing AI \u2014 just browse, pick, and go.",
       "acceptanceCriteria": [
         "Create a Supabase migration for curated_itineraries table: id (UUID PK), title (text), slug (text UNIQUE), description (text), duration (text: 'half-day'/'full-day'/'weekend'/'3-day'), theme (text), cover_image (text), stops (JSONB array of {order, entity_type, entity_id, name, description, time_suggestion, tips}), seo_title, seo_description, created_at, updated_at, is_published (boolean)",
         "Create /itineraries route page with itinerary cards organized by theme (Romance, Family, Adventure, Food & Drink, Arts & Culture, Sports)",
@@ -683,7 +683,7 @@
     {
       "id": "US-043",
       "title": "Build deals, coupons, and special offers section",
-      "description": "As a budget-conscious visitor or local, I need a dedicated deals and coupons section so that I can find current discounts on restaurants, attractions, hotels, and activities — giving me a reason to check the platform before every outing.",
+      "description": "As a budget-conscious visitor or local, I need a dedicated deals and coupons section so that I can find current discounts on restaurants, attractions, hotels, and activities \u2014 giving me a reason to check the platform before every outing.",
       "acceptanceCriteria": [
         "Create a Supabase migration for deals table: id (UUID PK), title (text), description (text), business_name (text), entity_type (text: restaurant/attraction/hotel/event), entity_id (UUID nullable FK), deal_type (text: percentage/dollar_off/bogo/free_item/package), discount_value (text), code (text nullable for promo codes), terms (text), start_date (timestamptz), end_date (timestamptz), image_url (text), is_verified (boolean), is_featured (boolean), redemption_count (integer default 0), created_at",
         "Create /deals route page with filterable deal cards organized by category (Dining, Attractions, Hotels, Activities)",
@@ -697,7 +697,7 @@
       ],
       "priority": 43,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has a dedicated deals/coupons section for attractions, hotels, and restaurants. We have zero deals functionality. Deals create urgency, repeat visits, and direct business value for partners. This also creates a monetization path — businesses pay to feature deals prominently."
+      "notes": "COMPETITIVE GAP: Catch Des Moines has a dedicated deals/coupons section for attractions, hotels, and restaurants. We have zero deals functionality. Deals create urgency, repeat visits, and direct business value for partners. This also creates a monetization path \u2014 businesses pay to feature deals prominently."
     },
     {
       "id": "US-044",
@@ -716,17 +716,17 @@
       ],
       "priority": 44,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Best-in-class tourism sites (Zurich, NYCGo, Visit Australia) all feature prominent interactive maps as primary discovery tools. We have Leaflet maps embedded in individual pages but no central 'explore by map' experience. Catch Des Moines doesn't have this either — this is an opportunity to leapfrog them."
+      "notes": "COMPETITIVE GAP: Best-in-class tourism sites (Zurich, NYCGo, Visit Australia) all feature prominent interactive maps as primary discovery tools. We have Leaflet maps embedded in individual pages but no central 'explore by map' experience. Catch Des Moines doesn't have this either \u2014 this is an opportunity to leapfrog them."
     },
     {
       "id": "US-045",
       "title": "Build dedicated live music and concert hub with 'The Setlist' monthly feature",
-      "description": "As a music fan in Des Moines, I need a dedicated live music section with venue guides, tonight's shows, and a curated monthly 'Setlist' feature so that I never miss a great show — and I stop going to Catch Des Moines for their concert calendar.",
+      "description": "As a music fan in Des Moines, I need a dedicated live music section with venue guides, tonight's shows, and a curated monthly 'Setlist' feature so that I never miss a great show \u2014 and I stop going to Catch Des Moines for their concert calendar.",
       "acceptanceCriteria": [
         "Create /music route page with sections: Tonight's Shows, This Weekend's Shows, Upcoming Concerts, Venue Guide",
         "Create a Supabase migration for venues table: id (UUID PK), name (text), slug (text UNIQUE), description (text), address (text), capacity (integer), venue_type (text: arena/theater/bar/club/outdoor), image_url (text), website (text), latitude (numeric), longitude (numeric), created_at",
         "Create /music/venues/:slug venue detail page showing upcoming events at that venue, venue info, photos, and map",
-        "Add 'The Setlist' monthly feature section — an editable curated list of the top 10-15 must-see shows each month, stored as a JSONB column in a monthly_features table",
+        "Add 'The Setlist' monthly feature section \u2014 an editable curated list of the top 10-15 must-see shows each month, stored as a JSONB column in a monthly_features table",
         "Filter events by category='Music' or category='Concert' with additional genre tags (Rock, Country, Jazz, Hip-Hop, Electronic, Classical)",
         "Add venue map showing all music venues in Des Moines with tonight's shows highlighted",
         "Add 'Set Reminder' button on each show that triggers the existing EventReminderSettings flow",
@@ -735,12 +735,12 @@
       ],
       "priority": 45,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has 'The Setlist' — a monthly curated feature highlighting the best concerts each month, plus dedicated venue pages and a concert calendar. We lump music into general events with no venue context, no curation, and no genre filtering. Des Moines has a thriving music scene and this deserves its own hub."
+      "notes": "COMPETITIVE GAP: Catch Des Moines has 'The Setlist' \u2014 a monthly curated feature highlighting the best concerts each month, plus dedicated venue pages and a concert calendar. We lump music into general events with no venue context, no curation, and no genre filtering. Des Moines has a thriving music scene and this deserves its own hub."
     },
     {
       "id": "US-046",
       "title": "Build dedicated sports hub with team schedules and tailgating guides",
-      "description": "As a sports fan visiting or living in Des Moines, I need a dedicated sports section with team schedules, venue guides, and tailgating tips so that I can plan my gameday experience — Des Moines is the #1 minor league market in the country and we should own that narrative.",
+      "description": "As a sports fan visiting or living in Des Moines, I need a dedicated sports section with team schedules, venue guides, and tailgating tips so that I can plan my gameday experience \u2014 Des Moines is the #1 minor league market in the country and we should own that narrative.",
       "acceptanceCriteria": [
         "Create /sports route page with sections: Today's Games, This Week's Schedule, Teams & Venues, Tailgating Guide",
         "Create a Supabase migration for teams table: id (UUID PK), name (text), slug (text UNIQUE), sport (text), league (text), venue_name (text), venue_id (UUID nullable FK to venues), logo_url (text), website (text), schedule_url (text), description (text), created_at",
@@ -776,11 +776,11 @@
     {
       "id": "US-048",
       "title": "Build brewery and craft beer trail experience",
-      "description": "As a craft beer enthusiast, I need a brewery trail feature with a digital passport so that I can discover Des Moines breweries, track my visits, earn rewards, and complete the trail — turning brewery hopping into a gamified adventure.",
+      "description": "As a craft beer enthusiast, I need a brewery trail feature with a digital passport so that I can discover Des Moines breweries, track my visits, earn rewards, and complete the trail \u2014 turning brewery hopping into a gamified adventure.",
       "acceptanceCriteria": [
         "Create /breweries route page filtering restaurants where cuisine includes 'Brewery' or 'Craft Beer', with additional brewery-specific fields",
         "Create a Supabase migration for brewery_trail_checkins table: id (UUID PK), user_id (UUID FK), restaurant_id (UUID FK), checked_in_at (timestamptz), photo_url (text nullable), beer_name (text nullable), rating (integer 1-5 nullable)",
-        "Create a digital 'Brewery Passport' component showing all trail breweries as stamps — filled when checked in, empty when not visited",
+        "Create a digital 'Brewery Passport' component showing all trail breweries as stamps \u2014 filled when checked in, empty when not visited",
         "Add check-in functionality with optional photo upload and beer rating",
         "Award gamification XP (40 XP) for each brewery check-in, plus bonus badge for completing the full trail",
         "Create /breweries/trail map page showing all breweries on an interactive map with check-in status overlay",
@@ -790,7 +790,7 @@
       ],
       "priority": 48,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines promotes craft beer trails. Des Moines has a booming craft beer scene. We list restaurants but have no brewery-specific experience and no 'trail' gamification. The digital passport concept combines our existing gamification system with brewery discovery — something no competitor does digitally."
+      "notes": "COMPETITIVE GAP: Catch Des Moines promotes craft beer trails. Des Moines has a booming craft beer scene. We list restaurants but have no brewery-specific experience and no 'trail' gamification. The digital passport concept combines our existing gamification system with brewery discovery \u2014 something no competitor does digitally."
     },
     {
       "id": "US-049",
@@ -808,7 +808,7 @@
       ],
       "priority": 49,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has detailed transportation pages covering ParkDSM app, skywalk system (4+ miles of enclosed walkways), BCycle, airport info, and transit. We have zero transportation content. This is essential visitor info — especially the skywalk system which is unique to Des Moines and critical during winter months."
+      "notes": "COMPETITIVE GAP: Catch Des Moines has detailed transportation pages covering ParkDSM app, skywalk system (4+ miles of enclosed walkways), BCycle, airport info, and transit. We have zero transportation content. This is essential visitor info \u2014 especially the skywalk system which is unique to Des Moines and critical during winter months."
     },
     {
       "id": "US-050",
@@ -820,7 +820,7 @@
         "Add 'Download Digital Guide' button that serves the PDF and captures email address (lead generation)",
         "Add 'Request Free Guide' form that collects name, email, and mailing address for physical guide fulfillment",
         "Store guide requests in a Supabase guide_requests table for fulfillment tracking",
-        "Create a seasonal/annual refresh process — guide content should pull from current platform data",
+        "Create a seasonal/annual refresh process \u2014 guide content should pull from current platform data",
         "Add Schema.org TouristInformationCenter structured data",
         "Track downloads and requests in analytics for conversion metrics",
         "Typecheck passes"
@@ -845,7 +845,7 @@
       ],
       "priority": 51,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has an entire Meeting Planners section with RFP submission, venue search by capacity, destination services, and wedding planning. This is a major B2B revenue driver for them. We have zero B2B meeting/convention features. The Des Moines convention business is significant — Iowa Events Center, Community Choice Credit Union Convention Center, etc."
+      "notes": "COMPETITIVE GAP: Catch Des Moines has an entire Meeting Planners section with RFP submission, venue search by capacity, destination services, and wedding planning. This is a major B2B revenue driver for them. We have zero B2B meeting/convention features. The Des Moines convention business is significant \u2014 Iowa Events Center, Community Choice Credit Union Convention Center, etc."
     },
     {
       "id": "US-052",
@@ -863,12 +863,12 @@
       ],
       "priority": 52,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines publishes seasonal content heavily — summer activity guides, fall festival roundups, holiday event guides. We have a guides page but it's mostly static. Seasonal editorial content drives massive organic traffic from searches like 'things to do in Des Moines this summer' and 'Des Moines holiday events 2026'."
+      "notes": "COMPETITIVE GAP: Catch Des Moines publishes seasonal content heavily \u2014 summer activity guides, fall festival roundups, holiday event guides. We have a guides page but it's mostly static. Seasonal editorial content drives massive organic traffic from searches like 'things to do in Des Moines this summer' and 'Des Moines holiday events 2026'."
     },
     {
       "id": "US-053",
       "title": "Create neighborhood deep-dive pages with local insider content",
-      "description": "As someone exploring Des Moines neighborhoods, I need rich neighborhood pages with walking tour routes, local business spotlights, history, and 'insider secrets' so that I can experience each neighborhood like a local — not just see a list of restaurants.",
+      "description": "As someone exploring Des Moines neighborhoods, I need rich neighborhood pages with walking tour routes, local business spotlights, history, and 'insider secrets' so that I can experience each neighborhood like a local \u2014 not just see a list of restaurants.",
       "acceptanceCriteria": [
         "Enhance existing /neighborhoods/:slug pages with: neighborhood history section, walking tour route (map with numbered stops), 'Insider Secrets' tips from locals, photo gallery, demographic/vibe description",
         "Add a Supabase migration for neighborhood_content table: id (UUID PK), neighborhood_slug (text), content_type (text: history/walking_tour/insider_tip/photo), content (JSONB), author (text nullable), created_at",
@@ -881,12 +881,12 @@
       ],
       "priority": 53,
       "passes": false,
-      "notes": "COMPETITIVE GAP: DSM Partnership publishes neighborhood guides with near-neighborhood deep-dives. Catch Des Moines features neighborhood-specific content. Explore Des Moines runs neighborhood events like 'Eat.Drink.Architecture' walking tours. Our neighborhood pages exist but are thin — mostly entity counts. Rich neighborhood content is a massive SEO play for hyper-local searches."
+      "notes": "COMPETITIVE GAP: DSM Partnership publishes neighborhood guides with near-neighborhood deep-dives. Catch Des Moines features neighborhood-specific content. Explore Des Moines runs neighborhood events like 'Eat.Drink.Architecture' walking tours. Our neighborhood pages exist but are thin \u2014 mostly entity counts. Rich neighborhood content is a massive SEO play for hyper-local searches."
     },
     {
       "id": "US-054",
       "title": "Build food and drink editorial hub with 'Restaurant Week' and curated lists",
-      "description": "As a foodie in Des Moines, I need a dedicated food and drink editorial hub with curated 'Best Of' lists, Restaurant Week coverage, chef spotlights, and food scene news so that this platform becomes the definitive Des Moines dining resource — not dsm Magazine or Catch Des Moines.",
+      "description": "As a foodie in Des Moines, I need a dedicated food and drink editorial hub with curated 'Best Of' lists, Restaurant Week coverage, chef spotlights, and food scene news so that this platform becomes the definitive Des Moines dining resource \u2014 not dsm Magazine or Catch Des Moines.",
       "acceptanceCriteria": [
         "Create /food-drink route page with sections: Best Of Lists, Restaurant Week, Chef Spotlights, New Openings, Food Trucks, Dining Guides",
         "Create a Supabase migration for food_lists table: id (UUID PK), title (text), slug (text UNIQUE), description (text), list_type (text: best_of/new_openings/closing/chef_spotlight), items (JSONB array of {restaurant_id, name, description, why_its_great, image_url}), cover_image (text), author (text), is_published (boolean), publish_date (timestamptz), seo_title, seo_description",
@@ -898,12 +898,12 @@
       ],
       "priority": 54,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has extensive 'Des Best' food content (Best Pizza, Best Ice Cream, Best Coffee, Best Happy Hours, Best Food Trucks). dsm Magazine runs Restaurant Week with dozens of participating venues. We have restaurant listings but zero editorial food content — no curated lists, no new opening alerts, no chef spotlights. Food content is the #1 traffic driver for city guide sites."
+      "notes": "COMPETITIVE GAP: Catch Des Moines has extensive 'Des Best' food content (Best Pizza, Best Ice Cream, Best Coffee, Best Happy Hours, Best Food Trucks). dsm Magazine runs Restaurant Week with dozens of participating venues. We have restaurant listings but zero editorial food content \u2014 no curated lists, no new opening alerts, no chef spotlights. Food content is the #1 traffic driver for city guide sites."
     },
     {
       "id": "US-055",
       "title": "Implement real-time weather integration with activity suggestions",
-      "description": "As a visitor or local checking the platform, I need to see current weather conditions with smart activity suggestions so that I can plan my day based on what's actually happening outside — rainy day indoor activities, perfect patio weather alerts, etc.",
+      "description": "As a visitor or local checking the platform, I need to see current weather conditions with smart activity suggestions so that I can plan my day based on what's actually happening outside \u2014 rainy day indoor activities, perfect patio weather alerts, etc.",
       "acceptanceCriteria": [
         "Create src/hooks/useWeather.ts that fetches current weather and 5-day forecast from a free weather API (OpenWeatherMap or WeatherAPI) for Des Moines",
         "Create src/components/WeatherWidget.tsx displaying current temp, conditions, and icon in the header or homepage hero",
@@ -935,7 +935,7 @@
       ],
       "priority": 56,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Industry trend — Viator and Booking.com have loyalty programs with real rewards. Our gamification system awards XP and badges but they're purely cosmetic. Adding real redemption value transforms gamification from a novelty into a retention driver. This also creates a compelling pitch for business partnerships — 'get your offer in front of our most engaged users.'"
+      "notes": "COMPETITIVE GAP: Industry trend \u2014 Viator and Booking.com have loyalty programs with real rewards. Our gamification system awards XP and badges but they're purely cosmetic. Adding real redemption value transforms gamification from a novelty into a retention driver. This also creates a compelling pitch for business partnerships \u2014 'get your offer in front of our most engaged users.'"
     },
     {
       "id": "US-057",
@@ -958,20 +958,20 @@
     {
       "id": "US-058",
       "title": "Create 'What's New in DSM' feed with new openings, closings, and scene updates",
-      "description": "As a local who wants to stay in the loop, I need a news feed of what's new in Des Moines — new restaurant openings, business closings, construction updates, and scene changes — so that I have a reason to check the platform daily.",
+      "description": "As a local who wants to stay in the loop, I need a news feed of what's new in Des Moines \u2014 new restaurant openings, business closings, construction updates, and scene changes \u2014 so that I have a reason to check the platform daily.",
       "acceptanceCriteria": [
         "Create a Supabase migration for scene_updates table: id (UUID PK), title (text), body (text), update_type (text: new_opening/closing/renovation/expansion/news), entity_type (text: restaurant/attraction/venue/neighborhood nullable), entity_id (UUID nullable FK), image_url (text nullable), source_url (text nullable), neighborhood (text nullable), is_published (boolean), publish_date (timestamptz), author (text), created_at",
         "Create /whats-new route page with a chronological feed of scene updates, filterable by type and neighborhood",
         "Create src/components/SceneUpdateCard.tsx with update type badge (New!, Closing, Under Renovation), entity link, and timestamp",
         "Add 'What's New' section to homepage showing the 3 most recent updates",
         "Auto-generate 'New Opening' updates when a new restaurant or attraction is added to the database (via Supabase trigger or edge function)",
-        "Add email digest integration — include recent scene updates in weekly newsletter",
+        "Add email digest integration \u2014 include recent scene updates in weekly newsletter",
         "Add RSS feed endpoint at /whats-new/feed.xml for syndication",
         "Typecheck passes"
       ],
       "priority": 58,
       "passes": false,
-      "notes": "COMPETITIVE GAP: This is a gap across ALL competitors. None of them do real-time scene tracking well. dsm Magazine covers new openings editorially but not in real-time. We already detect new restaurant openings within 48 hours via our scrapers — we should surface this intelligence to users directly. A daily-updated 'What's New' feed creates habitual platform usage."
+      "notes": "COMPETITIVE GAP: This is a gap across ALL competitors. None of them do real-time scene tracking well. dsm Magazine covers new openings editorially but not in real-time. We already detect new restaurant openings within 48 hours via our scrapers \u2014 we should surface this intelligence to users directly. A daily-updated 'What's New' feed creates habitual platform usage."
     },
     {
       "id": "US-059",
@@ -981,7 +981,7 @@
         "Enhance existing /stay page with richer hotel cards: star rating, price range indicator, neighborhood, amenities badges, distance from downtown",
         "Add filters: price range, star rating, neighborhood, amenities (pool, fitness, parking, pet-friendly, restaurant on-site)",
         "Add 'Hotels by Neighborhood' grouping so visitors can choose based on where they want to be",
-        "Add 'Book Now' affiliate links to booking platforms (Booking.com, Hotels.com, or direct hotel sites) — this creates affiliate revenue",
+        "Add 'Book Now' affiliate links to booking platforms (Booking.com, Hotels.com, or direct hotel sites) \u2014 this creates affiliate revenue",
         "Add 'Hotel + Event' package suggestion: when viewing an event, suggest nearby hotels with 'Stay nearby' call-to-action",
         "Add hotel comparison feature: select 2-3 hotels and see a side-by-side comparison table",
         "Add Schema.org Hotel structured data with priceRange and aggregateRating",
@@ -994,7 +994,7 @@
     {
       "id": "US-060",
       "title": "Add multilingual support starting with Spanish",
-      "description": "As a Spanish-speaking visitor or resident of Des Moines, I need the platform available in Spanish so that I can discover events, restaurants, and activities in my preferred language — reflecting the growing Latino community in Des Moines.",
+      "description": "As a Spanish-speaking visitor or resident of Des Moines, I need the platform available in Spanish so that I can discover events, restaurants, and activities in my preferred language \u2014 reflecting the growing Latino community in Des Moines.",
       "acceptanceCriteria": [
         "Install and configure react-i18next with language detection (browser language, URL parameter, user preference)",
         "Create src/i18n/ directory with en.json and es.json translation files",
@@ -1022,7 +1022,7 @@
         "Typecheck passes"
       ],
       "priority": 61,
-      "passes": false,
+      "passes": true,
       "notes": "CRITICAL SECURITY GAP found in audit: generate-itinerary, generate-writeup, nlp-search, generate-seo-content, generate-article, and enhance-content have ZERO rate limiting. Each call spends ~$0.01-$0.10 in Claude/OpenAI credits. A bot looping at 10 req/sec could generate hundreds of dollars in charges within minutes. The _shared/rateLimit.ts middleware exists and is used by payment functions but was never applied to AI functions."
     },
     {
@@ -1036,8 +1036,8 @@
         "Typecheck passes"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": "backfill-images was created in this session without auth. It downloads images from external URLs and writes to Supabase Storage — two expensive operations. Any unauthenticated caller can trigger it arbitrarily. WORKER_API_KEY secret already exists from US-013."
+      "passes": true,
+      "notes": "backfill-images was created in this session without auth. It downloads images from external URLs and writes to Supabase Storage \u2014 two expensive operations. Any unauthenticated caller can trigger it arbitrarily. WORKER_API_KEY secret already exists from US-013."
     },
     {
       "id": "US-063",
@@ -1054,8 +1054,8 @@
         "Verify in browser using dev-browser skill: share EventDetails URL and confirm og:image appears in the page source"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": "FOUND IN AUDIT: EventDetails.tsx renders event.image_url as an <img> tag (line 188) but no og:image meta tag exists anywhere in the file. Same for RestaurantDetails and AttractionDetails. Social sharing previews are blank for all content pages. This is a major discoverability gap — shared links look broken and no-one clicks them."
+      "passes": true,
+      "notes": "FOUND IN AUDIT: EventDetails.tsx renders event.image_url as an <img> tag (line 188) but no og:image meta tag exists anywhere in the file. Same for RestaurantDetails and AttractionDetails. Social sharing previews are blank for all content pages. This is a major discoverability gap \u2014 shared links look broken and no-one clicks them."
     },
     {
       "id": "US-064",
@@ -1071,8 +1071,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": "FOUND IN AUDIT: src/components/admin/MediaLibrary.tsx exists and is fully built, but there is zero import of it in Admin.tsx — it is a dead component. Admins have no UI to see what images have been stored, check which records have null image_url, or delete orphaned files."
+      "passes": true,
+      "notes": "FOUND IN AUDIT: src/components/admin/MediaLibrary.tsx exists and is fully built, but there is zero import of it in Admin.tsx \u2014 it is a dead component. Admins have no UI to see what images have been stored, check which records have null image_url, or delete orphaned files."
     },
     {
       "id": "US-065",
@@ -1116,7 +1116,7 @@
       "description": "As a developer, I need the image optimization queue processed automatically on a schedule so that newly crawled images are converted to WebP within minutes without manual intervention.",
       "acceptanceCriteria": [
         "Create a Supabase migration that enables pg_cron extension if not already enabled",
-        "Create a cron job: SELECT cron.schedule('process-image-queue', '*/10 * * * *', $$ SELECT net.http_post(url := current_setting('app.supabase_url') || '/functions/v1/batch-process-images', ...) $$) — runs every 10 minutes",
+        "Create a cron job: SELECT cron.schedule('process-image-queue', '*/10 * * * *', $$ SELECT net.http_post(url := current_setting('app.supabase_url') || '/functions/v1/batch-process-images', ...) $$) \u2014 runs every 10 minutes",
         "The cron job passes the WORKER_API_KEY via X-API-Key header",
         "The cron job requests action: 'process_pending' with batchSize: 20",
         "Add a migration that also schedules weekly backfill runs: SELECT cron.schedule('weekly-image-backfill', '0 3 * * 0', ...) for all categories",
@@ -1139,13 +1139,13 @@
         "When user_id is provided, look up all device_tokens for that user from the device_tokens table",
         "Log delivery results (success/failure per token) to a push_notification_log table",
         "Handle invalid token errors by deleting the stale token from device_tokens",
-        "Apply apiKeyAuth middleware — only callable from trusted server contexts",
+        "Apply apiKeyAuth middleware \u2014 only callable from trusted server contexts",
         "Add APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY, FCM_SERVICE_ACCOUNT_KEY, FCM_PROJECT_ID to .env.example with setup documentation",
         "Typecheck passes"
       ],
       "priority": 68,
       "passes": false,
-      "notes": "CRITICAL MOBILE GAP found in audit: The mobile app has full push notification infrastructure — device token registration, notification channels, permission handling, local notifications — but there is NO edge function to actually send remote notifications. Device tokens are stored in the device_tokens table (via register-device-token function) but they are never read by any sending function. The entire push notification system is receive-only. Android FCM requires google-services.json (missing from the repo — likely gitignored) and Firebase project setup."
+      "notes": "CRITICAL MOBILE GAP found in audit: The mobile app has full push notification infrastructure \u2014 device token registration, notification channels, permission handling, local notifications \u2014 but there is NO edge function to actually send remote notifications. Device tokens are stored in the device_tokens table (via register-device-token function) but they are never read by any sending function. The entire push notification system is receive-only. Android FCM requires google-services.json (missing from the repo \u2014 likely gitignored) and Firebase project setup."
     },
     {
       "id": "US-069",
@@ -1172,7 +1172,7 @@
         "Create supabase/functions/generate-image-alt-text/index.ts that accepts a media_asset_id",
         "Function fetches the image from Supabase Storage CDN URL and sends it to Claude vision API with prompt: 'Describe this image for use as alt text on a Des Moines events/restaurants website. Be concise (under 125 characters), descriptive, and specific. Start with the main subject.'",
         "Update media_assets.alt_text with the generated description",
-        "Apply rate limiting (5 req/min — vision API is expensive) and apiKeyAuth",
+        "Apply rate limiting (5 req/min \u2014 vision API is expensive) and apiKeyAuth",
         "Update backfill-images (via _shared/imageStorage.ts) to queue newly stored images for alt text generation",
         "Create a migration adding a pg_cron job that runs generate-image-alt-text for all media_assets where alt_text IS NULL (batch of 20 per run, every 5 minutes)",
         "Update EventCard, RestaurantCard, and detail page <img> tags to use media_assets.alt_text when available",
@@ -1180,7 +1180,7 @@
       ],
       "priority": 70,
       "passes": false,
-      "notes": "FOUND IN AUDIT: media_assets table has alt_text column (migration line 118) but it is NEVER populated. All stored images have null alt_text. This means: (1) screen readers say nothing for content images — WCAG violation, (2) Google Image Search cannot index image content. Claude's vision API can generate excellent alt text automatically. This closes both an accessibility gap and an SEO gap simultaneously."
+      "notes": "FOUND IN AUDIT: media_assets table has alt_text column (migration line 118) but it is NEVER populated. All stored images have null alt_text. This means: (1) screen readers say nothing for content images \u2014 WCAG violation, (2) Google Image Search cannot index image content. Claude's vision API can generate excellent alt text automatically. This closes both an accessibility gap and an SEO gap simultaneously."
     },
     {
       "id": "US-071",

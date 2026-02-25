@@ -6,11 +6,12 @@ import {
   extractImageFromHtml,
   CONTENT_TYPE_MAP,
 } from "../_shared/imageStorage.ts";
+import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
+    "authorization, x-client-info, apikey, content-type, x-api-key",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
@@ -123,6 +124,10 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
+  // Require API key for this data-processing endpoint
+  const authError = requireApiKey(req, corsHeaders);
+  if (authError) return authError;
 
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {

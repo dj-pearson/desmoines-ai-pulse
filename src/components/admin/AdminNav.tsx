@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Shield,
   Settings,
+  Image,
   ArrowLeft,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { Button } from "@/components/ui/button";
 const NAV_ITEMS = [
   { label: "Overview", href: "/admin", icon: BarChart3 },
   { label: "Content", href: "/admin/content", icon: FileText },
+  { label: "Media", href: "/admin/media", icon: Image },
   { label: "AI Tools", href: "/admin/ai", icon: Bot },
   { label: "Site Tools", href: "/admin/tools", icon: Wrench },
   { label: "Analytics", href: "/admin/analytics-dashboard", icon: TrendingUp },

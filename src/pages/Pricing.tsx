@@ -12,6 +12,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
+import { useConversionFunnel } from "@/hooks/useConversionFunnel";
 import {
   Check,
   Star,
@@ -169,20 +170,29 @@ export default function Pricing() {
     isPremium,
   } = useSubscription();
   const { toast } = useToast();
+  const { trackFunnelEvent } = useConversionFunnel();
   const [isYearly, setIsYearly] = useState(false);
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+
+  // Track pricing page view
+  useEffect(() => {
+    trackFunnelEvent('funnel_pricing_page_viewed');
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show toast if redirected from canceled checkout
   useEffect(() => {
     if (searchParams.get("canceled") === "true") {
+      trackFunnelEvent('funnel_checkout_abandoned');
       toast({
         title: "Checkout canceled",
         description: "No worries! Your account is still active. You can subscribe anytime.",
       });
     }
-  }, [searchParams, toast]);
+  }, [searchParams, toast]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelectPlan = async (planId: string) => {
+    trackFunnelEvent('funnel_plan_selected', { planId, billing: isYearly ? 'yearly' : 'monthly' });
+
     if (planId === "free") {
       navigate("/auth");
       return;
@@ -226,6 +236,7 @@ export default function Pricing() {
     }
 
     // Start checkout
+    trackFunnelEvent('funnel_checkout_started', { planId, planDbId: plan.id, billing: isYearly ? 'yearly' : 'monthly' });
     setLoadingPlan(planId);
     const success = await startCheckout(plan.id, isYearly ? "yearly" : "monthly");
 

@@ -291,15 +291,13 @@ export default function EnhancedPlaygroundSEO({
       <meta property="og:locality" content={BRAND.city} />
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
-      {playground.image_url && (
-        <meta property="og:image" content={playground.image_url} />
-      )}
-      {playground.image_url && (
-        <meta
-          property="og:image:alt"
-          content={`${playground.name} - Playground in ${BRAND.city}`}
-        />
-      )}
+      <meta property="og:image" content={playground.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta
+        property="og:image:alt"
+        content={`${playground.name} - Playground in ${BRAND.city}`}
+      />
       <meta property="og:url" content={playgroundUrl} />
       <meta property="og:site_name" content={BRAND.name} />
 
@@ -307,9 +305,7 @@ export default function EnhancedPlaygroundSEO({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={getOptimizedTitle()} />
       <meta name="twitter:description" content={getGEODescription()} />
-      {playground.image_url && (
-        <meta name="twitter:image" content={playground.image_url} />
-      )}
+      <meta name="twitter:image" content={playground.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data */}
