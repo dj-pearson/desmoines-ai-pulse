@@ -19,6 +19,7 @@ import {
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
 import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
+import { fetchAndStoreImage as _fetchAndStoreImageShared } from "../_shared/imageStorage.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -439,6 +440,18 @@ For EVERY event you find, extract:
 - category: Music/Sports/Arts/Community/Entertainment/Festival
 - price: If mentioned, or "See website"
 
+🖼️ IMAGE EXTRACTION (CRITICAL):
+- Look for the primary hero/featured image for each event
+- Check og:image meta tags: <meta property="og:image" content="URL">
+- Check the first prominent <img> tag near the event title
+- Look for data attributes with image URLs (data-image, data-src, data-bg)
+- Look for background-image CSS inline styles on event cards
+- Use ABSOLUTE URLs only (starting with https://)
+- If multiple images found, prefer the largest/highest-quality one
+- Skip tiny icons, logos, ads, or tracking pixels
+- Skip images from CDNs that clearly belong to the aggregator site (e.g. simpleviewinc.com)
+- If no suitable image found, omit the field or use null
+
 CRITICAL SUCCESS FACTORS:
 ✅ Extract events even with incomplete info
 ✅ Use logical defaults for missing details
@@ -456,6 +469,7 @@ FORMAT AS JSON ARRAY:
     "venue": "Venue Name",
     "category": "Event Type",
     "price": "Price or See website",
+    "image_url": "https://example.com/path/to/event-image.jpg",
     "detail_url": "/event/event-name/12345/" // IMPORTANT: Include if you find individual event detail page URLs
   }
 ]
@@ -518,6 +532,15 @@ For EVERY restaurant you find, extract:
 - phone: Phone number if mentioned
 - website: Website URL if mentioned
 
+🖼️ IMAGE EXTRACTION (IMPORTANT):
+- Look for the primary photo for each restaurant
+- Check og:image meta tags: <meta property="og:image" content="URL">
+- Check the first prominent <img> tag near the restaurant name
+- Look for data attributes with image URLs (data-image, data-src, data-bg)
+- Use ABSOLUTE URLs only (starting with https://)
+- Skip logos, icons, generic placeholder images, or ad images
+- If no suitable image found, omit the field or use null
+
 CRITICAL SUCCESS FACTORS:
 ✅ Extract restaurants even with incomplete info
 ✅ Use logical defaults for missing details
@@ -535,7 +558,8 @@ FORMAT AS JSON ARRAY:
     "price_range": "$$",
     "description": "Restaurant description and specialties",
     "phone": "515-xxx-xxxx",
-    "website": "https://restaurant-website.com"
+    "website": "https://restaurant-website.com",
+    "image_url": "https://example.com/path/to/restaurant-photo.jpg"
   }
 ]
 
@@ -553,6 +577,7 @@ Please analyze this content and extract information about NEW restaurant opening
 - cuisine: Type of cuisine
 - opening_date: Opening date (format as YYYY-MM-DD, or null if not specified)
 - status: 'opening_soon', 'newly_opened', or 'announced'
+- image_url: Primary photo of the restaurant or concept render (absolute https:// URL from og:image or prominent img tag, or null if not found)
 
 Format as JSON array:
 [
@@ -562,7 +587,8 @@ Format as JSON array:
     "location": "Location",
     "cuisine": "Cuisine Type",
     "opening_date": "2025-MM-DD",
-    "status": "opening_soon"
+    "status": "opening_soon",
+    "image_url": "https://example.com/path/to/photo.jpg"
   }
 ]
 
@@ -634,6 +660,14 @@ For EVERY playground you find, extract:
 - amenities: Array of equipment and features
 - rating: Numerical rating 1-5 if mentioned, or null
 
+🖼️ IMAGE EXTRACTION (IMPORTANT):
+- Look for the primary photo for each playground
+- Check og:image meta tags: <meta property="og:image" content="URL">
+- Check the first prominent <img> tag near the playground name
+- Use ABSOLUTE URLs only (starting with https://)
+- Skip logos, icons, or generic placeholder images
+- If no suitable image found, omit the field or use null
+
 CRITICAL SUCCESS FACTORS:
 ✅ Extract playgrounds even with incomplete info
 ✅ Use logical defaults for missing details
@@ -649,7 +683,8 @@ FORMAT AS JSON ARRAY:
     "description": "Playground features and description",
     "age_range": "2-12 years",
     "amenities": ["swings", "slides", "climbing structure", "splash pad"],
-    "rating": 4.2
+    "rating": 4.2,
+    "image_url": "https://example.com/path/to/playground-photo.jpg"
   }
 ]
 
@@ -667,6 +702,7 @@ Please analyze this content and extract ALL attractions, tourist destinations, o
 - description: Description of the attraction
 - rating: Numerical rating if available (1-5 scale)
 - website: Website URL if available
+- image_url: Primary photo of the attraction (absolute https:// URL from og:image or prominent img tag near the attraction name, or null if not found)
 
 Format as JSON array:
 [
@@ -676,7 +712,8 @@ Format as JSON array:
     "location": "Full address",
     "description": "Attraction description",
     "rating": 4.3,
-    "website": "Website URL"
+    "website": "Website URL",
+    "image_url": "https://example.com/path/to/attraction-photo.jpg"
   }
 ]
 
@@ -1124,6 +1161,16 @@ async function checkForDuplicates(
   return { newItems, duplicates };
 }
 
+// Delegate to the shared imageStorage utility
+function fetchAndStoreImage(
+  supabase: any,
+  sourceImageUrl: string,
+  category: string,
+  contentId: string
+): Promise<string | null> {
+  return _fetchAndStoreImageShared(supabase, sourceImageUrl, category, contentId);
+}
+
 // Insert data into appropriate table
 async function insertData(
   supabase: any,
@@ -1141,10 +1188,26 @@ async function insertData(
     const batch = items.slice(i, i + batchSize);
 
     try {
+      // Pre-assign UUIDs and fetch images concurrently for this batch
+      const batchWithIds = batch.map((item) => ({
+        ...item,
+        _assignedId: crypto.randomUUID(),
+      }));
+
+      const imageResults = await Promise.all(
+        batchWithIds.map((item) =>
+          item.image_url
+            ? fetchAndStoreImage(supabase, item.image_url, category, item._assignedId)
+            : Promise.resolve(null)
+        )
+      );
+
       // Transform data for database schema
-      const transformedBatch = batch
-        .map((item) => {
+      const transformedBatch = batchWithIds
+        .map((item, idx) => {
+          const resolvedImageUrl = imageResults[idx];
           const baseItem = {
+            id: item._assignedId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             is_featured: Math.random() > 0.8, // 20% chance of being featured
@@ -1181,6 +1244,7 @@ async function insertData(
                 category: item.category?.substring(0, 50) || "General",
                 price: item.price?.substring(0, 50) || "See website",
                 source_url: item.source_url || "",
+                image_url: resolvedImageUrl || null,
                 is_enhanced: false,
               };
             case "restaurants":
@@ -1194,6 +1258,7 @@ async function insertData(
                 description: item.description?.substring(0, 500) || "",
                 phone: item.phone?.substring(0, 20) || null,
                 website: item.website?.substring(0, 200) || null,
+                image_url: resolvedImageUrl || null,
               };
             case "restaurant_openings":
               return {
@@ -1216,6 +1281,7 @@ async function insertData(
                   : null,
                 status: item.status || "announced",
                 source_url: item.source_url || "",
+                image_url: resolvedImageUrl || null,
               };
             case "playgrounds":
               return {
@@ -1228,6 +1294,7 @@ async function insertData(
                   ? item.amenities.slice(0, 10)
                   : [],
                 rating: item.rating || null,
+                image_url: resolvedImageUrl || null,
               };
             case "attractions":
               return {
@@ -1238,9 +1305,13 @@ async function insertData(
                 description: item.description?.substring(0, 500) || "",
                 rating: item.rating || null,
                 website: item.website?.substring(0, 200) || null,
+                image_url: resolvedImageUrl || null,
               };
-            default:
-              return item;
+            default: {
+              // Strip internal _assignedId before returning
+              const { _assignedId: _id, ...rest } = item;
+              return { ...baseItem, ...rest };
+            }
           }
         })
         .filter((item) => item !== null); // Remove null items (events with bad dates)

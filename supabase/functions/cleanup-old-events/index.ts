@@ -10,6 +10,81 @@ interface CleanupRequest {
   dryRun?: boolean;
 }
 
+// Delete all Supabase Storage files associated with the given event IDs,
+// then remove the corresponding media_assets rows.
+async function deleteEventImages(
+  supabase: ReturnType<typeof createClient>,
+  eventIds: string[]
+): Promise<{ deletedFiles: number; errors: string[] }> {
+  if (eventIds.length === 0) return { deletedFiles: 0, errors: [] };
+
+  const errors: string[] = [];
+  let deletedFiles = 0;
+
+  // Fetch all media_assets for these events
+  const { data: assets, error: fetchError } = await supabase
+    .from('media_assets')
+    .select('id, file_path, bucket_id')
+    .eq('content_type', 'event')
+    .in('content_id', eventIds);
+
+  if (fetchError) {
+    console.error('❌ Failed to fetch media_assets for events:', fetchError.message);
+    errors.push(fetchError.message);
+    return { deletedFiles, errors };
+  }
+
+  if (!assets || assets.length === 0) {
+    console.log('ℹ️ No media_assets found for events being deleted');
+    return { deletedFiles, errors };
+  }
+
+  console.log(`🗑️ Found ${assets.length} media_assets to clean up`);
+
+  // Group by bucket to batch Storage deletions
+  const byBucket: Record<string, string[]> = {};
+  for (const asset of assets) {
+    const bucket = asset.bucket_id || 'media';
+    if (!byBucket[bucket]) byBucket[bucket] = [];
+    byBucket[bucket].push(asset.file_path);
+  }
+
+  for (const [bucket, filePaths] of Object.entries(byBucket)) {
+    // Supabase Storage remove accepts up to 1000 paths at a time
+    const chunkSize = 100;
+    for (let i = 0; i < filePaths.length; i += chunkSize) {
+      const chunk = filePaths.slice(i, i + chunkSize);
+      const { error: storageError } = await supabase.storage
+        .from(bucket)
+        .remove(chunk);
+
+      if (storageError) {
+        console.error(`❌ Storage delete error (bucket: ${bucket}):`, storageError.message);
+        errors.push(storageError.message);
+      } else {
+        deletedFiles += chunk.length;
+        console.log(`✅ Deleted ${chunk.length} files from bucket "${bucket}"`);
+      }
+    }
+  }
+
+  // Delete the media_assets rows (cascades to image_optimization_queue)
+  const assetIds = assets.map((a) => a.id);
+  const { error: deleteError } = await supabase
+    .from('media_assets')
+    .delete()
+    .in('id', assetIds);
+
+  if (deleteError) {
+    console.error('❌ Failed to delete media_assets rows:', deleteError.message);
+    errors.push(deleteError.message);
+  } else {
+    console.log(`✅ Deleted ${assetIds.length} media_assets rows`);
+  }
+
+  return { deletedFiles, errors };
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -29,7 +104,7 @@ Deno.serve(async (req) => {
     if (req.method === 'POST') {
       try {
         requestBody = await req.json();
-      } catch (error) {
+      } catch (_error) {
         console.log('No JSON body provided, using defaults');
       }
     }
@@ -41,15 +116,20 @@ Deno.serve(async (req) => {
 
     console.log(`🧹 Running event cleanup - Retention: ${retentionMonths} months, Dry run: ${dryRun}`);
 
+    const cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - retentionMonths);
+
     if (dryRun) {
-      // Calculate what would be deleted
-      const cutoffDate = new Date();
-      cutoffDate.setMonth(cutoffDate.getMonth() - retentionMonths);
-      
+      // Calculate what would be deleted without making changes
       const { count: eventsToDelete } = await supabase
         .from('events')
         .select('id', { count: 'exact', head: true })
         .lt('date', cutoffDate.toISOString());
+
+      const { count: imagesToDelete } = await supabase
+        .from('media_assets')
+        .select('id', { count: 'exact', head: true })
+        .eq('content_type', 'event');
 
       console.log(`🧹 DRY RUN: Would delete ${eventsToDelete} events older than ${cutoffDate.toDateString()}`);
 
@@ -60,7 +140,8 @@ Deno.serve(async (req) => {
           retentionMonths,
           cutoffDate: cutoffDate.toISOString(),
           eventsToDelete: eventsToDelete || 0,
-          message: `Dry run complete. Would delete ${eventsToDelete || 0} events.`
+          estimatedImagesToDelete: imagesToDelete || 0,
+          message: `Dry run complete. Would delete ${eventsToDelete || 0} events and their associated images.`
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -69,7 +150,31 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Execute the actual cleanup using the database function
+    // Fetch IDs of events that will be purged before deleting them
+    const { data: expiredEvents, error: fetchError } = await supabase
+      .from('events')
+      .select('id')
+      .lt('date', cutoffDate.toISOString());
+
+    if (fetchError) {
+      console.error('❌ Failed to fetch expired event IDs:', fetchError.message);
+      return new Response(
+        JSON.stringify({ success: false, error: fetchError.message }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      );
+    }
+
+    const expiredIds = (expiredEvents || []).map((e) => e.id);
+    console.log(`🧹 Found ${expiredIds.length} expired events to purge`);
+
+    // Delete associated Storage files and media_assets rows first
+    const { deletedFiles, errors: imageErrors } = await deleteEventImages(supabase, expiredIds);
+
+    if (imageErrors.length > 0) {
+      console.warn(`⚠️ ${imageErrors.length} image cleanup error(s) — proceeding with event purge`);
+    }
+
+    // Execute the actual event cleanup using the database function
     const { data, error } = await supabase.rpc('purge_old_events', {
       retention_months: retentionMonths
     });
@@ -79,7 +184,9 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           success: false,
-          error: error.message
+          error: error.message,
+          deletedFiles,
+          imageErrors,
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -95,7 +202,9 @@ Deno.serve(async (req) => {
         success: true,
         retentionMonths,
         result: data,
-        message: 'Event cleanup completed successfully'
+        deletedFiles,
+        imageErrors: imageErrors.length > 0 ? imageErrors : undefined,
+        message: `Event cleanup completed. Purged ${expiredIds.length} events and ${deletedFiles} image files.`,
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
