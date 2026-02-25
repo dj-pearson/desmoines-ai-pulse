@@ -76,6 +76,35 @@
 
 ## Progress Log
 
+## 2026-02-25 — Ralph Loop 2: Preferences, Feature Flags, Audit, Funnel
+
+- **US-019**: Implemented server-side user preferences in `use-user-preferences.ts`:
+  - On login: loads preferences from `profiles.communication_preferences.ui_preferences` (JSONB)
+  - Server wins on conflict when merging with localStorage defaults
+  - Debounced sync to server on preference changes (1s delay)
+  - Unauthenticated users continue using localStorage only (graceful degradation)
+  - Resolved both TODO comments in the hook
+- **US-028**: Enhanced `useFeatureFlag` hook with graceful degradation:
+  - Added `DEFAULT_FLAGS` fallback when feature_flags table query fails
+  - Migration already existed (`20260221000000_create_feature_flags.sql`)
+  - `FeatureFlag` wrapper component already existed
+  - Hook now returns default values instead of throwing on database errors
+- **US-037**: Created admin audit trail system:
+  - Created `src/hooks/useAuditLog.ts` with `logAdminAction()` and `useAuditLogEntries()` hooks
+  - Uses existing `security_audit_logs` table with `event_type='admin_action'`
+  - Created `src/components/admin/AuditLogPanel.tsx` with scrollable log viewer
+  - Added "Audit Log" tab to AdminAnalyticsPage
+- **US-039**: Implemented conversion funnel tracking:
+  - Created `src/hooks/useConversionFunnel.ts` with `trackFunnelEvent()` and `useConversionFunnelData()` hooks
+  - Tracks: pricing_page_viewed, plan_selected, checkout_started, checkout_completed, checkout_abandoned
+  - Integrated into Pricing page (page view, plan selection, checkout start, checkout cancel)
+  - Created `src/components/admin/ConversionFunnelChart.tsx` with bar visualization and drop-off percentages
+  - Added "Conversion Funnel" tab to AdminAnalyticsPage
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 6378 modules, 56s)
+
+**PRD Status**: 38/71 stories complete (54%)
+
 ## 2026-02-25 — Ralph Loop: Security, SEO, Admin, Code Quality
 
 - **US-001 through US-010**: Verified all 10 stories as complete in codebase; marked `passes: true` in prd.json (CI/CD, Vitest, unit tests, structured logger, console cleanup, Sentry)

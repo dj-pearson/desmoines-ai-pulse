@@ -297,7 +297,7 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Currently marked as TODO in use-user-preferences.ts. The profiles table has a preferences JSONB column that can be used."
     },
     {
@@ -447,7 +447,7 @@
         "Typecheck passes"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "Feature flags are essential for enterprise deployments. They allow progressive rollouts and instant rollbacks without redeploying code."
     },
     {
@@ -593,7 +593,7 @@
         "Typecheck passes"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": "Currently there is no record of who deleted content or changed user roles. This is critical for multi-admin environments and incident investigation."
     },
     {
@@ -623,7 +623,7 @@
         "Typecheck passes"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "The subscription system exists but there's no visibility into conversion rates. Without funnel data, optimizing the pricing page or checkout flow is guesswork."
     },
     {

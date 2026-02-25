@@ -10,6 +10,8 @@ import { ActivityLogViewer } from "@/components/ActivityLogViewer";
 import { DataQualityDashboard } from "@/components/DataQualityDashboard";
 import { CrmDashboard } from "@/components/crm";
 import { SearchTrafficDashboard } from "@/components/admin/SearchTrafficDashboard";
+import AuditLogPanel from "@/components/admin/AuditLogPanel";
+import ConversionFunnelChart from "@/components/admin/ConversionFunnelChart";
 import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -20,12 +22,16 @@ import {
   CheckCircle,
   Contact,
   TrendingUp,
+  ClipboardList,
+  Filter,
 } from "lucide-react";
 
 const ANALYTICS_TABS = [
   { id: "analytics", label: "Advanced Analytics", icon: BarChart3 },
   { id: "search-traffic", label: "Search Traffic", icon: TrendingUp },
+  { id: "funnel", label: "Conversion Funnel", icon: Filter },
   { id: "activity-logs", label: "Activity Logs", icon: ScrollText },
+  { id: "audit-log", label: "Audit Log", icon: ClipboardList },
   { id: "data-quality", label: "Data Quality", icon: CheckCircle },
   { id: "crm", label: "CRM Dashboard", icon: Contact },
 ];
@@ -86,6 +92,8 @@ export default function AdminAnalyticsPage() {
 
         {activeTab === "search-traffic" && <SearchTrafficDashboard />}
 
+        {activeTab === "funnel" && <ConversionFunnelChart />}
+
         {activeTab === "activity-logs" && <ActivityLogViewer />}
 
         {activeTab === "data-quality" && (
@@ -100,6 +108,8 @@ export default function AdminAnalyticsPage() {
             }}
           />
         )}
+
+        {activeTab === "audit-log" && <AuditLogPanel />}
 
         {activeTab === "crm" && <CrmDashboard />}
       </div>
