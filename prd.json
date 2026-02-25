@@ -159,6 +159,7 @@
     },
     {
       "id": "US-011",
+      "passes": true,
       "title": "Add security headers via Cloudflare Pages configuration",
       "description": "As a security engineer, I need proper HTTP security headers so that the application is protected against common web attacks like XSS, clickjacking, and MIME sniffing.",
       "acceptanceCriteria": [
@@ -172,7 +173,6 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
       "notes": "Cloudflare Pages supports a _headers file in the output directory (public/ gets copied to dist/). CSP must be carefully crafted to not break Supabase realtime, Stripe checkout, Leaflet maps, or inline Tailwind styles."
     },
     {
@@ -187,7 +187,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "18 of 76 edge functions have verify_jwt=false. Many are background jobs (scrapers, crawlers) which is acceptable. But some may be misconfigured. The audit creates accountability."
     },
     {
@@ -203,7 +203,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "These functions process external data and modify the database. Without API key auth, anyone who discovers the function URL can trigger bulk data operations."
     },
     {
@@ -218,7 +218,7 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "The rate limiter exists in _shared/rateLimit.ts but not all functions use it. Payment functions already have stricter limits (10 req/15min). This story ensures consistency."
     },
     {
@@ -233,7 +233,7 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "14 files currently use localStorage directly. The safeStorage wrapper handles try-catch for private browsing mode and provides typed access."
     },
     {
@@ -249,7 +249,7 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "The project has 682 instances of 'any' type. Starting with src/lib/ is strategic because these utilities are imported everywhere — fixing them improves downstream type safety."
     },
     {
@@ -329,7 +329,7 @@
         "npm run build passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "SearchTrafficDashboard is commented out in Admin.tsx with a note about requiring database migrations not yet applied."
     },
     {
@@ -345,7 +345,7 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "TODO in recommendation algorithm awaits event coordinates. Many events now have latitude/longitude from the backfill-coordinates work."
     },
     {
@@ -363,7 +363,7 @@
         "Typecheck passes"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Currently env vars are accessed via scattered import.meta.env calls with no validation. Missing vars cause silent failures at runtime."
     },
     {
@@ -413,7 +413,7 @@
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Accessibility tests exist but flag gaps. The skip link is the most commonly flagged issue. shadcn/ui components generally handle focus trapping well but need verification."
     },
     {
@@ -429,7 +429,7 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "The 3D cityscape hero is the most prominent animation. Leaflet map transitions should also be considered."
     },
     {
@@ -513,7 +513,7 @@
         "Typecheck passes"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "The AdminAnalyticsDashboard already queries content_metrics for 'view' and 'click' metric_types. This story populates that table with real user interactions."
     },
     {
@@ -529,7 +529,7 @@
         "Typecheck passes"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": "Now that usePageTracking sends device_type and session_id data, the dashboard can compute these metrics from real data. Lines 164, 180-181, and 188-192 in AdminAnalyticsDashboard.tsx have the hardcoded values."
     },
     {
@@ -545,7 +545,7 @@
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "Free tools are the primary lead generation channel. Currently there's no email capture outside the login flow. This is a high-impact conversion optimization."
     },
     {
@@ -561,7 +561,7 @@
         "Typecheck passes"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "Currently network errors show generic error messages. An explicit offline indicator prevents user confusion and reduces perceived bugs."
     },
     {
@@ -577,7 +577,7 @@
         "Typecheck passes"
       ],
       "priority": 36,
-      "passes": false,
+      "passes": true,
       "notes": "All keystrokes currently trigger immediate queries. With debouncing, typing 'farmers market' triggers 1 query instead of 14."
     },
     {
@@ -608,7 +608,7 @@
         "Typecheck passes"
       ],
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": "A single network hiccup currently causes permanent failure until the user manually refreshes. TanStack Query has built-in retry but it needs to be configured consistently across all hooks."
     },
     {
@@ -1009,6 +1009,198 @@
       "priority": 60,
       "passes": false,
       "notes": "COMPETITIVE GAP: Best-in-class tourism sites offer multilingual support. No Des Moines competitor currently offers Spanish language support despite Des Moines' significant and growing Latino population (~13% of Polk County). This is both a competitive differentiator and an accessibility/inclusion win. Start with Spanish, architect for future language additions."
+    },
+    {
+      "id": "US-061",
+      "title": "Rate-limit AI/LLM edge functions to prevent API cost abuse",
+      "description": "As a security engineer, I need rate limiting on every edge function that calls an AI API so that a single bad actor cannot run up unlimited AI costs with a simple loop.",
+      "acceptanceCriteria": [
+        "Import and apply rateLimiter from _shared/rateLimit.ts in: generate-itinerary, generate-writeup, generate-article, generate-seo-content, generate-weekend-guide, enhance-content, nlp-search",
+        "Set a tighter limit for AI functions: 10 requests per 15 minutes per IP (not the default 100)",
+        "Return 429 with Retry-After header when limit exceeded",
+        "Add a comment at the top of each updated function noting the rate limit tier and reason",
+        "Typecheck passes"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": "CRITICAL SECURITY GAP found in audit: generate-itinerary, generate-writeup, nlp-search, generate-seo-content, generate-article, and enhance-content have ZERO rate limiting. Each call spends ~$0.01-$0.10 in Claude/OpenAI credits. A bot looping at 10 req/sec could generate hundreds of dollars in charges within minutes. The _shared/rateLimit.ts middleware exists and is used by payment functions but was never applied to AI functions."
+    },
+    {
+      "id": "US-062",
+      "title": "Add API key auth to backfill-images edge function",
+      "description": "As a security engineer, I need the backfill-images function protected by API key so that it cannot be triggered by unauthorized parties to burn Supabase Storage egress and AI API credits.",
+      "acceptanceCriteria": [
+        "Import and apply apiKeyAuth middleware from _shared/apiKeyAuth.ts in supabase/functions/backfill-images/index.ts",
+        "Function returns 401 when called without X-API-Key header matching WORKER_API_KEY secret",
+        "Admin panel backfill UI (US-067) passes the key via Supabase service-role call, not directly from browser",
+        "Typecheck passes"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": "backfill-images was created in this session without auth. It downloads images from external URLs and writes to Supabase Storage — two expensive operations. Any unauthenticated caller can trigger it arbitrarily. WORKER_API_KEY secret already exists from US-013."
+    },
+    {
+      "id": "US-063",
+      "title": "Set dynamic og:image meta tags on all content detail pages",
+      "description": "As a content sharer, I need event, restaurant, and attraction detail pages to output og:image and twitter:image meta tags so that links shared on social media (Facebook, Twitter/X, iMessage, Slack) show the content's actual photo instead of a blank preview.",
+      "acceptanceCriteria": [
+        "In EventDetails.tsx: set <meta property='og:image' content={event.image_url} /> and <meta name='twitter:image' content={event.image_url} /> when image_url is present, falling back to a VITE_SITE_URL + '/og-default.jpg' constant",
+        "In RestaurantDetails.tsx: same og:image and twitter:image pattern using restaurant.image_url",
+        "In AttractionDetails.tsx: same pattern using attraction.image_url",
+        "In PlaygroundDetails.tsx and ArticleDetails.tsx: same pattern",
+        "Also set og:title, og:description, og:url, og:type='website' on each page for complete Open Graph coverage",
+        "Add a 1200x630px default og-image to public/ as the fallback",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: share EventDetails URL and confirm og:image appears in the page source"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": "FOUND IN AUDIT: EventDetails.tsx renders event.image_url as an <img> tag (line 188) but no og:image meta tag exists anywhere in the file. Same for RestaurantDetails and AttractionDetails. Social sharing previews are blank for all content pages. This is a major discoverability gap — shared links look broken and no-one clicks them."
+    },
+    {
+      "id": "US-064",
+      "title": "Wire MediaLibrary admin component into the Admin panel",
+      "description": "As an admin, I need a Media tab in the admin panel so that I can view, manage, and delete uploaded images from Supabase Storage without needing to access the Supabase dashboard directly.",
+      "acceptanceCriteria": [
+        "Import MediaLibrary from src/components/admin/MediaLibrary.tsx into the Admin panel (src/pages/Admin.tsx or the admin tab structure)",
+        "Add a 'Media' tab to the admin navigation alongside existing tabs (Events, Restaurants, Analytics, etc.)",
+        "The MediaLibrary component renders without runtime errors and shows media_assets records",
+        "Admin can filter media by content_type (event/restaurant/attraction)",
+        "Admin can delete a media asset (removes Storage file + media_assets row)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": "FOUND IN AUDIT: src/components/admin/MediaLibrary.tsx exists and is fully built, but there is zero import of it in Admin.tsx — it is a dead component. Admins have no UI to see what images have been stored, check which records have null image_url, or delete orphaned files."
+    },
+    {
+      "id": "US-065",
+      "title": "Build admin UI to trigger and monitor backfill-images with progress",
+      "description": "As an admin, I need a UI panel to run the image backfill across all content types so that I can populate images for the thousands of existing records without using cURL or Postman.",
+      "acceptanceCriteria": [
+        "Add a 'Backfill Images' section within the MediaLibrary admin component (or a new ImageBackfill.tsx component)",
+        "Show per-category counters: total records, records with images, records needing backfill (query image_url IS NULL counts)",
+        "Add 'Start Backfill' button per category that calls the backfill-images edge function via Supabase service-role client",
+        "Show real-time progress: batch offset, updated/skipped/failed counts from each response, progress bar",
+        "Auto-advance to nextOffset until nextOffset is null (all done)",
+        "Show per-record results in a scrollable log (name, status, image URL or failure reason)",
+        "Add 'Pause' button that stops auto-advancing",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": "The backfill-images edge function was just deployed but can only be called via cURL. Admins need a UI to run it across all 4 categories (events, restaurants, attractions, playgrounds) without technical knowledge. The paginated nextOffset pattern makes progress easy to visualize."
+    },
+    {
+      "id": "US-066",
+      "title": "Implement real WebP/AVIF generation via Cloudflare Images API",
+      "description": "As a developer, I need the image_optimization_queue to be processed with real WebP/AVIF conversion so that the platform serves optimally sized images to mobile and desktop users instead of raw JPEG blobs.",
+      "acceptanceCriteria": [
+        "Sign up for Cloudflare Images (available on Workers Paid plan, ~$5/mo for 100k images) and obtain account_id and API token",
+        "Update supabase/functions/batch-process-images/index.ts to replace the simulated processing with real Cloudflare Images API calls: POST to https://api.cloudflare.com/client/v4/accounts/{id}/images/v1 with the source image URL",
+        "Store the Cloudflare Images delivery URL (format: imagedelivery.net/...) as the optimized_versions.webp and optimized_versions.thumbnail in media_assets",
+        "Update media_assets.is_optimized to true and processing_status to 'completed' after successful upload",
+        "Add CLOUDFLARE_IMAGES_ACCOUNT_ID and CLOUDFLARE_IMAGES_API_TOKEN as Supabase secrets",
+        "Add CLOUDFLARE_IMAGES_ACCOUNT_ID and CLOUDFLARE_IMAGES_API_TOKEN to .env.example with documentation",
+        "Typecheck passes"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": "FOUND IN AUDIT: batch-process-images/index.ts lines 94-103 are 100% simulated with comments reading 'In production, this would: 1. Download the source image 2. Use Sharp or similar to generate optimized versions'. The image_optimization_queue has been accumulating entries from the new crawler but nothing processes them. Cloudflare Images is the right tool since the site is already on Cloudflare Pages and provides automatic WebP/AVIF serving, responsive variants, and a global CDN."
+    },
+    {
+      "id": "US-067",
+      "title": "Add pg_cron job to automatically process image_optimization_queue",
+      "description": "As a developer, I need the image optimization queue processed automatically on a schedule so that newly crawled images are converted to WebP within minutes without manual intervention.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration that enables pg_cron extension if not already enabled",
+        "Create a cron job: SELECT cron.schedule('process-image-queue', '*/10 * * * *', $$ SELECT net.http_post(url := current_setting('app.supabase_url') || '/functions/v1/batch-process-images', ...) $$) — runs every 10 minutes",
+        "The cron job passes the WORKER_API_KEY via X-API-Key header",
+        "The cron job requests action: 'process_pending' with batchSize: 20",
+        "Add a migration that also schedules weekly backfill runs: SELECT cron.schedule('weekly-image-backfill', '0 3 * * 0', ...) for all categories",
+        "Document the cron jobs in supabase/config.toml or a comment in the migration",
+        "Migration applies cleanly",
+        "Typecheck passes"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": "FOUND IN AUDIT: No scheduled job processes image_optimization_queue. Without this, optimized images are never generated even after US-066 implements real processing. pg_cron is already available in Supabase projects and net.http_post can call edge functions. This is the glue that makes the whole image pipeline automatic."
+    },
+    {
+      "id": "US-068",
+      "title": "Create send-push-notification edge function for iOS and Android",
+      "description": "As a developer, I need a backend edge function that sends push notifications to registered devices so that event reminders, deal alerts, and weekly digests can reach users on their phones.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/send-push-notification/index.ts that accepts: user_id OR device_tokens[], title, body, data (JSONB), channel (events/deals/general)",
+        "For iOS (APNs): send HTTP/2 request to https://api.push.apple.com/3/device/{token} with JWT auth using APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY secrets",
+        "For Android (FCM): send POST to https://fcm.googleapis.com/v1/projects/{project}/messages:send with FCM_SERVICE_ACCOUNT_KEY secret (Firebase v1 API)",
+        "When user_id is provided, look up all device_tokens for that user from the device_tokens table",
+        "Log delivery results (success/failure per token) to a push_notification_log table",
+        "Handle invalid token errors by deleting the stale token from device_tokens",
+        "Apply apiKeyAuth middleware — only callable from trusted server contexts",
+        "Add APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY, FCM_SERVICE_ACCOUNT_KEY, FCM_PROJECT_ID to .env.example with setup documentation",
+        "Typecheck passes"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": "CRITICAL MOBILE GAP found in audit: The mobile app has full push notification infrastructure — device token registration, notification channels, permission handling, local notifications — but there is NO edge function to actually send remote notifications. Device tokens are stored in the device_tokens table (via register-device-token function) but they are never read by any sending function. The entire push notification system is receive-only. Android FCM requires google-services.json (missing from the repo — likely gitignored) and Firebase project setup."
+    },
+    {
+      "id": "US-069",
+      "title": "Wire send-event-reminders to push notifications",
+      "description": "As a user who favorited an event, I need to receive a push notification reminder (not just email) before the event starts so that I actually remember to go.",
+      "acceptanceCriteria": [
+        "Update supabase/functions/send-event-reminders/index.ts to call send-push-notification for each user who has favorited the event AND has a registered device token",
+        "Send push 24 hours before event: title='Tomorrow: {event.title}', body='{event.venue} at {time}'",
+        "Send push 1 hour before event: title='Starting soon: {event.title}', body='Begins in 1 hour at {event.venue}'",
+        "Include event_id in the notification data payload for deep link routing in the mobile app",
+        "Only send push to users who have push_notifications enabled in their preferences (check user preferences)",
+        "Log push sends alongside email sends in the existing reminder log",
+        "Typecheck passes"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": "Depends on US-068 (send-push-notification function). send-event-reminders currently sends email only. Push notifications have dramatically higher open rates (~90%) vs email (~20%). This is the highest-value mobile feature after the basic push infrastructure."
+    },
+    {
+      "id": "US-070",
+      "title": "Add AI-generated alt text to media_assets for accessibility and SEO",
+      "description": "As an accessibility engineer, I need all stored images to have descriptive alt text so that screen reader users can understand image content and search engines can index image context.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/generate-image-alt-text/index.ts that accepts a media_asset_id",
+        "Function fetches the image from Supabase Storage CDN URL and sends it to Claude vision API with prompt: 'Describe this image for use as alt text on a Des Moines events/restaurants website. Be concise (under 125 characters), descriptive, and specific. Start with the main subject.'",
+        "Update media_assets.alt_text with the generated description",
+        "Apply rate limiting (5 req/min — vision API is expensive) and apiKeyAuth",
+        "Update backfill-images (via _shared/imageStorage.ts) to queue newly stored images for alt text generation",
+        "Create a migration adding a pg_cron job that runs generate-image-alt-text for all media_assets where alt_text IS NULL (batch of 20 per run, every 5 minutes)",
+        "Update EventCard, RestaurantCard, and detail page <img> tags to use media_assets.alt_text when available",
+        "Typecheck passes"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": "FOUND IN AUDIT: media_assets table has alt_text column (migration line 118) but it is NEVER populated. All stored images have null alt_text. This means: (1) screen readers say nothing for content images — WCAG violation, (2) Google Image Search cannot index image content. Claude's vision API can generate excellent alt text automatically. This closes both an accessibility gap and an SEO gap simultaneously."
+    },
+    {
+      "id": "US-071",
+      "title": "Implement Cloudflare Image Resizing for responsive image serving",
+      "description": "As a mobile app user, I need images sized appropriately for my screen so that the app loads fast and doesn't download 2MB full-res images for 400px thumbnails.",
+      "acceptanceCriteria": [
+        "Create src/lib/imageUrl.ts with a getImageUrl(url: string, options: { width?: number, height?: number, fit?: 'cover'|'contain', format?: 'webp'|'auto' }) function",
+        "For Supabase Storage URLs (containing '/storage/v1/object/public/'), rewrite to use Cloudflare Image Resizing: https://{your-domain}/cdn-cgi/image/width={w},height={h},fit={fit},format=auto/{original-path}",
+        "For external URLs (legacy records before backfill), return original URL unchanged",
+        "Update EventCard.tsx to use getImageUrl(event.image_url, { width: 400, height: 250, fit: 'cover' }) for the card thumbnail",
+        "Update RestaurantCard.tsx similarly with appropriate card dimensions",
+        "Update detail pages (EventDetails, RestaurantDetails) to use getImageUrl with larger dimensions (1200, 630) for hero images",
+        "Add srcSet support: generate 400w, 800w, 1200w variants using getImageUrl",
+        "Enable Cloudflare Image Resizing in Cloudflare Pages dashboard (Polish + Mirage settings)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: check Network tab shows images served from cdn-cgi/image/"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": "Cloudflare Image Resizing is available on all Cloudflare plans at no extra cost for sites hosted on Cloudflare Pages. Currently EventCard and RestaurantCard serve full-resolution images (potentially 1-5MB) for 400px thumbnails. On mobile this wastes bandwidth and slows load time. The cdn-cgi/image/ URL pattern automatically serves WebP to browsers that support it, JPEG to others, and the correct size for the requested dimensions."
     }
   ]
 }
