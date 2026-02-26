@@ -313,8 +313,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Two TODOs in useScraping.ts reference this. Without persistence, scraping jobs are lost on page refresh and there's no audit trail."
+      "passes": true,
+      "notes": "Completed: Created scraping_jobs migration with RLS policies, seeded 8 Des Moines event source jobs. Updated useScraping.ts to persist all operations (add, run, stop, update) to database. Resolved both TODOs: stop uses AbortController, add inserts to DB with UUID."
     },
     {
       "id": "US-021",
@@ -381,8 +381,8 @@
         "npm run build passes"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": "Target is <500KB gzipped initial bundle. Heavy libraries should already be chunk-split but Puppeteer may be leaking into the client bundle."
+      "passes": true,
+      "notes": "Completed: Removed 6 unused deps (cssnano, jsonwebtoken, lightningcss, node-fetch, stripe, terser). Moved puppeteer to devDependencies. Three.js/Leaflet/Tiptap/FullCalendar confirmed lazy-loaded. Main index chunk reduced 429→423 kB. Build time improved 63→50s."
     },
     {
       "id": "US-025",
@@ -397,8 +397,8 @@
         "Typecheck passes"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": "Some indexes exist (idx_events_date, idx_events_category, idx_restaurants_cuisine) but composite indexes for common filter combinations are likely missing."
+      "passes": true,
+      "notes": "Completed: Created migration with 16 indexes — composite indexes for events/restaurants/attractions filter patterns, FK indexes for favorites/ratings/reviews joins, partial index for upcoming events, trigram indexes for full-text search, and analytics indexes for content_metrics/user_analytics."
     },
     {
       "id": "US-026",
@@ -480,8 +480,8 @@
         "Typecheck passes"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": "DEPLOYMENT.md exists but is a basic guide. A production runbook is more comprehensive with operational procedures, rollback plans, and incident response."
+      "passes": true,
+      "notes": "Already complete: docs/PRODUCTION_RUNBOOK.md (932 lines) covers all acceptance criteria — pre-deployment checklist, deployment steps (Cloudflare + Supabase + edge functions), post-deployment verification with health check script, rollback procedures, P1-P4 incident response with templates, and troubleshooting for Supabase/Stripe/edge function/build issues."
     },
     {
       "id": "US-031",
@@ -638,8 +638,8 @@
         "Typecheck passes"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": "Depends on US-028 (feature flags). A/B testing is the key enabler for data-driven product decisions. Without it, all UI/UX changes are based on gut feeling."
+      "passes": true,
+      "notes": "Completed: Extended feature_flags with variants JSONB + traffic_split columns. Created experiment_assignments table with RLS. Built useExperiment hook with deterministic hashing (user_id or session_id), fire-and-forget analytics tracking. Created Experiment component for declarative variant rendering."
     },
     {
       "id": "US-041",
@@ -658,8 +658,8 @@
         "Typecheck passes"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines runs 'Des Best' with crowdsourced local voting that drives massive engagement. CITYVIEW's 'Best of Des Moines' gets 22,969+ votes across 271 categories annually. We have zero community voting. This is the single biggest engagement feature we're missing \u2014 locals vote, share results, and return to see who won. It turns passive readers into active participants."
+      "passes": true,
+      "notes": "Completed: Created voting_categories + votes tables with RLS, UNIQUE(category_id, user_id). Built /best-of and /best-of/:category routes with VotingBooth search-to-vote UX, write-in support, ranked results with vote bars. Seeded 10 categories. Added to main navigation."
     },
     {
       "id": "US-042",
@@ -970,8 +970,8 @@
         "Typecheck passes"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: This is a gap across ALL competitors. None of them do real-time scene tracking well. dsm Magazine covers new openings editorially but not in real-time. We already detect new restaurant openings within 48 hours via our scrapers \u2014 we should surface this intelligence to users directly. A daily-updated 'What's New' feed creates habitual platform usage."
+      "passes": true,
+      "notes": "Completed: Created scene_updates table with RLS, type/neighborhood/publish_date indexes. Built /whats-new page with type filter buttons and chronological feed. Created SceneUpdateCard with type badges and timeAgo display. Auto-generates 'New Opening' entries via DB trigger on restaurant INSERT. Added to main navigation."
     },
     {
       "id": "US-059",
@@ -1090,8 +1090,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 65,
-      "passes": false,
-      "notes": "The backfill-images edge function was just deployed but can only be called via cURL. Admins need a UI to run it across all 4 categories (events, restaurants, attractions, playgrounds) without technical knowledge. The paginated nextOffset pattern makes progress easy to visualize."
+      "passes": true,
+      "notes": "Completed: Created ImageBackfill.tsx component with per-category stats cards, Run Batch / Run All / Pause / Reset controls, progress bar with updated/skipped/failed counters, scrollable results log with status badges. Added as 'Backfill Images' tab in AdminMedia.tsx alongside MediaLibrary."
     },
     {
       "id": "US-066",
