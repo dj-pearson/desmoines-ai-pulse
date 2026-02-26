@@ -11,6 +11,7 @@ import {
   FileText,
   Compass,
   Sparkles,
+  Trophy,
   type LucideIcon,
 } from "lucide-react";
 
@@ -68,6 +69,8 @@ export const navigationGroups: Record<string, NavGroup> = {
     icon: FileText,
     items: [
       { href: "/articles", label: "Articles & Guides", icon: FileText },
+      { href: "/best-of", label: "Des Best Voting", icon: Trophy, featured: true },
+      { href: "/whats-new", label: "What's New in DSM", icon: Sparkles },
     ],
   },
 };
@@ -87,4 +90,6 @@ export const navigationLinks: NavItem[] = [
   { href: "/attractions", label: "Attractions", icon: Camera },
   { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
   { href: "/articles", label: "Articles", icon: FileText },
+  { href: "/best-of", label: "Des Best", icon: Trophy, priority: true },
+  { href: "/whats-new", label: "What's New", icon: Sparkles },
 ];

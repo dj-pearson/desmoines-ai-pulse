@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
@@ -59,8 +60,8 @@ const STORAGE_KEY = 'dmi-user-preferences';
 
 export function useUserPreferences() {
   const { toast } = useToast();
+  const { user, isAuthenticated } = useAuth();
   const [preferences, setPreferences] = useState<UserPreferences>(() => {
-    // Load from safeStorage on initialization
     const stored = storage.get<Partial<UserPreferences>>(STORAGE_KEY);
     if (stored) {
       return { ...DEFAULT_PREFERENCES, ...stored };
@@ -70,12 +71,55 @@ export function useUserPreferences() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const hasLoadedFromServer = useRef(false);
 
-  // Load preferences from server if authenticated
-  // TODO: Implement server-side preferences storage once user_profiles table is created
+  // Load preferences from server on login
   useEffect(() => {
-    setIsLoading(false);
-  }, []);
+    if (!isAuthenticated || !user?.id || hasLoadedFromServer.current) return;
+
+    const loadFromServer = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('communication_preferences')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error) {
+          log.warn('loadFromServer', 'Failed to load server preferences', { error: error.message });
+          setIsLoading(false);
+          return;
+        }
+
+        const serverPrefs = data?.communication_preferences as Record<string, unknown> | null;
+        if (serverPrefs?.ui_preferences) {
+          // Server wins on conflict — merge with defaults for any missing keys
+          const merged = {
+            ...DEFAULT_PREFERENCES,
+            ...serverPrefs.ui_preferences as Partial<UserPreferences>,
+          };
+          setPreferences(merged);
+          storage.set(STORAGE_KEY, merged);
+          log.info('loadFromServer', 'Loaded preferences from server');
+        }
+        hasLoadedFromServer.current = true;
+      } catch (err) {
+        log.error('loadFromServer', 'Unexpected error loading preferences', { err });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadFromServer();
+  }, [isAuthenticated, user?.id]);
+
+  // Reset server-loaded flag on logout
+  useEffect(() => {
+    if (!isAuthenticated) {
+      hasLoadedFromServer.current = false;
+    }
+  }, [isAuthenticated]);
 
   // Save preferences to safeStorage
   const saveToLocalStorage = useCallback((newPrefs: UserPreferences) => {
@@ -83,11 +127,44 @@ export function useUserPreferences() {
   }, []);
 
   // Sync preferences to server if authenticated
-  // TODO: Implement server-side preferences storage once user_profiles table is created
   const syncToServer = useCallback(async (newPrefs: UserPreferences) => {
-    // Placeholder for future server sync
-    setIsSyncing(false);
-  }, []);
+    if (!isAuthenticated || !user?.id) {
+      setIsSyncing(false);
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      // Read current communication_preferences to preserve other fields
+      const { data: current } = await supabase
+        .from('profiles')
+        .select('communication_preferences')
+        .eq('user_id', user.id)
+        .single();
+
+      const existing = (current?.communication_preferences as Record<string, unknown>) || {};
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          communication_preferences: {
+            ...existing,
+            ui_preferences: newPrefs,
+          },
+        })
+        .eq('user_id', user.id);
+
+      if (error) {
+        log.warn('syncToServer', 'Failed to sync preferences', { error: error.message });
+      } else {
+        log.info('syncToServer', 'Preferences synced to server');
+      }
+    } catch (err) {
+      log.error('syncToServer', 'Unexpected error syncing preferences', { err });
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isAuthenticated, user?.id]);
 
   // Update preferences
   const updatePreferences = useCallback(

@@ -268,15 +268,13 @@ export default function EnhancedAttractionSEO({
       <meta property="og:locality" content={BRAND.city} />
       <meta property="og:region" content={BRAND.state} />
       <meta property="og:country-name" content="United States" />
-      {attraction.image_url && (
-        <meta property="og:image" content={attraction.image_url} />
-      )}
-      {attraction.image_url && (
-        <meta
-          property="og:image:alt"
-          content={`${attraction.name} - ${attraction.type} in ${BRAND.city}`}
-        />
-      )}
+      <meta property="og:image" content={attraction.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta
+        property="og:image:alt"
+        content={`${attraction.name} - ${attraction.type} in ${BRAND.city}`}
+      />
       <meta property="og:url" content={attractionUrl} />
       <meta property="og:site_name" content={BRAND.name} />
 
@@ -284,9 +282,7 @@ export default function EnhancedAttractionSEO({
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={getOptimizedTitle()} />
       <meta name="twitter:description" content={getGEODescription()} />
-      {attraction.image_url && (
-        <meta name="twitter:image" content={attraction.image_url} />
-      )}
+      <meta name="twitter:image" content={attraction.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
       {/* Structured Data */}

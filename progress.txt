@@ -63,11 +63,164 @@
 - ~~PearsonASUS file naming artifacts from merge~~ (RESOLVED: deleted in US-018)
 - ~~SearchTrafficDashboard commented out (missing migrations)~~ (RESOLVED: US-021)
 - ~~TODOs: distance calculation~~ (RESOLVED: US-022, see src/lib/geo.ts)
-- TODOs: user preferences server-side, scraping job persistence
+- ~~No content interaction tracking~~ (RESOLVED: US-032, see src/hooks/useContentTracking.ts)
+- ~~Hardcoded metrics in AdminAnalyticsDashboard~~ (RESOLVED: US-033, computed from real data)
+- ~~No email capture for free tool users~~ (RESOLVED: US-034, see src/components/EmailCaptureModal.tsx)
+- ~~AI/LLM edge functions unprotected from abuse~~ (RESOLVED: US-061, rate limiting at 10 req/15min)
+- ~~backfill-images edge function has no auth~~ (RESOLVED: US-062, API key middleware added)
+- ~~og:image missing on HotelDetails and conditional on Enhanced SEO components~~ (RESOLVED: US-063)
+- ~~MediaLibrary component not wired into admin panel~~ (RESOLVED: US-064, /admin/media route)
+- ~~Scraping jobs lost on page refresh~~ (RESOLVED: US-020, database persistence + AbortController stop)
+- ~~No composite DB indexes for filter queries~~ (RESOLVED: US-025, 16 indexes added)
+- ~~No A/B testing infrastructure~~ (RESOLVED: US-040, useExperiment hook + Experiment component)
+- ~~No admin UI for image backfill~~ (RESOLVED: US-065, ImageBackfill component in AdminMedia)
+- ~~Bundle bloat from unused deps~~ (RESOLVED: US-024, removed 6 unused deps, puppeteer→devDeps)
+- ~~No production deployment runbook~~ (RESOLVED: US-030, docs/PRODUCTION_RUNBOOK.md already complete)
+- ~~No community voting system~~ (RESOLVED: US-041, Des Best voting at /best-of)
+- ~~No scene updates feed~~ (RESOLVED: US-058, What's New at /whats-new with auto-trigger)
+- TODOs: API documentation (US-029), remaining content hubs (US-042–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
 
 ---
 
 ## Progress Log
+
+## 2026-02-26 — Ralph Loop 4: Bundle Cleanup, Deployment Docs, Des Best Voting, What's New Feed
+
+- **US-024**: Optimized bundle size — removed 6 unused dependencies:
+  - Removed from dependencies: cssnano, jsonwebtoken, lightningcss, node-fetch, stripe, terser
+  - Moved puppeteer to devDependencies (150+ MB savings from production bundle)
+  - Verified Three.js/Leaflet/Tiptap/FullCalendar all properly lazy-loaded
+  - Main index chunk: 429 KB → 423 KB; build time: 63s → 50s
+- **US-030**: Production deployment runbook already complete:
+  - `docs/PRODUCTION_RUNBOOK.md` (932 lines) covers all acceptance criteria
+  - Pre-deployment checklist, deployment steps, post-deployment verification
+  - Rollback procedures, P1-P4 incident response, troubleshooting guides
+- **US-041**: Built Des Best crowdsourced voting system:
+  - Created `voting_categories` + `votes` tables with RLS + UNIQUE(category_id, user_id)
+  - Seeded 10 categories: Best Pizza, Coffee, Happy Hour, Brunch, Date Night, Hidden Gem, Food Truck, Brewery, Ice Cream, Live Music
+  - Built `/best-of` route with category grid + vote counts
+  - Built `/best-of/:category` with VotingBooth (search-to-vote + write-in), ranked results with vote percentage bars
+  - Created `src/hooks/useVoting.ts` with TanStack Query hooks for categories, results, user vote, cast vote
+  - Added to main navigation under Resources
+- **US-058**: Built What's New in DSM feed:
+  - Created `scene_updates` table with type check constraint, RLS, indexes on type/date/neighborhood
+  - Auto-generates "New Opening" entries via DB trigger on restaurant INSERT
+  - Built `/whats-new` route with type filter buttons and chronological SceneUpdateCard feed
+  - SceneUpdateCard shows type badges (New!/Closing/Renovation/etc.), timeAgo, entity links
+  - Created `src/hooks/useSceneUpdates.ts` with TanStack Query hooks
+  - Added to main navigation under Resources
+
+**Build verified**: `npm run build` passes (50.31s)
+
+**PRD Status**: 46/71 stories complete (65%)
+
+## 2026-02-26 — Ralph Loop 3: Persistence, Indexes, A/B Testing, Image Backfill UI
+
+- **US-020**: Implemented scraping jobs database persistence:
+  - Created `scraping_jobs` migration with RLS (admin CRUD), indexes on status/job_type/last_run
+  - Seeded 8 Des Moines event source jobs (Catch DSM, Iowa Cubs/Wolves/Wild/Barnstormers, Events Center, Vibrant Music Hall, Google Events)
+  - Rewrote `useScraping.ts`: all operations (add, run, stop, config update) now persist to database
+  - Resolved TODO at line 397: `stopAllJobs()` uses `AbortController` to signal loop abort + persists `stopped` status to DB
+  - Resolved TODO at line 483: `addJob()` inserts to database via Supabase, generates UUID server-side
+  - Replaced all `console.*` calls with structured logger
+- **US-025**: Optimized database queries with 16 new indexes:
+  - Composite: events(date,category), events(date,city), restaurants(cuisine,city), restaurants(rating DESC), attractions(category,city)
+  - Foreign key: favorites(user_id), favorites(event_id), ratings(user_id), reviews(entity_id), reviews(user_id)
+  - Partial: events upcoming (WHERE date >= now())
+  - Trigram: events.title, restaurants.name, attractions.name (gin_trgm_ops)
+  - Analytics: content_metrics(content_id,metric_type), content_metrics(created_at), user_analytics(session_id), user_analytics(event_type)
+- **US-040**: Implemented A/B testing infrastructure:
+  - Extended `feature_flags` table with `variants` JSONB and `traffic_split` numeric columns
+  - Created `experiment_assignments` table with unique constraints on (flag_key, user_id) and (flag_key, session_id)
+  - Built `src/hooks/useExperiment.ts` with deterministic hash-based variant assignment (user_id for authenticated, session_id for anonymous)
+  - Fire-and-forget tracking of `experiment_assigned` events to `user_analytics`
+  - Created `src/components/Experiment.tsx` declarative wrapper: `<Experiment flag="test" variants={{ A: <V1/>, B: <V2/> }} />`
+- **US-065**: Built admin UI for backfill-images:
+  - Created `src/components/admin/ImageBackfill.tsx` with full backfill control panel
+  - Per-category stats cards showing total/with images/needs backfill counts
+  - Run Batch (single), Run All (auto-advance), Pause, Reset controls
+  - Progress bar with updated/skipped/failed counters
+  - Scrollable results log with status badges per record
+  - Added as "Backfill Images" tab in AdminMedia.tsx alongside MediaLibrary
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 1m 3s)
+
+**PRD Status**: 42/71 stories complete (59%)
+
+## 2026-02-25 — Ralph Loop 2: Preferences, Feature Flags, Audit, Funnel
+
+- **US-019**: Implemented server-side user preferences in `use-user-preferences.ts`:
+  - On login: loads preferences from `profiles.communication_preferences.ui_preferences` (JSONB)
+  - Server wins on conflict when merging with localStorage defaults
+  - Debounced sync to server on preference changes (1s delay)
+  - Unauthenticated users continue using localStorage only (graceful degradation)
+  - Resolved both TODO comments in the hook
+- **US-028**: Enhanced `useFeatureFlag` hook with graceful degradation:
+  - Added `DEFAULT_FLAGS` fallback when feature_flags table query fails
+  - Migration already existed (`20260221000000_create_feature_flags.sql`)
+  - `FeatureFlag` wrapper component already existed
+  - Hook now returns default values instead of throwing on database errors
+- **US-037**: Created admin audit trail system:
+  - Created `src/hooks/useAuditLog.ts` with `logAdminAction()` and `useAuditLogEntries()` hooks
+  - Uses existing `security_audit_logs` table with `event_type='admin_action'`
+  - Created `src/components/admin/AuditLogPanel.tsx` with scrollable log viewer
+  - Added "Audit Log" tab to AdminAnalyticsPage
+- **US-039**: Implemented conversion funnel tracking:
+  - Created `src/hooks/useConversionFunnel.ts` with `trackFunnelEvent()` and `useConversionFunnelData()` hooks
+  - Tracks: pricing_page_viewed, plan_selected, checkout_started, checkout_completed, checkout_abandoned
+  - Integrated into Pricing page (page view, plan selection, checkout start, checkout cancel)
+  - Created `src/components/admin/ConversionFunnelChart.tsx` with bar visualization and drop-off percentages
+  - Added "Conversion Funnel" tab to AdminAnalyticsPage
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 6378 modules, 56s)
+
+**PRD Status**: 38/71 stories complete (54%)
+
+## 2026-02-25 — Ralph Loop: Security, SEO, Admin, Code Quality
+
+- **US-001 through US-010**: Verified all 10 stories as complete in codebase; marked `passes: true` in prd.json (CI/CD, Vitest, unit tests, structured logger, console cleanup, Sentry)
+- **US-017**: Fixed `metadata?: any` → `Record<string, unknown>` in AuthContext.tsx for strict mode compliance
+- **US-031**: Replaced `window.location.href` with no-ops in `defaultShortcuts` (runtime already uses `useNavigate()` in the hook handler); replaced `window.location.href = 'mailto:...'` with `<a href="mailto:...">` via `asChild` in AdvertiseSuccess.tsx and AdvertiseCancel.tsx
+- **US-061**: Added rate limiting (10 req/15min) to 5 AI/LLM edge functions:
+  - `generate-itinerary` (Claude trip planner)
+  - `generate-seo-content` (Claude SEO batch)
+  - `personalized-recommendations` (OpenAI recommendations)
+  - `generate-writeup` (Claude writeups)
+  - `analyze-competitor` (Claude competitor analysis)
+  - Documented rate limit tiers in `_shared/rateLimit.ts` header comment
+- **US-062**: Added `requireApiKey()` middleware to `backfill-images` edge function; added `x-api-key` to CORS allowed headers
+- **US-063**: Guaranteed dynamic `og:image` with fallback on all content detail pages:
+  - HotelDetails: Added full og:image, og:image:width/height/alt, and twitter:image tags (was completely missing)
+  - EnhancedEventSEO: Changed conditional `{event.image_url && ...}` to always-present with brand fallback, added width/height
+  - EnhancedAttractionSEO: Same pattern — unconditional og:image with fallback, added width/height
+  - EnhancedPlaygroundSEO: Same pattern — unconditional og:image with fallback, added width/height
+- **US-064**: Wired MediaLibrary admin component into the Admin panel:
+  - Created `src/pages/AdminMedia.tsx` page wrapper
+  - Added lazy import and `/admin/media` route in App.tsx with ProtectedRoute
+  - Added "Media" nav item with Image icon to AdminNav.tsx
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 6374 modules, 46s)
+
+**PRD Status**: 34/71 stories complete (48%)
+
+## 2026-02-23 — PRD Stories: Content Tracking, Email Capture, Analytics
+
+- **US-032**: Created `src/hooks/useContentTracking.ts` — fire-and-forget hook that tracks views, shares, favorites, and clicks to the `content_metrics` table. Integrated into EventDetails, RestaurantDetails, and AttractionDetails pages with automatic view tracking on mount and share tracking via ShareDialog `onShare` callback.
+- **US-034**: Created `src/components/EmailCaptureModal.tsx` — dismissible email capture modal with consent checkbox, name field, and safeStorage "don't show again" support. Integrated into TripPlanner (shown after itinerary generation). EventPromotionPlanner already had its own email capture.
+- **US-033**: Replaced all hardcoded metrics in AdminAnalyticsDashboard with real computed data:
+  - Bounce rate: computed from sessions with single page view / total sessions
+  - Avg session duration: computed from first-to-last event timestamps per session_id
+  - Device breakdown: computed from `device_type` field in `user_analytics`
+  - Top pages avgTime: estimated from inter-event gaps per page path
+  - Removed fake "+12%", "-3%", "+15%" comparison labels with accurate descriptions
+- **US-026**: Verified complete — skip navigation link in Header.tsx, `main#main-content` target in App.tsx, focus indicators in index.css, sr-only utility, AccessibleSkipLink component, and aria-labels on key interactive elements
+- **US-027**: Verified complete — `useReducedMotion` hook exists, `@media (prefers-reduced-motion: reduce)` CSS rules in index.css (global animation disable), `.a11y-reduced-motion` class for programmatic toggle
+- **US-011**: Verified complete — `public/_headers` with CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy, and comprehensive cache headers for Cloudflare Pages
+- **US-023**: Verified complete — `src/lib/env.ts` with environment variable validation
+- **US-038**: Verified complete — `src/lib/fetchWithRetry.ts` with exponential backoff
+- Added `onShare` callback prop to ShareDialog component for tracking integration
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 6369 modules, 55s)
 
 ## 2026-02-21 — PRD Stories Batch Implementation
 - **US-012**: Security audit of unauthenticated edge functions; created docs/SECURITY_AUDIT.md with risk classification for all 18 verify_jwt=false functions; added security documentation comments to each function

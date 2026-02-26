@@ -133,6 +133,10 @@ const AdminTools = lazyWithRetry(() => import("./pages/AdminTools"));
 const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
 const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
 const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
+const AdminMedia = lazyWithRetry(() => import("./pages/AdminMedia"));
+const BestOf = lazyWithRetry(() => import("./pages/BestOf"));
+const BestOfCategory = lazyWithRetry(() => import("./pages/BestOfCategory"));
+const WhatsNew = lazyWithRetry(() => import("./pages/WhatsNew"));
 
 // Mobile-optimized loading component with accessibility support
 const PageLoader = () => (
@@ -217,6 +221,7 @@ const App = () => (
             <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
             <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
+            <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
             {/* Restaurant SEO hub pages */}
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />
@@ -314,6 +319,11 @@ const App = () => (
             <Route path="/accessibility" element={<AccessibilityStatement />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
+            {/* Community voting */}
+            <Route path="/best-of" element={<BestOf />} />
+            <Route path="/best-of/:category" element={<BestOfCategory />} />
+            {/* Scene updates feed */}
+            <Route path="/whats-new" element={<WhatsNew />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

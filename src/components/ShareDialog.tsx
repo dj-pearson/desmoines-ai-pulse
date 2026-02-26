@@ -38,6 +38,8 @@ interface ShareDialogProps {
   url: string;
   trigger?: React.ReactNode;
   className?: string;
+  /** Callback fired when a share action is completed (any platform or copy) */
+  onShare?: () => void;
 }
 
 export default function ShareDialog({
@@ -46,6 +48,7 @@ export default function ShareDialog({
   url,
   trigger,
   className,
+  onShare,
 }: ShareDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -110,6 +113,7 @@ export default function ShareDialog({
     try {
       await navigator.clipboard.writeText(url);
       toast.success("Link copied to clipboard!");
+      onShare?.();
       setIsOpen(false);
     } catch (error) {
       toast.error("Failed to copy link");
@@ -124,6 +128,7 @@ export default function ShareDialog({
           text: shareText,
           url: url,
         });
+        onShare?.();
         setIsOpen(false);
       } catch (error) {
         // User cancelled sharing or error occurred
@@ -137,6 +142,7 @@ export default function ShareDialog({
     setTimeout(() => {
       window.open(shareUrl, "_blank", "width=600,height=400,scrollbars=yes,resizable=yes");
     }, 100);
+    onShare?.();
     setIsOpen(false);
   };
 

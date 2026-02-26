@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useContentTracking } from "@/hooks/useContentTracking";
 
 const createSlug = (name: string): string => {
   return name
@@ -67,6 +68,9 @@ export default function AttractionDetails() {
       return foundAttraction || null;
     },
   });
+
+  // Track page view and content interactions
+  const { trackShare } = useContentTracking(attraction?.id, 'attraction');
 
   const { data: relatedAttractions } = useQuery({
     queryKey: ["related-attractions", attraction?.type, attraction?.id],
@@ -231,6 +235,7 @@ export default function AttractionDetails() {
                 title={attraction.name}
                 description={attraction.description || `Check out ${attraction.name} - ${attraction.type} in Des Moines`}
                 url={typeof window !== "undefined" ? window.location.href : ""}
+                onShare={trackShare}
                 trigger={
                   <Button variant="outline" size="sm" className="rounded-xl">
                     <Share2 className="h-4 w-4 mr-1.5" />
@@ -338,6 +343,7 @@ export default function AttractionDetails() {
                 title={attraction.name}
                 description={attraction.description || `Discover ${attraction.name} in Des Moines`}
                 url={typeof window !== "undefined" ? window.location.href : ""}
+                onShare={trackShare}
               />
             </div>
 

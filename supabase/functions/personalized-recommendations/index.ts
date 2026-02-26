@@ -7,6 +7,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +21,12 @@ const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Rate limit: 10 AI requests per 15 minutes per client
+  const rateLimit = checkRateLimit(req, { max: 10, message: 'AI recommendation rate limit exceeded. Please try again later.' });
+  if (!rateLimit.success) {
+    return rateLimit.response!;
   }
 
   try {

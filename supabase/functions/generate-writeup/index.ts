@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, getClaudeHeaders, buildClaudeRequest } from "../_shared/aiConfig.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -228,6 +229,12 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Rate limit: 10 AI requests per 15 minutes per client
+  const rateLimit = checkRateLimit(req, { max: 10, message: 'AI writeup rate limit exceeded. Please try again later.' });
+  if (!rateLimit.success) {
+    return rateLimit.response!;
   }
 
   try {

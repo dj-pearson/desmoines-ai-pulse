@@ -2,6 +2,12 @@
  * Rate limiting middleware for Supabase Edge Functions
  * Uses in-memory storage (resets on function cold start)
  * For production, consider using Upstash Redis or Supabase tables
+ *
+ * Rate Limit Tiers:
+ *  - Read operations (default):     100 req / 15 min per client
+ *  - Write operations:               30 req / 15 min per client
+ *  - AI/LLM operations:              10 req / 15 min per client
+ *  - Checkout/payment operations:     10 req / 15 min per client
  */
 
 interface RateLimitStore {
