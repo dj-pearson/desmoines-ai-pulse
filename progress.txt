@@ -70,11 +70,48 @@
 - ~~backfill-images edge function has no auth~~ (RESOLVED: US-062, API key middleware added)
 - ~~og:image missing on HotelDetails and conditional on Enhanced SEO components~~ (RESOLVED: US-063)
 - ~~MediaLibrary component not wired into admin panel~~ (RESOLVED: US-064, /admin/media route)
-- TODOs: user preferences server-side (US-019), scraping job persistence (US-020)
+- ~~Scraping jobs lost on page refresh~~ (RESOLVED: US-020, database persistence + AbortController stop)
+- ~~No composite DB indexes for filter queries~~ (RESOLVED: US-025, 16 indexes added)
+- ~~No A/B testing infrastructure~~ (RESOLVED: US-040, useExperiment hook + Experiment component)
+- ~~No admin UI for image backfill~~ (RESOLVED: US-065, ImageBackfill component in AdminMedia)
+- TODOs: user preferences server-side (US-019 done), bundle optimization (US-024), API docs (US-029), deployment runbook (US-030)
 
 ---
 
 ## Progress Log
+
+## 2026-02-26 — Ralph Loop 3: Persistence, Indexes, A/B Testing, Image Backfill UI
+
+- **US-020**: Implemented scraping jobs database persistence:
+  - Created `scraping_jobs` migration with RLS (admin CRUD), indexes on status/job_type/last_run
+  - Seeded 8 Des Moines event source jobs (Catch DSM, Iowa Cubs/Wolves/Wild/Barnstormers, Events Center, Vibrant Music Hall, Google Events)
+  - Rewrote `useScraping.ts`: all operations (add, run, stop, config update) now persist to database
+  - Resolved TODO at line 397: `stopAllJobs()` uses `AbortController` to signal loop abort + persists `stopped` status to DB
+  - Resolved TODO at line 483: `addJob()` inserts to database via Supabase, generates UUID server-side
+  - Replaced all `console.*` calls with structured logger
+- **US-025**: Optimized database queries with 16 new indexes:
+  - Composite: events(date,category), events(date,city), restaurants(cuisine,city), restaurants(rating DESC), attractions(category,city)
+  - Foreign key: favorites(user_id), favorites(event_id), ratings(user_id), reviews(entity_id), reviews(user_id)
+  - Partial: events upcoming (WHERE date >= now())
+  - Trigram: events.title, restaurants.name, attractions.name (gin_trgm_ops)
+  - Analytics: content_metrics(content_id,metric_type), content_metrics(created_at), user_analytics(session_id), user_analytics(event_type)
+- **US-040**: Implemented A/B testing infrastructure:
+  - Extended `feature_flags` table with `variants` JSONB and `traffic_split` numeric columns
+  - Created `experiment_assignments` table with unique constraints on (flag_key, user_id) and (flag_key, session_id)
+  - Built `src/hooks/useExperiment.ts` with deterministic hash-based variant assignment (user_id for authenticated, session_id for anonymous)
+  - Fire-and-forget tracking of `experiment_assigned` events to `user_analytics`
+  - Created `src/components/Experiment.tsx` declarative wrapper: `<Experiment flag="test" variants={{ A: <V1/>, B: <V2/> }} />`
+- **US-065**: Built admin UI for backfill-images:
+  - Created `src/components/admin/ImageBackfill.tsx` with full backfill control panel
+  - Per-category stats cards showing total/with images/needs backfill counts
+  - Run Batch (single), Run All (auto-advance), Pause, Reset controls
+  - Progress bar with updated/skipped/failed counters
+  - Scrollable results log with status badges per record
+  - Added as "Backfill Images" tab in AdminMedia.tsx alongside MediaLibrary
+
+**Build verified**: `npm run build` passes with no errors (Vite 5.4.21, 1m 3s)
+
+**PRD Status**: 42/71 stories complete (59%)
 
 ## 2026-02-25 — Ralph Loop 2: Preferences, Feature Flags, Audit, Funnel
 
