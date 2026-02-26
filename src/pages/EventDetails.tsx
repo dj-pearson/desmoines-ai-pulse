@@ -1,5 +1,9 @@
+import { lazy, Suspense } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useEvents } from "@/hooks/useEvents";
+
+// Lazy load map to avoid Leaflet SSR issues
+const EventDetailMap = lazy(() => import("@/components/EventDetailMap"));
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -54,10 +58,11 @@ export default function EventDetails() {
 
   const relatedEvents = event
     ? events
-        .filter((e) =>
-          e.id !== event.id &&
-          e.category === event.category &&
-          new Date(e.date) >= new Date()
+        .filter(
+          (e) =>
+            e.id !== event.id &&
+            e.category === event.category &&
+            new Date(e.date) >= new Date(),
         )
         .slice(0, 3)
     : [];
@@ -65,10 +70,11 @@ export default function EventDetails() {
   // Nearby events (different category, same timeframe)
   const nearbyEvents = event
     ? events
-        .filter((e) =>
-          e.id !== event.id &&
-          e.category !== event.category &&
-          new Date(e.date) >= new Date()
+        .filter(
+          (e) =>
+            e.id !== event.id &&
+            e.category !== event.category &&
+            new Date(e.date) >= new Date(),
         )
         .slice(0, 3)
     : [];
@@ -120,7 +126,8 @@ export default function EventDetails() {
               </div>
               <h1 className="text-2xl font-bold">Event Not Found</h1>
               <p className="text-muted-foreground">
-                This event may have ended or been removed. Browse our latest events to find something new.
+                This event may have ended or been removed. Browse our latest
+                events to find something new.
               </p>
               <div className="flex gap-3 justify-center">
                 <Button onClick={() => navigate("/events")} variant="default">
@@ -143,19 +150,32 @@ export default function EventDetails() {
   const isUpcoming = eventDate >= new Date();
   const eventSlug = createEventSlugWithCentralTime(event.title, event);
   const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
-  const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0';
+  const isFree =
+    !event.price ||
+    event.price.toLowerCase().includes("free") ||
+    event.price === "$0";
   const showTime = hasSpecificTime(event);
-  const dateSource = event.event_start_utc || event.event_start_local || event.date;
+  const dateSource =
+    event.event_start_utc || event.event_start_local || event.date;
 
   // Get formatted date parts for the hero display
   const fullDate = formatEventDate(event);
-  const dayOfWeek = formatInCentralTime(dateSource, 'EEEE');
-  const monthDay = formatInCentralTime(dateSource, 'MMMM d, yyyy');
-  const timeStr = showTime ? formatInCentralTime(dateSource, 'h:mm a') : null;
+  const dayOfWeek = formatInCentralTime(dateSource, "EEEE");
+  const monthDay = formatInCentralTime(dateSource, "MMMM d, yyyy");
+  const timeStr = showTime ? formatInCentralTime(dateSource, "h:mm a") : null;
 
   // Determine days until event for urgency
-  const daysUntil = Math.ceil((eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  const urgencyLabel = daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : daysUntil <= 7 ? `In ${daysUntil} days` : null;
+  const daysUntil = Math.ceil(
+    (eventDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+  );
+  const urgencyLabel =
+    daysUntil === 0
+      ? "Today"
+      : daysUntil === 1
+        ? "Tomorrow"
+        : daysUntil <= 7
+          ? `In ${daysUntil} days`
+          : null;
 
   return (
     <>
@@ -168,7 +188,7 @@ export default function EventDetails() {
       <BreadcrumbListSchema
         items={[
           { name: "Home", url: BRAND.baseUrl },
-          { name: "Events", url: getCanonicalUrl('/events') },
+          { name: "Events", url: getCanonicalUrl("/events") },
           { name: event.title, url: eventUrl },
         ]}
       />
@@ -181,13 +201,13 @@ export default function EventDetails() {
           <div className="relative h-64 md:h-80 lg:h-96 overflow-hidden bg-slate-900">
             <img
               src={event.image_url}
-              alt={`${event.title} - ${event.category} event in ${event.city || 'Des Moines'}, Iowa`}
+              alt={`${event.title} - ${event.category} event in ${event.city || "Des Moines"}, Iowa`}
               className="w-full h-full object-cover opacity-60"
               loading="eager"
               decoding="async"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
-                target.parentElement!.style.display = 'none';
+                target.parentElement!.style.display = "none";
               }}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background via-background/50 to-transparent" />
@@ -196,14 +216,17 @@ export default function EventDetails() {
 
         <div className="container mx-auto px-4">
           {/* Content starts overlapping hero image */}
-          <div className={event.image_url ? '-mt-32 relative z-10' : 'pt-8'}>
+          <div className={event.image_url ? "-mt-32 relative z-10" : "pt-8"}>
             {/* Breadcrumbs */}
             <Breadcrumbs
               items={[
                 { label: "Home", href: "/" },
                 { label: "Events", href: "/events" },
-                { label: event.category, href: `/events?category=${encodeURIComponent(event.category)}` },
-                { label: event.title }
+                {
+                  label: event.category,
+                  href: `/events?category=${encodeURIComponent(event.category)}`,
+                },
+                { label: event.title },
               ]}
             />
 
@@ -211,12 +234,18 @@ export default function EventDetails() {
               {/* Main Content Column */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Event Header Card */}
-                <article className="bg-card rounded-2xl shadow-lg border overflow-hidden" itemScope itemType="https://schema.org/Event">
+                <article
+                  className="bg-card rounded-2xl shadow-lg border overflow-hidden"
+                  itemScope
+                  itemType="https://schema.org/Event"
+                >
                   <div className="p-6 md:p-8">
                     {/* Badges Row */}
                     <div className="flex flex-wrap items-center gap-2 mb-4">
                       {isUpcoming && urgencyLabel && (
-                        <Badge className={`${daysUntil === 0 ? 'bg-red-500' : daysUntil <= 2 ? 'bg-orange-500' : 'bg-indigo-500'} text-white border-0`}>
+                        <Badge
+                          className={`${daysUntil === 0 ? "bg-red-500" : daysUntil <= 2 ? "bg-orange-500" : "bg-indigo-500"} text-white border-0`}
+                        >
                           {urgencyLabel}
                         </Badge>
                       )}
@@ -231,12 +260,17 @@ export default function EventDetails() {
                         </Badge>
                       )}
                       {isFree && (
-                        <Badge className="bg-emerald-500 text-white border-0">Free Event</Badge>
+                        <Badge className="bg-emerald-500 text-white border-0">
+                          Free Event
+                        </Badge>
                       )}
                     </div>
 
                     {/* Title */}
-                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-4 leading-tight" itemProp="name">
+                    <h1
+                      className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-foreground mb-4 leading-tight"
+                      itemProp="name"
+                    >
                       {event.title}
                     </h1>
 
@@ -247,12 +281,25 @@ export default function EventDetails() {
                           <Calendar className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-semibold text-foreground text-sm">{dayOfWeek}</p>
-                          <p className="text-sm text-muted-foreground" itemProp="startDate" content={event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString())}>
+                          <p className="font-semibold text-foreground text-sm">
+                            {dayOfWeek}
+                          </p>
+                          <p
+                            className="text-sm text-muted-foreground"
+                            itemProp="startDate"
+                            content={
+                              event.event_start_utc ||
+                              (typeof event.date === "string"
+                                ? event.date
+                                : event.date.toISOString())
+                            }
+                          >
                             {monthDay}
                           </p>
                           {timeStr && (
-                            <p className="text-sm text-muted-foreground">{timeStr} CT</p>
+                            <p className="text-sm text-muted-foreground">
+                              {timeStr} CT
+                            </p>
                           )}
                         </div>
                       </div>
@@ -261,13 +308,29 @@ export default function EventDetails() {
                         <div className="p-2 rounded-lg bg-primary/10">
                           <MapPin className="h-5 w-5 text-primary" />
                         </div>
-                        <div itemProp="location" itemScope itemType="https://schema.org/Place">
+                        <div
+                          itemProp="location"
+                          itemScope
+                          itemType="https://schema.org/Place"
+                        >
                           {event.venue && (
-                            <p className="font-semibold text-foreground text-sm" itemProp="name">{event.venue}</p>
+                            <p
+                              className="font-semibold text-foreground text-sm"
+                              itemProp="name"
+                            >
+                              {event.venue}
+                            </p>
                           )}
-                          <p className="text-sm text-muted-foreground" itemProp="address">{event.location}</p>
+                          <p
+                            className="text-sm text-muted-foreground"
+                            itemProp="address"
+                          >
+                            {event.location}
+                          </p>
                           {event.city && (
-                            <p className="text-sm text-muted-foreground">{event.city}, Iowa</p>
+                            <p className="text-sm text-muted-foreground">
+                              {event.city}, Iowa
+                            </p>
                           )}
                         </div>
                       </div>
@@ -278,9 +341,23 @@ export default function EventDetails() {
                             <Ticket className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <p className="font-semibold text-foreground text-sm">Admission</p>
-                            <p className="text-sm text-muted-foreground" itemProp="offers" itemScope itemType="https://schema.org/Offer">
-                              <span itemProp="price" content={event.price.replace(/[^0-9.]/g, '') || '0'}>{event.price}</span>
+                            <p className="font-semibold text-foreground text-sm">
+                              Admission
+                            </p>
+                            <p
+                              className="text-sm text-muted-foreground"
+                              itemProp="offers"
+                              itemScope
+                              itemType="https://schema.org/Offer"
+                            >
+                              <span
+                                itemProp="price"
+                                content={
+                                  event.price.replace(/[^0-9.]/g, "") || "0"
+                                }
+                              >
+                                {event.price}
+                              </span>
                               <meta itemProp="priceCurrency" content="USD" />
                             </p>
                           </div>
@@ -292,7 +369,9 @@ export default function EventDetails() {
                           <Tag className="h-5 w-5 text-primary" />
                         </div>
                         <div>
-                          <p className="font-semibold text-foreground text-sm">Category</p>
+                          <p className="font-semibold text-foreground text-sm">
+                            Category
+                          </p>
                           <Link
                             to={`/events?category=${encodeURIComponent(event.category)}`}
                             className="text-sm text-primary hover:underline"
@@ -307,22 +386,38 @@ export default function EventDetails() {
                     <div className="flex flex-wrap gap-2 pb-2">
                       {event.source_url && (
                         <Button asChild size="sm">
-                          <a href={event.source_url} target="_blank" rel="noopener noreferrer">
+                          <a
+                            href={event.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             <ExternalLink className="h-4 w-4 mr-2" />
                             Official Page
                           </a>
                         </Button>
                       )}
                       {isUpcoming && (
-                        <Button variant="outline" size="sm" onClick={() => downloadICS(event)}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadICS(event)}
+                        >
                           <CalendarPlus className="h-4 w-4 mr-2" />
                           Add to Calendar
                         </Button>
                       )}
-                      <FavoriteButton eventId={event.id} size="sm" variant="outline" />
+                      <FavoriteButton
+                        eventId={event.id}
+                        size="sm"
+                        variant="outline"
+                      />
                       <ShareDialog
                         title={event.title}
-                        description={event.enhanced_description || event.original_description || `Check out ${event.title} in Des Moines`}
+                        description={
+                          event.enhanced_description ||
+                          event.original_description ||
+                          `Check out ${event.title} in Des Moines`
+                        }
                         url={window.location.href}
                       />
                     </div>
@@ -332,9 +427,14 @@ export default function EventDetails() {
                 {/* About This Event - SEO Rich Content */}
                 <section className="bg-card rounded-2xl shadow-sm border p-6 md:p-8">
                   <h2 className="text-xl font-bold mb-4">About This Event</h2>
-                  <div className="prose prose-slate max-w-none" itemProp="description">
+                  <div
+                    className="prose prose-slate max-w-none"
+                    itemProp="description"
+                  >
                     <p className="text-muted-foreground leading-relaxed text-base">
-                      {event.enhanced_description || event.original_description || `Join us for ${event.title}, a ${event.category.toLowerCase()} event happening in ${event.city || 'Des Moines'}, Iowa.`}
+                      {event.enhanced_description ||
+                        event.original_description ||
+                        `Join us for ${event.title}, a ${event.category.toLowerCase()} event happening in ${event.city || "Des Moines"}, Iowa.`}
                     </p>
                   </div>
 
@@ -359,35 +459,59 @@ export default function EventDetails() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-3">
                       <div>
-                        <h3 className="font-semibold text-sm text-foreground">When</h3>
-                        <p className="text-sm text-muted-foreground">{fullDate}</p>
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-sm text-foreground">Where</h3>
+                        <h3 className="font-semibold text-sm text-foreground">
+                          When
+                        </h3>
                         <p className="text-sm text-muted-foreground">
-                          {event.venue ? `${event.venue}, ` : ''}{event.location}
-                          {event.city ? `, ${event.city}, Iowa` : ', Des Moines, Iowa'}
+                          {fullDate}
                         </p>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-sm text-foreground">Price</h3>
+                        <h3 className="font-semibold text-sm text-foreground">
+                          Where
+                        </h3>
                         <p className="text-sm text-muted-foreground">
-                          {isFree ? 'Free admission' : event.price || 'Contact venue for pricing'}
+                          {event.venue ? `${event.venue}, ` : ""}
+                          {event.location}
+                          {event.city
+                            ? `, ${event.city}, Iowa`
+                            : ", Des Moines, Iowa"}
+                        </p>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm text-foreground">
+                          Price
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {isFree
+                            ? "Free admission"
+                            : event.price || "Contact venue for pricing"}
                         </p>
                       </div>
                     </div>
                     <div className="space-y-3">
                       <div>
-                        <h3 className="font-semibold text-sm text-foreground">Category</h3>
-                        <p className="text-sm text-muted-foreground">{event.category}</p>
+                        <h3 className="font-semibold text-sm text-foreground">
+                          Category
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {event.category}
+                        </p>
                       </div>
                       <div>
-                        <h3 className="font-semibold text-sm text-foreground">Area</h3>
-                        <p className="text-sm text-muted-foreground">{event.city || 'Des Moines'}, Iowa (Greater Des Moines Area)</p>
+                        <h3 className="font-semibold text-sm text-foreground">
+                          Area
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {event.city || "Des Moines"}, Iowa (Greater Des Moines
+                          Area)
+                        </p>
                       </div>
                       {event.source_url && (
                         <div>
-                          <h3 className="font-semibold text-sm text-foreground">More Info</h3>
+                          <h3 className="font-semibold text-sm text-foreground">
+                            More Info
+                          </h3>
                           <a
                             href={event.source_url}
                             target="_blank"
@@ -406,7 +530,11 @@ export default function EventDetails() {
                 {/* Community Features */}
                 <EventCheckIn eventId={event.id} eventTitle={event.title} />
                 <EventPhotoUpload eventId={event.id} />
-                <RatingSystem contentType="event" contentId={event.id} showReviews={true} />
+                <RatingSystem
+                  contentType="event"
+                  contentId={event.id}
+                  showReviews={true}
+                />
               </div>
 
               {/* Sidebar */}
@@ -415,16 +543,28 @@ export default function EventDetails() {
                 {event.latitude && event.longitude && (
                   <Card className="overflow-hidden shadow-sm">
                     <div className="h-48 overflow-hidden">
-                      <iframe
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${event.longitude - 0.01},${event.latitude - 0.01},${event.longitude + 0.01},${event.latitude + 0.01}&marker=${event.latitude},${event.longitude}&layer=mapnik`}
-                        className="w-full h-full border-0"
-                        title={`Map showing ${event.venue || event.location}`}
-                        loading="lazy"
-                      />
+                      <Suspense
+                        fallback={
+                          <div className="w-full h-full bg-muted animate-pulse" />
+                        }
+                      >
+                        <EventDetailMap
+                          latitude={event.latitude}
+                          longitude={event.longitude}
+                          venueName={event.venue || event.location}
+                        />
+                      </Suspense>
                     </div>
                     <CardContent className="p-4">
-                      <p className="text-sm font-medium mb-2">{event.venue || event.location}</p>
-                      <Button asChild variant="outline" size="sm" className="w-full">
+                      <p className="text-sm font-medium mb-2">
+                        {event.venue || event.location}
+                      </p>
+                      <Button
+                        asChild
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                      >
                         <a
                           href={`https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`}
                           target="_blank"
@@ -444,7 +584,9 @@ export default function EventDetails() {
                 {/* Explore More Links - Internal Linking for SEO */}
                 <Card className="shadow-sm">
                   <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Explore Des Moines Events</CardTitle>
+                    <CardTitle className="text-base">
+                      Explore Des Moines Events
+                    </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-1 p-4 pt-0">
                     <Link
@@ -507,13 +649,21 @@ export default function EventDetails() {
               <section className="mt-12 pt-8 border-t">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-2xl font-bold">More {event.category} Events</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Similar events happening in Des Moines</p>
+                    <h2 className="text-2xl font-bold">
+                      More {event.category} Events
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Similar events happening in Des Moines
+                    </p>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/events?category=${encodeURIComponent(event.category)}`)}
+                    onClick={() =>
+                      navigate(
+                        `/events?category=${encodeURIComponent(event.category)}`,
+                      )
+                    }
                   >
                     View All
                     <ChevronRight className="h-4 w-4 ml-1" />
@@ -525,7 +675,9 @@ export default function EventDetails() {
                       key={relatedEvent.id}
                       event={relatedEvent}
                       onViewDetails={() => {
-                        navigate(`/events/${createEventSlugWithCentralTime(relatedEvent.title, relatedEvent)}`);
+                        navigate(
+                          `/events/${createEventSlugWithCentralTime(relatedEvent.title, relatedEvent)}`,
+                        );
                       }}
                     />
                   ))}
@@ -538,10 +690,18 @@ export default function EventDetails() {
               <section className="mt-12 pt-8 border-t pb-8">
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-2xl font-bold">More Events in Des Moines</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Discover other upcoming activities</p>
+                    <h2 className="text-2xl font-bold">
+                      More Events in Des Moines
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Discover other upcoming activities
+                    </p>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/events')}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate("/events")}
+                  >
                     Browse All
                     <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
@@ -552,7 +712,9 @@ export default function EventDetails() {
                       key={nearbyEvent.id}
                       event={nearbyEvent}
                       onViewDetails={() => {
-                        navigate(`/events/${createEventSlugWithCentralTime(nearbyEvent.title, nearbyEvent)}`);
+                        navigate(
+                          `/events/${createEventSlugWithCentralTime(nearbyEvent.title, nearbyEvent)}`,
+                        );
                       }}
                     />
                   ))}

@@ -11,7 +11,11 @@ import {
   parseISO,
 } from "https://esm.sh/date-fns@2.30.0";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import { getAIConfig, buildClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import {
+  getAIConfig,
+  buildClaudeRequest,
+  getClaudeHeaders,
+} from "../_shared/aiConfig.ts";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { validateApiKey, apiKeyAuthError } from "../_shared/apiKeyAuth.ts";
 
@@ -103,7 +107,7 @@ function findBestEventUrl(originalUrl: string): string[] {
 // Try to find API endpoints or JSON data in the page
 async function findApiEndpoints(
   html: string,
-  baseUrl: string
+  baseUrl: string,
 ): Promise<string[]> {
   const apiEndpoints = [];
 
@@ -147,7 +151,7 @@ async function findApiEndpoints(
 
 // Extract the "Visit Website" URL from a CatchDesMoines event page
 async function extractCatchDesMoinesVisitWebsiteUrl(
-  eventUrl: string
+  eventUrl: string,
 ): Promise<string | null> {
   try {
     console.log(`🔍 Extracting Visit Website URL from: ${eventUrl}`);
@@ -164,7 +168,9 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
     }
 
     const html = scrapeResult.html;
-    console.log(`✅ Scraped ${html.length} chars using ${scrapeResult.backend} (took ${scrapeResult.duration}ms)`);
+    console.log(
+      `✅ Scraped ${html.length} chars using ${scrapeResult.backend} (took ${scrapeResult.duration}ms)`,
+    );
 
     // Define excluded domains
     const excludeDomains = [
@@ -202,7 +208,7 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
     // Use DOMParser from deno_dom to properly parse HTML
     const parser = new DOMParser();
     const doc = parser.parseFromString(html, "text/html");
-    
+
     if (!doc) {
       console.error("❌ Failed to parse HTML");
       return null;
@@ -212,16 +218,19 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 
     // Helper function to check if text matches "visit website"
     const isVisitWebsiteText = (text: string): boolean => {
-      const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
+      const normalized = text.trim().toLowerCase().replace(/\s+/g, " ");
       return (
-        normalized.includes('visit website') ||
-        normalized.includes('visit web site') ||
-        (normalized.includes('visit') && normalized.includes('website'))
+        normalized.includes("visit website") ||
+        normalized.includes("visit web site") ||
+        (normalized.includes("visit") && normalized.includes("website"))
       );
     };
 
     // Helper function to validate and normalize URL
-    const validateAndNormalizeUrl = (href: string | null, strategy: string): string | null => {
+    const validateAndNormalizeUrl = (
+      href: string | null,
+      strategy: string,
+    ): string | null => {
       if (!href) {
         console.log(`  [${strategy}] ⏭️ Skipped: no href attribute`);
         return null;
@@ -236,12 +245,16 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
       }
 
       if (!normalizedUrl.match(/^https?:\/\//i)) {
-        console.log(`  [${strategy}] ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`);
+        console.log(
+          `  [${strategy}] ⏭️ Skipped: not an http(s) URL: ${normalizedUrl}`,
+        );
         return null;
       }
 
       if (isExcluded(normalizedUrl)) {
-        console.log(`  [${strategy}] ⏭️ Skipped: excluded domain: ${normalizedUrl}`);
+        console.log(
+          `  [${strategy}] ⏭️ Skipped: excluded domain: ${normalizedUrl}`,
+        );
         return null;
       }
 
@@ -249,18 +262,24 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
     };
 
     // Strategy 1: Direct anchor text match
-    const allAnchors = doc.querySelectorAll("a") as NodeListOf<HTMLAnchorElement>;
-    console.log(`📊 [Strategy 1] Found ${allAnchors.length} total anchor tags on page`);
+    const allAnchors = doc.querySelectorAll(
+      "a",
+    ) as NodeListOf<HTMLAnchorElement>;
+    console.log(
+      `📊 [Strategy 1] Found ${allAnchors.length} total anchor tags on page`,
+    );
 
     let foundCount = 0;
     for (const anchor of allAnchors) {
       const href = anchor.getAttribute("href");
       const textContent = anchor.textContent || "";
-      
+
       if (isVisitWebsiteText(textContent)) {
         foundCount++;
-        console.log(`🔗 [Strategy 1] Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent.trim()}"`);
-        
+        console.log(
+          `🔗 [Strategy 1] Found potential "Visit Website" link #${foundCount}: href="${href}", text="${textContent.trim()}"`,
+        );
+
         const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 1");
         if (normalizedUrl) {
           console.log(`  ✅ [Strategy 1] Found valid URL: ${normalizedUrl}`);
@@ -269,24 +288,30 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
       }
     }
 
-    console.log(`[Strategy 1] Checked ${foundCount} matches out of ${allAnchors.length} anchors`);
+    console.log(
+      `[Strategy 1] Checked ${foundCount} matches out of ${allAnchors.length} anchors`,
+    );
 
     // Strategy 2: Check buttons
-    console.log(`📊 [Strategy 2] Searching for buttons with "visit website" text...`);
+    console.log(
+      `📊 [Strategy 2] Searching for buttons with "visit website" text...`,
+    );
     const allButtons = doc.querySelectorAll("button, .button, .btn");
     console.log(`Found ${allButtons.length} button elements`);
-    
+
     for (const button of allButtons) {
       const buttonText = button.textContent || "";
       if (isVisitWebsiteText(buttonText)) {
         console.log(`🔘 [Strategy 2] Found button: "${buttonText.trim()}"`);
-        
+
         const innerAnchor = button.querySelector("a");
         if (innerAnchor) {
           const href = innerAnchor.getAttribute("href");
           const normalizedUrl = validateAndNormalizeUrl(href, "Strategy 2");
           if (normalizedUrl) {
-            console.log(`  ✅ [Strategy 2] Found URL in button: ${normalizedUrl}`);
+            console.log(
+              `  ✅ [Strategy 2] Found URL in button: ${normalizedUrl}`,
+            );
             return normalizedUrl;
           }
         }
@@ -299,14 +324,16 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
       'a[class*="visit"]',
       'a[class*="website"]',
       'a[class*="external"]',
-      '.visit-website a',
-      '.event-website a'
+      ".visit-website a",
+      ".event-website a",
     ];
-    
+
     for (const selector of classSelectors) {
       const links = doc.querySelectorAll(selector);
       if (links.length > 0) {
-        console.log(`[Strategy 3] Found ${links.length} links matching: ${selector}`);
+        console.log(
+          `[Strategy 3] Found ${links.length} links matching: ${selector}`,
+        );
         for (const link of links) {
           const href = link.getAttribute("href");
           const normalizedUrl = validateAndNormalizeUrl(href, `Strategy 3`);
@@ -318,11 +345,13 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
       }
     }
 
-    console.log(`⚠️ No valid "Visit Website" link found after trying all strategies`);
-    
+    console.log(
+      `⚠️ No valid "Visit Website" link found after trying all strategies`,
+    );
+
     // Fallback: Check for linkUrl in JSON embedded in the page
     const linkUrlMatch = html.match(
-      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i
+      /["']linkUrl["']\s*:\s*["'](https?:\/\/[^"']+)["']/i,
     );
     if (linkUrlMatch) {
       const url = linkUrlMatch[1].trim();
@@ -343,7 +372,7 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 // Enhanced HTML content extraction with better patterns for CatchDesMoines
 function extractRelevantContent(html: string): string {
   console.log(
-    `🔍 Starting content extraction from ${html.length} character HTML`
+    `🔍 Starting content extraction from ${html.length} character HTML`,
   );
 
   // Simple approach: just clean HTML and limit size to avoid CPU timeout
@@ -356,7 +385,7 @@ function extractRelevantContent(html: string): string {
   const finalContent = cleanHtml.substring(0, 15000);
 
   console.log(
-    `📏 Final content length: ${finalContent.length} characters (reduced from ${html.length})`
+    `📏 Final content length: ${finalContent.length} characters (reduced from ${html.length})`,
   );
   return finalContent;
 }
@@ -366,14 +395,24 @@ async function extractContentWithAI(
   html: string,
   category: string,
   url: string,
-  claudeApiKey: string
+  claudeApiKey: string,
 ): Promise<any[]> {
   const relevantContent = extractRelevantContent(html);
+
+  // Dynamic date for AI prompt - always use today's date
+  const today = new Date();
+  const todayStr = today.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "America/Chicago",
+  });
+  const todayISO = today.toISOString().split("T")[0];
 
   const prompts = {
     events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${url}.
 
-CURRENT DATE: July 26, 2025
+CURRENT DATE: ${todayStr}
 WEBSITE CONTENT:
 ${relevantContent}
 
@@ -405,17 +444,17 @@ CRITICAL PARSING INSTRUCTIONS FOR CATCHDESMOINES.COM:
 📅 DATE CONVERSION (CRITICAL TIMEZONE HANDLING):
 - All events are in Des Moines, Iowa (Central Time Zone)
 - Convert ALL times to Central Time (CDT in summer -5 UTC, CST in winter -6 UTC)
-- Current date reference: July 30, 2025
+- Current date reference: ${todayISO}
 
 EXAMPLES:
-- "Jul 30th" → "2025-07-30 19:00:00" (7:00 PM Central Time default)
-- "August 1st" → "2025-08-01 19:00:00" 
-- "7:30 PM" → "2025-MM-DD 19:30:00" (keep Central Time)
-- "8 AM" → "2025-MM-DD 08:00:00" (morning events)
-- "Through July 28" → create events until that date
+- "Mar 1st" → "${today.getFullYear()}-03-01 19:00:00" (7:00 PM Central Time default)
+- "April 15th" → "${today.getFullYear()}-04-15 19:00:00" 
+- "7:30 PM" → "${today.getFullYear()}-MM-DD 19:30:00" (keep Central Time)
+- "8 AM" → "${today.getFullYear()}-MM-DD 08:00:00" (morning events)
+- "Through next month" → create events until that date
 - No specific time? → default to 7:00 PM Central (19:00:00)
 - All-day events → use 12:00 PM Central (12:00:00)
-- Past dates (before July 30, 2025) → SKIP these events
+- Past dates (before ${todayISO}) → SKIP these events
 
 ⚠️ TIMEZONE CRITICAL: Store times in Central Time format (not UTC). The system will handle UTC conversion automatically.
 
@@ -446,7 +485,7 @@ FORMAT AS JSON ARRAY:
   {
     "title": "Event Name",
     "description": "Event details",
-    "date": "2025-MM-DD HH:MM:SS",
+    "date": "${today.getFullYear()}-MM-DD HH:MM:SS",
     "location": "Des Moines, IA",
     "venue": "Venue Name",
     "category": "Event Type",
@@ -681,7 +720,7 @@ Return empty array [] if no attractions found.`,
   try {
     console.log(`🤖 Using Claude AI to extract ${category} data from ${url}`);
     console.log(
-      `📄 Content length being sent to AI: ${relevantContent.length} characters`
+      `📄 Content length being sent to AI: ${relevantContent.length} characters`,
     );
     console.log(`📝 Content preview: ${relevantContent.substring(0, 500)}...`);
 
@@ -690,7 +729,7 @@ Return empty array [] if no attractions found.`,
       const apiEndpoints = await findApiEndpoints(html, url);
       if (apiEndpoints.length > 0) {
         console.log(
-          `🔍 Found potential API endpoints: ${apiEndpoints.join(", ")}`
+          `🔍 Found potential API endpoints: ${apiEndpoints.join(", ")}`,
         );
 
         // Try to fetch from API endpoints
@@ -709,7 +748,7 @@ Return empty array [] if no attractions found.`,
               const apiData = await apiResponse.text();
               if (apiData.length > 100) {
                 console.log(
-                  `✅ Got API data from ${endpoint}: ${apiData.length} chars`
+                  `✅ Got API data from ${endpoint}: ${apiData.length} chars`,
                 );
                 relevantContent =
                   apiData + "\n\n--- ORIGINAL HTML ---\n\n" + relevantContent;
@@ -723,26 +762,30 @@ Return empty array [] if no attractions found.`,
       }
     }
 
-      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-      const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-      
-      const config = await getAIConfig(supabaseUrl, supabaseKey);
-      const headers = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
-      const requestBody = await buildClaudeRequest(
-        [{ role: "user", content: prompts[category as keyof typeof prompts] }],
-        { 
-          supabaseUrl, 
-          supabaseKey,
-          useLargeTokens: true,
-          customTemperature: 0.1
-        }
-      );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-      const claudeResponse = await fetch(config.api_endpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(requestBody)
-      });
+    const config = await getAIConfig(supabaseUrl, supabaseKey);
+    const headers = await getClaudeHeaders(
+      claudeApiKey,
+      supabaseUrl,
+      supabaseKey,
+    );
+    const requestBody = await buildClaudeRequest(
+      [{ role: "user", content: prompts[category as keyof typeof prompts] }],
+      {
+        supabaseUrl,
+        supabaseKey,
+        useLargeTokens: true,
+        customTemperature: 0.1,
+      },
+    );
+
+    const claudeResponse = await fetch(config.api_endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
 
     if (claudeResponse.ok) {
       const claudeData = await claudeResponse.json();
@@ -750,15 +793,15 @@ Return empty array [] if no attractions found.`,
 
       console.log(`🔍 Claude API response status: ${claudeResponse.status}`);
       console.log(
-        `🔍 Claude response structure check - content exists: ${!!claudeData.content}`
+        `🔍 Claude response structure check - content exists: ${!!claudeData.content}`,
       );
       console.log(
-        `🔍 Claude response text length: ${responseText?.length || 0}`
+        `🔍 Claude response text length: ${responseText?.length || 0}`,
       );
       console.log(
         `🔍 Claude response preview: ${
           responseText?.substring(0, 1000) || "No text"
-        }...`
+        }...`,
       );
 
       if (responseText) {
@@ -776,85 +819,96 @@ Return empty array [] if no attractions found.`,
 
           if (!jsonMatch) {
             console.error(
-              `❌ No JSON array found in Claude response. Full response: ${responseText}`
+              `❌ No JSON array found in Claude response. Full response: ${responseText}`,
             );
             return [];
           }
 
           console.log(
-            `🔍 Extracted JSON string: ${jsonMatch[0].substring(0, 500)}...`
+            `🔍 Extracted JSON string: ${jsonMatch[0].substring(0, 500)}...`,
           );
 
           const extractedData = JSON.parse(jsonMatch[0]);
 
           if (!Array.isArray(extractedData)) {
             console.error(
-              `❌ Parsed data is not an array: ${typeof extractedData}`
+              `❌ Parsed data is not an array: ${typeof extractedData}`,
             );
             return [];
           }
 
           console.log(
-            `🤖 AI extracted ${extractedData.length} ${category} items from ${url}`
+            `🤖 AI extracted ${extractedData.length} ${category} items from ${url}`,
           );
 
-           // Add source_url to each extracted item
-           // For CatchDesMoines events, try to extract the actual venue website URL
-           const itemsWithSource = await Promise.all(
-             extractedData.map(async (item) => {
-               let actualSourceUrl = url;
+          // Add source_url to each extracted item
+          // For CatchDesMoines events, try to extract the actual venue website URL
+          const itemsWithSource = await Promise.all(
+            extractedData.map(async (item) => {
+              let actualSourceUrl = url;
 
-               // If this is a catchdesmoines.com event, try to extract the "Visit Website" link
-               if (category === "events" && url.includes("catchdesmoines.com")) {
-                 try {
-                   let eventDetailUrl = null;
-                   
-                   // Check if we have a detail_url from the AI extraction
-                   if (item.detail_url) {
-                     // If it's a relative URL, make it absolute
-                     if (item.detail_url.startsWith('/')) {
-                       eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
-                     } else if (item.detail_url.includes('catchdesmoines.com')) {
-                       eventDetailUrl = item.detail_url;
-                     }
-                   }
-                   // If the URL we're crawling is already an event detail page, use it
-                   else if (url.includes('catchdesmoines.com/event/')) {
-                     eventDetailUrl = url;
-                   }
-                   
-                   // If we have an event detail URL, extract the "Visit Website" link from it
-                   if (eventDetailUrl) {
-                     console.log(`🔗 Fetching event detail page: ${eventDetailUrl}`);
-                     const visitWebsiteUrl = await extractCatchDesMoinesVisitWebsiteUrl(eventDetailUrl);
-                     if (visitWebsiteUrl) {
-                       actualSourceUrl = visitWebsiteUrl;
-                       console.log(`✅ Extracted Visit Website URL: ${visitWebsiteUrl}`);
-                     } else {
-                       console.log(`⚠️ No Visit Website URL found, using event detail URL: ${eventDetailUrl}`);
-                       actualSourceUrl = eventDetailUrl; // Use the event detail URL if we can't find Visit Website
-                     }
-                   } else {
-                     console.log(`⚠️ No event detail URL available, using list page URL`);
-                   }
-                 } catch (error) {
-                   console.error(
-                     `❌ Error extracting Visit Website URL: ${error.message}`
-                   );
-                 }
-               }
+              // If this is a catchdesmoines.com event, try to extract the "Visit Website" link
+              if (category === "events" && url.includes("catchdesmoines.com")) {
+                try {
+                  let eventDetailUrl = null;
 
-               return {
-                 ...item,
-                 source_url: actualSourceUrl,
-               };
-             })
-           );
+                  // Check if we have a detail_url from the AI extraction
+                  if (item.detail_url) {
+                    // If it's a relative URL, make it absolute
+                    if (item.detail_url.startsWith("/")) {
+                      eventDetailUrl = `https://www.catchdesmoines.com${item.detail_url}`;
+                    } else if (item.detail_url.includes("catchdesmoines.com")) {
+                      eventDetailUrl = item.detail_url;
+                    }
+                  }
+                  // If the URL we're crawling is already an event detail page, use it
+                  else if (url.includes("catchdesmoines.com/event/")) {
+                    eventDetailUrl = url;
+                  }
+
+                  // If we have an event detail URL, extract the "Visit Website" link from it
+                  if (eventDetailUrl) {
+                    console.log(
+                      `🔗 Fetching event detail page: ${eventDetailUrl}`,
+                    );
+                    const visitWebsiteUrl =
+                      await extractCatchDesMoinesVisitWebsiteUrl(
+                        eventDetailUrl,
+                      );
+                    if (visitWebsiteUrl) {
+                      actualSourceUrl = visitWebsiteUrl;
+                      console.log(
+                        `✅ Extracted Visit Website URL: ${visitWebsiteUrl}`,
+                      );
+                    } else {
+                      console.log(
+                        `⚠️ No Visit Website URL found, using event detail URL: ${eventDetailUrl}`,
+                      );
+                      actualSourceUrl = eventDetailUrl; // Use the event detail URL if we can't find Visit Website
+                    }
+                  } else {
+                    console.log(
+                      `⚠️ No event detail URL available, using list page URL`,
+                    );
+                  }
+                } catch (error) {
+                  console.error(
+                    `❌ Error extracting Visit Website URL: ${error.message}`,
+                  );
+                }
+              }
+
+              return {
+                ...item,
+                source_url: actualSourceUrl,
+              };
+            }),
+          );
 
           // Log sample item for debugging
           if (itemsWithSource.length > 0) {
             console.log(
-              `🔍 Sample extracted item: ${JSON.stringify(itemsWithSource[0])}`
+              `🔍 Sample extracted item: ${JSON.stringify(itemsWithSource[0])}`,
             );
           }
 
@@ -864,8 +918,8 @@ Return empty array [] if no attractions found.`,
           console.error(
             `❌ JSON string that failed to parse: ${responseText.substring(
               0,
-              2000
-            )}`
+              2000,
+            )}`,
           );
         }
       } else {
@@ -874,7 +928,7 @@ Return empty array [] if no attractions found.`,
     } else {
       const errorText = await claudeResponse.text();
       console.error(
-        `❌ Claude API error: ${claudeResponse.status} - ${errorText}`
+        `❌ Claude API error: ${claudeResponse.status} - ${errorText}`,
       );
     }
   } catch (error) {
@@ -902,10 +956,17 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
     // Parse the date string as Central Time and convert to UTC
     // The AI provides dates like "2025-10-04 19:00:00" which should be interpreted as Central Time
 
-    let year: number, month: number, day: number, hours: number, minutes: number, seconds: number;
+    let year: number,
+      month: number,
+      day: number,
+      hours: number,
+      minutes: number,
+      seconds: number;
 
     // Match YYYY-MM-DD HH:MM:SS format
-    const datetimeMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    const datetimeMatch = dateStr.match(
+      /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})$/,
+    );
     if (datetimeMatch) {
       [, year, month, day, hours, minutes, seconds] = datetimeMatch.map(Number);
     }
@@ -936,24 +997,27 @@ function parseEventDateTime(dateStr: string): ParsedDateTime | null {
     // Create a proper date object representing this time in Central timezone
     // We build the ISO string without timezone, then tell date-fns-tz to interpret it as Central
     const centralTimeString = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-    
+
     // CRITICAL FIX: Create a date in Central timezone, then convert to UTC
     // First, we need to create a Date object that represents the correct instant in time
     // For October 4th 7:30 PM Central, we need to get the UTC equivalent
-    
+
     // Method: Build an ISO string with timezone offset for Central Time
     // Determine DST offset (CDT = UTC-5, CST = UTC-6)
     const testDate = new Date(year, month - 1, day, 12, 0, 0); // noon on that day
     const isDST = testDate.getMonth() >= 2 && testDate.getMonth() <= 10; // rough DST check (Mar-Nov)
     const offset = isDST ? -5 : -6; // CDT or CST
-    const offsetStr = offset >= 0 ? `+${String(Math.abs(offset)).padStart(2, '0')}:00` : `-${String(Math.abs(offset)).padStart(2, '0')}:00`;
-    
+    const offsetStr =
+      offset >= 0
+        ? `+${String(Math.abs(offset)).padStart(2, "0")}:00`
+        : `-${String(Math.abs(offset)).padStart(2, "0")}:00`;
+
     // Create ISO string with timezone
     const isoWithTimezone = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}${offsetStr}`;
     const utcDate = new Date(isoWithTimezone);
 
     console.log(
-      `🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} (offset: ${offsetStr}) -> UTC: ${utcDate.toISOString()}`
+      `🕐 Parsed: ${dateStr} -> Central: ${centralTimeString} (offset: ${offsetStr}) -> UTC: ${utcDate.toISOString()}`,
     );
 
     if (!isNaN(utcDate.getTime())) {
@@ -987,7 +1051,7 @@ function filterFutureEvents(events: any[]): any[] {
     } catch (error) {
       console.log(
         `⚠️ Could not parse date for filtering: ${event.date}`,
-        error
+        error,
       );
       return true; // Keep events with unparseable dates
     }
@@ -1025,7 +1089,7 @@ function generateFingerprint(data: any, category: string): string {
 async function checkForDuplicates(
   supabase: any,
   category: string,
-  items: any[]
+  items: any[],
 ): Promise<{ newItems: any[]; duplicates: number }> {
   const tableName =
     category === "restaurant_openings" ? "restaurants" : category;
@@ -1089,7 +1153,7 @@ async function checkForDuplicates(
 
           // Debug for restaurant_openings
           console.log(
-            `🔍 Checking duplicate for restaurant opening: "${item.name?.trim()}" in table ${tableName} (exact match)`
+            `🔍 Checking duplicate for restaurant opening: "${item.name?.trim()}" in table ${tableName} (exact match)`,
           );
           break;
       }
@@ -1099,7 +1163,7 @@ async function checkForDuplicates(
       if (error) {
         console.error(
           `Error checking duplicate for ${item.title || item.name}:`,
-          error
+          error,
         );
         // On error, still add the item
         newItems.push({ ...item, fingerprint });
@@ -1123,7 +1187,7 @@ async function checkForDuplicates(
 async function insertData(
   supabase: any,
   category: string,
-  items: any[]
+  items: any[],
 ): Promise<{ success: boolean; insertedCount: number; errors: any[] }> {
   const tableName =
     category === "restaurant_openings" ? "restaurants" : category;
@@ -1154,9 +1218,17 @@ async function insertData(
               // Skip events where we can't parse the date properly
               if (!parsedEventDateTime?.event_start_utc) {
                 console.warn(
-                  `⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`
+                  `⚠️ Skipping event with unparseable date: ${item.title} - ${item.date}`,
                 );
                 return null; // This will be filtered out
+              }
+
+              // Skip past events - only store future events
+              if (parsedEventDateTime.event_start_utc < new Date()) {
+                console.warn(
+                  `⏭️ Skipping past event: ${item.title} - ${item.date}`,
+                );
+                return null;
               }
 
               return {
@@ -1256,7 +1328,7 @@ async function insertData(
         if (category === "restaurant_openings") {
           console.error(
             `❌ Restaurant openings batch that failed:`,
-            JSON.stringify(transformedBatch, null, 2)
+            JSON.stringify(transformedBatch, null, 2),
           );
         }
         errors.push(error);
@@ -1266,7 +1338,7 @@ async function insertData(
         if (category === "restaurant_openings" && data.length > 0) {
           console.log(
             `🍽️ Successfully inserted restaurant openings:`,
-            data.map((d) => d.name).join(", ")
+            data.map((d) => d.name).join(", "),
           );
         }
       }
@@ -1311,7 +1383,7 @@ Deno.serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -1326,13 +1398,13 @@ Deno.serve(async (req) => {
       return new Response(
         JSON.stringify({
           error: `Invalid category. Must be one of: ${validCategories.join(
-            ", "
+            ", ",
           )}`,
         }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -1347,7 +1419,7 @@ Deno.serve(async (req) => {
         {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -1376,17 +1448,23 @@ Deno.serve(async (req) => {
     let maxEventContent = 0;
 
     // Use universal scraper to fetch URLs with JavaScript rendering
-    console.log(`📄 Scraping ${urlsToTry.length} URLs with Puppeteer/Playwright...`);
-    const scrapeResults = await scrapeUrls(urlsToTry, {
-      waitTime: 5000,
-      timeout: 30000,
-    }, 2); // Scrape 2 at a time
+    console.log(
+      `📄 Scraping ${urlsToTry.length} URLs with Puppeteer/Playwright...`,
+    );
+    const scrapeResults = await scrapeUrls(
+      urlsToTry,
+      {
+        waitTime: 5000,
+        timeout: 30000,
+      },
+      2,
+    ); // Scrape 2 at a time
 
     // Try each result to find the one with the most event content
     for (let i = 0; i < scrapeResults.length; i++) {
       const result = scrapeResults[i];
       const tryUrl = urlsToTry[i];
-      
+
       try {
         console.log(`📄 Processing result from: ${tryUrl}`);
 
@@ -1396,27 +1474,29 @@ Deno.serve(async (req) => {
         }
 
         const html = result.html;
-        console.log(`✅ Got ${html.length} chars from ${tryUrl} using ${result.backend} (took ${result.duration}ms)`);
+        console.log(
+          `✅ Got ${html.length} chars from ${tryUrl} using ${result.backend} (took ${result.duration}ms)`,
+        );
 
         // Enhanced scoring for CatchDesMoines-style content
         const eventKeywords = (
           html.match(
-            /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi
+            /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi,
           ) || []
         ).length;
         const venueKeywords = (
           html.match(
-            /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi
+            /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi,
           ) || []
         ).length;
         const dateKeywords = (
           html.match(
-            /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi
+            /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi,
           ) || []
         ).length;
         const titleKeywords = (
           html.match(
-            /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
+            /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi,
           ) || []
         ).length;
 
@@ -1427,7 +1507,7 @@ Deno.serve(async (req) => {
           titleKeywords * 3;
 
         console.log(
-          `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
+          `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`,
         );
 
         if (totalScore > maxEventContent) {
@@ -1449,12 +1529,12 @@ Deno.serve(async (req) => {
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
     console.log(
-      `✅ Using content from: ${bestUrl} (${bestHtml.length} characters, ${maxEventContent} event keywords)`
+      `✅ Using content from: ${bestUrl} (${bestHtml.length} characters, ${maxEventContent} event keywords)`,
     );
 
     // Extract content using AI
@@ -1462,7 +1542,7 @@ Deno.serve(async (req) => {
       bestHtml,
       category,
       bestUrl,
-      claudeApiKey
+      claudeApiKey,
     );
 
     // Filter out past events for events category
@@ -1474,7 +1554,7 @@ Deno.serve(async (req) => {
     console.log(
       `🕒 After filtering past events: ${filteredItems.length} items (removed ${
         extractedItems.length - filteredItems.length
-      } past events)`
+      } past events)`,
     );
 
     if (filteredItems.length === 0) {
@@ -1491,7 +1571,7 @@ Deno.serve(async (req) => {
         }),
         {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        },
       );
     }
 
@@ -1501,7 +1581,7 @@ Deno.serve(async (req) => {
     if (category === "restaurant_openings" && filteredItems.length > 0) {
       console.log(
         `🔍 Sample restaurant opening items:`,
-        JSON.stringify(filteredItems.slice(0, 2), null, 2)
+        JSON.stringify(filteredItems.slice(0, 2), null, 2),
       );
     }
 
@@ -1509,11 +1589,11 @@ Deno.serve(async (req) => {
     const { newItems, duplicates } = await checkForDuplicates(
       supabase,
       category,
-      filteredItems
+      filteredItems,
     );
 
     console.log(
-      `📊 Found ${newItems.length} new items, ${duplicates} duplicates`
+      `📊 Found ${newItems.length} new items, ${duplicates} duplicates`,
     );
 
     let insertedCount = 0;
@@ -1522,7 +1602,7 @@ Deno.serve(async (req) => {
     // Insert new items
     if (newItems.length > 0) {
       console.log(
-        `💾 Attempting to insert ${newItems.length} ${category} items`
+        `💾 Attempting to insert ${newItems.length} ${category} items`,
       );
       const insertResult = await insertData(supabase, category, newItems);
       insertedCount = insertResult.insertedCount;
@@ -1530,7 +1610,7 @@ Deno.serve(async (req) => {
 
       if (category === "restaurant_openings") {
         console.log(
-          `🍽️ Restaurant openings insertion result: ${insertedCount} inserted, ${insertErrors.length} errors`
+          `🍽️ Restaurant openings insertion result: ${insertedCount} inserted, ${insertErrors.length} errors`,
         );
         if (insertErrors.length > 0) {
           console.log(`❌ Restaurant opening insertion errors:`, insertErrors);
@@ -1568,7 +1648,7 @@ Deno.serve(async (req) => {
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      },
     );
   }
 });
