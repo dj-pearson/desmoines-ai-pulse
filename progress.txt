@@ -74,11 +74,45 @@
 - ~~No composite DB indexes for filter queries~~ (RESOLVED: US-025, 16 indexes added)
 - ~~No A/B testing infrastructure~~ (RESOLVED: US-040, useExperiment hook + Experiment component)
 - ~~No admin UI for image backfill~~ (RESOLVED: US-065, ImageBackfill component in AdminMedia)
-- TODOs: user preferences server-side (US-019 done), bundle optimization (US-024), API docs (US-029), deployment runbook (US-030)
+- ~~Bundle bloat from unused deps~~ (RESOLVED: US-024, removed 6 unused deps, puppeteer→devDeps)
+- ~~No production deployment runbook~~ (RESOLVED: US-030, docs/PRODUCTION_RUNBOOK.md already complete)
+- ~~No community voting system~~ (RESOLVED: US-041, Des Best voting at /best-of)
+- ~~No scene updates feed~~ (RESOLVED: US-058, What's New at /whats-new with auto-trigger)
+- TODOs: API documentation (US-029), remaining content hubs (US-042–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
 
 ---
 
 ## Progress Log
+
+## 2026-02-26 — Ralph Loop 4: Bundle Cleanup, Deployment Docs, Des Best Voting, What's New Feed
+
+- **US-024**: Optimized bundle size — removed 6 unused dependencies:
+  - Removed from dependencies: cssnano, jsonwebtoken, lightningcss, node-fetch, stripe, terser
+  - Moved puppeteer to devDependencies (150+ MB savings from production bundle)
+  - Verified Three.js/Leaflet/Tiptap/FullCalendar all properly lazy-loaded
+  - Main index chunk: 429 KB → 423 KB; build time: 63s → 50s
+- **US-030**: Production deployment runbook already complete:
+  - `docs/PRODUCTION_RUNBOOK.md` (932 lines) covers all acceptance criteria
+  - Pre-deployment checklist, deployment steps, post-deployment verification
+  - Rollback procedures, P1-P4 incident response, troubleshooting guides
+- **US-041**: Built Des Best crowdsourced voting system:
+  - Created `voting_categories` + `votes` tables with RLS + UNIQUE(category_id, user_id)
+  - Seeded 10 categories: Best Pizza, Coffee, Happy Hour, Brunch, Date Night, Hidden Gem, Food Truck, Brewery, Ice Cream, Live Music
+  - Built `/best-of` route with category grid + vote counts
+  - Built `/best-of/:category` with VotingBooth (search-to-vote + write-in), ranked results with vote percentage bars
+  - Created `src/hooks/useVoting.ts` with TanStack Query hooks for categories, results, user vote, cast vote
+  - Added to main navigation under Resources
+- **US-058**: Built What's New in DSM feed:
+  - Created `scene_updates` table with type check constraint, RLS, indexes on type/date/neighborhood
+  - Auto-generates "New Opening" entries via DB trigger on restaurant INSERT
+  - Built `/whats-new` route with type filter buttons and chronological SceneUpdateCard feed
+  - SceneUpdateCard shows type badges (New!/Closing/Renovation/etc.), timeAgo, entity links
+  - Created `src/hooks/useSceneUpdates.ts` with TanStack Query hooks
+  - Added to main navigation under Resources
+
+**Build verified**: `npm run build` passes (50.31s)
+
+**PRD Status**: 46/71 stories complete (65%)
 
 ## 2026-02-26 — Ralph Loop 3: Persistence, Indexes, A/B Testing, Image Backfill UI
 
