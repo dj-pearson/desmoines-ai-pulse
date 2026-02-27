@@ -11,6 +11,7 @@ import { Loader2, ExternalLink, Eye } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { createLogger } from '@/lib/logger';
+import { notifyAdmins } from "@/hooks/useCampaignNotifications";
 
 const log = createLogger('CreativeUploadForm');
 
@@ -150,14 +151,27 @@ export function CreativeUploadForm({
 
       if (createError) throw createError;
 
-      // Update campaign status to pending_creative if it's in draft
-      const { error: updateError } = await supabase
+      // Update campaign status to pending_creative if it's still in pending_payment
+      await supabase
         .from('campaigns')
         .update({ status: 'pending_creative' })
         .eq('id', campaignId)
         .eq('status', 'pending_payment');
 
-      if (updateError) throw updateError;
+      // Fetch campaign name for notification
+      const { data: campaignData } = await supabase
+        .from('campaigns')
+        .select('name')
+        .eq('id', campaignId)
+        .single();
+
+      // Notify admins that a creative is ready for review
+      notifyAdmins(
+        campaignId,
+        campaignData?.name || 'Campaign',
+        'creative_uploaded',
+        { placementType }
+      );
 
       toast({
         title: "Creative uploaded successfully!",

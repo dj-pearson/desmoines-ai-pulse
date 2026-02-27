@@ -7,30 +7,32 @@ import { ExternalLink } from "lucide-react";
 interface AdBannerProps {
   placement: 'top_banner' | 'featured_spot' | 'below_fold';
   className?: string;
+  /** Optional fallback content when no ads are available */
+  fallback?: React.ReactNode;
 }
 
-export function AdBanner({ placement, className = "" }: AdBannerProps) {
+export function AdBanner({ placement, className = "", fallback }: AdBannerProps) {
   const { ad, isLoading } = useActiveAds(placement);
 
-  // Set up ad tracking with viewability monitoring
   const { adRef, trackClick } = useAdTracking({
     campaignId: ad?.campaign_id || '',
     creativeId: ad?.creative_id || '',
     placementType: placement,
-    autoTrackImpression: !!ad, // Only track if ad exists
-    viewabilityThreshold: 0.5, // 50% visible
-    viewabilityDuration: 1000, // 1 second
+    autoTrackImpression: !!ad,
+    viewabilityThreshold: 0.5,
+    viewabilityDuration: 1000,
   });
 
-  if (isLoading || !ad) {
+  if (isLoading) {
     return null;
   }
 
-  const handleAdClick = async () => {
-    // Track the click
-    await trackClick();
+  if (!ad) {
+    return fallback ? <>{fallback}</> : null;
+  }
 
-    // Open the link
+  const handleAdClick = async () => {
+    await trackClick();
     if (ad.link_url) {
       window.open(ad.link_url, '_blank', 'noopener,noreferrer');
     }
@@ -39,58 +41,70 @@ export function AdBanner({ placement, className = "" }: AdBannerProps) {
   const getAdSizeClasses = () => {
     switch (placement) {
       case 'top_banner':
-        return "h-24 md:h-32";
+        return "h-24 md:h-28";
       case 'featured_spot':
-        return "h-48 md:h-56";
+        return "min-h-[250px]";
       case 'below_fold':
-        return "h-32 md:h-40";
+        return "h-24 md:h-28";
       default:
-        return "h-32";
+        return "h-28";
     }
   };
 
   return (
     <Card
       ref={adRef}
-      className={`${getAdSizeClasses()} overflow-hidden cursor-pointer hover:shadow-lg transition-shadow ${className}`}
+      className={`${getAdSizeClasses()} overflow-hidden cursor-pointer hover:shadow-lg transition-shadow relative group ${className}`}
+      role="complementary"
+      aria-label="Sponsored advertisement"
     >
+      {/* FTC-compliant Sponsored label */}
+      <div className="absolute top-1.5 left-1.5 z-20">
+        <span className="text-[10px] font-medium bg-black/60 text-white/90 px-1.5 py-0.5 rounded tracking-wide uppercase">
+          Ad
+        </span>
+      </div>
+
       <div
         onClick={handleAdClick}
-        className="w-full h-full relative bg-gradient-to-r from-muted to-muted/50 flex items-center justify-between p-4"
+        className="w-full h-full relative flex items-center"
         style={{
           backgroundImage: ad.image_url ? `url(${ad.image_url})` : undefined,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }}
       >
-        {/* Overlay for better text readability */}
+        {/* Gradient overlay for text readability */}
         {ad.image_url && (
-          <div className="absolute inset-0 bg-black/20" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/30 to-transparent" />
         )}
 
-        <div className="relative z-10 flex-1">
-          {ad.title && (
-            <h3 className="font-semibold text-lg text-white mb-1 drop-shadow-lg">
-              {ad.title}
-            </h3>
-          )}
-          {ad.description && (
-            <p className="text-sm text-white/90 drop-shadow-lg line-clamp-2">
-              {ad.description}
-            </p>
+        {/* Content wrapper */}
+        <div className="relative z-10 flex items-center justify-between w-full p-4">
+          <div className="flex-1 min-w-0 mr-4">
+            {ad.title && (
+              <h3 className={`font-semibold mb-0.5 line-clamp-1 ${ad.image_url ? 'text-white drop-shadow-lg' : 'text-foreground'} ${placement === 'featured_spot' ? 'text-lg' : 'text-base'}`}>
+                {ad.title}
+              </h3>
+            )}
+            {ad.description && (
+              <p className={`text-sm line-clamp-2 ${ad.image_url ? 'text-white/90 drop-shadow-md' : 'text-muted-foreground'}`}>
+                {ad.description}
+              </p>
+            )}
+          </div>
+
+          {ad.link_url && (
+            <Button
+              size="sm"
+              className="flex-shrink-0 bg-white/90 text-primary hover:bg-white shadow-md group-hover:shadow-lg transition-shadow"
+              aria-label={ad.title ? `${ad.cta_text || 'Learn more'} - ${ad.title}` : "Learn more about this advertisement"}
+            >
+              {ad.cta_text || "Learn More"}
+              <ExternalLink className="ml-1.5 h-3 w-3" />
+            </Button>
           )}
         </div>
-
-        {ad.link_url && (
-          <Button
-            size="sm"
-            className="relative z-10 ml-4 bg-white/90 text-primary hover:bg-white"
-            aria-label={ad.title ? `Learn more about ${ad.title}` : "Learn more about this advertisement"}
-          >
-            {ad.cta_text || "Learn More"}
-            <ExternalLink className="ml-1 h-3 w-3" />
-          </Button>
-        )}
       </div>
     </Card>
   );

@@ -30,16 +30,16 @@ export default function AdvertiseSuccess() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const sessionId = searchParams.get('session_id');
+  const campaignId = searchParams.get('campaign_id');
 
   useEffect(() => {
-    if (sessionId) {
+    if (campaignId) {
       verifyPayment();
     } else {
-      setError("No payment session found");
+      setError("No campaign ID found in the URL. Please check your email for campaign details.");
       setIsLoading(false);
     }
-  }, [sessionId]);
+  }, [campaignId]);
 
   const verifyPayment = async () => {
     try {
@@ -49,17 +49,28 @@ export default function AdvertiseSuccess() {
       const { data, error: verifyError } = await supabase.functions.invoke(
         "verify-campaign-payment",
         {
-          body: { sessionId },
+          body: { campaignId },
         }
       );
 
       if (verifyError) throw verifyError;
 
-      if (!data || !data.campaign) {
-        throw new Error("Payment verification failed");
+      if (!data?.paid) {
+        throw new Error("Payment has not been confirmed yet. Please try refreshing the page.");
       }
 
-      setCampaign(data.campaign);
+      // Fetch the full campaign details
+      const { data: campaignData, error: campaignError } = await supabase
+        .from("campaigns")
+        .select("id, name, total_cost, start_date, end_date, stripe_payment_intent_id")
+        .eq("id", campaignId)
+        .single();
+
+      if (campaignError || !campaignData) {
+        throw new Error("Campaign not found");
+      }
+
+      setCampaign(campaignData);
 
       toast({
         title: "Payment successful!",

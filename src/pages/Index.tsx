@@ -28,6 +28,7 @@ import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
 import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
+import { AdBanner } from "@/components/AdBanner";
 
 // Lazy load below-the-fold and heavy components to improve initial load
 const Footer = lazy(() => import("@/components/Footer"));
@@ -429,6 +430,13 @@ export default function Index() {
 
         <SearchSection onSearch={handleSearch} />
 
+        {/* Top Banner Ad Placement */}
+        <div className="py-4 bg-muted/10">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <AdBanner placement="top_banner" />
+          </div>
+        </div>
+
         {/* AI Conversational Features Section */}
         <section className="py-16 bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -740,6 +748,13 @@ export default function Index() {
               />
           </div>
         </section>
+
+        {/* Below-Fold Ad Placement */}
+        <div className="py-6 bg-muted/20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <AdBanner placement="below_fold" />
+          </div>
+        </div>
 
         <Suspense fallback={<SectionLoader />}>
           <Newsletter />

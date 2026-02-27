@@ -218,7 +218,7 @@ export function CreativeUploader({
           ref={fileInputRef}
           type="file"
           multiple
-          accept={ALLOWED_TYPES.join(',')}
+          accept={ALLOWED_MIME_TYPES.join(',')}
           onChange={handleFileInput}
           className="hidden"
           disabled={files.length >= maxFiles}

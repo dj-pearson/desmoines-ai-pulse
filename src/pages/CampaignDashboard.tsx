@@ -13,9 +13,12 @@ const STATUS_COLORS = {
   draft: "secondary",
   pending_payment: "destructive",
   pending_creative: "outline",
+  pending_review: "outline",
   active: "default",
   completed: "secondary",
   cancelled: "destructive",
+  rejected: "destructive",
+  refunded: "secondary",
 } as const;
 
 export default function CampaignDashboard() {
@@ -133,6 +136,16 @@ export default function CampaignDashboard() {
                   >
                     View Details
                   </Button>
+                  {campaign.status === 'pending_payment' && (
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => navigate(`/campaigns/${campaign.id}`)}
+                    >
+                      <DollarSign className="h-3 w-3 mr-1" />
+                      Complete Payment
+                    </Button>
+                  )}
                   {campaign.status === 'pending_creative' && (
                     <Button
                       size="sm"
@@ -140,6 +153,21 @@ export default function CampaignDashboard() {
                     >
                       <Upload className="h-3 w-3 mr-1" />
                       Upload Creatives
+                    </Button>
+                  )}
+                  {campaign.status === 'pending_review' && (
+                    <Badge variant="outline" className="text-xs">
+                      Awaiting Admin Review
+                    </Badge>
+                  )}
+                  {campaign.status === 'rejected' && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(`/campaigns/${campaign.id}/creatives`)}
+                    >
+                      <Upload className="h-3 w-3 mr-1" />
+                      Resubmit Creatives
                     </Button>
                   )}
                   {campaign.status === 'draft' && (

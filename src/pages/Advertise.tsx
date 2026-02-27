@@ -9,13 +9,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Star, Eye, Target } from "lucide-react";
-import { format, addDays } from "date-fns";
+import { format, addDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCampaigns } from "@/hooks/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
 import type { PlacementType } from "@/lib/placementSpecs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { notifyAdmins } from "@/hooks/useCampaignNotifications";
+
+/** Minimum number of days from today before a campaign can start.
+ *  Gives time for creative upload + admin review. */
+const MIN_LEAD_TIME_DAYS = 3;
 
 const ICON_MAP = {
   top_banner: Star,
@@ -107,6 +113,12 @@ export default function Advertise() {
         })),
         start_date: format(startDate, "yyyy-MM-dd"),
         end_date: format(endDate, "yyyy-MM-dd"),
+      });
+
+      // Notify admins about new campaign
+      notifyAdmins(campaign.id, campaignName, 'campaign_created', {
+        totalCost: calculateTotalCost(),
+        startDate: format(startDate, "yyyy-MM-dd"),
       });
 
       toast({
@@ -212,11 +224,14 @@ export default function Advertise() {
                           mode="single"
                           selected={startDate}
                           onSelect={setStartDate}
-                          disabled={(date) => date < new Date()}
+                          disabled={(date) => date < addDays(new Date(), MIN_LEAD_TIME_DAYS)}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Earliest start: {format(addDays(new Date(), MIN_LEAD_TIME_DAYS), "MMM dd")} ({MIN_LEAD_TIME_DAYS}-day lead time for creative review)
+                    </p>
                   </div>
 
                   <div>
@@ -239,13 +254,23 @@ export default function Advertise() {
                           mode="single"
                           selected={endDate}
                           onSelect={setEndDate}
-                          disabled={(date) => date < (startDate || new Date())}
+                          disabled={(date) => date < (startDate || addDays(new Date(), MIN_LEAD_TIME_DAYS))}
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
                   </div>
                 </div>
+
+                {startDate && endDate && (
+                  <Alert>
+                    <AlertDescription className="text-sm">
+                      Campaign duration: <strong>{differenceInDays(endDate, startDate) + 1} days</strong>.
+                      Please upload your creatives by <strong>{format(addDays(startDate, -1), "MMM dd, yyyy")}</strong> to ensure
+                      review is completed before launch.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 

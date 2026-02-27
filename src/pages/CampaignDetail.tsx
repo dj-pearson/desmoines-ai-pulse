@@ -16,18 +16,24 @@ const STATUS_COLORS = {
   draft: "secondary",
   pending_payment: "destructive",
   pending_creative: "outline",
+  pending_review: "outline",
   active: "default",
   completed: "secondary",
   cancelled: "destructive",
+  rejected: "destructive",
+  refunded: "secondary",
 } as const;
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   pending_payment: "Pending Payment",
-  pending_creative: "Pending Creative",
+  pending_creative: "Awaiting Creative Upload",
+  pending_review: "Under Review",
   active: "Active",
   completed: "Completed",
   cancelled: "Cancelled",
+  rejected: "Rejected",
+  refunded: "Refunded",
 };
 
 export default function CampaignDetail() {
