@@ -118,6 +118,9 @@ const TripPlanner = lazyWithRetry(() => import("./pages/TripPlanner"));
 // Affiliate disclosure
 const AffiliateDisclosure = lazyWithRetry(() => import("./pages/AffiliateDisclosure"));
 
+// Event submission
+const SubmitEvent = lazyWithRetry(() => import("./pages/SubmitEvent"));
+
 // Legal pages — direct imports (small static content, must always be reachable)
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Terms from "./pages/Terms";
@@ -311,6 +314,8 @@ const App = () => (
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* AI-powered features */}
             <Route path="/trip-planner" element={<TripPlanner />} />
+            {/* Event submission */}
+            <Route path="/submit-event" element={<SubmitEvent />} />
             {/* Affiliate disclosure */}
             <Route path="/affiliate-disclosure" element={<AffiliateDisclosure />} />
             {/* Legal pages */}

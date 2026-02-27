@@ -29,21 +29,47 @@ export interface UserSubmittedEvent {
   updated_at: string;
 }
 
+/**
+ * Fire-and-forget notification to the edge function.
+ * Errors are logged but never block the UI flow.
+ */
+async function sendEventNotification(payload: {
+  notificationType: string;
+  eventId: string;
+  eventTitle: string;
+  eventDate?: string;
+  eventVenue?: string;
+  eventCategory?: string;
+  submitterEmail?: string;
+  submitterName?: string;
+  adminNotes?: string;
+}) {
+  try {
+    await supabase.functions.invoke('notify-event-submission', {
+      body: payload,
+    });
+  } catch (err) {
+    // Best-effort – don't block the user
+    if (import.meta.env.DEV) {
+      console.warn('Event notification failed (non-blocking):', err);
+    }
+  }
+}
+
 export function useUserSubmittedEvents() {
   const { user } = useAuth();
-  
+
   return useQuery({
     queryKey: ['user-submitted-events', user?.id],
     queryFn: async (): Promise<UserSubmittedEvent[]> => {
       if (!user) throw new Error('User not authenticated');
-      
-      // Use proper typing for the Supabase client
+
       const { data, error} = await supabase
         .from('user_submitted_events')
         .select('*')
         .eq('user_id', user.id)
         .order('submitted_at', { ascending: false });
-      
+
       if (error) throw error;
       return (data || []) as UserSubmittedEvent[];
     },
@@ -54,11 +80,11 @@ export function useUserSubmittedEvents() {
 export function useSubmitEvent() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  
+
   return useMutation({
     mutationFn: async (eventData: Omit<UserSubmittedEvent, 'id' | 'user_id' | 'status' | 'submitted_at' | 'created_at' | 'updated_at'>) => {
       if (!user) throw new Error('User not authenticated');
-      
+
       const { data, error } = await supabase
         .from('user_submitted_events')
         .insert([
@@ -69,8 +95,21 @@ export function useSubmitEvent() {
         ])
         .select()
         .single();
-      
+
       if (error) throw error;
+
+      // Notify admin (fire-and-forget)
+      sendEventNotification({
+        notificationType: 'event_submitted',
+        eventId: data.id,
+        eventTitle: data.title,
+        eventDate: data.date ? new Date(data.date).toLocaleDateString() : undefined,
+        eventVenue: data.venue || undefined,
+        eventCategory: data.category || undefined,
+        submitterEmail: user.email || undefined,
+        submitterName: user.user_metadata?.full_name || user.email || undefined,
+      });
+
       return data;
     },
     onSuccess: () => {
@@ -81,7 +120,7 @@ export function useSubmitEvent() {
 
 export function useUpdateEvent() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({ id, ...eventData }: Partial<UserSubmittedEvent> & { id: string }) => {
       const { data, error } = await supabase
@@ -90,7 +129,7 @@ export function useUpdateEvent() {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
       return data;
     },
@@ -102,14 +141,14 @@ export function useUpdateEvent() {
 
 export function useDeleteEvent() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase
         .from('user_submitted_events')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -130,7 +169,7 @@ export function useAllSubmittedEvents() {
           profiles!user_submitted_events_user_id_fkey(first_name, last_name, email)
         `)
         .order('submitted_at', { ascending: false });
-      
+
       if (error) throw error;
       return (data || []) as UserSubmittedEvent[];
     },
@@ -189,9 +228,31 @@ export function useReviewEvent() {
           }]);
 
         if (publishError) {
-          // Don't throw - the approval still succeeded
-          // eslint-disable-next-line no-console
           console.error('Failed to publish to events table:', publishError);
+        }
+      }
+
+      // Notify the submitter about the review decision
+      if (data) {
+        const submittedEvent = data as UserSubmittedEvent;
+        // Look up submitter email via auth
+        const { data: userData } = await supabase.auth.admin.getUserById(submittedEvent.user_id).catch(() => ({ data: null }));
+        const submitterEmail = (userData as any)?.user?.email;
+
+        if (submitterEmail) {
+          const notificationType = status === 'approved'
+            ? 'event_approved'
+            : status === 'rejected'
+              ? 'event_rejected'
+              : 'event_needs_revision';
+
+          sendEventNotification({
+            notificationType,
+            eventId: submittedEvent.id,
+            eventTitle: submittedEvent.title,
+            submitterEmail,
+            adminNotes: admin_notes,
+          });
         }
       }
 
