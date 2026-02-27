@@ -1,7 +1,7 @@
 {
   "project": "Des Moines AI Pulse",
-  "branchName": "ralph/enterprise-readiness",
-  "description": "Enterprise & Production Readiness \u2014 Comprehensive hardening of the Des Moines AI Pulse platform across CI/CD, testing, security, observability, code quality, performance, accessibility, and documentation to achieve enterprise-grade production standards.",
+  "branchName": "ralph/platform-hardening-v2",
+  "description": "Platform Hardening V2 \u2014 Comprehensive audit-driven improvements across security (Stripe webhook fix, rate limiting persistence, SQL injection prevention), performance (Three.js deferral, AuthContext splitting, TanStack Query standardization, image optimization), UI/UX (empty states, search autocomplete, dark mode, pagination, toast feedback), accessibility (heading hierarchy, aria-live regions, form accessibility, keyboard navigation), SEO (sitemap domain fix, breadcrumb schema, FAQ schema), and code quality (dead hook removal, optimistic updates, type safety).",
   "userStories": [
     {
       "id": "US-001",
@@ -1201,6 +1201,537 @@
       "priority": 71,
       "passes": false,
       "notes": "Cloudflare Image Resizing is available on all Cloudflare plans at no extra cost for sites hosted on Cloudflare Pages. Currently EventCard and RestaurantCard serve full-resolution images (potentially 1-5MB) for 400px thumbnails. On mobile this wastes bandwidth and slows load time. The cdn-cgi/image/ URL pattern automatically serves WebP to browsers that support it, JPEG to others, and the correct size for the requested dimensions."
+    },
+    {
+      "id": "US-072",
+      "title": "Fix Stripe webhook signature verification bypass in development mode",
+      "description": "As a security engineer, I need the Stripe webhook handler to always require signature verification so that attackers cannot spoof payment events by sending unsigned requests.",
+      "acceptanceCriteria": [
+        "Remove the development-mode fallback in supabase/functions/stripe-webhook/index.ts that processes unsigned webhooks when STRIPE_WEBHOOK_SECRET is not set",
+        "Function MUST return 400/500 if STRIPE_WEBHOOK_SECRET is missing — never silently process unverified events",
+        "Replace console.log calls that expose payment data (session IDs, campaign IDs) with redacted structured logging",
+        "Error responses must return generic messages ('Internal server error') instead of raw error.message which may expose stack traces or query details",
+        "Add STRIPE_WEBHOOK_SECRET to the pre-deployment checklist in docs/PRODUCTION_RUNBOOK.md",
+        "Typecheck passes"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": "CRITICAL: supabase/functions/stripe-webhook/index.ts lines 77-80 allow processing ANY unsigned webhook event when STRIPE_WEBHOOK_SECRET is not configured. An attacker could spoof checkout.session.completed events to create fraudulent subscriptions. Additionally, console.log on lines 83, 152, 176 exposes payment intent IDs and campaign IDs in edge function logs, violating PCI DSS requirements."
+    },
+    {
+      "id": "US-073",
+      "title": "Migrate rate limiting from in-memory to persistent storage",
+      "description": "As a security engineer, I need rate limiting backed by persistent storage so that limits survive function cold starts and work across horizontal scaling.",
+      "acceptanceCriteria": [
+        "Replace the in-memory store object in supabase/functions/_shared/rateLimit.ts with Supabase-backed persistence (use a rate_limits table or KV store)",
+        "Rate limit entries must have TTL-based expiration so they auto-clean",
+        "Fix IP identification to not blindly trust X-Forwarded-For header — validate against known proxy headers or use Cloudflare CF-Connecting-IP",
+        "Fix token hashing — replace substring(0, 20) with a proper SHA-256 hash of the full authorization token",
+        "Add unit tests verifying rate limits persist across function invocations",
+        "Typecheck passes"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": "AUDIT FINDING: _shared/rateLimit.ts uses a global in-memory object that resets on every cold start. Attackers can bypass limits by triggering cold starts. X-Forwarded-For is trusted without validation (spoofable). Token identification uses only first 20 chars of JWT (not unique — multiple users share the same JWT header prefix)."
+    },
+    {
+      "id": "US-074",
+      "title": "Sanitize ilike query parameters in api-events edge function",
+      "description": "As a security engineer, I need all user-supplied search/filter strings properly escaped before use in Supabase ilike queries so that SQL injection via wildcard or special character manipulation is prevented.",
+      "acceptanceCriteria": [
+        "Create a shared escapeIlike(input: string) utility in supabase/functions/_shared/validation.ts that escapes %, _, and \\ characters",
+        "Apply escapeIlike to the location parameter in supabase/functions/api-events/index.ts lines 86-88 before interpolation into the .or() filter string",
+        "Apply escapeIlike to the search parameter in supabase/functions/api-events/index.ts lines 91-94",
+        "Audit all other edge functions that use .ilike() or .or() with user input and apply the same sanitization",
+        "Add unit tests for escapeIlike with edge cases: %, _, \\, empty string, unicode, SQL comment sequences",
+        "Typecheck passes"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": "AUDIT FINDING: api-events/index.ts lines 86-94 interpolate raw user input into ilike filter strings without escaping special characters. While Supabase.js provides some protection, the pattern `location.ilike.%${location}%` is dangerous — special chars like % and _ have meaning in SQL LIKE patterns and could be exploited for pattern-based injection."
+    },
+    {
+      "id": "US-075",
+      "title": "Add authentication and rate limiting to image-proxy edge function",
+      "description": "As a security engineer, I need the image-proxy endpoint protected by authentication and rate limiting so that it cannot be abused as an open proxy for unlimited bandwidth consumption.",
+      "acceptanceCriteria": [
+        "Add JWT authentication check to supabase/functions/image-proxy/index.ts — require valid Supabase auth token",
+        "Add rate limiting: 50 requests per 15 minutes per user (image proxy is bandwidth-intensive)",
+        "Add response size limit: reject proxy requests for images larger than 10MB",
+        "Log all image proxy requests with user context for abuse monitoring",
+        "Allow unauthenticated access only for a whitelist of internal Supabase Storage URLs",
+        "Typecheck passes"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": "AUDIT FINDING: image-proxy has SSRF validation (good) but zero authentication. Any unauthenticated caller can use it to proxy unlimited image requests, causing high egress costs. It could also be abused as a general-purpose proxy despite SSRF checks."
+    },
+    {
+      "id": "US-076",
+      "title": "Fix sitemap domain mismatch and add canonical URL consistency",
+      "description": "As an SEO engineer, I need all sitemaps, canonical URLs, and internal references to use a single consistent domain so that search engines don't treat the site as having duplicate content across domains.",
+      "acceptanceCriteria": [
+        "Update public/sitemap-index.xml to use consistent domain (desmoinesaipulse.com) instead of mixed desmoinesinsider.com references",
+        "Audit all static sitemap files in public/ for domain consistency",
+        "Verify SEOHead component outputs canonical URLs with the correct domain from VITE_SITE_URL",
+        "Verify robots.txt Sitemap directives match the actual sitemap URLs",
+        "Add a build-time check script that validates all sitemap URLs use the same domain",
+        "Typecheck passes"
+      ],
+      "priority": 76,
+      "passes": false,
+      "notes": "AUDIT FINDING: public/sitemap-index.xml references desmoinesinsider.com while robots.txt references desmoinesaipulse.com. This domain mismatch confuses search engines — Google may index duplicate pages or fail to find sitemaps entirely. All URLs must be consistent."
+    },
+    {
+      "id": "US-077",
+      "title": "Fix heading hierarchy violations across all pages",
+      "description": "As an accessibility engineer, I need each page to have exactly one h1 and a proper descending heading hierarchy so that screen readers can navigate the page structure correctly (WCAG 1.3.1).",
+      "acceptanceCriteria": [
+        "Audit all pages in src/pages/ for heading hierarchy: each page must have exactly one <h1>",
+        "Fix EventsPage.tsx which has multiple h1 elements — keep only the main page title as h1, demote others to h2/h3",
+        "Fix RestaurantDetails.tsx, AttractionDetails.tsx, and other detail pages for proper h1 > h2 > h3 nesting",
+        "Ensure no heading level is skipped (e.g., no h1 followed directly by h3 without h2)",
+        "Add an ESLint rule or Playwright test that validates heading hierarchy on key pages",
+        "Typecheck passes"
+      ],
+      "priority": 77,
+      "passes": false,
+      "notes": "AUDIT FINDING: EventsPage.tsx has multiple <h1> tags violating WCAG 1.3.1. Multiple h1 elements confuse screen readers' document outline — users relying on headings for navigation get a flat, unusable structure. This is a Level A violation (must fix)."
+    },
+    {
+      "id": "US-078",
+      "title": "Add aria-live regions for dynamic content updates across listing pages",
+      "description": "As a screen reader user, I need dynamic content changes (search results updating, filters applied, favorites toggled) announced automatically so that I know the page has changed without visually seeing it.",
+      "acceptanceCriteria": [
+        "Add aria-live='polite' region to EventsPage.tsx that announces result count after search/filter: 'Found 23 events matching your search'",
+        "Add aria-live='polite' region to Restaurants.tsx for the same pattern",
+        "Add aria-live='polite' region to Attractions.tsx for the same pattern",
+        "Add aria-live='assertive' announcement when favorite/unfavorite succeeds: 'Added to favorites' / 'Removed from favorites'",
+        "Create a reusable useAnnounce() hook that manages a visually-hidden aria-live region",
+        "Typecheck passes"
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": "AUDIT FINDING: No aria-live regions exist on any listing page. When a user applies a filter or runs a search, sighted users see the results change instantly but screen reader users get no feedback. This is a WCAG 4.1.3 violation — dynamic content changes must be programmatically determinable."
+    },
+    {
+      "id": "US-079",
+      "title": "Improve form accessibility with fieldsets, error summaries, and focus management",
+      "description": "As a user with disabilities, I need forms to group related fields with fieldsets, show an error summary at the top on validation failure, and auto-focus the first error field so that I can efficiently fix issues.",
+      "acceptanceCriteria": [
+        "Update EventSubmissionForm.tsx to wrap related input groups in <fieldset> with <legend> elements",
+        "Add a FormErrorSummary component at the top of all forms that lists all validation errors with links to each field",
+        "On form submission failure, auto-focus the first field with an error",
+        "Ensure all inputs have aria-describedby pointing to their error message element",
+        "Ensure all inputs have aria-invalid='true' when in error state",
+        "Add autoComplete attributes to email (autoComplete='email'), phone (autoComplete='tel'), and name fields",
+        "Typecheck passes"
+      ],
+      "priority": 79,
+      "passes": false,
+      "notes": "AUDIT FINDING: EventSubmissionForm.tsx shows inline errors but has no error summary, no focus management to first error, no fieldset grouping, and no aria-describedby linking. Forms also lack autoComplete attributes (email, tel) which help mobile users. This affects both accessibility and general UX."
+    },
+    {
+      "id": "US-080",
+      "title": "Split AuthContext into state and actions contexts to prevent app-wide re-renders",
+      "description": "As a developer, I need the AuthContext split into separate state and actions contexts so that components consuming only auth actions (login, logout) don't re-render when auth state changes (session refresh, admin check).",
+      "acceptanceCriteria": [
+        "Split src/contexts/AuthContext.tsx into AuthStateContext (user, isAuthenticated, isAdmin, session) and AuthActionsContext (login, logout, refreshSession)",
+        "Export separate hooks: useAuthState() for reading auth state, useAuthActions() for calling auth methods",
+        "Maintain backward-compatible useAuth() hook that combines both (deprecation path)",
+        "Components that only call login/logout should use useAuthActions() and no longer re-render on session refresh",
+        "Verify no regressions in auth flow: login, logout, admin panel access, session refresh",
+        "Typecheck passes"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": "PERFORMANCE AUDIT: AuthContext wraps the entire app (576 lines). Every state change (session refresh, admin check, login) triggers re-renders in ALL consuming components — even those that only use isAuthenticated. This is the single highest-impact performance fix: splitting into separate contexts prevents cascade re-renders across 50+ components."
+    },
+    {
+      "id": "US-081",
+      "title": "Standardize TanStack Query configuration with shared cache tiers and query key factory",
+      "description": "As a developer, I need consistent TanStack Query caching across all hooks so that data freshness is predictable and cache keys don't collide or create duplicate entries.",
+      "acceptanceCriteria": [
+        "Create src/lib/queryConfig.ts with shared staleTime tiers: INSTANT (0), SHORT (30s), MEDIUM (5min), LONG (30min)",
+        "Create src/lib/queryKeys.ts with a query key factory pattern for events, restaurants, attractions, favorites, and search",
+        "Update useEvents, useRestaurants, useAttractions hooks to use shared staleTime tiers and query key factory",
+        "Update useFavorites to use explicit staleTime (currently uses implicit default) and query key factory",
+        "Add refetchOnMount: false to expensive query hooks (search, recommendations) to prevent refetch on navigation back",
+        "Typecheck passes"
+      ],
+      "priority": 81,
+      "passes": false,
+      "notes": "PERFORMANCE AUDIT: staleTime values are inconsistent across hooks — useSubscription uses 5min, useFavorites uses default 60s, useEnhancedSearch uses 30s/5min/10min in different places. Query keys like ['favorites', user?.id] create duplicate entries when user?.id is undefined. A shared config prevents cache misses and the query key factory prevents key collisions."
+    },
+    {
+      "id": "US-082",
+      "title": "Defer Three.js loading on homepage to unblock First Contentful Paint",
+      "description": "As a user, I need the homepage to paint content immediately without waiting for the 600KB+ Three.js library so that I see useful content within 1 second instead of waiting 3+ seconds.",
+      "acceptanceCriteria": [
+        "Update Hero3D.tsx to defer Three.js and React Three Fiber imports until after initial paint using a useEffect-gated lazy import",
+        "Show a lightweight CSS gradient placeholder hero while Three.js loads (not a blank space or loading spinner)",
+        "Wrap the Three.js Canvas component in React.Suspense with the gradient placeholder as fallback",
+        "Add React.memo to Hero3D to prevent unnecessary re-renders",
+        "Verify FCP improves by measuring with Lighthouse before/after",
+        "Typecheck passes"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": "PERFORMANCE AUDIT: Hero3D imports Three.js (~600KB) at module evaluation time. If rendered on the homepage (likely), this blocks First Contentful Paint by 300-500ms. The fix is to show a CSS-only placeholder and load Three.js asynchronously after paint. This is the single biggest FCP improvement available."
+    },
+    {
+      "id": "US-083",
+      "title": "Add useCallback to event handlers passed to memoized list item components",
+      "description": "As a developer, I need stable callback references for event handlers passed to React.memo'd card components so that memo actually prevents re-renders in list views with 20-40 items.",
+      "acceptanceCriteria": [
+        "Audit EventsPage.tsx, Restaurants.tsx, Attractions.tsx for inline arrow functions passed as props to card components",
+        "Wrap all callback props (onViewDetails, onFavorite, onShare) with useCallback and explicit dependency arrays",
+        "Verify EventCard's React.memo wrapper actually prevents re-renders by adding a React DevTools Profiler check",
+        "Apply the same useCallback pattern to RestaurantCard and AttractionCard parents",
+        "Typecheck passes"
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": "PERFORMANCE AUDIT: EventCard uses React.memo but parent passes inline arrow functions () => action(event) on every render. This creates new function references each time, defeating memo. With 20-40 cards per page, every parent state change (filter toggle, search keystroke) re-renders all cards. Wrapping handlers in useCallback is a 200-500ms improvement on list views."
+    },
+    {
+      "id": "US-084",
+      "title": "Add empty states with contextual actions to all listing pages",
+      "description": "As a user, I need clear, helpful empty states when searches or filters return no results so that I know what to do next instead of seeing a blank white page.",
+      "acceptanceCriteria": [
+        "Use the existing EmptyState component (src/components/ui/empty-state.tsx) on EventsPage when no events match filters/search",
+        "Use EmptyState on Restaurants.tsx when no restaurants match filters",
+        "Use EmptyState on Attractions.tsx when no attractions match filters",
+        "Each empty state must include: relevant icon, descriptive title, helpful description, and a 'Clear Filters' or 'Browse All' action button",
+        "Add empty states to user favorites page ('No favorites yet — explore events to add some')",
+        "Typecheck passes"
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": "UI/UX AUDIT: The EmptyState component exists (src/components/ui/empty-state.tsx) but is not used on any listing page. When search/filter returns 0 results, users see blank white space. This is confusing — users think the page is broken. Contextual empty states with clear CTAs improve discoverability and reduce bounce rates."
+    },
+    {
+      "id": "US-085",
+      "title": "Add search autocomplete with recent searches and suggestions",
+      "description": "As a user, I need search autocomplete showing popular suggestions and my recent searches so that I can find content faster without guessing exact keywords.",
+      "acceptanceCriteria": [
+        "Create src/components/SearchAutocomplete.tsx that renders a dropdown below the search input with sections: Recent Searches, Suggested Results",
+        "Store recent searches (last 10) in safeStorage, scoped per content type (events, restaurants, attractions)",
+        "Query database for title matches as user types (debounced, 3+ characters) and show top 5 suggestions",
+        "Integrate into EventsPage.tsx, Restaurants.tsx, and Attractions.tsx search inputs",
+        "Clear recent searches button in the dropdown",
+        "Keyboard accessible: arrow keys navigate suggestions, Enter selects, Escape closes dropdown",
+        "Typecheck passes"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": "UI/UX AUDIT: Search inputs on all listing pages have debouncing (US-036) but no autocomplete, no recent searches, and no suggestions. Users have to know exactly what they're searching for. Autocomplete dramatically improves search conversion — users see matching titles as they type, reducing failed searches."
+    },
+    {
+      "id": "US-086",
+      "title": "Add dark mode toggle and fix incomplete dark mode styling",
+      "description": "As a user, I need a theme toggle to switch between light and dark mode, and I need dark mode styling to be complete across all components so that the interface is usable in both themes.",
+      "acceptanceCriteria": [
+        "Add a theme toggle button (sun/moon icon) to the Header component, accessible via keyboard",
+        "Store theme preference in safeStorage and user profile (for authenticated users)",
+        "Fix RestaurantCard.tsx hardcoded gradients — add dark: variants for all gradient backgrounds",
+        "Fix ShareDialog.tsx social media button colors — add dark:brightness-75 for bright platform colors",
+        "Fix BottomNav.tsx hover states for dark mode contrast",
+        "Audit and fix input placeholder contrast in dark mode (must meet WCAG 4.5:1 ratio)",
+        "Typecheck passes"
+      ],
+      "priority": 86,
+      "passes": false,
+      "notes": "UI/UX AUDIT: Dark mode CSS variables are defined in src/index.css lines 80-128 but there's no UI toggle for users to switch themes. Additionally, multiple components have hardcoded colors without dark: variants — RestaurantCard gradients, ShareDialog platform buttons, and BottomNav hover states don't adapt to dark mode."
+    },
+    {
+      "id": "US-087",
+      "title": "Add context-aware loading states and error recovery to listing pages",
+      "description": "As a user, I need loading states that tell me what's happening and error states with retry buttons so that I understand the current state and can recover from failures.",
+      "acceptanceCriteria": [
+        "Update EventsPage.tsx loading label from generic 'Loading content...' to context-specific: 'Loading events...', 'Searching for...', 'Applying filters...'",
+        "Update RestaurantDetails.tsx loading skeleton to show labeled sections (Restaurant Info, Hours, Reviews) instead of plain gray boxes",
+        "Add error boundaries with 'Try Again' buttons to EventsPage, Restaurants, and Attractions pages",
+        "Add loading spinners to favorite/unfavorite buttons that disable during mutation",
+        "Show upload progress percentage (not just spinner) in EventSubmissionForm.tsx",
+        "Typecheck passes"
+      ],
+      "priority": 87,
+      "passes": false,
+      "notes": "UI/UX AUDIT: Loading states use generic labels ('Loading content...') regardless of context. Error states are incomplete — network failures on search don't show user-friendly recovery options. Mutation buttons (favorite, share) don't show loading state, so users can't tell if their click registered."
+    },
+    {
+      "id": "US-088",
+      "title": "Implement pagination controls and load-more pattern for listing pages",
+      "description": "As a user, I need visible pagination or load-more controls on listing pages so that I can navigate through large result sets without the page trying to render 1000+ items.",
+      "acceptanceCriteria": [
+        "Wire up the existing pagination component (src/components/ui/pagination.tsx) on EventsPage.tsx with page controls below results",
+        "Add pagination to Restaurants.tsx and Attractions.tsx listing pages",
+        "Show current page and total results count: 'Showing 1-30 of 247 events'",
+        "On mobile, use a 'Load More' button pattern instead of full pagination (better for touch)",
+        "Scroll to top of results when changing pages on desktop",
+        "Preserve page state in URL query params (?page=2) for shareable paginated views",
+        "Typecheck passes"
+      ],
+      "priority": 88,
+      "passes": false,
+      "notes": "UI/UX AUDIT: EventsPage has EVENTS_PER_PAGE=30 and page state but no visible pagination controls — users can't navigate to page 2. The pagination.tsx component exists in src/components/ui/ but is never imported on any listing page. Large result sets render all items, causing performance degradation."
+    },
+    {
+      "id": "US-089",
+      "title": "Expand route prefetching and add hover prefetch to navigation",
+      "description": "As a user, I need commonly visited pages to prefetch when I hover over navigation links so that page transitions feel instant.",
+      "acceptanceCriteria": [
+        "Expand src/lib/prefetch.ts routeModuleMap to include all popular routes: /events/today, /events/free, /restaurants/open-now, /best-of, /whats-new, /trip-planner",
+        "Add onMouseEnter and onTouchStart prefetch triggers to BottomNav.tsx link items",
+        "Add onMouseEnter prefetch triggers to Header.tsx navigation links",
+        "Add DNS prefetch hints to index.html for Stripe (js.stripe.com) and any other third-party APIs",
+        "Verify prefetch actually fires by checking Network tab in DevTools",
+        "Typecheck passes"
+      ],
+      "priority": 89,
+      "passes": false,
+      "notes": "PERFORMANCE AUDIT: Only 4 routes are prefetchable (/events, /restaurants, /attractions, /playgrounds). BottomNav imports prefetchRoute but doesn't call it on hover/touch. Missing DNS prefetch hints for Stripe. Expanding prefetch to all popular routes saves 200-500ms per navigation."
+    },
+    {
+      "id": "US-090",
+      "title": "Add visible focus indicators and keyboard navigation to all interactive card components",
+      "description": "As a keyboard user, I need visible focus indicators on event, restaurant, and attraction cards so that I can see which card is focused and activate it with Enter/Space.",
+      "acceptanceCriteria": [
+        "Add focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 to EventCard.tsx, RestaurantCard.tsx, and AttractionCard.tsx",
+        "Remove any focus:outline-none that removes focus styles without replacing them",
+        "Make cards keyboard-activatable: add role='link', tabIndex={0}, and onKeyDown handler for Enter/Space",
+        "Ensure icon-only buttons throughout the app have aria-label attributes",
+        "Add a Playwright test that tab-navigates through a listing page and verifies focus ring visibility",
+        "Typecheck passes"
+      ],
+      "priority": 90,
+      "passes": false,
+      "notes": "ACCESSIBILITY AUDIT: RestaurantCard.tsx has focus:outline-none (removing focus styles) without a replacement ring. EventCard is wrapped in memo but isn't keyboard-navigable. Icon-only buttons may lack aria-labels. WCAG 2.4.7 requires visible focus indicators on all interactive elements."
+    },
+    {
+      "id": "US-091",
+      "title": "Add BreadcrumbListSchema to all detail pages and fix breadcrumb labels",
+      "description": "As an SEO engineer, I need BreadcrumbList structured data on all detail pages with actual content titles so that Google shows rich breadcrumb snippets in search results.",
+      "acceptanceCriteria": [
+        "Add BreadcrumbListSchema component to EventDetails.tsx with items: Home > Events > {event.title}",
+        "Add BreadcrumbListSchema to RestaurantDetails.tsx with items: Home > Restaurants > {restaurant.name}",
+        "Add BreadcrumbListSchema to AttractionDetails.tsx with items: Home > Attractions > {attraction.name}",
+        "Fix breadcrumbs.tsx to load actual entity titles for dynamic segments instead of showing raw URL slugs",
+        "Verify structured data validates via Google Rich Results Test",
+        "Typecheck passes"
+      ],
+      "priority": 91,
+      "passes": false,
+      "notes": "SEO AUDIT: BreadcrumbListSchema component exists (src/components/schema/BreadcrumbListSchema.tsx) but is not used on detail pages. Visual breadcrumbs exist but show raw slugs for dynamic routes instead of actual titles. Google requires BreadcrumbList schema for rich breadcrumb snippets in search results."
+    },
+    {
+      "id": "US-092",
+      "title": "Wire FAQSchema to FAQ sections and add FAQ structured data to key pages",
+      "description": "As an SEO engineer, I need FAQ sections on high-traffic pages to include FAQSchema structured data so that Google can show FAQ rich snippets, increasing click-through rates from search.",
+      "acceptanceCriteria": [
+        "Update FAQSection component to automatically include FAQSchema structured data for its items",
+        "Add FAQ sections with schema to high-traffic pages: /events, /restaurants, /attractions, /trip-planner",
+        "FAQ content should answer common search queries: 'What events are happening in Des Moines this weekend?', 'Best restaurants in Des Moines?', 'Free things to do in Des Moines?'",
+        "Verify FAQ structured data validates via Google Rich Results Test",
+        "Typecheck passes"
+      ],
+      "priority": 92,
+      "passes": false,
+      "notes": "SEO AUDIT: FAQSchema component exists (src/components/schema/FAQSchema.tsx) but is not wired to the FAQSection component. FAQ rich snippets are among the highest-CTR SERP features — pages with FAQ schema typically see 10-30% higher click-through rates. Questions should target long-tail search queries like 'things to do in Des Moines this weekend'."
+    },
+    {
+      "id": "US-093",
+      "title": "Replace raw img tags with OptimizedImage component and add aspect ratio wrappers",
+      "description": "As a developer, I need all content images to use the OptimizedImage component with consistent aspect ratios so that images are lazy-loaded, WebP-optimized, and don't cause Cumulative Layout Shift.",
+      "acceptanceCriteria": [
+        "Replace raw <img> tags in EventCard.tsx with OptimizedImage component, using width={400} height={250} and aspect ratio wrapper",
+        "Replace raw <img> tags in RestaurantCard.tsx with OptimizedImage",
+        "Add aspect-[3/2] or aspect-video wrapper div around all card images to prevent CLS",
+        "Set loading='eager' on above-fold hero images and loading='lazy' on all below-fold content",
+        "Add srcSet with responsive widths (320w, 400w, 800w) for mobile optimization",
+        "Verify CLS score improves by measuring with Lighthouse before/after",
+        "Typecheck passes"
+      ],
+      "priority": 93,
+      "passes": false,
+      "notes": "PERFORMANCE AUDIT: EventCard.tsx uses raw <img> tags instead of the existing OptimizedImage component. No aspect ratio wrappers mean images cause layout shift as they load. Card images load full-resolution (~800KB) instead of thumbnail sizes. On mobile list views, this wastes 2-5MB of bandwidth per page. The OptimizedImage component already exists and handles lazy loading, WebP, and error states."
+    },
+    {
+      "id": "US-094",
+      "title": "Add interactive map accessibility with skip link and keyboard alternative",
+      "description": "As a screen reader user, I need an accessible alternative to the interactive Leaflet map so that I can discover the same location-based content without needing to interact with a visual map.",
+      "acceptanceCriteria": [
+        "Add role='application' and aria-label to the InteractiveMap component's container div",
+        "Add a visible 'Skip map, view as list' button before the map that scrolls to a list view of the same data",
+        "Ensure map markers have aria-label with the entity name and type",
+        "Add a keyboard-accessible list view alternative showing the same data as the map with sortable columns",
+        "Typecheck passes"
+      ],
+      "priority": 94,
+      "passes": false,
+      "notes": "ACCESSIBILITY AUDIT: Leaflet maps are notoriously inaccessible to screen reader users. The InteractiveMap component lacks role, aria-label, and any keyboard alternative. Users who can't interact with the visual map have no way to access the location-based content it displays. WCAG 1.1.1 requires a text alternative for all non-text content."
+    },
+    {
+      "id": "US-095",
+      "title": "Add consistent toast feedback for all user actions",
+      "description": "As a user, I need every action I take (favorite, share, filter, submit) to give me immediate visual feedback via toast notifications so that I know my action was registered.",
+      "acceptanceCriteria": [
+        "Add toast notification on favorite/unfavorite success and failure (currently silent)",
+        "Add toast.loading() for long operations: image upload, form submission, data fetching on button click",
+        "Configure Sonner toast position to render above BottomNav on mobile (prevent overlap)",
+        "Standardize toast patterns: loading → success/error with consistent ID to prevent duplicates",
+        "Ensure toast messages are concise and actionable: 'Added to favorites' not 'The item has been successfully added to your favorites list'",
+        "Typecheck passes"
+      ],
+      "priority": 95,
+      "passes": false,
+      "notes": "UI/UX AUDIT: Toast usage is inconsistent — forms show success/error toasts but favorite button is silent, filter changes sometimes show toasts and sometimes don't. Long operations like image upload show spinners but no toast. Mobile users may not see bottom-positioned toasts due to BottomNav overlap."
+    },
+    {
+      "id": "US-096",
+      "title": "Add login attempt throttling to prevent brute force attacks",
+      "description": "As a security engineer, I need login attempts throttled per IP and per email so that brute force password attacks are mitigated.",
+      "acceptanceCriteria": [
+        "Add login attempt tracking: max 5 failed attempts per email per 15 minutes, max 20 failed attempts per IP per 15 minutes",
+        "After limit exceeded, return 429 with Retry-After header and show user-friendly message: 'Too many login attempts. Please try again in X minutes.'",
+        "Track attempts in a login_attempts table or rate limit store (from US-073)",
+        "Reset attempt counter on successful login",
+        "Log excessive failed attempts for security monitoring",
+        "Typecheck passes"
+      ],
+      "priority": 96,
+      "passes": false,
+      "notes": "SECURITY AUDIT: No login attempt throttling exists. Supabase Auth handles authentication but edge functions don't add any additional rate limiting on auth endpoints. An attacker can make unlimited login attempts against any email address. This is a basic security requirement that should complement Supabase's built-in protections."
+    },
+    {
+      "id": "US-097",
+      "title": "Separate service worker caches and add image cache persistence across deploys",
+      "description": "As a developer, I need the service worker to use separate cache buckets for runtime assets, images, and API responses so that deploys don't invalidate the image cache users have already built up.",
+      "acceptanceCriteria": [
+        "Split public/sw.js caches into: dmi-runtime-v{n} (cleared on deploy), dmi-images-v1 (persists across deploys), dmi-api-v1 (persists with TTL)",
+        "Only clear the runtime cache on activate event — preserve image and API caches",
+        "Add 7-day expiration to cached images to prevent stale content",
+        "Add 5-minute expiration to cached API responses",
+        "Ensure offline.html is properly cached and served when network is unavailable",
+        "Typecheck passes"
+      ],
+      "priority": 97,
+      "passes": false,
+      "notes": "PERFORMANCE AUDIT: Service worker uses a single cache version (v4) that invalidates ALL cached content on every deploy — including images users have already downloaded. Separating caches means deploys only bust the runtime cache while preserving the image cache, saving users from re-downloading megabytes of already-seen images."
+    },
+    {
+      "id": "US-098",
+      "title": "Add prefers-reduced-motion support across all animations",
+      "description": "As a user with vestibular disorders, I need all animations — including the 3D hero, page transitions, hover effects, and auto-playing carousels — to respect my OS reduced-motion preference so that the site doesn't cause discomfort.",
+      "acceptanceCriteria": [
+        "Add @media (prefers-reduced-motion: reduce) CSS rule in src/index.css that disables all transitions and animations globally",
+        "Add motion-reduce:animate-none Tailwind class to all components using animate-* classes",
+        "Disable Three.js/React Three Fiber hero animation when reduced motion is preferred",
+        "Disable auto-advancing carousels or slideshows when reduced motion is preferred",
+        "Create useReducedMotion() hook that returns boolean for component-level motion checks",
+        "Typecheck passes"
+      ],
+      "priority": 98,
+      "passes": false,
+      "notes": "Note: This is related to the existing US-027 but US-027 passes:true already. However the accessibility audit found that prefers-reduced-motion support is still incomplete in practice — animations defined in Tailwind config (16 animations) don't have motion-reduce variants, and the Three.js hero may not be fully disabled. This story ensures completeness."
+    },
+    {
+      "id": "US-099",
+      "title": "Standardize card component patterns with shared category color map",
+      "description": "As a developer, I need a single source of truth for category colors, badge styles, and card layouts so that EventCard, RestaurantCard, and AttractionCard look and behave consistently.",
+      "acceptanceCriteria": [
+        "Create src/lib/constants.ts with a CATEGORY_COLORS map: { Music: 'bg-purple-500 text-white', Food: 'bg-orange-500 text-white', Art: 'bg-pink-500 text-white', ... }",
+        "Update EventCard.tsx getCategoryColor() to use the shared CATEGORY_COLORS map",
+        "Update RestaurantCard.tsx cuisine badge colors to use the shared map",
+        "Standardize card image heights, padding, and font sizes across all card types",
+        "Create a shared CardBadge component used by all card types for category/type badges",
+        "Typecheck passes"
+      ],
+      "priority": 99,
+      "passes": false,
+      "notes": "UI/UX AUDIT: EventCard uses purple for Music, orange for Food. RestaurantCard uses completely different gradient schemes for cuisines. AttractionCard likely has yet another color system. This inconsistency confuses users — the same category appears in different colors depending on the card type. A shared constant map ensures visual consistency."
+    },
+    {
+      "id": "US-100",
+      "title": "Remove CORS headers from Stripe webhook and tighten CORS on all edge functions",
+      "description": "As a security engineer, I need the Stripe webhook to have no CORS headers (it's server-to-server) and all other edge functions to use explicit origin whitelists instead of wildcards.",
+      "acceptanceCriteria": [
+        "Remove Access-Control-Allow-Origin: * from supabase/functions/stripe-webhook/index.ts — webhooks are server-to-server and don't need CORS",
+        "Audit all edge functions for wildcard CORS (*) and replace with explicit origin whitelist from _shared/cors.ts",
+        "Verify _shared/cors.ts allowedOrigins includes only production domain(s) and localhost for development",
+        "Add Origin header validation — reject requests from unlisted origins with 403",
+        "Typecheck passes"
+      ],
+      "priority": 100,
+      "passes": false,
+      "notes": "SECURITY AUDIT: stripe-webhook/index.ts has Access-Control-Allow-Origin: * which is dangerous for any endpoint. Webhooks don't need CORS at all — they're called server-to-server by Stripe. Other edge functions should also be audited to ensure they don't use wildcard CORS."
+    },
+    {
+      "id": "US-101",
+      "title": "Implement optimistic updates for favorites, ratings, and attendance mutations",
+      "description": "As a user, I need favorite/unfavorite, rating, and attendance actions to update the UI instantly without waiting for the server response so that interactions feel snappy, especially on mobile or slow networks.",
+      "acceptanceCriteria": [
+        "Add onMutate optimistic update to useFavorites.ts addFavoriteMutation and removeFavoriteMutation: snapshot previous state, optimistically update query cache, return rollback context",
+        "Add onError rollback to both favorite mutations: restore previous state from context on server failure",
+        "Add onMutate optimistic update to useRatings.ts for rating submission",
+        "Add onMutate optimistic update to useEventSocial.ts for attendance RSVP",
+        "Verify that UI updates instantly on click, then reconciles with server response",
+        "Typecheck passes"
+      ],
+      "priority": 101,
+      "passes": false,
+      "notes": "DATA LAYER AUDIT: No mutation in the codebase uses TanStack Query's optimistic update pattern (onMutate + rollback). Users currently wait for the full server round-trip before seeing UI changes — toggling a favorite takes 300-800ms of visible delay. Optimistic updates make this instant with automatic rollback on failure."
+    },
+    {
+      "id": "US-102",
+      "title": "Remove dead/unused hooks from src/hooks/",
+      "description": "As a developer, I need unused hooks removed from the codebase so that the project is cleaner, easier to navigate, and has less dead code to maintain.",
+      "acceptanceCriteria": [
+        "Verify and remove useCompetitorAnalysis.ts — confirmed 0 imports anywhere in src/",
+        "Verify and remove useLocationTracking.ts — confirmed 0 imports",
+        "Verify and remove useEventClone.ts — confirmed 0 imports",
+        "Verify and remove useFormAccessibility.ts — confirmed 0 imports",
+        "Audit suspicious low-usage hooks (useDomainHighlights, useKnownVenues, useNLPSearch, useProximitySearch, useSimplePersonalization, useWriteupGenerator) and remove if truly unused",
+        "Verify no runtime errors from removals — typecheck passes and build passes",
+        "Typecheck passes"
+      ],
+      "priority": 102,
+      "passes": false,
+      "notes": "DATA LAYER AUDIT: 4 hooks confirmed with zero imports anywhere in src/. Several more hooks have suspiciously low usage. The hooks/ directory has 101+ hooks — removing dead ones reduces cognitive load and maintenance burden."
+    },
+    {
+      "id": "US-103",
+      "title": "Replace 'any' types in critical analytics and configuration hooks with proper interfaces",
+      "description": "As a developer, I need the most-used hooks to have proper TypeScript types instead of 'any' so that bugs are caught at compile time and IDE autocomplete works correctly.",
+      "acceptanceCriteria": [
+        "Replace all 'any' types in useAdvancedAnalytics.ts (~12 instances) with proper interfaces for metrics, filters, and queue items",
+        "Replace all 'any' types in useAnalytics.ts (~10 instances) with proper event and filter interfaces",
+        "Replace all 'any' types in useAIConfiguration.ts with proper setting_value and configuration interfaces",
+        "Replace 'any' types in useAdminSecurity.ts (oldValues, newValues) with proper audit log interfaces",
+        "Replace 'any' types in useAdminCampaigns.ts (updates object) with proper campaign update interface",
+        "Total 'any' reduction: at least 40 instances across these 5 hooks",
+        "Typecheck passes"
+      ],
+      "priority": 103,
+      "passes": false,
+      "notes": "DATA LAYER AUDIT: ~110 instances of 'any' type across 130 hooks (85% of hooks use 'any' somewhere). The 5 worst offenders are useAdvancedAnalytics (12+), useAnalytics (10+), useAIConfiguration (3+), useAdminSecurity (mixed), and useAdminCampaigns. These are analytics and admin hooks that handle complex data — proper types prevent silent data corruption bugs."
+    },
+    {
+      "id": "US-104",
+      "title": "Add detail page data prefetching on card hover for instant navigation",
+      "description": "As a user, I need detail page data to start loading when I hover over a card so that clicking through feels instant instead of showing a loading spinner.",
+      "acceptanceCriteria": [
+        "Add onMouseEnter handler to EventCard that prefetches event detail data via queryClient.prefetchQuery",
+        "Add onMouseEnter handler to RestaurantCard that prefetches restaurant detail data",
+        "Add onMouseEnter handler to AttractionCard that prefetches attraction detail data",
+        "Use requestIdleCallback to avoid blocking the main thread during prefetch",
+        "Prefetch should only trigger once per card (debounce/guard against repeated hover)",
+        "Typecheck passes"
+      ],
+      "priority": 104,
+      "passes": false,
+      "notes": "DATA LAYER AUDIT: Route-level prefetching exists (src/lib/prefetch.ts) but only prefetches code bundles, not data. When a user clicks a card, they wait for both the route bundle AND the API data to load. Prefetching data on hover means the API response is already cached when the user clicks, making navigation feel instant."
     }
   ]
 }
