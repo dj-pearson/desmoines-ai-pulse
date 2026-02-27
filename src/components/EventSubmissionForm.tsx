@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -10,10 +10,11 @@ import { Calendar } from "./ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription } from "./ui/alert";
-import { CalendarIcon, X, Plus, Info } from "lucide-react";
+import { CalendarIcon, X, Plus, Info, Upload, ImageIcon, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useSubmitEvent, useUpdateEvent, type UserSubmittedEvent } from "@/hooks/useUserSubmittedEvents";
+import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 
@@ -21,7 +22,7 @@ const log = createLogger('EventSubmissionForm');
 
 const EVENT_CATEGORIES = [
   "Art & Culture",
-  "Business & Networking", 
+  "Business & Networking",
   "Entertainment",
   "Family & Kids",
   "Food & Dining",
@@ -38,7 +39,7 @@ const EVENT_CATEGORIES = [
 
 const POPULAR_TAGS = [
   "Free",
-  "Family Friendly", 
+  "Family Friendly",
   "Live Music",
   "Food & Drink",
   "Outdoor",
@@ -63,6 +64,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
   );
   const [selectedTags, setSelectedTags] = useState<string[]>(editEvent?.tags || []);
   const [customTag, setCustomTag] = useState("");
+  const [imagePreview, setImagePreview] = useState<string | null>(editEvent?.image_url || null);
+  const [uploadedImageUrl, setUploadedImageUrl] = useState<string>(editEvent?.image_url || '');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm({
     defaultValues: editEvent ? {
@@ -83,6 +87,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
   });
   const submitEvent = useSubmitEvent();
   const updateEvent = useUpdateEvent();
+  const { upload, isUploading, progress, error: uploadError } = useMediaUpload();
 
   const addTag = (tag: string) => {
     if (tag && !selectedTags.includes(tag)) {
@@ -101,16 +106,52 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
     }
   };
 
+  const handleImageUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Show local preview immediately
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreview(previewUrl);
+
+    try {
+      const result = await upload(file, {
+        bucket: 'event-photos',
+        contentType: 'event',
+        maxWidth: 1200,
+        maxHeight: 800,
+        quality: 0.85,
+        altText: `Event image`,
+      });
+      setUploadedImageUrl(result.url);
+      setValue("image_url", result.url);
+      toast.success("Image uploaded successfully!");
+    } catch (err) {
+      setImagePreview(editEvent?.image_url || null);
+      setUploadedImageUrl(editEvent?.image_url || '');
+      toast.error(err instanceof Error ? err.message : "Failed to upload image");
+    }
+  }, [upload, setValue, editEvent]);
+
+  const handleRemoveImage = () => {
+    setImagePreview(null);
+    setUploadedImageUrl('');
+    setValue("image_url", '');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const onSubmit = async (data: any) => {
     try {
       const eventData = {
         ...data,
         date: selectedDate?.toISOString(),
         tags: selectedTags,
+        image_url: uploadedImageUrl || data.image_url || null,
       };
 
       if (isEditing && editEvent) {
-        // Update existing event and reset to pending review
         await updateEvent.mutateAsync({
           id: editEvent.id,
           ...eventData,
@@ -128,6 +169,11 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
       setSelectedDate(undefined);
       setSelectedTags([]);
       setCustomTag("");
+      setImagePreview(null);
+      setUploadedImageUrl('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
 
       onSuccess?.();
     } catch (error) {
@@ -165,13 +211,16 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
             </div>
 
             <div className="md:col-span-2">
-              <Label htmlFor="description">Description</Label>
+              <Label htmlFor="description">Description *</Label>
               <Textarea
                 id="description"
-                {...register("description")}
-                placeholder="Tell people what your event is about..."
-                rows={4}
+                {...register("description", { required: "Please describe your event" })}
+                placeholder="Tell people what your event is about, what to expect, who should attend..."
+                rows={5}
               />
+              {errors.description && (
+                <p className="text-sm text-red-500 mt-1">{errors.description.message as string}</p>
+              )}
             </div>
 
             <div>
@@ -194,7 +243,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
             </div>
 
             <div>
-              <Label>Event Date</Label>
+              <Label>Event Date *</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -213,6 +262,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                     mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
+                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                     initialFocus
                   />
                 </PopoverContent>
@@ -246,12 +296,15 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
           <h3 className="text-lg font-semibold mb-4">Location Information</h3>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
-              <Label htmlFor="venue">Venue Name</Label>
+              <Label htmlFor="venue">Venue Name *</Label>
               <Input
                 id="venue"
-                {...register("venue")}
+                {...register("venue", { required: "Venue name is required" })}
                 placeholder="e.g., Downtown Des Moines Park"
               />
+              {errors.venue && (
+                <p className="text-sm text-red-500 mt-1">{errors.venue.message as string}</p>
+              )}
             </div>
 
             <div>
@@ -275,6 +328,91 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
         </CardContent>
       </Card>
 
+      {/* Event Image */}
+      <Card>
+        <CardContent className="pt-6">
+          <h3 className="text-lg font-semibold mb-4">Event Image</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Upload an image for your event. Accepted formats: JPG, PNG, WebP (max 5MB).
+          </p>
+
+          {imagePreview ? (
+            <div className="relative">
+              <img
+                src={imagePreview}
+                alt="Event image preview"
+                className="w-full h-48 object-cover rounded-lg border"
+              />
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="absolute top-2 right-2"
+                onClick={handleRemoveImage}
+                disabled={isUploading}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Remove
+              </Button>
+              {isUploading && (
+                <div className="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center">
+                  <div className="text-center text-white">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                    <p className="text-sm">
+                      Uploading... {progress ? `${Math.round(progress.percentage)}%` : ''}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div
+              className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/50 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+              aria-label="Upload event image"
+            >
+              <ImageIcon className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm font-medium mb-1">Click to upload an image</p>
+              <p className="text-xs text-muted-foreground">JPG, PNG, or WebP up to 5MB</p>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+            onChange={handleImageUpload}
+          />
+
+          {uploadError && (
+            <p className="text-sm text-red-500 mt-2">{uploadError}</p>
+          )}
+
+          {/* Fallback: paste URL */}
+          <div className="mt-4">
+            <Label htmlFor="image_url_manual" className="text-sm text-muted-foreground">
+              Or paste an image URL
+            </Label>
+            <Input
+              id="image_url_manual"
+              type="url"
+              {...register("image_url")}
+              placeholder="https://example.com/your-event-image.jpg"
+              onChange={(e) => {
+                register("image_url").onChange(e);
+                if (e.target.value && !uploadedImageUrl) {
+                  setImagePreview(e.target.value);
+                }
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Additional Details */}
       <Card>
         <CardContent className="pt-6">
@@ -290,12 +428,12 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
             </div>
 
             <div>
-              <Label htmlFor="website_url">Website URL</Label>
+              <Label htmlFor="website_url">Event Website or Ticket Link</Label>
               <Input
                 id="website_url"
                 type="url"
                 {...register("website_url")}
-                placeholder="https://yourwebsite.com"
+                placeholder="https://yourwebsite.com/tickets"
               />
             </div>
 
@@ -318,16 +456,6 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 placeholder="(515) 555-0123"
               />
             </div>
-
-            <div className="md:col-span-2">
-              <Label htmlFor="image_url">Event Image URL (optional)</Label>
-              <Input
-                id="image_url"
-                type="url"
-                {...register("image_url")}
-                placeholder="https://example.com/your-event-image.jpg"
-              />
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -339,7 +467,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
           <p className="text-sm text-muted-foreground mb-4">
             Add tags to help people find your event
           </p>
-          
+
           {/* Popular Tags */}
           <div className="mb-4">
             <Label className="text-sm font-medium mb-2 block">Popular Tags</Label>
@@ -366,7 +494,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 value={customTag}
                 onChange={(e) => setCustomTag(e.target.value)}
                 placeholder="Enter custom tag"
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomTag())}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
               />
               <Button type="button" onClick={addCustomTag} size="sm">
                 <Plus className="h-4 w-4" />
@@ -403,14 +531,17 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
       <div className="flex justify-end">
         <Button
           type="submit"
-          disabled={submitEvent.isPending || updateEvent.isPending}
+          disabled={submitEvent.isPending || updateEvent.isPending || isUploading}
           className="w-full sm:w-auto"
+          size="lg"
         >
           {(submitEvent.isPending || updateEvent.isPending)
             ? "Submitting..."
-            : isEditing
-              ? "Save Changes & Resubmit"
-              : "Submit Event for Review"}
+            : isUploading
+              ? "Uploading image..."
+              : isEditing
+                ? "Save Changes & Resubmit"
+                : "Submit Event for Review"}
         </Button>
       </div>
     </form>
