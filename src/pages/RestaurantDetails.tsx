@@ -34,8 +34,9 @@ import {
   Globe,
   Check,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -107,6 +108,11 @@ export default function RestaurantDetails() {
     },
     enabled: !!restaurant,
   });
+
+  const openStatus = useMemo(
+    () => getRestaurantOpenStatus(restaurant?.opening),
+    [restaurant?.opening]
+  );
 
   const formatPrice = (price: string) => {
     const count = price?.length || 1;
@@ -408,13 +414,13 @@ export default function RestaurantDetails() {
                     Featured
                   </Badge>
                 )}
-                {restaurant.status === "open" && (
-                  <Badge className="bg-emerald-500 text-white border-0 shadow-lg text-sm font-semibold px-3 py-1">
+                {openStatus.isOpen && (
+                  <Badge className={`${openStatus.closingSoon ? 'bg-amber-500' : 'bg-emerald-500'} text-white border-0 shadow-lg text-sm font-semibold px-3 py-1`}>
                     <span className="relative flex h-2 w-2 mr-1.5">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                       <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
                     </span>
-                    Open Now
+                    {openStatus.closingSoon ? 'Closing Soon' : 'Open Now'}
                   </Badge>
                 )}
               </div>

@@ -3,6 +3,7 @@ import { Clock, CheckCircle, XCircle, AlertCircle, Phone, Globe } from 'lucide-r
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { getRestaurantOpenStatus, type OpenStatus } from '@/lib/restaurantHours';
 
 interface RestaurantStatusProps {
   restaurant: {
@@ -13,76 +14,26 @@ interface RestaurantStatusProps {
   };
 }
 
-interface DayHours {
-  open: string;
-  close: string;
-}
-
 /**
- * Displays real-time business status for a restaurant
- * Shows current open/closed status, today's hours, and quick actions
+ * Displays real-time business status for a restaurant.
+ * Uses the restaurant's actual hours data from the `opening` field.
+ * Updates every minute.
  */
 export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) {
-  const [currentStatus, setCurrentStatus] = useState<'open' | 'closed' | 'closing-soon' | 'unknown'>('unknown');
-  const [todayHours, setTodayHours] = useState<DayHours | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<OpenStatus>('unknown');
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
 
-  // Determine current status based on time
   useEffect(() => {
     const checkStatus = () => {
-      const now = new Date();
-      const currentHour = now.getHours();
-      const currentMinute = now.getMinutes();
-      const currentTime = currentHour * 60 + currentMinute; // Convert to minutes
-      const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, etc.
-
-      // Default hours (can be customized per restaurant from database)
-      // For now using typical restaurant hours
-      let openTime = 11 * 60; // 11:00 AM
-      let closeTime = 22 * 60; // 10:00 PM
-
-      // Weekend hours (Friday-Saturday)
-      if (dayOfWeek === 5 || dayOfWeek === 6) {
-        closeTime = 23 * 60; // 11:00 PM
-      }
-
-      // Sunday hours
-      if (dayOfWeek === 0) {
-        openTime = 12 * 60; // 12:00 PM
-        closeTime = 21 * 60; // 9:00 PM
-      }
-
-      // Set today's hours
-      const openHour = Math.floor(openTime / 60);
-      const openMin = openTime % 60;
-      const closeHour = Math.floor(closeTime / 60);
-      const closeMin = closeTime % 60;
-
-      setTodayHours({
-        open: `${openHour.toString().padStart(2, '0')}:${openMin.toString().padStart(2, '0')}`,
-        close: `${closeHour.toString().padStart(2, '0')}:${closeMin.toString().padStart(2, '0')}`,
-      });
-
-      // Determine status
-      if (currentTime >= openTime && currentTime < closeTime) {
-        // Check if closing soon (within 1 hour)
-        if (currentTime >= closeTime - 60) {
-          setCurrentStatus('closing-soon');
-        } else {
-          setCurrentStatus('open');
-        }
-      } else {
-        setCurrentStatus('closed');
-      }
-
+      const result = getRestaurantOpenStatus(restaurant.hours);
+      setCurrentStatus(result.status);
       setLastUpdated(new Date());
     };
 
     checkStatus();
-    // Update every minute
     const interval = setInterval(checkStatus, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [restaurant.hours]);
 
   const getStatusIcon = () => {
     switch (currentStatus) {
@@ -123,14 +74,6 @@ export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) 
     }
   };
 
-  const formatTime = (time: string) => {
-    const [hours, minutes] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
-    return `${displayHour}:${minutes} ${ampm}`;
-  };
-
   return (
     <Card className={`border-2 ${getStatusColor()} transition-colors`}>
       <CardHeader className="pb-3">
@@ -154,14 +97,14 @@ export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) 
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {todayHours && (
+        {restaurant.hours && (
           <div className="flex items-center justify-between p-3 bg-white/50 rounded-lg">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">Today's Hours:</span>
+              <span className="font-medium">Hours:</span>
             </div>
-            <span className="font-semibold text-primary">
-              {formatTime(todayHours.open)} - {formatTime(todayHours.close)}
+            <span className="font-semibold text-primary text-sm text-right max-w-[60%]">
+              {restaurant.hours}
             </span>
           </div>
         )}
@@ -180,14 +123,14 @@ export default function RestaurantStatus({ restaurant }: RestaurantStatusProps) 
           </div>
         )}
 
-        {currentStatus === 'closed' && todayHours && (
+        {currentStatus === 'closed' && restaurant.hours && (
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-start gap-2">
               <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
               <div>
-                <p className="font-medium text-blue-900">Opens at {formatTime(todayHours.open)}</p>
+                <p className="font-medium text-blue-900">Currently Closed</p>
                 <p className="text-sm text-blue-700">
-                  Plan your visit for later today!
+                  Check hours above for when this restaurant opens next
                 </p>
               </div>
             </div>

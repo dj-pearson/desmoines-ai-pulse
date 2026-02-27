@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { createLogger } from '@/lib/logger';
 import { supabase } from "@/integrations/supabase/client";
+import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 
 const log = createLogger('OpenNowRestaurants');
 import Header from "@/components/Header";
@@ -62,27 +63,10 @@ export default function OpenNowRestaurants() {
           log.error('fetchOpenRestaurants', 'Error fetching restaurants', { error });
           setRestaurants([]);
         } else {
-          // Filter restaurants likely open based on current time and opening field
-          const hour = new Date().getHours();
+          // Filter restaurants to only show those with hours data that are currently open
           const filtered = (data || []).filter(restaurant => {
-            const opening = restaurant.opening?.toLowerCase() || '';
-            // If no hours data, use reasonable defaults
-            if (!opening) {
-              // Most restaurants: 11 AM - 10 PM
-              return hour >= 11 && hour < 22;
-            }
-            // Check for "24 hour" or "always open"
-            if (opening.includes('24 hour') || opening.includes('always')) return true;
-            // Check for "closed" indicators
-            if (opening.includes('closed') || opening.includes('temporarily')) return false;
-            // If hours contain current day name, check if it says closed for that day
-            const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-            const today = days[new Date().getDay()];
-            if (opening.includes(today) && opening.includes('closed')) return false;
-            // Default: use common restaurant hours based on time of day
-            if (hour < 6) return false; // Before 6 AM
-            if (hour < 11) return opening.includes('breakfast') || opening.includes('brunch') || hour >= 7;
-            return hour < 22; // Until 10 PM
+            const result = getRestaurantOpenStatus(restaurant.opening);
+            return result.isOpen;
           });
           setRestaurants(filtered);
         }

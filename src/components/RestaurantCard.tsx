@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 
 interface RestaurantCardProps {
   restaurant: {
@@ -15,6 +16,7 @@ interface RestaurantCardProps {
     location?: string;
     city?: string;
     status?: string;
+    opening?: string;
     is_featured?: boolean;
     image_url?: string;
     phone?: string;
@@ -84,6 +86,7 @@ export default function RestaurantCard({ restaurant, variant = "default" }: Rest
   const gradient = getGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
   const isFeatured = variant === "featured" || restaurant.is_featured;
+  const openStatus = useMemo(() => getRestaurantOpenStatus(restaurant.opening), [restaurant.opening]);
 
   return (
     <Link
@@ -127,13 +130,13 @@ export default function RestaurantCard({ restaurant, variant = "default" }: Rest
                 Featured
               </Badge>
             )}
-            {restaurant.status === "open" && (
-              <Badge className="bg-emerald-500 text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5">
+            {openStatus.isOpen && (
+              <Badge className={`${openStatus.closingSoon ? 'bg-amber-500' : 'bg-emerald-500'} text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
                 <span className="relative flex h-2 w-2 mr-1.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
                 </span>
-                Open Now
+                {openStatus.closingSoon ? 'Closing Soon' : 'Open Now'}
               </Badge>
             )}
           </div>
