@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from "./ui/alert";
 import { CalendarIcon, X, Plus, Info } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useSubmitEvent } from "@/hooks/useUserSubmittedEvents";
+import { useSubmitEvent, useUpdateEvent, type UserSubmittedEvent } from "@/hooks/useUserSubmittedEvents";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
 
@@ -53,15 +53,36 @@ const POPULAR_TAGS = [
 
 interface EventSubmissionFormProps {
   onSuccess?: () => void;
+  editEvent?: UserSubmittedEvent;
 }
 
-export default function EventSubmissionForm({ onSuccess }: EventSubmissionFormProps) {
-  const [selectedDate, setSelectedDate] = useState<Date>();
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmissionFormProps) {
+  const isEditing = !!editEvent;
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(
+    editEvent?.date ? new Date(editEvent.date) : undefined
+  );
+  const [selectedTags, setSelectedTags] = useState<string[]>(editEvent?.tags || []);
   const [customTag, setCustomTag] = useState("");
-  
-  const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm();
+
+  const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm({
+    defaultValues: editEvent ? {
+      title: editEvent.title,
+      description: editEvent.description || '',
+      category: editEvent.category || '',
+      start_time: editEvent.start_time || '',
+      end_time: editEvent.end_time || '',
+      venue: editEvent.venue || '',
+      location: editEvent.location || '',
+      address: editEvent.address || '',
+      price: editEvent.price || '',
+      website_url: editEvent.website_url || '',
+      contact_email: editEvent.contact_email || '',
+      contact_phone: editEvent.contact_phone || '',
+      image_url: editEvent.image_url || '',
+    } : undefined,
+  });
   const submitEvent = useSubmitEvent();
+  const updateEvent = useUpdateEvent();
 
   const addTag = (tag: string) => {
     if (tag && !selectedTags.includes(tag)) {
@@ -88,15 +109,26 @@ export default function EventSubmissionForm({ onSuccess }: EventSubmissionFormPr
         tags: selectedTags,
       };
 
-      await submitEvent.mutateAsync(eventData);
-      
+      if (isEditing && editEvent) {
+        // Update existing event and reset to pending review
+        await updateEvent.mutateAsync({
+          id: editEvent.id,
+          ...eventData,
+          status: 'pending',
+          admin_notes: undefined,
+        });
+        toast.success("Event updated and resubmitted for review!");
+      } else {
+        await submitEvent.mutateAsync(eventData);
+        toast.success("Event submitted successfully!");
+      }
+
       // Reset form
       reset();
       setSelectedDate(undefined);
       setSelectedTags([]);
       setCustomTag("");
-      
-      toast.success("Event submitted successfully!");
+
       onSuccess?.();
     } catch (error) {
       log.error('submit', 'Error submitting event', { data: error });
@@ -109,7 +141,9 @@ export default function EventSubmissionForm({ onSuccess }: EventSubmissionFormPr
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          All events are reviewed within 48 hours. We'll email you when your event is approved or if we need more information.
+          {isEditing
+            ? "Update your event details below. Once saved, it will be resubmitted for review."
+            : "All events are reviewed within 48 hours. We'll email you when your event is approved or if we need more information."}
         </AlertDescription>
       </Alert>
 
@@ -142,7 +176,7 @@ export default function EventSubmissionForm({ onSuccess }: EventSubmissionFormPr
 
             <div>
               <Label htmlFor="category">Category *</Label>
-              <Select onValueChange={(value) => setValue("category", value)}>
+              <Select defaultValue={editEvent?.category || undefined} onValueChange={(value) => setValue("category", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a category" />
                 </SelectTrigger>
@@ -367,12 +401,16 @@ export default function EventSubmissionForm({ onSuccess }: EventSubmissionFormPr
 
       {/* Submit Button */}
       <div className="flex justify-end">
-        <Button 
-          type="submit" 
-          disabled={submitEvent.isPending}
+        <Button
+          type="submit"
+          disabled={submitEvent.isPending || updateEvent.isPending}
           className="w-full sm:w-auto"
         >
-          {submitEvent.isPending ? "Submitting..." : "Submit Event for Review"}
+          {(submitEvent.isPending || updateEvent.isPending)
+            ? "Submitting..."
+            : isEditing
+              ? "Save Changes & Resubmit"
+              : "Submit Event for Review"}
         </Button>
       </div>
     </form>

@@ -25,26 +25,34 @@ import {
   Sparkles,
   Heart,
   Bell,
-  Zap
+  Zap,
+  Upload,
+  BarChart3,
+  DollarSign
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
+import { useUserSubmittedEvents, useDeleteEvent } from "@/hooks/useUserSubmittedEvents";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useFavorites } from "@/hooks/useFavorites";
+import { useCampaigns } from "@/hooks/useCampaigns";
 import { PremiumBadge } from "@/components/PremiumBadge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import EventSubmissionForm from "@/components/EventSubmissionForm";
 import { EmailPreferencesCard } from "@/components/EmailPreferencesCard";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
 export default function UserDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth(); // No longer need to check authLoading - ProtectedRoute handles it
   useDocumentTitle("My Dashboard");
   const { data: events, isLoading, refetch } = useUserSubmittedEvents();
+  const deleteEvent = useDeleteEvent();
+  const { campaigns, isLoading: campaignsLoading } = useCampaigns();
   const { tier, isPremium, isExpiringSoon, subscription } = useSubscription();
   const { favoritedEvents, remainingFavorites, favoritesLimit } = useFavorites();
 
@@ -84,8 +92,19 @@ export default function UserDashboard() {
 
   const handleEventSubmitted = () => {
     refetch();
+    setEditingEventId(null);
     setActiveTab("events");
     toast.success("Event submitted successfully! We'll review it within 48 hours.");
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    try {
+      await deleteEvent.mutateAsync(id);
+      toast.success("Event deleted successfully");
+      refetch();
+    } catch {
+      toast.error("Failed to delete event");
+    }
   };
 
   // No loading check needed - ProtectedRoute handles authentication
@@ -343,7 +362,13 @@ export default function UserDashboard() {
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <h3 className="font-semibold text-lg">{event.title}</h3>
-                            <p className="text-muted-foreground mb-2">{event.venue}</p>
+                            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground mb-2">
+                              {event.venue && <span>{event.venue}</span>}
+                              {event.category && (
+                                <Badge variant="secondary" className="text-xs">{event.category}</Badge>
+                              )}
+                              {event.price && <span>{event.price}</span>}
+                            </div>
                             <p className="text-sm text-muted-foreground mb-3">
                               Submitted {format(new Date(event.submitted_at), "MMM d, yyyy 'at' h:mm a")}
                             </p>
@@ -356,19 +381,55 @@ export default function UserDashboard() {
                               </Alert>
                             )}
                           </div>
-                          <div className="ml-4 text-right">
-                            <Badge 
-                              variant="outline" 
+                          <div className="ml-4 flex flex-col items-end gap-2">
+                            <Badge
+                              variant="outline"
                               className={getStatusColor(event.status)}
                             >
                               {getStatusIcon(event.status)}
                               <span className="ml-1 capitalize">{event.status.replace("_", " ")}</span>
                             </Badge>
                             {event.date && (
-                              <p className="text-sm text-muted-foreground mt-2">
+                              <p className="text-sm text-muted-foreground">
                                 {format(new Date(event.date), "MMM d, yyyy")}
                               </p>
                             )}
+                            <div className="flex gap-1 mt-1">
+                              {(event.status === "needs_revision" || event.status === "pending") && (
+                                <Dialog open={editingEventId === event.id} onOpenChange={(open) => setEditingEventId(open ? event.id : null)}>
+                                  <DialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                      <Edit className="h-3 w-3 mr-1" />
+                                      Edit
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                                    <DialogHeader>
+                                      <DialogTitle>Edit Event: {event.title}</DialogTitle>
+                                    </DialogHeader>
+                                    <EventSubmissionForm
+                                      editEvent={event}
+                                      onSuccess={() => {
+                                        setEditingEventId(null);
+                                        refetch();
+                                        toast.success("Event updated and resubmitted for review!");
+                                      }}
+                                    />
+                                  </DialogContent>
+                                </Dialog>
+                              )}
+                              {(event.status === "pending" || event.status === "needs_revision" || event.status === "rejected") && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => handleDeleteEvent(event.id)}
+                                  disabled={deleteEvent.isPending}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -393,27 +454,120 @@ export default function UserDashboard() {
 
           {/* Advertise Tab */}
           <TabsContent value="advertise">
-            <Card>
-              <CardHeader>
-                <CardTitle>Advertise Your Business</CardTitle>
-                <CardDescription>
-                  Reach thousands of local people with targeted advertising
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <Alert>
-                    <Megaphone className="h-4 w-4" />
-                    <AlertDescription>
-                      Get your business in front of Des Moines' most engaged community members.
-                    </AlertDescription>
-                  </Alert>
-                  <Button onClick={() => navigate("/advertise")}>
-                    Learn More About Advertising
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              {/* Create New Campaign CTA */}
+              <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-semibold mb-1">Advertise Your Business</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Reach 50K+ local visitors with banner ads, featured spots, and more. Starting at $5/day.
+                      </p>
+                    </div>
+                    <Button onClick={() => navigate("/advertise")} className="shrink-0">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Campaign
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* My Campaigns */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>My Campaigns</CardTitle>
+                      <CardDescription>
+                        Manage your advertising campaigns
+                      </CardDescription>
+                    </div>
+                    {campaigns.length > 0 && (
+                      <Button variant="outline" size="sm" onClick={() => navigate("/campaigns")}>
+                        View All
+                      </Button>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {campaignsLoading ? (
+                    <div className="text-center py-6">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                      <p className="text-sm text-muted-foreground">Loading campaigns...</p>
+                    </div>
+                  ) : campaigns.length > 0 ? (
+                    <div className="space-y-4">
+                      {campaigns.slice(0, 5).map((campaign) => (
+                        <div key={campaign.id} className="border rounded-lg p-4">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-semibold">{campaign.name}</h4>
+                                <Badge variant={
+                                  campaign.status === 'active' ? 'default' :
+                                  campaign.status === 'pending_payment' ? 'destructive' :
+                                  'secondary'
+                                } className="text-xs">
+                                  {campaign.status.replace(/_/g, ' ')}
+                                </Badge>
+                              </div>
+                              <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                                {campaign.start_date && campaign.end_date && (
+                                  <span className="flex items-center gap-1">
+                                    <Calendar className="h-3 w-3" />
+                                    {format(new Date(campaign.start_date), "MMM d")} - {format(new Date(campaign.end_date), "MMM d")}
+                                  </span>
+                                )}
+                                {campaign.total_cost && (
+                                  <span className="flex items-center gap-1">
+                                    <DollarSign className="h-3 w-3" />
+                                    ${campaign.total_cost}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1">
+                                  <Eye className="h-3 w-3" />
+                                  {campaign.campaign_placements?.length || 0} placements
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex gap-1 ml-4">
+                              {campaign.status === 'pending_creative' && (
+                                <Button size="sm" onClick={() => navigate(`/campaigns/${campaign.id}/creatives`)}>
+                                  <Upload className="h-3 w-3 mr-1" />
+                                  Upload
+                                </Button>
+                              )}
+                              {(campaign.status === 'active' || campaign.status === 'completed') && (
+                                <Button variant="outline" size="sm" onClick={() => navigate(`/campaigns/${campaign.id}/analytics`)}>
+                                  <BarChart3 className="h-3 w-3 mr-1" />
+                                  Stats
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" onClick={() => navigate(`/campaigns/${campaign.id}`)}>
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <Megaphone className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                      <h3 className="text-lg font-semibold mb-2">No campaigns yet</h3>
+                      <p className="text-muted-foreground mb-4">
+                        Create your first campaign to reach thousands of Des Moines locals.
+                      </p>
+                      <Button onClick={() => navigate("/advertise")}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Your First Campaign
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
           {/* Settings Tab */}

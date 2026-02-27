@@ -138,19 +138,21 @@ export function useAllSubmittedEvents() {
 }
 
 // For admin use - approve/reject events
+// When approved, also publishes the event to the main events table
 export function useReviewEvent() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async ({ 
-      id, 
-      status, 
-      admin_notes 
-    }: { 
-      id: string; 
-      status: 'approved' | 'rejected' | 'needs_revision'; 
+    mutationFn: async ({
+      id,
+      status,
+      admin_notes
+    }: {
+      id: string;
+      status: 'approved' | 'rejected' | 'needs_revision';
       admin_notes?: string;
     }) => {
+      // Update submission status
       const { data, error } = await (supabase as any)
         .from('user_submitted_events')
         .update({
@@ -161,13 +163,44 @@ export function useReviewEvent() {
         .eq('id', id)
         .select()
         .single();
-      
+
       if (error) throw error;
+
+      // If approved, publish to the main events table
+      if (status === 'approved' && data) {
+        const submittedEvent = data as UserSubmittedEvent;
+        const { error: publishError } = await supabase
+          .from('events')
+          .insert([{
+            title: submittedEvent.title,
+            description: submittedEvent.description || null,
+            date: submittedEvent.date || null,
+            start_time: submittedEvent.start_time || null,
+            end_time: submittedEvent.end_time || null,
+            venue: submittedEvent.venue || null,
+            location: submittedEvent.location || null,
+            address: submittedEvent.address || null,
+            price: submittedEvent.price || null,
+            category: submittedEvent.category || 'General',
+            source_url: submittedEvent.website_url || null,
+            image_url: submittedEvent.image_url || null,
+            city: submittedEvent.location || 'Des Moines',
+            source: 'user_submitted',
+          }]);
+
+        if (publishError) {
+          // Don't throw - the approval still succeeded
+          // eslint-disable-next-line no-console
+          console.error('Failed to publish to events table:', publishError);
+        }
+      }
+
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['all-submitted-events'] });
       queryClient.invalidateQueries({ queryKey: ['user-submitted-events'] });
+      queryClient.invalidateQueries({ queryKey: ['events'] });
     },
   });
 }

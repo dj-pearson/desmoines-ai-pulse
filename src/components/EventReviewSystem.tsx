@@ -375,7 +375,7 @@ export default function EventReviewSystem() {
                                   </div>
 
                                   {/* Admin Review Section */}
-                                  {event.status === 'pending' && (
+                                  {(event.status === 'pending' || event.status === 'needs_revision') && (
                                     <div className="border-t pt-4">
                                       <Label htmlFor="admin-notes" className="font-semibold">
                                         Admin Notes (optional)
