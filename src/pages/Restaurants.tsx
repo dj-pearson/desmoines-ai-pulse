@@ -1,5 +1,6 @@
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { AdBanner } from "@/components/AdBanner";
 import SEOHead from "@/components/SEOHead";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
 import {
@@ -703,6 +704,11 @@ export default function Restaurants() {
               </section>
             )}
 
+            {/* Featured Spot Ad */}
+            <div className="my-6">
+              <AdBanner placement="featured_spot" />
+            </div>
+
             {/* Main Restaurant Grid */}
             <section aria-labelledby="all-restaurants-heading">
               <div className="flex items-center justify-between mb-4">
@@ -779,6 +785,11 @@ export default function Restaurants() {
                 </div>
               )}
             </section>
+
+            {/* Below-Fold Ad */}
+            <div className="my-8">
+              <AdBanner placement="below_fold" />
+            </div>
 
             {/* SEO Content Section */}
             <section className="max-w-4xl mx-auto space-y-12 mt-16" aria-labelledby="guide-heading">

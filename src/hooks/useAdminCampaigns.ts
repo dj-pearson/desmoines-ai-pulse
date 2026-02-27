@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "./use-toast";
 import { Campaign, CampaignCreative } from "./useCampaigns";
 import { createLogger } from '@/lib/logger';
+import { notifyAdmins, notifyAdvertiser } from "./useCampaignNotifications";
 
 const log = createLogger('useAdminCampaigns');
 
@@ -139,6 +140,18 @@ export function useAdminCampaigns() {
 
       if (error) throw error;
 
+      // Fetch the campaign to get owner info and dates
+      const { data: campaign } = await supabase
+        .from("campaigns")
+        .select("user_id, name, start_date, status")
+        .eq("id", campaignId)
+        .single();
+
+      // Notify the advertiser their creative was approved
+      if (campaign) {
+        notifyAdvertiser(campaignId, campaign.name, campaign.user_id, 'creative_approved');
+      }
+
       // Check if all creatives for this campaign are approved
       const { data: allCreatives } = await supabase
         .from("campaign_creatives")
@@ -147,18 +160,36 @@ export function useAdminCampaigns() {
 
       const allApproved = allCreatives?.every((c) => c.is_approved);
 
-      // If all creatives are approved, update campaign status to active
-      if (allApproved) {
-        await supabase
-          .from("campaigns")
-          .update({ status: "active" })
-          .eq("id", campaignId)
-          .eq("status", "pending_creative");
+      // If all creatives are approved, determine the next status
+      if (allApproved && campaign) {
+        const startDate = campaign.start_date ? new Date(campaign.start_date) : null;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        if (startDate && startDate <= today) {
+          // Start date is today or in the past → activate immediately
+          await supabase
+            .from("campaigns")
+            .update({ status: "active" })
+            .eq("id", campaignId)
+            .in("status", ["pending_creative", "pending_review"]);
+
+          notifyAdvertiser(campaignId, campaign.name, campaign.user_id, 'campaign_activated');
+        } else {
+          // Start date is in the future → mark as pending_review (approved, waiting for start date)
+          await supabase
+            .from("campaigns")
+            .update({ status: "pending_review" })
+            .eq("id", campaignId)
+            .in("status", ["pending_creative", "pending_review"]);
+        }
       }
 
       toast({
         title: "Creative approved",
-        description: "The creative has been approved and will go live on the scheduled date.",
+        description: allApproved
+          ? "All creatives approved. Campaign will go live on the scheduled start date."
+          : "Creative approved. Remaining creatives still need review.",
       });
 
       await fetchCampaigns();
@@ -181,6 +212,13 @@ export function useAdminCampaigns() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
+      // Get the creative's campaign info for notification
+      const { data: creative } = await supabase
+        .from("campaign_creatives")
+        .select("campaign_id")
+        .eq("id", creativeId)
+        .single();
+
       const { error } = await supabase
         .from("campaign_creatives")
         .update({
@@ -193,9 +231,28 @@ export function useAdminCampaigns() {
 
       if (error) throw error;
 
+      // Notify the advertiser about the rejection
+      if (creative?.campaign_id) {
+        const { data: campaign } = await supabase
+          .from("campaigns")
+          .select("user_id, name")
+          .eq("id", creative.campaign_id)
+          .single();
+
+        if (campaign) {
+          notifyAdvertiser(
+            creative.campaign_id,
+            campaign.name,
+            campaign.user_id,
+            'creative_rejected',
+            { reason }
+          );
+        }
+      }
+
       toast({
         title: "Creative rejected",
-        description: "The advertiser will be notified of the rejection and can resubmit.",
+        description: "The advertiser has been notified of the rejection and can resubmit.",
       });
 
       await fetchCampaigns();
@@ -316,43 +373,46 @@ export function useAdminCampaigns() {
     policyViolation?: string
   ): Promise<boolean> => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      // Call the process-stripe-refund edge function which handles
+      // Stripe refund creation, DB record, and campaign status update
+      const { data, error: refundError } = await supabase.functions.invoke(
+        "process-stripe-refund",
+        {
+          body: {
+            campaignId,
+            amount,
+            reason,
+            policyViolation: policyViolation || null,
+          },
+        }
+      );
 
-      // Get campaign payment info
+      if (refundError) throw refundError;
+
+      if (!data?.success) {
+        throw new Error(data?.error || "Refund processing failed");
+      }
+
+      // Notify the advertiser about the refund
       const { data: campaign } = await supabase
         .from("campaigns")
-        .select("stripe_payment_intent_id, total_cost")
+        .select("user_id, name")
         .eq("id", campaignId)
         .single();
 
-      if (!campaign) throw new Error("Campaign not found");
-      if (!campaign.stripe_payment_intent_id) {
-        throw new Error("No payment found for this campaign");
+      if (campaign) {
+        notifyAdvertiser(
+          campaignId,
+          campaign.name,
+          campaign.user_id,
+          'campaign_refunded',
+          { amount, reason }
+        );
       }
 
-      // Create refund record
-      const { error } = await supabase
-        .from("refunds")
-        .insert({
-          campaign_id: campaignId,
-          admin_user_id: user?.id,
-          amount,
-          reason,
-          policy_violation: policyViolation || null,
-          status: "pending",
-        });
-
-      if (error) throw error;
-
-      // Update campaign status
-      await supabase
-        .from("campaigns")
-        .update({ status: "refunded" })
-        .eq("id", campaignId);
-
       toast({
-        title: "Refund initiated",
-        description: "The refund has been initiated and will be processed through Stripe.",
+        title: "Refund processed",
+        description: `Refund of $${amount.toFixed(2)} has been processed through Stripe. ID: ${data.refundId}`,
       });
 
       await fetchCampaigns();

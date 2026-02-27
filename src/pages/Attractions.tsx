@@ -1,6 +1,7 @@
 import React, { useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { AdBanner } from "@/components/AdBanner";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
@@ -517,6 +518,13 @@ export default function Attractions() {
         )}
       </div>
 
+      {/* Featured Spot Ad */}
+      <div className="py-6 bg-muted/10">
+        <div className="container mx-auto px-4">
+          <AdBanner placement="featured_spot" />
+        </div>
+      </div>
+
       {/* Browse Attractions By Type - Internal Linking for SEO */}
       {attractionTypes.length > 0 && (
         <section className="py-12 bg-white border-t">
@@ -553,6 +561,13 @@ export default function Attractions() {
           </div>
         </section>
       )}
+
+      {/* Below-Fold Ad */}
+      <div className="py-6 bg-muted/20">
+        <div className="container mx-auto px-4">
+          <AdBanner placement="below_fold" />
+        </div>
+      </div>
 
       {/* SEO Content Section - Things to Do */}
       <section className="py-12 bg-gray-50 border-t">

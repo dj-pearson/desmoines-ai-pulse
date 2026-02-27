@@ -8,13 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Filter, Eye, DollarSign, Calendar, User } from "lucide-react";
+import { Search, Filter, Eye, DollarSign, Calendar, User, Settings } from "lucide-react";
+import { AdRateManager } from "@/components/admin/AdRateManager";
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500",
   pending_payment: "bg-yellow-500",
   pending_creative: "bg-blue-500",
+  pending_review: "bg-indigo-500",
   active: "bg-green-500",
   completed: "bg-gray-400",
   cancelled: "bg-red-500",
@@ -25,7 +28,8 @@ const statusColors: Record<string, string> = {
 const statusLabels: Record<string, string> = {
   draft: "Draft",
   pending_payment: "Pending Payment",
-  pending_creative: "Pending Creative",
+  pending_creative: "Awaiting Creatives",
+  pending_review: "Under Review",
   active: "Active",
   completed: "Completed",
   cancelled: "Cancelled",
@@ -82,7 +86,10 @@ export default function AdminCampaigns() {
   const stats = {
     total: campaigns.length,
     active: campaigns.filter((c) => c.status === 'active').length,
-    pending: campaigns.filter((c) => c.status === 'pending_creative').length,
+    pending: campaigns.filter((c) => ['pending_creative', 'pending_review'].includes(c.status)).length,
+    needsReview: campaigns.filter((c) =>
+      c.campaign_creatives?.some((cr) => !cr.is_approved) && ['pending_creative', 'pending_review'].includes(c.status)
+    ).length,
     revenue: campaigns
       .filter((c) => c.status === 'active' || c.status === 'completed')
       .reduce((sum, c) => sum + (c.total_cost || 0), 0),
@@ -112,6 +119,21 @@ export default function AdminCampaigns() {
         </p>
       </div>
 
+      <Tabs defaultValue="campaigns" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="campaigns">
+            Campaigns
+            {stats.needsReview > 0 && (
+              <Badge className="ml-2 bg-red-500 text-white text-xs px-1.5 py-0">{stats.needsReview}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="rates">
+            <Settings className="h-4 w-4 mr-1" />
+            Rate Management
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="campaigns">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
@@ -195,7 +217,8 @@ export default function AdminCampaigns() {
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="draft">Draft</SelectItem>
                 <SelectItem value="pending_payment">Pending Payment</SelectItem>
-                <SelectItem value="pending_creative">Pending Creative</SelectItem>
+                <SelectItem value="pending_creative">Awaiting Creatives</SelectItem>
+                <SelectItem value="pending_review">Under Review</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="completed">Completed</SelectItem>
                 <SelectItem value="cancelled">Cancelled</SelectItem>
@@ -320,6 +343,12 @@ export default function AdminCampaigns() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="rates">
+          <AdRateManager />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

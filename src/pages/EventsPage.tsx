@@ -54,6 +54,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Header from "@/components/Header";
+import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
@@ -867,6 +868,11 @@ export default function EventsPage() {
             />
           )}
 
+          {/* Top Banner Ad */}
+          <div className="mb-5">
+            <AdBanner placement="top_banner" />
+          </div>
+
           {/* Results Header */}
           <div className="flex items-center justify-between mb-5">
             <div>
@@ -952,6 +958,13 @@ export default function EventsPage() {
               compact={isMobile}
             />
           )}
+        </div>
+
+        {/* Below-Fold Ad */}
+        <div className="py-6 bg-muted/10">
+          <div className="container mx-auto px-4">
+            <AdBanner placement="below_fold" />
+          </div>
         </div>
 
         {/* SEO Content Section */}

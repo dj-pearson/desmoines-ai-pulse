@@ -45,47 +45,75 @@ export function useCampaignAnalytics(campaignId: string) {
     try {
       setIsLoading(true);
 
-      // Build query for ad impressions
-      let query = supabase
+      // Fetch impressions
+      let impressionQuery = supabase
         .from("ad_impressions")
-        .select(`
-          *,
-          campaign_creatives (
-            id,
-            title,
-            image_url,
-            campaign_placements (
-              placement_type
-            )
-          )
-        `)
+        .select("id, campaign_id, creative_id, placement_type, session_id, date, timestamp")
         .eq("campaign_id", campaignId);
 
       if (startDate) {
-        query = query.gte("viewed_at", startDate);
+        impressionQuery = impressionQuery.gte("date", startDate);
       }
       if (endDate) {
-        query = query.lte("viewed_at", endDate);
+        impressionQuery = impressionQuery.lte("date", endDate);
       }
 
-      const { data: impressions, error: impressionsError } = await query;
+      // Fetch clicks separately from the ad_clicks table
+      let clickQuery = supabase
+        .from("ad_clicks")
+        .select("id, campaign_id, creative_id, date, timestamp")
+        .eq("campaign_id", campaignId);
 
-      if (impressionsError) throw impressionsError;
+      if (startDate) {
+        clickQuery = clickQuery.gte("date", startDate);
+      }
+      if (endDate) {
+        clickQuery = clickQuery.lte("date", endDate);
+      }
 
-      // Calculate summary metrics
-      const totalImpressions = impressions?.length || 0;
-      const totalClicks = impressions?.filter((i) => i.clicked).length || 0;
-      const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-      const uniqueViewers = new Set(impressions?.map((i) => i.viewer_ip)).size;
-
-      // Get campaign cost
-      const { data: campaign } = await supabase
+      // Fetch campaign cost and creatives info
+      const campaignQuery = supabase
         .from("campaigns")
         .select("total_cost")
         .eq("id", campaignId)
         .single();
 
-      const totalCost = campaign?.total_cost || 0;
+      const creativesQuery = supabase
+        .from("campaign_creatives")
+        .select("id, title, image_url, placement_type")
+        .eq("campaign_id", campaignId);
+
+      // Execute all queries in parallel
+      const [impressionResult, clickResult, campaignResult, creativesResult] = await Promise.all([
+        impressionQuery,
+        clickQuery,
+        campaignQuery,
+        creativesQuery,
+      ]);
+
+      if (impressionResult.error) throw impressionResult.error;
+      if (clickResult.error) throw clickResult.error;
+
+      const impressions = impressionResult.data || [];
+      const clicks = clickResult.data || [];
+      const totalCost = campaignResult.data?.total_cost || 0;
+      const creatives = creativesResult.data || [];
+
+      // Build creative lookup
+      const creativeLookup: Record<string, { title: string; imageUrl: string; placementType: string }> = {};
+      creatives.forEach((c) => {
+        creativeLookup[c.id] = {
+          title: c.title || 'Untitled',
+          imageUrl: c.image_url || '',
+          placementType: c.placement_type || 'unknown',
+        };
+      });
+
+      // Calculate summary
+      const totalImpressions = impressions.length;
+      const totalClicks = clicks.length;
+      const avgCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+      const uniqueViewers = new Set(impressions.map((i) => i.session_id)).size;
 
       setSummary({
         totalImpressions,
@@ -95,70 +123,73 @@ export function useCampaignAnalytics(campaignId: string) {
         totalCost,
       });
 
-      // Calculate daily data
-      const dailyMap: Record<string, { impressions: number; clicks: number }> = {};
+      // Build daily data by combining impressions and clicks
+      const dailyImpressions: Record<string, number> = {};
+      const dailyClicks: Record<string, number> = {};
 
-      impressions?.forEach((impression) => {
-        const date = new Date(impression.viewed_at).toISOString().split("T")[0];
-        if (!dailyMap[date]) {
-          dailyMap[date] = { impressions: 0, clicks: 0 };
-        }
-        dailyMap[date].impressions++;
-        if (impression.clicked) {
-          dailyMap[date].clicks++;
-        }
+      impressions.forEach((imp) => {
+        const date = imp.date || (imp.timestamp ? new Date(imp.timestamp).toISOString().split("T")[0] : 'unknown');
+        dailyImpressions[date] = (dailyImpressions[date] || 0) + 1;
       });
 
-      const dailyAnalytics: DailyAnalytics[] = Object.entries(dailyMap).map(([date, data]) => ({
-        date,
-        impressions: data.impressions,
-        clicks: data.clicks,
-        ctr: data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0,
-        cost: totalCost / Object.keys(dailyMap).length, // Distribute cost evenly
-      }));
+      clicks.forEach((click) => {
+        const date = click.date || (click.timestamp ? new Date(click.timestamp).toISOString().split("T")[0] : 'unknown');
+        dailyClicks[date] = (dailyClicks[date] || 0) + 1;
+      });
+
+      // Merge dates from both impressions and clicks
+      const allDates = new Set([
+        ...Object.keys(dailyImpressions),
+        ...Object.keys(dailyClicks),
+      ]);
+      const numDays = allDates.size || 1;
+
+      const dailyAnalytics: DailyAnalytics[] = Array.from(allDates).map((date) => {
+        const imps = dailyImpressions[date] || 0;
+        const clks = dailyClicks[date] || 0;
+        return {
+          date,
+          impressions: imps,
+          clicks: clks,
+          ctr: imps > 0 ? (clks / imps) * 100 : 0,
+          cost: totalCost / numDays,
+        };
+      });
 
       dailyAnalytics.sort((a, b) => a.date.localeCompare(b.date));
       setDailyData(dailyAnalytics);
 
       // Calculate creative performance
-      const creativeMap: Record<string, {
-        title: string;
-        imageUrl: string;
-        placementType: string;
-        impressions: number;
-        clicks: number;
-      }> = {};
+      const creativeImpressions: Record<string, number> = {};
+      const creativeClicks: Record<string, number> = {};
 
-      impressions?.forEach((impression) => {
-        const creative = impression.campaign_creatives;
-        if (creative) {
-          const creativeId = creative.id;
-          if (!creativeMap[creativeId]) {
-            creativeMap[creativeId] = {
-              title: creative.title,
-              imageUrl: creative.image_url || "",
-              placementType: creative.campaign_placements?.[0]?.placement_type || "unknown",
-              impressions: 0,
-              clicks: 0,
-            };
-          }
-          creativeMap[creativeId].impressions++;
-          if (impression.clicked) {
-            creativeMap[creativeId].clicks++;
-          }
+      impressions.forEach((imp) => {
+        if (imp.creative_id) {
+          creativeImpressions[imp.creative_id] = (creativeImpressions[imp.creative_id] || 0) + 1;
         }
       });
 
-      const creativePerf: CreativePerformance[] = Object.entries(creativeMap).map(([creativeId, data]) => ({
-        creativeId,
-        title: data.title,
-        imageUrl: data.imageUrl,
-        placementType: data.placementType,
-        impressions: data.impressions,
-        clicks: data.clicks,
-        ctr: data.impressions > 0 ? (data.clicks / data.impressions) * 100 : 0,
-        cost: totalCost * (data.impressions / totalImpressions), // Proportional cost
-      }));
+      clicks.forEach((click) => {
+        if (click.creative_id) {
+          creativeClicks[click.creative_id] = (creativeClicks[click.creative_id] || 0) + 1;
+        }
+      });
+
+      const creativePerf: CreativePerformance[] = Object.keys(creativeLookup).map((creativeId) => {
+        const imps = creativeImpressions[creativeId] || 0;
+        const clks = creativeClicks[creativeId] || 0;
+        const info = creativeLookup[creativeId];
+        return {
+          creativeId,
+          title: info.title,
+          imageUrl: info.imageUrl,
+          placementType: info.placementType,
+          impressions: imps,
+          clicks: clks,
+          ctr: imps > 0 ? (clks / imps) * 100 : 0,
+          cost: totalImpressions > 0 ? totalCost * (imps / totalImpressions) : 0,
+        };
+      });
 
       creativePerf.sort((a, b) => b.impressions - a.impressions);
       setCreativePerformance(creativePerf);
@@ -185,7 +216,6 @@ export function useCampaignAnalytics(campaignId: string) {
     }
 
     try {
-      // Create CSV content
       const headers = ["Date", "Impressions", "Clicks", "CTR (%)", "Cost ($)"];
       const rows = dailyData.map((day) => [
         day.date,
@@ -207,7 +237,6 @@ export function useCampaignAnalytics(campaignId: string) {
         `Total Cost,$${summary.totalCost.toFixed(2)}`,
       ].join("\n");
 
-      // Create and download file
       const blob = new Blob([csvContent], { type: "text/csv" });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");

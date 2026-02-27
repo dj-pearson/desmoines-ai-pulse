@@ -197,10 +197,11 @@ async function handleCampaignPayment(
   }
 
   // Log payment to payments table
+  const amountPaid = (session.amount_total || 0) / 100;
   const paymentData = {
     user_id: campaign?.user_id || null,
     stripe_payment_intent_id: session.payment_intent as string,
-    amount: (session.amount_total || 0) / 100,
+    amount: amountPaid,
     currency: session.currency || 'usd',
     payment_type: 'campaign' as const,
     status: 'succeeded' as const,
@@ -218,6 +219,39 @@ async function handleCampaignPayment(
 
   if (paymentError) {
     console.error("Failed to log campaign payment:", paymentError);
+  }
+
+  // Send payment confirmation notification to the advertiser
+  if (campaign?.user_id) {
+    await supabase.from("campaign_notifications").insert({
+      campaign_id: campaignId,
+      recipient_user_id: campaign.user_id,
+      notification_type: "payment_received",
+      title: `Payment Confirmed: ${campaign.name || 'Campaign'}`,
+      message: `Payment of $${amountPaid.toFixed(2)} has been received for your campaign "${campaign.name}". You can now upload your ad creatives.`,
+      is_read: false,
+      metadata: { amount: amountPaid },
+    });
+  }
+
+  // Notify admins about the new paid campaign
+  const { data: admins } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("role", "admin");
+
+  if (admins && admins.length > 0) {
+    await supabase.from("campaign_notifications").insert(
+      admins.map((admin: { id: string }) => ({
+        campaign_id: campaignId,
+        recipient_user_id: admin.id,
+        notification_type: "payment_received",
+        title: `New Payment: ${campaign?.name || 'Campaign'}`,
+        message: `Payment of $${amountPaid.toFixed(2)} received for campaign "${campaign?.name}". Advertiser can now upload creatives.`,
+        is_read: false,
+        metadata: { amount: amountPaid },
+      }))
+    );
   }
 
   console.log("Campaign payment processed successfully:", campaignId);
