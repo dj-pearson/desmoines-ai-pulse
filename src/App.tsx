@@ -115,6 +115,16 @@ const HotelDetails = lazyWithRetry(() => import("./pages/HotelDetails"));
 // AI-powered features
 const TripPlanner = lazyWithRetry(() => import("./pages/TripPlanner"));
 
+// Curated itineraries
+const ItinerariesPage = lazyWithRetry(() => import("./pages/Itineraries"));
+const ItineraryDetail = lazyWithRetry(() => import("./pages/ItineraryDetail"));
+
+// Deals & coupons
+const DealsPage = lazyWithRetry(() => import("./pages/Deals"));
+
+// Interactive discovery map
+const DiscoverMap = lazyWithRetry(() => import("./pages/DiscoverMap"));
+
 // Affiliate disclosure
 const AffiliateDisclosure = lazyWithRetry(() => import("./pages/AffiliateDisclosure"));
 
@@ -314,6 +324,13 @@ const App = () => (
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
             {/* AI-powered features */}
             <Route path="/trip-planner" element={<TripPlanner />} />
+            {/* Curated itineraries */}
+            <Route path="/itineraries" element={<ItinerariesPage />} />
+            <Route path="/itineraries/:slug" element={<ItineraryDetail />} />
+            {/* Deals & coupons */}
+            <Route path="/deals" element={<DealsPage />} />
+            {/* Discovery map */}
+            <Route path="/map" element={<DiscoverMap />} />
             {/* Event submission */}
             <Route path="/submit-event" element={<SubmitEvent />} />
             {/* Affiliate disclosure */}

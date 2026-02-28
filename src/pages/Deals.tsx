@@ -1,0 +1,93 @@
+import { useState } from 'react';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import { Helmet } from 'react-helmet-async';
+import { useDeals, useClaimDeal } from '@/hooks/useDeals';
+import { DealCard } from '@/components/DealCard';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Tag } from 'lucide-react';
+
+const CATEGORIES = [
+  { value: 'all', label: 'All Deals' },
+  { value: 'restaurant', label: 'Dining' },
+  { value: 'attraction', label: 'Attractions' },
+  { value: 'hotel', label: 'Hotels' },
+  { value: 'event', label: 'Events' },
+  { value: 'activity', label: 'Activities' },
+];
+
+export default function Deals() {
+  const [category, setCategory] = useState('all');
+  const { data: deals, isLoading } = useDeals(category);
+  const claimDeal = useClaimDeal();
+
+  return (
+    <>
+      <Helmet>
+        <title>Deals & Coupons — Des Moines Discounts | Des Moines Insider</title>
+        <meta name="description" content="Find the best deals, coupons, and special offers for Des Moines restaurants, attractions, hotels, and activities." />
+      </Helmet>
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          {/* Hero */}
+          <div className="text-center mb-10">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full mb-4">
+              <Tag className="h-5 w-5" />
+              <span className="font-semibold">Save in Des Moines</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-bold mb-3">
+              Deals & Special Offers
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Exclusive discounts on restaurants, attractions, hotels, and more in Des Moines.
+            </p>
+          </div>
+
+          {/* Category filter */}
+          <div className="flex items-center gap-2 flex-wrap justify-center mb-8">
+            {CATEGORIES.map((cat) => (
+              <Button
+                key={cat.value}
+                variant={category === cat.value ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setCategory(cat.value)}
+              >
+                {cat.label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Deals grid */}
+          {isLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-64 rounded-lg" />
+              ))}
+            </div>
+          ) : deals && deals.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {deals.map((deal) => (
+                <DealCard
+                  key={deal.id}
+                  deal={deal}
+                  onClaim={(id) => claimDeal.mutate(id)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <Tag className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">No deals available</h2>
+              <p className="text-muted-foreground">
+                Check back soon for new deals and special offers.
+              </p>
+            </div>
+          )}
+        </div>
+        <Footer />
+      </div>
+    </>
+  );
+}

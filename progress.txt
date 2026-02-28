@@ -78,11 +78,52 @@
 - ~~No production deployment runbook~~ (RESOLVED: US-030, docs/PRODUCTION_RUNBOOK.md already complete)
 - ~~No community voting system~~ (RESOLVED: US-041, Des Best voting at /best-of)
 - ~~No scene updates feed~~ (RESOLVED: US-058, What's New at /whats-new with auto-trigger)
-- TODOs: API documentation (US-029), remaining content hubs (US-042–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
+- ~~No API documentation~~ (RESOLVED: US-029, docs/API_REFERENCE.md with all 85 edge functions)
+- ~~No curated itineraries~~ (RESOLVED: US-042, /itineraries with 6 seeded itineraries + print + ICS export)
+- ~~No deals/coupons section~~ (RESOLVED: US-043, /deals with category filters + claim flow)
+- ~~No interactive discovery map~~ (RESOLVED: US-044, /map with toggleable event/restaurant/attraction layers)
+- TODOs: remaining content hubs (US-045–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
 
 ---
 
 ## Progress Log
+
+## 2026-02-28 — Ralph Loop 5: API Docs, Itineraries, Deals, Discovery Map
+
+- **US-029**: Created comprehensive API documentation:
+  - `docs/API_REFERENCE.md` documenting all 85 edge functions
+  - Grouped by domain: Content (8), Payment (8), Data Processing (21), AI/ML (9), Analytics (5), SEO (11), Notification (5), Admin (3), Utility (11), Integration (4)
+  - Each entry: HTTP methods, auth type, rate limit tier, request/response schemas
+  - Authentication methods table (JWT, API Key, None)
+  - Rate limit tiers table (Default 100/15min, Write 30/15min, AI/Strict 10/15min)
+  - Environment variables reference for all secrets
+- **US-042**: Built curated editorial itineraries system:
+  - Created `curated_itineraries` migration with RLS, theme/duration indexes
+  - Seeded 6 itineraries: Weekend Getaway, Date Day, Family Fun, Craft Beer Trail, Art Walk, Foodie Tour
+  - Built `/itineraries` listing page with itineraries grouped by theme (General, Romance, Family, Food & Drink, Arts & Culture)
+  - Built `/itineraries/:slug` detail page with step-by-step stop cards, insider tips, time suggestions
+  - Print-friendly CSS: `@media print` styles render checkbox checklist, hide header/footer
+  - ICS calendar export: "Add All to Calendar" generates .ics file with all stops as events
+  - Schema.org TouristTrip structured data on detail pages
+  - Created `useItineraries` + `useItinerary` hooks with TanStack Query
+- **US-043**: Built deals, coupons, and special offers section:
+  - Created `deals` migration with RLS policies (public read for active, auth insert, admin manage)
+  - Seeded 5 sample deals: 20% Off Brunch, BOGO Beer, $5 Off Admission, Free Dessert, Hotel Package
+  - Built `/deals` page with category filter buttons (All/Dining/Attractions/Hotels/Events/Activities)
+  - Created `DealCard` component with deal type badge, expiry countdown, claim/reveal flow, promo code copy
+  - Created `useDeals`, `useFeaturedDeals`, `useClaimDeal` hooks
+  - Expiry badges: "Last day!", "Expires in 3 days", "New this week"
+- **US-044**: Built interactive city discovery map:
+  - Created `/map` route with full-screen Leaflet map centered on Des Moines (41.5868, -93.625)
+  - Toggleable layers: Events, Restaurants, Attractions with entity counts
+  - Marker popups: entity name, category, description, rating, "View Details" link, "Get Directions" (Google Maps)
+  - "Near Me" geolocation button
+  - Lazy-loaded map component for performance (React.lazy + Suspense)
+  - Fetches up to 700 geocoded entities (200 events, 300 restaurants, 200 attractions)
+
+**Build verified**: `npm run build` passes (52.20s)
+
+**PRD Status**: 50/104 stories complete (48%)
 
 ## 2026-02-26 — Ralph Loop 4: Bundle Cleanup, Deployment Docs, Des Best Voting, What's New Feed
 
