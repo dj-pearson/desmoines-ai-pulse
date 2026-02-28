@@ -37,6 +37,8 @@ import {
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
+import { NearbyContent } from "@/components/NearbyContent";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -774,6 +776,13 @@ export default function RestaurantDetails() {
             </section>
           )}
 
+          {/* Cross-Content: Nearby Events */}
+          <NearbyContent
+            variant="events-near-restaurant"
+            city={restaurant.city || "Des Moines"}
+            excludeId={restaurant.id}
+          />
+
           {/* Browse More CTA */}
           <div className="text-center py-8">
             <Link to="/restaurants">
@@ -787,6 +796,36 @@ export default function RestaurantDetails() {
       </div>
       <Footer />
       <BackToTop />
+
+      <StickyMobileCTA
+        variant="restaurant"
+        primaryAction={
+          restaurant.phone
+            ? {
+                label: "Call Now",
+                href: `tel:${restaurant.phone}`,
+                icon: "phone",
+              }
+            : restaurant.website
+            ? {
+                label: "Website",
+                href: restaurant.website,
+                icon: "website",
+                isExternal: true,
+              }
+            : undefined
+        }
+        secondaryAction={
+          restaurant.location
+            ? {
+                label: "Directions",
+                href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + " " + restaurant.location)}`,
+                icon: "directions",
+                isExternal: true,
+              }
+            : undefined
+        }
+      />
     </>
   );
 }

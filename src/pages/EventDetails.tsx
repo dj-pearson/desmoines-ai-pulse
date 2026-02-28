@@ -43,6 +43,8 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
+import { NearbyContent } from "@/components/NearbyContent";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -568,11 +570,47 @@ export default function EventDetails() {
                 </div>
               </section>
             )}
+
+            {/* Cross-Content: Nearby Restaurants */}
+            <NearbyContent
+              variant="restaurants-near-event"
+              city={event.city || "Des Moines"}
+              excludeId={event.id}
+            />
           </div>
         </div>
 
         <Footer />
       </div>
+
+      <StickyMobileCTA
+        variant="event"
+        primaryAction={
+          event.source_url
+            ? {
+                label: "Get Tickets",
+                href: event.source_url,
+                icon: "external",
+                isExternal: true,
+              }
+            : isUpcoming
+            ? {
+                label: "Add to Calendar",
+                onClick: () => downloadICS(event),
+                icon: "calendar",
+              }
+            : undefined
+        }
+        secondaryAction={
+          event.source_url && isUpcoming
+            ? {
+                label: "Add to Calendar",
+                onClick: () => downloadICS(event),
+                icon: "calendar",
+              }
+            : undefined
+        }
+      />
     </>
   );
 }

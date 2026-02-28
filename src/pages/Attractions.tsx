@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
 import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight } from "lucide-react";
+import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
 import { Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
@@ -61,6 +62,7 @@ export default function Attractions() {
   const [showFilters, setShowFilters] = useState(true); // Show filters by default
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [featuredOnly, setFeaturedOnly] = useState("all");
+  const [sortBy, setSortBy] = useState("rating");
   const [viewMode, setViewMode] = useState('list');
 
   // Get all attractions first
@@ -109,6 +111,23 @@ export default function Attractions() {
       return true;
     });
   }, [allAttractions, searchQuery, selectedType, minRating, featuredOnly]);
+
+  const sortedAttractions = useMemo(() => {
+    const sorted = [...filteredAttractions];
+    switch (sortBy) {
+      case "newest":
+        sorted.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        break;
+      case "name_asc":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "rating":
+      default:
+        sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        break;
+    }
+    return sorted;
+  }, [filteredAttractions, sortBy]);
 
   const getActiveFiltersCount = () => {
     let count = 0;
@@ -429,10 +448,15 @@ export default function Attractions() {
               ? `${selectedType} Attractions`
               : "Des Moines Attractions"}
           </h2>
+          <SortDropdown
+            options={ATTRACTION_SORT_OPTIONS}
+            value={sortBy}
+            onChange={setSortBy}
+          />
         </div>
 
         {viewMode === 'map' ? (
-          <AttractionsMap attractions={filteredAttractions} />
+          <AttractionsMap attractions={sortedAttractions} />
         ) : isLoading ? (
           <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" />
         ) : error ? (
@@ -441,7 +465,7 @@ export default function Attractions() {
               Error loading attractions. Please try again later.
             </p>
           </div>
-        ) : filteredAttractions.length === 0 ? (
+        ) : sortedAttractions.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-muted-foreground">
               {searchQuery ||
@@ -454,7 +478,7 @@ export default function Attractions() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredAttractions.map((attraction) => (
+            {sortedAttractions.map((attraction) => (
               <Link
                 key={attraction.id}
                 to={`/attractions/${createSlug(attraction.name)}`}
