@@ -13,7 +13,7 @@
 ## Project Structure
 - src/components/ui/ — shadcn/ui base components (do NOT modify these directly)
 - src/components/[feature]/ — feature-specific components
-- src/hooks/ — 116 custom hooks (use-*.ts naming)
+- src/hooks/ — 103 custom hooks (use-*.ts naming)
 - src/lib/ — utility libraries (errorHandler, safeStorage, utils)
 - src/contexts/ — React contexts (AuthContext is the primary one)
 - src/pages/ — 62 route page components
@@ -95,6 +95,40 @@
 ---
 
 ## Progress Log
+
+## 2026-02-28 — Ralph Loop 8: Security Hardening, Code Cleanup, UX Improvements
+
+- **US-072**: Fixed critical Stripe webhook signature verification bypass:
+  - Made `STRIPE_WEBHOOK_SECRET` **required** — rejects with 500 if not configured instead of silently skipping verification
+  - Removed development bypass that allowed unsigned webhook events to be processed
+  - Always verifies signature via `stripe.webhooks.constructEvent()` — no fallback to raw `JSON.parse`
+- **US-100**: Removed CORS headers from Stripe webhook endpoint:
+  - Replaced `Access-Control-Allow-Origin: *` with no CORS headers (webhooks are server-to-server, not browser-initiated)
+  - Removed OPTIONS preflight handler — Stripe never sends CORS preflight
+  - Simplified response headers to `Content-Type: application/json` only
+- **US-074**: Sanitized ilike query parameters in api-events edge function:
+  - Imported `sanitizeString` from `_shared/validation.ts` (was defined but unused)
+  - Applied sanitization to `location` and `search` parameters before interpolation into `.or()` ilike filters
+  - Prevents SQL injection via special characters in query strings
+- **US-076**: Fixed sitemap domain mismatch:
+  - Edge function (`generate-sitemap`): reads `VITE_SITE_URL` env var with `desmoinesinsider.com` fallback, replacing hardcoded domain
+  - Script (`scripts/generate-sitemap.js`): reads `VITE_SITE_URL` from `process.env`, replacing hardcoded `desmoinespulse.com`
+  - Both now use consistent canonical domain
+- **US-102**: Removed 13 dead/unused hooks from `src/hooks/`:
+  - Deleted: `useCompetitorAnalysis`, `useLocationTracking`, `useEventClone`, `useFormAccessibility`, `useAccountLockout`, `useAdminSecurity`, `useAdvancedAnalytics`, `useCampaignRenewal`, `useDebouncedValue`, `useEnhancedSearch`, `useGeofencing`, `useMagicLink`, `useSecureProfile`
+  - Each verified with 0 imports across entire `src/` directory
+  - Hook count: 116 → 103
+- **US-128**: Improved event time display on EventCard:
+  - Updated `formatEventDateShort` to include day-of-week abbreviation: `EEE, MMM d '@' h:mm a` → e.g. "Sat, Mar 15 @ 7:00 PM"
+  - Date-only events show `EEE, MMM d` → e.g. "Sat, Mar 15"
+  - More compact format aids quick scanning in card grids
+- **US-112**: Added Sign Up CTA button in header for non-authenticated users:
+  - Desktop-only `Sign Up Free` button (hidden on mobile via `hidden lg:block`)
+  - Positioned between navigation and user menu
+  - Links to `/auth` with UTM tracking parameters (`utm_source=header&utm_medium=cta`)
+  - Disappears when user is authenticated
+- Build verified: `npm run build` passes (58.3s, no errors)
+- **Progress: 65/130 stories complete (50%)**
 
 ## 2026-02-28 — Ralph Loop 7: Visitor & Planner Pages (Transportation, Guide, Meetings, Seasons)
 

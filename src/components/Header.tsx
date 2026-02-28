@@ -9,6 +9,7 @@ import { OptimizedLogo } from "./OptimizedLogo";
 import { DesktopNav } from "./header/DesktopNav";
 import { MobileNav } from "./header/MobileNav";
 import { UserMenu } from "./header/UserMenu";
+import { Button } from "@/components/ui/button";
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('Header');
@@ -102,6 +103,15 @@ export default function Header() {
 
           {/* Desktop Navigation */}
           <DesktopNav />
+
+          {/* Sign Up CTA for non-authenticated users (desktop only) */}
+          {!isAuthenticated && (
+            <Link to="/auth?utm_source=header&utm_medium=cta" className="hidden lg:block flex-shrink-0">
+              <Button size="sm" className="font-semibold">
+                Sign Up Free
+              </Button>
+            </Link>
+          )}
 
           {/* Mobile Menu + User Actions */}
           <div className="flex items-center gap-2">

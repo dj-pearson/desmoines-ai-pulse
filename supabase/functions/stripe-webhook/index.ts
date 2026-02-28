@@ -13,24 +13,18 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
-// Webhook-specific CORS headers (more restrictive - Stripe only)
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*", // Stripe webhooks come from Stripe servers
-  "Access-Control-Allow-Headers": "stripe-signature, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
+// Stripe webhooks are server-to-server and do not require CORS headers.
+// Removing Access-Control-Allow-Origin prevents browser-based spoofing.
+const responseHeaders = {
+  "Content-Type": "application/json",
 };
 
 serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  // Only allow POST requests
+  // Stripe webhooks are server-to-server POST only — no CORS preflight needed
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: responseHeaders,
     });
   }
 
@@ -44,15 +38,24 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Get the webhook signature
+    // SECURITY: Webhook signature verification is REQUIRED.
+    // STRIPE_WEBHOOK_SECRET must be configured in all environments.
     const signature = req.headers.get("stripe-signature");
     const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+
+    if (!webhookSecret) {
+      console.error("STRIPE_WEBHOOK_SECRET is not configured — rejecting webhook");
+      return new Response(
+        JSON.stringify({ error: "Webhook secret not configured" }),
+        { status: 500, headers: responseHeaders }
+      );
+    }
 
     if (!signature) {
       console.error("No Stripe signature found");
       return new Response(JSON.stringify({ error: "No signature" }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: responseHeaders,
       });
     }
 
@@ -60,24 +63,15 @@ serve(async (req) => {
     const body = await req.text();
     let event: Stripe.Event;
 
-    // Verify webhook signature if secret is configured
-    if (webhookSecret) {
-      try {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-      } catch (err) {
-        console.error("Webhook signature verification failed:", err);
-        return new Response(
-          JSON.stringify({ error: "Invalid signature" }),
-          {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    } else {
-      // Development mode - parse without verification (NOT recommended for production)
-      console.warn("STRIPE_WEBHOOK_SECRET not configured - skipping signature verification");
-      event = JSON.parse(body);
+    // Always verify webhook signature — never skip
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    } catch (err) {
+      console.error("Webhook signature verification failed:", err);
+      return new Response(
+        JSON.stringify({ error: "Invalid signature" }),
+        { status: 401, headers: responseHeaders }
+      );
     }
 
     console.log(`Processing Stripe event: ${event.type}`);
@@ -126,7 +120,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ received: true }), {
       status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error("Webhook error:", error);
@@ -134,7 +128,7 @@ serve(async (req) => {
       JSON.stringify({ error: error.message || "Internal server error" }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: responseHeaders,
       }
     );
   }
