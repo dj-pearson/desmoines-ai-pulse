@@ -1,5 +1,5 @@
 # Ralph Progress Log
-Started: (first run will populate this)
+Started: 2026-02-28T03:00:00Z
 ---
 
 ## Codebase Patterns
@@ -13,5 +13,21 @@ Started: (first run will populate this)
 - Auth is accessed via useAuth() from @/contexts/AuthContext
 - Icons: Lucide React only
 - Quality checks: npm run type-check && npm run lint
+- Supabase tables not in generated types need `as unknown as T` cast
+- Use lazyWithRetry() for lazy-loaded routes in App.tsx
+- Leaflet components must be lazy-loaded (heavy dependency)
+- Print CSS: use `print:hidden` Tailwind class + `@media print` for print-friendly pages
 
+---
+
+## 2026-02-28 — US-029, US-042, US-043, US-044
+- US-029: Created docs/API_REFERENCE.md — all 85 edge functions documented with auth, rate limits, schemas
+- US-042: Built /itineraries with 6 seeded itineraries, print checklist, ICS export, TouristTrip schema
+- US-043: Built /deals with category filters, DealCard with claim flow, expiry badges
+- US-044: Built /map with full-screen Leaflet, toggleable layers, marker popups, geolocation
+- Files changed: docs/API_REFERENCE.md, supabase/migrations/20260228000000_create_curated_itineraries.sql, supabase/migrations/20260228000001_create_deals.sql, src/hooks/useItineraries.ts, src/hooks/useDeals.ts, src/components/DealCard.tsx, src/components/schema/TouristTripSchema.tsx, src/pages/Itineraries.tsx, src/pages/ItineraryDetail.tsx, src/pages/Deals.tsx, src/pages/DiscoverMap.tsx, src/App.tsx, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - PUPPETEER_SKIP_DOWNLOAD=true needed when running npm install in sandbox
+  - Supabase tables added via migration but not in generated types — cast with `as unknown as T`
+  - Leaflet lazy loading pattern: `lazy(() => import('react-leaflet').then(m => ({ default: m.Component })))`
 ---

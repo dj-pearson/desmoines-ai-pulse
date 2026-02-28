@@ -382,7 +382,7 @@
       ],
       "priority": 24,
       "passes": true,
-      "notes": "Completed: Removed 6 unused deps (cssnano, jsonwebtoken, lightningcss, node-fetch, stripe, terser). Moved puppeteer to devDependencies. Three.js/Leaflet/Tiptap/FullCalendar confirmed lazy-loaded. Main index chunk reduced 429→423 kB. Build time improved 63→50s."
+      "notes": "Completed: Removed 6 unused deps (cssnano, jsonwebtoken, lightningcss, node-fetch, stripe, terser). Moved puppeteer to devDependencies. Three.js/Leaflet/Tiptap/FullCalendar confirmed lazy-loaded. Main index chunk reduced 429\u2192423 kB. Build time improved 63\u219250s."
     },
     {
       "id": "US-025",
@@ -398,7 +398,7 @@
       ],
       "priority": 25,
       "passes": true,
-      "notes": "Completed: Created migration with 16 indexes — composite indexes for events/restaurants/attractions filter patterns, FK indexes for favorites/ratings/reviews joins, partial index for upcoming events, trigram indexes for full-text search, and analytics indexes for content_metrics/user_analytics."
+      "notes": "Completed: Created migration with 16 indexes \u2014 composite indexes for events/restaurants/attractions filter patterns, FK indexes for favorites/ratings/reviews joins, partial index for upcoming events, trigram indexes for full-text search, and analytics indexes for content_metrics/user_analytics."
     },
     {
       "id": "US-026",
@@ -462,8 +462,8 @@
         "Typecheck passes"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": "76 edge functions with no centralized API documentation. This is critical for onboarding developers and maintaining the system."
+      "passes": true,
+      "notes": "Completed: Created docs/API_REFERENCE.md documenting all 85 edge functions grouped by domain (Content, Payment, Data Processing, AI/ML, Analytics, SEO, Notification, Admin, Utility, Integration). Each entry includes HTTP methods, auth requirements, rate limit tier, request/response schemas, and environment variables."
     },
     {
       "id": "US-030",
@@ -481,7 +481,7 @@
       ],
       "priority": 30,
       "passes": true,
-      "notes": "Already complete: docs/PRODUCTION_RUNBOOK.md (932 lines) covers all acceptance criteria — pre-deployment checklist, deployment steps (Cloudflare + Supabase + edge functions), post-deployment verification with health check script, rollback procedures, P1-P4 incident response with templates, and troubleshooting for Supabase/Stripe/edge function/build issues."
+      "notes": "Already complete: docs/PRODUCTION_RUNBOOK.md (932 lines) covers all acceptance criteria \u2014 pre-deployment checklist, deployment steps (Cloudflare + Supabase + edge functions), post-deployment verification with health check script, rollback procedures, P1-P4 incident response with templates, and troubleshooting for Supabase/Stripe/edge function/build issues."
     },
     {
       "id": "US-031",
@@ -677,8 +677,8 @@
         "Typecheck passes"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has a full 'Catch List' itinerary system with downloadable/printable themed itineraries for Date Day, Family Fun, Quintessential Weekend, and more. Our AI Trip Planner is dynamic but many users just want to browse pre-built plans and print a checklist. Both approaches serve different user intents and should coexist."
+      "passes": true,
+      "notes": "Completed: Created curated_itineraries migration with RLS, seeded 6 itineraries (Weekend Getaway, Date Day, Family Fun, Craft Beer Trail, Art Walk, Foodie Tour). Built /itineraries listing page grouped by theme, /itineraries/:slug detail page with step-by-step stops, insider tips, print-friendly CSS with checkbox checklist, ICS calendar export, and TouristTrip Schema.org structured data."
     },
     {
       "id": "US-043",
@@ -696,8 +696,8 @@
         "Typecheck passes"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has a dedicated deals/coupons section for attractions, hotels, and restaurants. We have zero deals functionality. Deals create urgency, repeat visits, and direct business value for partners. This also creates a monetization path \u2014 businesses pay to feature deals prominently."
+      "passes": true,
+      "notes": "Completed: Created deals migration with RLS and seed data (5 sample deals). Built /deals page with category filters, DealCard component with claim/reveal flow, expiry countdown badges, promo code copy, and useDeals/useFeaturedDeals/useClaimDeal hooks."
     },
     {
       "id": "US-044",
@@ -715,8 +715,8 @@
         "Typecheck passes"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Best-in-class tourism sites (Zurich, NYCGo, Visit Australia) all feature prominent interactive maps as primary discovery tools. We have Leaflet maps embedded in individual pages but no central 'explore by map' experience. Catch Des Moines doesn't have this either \u2014 this is an opportunity to leapfrog them."
+      "passes": true,
+      "notes": "Completed: Created /map route with full-screen Leaflet map centered on Des Moines. Toggleable layers for events, restaurants, and attractions with entity counts. Markers with popup cards showing name, category, description, rating, View Details link, and Get Directions link. Near Me geolocation button. Lazy-loaded map for performance."
     },
     {
       "id": "US-045",
@@ -1208,7 +1208,7 @@
       "description": "As a security engineer, I need the Stripe webhook handler to always require signature verification so that attackers cannot spoof payment events by sending unsigned requests.",
       "acceptanceCriteria": [
         "Remove the development-mode fallback in supabase/functions/stripe-webhook/index.ts that processes unsigned webhooks when STRIPE_WEBHOOK_SECRET is not set",
-        "Function MUST return 400/500 if STRIPE_WEBHOOK_SECRET is missing — never silently process unverified events",
+        "Function MUST return 400/500 if STRIPE_WEBHOOK_SECRET is missing \u2014 never silently process unverified events",
         "Replace console.log calls that expose payment data (session IDs, campaign IDs) with redacted structured logging",
         "Error responses must return generic messages ('Internal server error') instead of raw error.message which may expose stack traces or query details",
         "Add STRIPE_WEBHOOK_SECRET to the pre-deployment checklist in docs/PRODUCTION_RUNBOOK.md",
@@ -1225,14 +1225,14 @@
       "acceptanceCriteria": [
         "Replace the in-memory store object in supabase/functions/_shared/rateLimit.ts with Supabase-backed persistence (use a rate_limits table or KV store)",
         "Rate limit entries must have TTL-based expiration so they auto-clean",
-        "Fix IP identification to not blindly trust X-Forwarded-For header — validate against known proxy headers or use Cloudflare CF-Connecting-IP",
-        "Fix token hashing — replace substring(0, 20) with a proper SHA-256 hash of the full authorization token",
+        "Fix IP identification to not blindly trust X-Forwarded-For header \u2014 validate against known proxy headers or use Cloudflare CF-Connecting-IP",
+        "Fix token hashing \u2014 replace substring(0, 20) with a proper SHA-256 hash of the full authorization token",
         "Add unit tests verifying rate limits persist across function invocations",
         "Typecheck passes"
       ],
       "priority": 73,
       "passes": false,
-      "notes": "AUDIT FINDING: _shared/rateLimit.ts uses a global in-memory object that resets on every cold start. Attackers can bypass limits by triggering cold starts. X-Forwarded-For is trusted without validation (spoofable). Token identification uses only first 20 chars of JWT (not unique — multiple users share the same JWT header prefix)."
+      "notes": "AUDIT FINDING: _shared/rateLimit.ts uses a global in-memory object that resets on every cold start. Attackers can bypass limits by triggering cold starts. X-Forwarded-For is trusted without validation (spoofable). Token identification uses only first 20 chars of JWT (not unique \u2014 multiple users share the same JWT header prefix)."
     },
     {
       "id": "US-074",
@@ -1248,14 +1248,14 @@
       ],
       "priority": 74,
       "passes": false,
-      "notes": "AUDIT FINDING: api-events/index.ts lines 86-94 interpolate raw user input into ilike filter strings without escaping special characters. While Supabase.js provides some protection, the pattern `location.ilike.%${location}%` is dangerous — special chars like % and _ have meaning in SQL LIKE patterns and could be exploited for pattern-based injection."
+      "notes": "AUDIT FINDING: api-events/index.ts lines 86-94 interpolate raw user input into ilike filter strings without escaping special characters. While Supabase.js provides some protection, the pattern `location.ilike.%${location}%` is dangerous \u2014 special chars like % and _ have meaning in SQL LIKE patterns and could be exploited for pattern-based injection."
     },
     {
       "id": "US-075",
       "title": "Add authentication and rate limiting to image-proxy edge function",
       "description": "As a security engineer, I need the image-proxy endpoint protected by authentication and rate limiting so that it cannot be abused as an open proxy for unlimited bandwidth consumption.",
       "acceptanceCriteria": [
-        "Add JWT authentication check to supabase/functions/image-proxy/index.ts — require valid Supabase auth token",
+        "Add JWT authentication check to supabase/functions/image-proxy/index.ts \u2014 require valid Supabase auth token",
         "Add rate limiting: 50 requests per 15 minutes per user (image proxy is bandwidth-intensive)",
         "Add response size limit: reject proxy requests for images larger than 10MB",
         "Log all image proxy requests with user context for abuse monitoring",
@@ -1280,7 +1280,7 @@
       ],
       "priority": 76,
       "passes": false,
-      "notes": "AUDIT FINDING: public/sitemap-index.xml references desmoinesinsider.com while robots.txt references desmoinesaipulse.com. This domain mismatch confuses search engines — Google may index duplicate pages or fail to find sitemaps entirely. All URLs must be consistent."
+      "notes": "AUDIT FINDING: public/sitemap-index.xml references desmoinesinsider.com while robots.txt references desmoinesaipulse.com. This domain mismatch confuses search engines \u2014 Google may index duplicate pages or fail to find sitemaps entirely. All URLs must be consistent."
     },
     {
       "id": "US-077",
@@ -1288,7 +1288,7 @@
       "description": "As an accessibility engineer, I need each page to have exactly one h1 and a proper descending heading hierarchy so that screen readers can navigate the page structure correctly (WCAG 1.3.1).",
       "acceptanceCriteria": [
         "Audit all pages in src/pages/ for heading hierarchy: each page must have exactly one <h1>",
-        "Fix EventsPage.tsx which has multiple h1 elements — keep only the main page title as h1, demote others to h2/h3",
+        "Fix EventsPage.tsx which has multiple h1 elements \u2014 keep only the main page title as h1, demote others to h2/h3",
         "Fix RestaurantDetails.tsx, AttractionDetails.tsx, and other detail pages for proper h1 > h2 > h3 nesting",
         "Ensure no heading level is skipped (e.g., no h1 followed directly by h3 without h2)",
         "Add an ESLint rule or Playwright test that validates heading hierarchy on key pages",
@@ -1296,7 +1296,7 @@
       ],
       "priority": 77,
       "passes": false,
-      "notes": "AUDIT FINDING: EventsPage.tsx has multiple <h1> tags violating WCAG 1.3.1. Multiple h1 elements confuse screen readers' document outline — users relying on headings for navigation get a flat, unusable structure. This is a Level A violation (must fix)."
+      "notes": "AUDIT FINDING: EventsPage.tsx has multiple <h1> tags violating WCAG 1.3.1. Multiple h1 elements confuse screen readers' document outline \u2014 users relying on headings for navigation get a flat, unusable structure. This is a Level A violation (must fix)."
     },
     {
       "id": "US-078",
@@ -1312,7 +1312,7 @@
       ],
       "priority": 78,
       "passes": false,
-      "notes": "AUDIT FINDING: No aria-live regions exist on any listing page. When a user applies a filter or runs a search, sighted users see the results change instantly but screen reader users get no feedback. This is a WCAG 4.1.3 violation — dynamic content changes must be programmatically determinable."
+      "notes": "AUDIT FINDING: No aria-live regions exist on any listing page. When a user applies a filter or runs a search, sighted users see the results change instantly but screen reader users get no feedback. This is a WCAG 4.1.3 violation \u2014 dynamic content changes must be programmatically determinable."
     },
     {
       "id": "US-079",
@@ -1345,7 +1345,7 @@
       ],
       "priority": 80,
       "passes": false,
-      "notes": "PERFORMANCE AUDIT: AuthContext wraps the entire app (576 lines). Every state change (session refresh, admin check, login) triggers re-renders in ALL consuming components — even those that only use isAuthenticated. This is the single highest-impact performance fix: splitting into separate contexts prevents cascade re-renders across 50+ components."
+      "notes": "PERFORMANCE AUDIT: AuthContext wraps the entire app (576 lines). Every state change (session refresh, admin check, login) triggers re-renders in ALL consuming components \u2014 even those that only use isAuthenticated. This is the single highest-impact performance fix: splitting into separate contexts prevents cascade re-renders across 50+ components."
     },
     {
       "id": "US-081",
@@ -1361,7 +1361,7 @@
       ],
       "priority": 81,
       "passes": false,
-      "notes": "PERFORMANCE AUDIT: staleTime values are inconsistent across hooks — useSubscription uses 5min, useFavorites uses default 60s, useEnhancedSearch uses 30s/5min/10min in different places. Query keys like ['favorites', user?.id] create duplicate entries when user?.id is undefined. A shared config prevents cache misses and the query key factory prevents key collisions."
+      "notes": "PERFORMANCE AUDIT: staleTime values are inconsistent across hooks \u2014 useSubscription uses 5min, useFavorites uses default 60s, useEnhancedSearch uses 30s/5min/10min in different places. Query keys like ['favorites', user?.id] create duplicate entries when user?.id is undefined. A shared config prevents cache misses and the query key factory prevents key collisions."
     },
     {
       "id": "US-082",
@@ -1403,12 +1403,12 @@
         "Use EmptyState on Restaurants.tsx when no restaurants match filters",
         "Use EmptyState on Attractions.tsx when no attractions match filters",
         "Each empty state must include: relevant icon, descriptive title, helpful description, and a 'Clear Filters' or 'Browse All' action button",
-        "Add empty states to user favorites page ('No favorites yet — explore events to add some')",
+        "Add empty states to user favorites page ('No favorites yet \u2014 explore events to add some')",
         "Typecheck passes"
       ],
       "priority": 84,
       "passes": false,
-      "notes": "UI/UX AUDIT: The EmptyState component exists (src/components/ui/empty-state.tsx) but is not used on any listing page. When search/filter returns 0 results, users see blank white space. This is confusing — users think the page is broken. Contextual empty states with clear CTAs improve discoverability and reduce bounce rates."
+      "notes": "UI/UX AUDIT: The EmptyState component exists (src/components/ui/empty-state.tsx) but is not used on any listing page. When search/filter returns 0 results, users see blank white space. This is confusing \u2014 users think the page is broken. Contextual empty states with clear CTAs improve discoverability and reduce bounce rates."
     },
     {
       "id": "US-085",
@@ -1425,7 +1425,7 @@
       ],
       "priority": 85,
       "passes": false,
-      "notes": "UI/UX AUDIT: Search inputs on all listing pages have debouncing (US-036) but no autocomplete, no recent searches, and no suggestions. Users have to know exactly what they're searching for. Autocomplete dramatically improves search conversion — users see matching titles as they type, reducing failed searches."
+      "notes": "UI/UX AUDIT: Search inputs on all listing pages have debouncing (US-036) but no autocomplete, no recent searches, and no suggestions. Users have to know exactly what they're searching for. Autocomplete dramatically improves search conversion \u2014 users see matching titles as they type, reducing failed searches."
     },
     {
       "id": "US-086",
@@ -1434,15 +1434,15 @@
       "acceptanceCriteria": [
         "Add a theme toggle button (sun/moon icon) to the Header component, accessible via keyboard",
         "Store theme preference in safeStorage and user profile (for authenticated users)",
-        "Fix RestaurantCard.tsx hardcoded gradients — add dark: variants for all gradient backgrounds",
-        "Fix ShareDialog.tsx social media button colors — add dark:brightness-75 for bright platform colors",
+        "Fix RestaurantCard.tsx hardcoded gradients \u2014 add dark: variants for all gradient backgrounds",
+        "Fix ShareDialog.tsx social media button colors \u2014 add dark:brightness-75 for bright platform colors",
         "Fix BottomNav.tsx hover states for dark mode contrast",
         "Audit and fix input placeholder contrast in dark mode (must meet WCAG 4.5:1 ratio)",
         "Typecheck passes"
       ],
       "priority": 86,
       "passes": false,
-      "notes": "UI/UX AUDIT: Dark mode CSS variables are defined in src/index.css lines 80-128 but there's no UI toggle for users to switch themes. Additionally, multiple components have hardcoded colors without dark: variants — RestaurantCard gradients, ShareDialog platform buttons, and BottomNav hover states don't adapt to dark mode."
+      "notes": "UI/UX AUDIT: Dark mode CSS variables are defined in src/index.css lines 80-128 but there's no UI toggle for users to switch themes. Additionally, multiple components have hardcoded colors without dark: variants \u2014 RestaurantCard gradients, ShareDialog platform buttons, and BottomNav hover states don't adapt to dark mode."
     },
     {
       "id": "US-087",
@@ -1458,7 +1458,7 @@
       ],
       "priority": 87,
       "passes": false,
-      "notes": "UI/UX AUDIT: Loading states use generic labels ('Loading content...') regardless of context. Error states are incomplete — network failures on search don't show user-friendly recovery options. Mutation buttons (favorite, share) don't show loading state, so users can't tell if their click registered."
+      "notes": "UI/UX AUDIT: Loading states use generic labels ('Loading content...') regardless of context. Error states are incomplete \u2014 network failures on search don't show user-friendly recovery options. Mutation buttons (favorite, share) don't show loading state, so users can't tell if their click registered."
     },
     {
       "id": "US-088",
@@ -1475,7 +1475,7 @@
       ],
       "priority": 88,
       "passes": false,
-      "notes": "UI/UX AUDIT: EventsPage has EVENTS_PER_PAGE=30 and page state but no visible pagination controls — users can't navigate to page 2. The pagination.tsx component exists in src/components/ui/ but is never imported on any listing page. Large result sets render all items, causing performance degradation."
+      "notes": "UI/UX AUDIT: EventsPage has EVENTS_PER_PAGE=30 and page state but no visible pagination controls \u2014 users can't navigate to page 2. The pagination.tsx component exists in src/components/ui/ but is never imported on any listing page. Large result sets render all items, causing performance degradation."
     },
     {
       "id": "US-089",
@@ -1538,7 +1538,7 @@
       ],
       "priority": 92,
       "passes": false,
-      "notes": "SEO AUDIT: FAQSchema component exists (src/components/schema/FAQSchema.tsx) but is not wired to the FAQSection component. FAQ rich snippets are among the highest-CTR SERP features — pages with FAQ schema typically see 10-30% higher click-through rates. Questions should target long-tail search queries like 'things to do in Des Moines this weekend'."
+      "notes": "SEO AUDIT: FAQSchema component exists (src/components/schema/FAQSchema.tsx) but is not wired to the FAQSection component. FAQ rich snippets are among the highest-CTR SERP features \u2014 pages with FAQ schema typically see 10-30% higher click-through rates. Questions should target long-tail search queries like 'things to do in Des Moines this weekend'."
     },
     {
       "id": "US-093",
@@ -1580,13 +1580,13 @@
         "Add toast notification on favorite/unfavorite success and failure (currently silent)",
         "Add toast.loading() for long operations: image upload, form submission, data fetching on button click",
         "Configure Sonner toast position to render above BottomNav on mobile (prevent overlap)",
-        "Standardize toast patterns: loading → success/error with consistent ID to prevent duplicates",
+        "Standardize toast patterns: loading \u2192 success/error with consistent ID to prevent duplicates",
         "Ensure toast messages are concise and actionable: 'Added to favorites' not 'The item has been successfully added to your favorites list'",
         "Typecheck passes"
       ],
       "priority": 95,
       "passes": false,
-      "notes": "UI/UX AUDIT: Toast usage is inconsistent — forms show success/error toasts but favorite button is silent, filter changes sometimes show toasts and sometimes don't. Long operations like image upload show spinners but no toast. Mobile users may not see bottom-positioned toasts due to BottomNav overlap."
+      "notes": "UI/UX AUDIT: Toast usage is inconsistent \u2014 forms show success/error toasts but favorite button is silent, filter changes sometimes show toasts and sometimes don't. Long operations like image upload show spinners but no toast. Mobile users may not see bottom-positioned toasts due to BottomNav overlap."
     },
     {
       "id": "US-096",
@@ -1610,7 +1610,7 @@
       "description": "As a developer, I need the service worker to use separate cache buckets for runtime assets, images, and API responses so that deploys don't invalidate the image cache users have already built up.",
       "acceptanceCriteria": [
         "Split public/sw.js caches into: dmi-runtime-v{n} (cleared on deploy), dmi-images-v1 (persists across deploys), dmi-api-v1 (persists with TTL)",
-        "Only clear the runtime cache on activate event — preserve image and API caches",
+        "Only clear the runtime cache on activate event \u2014 preserve image and API caches",
         "Add 7-day expiration to cached images to prevent stale content",
         "Add 5-minute expiration to cached API responses",
         "Ensure offline.html is properly cached and served when network is unavailable",
@@ -1618,12 +1618,12 @@
       ],
       "priority": 97,
       "passes": false,
-      "notes": "PERFORMANCE AUDIT: Service worker uses a single cache version (v4) that invalidates ALL cached content on every deploy — including images users have already downloaded. Separating caches means deploys only bust the runtime cache while preserving the image cache, saving users from re-downloading megabytes of already-seen images."
+      "notes": "PERFORMANCE AUDIT: Service worker uses a single cache version (v4) that invalidates ALL cached content on every deploy \u2014 including images users have already downloaded. Separating caches means deploys only bust the runtime cache while preserving the image cache, saving users from re-downloading megabytes of already-seen images."
     },
     {
       "id": "US-098",
       "title": "Add prefers-reduced-motion support across all animations",
-      "description": "As a user with vestibular disorders, I need all animations — including the 3D hero, page transitions, hover effects, and auto-playing carousels — to respect my OS reduced-motion preference so that the site doesn't cause discomfort.",
+      "description": "As a user with vestibular disorders, I need all animations \u2014 including the 3D hero, page transitions, hover effects, and auto-playing carousels \u2014 to respect my OS reduced-motion preference so that the site doesn't cause discomfort.",
       "acceptanceCriteria": [
         "Add @media (prefers-reduced-motion: reduce) CSS rule in src/index.css that disables all transitions and animations globally",
         "Add motion-reduce:animate-none Tailwind class to all components using animate-* classes",
@@ -1634,7 +1634,7 @@
       ],
       "priority": 98,
       "passes": false,
-      "notes": "Note: This is related to the existing US-027 but US-027 passes:true already. However the accessibility audit found that prefers-reduced-motion support is still incomplete in practice — animations defined in Tailwind config (16 animations) don't have motion-reduce variants, and the Three.js hero may not be fully disabled. This story ensures completeness."
+      "notes": "Note: This is related to the existing US-027 but US-027 passes:true already. However the accessibility audit found that prefers-reduced-motion support is still incomplete in practice \u2014 animations defined in Tailwind config (16 animations) don't have motion-reduce variants, and the Three.js hero may not be fully disabled. This story ensures completeness."
     },
     {
       "id": "US-099",
@@ -1650,22 +1650,22 @@
       ],
       "priority": 99,
       "passes": false,
-      "notes": "UI/UX AUDIT: EventCard uses purple for Music, orange for Food. RestaurantCard uses completely different gradient schemes for cuisines. AttractionCard likely has yet another color system. This inconsistency confuses users — the same category appears in different colors depending on the card type. A shared constant map ensures visual consistency."
+      "notes": "UI/UX AUDIT: EventCard uses purple for Music, orange for Food. RestaurantCard uses completely different gradient schemes for cuisines. AttractionCard likely has yet another color system. This inconsistency confuses users \u2014 the same category appears in different colors depending on the card type. A shared constant map ensures visual consistency."
     },
     {
       "id": "US-100",
       "title": "Remove CORS headers from Stripe webhook and tighten CORS on all edge functions",
       "description": "As a security engineer, I need the Stripe webhook to have no CORS headers (it's server-to-server) and all other edge functions to use explicit origin whitelists instead of wildcards.",
       "acceptanceCriteria": [
-        "Remove Access-Control-Allow-Origin: * from supabase/functions/stripe-webhook/index.ts — webhooks are server-to-server and don't need CORS",
+        "Remove Access-Control-Allow-Origin: * from supabase/functions/stripe-webhook/index.ts \u2014 webhooks are server-to-server and don't need CORS",
         "Audit all edge functions for wildcard CORS (*) and replace with explicit origin whitelist from _shared/cors.ts",
         "Verify _shared/cors.ts allowedOrigins includes only production domain(s) and localhost for development",
-        "Add Origin header validation — reject requests from unlisted origins with 403",
+        "Add Origin header validation \u2014 reject requests from unlisted origins with 403",
         "Typecheck passes"
       ],
       "priority": 100,
       "passes": false,
-      "notes": "SECURITY AUDIT: stripe-webhook/index.ts has Access-Control-Allow-Origin: * which is dangerous for any endpoint. Webhooks don't need CORS at all — they're called server-to-server by Stripe. Other edge functions should also be audited to ensure they don't use wildcard CORS."
+      "notes": "SECURITY AUDIT: stripe-webhook/index.ts has Access-Control-Allow-Origin: * which is dangerous for any endpoint. Webhooks don't need CORS at all \u2014 they're called server-to-server by Stripe. Other edge functions should also be audited to ensure they don't use wildcard CORS."
     },
     {
       "id": "US-101",
@@ -1681,24 +1681,24 @@
       ],
       "priority": 101,
       "passes": false,
-      "notes": "DATA LAYER AUDIT: No mutation in the codebase uses TanStack Query's optimistic update pattern (onMutate + rollback). Users currently wait for the full server round-trip before seeing UI changes — toggling a favorite takes 300-800ms of visible delay. Optimistic updates make this instant with automatic rollback on failure."
+      "notes": "DATA LAYER AUDIT: No mutation in the codebase uses TanStack Query's optimistic update pattern (onMutate + rollback). Users currently wait for the full server round-trip before seeing UI changes \u2014 toggling a favorite takes 300-800ms of visible delay. Optimistic updates make this instant with automatic rollback on failure."
     },
     {
       "id": "US-102",
       "title": "Remove dead/unused hooks from src/hooks/",
       "description": "As a developer, I need unused hooks removed from the codebase so that the project is cleaner, easier to navigate, and has less dead code to maintain.",
       "acceptanceCriteria": [
-        "Verify and remove useCompetitorAnalysis.ts — confirmed 0 imports anywhere in src/",
-        "Verify and remove useLocationTracking.ts — confirmed 0 imports",
-        "Verify and remove useEventClone.ts — confirmed 0 imports",
-        "Verify and remove useFormAccessibility.ts — confirmed 0 imports",
+        "Verify and remove useCompetitorAnalysis.ts \u2014 confirmed 0 imports anywhere in src/",
+        "Verify and remove useLocationTracking.ts \u2014 confirmed 0 imports",
+        "Verify and remove useEventClone.ts \u2014 confirmed 0 imports",
+        "Verify and remove useFormAccessibility.ts \u2014 confirmed 0 imports",
         "Audit suspicious low-usage hooks (useDomainHighlights, useKnownVenues, useNLPSearch, useProximitySearch, useSimplePersonalization, useWriteupGenerator) and remove if truly unused",
-        "Verify no runtime errors from removals — typecheck passes and build passes",
+        "Verify no runtime errors from removals \u2014 typecheck passes and build passes",
         "Typecheck passes"
       ],
       "priority": 102,
       "passes": false,
-      "notes": "DATA LAYER AUDIT: 4 hooks confirmed with zero imports anywhere in src/. Several more hooks have suspiciously low usage. The hooks/ directory has 101+ hooks — removing dead ones reduces cognitive load and maintenance burden."
+      "notes": "DATA LAYER AUDIT: 4 hooks confirmed with zero imports anywhere in src/. Several more hooks have suspiciously low usage. The hooks/ directory has 101+ hooks \u2014 removing dead ones reduces cognitive load and maintenance burden."
     },
     {
       "id": "US-103",
@@ -1715,7 +1715,7 @@
       ],
       "priority": 103,
       "passes": false,
-      "notes": "DATA LAYER AUDIT: ~110 instances of 'any' type across 130 hooks (85% of hooks use 'any' somewhere). The 5 worst offenders are useAdvancedAnalytics (12+), useAnalytics (10+), useAIConfiguration (3+), useAdminSecurity (mixed), and useAdminCampaigns. These are analytics and admin hooks that handle complex data — proper types prevent silent data corruption bugs."
+      "notes": "DATA LAYER AUDIT: ~110 instances of 'any' type across 130 hooks (85% of hooks use 'any' somewhere). The 5 worst offenders are useAdvancedAnalytics (12+), useAnalytics (10+), useAIConfiguration (3+), useAdminSecurity (mixed), and useAdminCampaigns. These are analytics and admin hooks that handle complex data \u2014 proper types prevent silent data corruption bugs."
     },
     {
       "id": "US-104",
