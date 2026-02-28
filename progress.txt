@@ -86,11 +86,39 @@
 - ~~No sports hub~~ (RESOLVED: US-046, /sports with 7 teams + game schedules)
 - ~~No trails/outdoor hub~~ (RESOLVED: US-047, /outdoors with 8 trails + difficulty filters)
 - ~~No brewery trail~~ (RESOLVED: US-048, /breweries with digital passport + check-in gamification)
-- TODOs: remaining content hubs (US-049–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
+- ~~No transportation/getting around guide~~ (RESOLVED: US-049, /getting-around with parking, skywalk, transit, airport, FAQ)
+- ~~No downloadable visitor guide~~ (RESOLVED: US-050, /visitors-guide with digital download + physical mail request)
+- ~~No meeting planner portal~~ (RESOLVED: US-051, /group-travel with venue search, RFP submission, 8 seeded venues)
+- ~~No seasonal/holiday guides~~ (RESOLVED: US-052, /guides/:slug with 4 seeded seasonal guides)
+- TODOs: remaining content hubs (US-053–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
 
 ---
 
 ## Progress Log
+
+## 2026-02-28 — Ralph Loop 7: Visitor & Planner Pages (Transportation, Guide, Meetings, Seasons)
+
+- **US-049**: Built comprehensive getting-around guide:
+  - Created `/getting-around` page with 7 sections: Parking & ParkDSM (5 garages with rates/hours), Skywalk System guide, BCycle Bike Share (pricing + stations), Rideshare tips (Uber/Lyft fare estimates), DSM Airport (6 airlines + 5 ground transport options), DART Public Transit (D-Line free downtown circulator), Distance From Downtown table (7 destinations with drive times + transit)
+  - Schema.org FAQPage structured data with 5 common transportation questions
+- **US-050**: Created downloadable/requestable visitor guide:
+  - Created `guide_requests` migration with RLS (public insert, admin read/update)
+  - Built `/visitors-guide` page with 2026 Edition hero, What's Inside feature cards
+  - Tabbed interface: Digital Download (email capture for lead gen) and Request Free Copy (full mailing address form)
+  - Schema.org TouristInformationCenter structured data
+- **US-051**: Built meeting planner and group travel portal:
+  - Created `meeting_venues` migration with RLS and 8 seeded venues (Iowa Events Center 15K cap, CCCUCC 5K, Marriott 1.2K, Hilton 800, Brenton Plaza, Temple, Jasper Winery, Art Center)
+  - Created `rfp_submissions` migration with RLS (public insert, admin read/update)
+  - Built `/group-travel` page with Why Des Moines stats, venue search (filter by type/capacity), Group Itineraries link, RFP submission form
+  - Created `useMeetingVenues` hook with venue filters and `useSubmitRfp` mutation
+- **US-052**: Added seasonal and holiday event guides:
+  - Created `seasonal_guides` migration with RLS and 4 seeded guides: Summer 2026, Fall Festivals & Foliage, Holiday Lights & Markets, Iowa State Fair Survival Guide
+  - Built `/guides/:slug` seasonal guide detail page with sectioned content, checklist items, Schema.org Article structured data
+  - Updated existing GuidesPage to dynamically pull from seasonal_guides table and display seasonal guides grid above static content
+  - Created `useSeasonalGuides` hook with season labels/colors
+- All pages added to navigation (new "Plan" nav group: Getting Around, Visitor Guide, Group & Meetings)
+- Build verified: `npm run build` passes (59s, no errors)
+- **Progress: 58/104 stories complete (56%)**
 
 ## 2026-02-28 — Ralph Loop 6: Content Hubs (Music, Sports, Outdoors, Breweries)
 

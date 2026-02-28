@@ -125,7 +125,11 @@ const DealsPage = lazyWithRetry(() => import("./pages/Deals"));
 // Interactive discovery map
 const DiscoverMap = lazyWithRetry(() => import("./pages/DiscoverMap"));
 
-// Content hubs
+// Content hubs & visitor pages
+const GettingAround = lazyWithRetry(() => import("./pages/GettingAround"));
+const VisitorsGuide = lazyWithRetry(() => import("./pages/VisitorsGuide"));
+const GroupTravel = lazyWithRetry(() => import("./pages/GroupTravel"));
+const SeasonalGuide = lazyWithRetry(() => import("./pages/SeasonalGuide"));
 const MusicHub = lazyWithRetry(() => import("./pages/MusicHub"));
 const VenueDetail = lazyWithRetry(() => import("./pages/VenueDetail"));
 const SportsHub = lazyWithRetry(() => import("./pages/SportsHub"));
@@ -355,6 +359,11 @@ const App = () => (
             <Route path="/best-of/:category" element={<BestOfCategory />} />
             {/* Scene updates feed */}
             <Route path="/whats-new" element={<WhatsNew />} />
+            {/* Visitor & planner pages */}
+            <Route path="/getting-around" element={<GettingAround />} />
+            <Route path="/visitors-guide" element={<VisitorsGuide />} />
+            <Route path="/group-travel" element={<GroupTravel />} />
+            <Route path="/guides/:slug" element={<SeasonalGuide />} />
             {/* Content hubs */}
             <Route path="/music" element={<MusicHub />} />
             <Route path="/music/venues/:slug" element={<VenueDetail />} />

@@ -15,6 +15,9 @@ import {
   Music,
   TreePine,
   Beer,
+  Navigation,
+  BookOpen,
+  Briefcase,
   type LucideIcon,
 } from "lucide-react";
 
@@ -71,6 +74,15 @@ export const navigationGroups: Record<string, NavGroup> = {
       { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
     ],
   },
+  plan: {
+    label: "Plan",
+    icon: Navigation,
+    items: [
+      { href: "/getting-around", label: "Getting Around", icon: Navigation },
+      { href: "/visitors-guide", label: "Visitor Guide", icon: BookOpen, featured: true },
+      { href: "/group-travel", label: "Group & Meetings", icon: Briefcase },
+    ],
+  },
   resources: {
     label: "Resources",
     icon: FileText,
@@ -100,6 +112,9 @@ export const navigationLinks: NavItem[] = [
   { href: "/breweries", label: "Brewery Trail", icon: Beer },
   { href: "/attractions", label: "Attractions", icon: Camera },
   { href: "/playgrounds", label: "Playgrounds", icon: Gamepad2 },
+  { href: "/getting-around", label: "Getting Around", icon: Navigation },
+  { href: "/visitors-guide", label: "Visitor Guide", icon: BookOpen },
+  { href: "/group-travel", label: "Group & Meetings", icon: Briefcase },
   { href: "/articles", label: "Articles", icon: FileText },
   { href: "/best-of", label: "Des Best", icon: Trophy, priority: true },
   { href: "/whats-new", label: "What's New", icon: Sparkles },

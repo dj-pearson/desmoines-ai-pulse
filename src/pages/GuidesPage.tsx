@@ -6,6 +6,7 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useSeasonalGuides, getSeasonLabel, getSeasonColor } from "@/hooks/useSeasonalGuides";
 import { 
   MapPin, 
   Calendar, 
@@ -130,6 +131,7 @@ const faqData = [
 
 export default function GuidesPage() {
   useDocumentTitle("City Guides");
+  const { data: seasonalGuides } = useSeasonalGuides();
   const pageTitle = "Des Moines Local Guides - Best Activities, Dining & Attractions";
   const pageDescription = "Comprehensive guides to the best of Des Moines. Find seasonal activities, dining recommendations, family fun, date night spots, and local insider tips for Des Moines and suburbs.";
   
@@ -204,6 +206,32 @@ export default function GuidesPage() {
             </Badge>
           ))}
         </div>
+
+        {/* Seasonal Guides (dynamic from database) */}
+        {seasonalGuides && seasonalGuides.length > 0 && (
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold mb-6 text-center">Seasonal &amp; Holiday Guides</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {seasonalGuides.map((guide) => (
+                <Link key={guide.id} to={`/guides/${guide.slug}`}>
+                  <Card className="hover:border-primary transition-colors h-full">
+                    <CardContent className="p-5">
+                      {guide.season && (
+                        <Badge className={`${getSeasonColor(guide.season)} mb-2`}>
+                          {getSeasonLabel(guide.season)}
+                        </Badge>
+                      )}
+                      <h3 className="font-semibold mb-1">{guide.title}</h3>
+                      {guide.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">{guide.description}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Guides Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
