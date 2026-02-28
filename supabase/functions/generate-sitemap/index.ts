@@ -24,7 +24,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { domain = "https://desmoinesinsider.com", include = [] } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
+    const { domain = siteUrl, include = [] } = body;
 
     console.log("Generating sitemap for:", domain);
     const currentDate = new Date().toISOString().split("T")[0];

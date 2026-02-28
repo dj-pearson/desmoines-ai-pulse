@@ -158,29 +158,30 @@ export function formatEventDate(event: any): string {
 }
 
 /**
- * Format an event date for card display (shorter format)
+ * Format an event date for card display (shorter format with day-of-week)
  * Prefers new timezone fields over legacy date field
+ * Shows "Sat, Mar 15 @ 7:00 PM" when time available, "Sat, Mar 15" otherwise
  */
 export function formatEventDateShort(event: any): string {
   try {
     // Always use UTC field for display - it's the source of truth
     if (event.event_start_utc) {
       if (hasSpecificTime(event)) {
-        return formatInCentralTime(event.event_start_utc, "MMM d, yyyy 'at' h:mm a");
+        return formatInCentralTime(event.event_start_utc, "EEE, MMM d '@' h:mm a");
       } else {
-        return formatInCentralTime(event.event_start_utc, "MMM d, yyyy");
+        return formatInCentralTime(event.event_start_utc, "EEE, MMM d");
       }
     }
-    
+
     // Fallback to legacy date field
     if (event.date) {
       if (hasSpecificTime(event)) {
-        return formatInCentralTime(event.date, "MMM d, yyyy 'at' h:mm a");
+        return formatInCentralTime(event.date, "EEE, MMM d '@' h:mm a");
       } else {
-        return formatInCentralTime(event.date, "MMM d, yyyy");
+        return formatInCentralTime(event.date, "EEE, MMM d");
       }
     }
-    
+
     return "Date TBA";
   } catch (error) {
     logger.error("formatEventDateShort", "Error formatting short event date", { error: String(error) });

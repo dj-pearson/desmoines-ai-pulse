@@ -2,7 +2,7 @@ import { writeFileSync } from 'fs';
 import { join } from 'path';
 
 const generateSitemap = () => {
-  const baseUrl = 'https://desmoinespulse.com'; // Update this to your actual domain
+  const baseUrl = process.env.VITE_SITE_URL || 'https://desmoinesinsider.com';
   const currentDate = new Date().toISOString().split('T')[0];
   
   // Define your site pages here
