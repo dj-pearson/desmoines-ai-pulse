@@ -125,6 +125,19 @@ const DealsPage = lazyWithRetry(() => import("./pages/Deals"));
 // Interactive discovery map
 const DiscoverMap = lazyWithRetry(() => import("./pages/DiscoverMap"));
 
+// Content hubs & visitor pages
+const GettingAround = lazyWithRetry(() => import("./pages/GettingAround"));
+const VisitorsGuide = lazyWithRetry(() => import("./pages/VisitorsGuide"));
+const GroupTravel = lazyWithRetry(() => import("./pages/GroupTravel"));
+const SeasonalGuide = lazyWithRetry(() => import("./pages/SeasonalGuide"));
+const MusicHub = lazyWithRetry(() => import("./pages/MusicHub"));
+const VenueDetail = lazyWithRetry(() => import("./pages/VenueDetail"));
+const SportsHub = lazyWithRetry(() => import("./pages/SportsHub"));
+const TeamDetail = lazyWithRetry(() => import("./pages/TeamDetail"));
+const OutdoorsHub = lazyWithRetry(() => import("./pages/OutdoorsHub"));
+const TrailDetail = lazyWithRetry(() => import("./pages/TrailDetail"));
+const BreweryTrail = lazyWithRetry(() => import("./pages/BreweryTrail"));
+
 // Affiliate disclosure
 const AffiliateDisclosure = lazyWithRetry(() => import("./pages/AffiliateDisclosure"));
 
@@ -346,6 +359,19 @@ const App = () => (
             <Route path="/best-of/:category" element={<BestOfCategory />} />
             {/* Scene updates feed */}
             <Route path="/whats-new" element={<WhatsNew />} />
+            {/* Visitor & planner pages */}
+            <Route path="/getting-around" element={<GettingAround />} />
+            <Route path="/visitors-guide" element={<VisitorsGuide />} />
+            <Route path="/group-travel" element={<GroupTravel />} />
+            <Route path="/guides/:slug" element={<SeasonalGuide />} />
+            {/* Content hubs */}
+            <Route path="/music" element={<MusicHub />} />
+            <Route path="/music/venues/:slug" element={<VenueDetail />} />
+            <Route path="/sports" element={<SportsHub />} />
+            <Route path="/sports/:slug" element={<TeamDetail />} />
+            <Route path="/outdoors" element={<OutdoorsHub />} />
+            <Route path="/outdoors/:slug" element={<TrailDetail />} />
+            <Route path="/breweries" element={<BreweryTrail />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -734,8 +734,8 @@
         "Typecheck passes"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has 'The Setlist' \u2014 a monthly curated feature highlighting the best concerts each month, plus dedicated venue pages and a concert calendar. We lump music into general events with no venue context, no curation, and no genre filtering. Des Moines has a thriving music scene and this deserves its own hub."
+      "passes": true,
+      "notes": "Completed: Created venues table with RLS and 9 seeded Des Moines venues (Wells Fargo Arena, Hoyt Sherman, Woolys, xBk, Leftys, Val Air, Civic Center, Simon Estes, Vibrant). Built /music hub with Tonight's Shows, This Weekend, Upcoming Concerts, and Venue Guide sections. Built /music/venues/:slug detail pages with upcoming events, location, and directions. Added useVenues hook. Added to main navigation."
     },
     {
       "id": "US-046",
@@ -752,8 +752,8 @@
         "Typecheck passes"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has a dedicated sports section positioning Des Moines as the #1 minor league market in the US. They cover Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves, and Des Moines Menace with venue guides and fan experiences. Our events include sports but there's no dedicated sports hub, no team pages, no gameday guides. Sports fans need a specialized experience."
+      "passes": true,
+      "notes": "Completed: Created teams table with RLS and 7 seeded teams (Iowa Cubs, Iowa Wild, Iowa Wolves, Iowa Barnstormers, Des Moines Menace, Drake Bulldogs, Grand View Vikings). Built /sports hub with Today's Games, This Week's Schedule, Teams & Venues sections with sport emoji icons. Built /sports/:slug team detail pages with SportsTeam Schema.org structured data, upcoming games, and external links. Added useTeams hook. Added to main navigation."
     },
     {
       "id": "US-047",
@@ -770,8 +770,8 @@
         "Typecheck passes"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has extensive hiking/biking trail content. DSM Partnership promotes 800+ miles of trails. Explore Des Moines publishes seasonal trail guides. We have attractions but zero dedicated trail/outdoor content. Des Moines' trail system (especially High Trestle Trail) is a nationally recognized attraction that deserves its own hub."
+      "passes": true,
+      "notes": "Completed: Created trails table with RLS and 8 seeded trails (High Trestle, Raccoon River Valley, Gray's Lake, Clive Greenbelt, Neal Smith, Great Western, Sycamore, Bill Riley). Built /outdoors hub with Featured Trails, difficulty/activity filters, and All Trails grid. Built /outdoors/:slug trail detail pages with highlights, activities, trailhead directions. Added useTrails hook with featured filter. Added to main navigation."
     },
     {
       "id": "US-048",
@@ -789,8 +789,8 @@
         "Typecheck passes"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines promotes craft beer trails. Des Moines has a booming craft beer scene. We list restaurants but have no brewery-specific experience and no 'trail' gamification. The digital passport concept combines our existing gamification system with brewery discovery \u2014 something no competitor does digitally."
+      "passes": true,
+      "notes": "Completed: Created brewery_trail_checkins table with RLS and UNIQUE(user_id, restaurant_id). Built /breweries page with Brewery Passport progress tracker, brewery grid with check-in status overlay, check-in dialog with beer name and 5-star rating. Added useBreweryTrail hook with checkin mutation (+40 XP). Gamification integration with progress bar and completion badge. Added to main navigation."
     },
     {
       "id": "US-049",
@@ -807,8 +807,8 @@
         "Typecheck passes"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has detailed transportation pages covering ParkDSM app, skywalk system (4+ miles of enclosed walkways), BCycle, airport info, and transit. We have zero transportation content. This is essential visitor info \u2014 especially the skywalk system which is unique to Des Moines and critical during winter months."
+      "passes": true,
+      "notes": "Completed: Created /getting-around page with sections: Parking & ParkDSM (5 garages with rates/hours), Skywalk System guide, BCycle Bike Share, Rideshare, DSM Airport (6 airlines + ground transport), DART Public Transit, Distance From Downtown table (7 destinations), and FAQ section with Schema.org FAQPage structured data."
     },
     {
       "id": "US-050",
@@ -826,8 +826,8 @@
         "Typecheck passes"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines offers a beautiful annual Visitors Guide (2026 edition now available) as both digital download and free mailed copy. It's a massive lead generation and brand credibility tool. We have no equivalent. Even a well-designed PDF guide auto-generated from our content would be valuable."
+      "passes": true,
+      "notes": "Completed: Created /visitors-guide page with '2026 Edition' hero, What's Inside feature cards, tabbed Download/Request interface. Digital download captures email for lead gen. Physical guide request form with full mailing address. Created guide_requests migration with RLS. Schema.org TouristInformationCenter structured data."
     },
     {
       "id": "US-051",
@@ -844,8 +844,8 @@
         "Typecheck passes"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has an entire Meeting Planners section with RFP submission, venue search by capacity, destination services, and wedding planning. This is a major B2B revenue driver for them. We have zero B2B meeting/convention features. The Des Moines convention business is significant \u2014 Iowa Events Center, Community Choice Credit Union Convention Center, etc."
+      "passes": true,
+      "notes": "Completed: Created /group-travel portal with Why Des Moines stats cards, meeting_venues table (8 seeded venues with capacity/amenities/catering), venue search with type and capacity filters, Group Itineraries link to curated itineraries, and RFP submission form stored in rfp_submissions table. Created useMeetingVenues hook with filters and useSubmitRfp mutation."
     },
     {
       "id": "US-052",
@@ -862,8 +862,8 @@
         "Typecheck passes"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines publishes seasonal content heavily \u2014 summer activity guides, fall festival roundups, holiday event guides. We have a guides page but it's mostly static. Seasonal editorial content drives massive organic traffic from searches like 'things to do in Des Moines this summer' and 'Des Moines holiday events 2026'."
+      "passes": true,
+      "notes": "Completed: Created seasonal_guides table with RLS and 4 seeded guides (Summer 2026, Fall Festivals, Holiday Lights & Markets, Iowa State Fair Survival Guide). Built /guides/:slug detail page with Schema.org Article structured data and sectioned content with checklist items. Updated GuidesPage to pull seasonal guides from database and display them in a featured grid above static guides."
     },
     {
       "id": "US-053",
