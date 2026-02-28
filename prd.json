@@ -1732,6 +1732,430 @@
       "priority": 104,
       "passes": false,
       "notes": "DATA LAYER AUDIT: Route-level prefetching exists (src/lib/prefetch.ts) but only prefetches code bundles, not data. When a user clicks a card, they wait for both the route bundle AND the API data to load. Prefetching data on hover means the API response is already cached when the user clicks, making navigation feel instant."
+    },
+    {
+      "id": "US-105",
+      "title": "Add sticky mobile CTA bar on all detail pages",
+      "description": "As a mobile user, I need persistent call-to-action buttons visible while scrolling detail pages so that I can quickly take action (get tickets, call restaurant, get directions) without scrolling back to the top.",
+      "acceptanceCriteria": [
+        "Create a reusable StickyMobileCTA component that renders a fixed-bottom bar on mobile viewports (hidden on lg+ screens)",
+        "EventDetails sticky bar shows primary action (Get Tickets/Register or Add to Calendar) and secondary action (Share)",
+        "RestaurantDetails sticky bar shows primary action (Call Now) and secondary action (Get Directions)",
+        "AttractionDetails sticky bar shows primary action (Get Directions) and secondary action (Visit Website)",
+        "Sticky bar has safe-area-inset-bottom padding for notched devices",
+        "Sticky bar does not overlap with BottomNav component",
+        "Sticky bar uses backdrop-blur and subtle top border for visual separation",
+        "Typecheck passes"
+      ],
+      "priority": 105,
+      "passes": false,
+      "notes": "UX AUDIT: On mobile, important CTAs (Get Tickets, Call, Directions) scroll off-screen as users read detail content. Mobile users are the majority of traffic. A sticky CTA bar keeps conversion paths visible at all times, directly improving engagement and conversion rates. Pattern is standard on Yelp, Google Maps, Eventbrite, and similar platforms."
+    },
+    {
+      "id": "US-106",
+      "title": "Add cross-content recommendations on detail pages for internal linking",
+      "description": "As a user viewing an event, I need to see nearby restaurants and attractions so that I can plan my entire outing without leaving the platform, increasing time on site and discovery.",
+      "acceptanceCriteria": [
+        "Create a NearbyContent component that fetches and displays related content from other categories based on location proximity or category relevance",
+        "EventDetails page shows 'Restaurants Near This Venue' section with 3 restaurant cards below the event details",
+        "RestaurantDetails page shows 'Events Nearby' section with 3 upcoming event cards",
+        "AttractionDetails page shows 'Dining Nearby' section with 3 restaurant cards",
+        "Each cross-content section includes a 'View All' link to the respective listing page with location filter pre-applied",
+        "Cross-content sections use existing card components (RestaurantCard, EventCard) for consistency",
+        "Sections are lazy-loaded to avoid impacting initial page load performance",
+        "Typecheck passes"
+      ],
+      "priority": 106,
+      "passes": false,
+      "notes": "UX AUDIT: Detail pages currently only recommend same-type content (events show related events, restaurants show related restaurants). Cross-content linking is a major opportunity for increasing time on site (+20-40% in industry benchmarks), improving internal linking for SEO, and helping users plan complete outings. Google rewards sites with strong internal linking structures."
+    },
+    {
+      "id": "US-107",
+      "title": "Add sort dropdown to all listing pages (Events, Restaurants, Attractions)",
+      "description": "As a user browsing listings, I need to sort results by relevance, rating, date, distance, or price so that I can quickly find the best options for my needs.",
+      "acceptanceCriteria": [
+        "Create a reusable SortDropdown component with configurable sort options",
+        "EventsPage sort options: Date (soonest), Rating, Newest Added, Price (low to high), Price (high to low)",
+        "Restaurants page sort options: Rating, Price (low to high), Price (high to low), Newest Added",
+        "Attractions page sort options: Rating, Newest Added, Name (A-Z)",
+        "Sort selection persists in URL query parameters for shareability and SEO",
+        "Sort dropdown is positioned in the results header area next to the results count",
+        "Default sort is contextual: Events=Date, Restaurants=Rating, Attractions=Rating",
+        "Typecheck passes"
+      ],
+      "priority": 107,
+      "passes": false,
+      "notes": "UX AUDIT: None of the three listing pages have sort functionality. This is a fundamental UX feature that every major listing platform provides (Yelp, Eventbrite, TripAdvisor, Google Maps). Users browsing 50+ items need sorting to find what they want quickly. Without it, users rely solely on the default order which may not match their intent. Sort also improves engagement by letting users control their experience."
+    },
+    {
+      "id": "US-108",
+      "title": "Add featured events section to Events listing page",
+      "description": "As a user browsing events, I need a prominent featured events section at the top of the listing so that I can quickly discover highlighted and recommended events.",
+      "acceptanceCriteria": [
+        "Add a 'Featured Events' section at the top of EventsPage below the hero and filters, showing up to 3 featured events",
+        "Featured section only displays when no search query or filters are active (same pattern as Restaurants page)",
+        "Featured events use a visually distinct card variant (larger, gradient border, or 'Featured' badge)",
+        "Section includes a 'View All Featured' link that applies is_featured filter",
+        "Featured section collapses gracefully when fewer than 3 featured events exist",
+        "Typecheck passes"
+      ],
+      "priority": 108,
+      "passes": false,
+      "notes": "UX AUDIT: Restaurants page has an excellent dedicated featured section that promotes premium listings. Events page lacks this, despite events being the primary content type. Featured events drive venue/promoter partnerships and give users a curated starting point. The inconsistency between pages creates a fragmented UX."
+    },
+    {
+      "id": "US-109",
+      "title": "Add active filter badge display on Attractions listing page",
+      "description": "As a user filtering attractions, I need to see which filters are currently active as removable badges so that I can easily understand and modify my current filter state.",
+      "acceptanceCriteria": [
+        "Add active filter badges below the search/filter area on Attractions page matching the pattern used on Events and Restaurants pages",
+        "Each active filter shows as a removable badge with an X button to clear that specific filter",
+        "Clearing individual filter badges updates results immediately",
+        "A 'Clear All Filters' badge appears when 2+ filters are active",
+        "Badge styling matches existing filter badge design (e.g., Events page pattern)",
+        "Typecheck passes"
+      ],
+      "priority": 109,
+      "passes": false,
+      "notes": "UX AUDIT: Events and Restaurants pages both show active filter badges that users can individually remove. Attractions page lacks this, making filter state unclear. Users may not realize filters are applied, leading to confusion about why they see fewer results. Consistency across all listing pages is essential for usable navigation."
+    },
+    {
+      "id": "US-110",
+      "title": "Add social proof and value proposition to homepage hero",
+      "description": "As a first-time visitor, I need to immediately understand what Des Moines AI Pulse offers and see trust indicators so that I feel confident exploring the platform.",
+      "acceptanceCriteria": [
+        "Add a concise 1-2 sentence value proposition below the hero greeting that explains the platform's unique benefit",
+        "Add a social proof element near the hero stats showing aggregate trust (e.g., star rating with review count, or user count badge)",
+        "Value proposition text is SEO-optimized with primary keywords (Des Moines events, restaurants, AI-powered)",
+        "Social proof data is pulled from actual database metrics where available",
+        "Both elements are responsive and render well on mobile without pushing content below the fold excessively",
+        "Typecheck passes"
+      ],
+      "priority": 110,
+      "passes": false,
+      "notes": "UX AUDIT: The hero currently shows a time-based greeting and live stats but lacks a clear statement of what the platform IS and why users should trust it. First-time visitors need to understand the value proposition within 3-5 seconds. Social proof (ratings, user counts) near the hero increases trust and reduces bounce rate by 15-30% per industry benchmarks."
+    },
+    {
+      "id": "US-111",
+      "title": "Add popular search suggestions below search bar",
+      "description": "As a user, I need to see popular or trending search queries below the search bar so that I can discover content quickly without needing to know exact terms.",
+      "acceptanceCriteria": [
+        "Add a 'Popular Searches' or 'Trending' row below the main SearchSection with 5-8 clickable suggestion chips",
+        "Clicking a chip populates the search query and triggers a search",
+        "Suggestions are contextual: show event categories, trending restaurants, or seasonal content",
+        "Chips use a compact pill/badge design that doesn't dominate the layout",
+        "Suggestions are visible on both mobile and desktop",
+        "Typecheck passes"
+      ],
+      "priority": 111,
+      "passes": false,
+      "notes": "UX AUDIT: The search bar has a generic placeholder but offers no guidance on what users can search for. Popular/trending search suggestions reduce search friction, increase search usage by 20-40%, and expose content that users might not discover on their own. This is standard on Google, Airbnb, Yelp, and similar discovery platforms."
+    },
+    {
+      "id": "US-112",
+      "title": "Add prominent Sign Up CTA button in header for non-authenticated users",
+      "description": "As a non-authenticated visitor, I need a visible sign-up button in the site header so that I can easily create an account without hunting for the registration page.",
+      "acceptanceCriteria": [
+        "Add a 'Sign Up Free' button in the desktop header next to the user menu area, visible only when user is not authenticated",
+        "Button uses a visually distinct style (primary color or outlined) to stand out from navigation",
+        "Button links to /auth with appropriate UTM parameters for tracking",
+        "Button is hidden on mobile to avoid header crowding (mobile users have Sign In in BottomNav and MobileNav)",
+        "Button disappears once user is authenticated",
+        "Typecheck passes"
+      ],
+      "priority": 112,
+      "passes": false,
+      "notes": "UX AUDIT: The header currently shows a generic user menu icon that requires a click to reveal sign-in options. A visible Sign Up CTA in the header is a conversion best practice used by virtually all SaaS and platform sites. It reduces friction for new users and increases signup rates by 10-25%."
+    },
+    {
+      "id": "US-113",
+      "title": "Display dietary restrictions and service type badges on restaurant cards and details",
+      "description": "As a user with dietary needs, I need to see dietary options (vegan, gluten-free) and service types (dine-in, takeout, delivery) on restaurant cards so that I can quickly filter for restaurants that meet my requirements.",
+      "acceptanceCriteria": [
+        "RestaurantCard displays up to 3 dietary option badges (from dietary_options field) below the cuisine type",
+        "RestaurantDetails page shows a dedicated 'Dietary Options' section with all available dietary accommodations",
+        "RestaurantDetails page shows service type indicators (Dine-In, Takeout, Delivery) near the open/close status",
+        "Dietary badges use recognizable icons (leaf for vegan, wheat-off for gluten-free, etc.)",
+        "Badges are compact and don't clutter the card layout",
+        "Typecheck passes"
+      ],
+      "priority": 113,
+      "passes": false,
+      "notes": "UX AUDIT: The database schema includes dietary_options (TEXT[]) on the restaurants table, but this data is not displayed on cards or prominently on detail pages. 30-40% of diners report having dietary restrictions. Surfacing this information reduces friction for a large user segment and improves restaurant matching. This is a key differentiator vs. competitors who bury dietary info."
+    },
+    {
+      "id": "US-114",
+      "title": "Add last-updated verification timestamp to detail pages",
+      "description": "As a user viewing a listing, I need to know when the information was last verified so that I can trust the accuracy of hours, prices, and descriptions.",
+      "acceptanceCriteria": [
+        "Add a subtle 'Last updated: X ago' timestamp on EventDetails, RestaurantDetails, and AttractionDetails pages",
+        "Timestamp uses relative time format (e.g., '2 hours ago', '3 days ago', 'Last week')",
+        "Timestamp is positioned near the bottom of the main content area or in the sidebar",
+        "Add a verification checkmark icon next to recently updated listings (updated within 7 days)",
+        "Timestamp data comes from the updated_at field in the database",
+        "Typecheck passes"
+      ],
+      "priority": 114,
+      "passes": false,
+      "notes": "UX AUDIT: Users have no way to know if listing information is current. Outdated hours, prices, or closed venues erode trust. A last-updated timestamp with verification badge increases user confidence and reduces support inquiries. Google also uses freshness signals in ranking, so this benefits SEO."
+    },
+    {
+      "id": "US-115",
+      "title": "Add estimated visit duration to attraction detail pages",
+      "description": "As a user planning a visit, I need to know how long to spend at an attraction so that I can plan my day effectively and combine multiple activities.",
+      "acceptanceCriteria": [
+        "Add 'Estimated Visit Duration' field display on AttractionDetails page in the Things To Know section",
+        "Display duration as a range (e.g., '1-2 hours', '30 min - 1 hour', 'Half day')",
+        "Use a clock icon for visual consistency",
+        "If duration data is not available, gracefully hide the field rather than showing empty state",
+        "Duration is positioned alongside existing admission and hours information",
+        "Typecheck passes"
+      ],
+      "priority": 115,
+      "passes": false,
+      "notes": "UX AUDIT: Attractions detail pages show hours and admission but not how long a typical visit takes. This is critical information for trip planning. Without it, users must guess or search externally. TripAdvisor and Google Maps both surface this information prominently. Adding it improves the trip planning use case and keeps users on-platform."
+    },
+    {
+      "id": "US-116",
+      "title": "Add pull-to-refresh on Restaurants and Attractions listing pages",
+      "description": "As a mobile user browsing listings, I need pull-to-refresh functionality on all listing pages so that I can easily refresh content with a native mobile gesture.",
+      "acceptanceCriteria": [
+        "Add usePullToRefresh hook to Restaurants listing page, matching the Events page implementation",
+        "Add usePullToRefresh hook to Attractions listing page, matching the Events page implementation",
+        "Pull-to-refresh triggers a data refetch via TanStack Query invalidation",
+        "Visual indicator (spinner) shows during refresh",
+        "Pull gesture only works at scroll position 0 to avoid conflicts with normal scrolling",
+        "Typecheck passes"
+      ],
+      "priority": 116,
+      "passes": false,
+      "notes": "UX AUDIT: Events page has pull-to-refresh but Restaurants and Attractions do not. This inconsistency creates a fragmented mobile experience. Pull-to-refresh is an expected mobile interaction pattern that users attempt instinctively. Adding it to all listing pages creates a consistent, native-feeling experience."
+    },
+    {
+      "id": "US-117",
+      "title": "Improve Attractions page empty state with proper EmptyState component",
+      "description": "As a user who filters attractions and gets no results, I need a helpful empty state with clear messaging and recovery actions so that I can adjust my search.",
+      "acceptanceCriteria": [
+        "Replace the plain text 'No attractions match...' message on Attractions page with the EmptyState component pattern used on Events page",
+        "Empty state shows contextual icon (SearchX for filtered results, Landmark for no data)",
+        "Empty state shows helpful title and description explaining the situation",
+        "Empty state includes 'Clear All Filters' and 'Browse All Attractions' action buttons",
+        "Empty state varies messaging based on whether search query or category filters are active",
+        "Typecheck passes"
+      ],
+      "priority": 117,
+      "passes": false,
+      "notes": "UX AUDIT: Events page has an excellent contextual empty state with recovery actions. Attractions page only shows plain text with no actions when filters return no results. Good empty states reduce user frustration, decrease bounce rate, and guide users toward successful content discovery. This is a quick win for UX consistency."
+    },
+    {
+      "id": "US-118",
+      "title": "Add hover CTA accessibility fix on restaurant cards for keyboard users",
+      "description": "As a keyboard user, I need the hover CTA strip on restaurant cards to be visible on focus so that I can access the action buttons without a mouse.",
+      "acceptanceCriteria": [
+        "RestaurantCard hover CTA strip becomes visible on keyboard focus-within (not just mouse hover)",
+        "Add group-focus-within:translate-y-0 class alongside existing group-hover:translate-y-0",
+        "CTA buttons within the strip are reachable via Tab key",
+        "Focus order is logical: card content → CTA buttons",
+        "Visual focus indicator is visible on CTA buttons",
+        "Typecheck passes"
+      ],
+      "priority": 118,
+      "passes": false,
+      "notes": "UX AUDIT: RestaurantCard has a hover CTA strip that slides up from the bottom on mouse hover. This is invisible to keyboard users, making the card actions inaccessible without a mouse. This is a WCAG 2.1 Level AA compliance issue (Success Criterion 2.1.1 Keyboard). The fix is simple CSS but critical for accessibility."
+    },
+    {
+      "id": "US-119",
+      "title": "Add 'New Restaurant' badge to recently added restaurant cards",
+      "description": "As a user, I need to see which restaurants are newly added so that I can discover the latest dining options in Des Moines.",
+      "acceptanceCriteria": [
+        "RestaurantCard displays a 'New' badge for restaurants added within the last 14 days",
+        "Badge uses the same styling pattern as EventCard's 'New' badge for consistency",
+        "Badge is positioned in the image overlay area alongside existing badges (Featured, Open Now)",
+        "Calculation uses the created_at field from the restaurant record",
+        "Badge does not display simultaneously with 'Featured' badge to avoid visual clutter (Featured takes priority)",
+        "Typecheck passes"
+      ],
+      "priority": 119,
+      "passes": false,
+      "notes": "UX AUDIT: EventCard shows 'New' and 'Trending' badges for social proof, but RestaurantCard has no 'New' indicator. Users love discovering what's new in their city. A 'New' badge creates urgency and excitement around recently added restaurants, driving clicks and engagement. This is a freshness signal that also benefits SEO."
+    },
+    {
+      "id": "US-120",
+      "title": "Add FAQ schema sections to Events and Attractions listing pages",
+      "description": "As a search engine user, I need FAQ sections with schema markup on listing pages so that the site earns rich snippet placements and answers common queries directly in search results.",
+      "acceptanceCriteria": [
+        "Verify EventsPage has a FAQSection component with FAQ schema markup (check if already implemented)",
+        "Verify Attractions page has a FAQSection component with FAQ schema markup",
+        "FAQ content is relevant to the page topic (events FAQ, attractions FAQ)",
+        "FAQSchema component outputs valid JSON-LD structured data",
+        "FAQ sections are positioned after main listings but before footer",
+        "Each FAQ section has at least 5 questions with substantive answers",
+        "Typecheck passes"
+      ],
+      "priority": 120,
+      "passes": false,
+      "notes": "UX AUDIT: FAQ sections with schema markup can earn rich snippets in Google search results, increasing CTR by 20-30%. Restaurants page has good FAQ implementation. Events and Attractions pages should have equally strong FAQ sections. FAQ content also improves time on page and provides value to users who scroll below listings."
+    },
+    {
+      "id": "US-121",
+      "title": "Add SEOHead component to RestaurantDetails and AttractionDetails pages",
+      "description": "As a search engine, I need proper dynamic meta tags on all detail pages so that each listing has unique, optimized title, description, and Open Graph tags for better search rankings and social sharing.",
+      "acceptanceCriteria": [
+        "RestaurantDetails page uses SEOHead or EnhancedLocalSEO component with dynamic restaurant data (name, cuisine, location, description)",
+        "AttractionDetails page uses SEOHead or EnhancedAttractionSEO component with dynamic attraction data (name, type, location, description)",
+        "Each detail page generates a unique meta title following the pattern: '{Name} - {Type} in Des Moines | Des Moines Insider'",
+        "Each detail page generates a unique meta description using the listing's description field (155-160 chars)",
+        "Open Graph image uses the listing's image_url",
+        "Canonical URL is set correctly for each detail page",
+        "Typecheck passes"
+      ],
+      "priority": 121,
+      "passes": false,
+      "notes": "UX AUDIT: EventDetails has good SEO head implementation but RestaurantDetails and AttractionDetails may not be consistently applying dynamic meta tags. Every detail page needs unique, optimized meta tags for search engine indexing and social media sharing. Without this, shared links show generic site info instead of specific listing details."
+    },
+    {
+      "id": "US-122",
+      "title": "Improve footer newsletter conversion with benefit copy and social proof",
+      "description": "As a potential subscriber, I need clear benefit messaging and social proof near the newsletter signup form so that I understand the value of subscribing before entering my email.",
+      "acceptanceCriteria": [
+        "Update the footer newsletter form placeholder from 'Your email' to something benefit-oriented (e.g., 'Get your weekly Des Moines plan')",
+        "Add a brief benefit line above the form (e.g., 'Weekly digest of trending events + AI recommendations')",
+        "Add subscriber count social proof near the form if not already present (e.g., 'Join 15,000+ locals')",
+        "Newsletter signup button text communicates value (e.g., 'Subscribe Free' instead of generic 'Subscribe')",
+        "Changes are responsive and don't break footer layout on mobile",
+        "Typecheck passes"
+      ],
+      "priority": 122,
+      "passes": false,
+      "notes": "UX AUDIT: The footer newsletter form has a generic 'Your email' placeholder with no benefit messaging. Newsletter conversion rates improve 25-50% when the form communicates specific value (what subscribers get) and includes social proof (how many others subscribe). The Newsletter component elsewhere in the app already has social proof but the footer implementation lacks it."
+    },
+    {
+      "id": "US-123",
+      "title": "Add category quick-links section to Restaurants listing page",
+      "description": "As a user browsing restaurants, I need quick-access category links (by cuisine type) so that I can rapidly filter to my preferred cuisine without opening the full filter panel.",
+      "acceptanceCriteria": [
+        "Add a 'Browse by Cuisine' section to the Restaurants page, either above or below the main restaurant grid",
+        "Section shows clickable cuisine type buttons with result counts (e.g., 'Italian (23)', 'Mexican (15)')",
+        "Clicking a cuisine button applies the cuisine filter and scrolls to results",
+        "Section styling matches the 'Browse by Type' pattern on the Attractions page",
+        "Section only shows cuisines that have at least 1 restaurant",
+        "Typecheck passes"
+      ],
+      "priority": 123,
+      "passes": false,
+      "notes": "UX AUDIT: Attractions page has a 'Browse by Type' section that allows quick category filtering. Events page has SmartFilterChips. Restaurants page lacks equivalent category quick-links, forcing users to open the full filter panel to browse by cuisine. Cuisine browsing is one of the most common restaurant search patterns."
+    },
+    {
+      "id": "US-124",
+      "title": "Move SmartFilterChips on Events page to more prominent position",
+      "description": "As a user browsing events, I need category quick-filter chips positioned above the event grid so that I can easily discover and filter by category without scrolling past ads.",
+      "acceptanceCriteria": [
+        "Move or duplicate SmartFilterChips component to appear directly above the events grid (below the results count header)",
+        "Chips should be visible immediately without scrolling past other content",
+        "Chips remain horizontally scrollable on mobile with overflow handling",
+        "Existing ad placement is not removed but SmartFilterChips no longer depends on being below the ad",
+        "Typecheck passes"
+      ],
+      "priority": 124,
+      "passes": false,
+      "notes": "UX AUDIT: SmartFilterChips on the Events page is currently positioned below the first ad placement, reducing its discoverability. Category quick-filters should be one of the first interactive elements users see when browsing. Moving them above the grid follows the pattern used by Eventbrite, Meetup, and similar event platforms where category chips appear immediately below the search bar."
+    },
+    {
+      "id": "US-125",
+      "title": "Standardize card social proof badges across all content types",
+      "description": "As a user, I need consistent social proof indicators (trending, new, popular, view counts) across event, restaurant, and attraction cards so that I can quickly identify high-quality options regardless of content type.",
+      "acceptanceCriteria": [
+        "EventCard, RestaurantCard, and AttractionCard all support 'New' badges for recently added items (within 14 days)",
+        "All card types support 'Trending' or 'Popular' badges based on engagement metrics",
+        "Badge styling is consistent across all card types (same colors, sizes, positions)",
+        "Badge logic uses a shared utility function for determining badge eligibility",
+        "No more than 2 badges show simultaneously on any card to avoid visual clutter",
+        "Typecheck passes"
+      ],
+      "priority": 125,
+      "passes": false,
+      "notes": "UX AUDIT: EventCard has 'New' and 'Trending' badges, RestaurantCard has 'Popular' badge (popularity_score > 70), but the styling and logic are inconsistent. AttractionCard has no social proof badges at all. Standardizing social proof across all card types creates a cohesive browsing experience and helps users identify high-quality content at a glance."
+    },
+    {
+      "id": "US-126",
+      "title": "Add 'Surprise Me' random discovery button to search section",
+      "description": "As a user who doesn't know what to search for, I need a serendipity button that suggests a random event or restaurant so that I can discover things I wouldn't have found through traditional search.",
+      "acceptanceCriteria": [
+        "Add a 'Surprise Me' or 'I'm Feeling Lucky' secondary button adjacent to the main Search button in SearchSection",
+        "Clicking the button navigates to a random featured or highly-rated event/restaurant detail page",
+        "Random selection draws from featured or high-rated content to ensure quality",
+        "Button uses a distinct but complementary style (outlined or secondary variant) to not compete with the primary Search CTA",
+        "Button includes a dice or sparkle icon for visual clarity",
+        "Typecheck passes"
+      ],
+      "priority": 126,
+      "passes": false,
+      "notes": "UX AUDIT: Many users visit discovery platforms without a specific intent. A 'Surprise Me' button capitalizes on serendipity browsing behavior, increases engagement with lesser-known content, and creates a playful interaction that differentiates the platform. This feature is used by Netflix (shuffle), Spotify (lucky pick), and Yelp (surprise me)."
+    },
+    {
+      "id": "US-127",
+      "title": "Add 'Getting There' section with parking and transit info on event detail pages",
+      "description": "As a user planning to attend an event, I need parking and transportation information so that I can plan how to get to the venue without searching externally.",
+      "acceptanceCriteria": [
+        "Add a 'Getting There' card on EventDetails page below the map section",
+        "Section shows venue-specific parking information if available in the database",
+        "Section includes a link to Google Maps directions using the event's coordinates",
+        "Section mentions DART public transit as an option with a link to the DART website",
+        "If no specific parking info is available, show generic downtown Des Moines parking guidance",
+        "Typecheck passes"
+      ],
+      "priority": 127,
+      "passes": false,
+      "notes": "UX AUDIT: Event detail pages show a map with the venue location but provide no practical transportation guidance. 'How do I get there?' and 'Where do I park?' are among the most common questions for event attendees. Providing this info keeps users on-platform and reduces the need to search Google for parking near the venue."
+    },
+    {
+      "id": "US-128",
+      "title": "Add event time display to EventCard for quick scanning",
+      "description": "As a user browsing events, I need to see the event time (not just date) on the card so that I can quickly determine if the timing works for my schedule without clicking into every event.",
+      "acceptanceCriteria": [
+        "EventCard displays the event time alongside the date (e.g., 'Sat, Mar 15 @ 7:00 PM')",
+        "Time is formatted in 12-hour format with AM/PM for US audience",
+        "If time is not available (date-only events), only the date is shown",
+        "Time display is compact and doesn't increase card height significantly",
+        "Time uses a subtle visual separator (@ or •) between date and time",
+        "Typecheck passes"
+      ],
+      "priority": 128,
+      "passes": false,
+      "notes": "UX AUDIT: EventCard currently shows the date via formatEventDateShort() but the time is not visible on the card. Users must click into event details to see what time it starts. Time is one of the most critical pieces of information for event decision-making. Showing it on the card reduces clicks and helps users scan listings much faster."
+    },
+    {
+      "id": "US-129",
+      "title": "Consolidate and optimize newsletter signup placement strategy",
+      "description": "As a user, I need newsletter signup prompts to appear at the right moments in my journey so that I encounter them when I'm most likely to subscribe, without feeling spammed by multiple forms.",
+      "acceptanceCriteria": [
+        "Newsletter signup appears in at most 2 strategic locations: one in-content and one in footer",
+        "Remove duplicate newsletter forms that appear within close scroll proximity of each other",
+        "In-content placement triggers after user has scrolled past at least 50% of main content (engagement signal)",
+        "Footer placement remains as the persistent fallback",
+        "EmailCaptureModal respects user dismiss preference and does not reappear for 30 days",
+        "Typecheck passes"
+      ],
+      "priority": 129,
+      "passes": false,
+      "notes": "UX AUDIT: Newsletter signup currently appears in Footer (always), Newsletter component (homepage), and EmailCaptureModal (triggered from tools). Multiple prompts can create 'subscription fatigue' and annoy users. Strategic placement at 2 high-intent touchpoints will improve conversion rates while reducing user friction."
+    },
+    {
+      "id": "US-130",
+      "title": "Add breadcrumb navigation to all detail pages consistently",
+      "description": "As a user on a detail page, I need breadcrumb navigation so that I can understand my location in the site hierarchy and easily navigate back to parent listing pages.",
+      "acceptanceCriteria": [
+        "EventDetails, RestaurantDetails, and AttractionDetails all render breadcrumb navigation below the header",
+        "Breadcrumbs follow the pattern: Home > [Category] > [Item Name]",
+        "Breadcrumb links are functional and navigate to the correct pages",
+        "BreadcrumbListSchema structured data is included for SEO",
+        "Breadcrumbs are responsive and truncate long item names on mobile",
+        "Breadcrumb styling is consistent across all detail page types",
+        "Typecheck passes"
+      ],
+      "priority": 130,
+      "passes": false,
+      "notes": "UX AUDIT: Breadcrumbs are implemented on listing pages but may not be consistently applied to all detail pages. Breadcrumbs improve navigation (reducing bounce rate by 5-10%), provide context (users know where they are), and generate structured data that Google displays in search results. BreadcrumbList schema can increase CTR in search results by 20-30%."
     }
   ]
 }

@@ -37,6 +37,8 @@ import {
 import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
+import { StickyMobileCTA } from "@/components/StickyMobileCTA";
+import { NearbyContent } from "@/components/NearbyContent";
 
 const createSlug = (name: string): string => {
   return name
@@ -661,6 +663,13 @@ export default function AttractionDetails() {
             </section>
           )}
 
+          {/* Cross-Content: Nearby Restaurants */}
+          <NearbyContent
+            variant="restaurants-near-attraction"
+            city="Des Moines"
+            excludeId={attraction.id}
+          />
+
           {/* Browse More CTA */}
           <div className="text-center py-8">
             <Link to="/attractions">
@@ -674,6 +683,30 @@ export default function AttractionDetails() {
       </div>
       <Footer />
       <BackToTop />
+
+      <StickyMobileCTA
+        variant="attraction"
+        primaryAction={
+          attraction.location
+            ? {
+                label: "Get Directions",
+                href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(attraction.name + " " + attraction.location)}`,
+                icon: "directions",
+                isExternal: true,
+              }
+            : undefined
+        }
+        secondaryAction={
+          attraction.website
+            ? {
+                label: "Visit Website",
+                href: attraction.website,
+                icon: "website",
+                isExternal: true,
+              }
+            : undefined
+        }
+      />
     </>
   );
 }

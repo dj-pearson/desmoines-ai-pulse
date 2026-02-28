@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense, useRef } from "react";
+import React, { useState, useEffect, lazy, Suspense, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { SortDropdown, EVENT_SORT_OPTIONS } from "@/components/SortDropdown";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
   Sheet,
@@ -140,6 +141,7 @@ export default function EventsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState("list");
+  const [sortBy, setSortBy] = useState("date_asc");
   const [page, setPage] = useState(1);
   const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
@@ -369,7 +371,26 @@ export default function EventsPage() {
   });
 
   const rawEvents = eventsData?.events || [];
-  const events = filterEventsByPrice(rawEvents, priceRange);
+  const priceFilteredEvents = filterEventsByPrice(rawEvents, priceRange);
+  const events = useMemo(() => {
+    const sorted = [...priceFilteredEvents];
+    switch (sortBy) {
+      case "date_desc":
+        sorted.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        break;
+      case "newest":
+        sorted.sort((a, b) => new Date(b.id > a.id ? 1 : -1));
+        break;
+      case "title_asc":
+        sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+        break;
+      case "date_asc":
+      default:
+        sorted.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        break;
+    }
+    return sorted;
+  }, [priceFilteredEvents, sortBy]);
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
@@ -891,6 +912,11 @@ export default function EventsPage() {
                 </p>
               )}
             </div>
+            <SortDropdown
+              options={EVENT_SORT_OPTIONS}
+              value={sortBy}
+              onChange={setSortBy}
+            />
           </div>
 
           {/* Event Grid / Map */}
