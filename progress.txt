@@ -82,11 +82,46 @@
 - ~~No curated itineraries~~ (RESOLVED: US-042, /itineraries with 6 seeded itineraries + print + ICS export)
 - ~~No deals/coupons section~~ (RESOLVED: US-043, /deals with category filters + claim flow)
 - ~~No interactive discovery map~~ (RESOLVED: US-044, /map with toggleable event/restaurant/attraction layers)
-- TODOs: remaining content hubs (US-045–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
+- ~~No dedicated music/concert hub~~ (RESOLVED: US-045, /music with venue guide + tonight's shows)
+- ~~No sports hub~~ (RESOLVED: US-046, /sports with 7 teams + game schedules)
+- ~~No trails/outdoor hub~~ (RESOLVED: US-047, /outdoors with 8 trails + difficulty filters)
+- ~~No brewery trail~~ (RESOLVED: US-048, /breweries with digital passport + check-in gamification)
+- TODOs: remaining content hubs (US-049–US-060), mobile push (US-068–069), image pipeline (US-066–067, US-071)
 
 ---
 
 ## Progress Log
+
+## 2026-02-28 — Ralph Loop 6: Content Hubs (Music, Sports, Outdoors, Breweries)
+
+- **US-045**: Built live music and concert hub:
+  - Created `venues` migration with RLS, seeded 9 Des Moines venues (Wells Fargo Arena, Hoyt Sherman Place, Woolys, xBk, Leftys, Val Air Ballroom, Civic Center, Simon Estes Amphitheater, Vibrant Music Hall)
+  - Built `/music` hub page with Tonight's Shows, This Weekend, Upcoming Concerts, and Venue Guide sections
+  - Built `/music/venues/:slug` venue detail page with upcoming events, capacity, location, directions
+  - Created `useVenues` hook (useVenues, useVenue, useVenueEvents)
+  - Music events filtered by category=Music/Concert/Live Music
+- **US-046**: Built sports hub with team schedules:
+  - Created `teams` migration with RLS, seeded 7 teams (Iowa Cubs, Iowa Wild, Iowa Wolves, Iowa Barnstormers, Des Moines Menace, Drake Bulldogs, Grand View Vikings)
+  - Built `/sports` hub with Today's Games, This Week's Schedule, Teams & Venues sections with sport emoji icons
+  - Built `/sports/:slug` team detail page with Schema.org SportsTeam structured data, upcoming games
+  - Created `useTeams` hook (useTeams, useTeam, useTeamGames)
+  - Sports events filtered by category=Sport/Game/Baseball/Hockey/Basketball/Football/Soccer
+- **US-047**: Created trails and outdoor recreation hub:
+  - Created `trails` migration with RLS, seeded 8 trails (High Trestle, Raccoon River Valley, Gray's Lake, Clive Greenbelt, Neal Smith, Great Western, Sycamore, Bill Riley)
+  - Built `/outdoors` hub with Featured Trails spotlight, difficulty/activity filters, and All Trails grid
+  - Built `/outdoors/:slug` trail detail page with highlights, activities, trailhead directions, distance info
+  - Created `useTrails` hook (useTrails, useTrail, useFeaturedTrails) with helper functions
+  - Difficulty color badges (green/yellow/red), surface type labels, activity icons
+- **US-048**: Built brewery and craft beer trail:
+  - Created `brewery_trail_checkins` migration with RLS and UNIQUE(user_id, restaurant_id)
+  - Built `/breweries` page with Brewery Passport progress tracker (progress bar, X/Y count, completion message)
+  - Brewery grid with check-in status overlay (visited badge + filled circle vs empty)
+  - Check-in dialog with optional beer name and 5-star rating input
+  - Created `useBreweryTrail` hook (useBreweries, useBreweryCheckins, useCheckinMutation)
+  - Gamification: +40 XP per check-in, trail completion badge
+- All 4 content hubs added to main navigation (Explore group + flat nav list)
+- Build verified: `npm run build` passes (59s, no errors)
+- **Progress: 54/104 stories complete (52%)**
 
 ## 2026-02-28 — Ralph Loop 5: API Docs, Itineraries, Deals, Discovery Map
 
