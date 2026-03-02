@@ -54,6 +54,8 @@ targets:
         basedOnDependencyAnalysis: false
     dependencies:
       - package: Supabase
+      - target: DesMoinesInsiderClip
+        embed: true
     entitlements:
       path: DesMoinesInsider/App/DesMoinesInsider.entitlements
       properties:
@@ -62,6 +64,40 @@ targets:
         com.apple.developer.associated-domains:
           - applinks:desmoinesinsider.com
           - webcredentials:desmoinesinsider.com
+          - appclip:desmoinesinsider.com
+
+  # ──────────────────────────────────────────────────
+  # App Clip Target
+  # ──────────────────────────────────────────────────
+  DesMoinesInsiderClip:
+    type: application.on-demand-install-capable
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: DesMoinesInsiderClip
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        INFOPLIST_FILE: DesMoinesInsiderClip/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.desmoines.aipulse.Clip
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic
+      configs:
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: -Onone
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: -O
+    dependencies:
+      - package: Supabase
+    entitlements:
+      path: DesMoinesInsiderClip/DesMoinesInsiderClip.entitlements
+      properties:
+        com.apple.developer.on-demand-install-capable: true
+        com.apple.developer.associated-domains:
+          - appclip:desmoinesinsider.com
 
   # ──────────────────────────────────────────────────
   # UI Test Target — Used by Fastlane Snapshot for
@@ -92,6 +128,7 @@ schemes:
     build:
       targets:
         DesMoinesInsider: all
+        DesMoinesInsiderClip: all
     run:
       config: Debug
     profile:

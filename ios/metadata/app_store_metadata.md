@@ -17,6 +17,7 @@ Copy/paste the sections below into the corresponding fields.
 
 ---
 
+
 ## URLs
 
 - **Privacy Policy URL:** https://desmoinesinsider.com/privacy-policy
@@ -92,3 +93,80 @@ The app requires a network connection to load content from our backend (Supabase
 Generated automatically via the iOS Screenshots GitHub Actions workflow.
 Devices: iPhone 16 Pro Max, iPhone 15 Pro Max, iPad Pro 13-inch (M4).
 Download from the `app-store-screenshots` artifact in GitHub Actions.
+
+---
+
+## App Clip
+
+### Bundle ID
+`com.desmoines.aipulse.Clip`
+
+### Invocation URL
+`https://desmoinesinsider.com/clip`
+
+(Also handles `/events/:id` and `/restaurants/:id` for deep-linked clips from QR/NFC.)
+
+### Header Image
+- **Format:** JPG or PNG, RGB color space
+- **Size:** 1800 × 1200 px
+- **Content:** Des Moines skyline with "What's Happening Today" overlay text.
+
+### Subtitle (50 chars max)
+```
+Today's events in Des Moines
+```
+
+### Action (choose from App Store Connect dropdown)
+`Open App` — reveals the full Des Moines Insider app install prompt.
+
+### Default App Clip Link
+`https://desmoinesinsider.com/clip`
+
+### App Clip Demo URL (for Apple review)
+`https://desmoinesinsider.com/clip`
+
+### Associated Domain (added to both targets)
+`appclip:desmoinesinsider.com`
+
+### Apple App Site Association (AASA) — add to desmoinesinsider.com
+The following JSON block must be served at:
+`https://desmoinesinsider.com/.well-known/apple-app-site-association`
+
+```json
+{
+  "appclips": {
+    "apps": ["<TEAM_ID>.com.desmoines.aipulse.Clip"]
+  },
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["<TEAM_ID>.com.desmoines.aipulse"],
+        "components": [
+          { "/": "/events/*" },
+          { "/": "/restaurants/*" },
+          { "/": "/clip" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Replace `<TEAM_ID>` with your Apple Developer Team ID.
+
+### What the Clip Shows
+- Today's upcoming **featured events** (max 5), fetched without requiring sign-in
+- Each card shows: event title, venue/location, date/time, price, category icon
+- Tapping a card opens the full event page in Safari / the full app
+- "Get Des Moines Insider — Free" button deep-links to the App Store listing
+
+### Source Files
+| File | Purpose |
+|------|---------|
+| `ios/DesMoinesInsiderClip/DesMoinesInsiderClipApp.swift` | `@main` entry point, handles `NSUserActivityTypeBrowsingWeb` |
+| `ios/DesMoinesInsiderClip/ClipRootView.swift` | Single-screen UI (hero + event list + CTA) |
+| `ios/DesMoinesInsiderClip/ClipEventCard.swift` | Individual event row card |
+| `ios/DesMoinesInsiderClip/ClipEventsViewModel.swift` | Fetches featured events from Supabase |
+| `ios/DesMoinesInsiderClip/DesMoinesInsiderClip.entitlements` | `on-demand-install-capable` + `appclip:` domain |
+| `ios/DesMoinesInsiderClip/Info.plist` | Clip bundle info + `NSAppClip` key |
+
