@@ -27,7 +27,8 @@
       "Bash(git hash-object:*)",
       "Bash(git ls-tree:*)",
       "Bash(npm run lint:*)",
-      "Bash(npm run test:unit:*)"
+      "Bash(npm run test:unit:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
