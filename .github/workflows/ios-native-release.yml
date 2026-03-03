@@ -181,6 +181,15 @@ jobs:
 
           print('  Removed App Clip target from project.yml')
           PYEOF
+
+          # Belt-and-suspenders: strip appclip from main app entitlements when
+          # building without App Clip. Prevents Invalid Binary if project.yml
+          # or XcodeGen ever re-adds it.
+          ENT="DesMoinesInsider/App/DesMoinesInsider.entitlements"
+          if grep -q "appclip:desmoinesinsider.com" "$ENT" 2>/dev/null; then
+            echo "  Stripping appclip from $ENT (building without App Clip)"
+            sed -i '' '/appclip:desmoinesinsider.com/d' "$ENT"
+          fi
           fi
 
           xcodegen generate
@@ -487,6 +496,22 @@ jobs:
 
           echo "IPA_PATH=$IPA_PATH" >> $GITHUB_ENV
           echo "✅ IPA exported: $IPA_PATH ($(du -h "$IPA_PATH" | cut -f1))"
+
+      # ==============================================================
+      # 10b. VERIFY BINARY ENTITLEMENTS (debug Invalid Binary)
+      # ==============================================================
+      - name: Verify binary entitlements
+        run: |
+          cd "$RUNNER_TEMP"
+          unzip -q -o "$IPA_PATH" -d ipa_extract
+          APP=$(find ipa_extract -name "*.app" -type d | head -1)
+          echo "📋 App entitlements (embedded in binary):"
+          codesign -d --entitlements - "$APP" 2>/dev/null | plutil -p - 2>/dev/null || codesign -d --entitlements - "$APP" 2>/dev/null || true
+          if codesign -d --entitlements - "$APP" 2>/dev/null | grep -q "appclip"; then
+            echo "::error::appclip found in binary entitlements — will cause Invalid Binary"
+            exit 1
+          fi
+          echo "✅ No appclip in binary entitlements"
 
       # ==============================================================
       # 11. UPLOAD TO TESTFLIGHT
