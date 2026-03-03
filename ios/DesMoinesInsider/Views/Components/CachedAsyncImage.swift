@@ -13,7 +13,11 @@ struct CachedAsyncImage<Placeholder: View>: View {
             if let image {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
+                    // clipped() here prevents the fill-scaled image from overflowing
+                    // whatever frame the call site provides, which would otherwise
+                    // widen the layout beyond the screen bounds.
+                    .clipped()
             } else if isLoading {
                 placeholder()
                     .overlay {

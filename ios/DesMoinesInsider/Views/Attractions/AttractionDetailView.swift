@@ -14,6 +14,7 @@ struct AttractionDetailView: View {
                 actionButtons
                 descriptionSection
             }
+            .frame(maxWidth: .infinity)
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
@@ -46,8 +47,7 @@ struct AttractionDetailView: View {
                         .foregroundStyle(.teal.opacity(0.3))
                 }
             }
-            .frame(height: 300)
-            .clipped()
+            .frame(maxWidth: .infinity, minHeight: 300, maxHeight: 300)
 
             LinearGradient(
                 colors: [.clear, .clear, .black.opacity(0.7)],
@@ -75,6 +75,7 @@ struct AttractionDetailView: View {
             }
             .padding()
         }
+        .clipped()
     }
 
     // MARK: - Info Section

@@ -16,6 +16,7 @@ struct RestaurantDetailView: View {
                 actionButtons
                 descriptionSection
             }
+            .frame(maxWidth: .infinity)
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
@@ -64,8 +65,7 @@ struct RestaurantDetailView: View {
                         .foregroundStyle(.orange.opacity(0.3))
                 }
             }
-            .frame(height: 300)
-            .clipped()
+            .frame(maxWidth: .infinity, minHeight: 300, maxHeight: 300)
 
             LinearGradient(
                 colors: [.clear, .clear, .black.opacity(0.7)],
@@ -91,6 +91,7 @@ struct RestaurantDetailView: View {
             }
             .padding()
         }
+        .clipped()
         .onTapGesture {
             if restaurant.imageUrl != nil {
                 showImageViewer = true

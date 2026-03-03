@@ -21,6 +21,7 @@ struct EventDetailView: View {
                     relatedEventsSection
                 }
             }
+            .frame(maxWidth: .infinity)
         }
         .ignoresSafeArea(edges: .top)
         .navigationBarTitleDisplayMode(.inline)
@@ -78,8 +79,7 @@ struct EventDetailView: View {
                         .foregroundStyle(.white.opacity(0.3))
                 }
             }
-            .frame(height: 300)
-            .clipped()
+            .frame(maxWidth: .infinity, minHeight: 300, maxHeight: 300)
             // Decorative — title is in the text overlay below; hide from VoiceOver
             .accessibilityHidden(true)
 
@@ -101,6 +101,8 @@ struct EventDetailView: View {
             }
             .padding()
         }
+        // clip the ZStack so neither the image nor overlays can push layout wider than screen
+        .clipped()
         .onTapGesture {
             if event.imageUrl != nil {
                 showImageViewer = true
