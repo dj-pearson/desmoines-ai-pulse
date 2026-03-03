@@ -6,6 +6,7 @@ struct EventDetailView: View {
 
     @State private var viewModel = EventDetailViewModel()
     @State private var showShareSheet = false
+    @State private var showImageViewer = false
 
     var body: some View {
         ScrollView {
@@ -55,6 +56,9 @@ struct EventDetailView: View {
         } message: {
             Text(viewModel.calendarError ?? "")
         }
+        .fullScreenCover(isPresented: $showImageViewer) {
+            FullScreenImageViewer(imageUrl: event.imageUrl, isPresented: $showImageViewer)
+        }
         .task {
             await viewModel.loadEvent(event)
         }
@@ -95,6 +99,11 @@ struct EventDetailView: View {
                     .lineLimit(3)
             }
             .padding()
+        }
+        .onTapGesture {
+            if event.imageUrl != nil {
+                showImageViewer = true
+            }
         }
     }
 

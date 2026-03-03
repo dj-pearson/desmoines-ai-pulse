@@ -5,6 +5,7 @@ struct RestaurantDetailView: View {
     let restaurant: Restaurant
 
     @State private var showShareSheet = false
+    @State private var showImageViewer = false
     @State private var favorites = FavoritesService.shared
 
     var body: some View {
@@ -44,6 +45,9 @@ struct RestaurantDetailView: View {
         }
         .sheet(isPresented: $showShareSheet) {
             ShareSheet(items: [shareText])
+        }
+        .fullScreenCover(isPresented: $showImageViewer) {
+            FullScreenImageViewer(imageUrl: restaurant.imageUrl, isPresented: $showImageViewer)
         }
     }
 
@@ -86,6 +90,11 @@ struct RestaurantDetailView: View {
                     .lineLimit(3)
             }
             .padding()
+        }
+        .onTapGesture {
+            if restaurant.imageUrl != nil {
+                showImageViewer = true
+            }
         }
     }
 
