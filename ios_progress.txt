@@ -91,6 +91,18 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-006
+- **Implemented**: Add pull-to-refresh on main list pages
+- **Changes**:
+  - `src/hooks/use-pull-to-refresh.tsx`: Added `hapticTap()` import and call when pull threshold is reached
+  - `src/pages/RestaurantsPage.tsx`: Added pull-to-refresh with `usePullToRefresh` hook, `pullToRefreshRef` on content container, refresh indicator UI matching EventsPage pattern
+- **Why**: Pull-to-refresh is a standard iOS interaction pattern. EventsPage already had it; RestaurantsPage was missing it. Haptic feedback makes the trigger feel native.
+- **Learnings for future iterations:**
+  - `usePullToRefresh` hook is touch-only by design (touch events) — no need for explicit Capacitor gating
+  - The `ptr-indicator` CSS class handles positioning; indicator UI is inline with a transform based on pull distance
+  - Keep the pull-to-refresh pattern consistent: same indicator, same toast message pattern across pages
+---
+
 ## 2026-03-02 — IOS-004
 - **Implemented**: Fix keyboard push-up behavior on iOS form inputs
 - **Changes**:

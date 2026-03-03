@@ -13,6 +13,9 @@ import {
   List,
   Map
 } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
+import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +47,9 @@ export default function RestaurantsPage() {
   const RESTAURANTS_PER_PAGE = 30;
   const { toast } = useToast();
 
-  const { data: restaurantsData, isLoading } = useQuery({
+  const isMobile = useIsMobile();
+
+  const { data: restaurantsData, isLoading, refetch } = useQuery({
     queryKey: [
       "restaurants",
       searchQuery,
@@ -103,6 +108,13 @@ export default function RestaurantsPage() {
       return (data || []).map((row: { cuisine: string }) => row.cuisine);
     },
     staleTime: 30 * 60 * 1000, // 30 minutes - cuisines rarely change
+  });
+
+  const { elementRef: pullToRefreshRef, isPulling, isRefreshing, pullDistance } = usePullToRefresh({
+    onRefresh: async () => {
+      await refetch();
+      toast({ title: "Restaurants Refreshed", description: "Restaurant list has been updated" });
+    },
   });
 
   const handleClearFilters = () => {
@@ -272,7 +284,22 @@ export default function RestaurantsPage() {
           </div>
         </section>
 
-        <div className="container mx-auto px-4 py-8">
+        <div ref={pullToRefreshRef} className="container mx-auto px-4 py-8 relative">
+          {/* Pull to Refresh */}
+          {isMobile && (isPulling || isRefreshing) && (
+            <div className="ptr-indicator" style={{ transform: `translateY(${Math.min(pullDistance, 80)}px)` }}>
+              <div className="bg-background rounded-full p-3 shadow-lg">
+                {isRefreshing ? (
+                  <LoadingSpinner className="h-6 w-6" />
+                ) : (
+                  <svg className="h-6 w-6 text-primary" style={{ transform: `rotate(${pullDistance * 2}deg)` }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Filters Section */}
           {showFilters && (
             <div className="bg-white rounded-2xl shadow-lg p-6 mb-8 border">

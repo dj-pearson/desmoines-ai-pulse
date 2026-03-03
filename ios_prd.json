@@ -93,8 +93,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "The ptr-content and ptr-indicator CSS classes already exist in index.css. Can use the overscroll-behavior-y: contain approach. Key pages: EventsPage, RestaurantsPage, Attractions."
+      "passes": true,
+      "notes": "usePullToRefresh hook already existed with touch gesture detection. Added hapticTap() feedback on pull trigger. Added pull-to-refresh to RestaurantsPage (EventsPage already had it). Uses ptr-indicator CSS class for the refresh spinner."
     },
     {
       "id": "IOS-007",
