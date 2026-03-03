@@ -233,8 +233,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "EventPhotoGallery.tsx has a basic modal viewer. Could enhance it or create a separate native-feel viewer. CSS touch-action and transform: scale() for zoom."
+      "passes": true,
+      "notes": "Created ImageViewer component with full-screen overlay, pinch-to-zoom (2-finger gesture using Math.hypot distance), and swipe-down-to-dismiss (opacity fades as user swipes). Only activates in Capacitor. Uses touch-action: none for gesture control. Close button respects safe area insets."
     },
     {
       "id": "IOS-016",

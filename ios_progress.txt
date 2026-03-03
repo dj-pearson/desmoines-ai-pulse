@@ -91,6 +91,13 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-015
+- **Implemented**: Add iOS-native image viewer with pinch-to-zoom and swipe-to-dismiss
+- **Changes**:
+  - `src/components/ImageViewer.tsx`: New component — wraps children as a tap target, opens full-screen overlay with pinch-to-zoom (Math.hypot for 2-finger distance) and swipe-down-to-dismiss (opacity fades, 100px threshold). Only in Capacitor.
+- **Learnings**: Use `touch-action: none` on the viewer element to prevent browser handling pinch/swipe. Track `isDismissing` ref to distinguish pinch from dismiss gestures.
+---
+
 ## 2026-03-02 — IOS-014
 - **Implemented**: Fix status bar text color on dark hero images
 - **Changes**:
