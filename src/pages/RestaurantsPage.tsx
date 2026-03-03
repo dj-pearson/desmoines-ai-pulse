@@ -31,7 +31,6 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { useToast } from "@/hooks/use-toast";
-import { LoadingSpinner } from "@/components/ui/loading-skeleton";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
