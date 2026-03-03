@@ -309,8 +309,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Some skeleton/loading states may already exist. The skeleton-mobile and loading-shimmer CSS classes are in index.css. Focus on the main user-facing pages: events list, restaurants list, detail pages."
+      "passes": true,
+      "notes": "Created EventCardSkeleton (matches SocialEventCard: image area, date badge, category badges, title, location/time), RestaurantCardSkeleton (matches RestaurantCard: image, badges, star rating row, description, location), and DetailHeroSkeleton. Added variant prop to CardsGridSkeleton ('event'|'restaurant'|'default'). Updated EventsPage, Restaurants, and RestaurantsPage to use layout-matched skeletons. Uses existing skeleton-mobile CSS class for image areas."
     }
   ]
 }

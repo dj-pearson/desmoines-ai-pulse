@@ -260,3 +260,17 @@ npm run build                        # Production build must succeed
   - `@media (hover: none)` targets touch-only devices without affecting desktop
   - Key hover classes to suppress: `hover:shadow-lg`, `hover:shadow-xl`, `hover:-translate-y-*`
 ---
+
+### IOS-020: Add loading skeleton screens for iOS-native feel ✅
+- **Changes:**
+  - `src/components/ui/loading-skeleton.tsx`: Added `EventCardSkeleton` (matches SocialEventCard: image area with date badge placeholder, category badge row, title lines, location/time footer), `RestaurantCardSkeleton` (matches RestaurantCard: image with badge placeholders, star rating row with 5 skeleton stars, description lines, location), `DetailHeroSkeleton` (full-width image with back/share button placeholders and overlaid title/badges)
+  - `src/components/ui/loading-skeleton.tsx`: Added `variant` prop to `CardsGridSkeleton` — accepts `"event"`, `"restaurant"`, or `"default"` to render the appropriate skeleton card type
+  - `src/pages/EventsPage.tsx`: Both skeleton usages now pass `variant="event"` for layout-matched skeletons
+  - `src/pages/Restaurants.tsx`: Added `variant="restaurant"` to CardsGridSkeleton
+  - `src/pages/RestaurantsPage.tsx`: Replaced basic `animate-pulse` div loading state with proper `CardsGridSkeleton variant="restaurant"`, imported CardsGridSkeleton
+- **Why**: Modern iOS apps show content-shaped skeleton screens rather than generic spinners. Layout-matched skeletons reduce perceived load time and prevent layout shift (CLS) when real content appears.
+- **Learnings for future iterations:**
+  - Skeleton cards should mirror the real card's image height, badge positions, and text line widths
+  - The `skeleton-mobile` CSS class provides `bg-muted animate-pulse rounded-lg` for image areas
+  - Adding a `variant` prop to grid skeletons keeps the API backwards-compatible while enabling card-specific shapes
+---
