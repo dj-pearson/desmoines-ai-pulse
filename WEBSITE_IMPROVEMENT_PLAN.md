@@ -1491,9 +1491,9 @@ if (isSlowConnection || isLowEndDevice) {
 
 ---
 
-#### 📌 Mobile App (Capacitor)
-**Current:** Basic mobile app exists in `/mobile-app/`
-**Solution:** Polish and publish native apps
+#### 📌 Mobile App (Native SwiftUI)
+**Current:** Native SwiftUI app in `/ios/` with full feature set
+**Solution:** Continue enhancing native iOS app
 
 **Features to Add:**
 - Push notifications (FCM)

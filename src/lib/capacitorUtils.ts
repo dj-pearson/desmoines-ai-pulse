@@ -8,7 +8,7 @@
  */
 
 /* ------------------------------------------------------------------ */
-/* Build-time constant injected by mobile-app/vite.config.mobile.ts   */
+/* Build-time constant injected by vite.config.mobile.ts              */
 /* ------------------------------------------------------------------ */
 declare const __MOBILE_APP__: boolean | undefined;
 

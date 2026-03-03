@@ -1812,7 +1812,7 @@ npm run test:codegen
 - **Tech Stack:** React Native (existing React knowledge)
 - **Effort:** Medium (3-4 months)
 - **ROI:** High (mobile usage is 60%+ of traffic)
-- **Note:** `/mobile-app/` directory exists with basic setup
+- **Note:** Native SwiftUI app lives in `/ios/` directory
 
 **2. Enhanced Personalization**
 - **Opportunity:** AI-powered user recommendations

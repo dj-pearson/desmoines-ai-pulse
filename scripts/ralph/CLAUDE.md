@@ -18,7 +18,7 @@ You are an autonomous coding agent working on the **Des Moines Insider** project
 ## Project Context
 
 - **Stack**: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Supabase + React Router v6
-- **Mobile**: Capacitor iOS/Android app in `mobile-app/`
+- **Mobile**: Native SwiftUI iOS app in `ios/`
 - **Database**: PostgreSQL via Supabase (see `src/integrations/supabase/types.ts` for schema types)
 - **Auth**: Supabase Auth, accessed via `useAuth()` from `@/contexts/AuthContext`
 - **State**: TanStack Query v5 for server state; React hooks + Context for UI state
