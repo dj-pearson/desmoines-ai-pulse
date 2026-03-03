@@ -9,6 +9,7 @@ import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useKeyboardAware } from "@/hooks/useKeyboardAware";
 import { usePageTransition } from "@/hooks/usePageTransition";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useDeepLinks } from "@/hooks/useDeepLinks";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation } from "react-router-dom";
@@ -212,6 +213,9 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
 
   // Register for push notifications on Capacitor (auto-registers if previously enabled)
   usePushNotifications();
+
+  // Handle incoming deep links (Universal Links / App Links)
+  useDeepLinks();
 
   // Subtle page transition animation for Capacitor (no-op on web)
   const pageTransitionRef = usePageTransition<HTMLDivElement>();

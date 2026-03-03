@@ -188,8 +188,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "The public/.well-known/ directory exists. Capacitor App plugin listener is typed in capacitorUtils.ts. The App Clip functionality was recently added (commit history shows associated domains work)."
+      "passes": true,
+      "notes": "apple-app-site-association file already exists with /events/*, /restaurants/*, /attractions/* paths. Created useDeepLinks hook that listens for Capacitor App plugin 'appUrlOpen' events and navigates to the corresponding route. Wired into App.tsx. Associated Domains already configured in iOS project."
     },
     {
       "id": "IOS-013",

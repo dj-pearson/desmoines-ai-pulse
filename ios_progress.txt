@@ -91,6 +91,20 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-012
+- **Implemented**: Implement deep linking for event/restaurant URLs
+- **Changes**:
+  - `src/hooks/useDeepLinks.ts`: New hook — listens for `appUrlOpen` event from Capacitor App plugin, parses incoming URL, extracts path, and navigates via React Router. Handles both full URLs and path-only strings.
+  - `src/App.tsx`: Wired `useDeepLinks()` into KeyboardShortcutsProvider
+  - `public/.well-known/apple-app-site-association`: Already exists with proper paths (/events/*, /restaurants/*, /attractions/*, etc.)
+- **Why**: Deep links allow shared URLs to open directly in the app instead of the browser, providing a seamless user experience.
+- **Learnings for future iterations:**
+  - The Capacitor App plugin fires `appUrlOpen` for both Universal Links and custom URL schemes
+  - Always parse the URL to extract just the path — the full URL includes the domain
+  - The AASA file must be served from `/.well-known/` with `Content-Type: application/json` (Cloudflare Pages handles this)
+  - The listener returns a `{ remove }` object from `addListener`, not a Promise-based cleanup
+---
+
 ## 2026-03-02 — IOS-011
 - **Implemented**: Wire up push notification registration and event reminders
 - **Changes**:
