@@ -111,10 +111,11 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "automatic",
     scheme: "Des Moines Insider",
-    // Prefer WKWebView (default in Capacitor 6)
-    preferredContentMode: "mobile",
-    // Required for HTML5 video inline playback and WebVTT caption/description tracks
-    allowsInlineMediaPlayback: true,
+    // "recommended" lets WKWebView choose the best rendering mode per device.
+    // On iPhone: phone layout. On iPad: full tablet layout (uses the wide screen).
+    preferredContentMode: "recommended",
+    // Note: allowsInlineMediaPlayback is set in MainViewController.swift via
+    // WKWebViewConfiguration override — Capacitor's TypeScript types do not expose it.
     // Allow link previews (3D touch / long-press)
     allowsLinkPreview: true,
     // Scroll behavior

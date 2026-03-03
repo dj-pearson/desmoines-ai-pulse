@@ -22,7 +22,8 @@ html {
   padding: 0;
   margin: 0;
   /* Enable safe area insets */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 /* Safe area utility classes */
@@ -57,7 +58,9 @@ a,
 }
 
 /* Allow text selection in content areas */
-p, article, .selectable {
+p,
+article,
+.selectable {
   -webkit-user-select: text;
   user-select: text;
 }
@@ -73,7 +76,9 @@ html {
 }
 
 /* Prevent zooming on input focus (iOS) */
-input, select, textarea {
+input,
+select,
+textarea {
   font-size: 16px !important;
 }
 
@@ -92,7 +97,9 @@ a:active,
 [role="button"]:active {
   opacity: 0.7;
   transform: scale(0.98);
-  transition: opacity 0.1s ease, transform 0.1s ease;
+  transition:
+    opacity 0.1s ease,
+    transform 0.1s ease;
 }
 
 /* ==========================================================================
@@ -101,12 +108,14 @@ a:active,
 
 /* iOS: Match system font */
 .ios body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    sans-serif;
 }
 
 /* Android: Match system font */
 .android body {
-  font-family: 'Roboto', 'Noto Sans', sans-serif;
+  font-family: "Roboto", "Noto Sans", sans-serif;
 }
 
 /* ==========================================================================
@@ -146,6 +155,84 @@ body.keyboard-visible nav[aria-label="Bottom navigation"] {
 
 * {
   scrollbar-width: none;
+}
+
+/* ==========================================================================
+   iPadOS Pointer Device Support (trackpad / mouse / Apple Pencil hover)
+   Only applies when a fine pointer (mouse/trackpad) is present — not on
+   touch-only devices. Keeps touch UX unchanged on iPhone.
+   ========================================================================== */
+
+@media (hover: hover) and (pointer: fine) {
+  /* Show pointer cursor on all interactive elements */
+  button,
+  a,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"],
+  [role="option"],
+  label[for],
+  select,
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="submit"],
+  input[type="button"],
+  .cursor-pointer {
+    cursor: pointer;
+  }
+
+  /* Hover states for buttons */
+  button:hover,
+  [role="button"]:hover,
+  input[type="submit"]:hover,
+  input[type="button"]:hover {
+    opacity: 0.85;
+    transition: opacity 0.15s ease;
+  }
+
+  /* Hover states for links */
+  a:hover {
+    opacity: 0.8;
+    transition: opacity 0.15s ease;
+  }
+
+  /* Hover states for cards */
+  [class*="card"]:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+    transform: translateY(-1px);
+    transition:
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  /* Undo the touch active-state scale effect on hover-capable devices */
+  button:active,
+  a:active,
+  [role="button"]:active {
+    opacity: 0.7;
+    transform: none;
+  }
+
+  /* Show scrollbars on iPad with mouse (hidden by default for touch) */
+  ::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.4);
+    border-radius: 3px;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+  }
 }
 
 /* ==========================================================================
