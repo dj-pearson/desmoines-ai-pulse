@@ -156,8 +156,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "EnhancedHero.tsx already conditionally loads HeroCityLite only for web builds. The .capacitor-app section[class*='min-h-'] rule already removes min-height. Verify end-to-end that the hero is fast and compact."
+      "passes": true,
+      "notes": "Verified: EnhancedHero sets HeroCityLite = null when __MOBILE_APP__ is true (build-time tree-shaking). CSS .capacitor-app section[class*='min-h-'] forces min-height: auto. QuickActionsMobile renders with large touch targets and gold gradient primary action. No changes needed — all criteria already met."
     },
     {
       "id": "IOS-011",

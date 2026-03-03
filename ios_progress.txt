@@ -91,6 +91,18 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-010
+- **Verified**: Optimize hero section for Capacitor (skip Three.js) — already fully implemented
+- **No changes needed**:
+  - `src/components/EnhancedHero.tsx`: Already sets `HeroCityLite = null` via `__MOBILE_APP__` build-time constant
+  - `src/index.css`: `.capacitor-app section[class*="min-h-"]` already forces `min-height: auto !important`
+  - `src/components/QuickActions.tsx`: `QuickActionsMobile` variant already provides large touch targets (h-20) with prominent gold gradient AI action
+- **Why no code changes**: All acceptance criteria were already satisfied by previous implementation. Three.js is completely tree-shaken out of mobile builds, hero is compact, quick actions are prominent.
+- **Learnings for future iterations:**
+  - Build-time constants (`__MOBILE_APP__`) are the most reliable way to exclude heavy dependencies — bundler eliminates entire code paths
+  - `min-h-auto !important` in Capacitor CSS is more flexible than a fixed mobile height — lets content flow naturally
+---
+
 ## 2026-03-02 — IOS-009
 - **Implemented**: Add network status indicator for offline/slow connections
 - **Changes**:
