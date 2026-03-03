@@ -217,8 +217,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "StatusBar plugin is configured in capacitor.config.ts. capacitorUtils.ts has the StatusBar type. Need to call setStyle on route change and scroll events for detail pages."
+      "passes": true,
+      "notes": "Created useStatusBarStyle hook that switches status bar text color on route change. Light text on detail pages with dark heroes (/events/:slug, /restaurants/:slug, etc.) and home page. Dark text on list pages. Uses Capacitor StatusBar plugin setStyle."
     },
     {
       "id": "IOS-015",

@@ -91,6 +91,14 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-014
+- **Implemented**: Fix status bar text color on dark hero images
+- **Changes**:
+  - `src/hooks/useStatusBarStyle.ts`: New hook — switches StatusBar style between LIGHT/DARK based on current route. Detail pages and home use LIGHT (white text), list pages use DARK.
+  - `src/App.tsx`: Wired `useStatusBarStyle()` into KeyboardShortcutsProvider
+- **Learnings**: StatusBar.setStyle accepts `{ style: 'LIGHT' | 'DARK' }` — LIGHT = white text, DARK = black text (confusingly named).
+---
+
 ## 2026-03-02 — IOS-013
 - **Implemented**: Add swipe-back gesture support for navigation
 - **Changes**:

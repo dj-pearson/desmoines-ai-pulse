@@ -11,6 +11,7 @@ import { usePageTransition } from "@/hooks/usePageTransition";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useDeepLinks } from "@/hooks/useDeepLinks";
 import { useSwipeBack } from "@/hooks/useSwipeBack";
+import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation } from "react-router-dom";
@@ -220,6 +221,9 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
 
   // Enable swipe-from-left-edge to go back on iOS
   useSwipeBack();
+
+  // Switch status bar text color based on page (light on dark heroes, dark elsewhere)
+  useStatusBarStyle();
 
   // Subtle page transition animation for Capacitor (no-op on web)
   const pageTransitionRef = usePageTransition<HTMLDivElement>();
