@@ -28,7 +28,8 @@
       "Bash(git ls-tree:*)",
       "Bash(npm run lint:*)",
       "Bash(npm run test:unit:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []
