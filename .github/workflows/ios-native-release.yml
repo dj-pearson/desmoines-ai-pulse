@@ -365,33 +365,34 @@ jobs:
           # CODE_SIGN_IDENTITY as global xcodebuild CLI overrides applies them to EVERY
           # compiled target, including SPM C targets like swift-crypto_Crypto. Xcode 26+
           # hard-errors when a provisioning profile is assigned to such targets.
-          python3 << PYEOF
-import re
-
-pp_uuid  = "$PP_UUID"
-team_id  = "$TEAM_ID"
-
-with open("DesMoinesInsider.xcodeproj/project.pbxproj", "r") as fh:
-    content = fh.read()
-
-def insert_signing_settings(m):
-    indent = m.group(1)
-    return (
-        f'{indent}CODE_SIGN_IDENTITY = "Apple Distribution";\n'
-        f'{indent}CODE_SIGN_STYLE = Manual;\n'
-        f'{indent}PROVISIONING_PROFILE_SPECIFIER = "{pp_uuid}";'
-    )
-
-new_content = re.sub(r"(\t+)CODE_SIGN_STYLE = Manual;", insert_signing_settings, content)
-
-inserted = new_content.count(f'PROVISIONING_PROFILE_SPECIFIER = "{pp_uuid}"')
-print(f"  Inserted PROVISIONING_PROFILE_SPECIFIER into {inserted} build config(s)")
-if inserted == 0:
-    print("  WARNING: no CODE_SIGN_STYLE = Manual; lines found — check project.yml")
-
-with open("DesMoinesInsider.xcodeproj/project.pbxproj", "w") as fh:
-    fh.write(new_content)
-PYEOF
+          python3 << 'PYEOF'
+          import re, os, sys
+          
+          pp_uuid = os.environ["PP_UUID"]
+          
+          pbxproj = "DesMoinesInsider.xcodeproj/project.pbxproj"
+          with open(pbxproj, "r") as fh:
+              content = fh.read()
+          
+          def insert_signing_settings(m):
+              indent = m.group(1)
+              return (
+                  indent + 'CODE_SIGN_IDENTITY = "Apple Distribution";\n' +
+                  indent + "CODE_SIGN_STYLE = Manual;\n" +
+                  indent + 'PROVISIONING_PROFILE_SPECIFIER = "' + pp_uuid + '";'
+              )
+          
+          new_content = re.sub(r"(\t+)CODE_SIGN_STYLE = Manual;", insert_signing_settings, content)
+          
+          inserted = new_content.count('PROVISIONING_PROFILE_SPECIFIER = "' + pp_uuid + '"')
+          print("  Inserted PROVISIONING_PROFILE_SPECIFIER into " + str(inserted) + " build config(s)")
+          if inserted == 0:
+              print("  WARNING: no CODE_SIGN_STYLE = Manual; lines found — check project.yml")
+              sys.exit(1)
+          
+          with open(pbxproj, "w") as fh:
+              fh.write(new_content)
+          PYEOF
 
           echo "✅ Code signing configured in project.pbxproj"
           grep -c "DEVELOPMENT_TEAM = $TEAM_ID;" "$PBXPROJ" | xargs -I{} echo "   DEVELOPMENT_TEAM set in {} build configs"
