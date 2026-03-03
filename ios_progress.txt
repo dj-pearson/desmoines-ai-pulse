@@ -91,6 +91,164 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-018
+- **Implemented**: Add App Store metadata and screenshot generation docs
+- **Changes**:
+  - `mobile-app/docs/app-store-metadata.md`: New doc — app name, subtitle, description, keywords, screenshot requirements (5 device sizes), privacy nutrition labels, App Store Connect fields, Fastlane commands
+- **No code changes** — documentation only as specified in acceptance criteria
+---
+
+## 2026-03-02 — IOS-017
+- **Implemented**: Cache images locally for faster repeat loads
+- **Changes**:
+  - `public/sw.js`: Updated image cache limit from 50 to 100. Added LRU eviction — when cache exceeds limit, oldest entries (first in `cache.keys()`) are deleted. Re-puts cached responses on hit to move to front.
+- **Learnings**: `cache.keys()` returns entries in insertion order — re-putting an entry moves it to the end (newest). Deleting from the start of the keys list implements simple LRU.
+---
+
+## 2026-03-02 — IOS-016
+- **Implemented**: Optimize list rendering with virtualization for long lists
+- **Changes**:
+  - `src/hooks/useVirtualList.ts`: New hook — lightweight windowed rendering using scroll position + requestAnimationFrame. Only virtualizes when item count exceeds threshold (50). Returns startIndex/endIndex for slicing visible items, totalHeight/offsetTop for spacer positioning.
+- **Learnings**: Use `requestAnimationFrame` for scroll handlers to avoid jank. 2-screen overscan buffer prevents visible gaps during fast scrolling.
+---
+
+## 2026-03-02 — IOS-015
+- **Implemented**: Add iOS-native image viewer with pinch-to-zoom and swipe-to-dismiss
+- **Changes**:
+  - `src/components/ImageViewer.tsx`: New component — wraps children as a tap target, opens full-screen overlay with pinch-to-zoom (Math.hypot for 2-finger distance) and swipe-down-to-dismiss (opacity fades, 100px threshold). Only in Capacitor.
+- **Learnings**: Use `touch-action: none` on the viewer element to prevent browser handling pinch/swipe. Track `isDismissing` ref to distinguish pinch from dismiss gestures.
+---
+
+## 2026-03-02 — IOS-014
+- **Implemented**: Fix status bar text color on dark hero images
+- **Changes**:
+  - `src/hooks/useStatusBarStyle.ts`: New hook — switches StatusBar style between LIGHT/DARK based on current route. Detail pages and home use LIGHT (white text), list pages use DARK.
+  - `src/App.tsx`: Wired `useStatusBarStyle()` into KeyboardShortcutsProvider
+- **Learnings**: StatusBar.setStyle accepts `{ style: 'LIGHT' | 'DARK' }` — LIGHT = white text, DARK = black text (confusingly named).
+---
+
+## 2026-03-02 — IOS-013
+- **Implemented**: Add swipe-back gesture support for navigation
+- **Changes**:
+  - `src/hooks/useSwipeBack.ts`: New hook — detects left-edge swipe gestures (30px zone) with threshold (80px) and velocity (0.3px/ms) checks, triggers `navigate(-1)`. Only iOS Capacitor, disabled on home page.
+  - `src/App.tsx`: Wired `useSwipeBack()` into KeyboardShortcutsProvider
+- **Why**: iOS users expect swipe-from-left-edge to go back. This JS implementation works in WKWebView alongside the native gesture support.
+- **Learnings for future iterations:**
+  - Edge zone (30px) prevents false positives from normal horizontal scrolling
+  - Check `deltaY > deltaX` to distinguish vertical scrolls from horizontal swipes
+  - Disable on home page (`/`) since there's nothing to go back to
+  - `{ passive: true }` on touch listeners is important for scroll performance
+---
+
+## 2026-03-02 — IOS-012
+- **Implemented**: Implement deep linking for event/restaurant URLs
+- **Changes**:
+  - `src/hooks/useDeepLinks.ts`: New hook — listens for `appUrlOpen` event from Capacitor App plugin, parses incoming URL, extracts path, and navigates via React Router. Handles both full URLs and path-only strings.
+  - `src/App.tsx`: Wired `useDeepLinks()` into KeyboardShortcutsProvider
+  - `public/.well-known/apple-app-site-association`: Already exists with proper paths (/events/*, /restaurants/*, /attractions/*, etc.)
+- **Why**: Deep links allow shared URLs to open directly in the app instead of the browser, providing a seamless user experience.
+- **Learnings for future iterations:**
+  - The Capacitor App plugin fires `appUrlOpen` for both Universal Links and custom URL schemes
+  - Always parse the URL to extract just the path — the full URL includes the domain
+  - The AASA file must be served from `/.well-known/` with `Content-Type: application/json` (Cloudflare Pages handles this)
+  - The listener returns a `{ remove }` object from `addListener`, not a Promise-based cleanup
+---
+
+## 2026-03-02 — IOS-011
+- **Implemented**: Wire up push notification registration and event reminders
+- **Changes**:
+  - `src/hooks/usePushNotifications.ts`: New hook — registers with APNs/FCM via Capacitor PushNotifications plugin, stores device token in Supabase `device_tokens` table, handles notification tap navigation to event/restaurant detail pages. Also exports `scheduleEventReminder()` for local notifications.
+  - `src/lib/capacitorUtils.ts`: Added PushNotifications and LocalNotifications plugin types
+  - `src/components/EventReminderSettings.tsx`: Added local notification scheduling when toggling reminders on Capacitor. Added `eventTitle` and `eventDate` optional props.
+  - `src/App.tsx`: Wired `usePushNotifications()` into KeyboardShortcutsProvider for auto-registration on launch
+- **Why**: Push notifications are essential for event reminders on mobile. The mobile-app/ directory had a separate implementation, but the main web app (which gets bundled into Capacitor) needed its own version using window.Capacitor.Plugins.
+- **Learnings for future iterations:**
+  - Capacitor PushNotifications plugin requires `checkPermissions` → `requestPermissions` → `register` flow
+  - `device_tokens` table upsert uses `onConflict: 'token'` to prevent duplicates
+  - Local notifications need a stable numeric ID — use a hash function on `eventId + reminderType`
+  - The `registration` event fires after `register()` with the device token
+  - `pushNotificationActionPerformed` fires when user taps a notification — use for deep linking
+---
+
+## 2026-03-02 — IOS-010
+- **Verified**: Optimize hero section for Capacitor (skip Three.js) — already fully implemented
+- **No changes needed**:
+  - `src/components/EnhancedHero.tsx`: Already sets `HeroCityLite = null` via `__MOBILE_APP__` build-time constant
+  - `src/index.css`: `.capacitor-app section[class*="min-h-"]` already forces `min-height: auto !important`
+  - `src/components/QuickActions.tsx`: `QuickActionsMobile` variant already provides large touch targets (h-20) with prominent gold gradient AI action
+- **Why no code changes**: All acceptance criteria were already satisfied by previous implementation. Three.js is completely tree-shaken out of mobile builds, hero is compact, quick actions are prominent.
+- **Learnings for future iterations:**
+  - Build-time constants (`__MOBILE_APP__`) are the most reliable way to exclude heavy dependencies — bundler eliminates entire code paths
+  - `min-h-auto !important` in Capacitor CSS is more flexible than a fixed mobile height — lets content flow naturally
+---
+
+## 2026-03-02 — IOS-009
+- **Implemented**: Add network status indicator for offline/slow connections
+- **Changes**:
+  - `src/hooks/useNetworkStatus.ts`: Added Capacitor Network plugin listener (`networkStatusChange`) for reliable detection in WKWebView. Added `queryClient.invalidateQueries()` on reconnect to auto-refetch visible queries. Gets initial status from Network plugin.
+  - `src/components/OfflineBanner.tsx`: Added safe area inset support via inline style `paddingTop: max(0.5rem, env(safe-area-inset-top))`. Bumped z-index to 60 to sit above the header (z-50).
+  - `src/lib/capacitorUtils.ts`: Added Network plugin type to CapacitorGlobal interface
+- **Why**: `navigator.onLine` is unreliable in WKWebView — it may not fire events or report incorrect status. The Capacitor Network plugin provides native-level network monitoring. Auto-refetching on reconnect ensures users see fresh data immediately.
+- **Learnings for future iterations:**
+  - `queryClient.invalidateQueries()` without arguments invalidates ALL queries, causing visible ones to refetch
+  - The Network plugin's `addListener` is async — returns a Promise<{remove}> unlike browser events
+  - `networkMode: 'always'` in TanStack Query config means queries fire even offline (using cache) — no need for extra offline handling
+  - Safe area insets in inline styles need `max()` for fallback on non-notched devices
+---
+
+## 2026-03-02 — IOS-008
+- **Implemented**: Implement native-feel page transitions
+- **Changes**:
+  - `src/hooks/usePageTransition.ts`: New hook — detects route changes via useLocation, applies `cap-page-enter` CSS class to a ref'd container for a slide-fade animation. No-op on web.
+  - `src/index.css`: Added `@keyframes cap-page-enter` (opacity 0.85→1, translateX 8px→0, 250ms ease-out), scoped to `.capacitor-app`
+  - `src/App.tsx`: Added `usePageTransition` to KeyboardShortcutsProvider, wrapping children in a `<div>` with the transition ref
+- **Why**: Native iOS apps have subtle slide-in transitions between screens. A lightweight CSS-only approach avoids heavy dependencies like framer-motion while achieving a native feel.
+- **Learnings for future iterations:**
+  - Force reflow (`void el.offsetWidth`) between removing and adding a CSS class to re-trigger animations
+  - 250ms is the sweet spot — fast enough to feel snappy, slow enough to register visually
+  - `translateX(8px)` is a subtle hint of direction without being disorienting
+  - The existing `@media (prefers-reduced-motion: reduce)` rule suppresses all animations, so this respects it automatically
+---
+
+## 2026-03-02 — IOS-007
+- **Implemented**: Fix header safe area overlap on notched iPhones
+- **Changes**:
+  - `src/index.css`: Changed `.capacitor-app header` padding-top from `env(safe-area-inset-top, 0px)` to `0` to prevent double spacing with the `::before` pseudo-element that already handles the safe area inset
+- **Why**: Three overlapping safe-area mechanisms competed: (1) `.safe-area-top` class on the header element, (2) `.capacitor-app header` padding-top override, (3) `header::before` height. On notched iPhones this produced ~2x the needed spacing. Now only `::before` handles the inset, and padding-top is zeroed in Capacitor.
+- **Learnings for future iterations:**
+  - Pick ONE mechanism for safe area spacing, not multiple — `::before` is cleanest for sticky headers
+  - The `.safe-area-top` utility class is for non-Capacitor use; in Capacitor the `!important` overrides must account for it
+  - `viewport-fit=cover` in the viewport meta tag is required for `env(safe-area-inset-*)` to work
+  - MobileNav sheet already uses `safe-area-inset` class — covers all four edges
+---
+
+## 2026-03-02 — IOS-006
+- **Implemented**: Add pull-to-refresh on main list pages
+- **Changes**:
+  - `src/hooks/use-pull-to-refresh.tsx`: Added `hapticTap()` import and call when pull threshold is reached
+  - `src/pages/RestaurantsPage.tsx`: Added pull-to-refresh with `usePullToRefresh` hook, `pullToRefreshRef` on content container, refresh indicator UI matching EventsPage pattern
+- **Why**: Pull-to-refresh is a standard iOS interaction pattern. EventsPage already had it; RestaurantsPage was missing it. Haptic feedback makes the trigger feel native.
+- **Learnings for future iterations:**
+  - `usePullToRefresh` hook is touch-only by design (touch events) — no need for explicit Capacitor gating
+  - The `ptr-indicator` CSS class handles positioning; indicator UI is inline with a transform based on pull distance
+  - Keep the pull-to-refresh pattern consistent: same indicator, same toast message pattern across pages
+---
+
+## 2026-03-02 — IOS-004
+- **Implemented**: Fix keyboard push-up behavior on iOS form inputs
+- **Changes**:
+  - `src/lib/capacitorUtils.ts`: Added Keyboard plugin type (addListener, hide, setAccessoryBarVisible, setScroll)
+  - `src/hooks/useKeyboardAware.ts`: New hook — listens for `keyboardWillShow`/`keyboardWillHide` via Capacitor Keyboard plugin, scrolls focused input into view above keyboard, sets `--keyboard-height` CSS variable and `.keyboard-visible` class on html. Falls back to `focusin` + `scrollIntoView` when plugin unavailable.
+  - `src/index.css`: Added keyboard-aware CSS — hides bottom nav when keyboard visible, adjusts main padding to `var(--keyboard-height)`, adds `scroll-margin-bottom: 120px` to focused inputs in Capacitor
+  - `src/App.tsx`: Wired `useKeyboardAware()` into KeyboardShortcutsProvider
+- **Why**: iOS WKWebView with `resize: 'native'` can still obscure inputs, especially when the bottom nav takes space. Hiding the nav during keyboard input frees ~80px. The scrollIntoView with 300ms delay lets the keyboard finish animating before adjusting scroll position.
+- **Learnings for future iterations:**
+  - Capacitor Keyboard plugin provides `keyboardHeight` in `keyboardWillShow` — use it for precise positioning
+  - `scroll-margin-bottom` CSS property is the modern way to ensure scroll targets have clearance
+  - Always fall back gracefully when Keyboard plugin isn't available (web builds)
+  - Hiding bottom nav during keyboard input is standard iOS UX (native apps do this)
+---
+
 ## 2026-03-03 — IOS-005
 - **Implemented**: Optimize scroll performance with CSS containment
 - **Changes**:
@@ -101,4 +259,18 @@ npm run build                        # Production build must succeed
   - `contain: layout style paint` is safe for card-like elements that don't overflow
   - `@media (hover: none)` targets touch-only devices without affecting desktop
   - Key hover classes to suppress: `hover:shadow-lg`, `hover:shadow-xl`, `hover:-translate-y-*`
+---
+
+### IOS-020: Add loading skeleton screens for iOS-native feel ✅
+- **Changes:**
+  - `src/components/ui/loading-skeleton.tsx`: Added `EventCardSkeleton` (matches SocialEventCard: image area with date badge placeholder, category badge row, title lines, location/time footer), `RestaurantCardSkeleton` (matches RestaurantCard: image with badge placeholders, star rating row with 5 skeleton stars, description lines, location), `DetailHeroSkeleton` (full-width image with back/share button placeholders and overlaid title/badges)
+  - `src/components/ui/loading-skeleton.tsx`: Added `variant` prop to `CardsGridSkeleton` — accepts `"event"`, `"restaurant"`, or `"default"` to render the appropriate skeleton card type
+  - `src/pages/EventsPage.tsx`: Both skeleton usages now pass `variant="event"` for layout-matched skeletons
+  - `src/pages/Restaurants.tsx`: Added `variant="restaurant"` to CardsGridSkeleton
+  - `src/pages/RestaurantsPage.tsx`: Replaced basic `animate-pulse` div loading state with proper `CardsGridSkeleton variant="restaurant"`, imported CardsGridSkeleton
+- **Why**: Modern iOS apps show content-shaped skeleton screens rather than generic spinners. Layout-matched skeletons reduce perceived load time and prevent layout shift (CLS) when real content appears.
+- **Learnings for future iterations:**
+  - Skeleton cards should mirror the real card's image height, badge positions, and text line widths
+  - The `skeleton-mobile` CSS class provides `bg-muted animate-pulse rounded-lg` for image areas
+  - Adding a `variant` prop to grid skeletons keeps the API backwards-compatible while enabling card-specific shapes
 ---

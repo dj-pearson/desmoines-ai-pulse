@@ -6,6 +6,12 @@ import { RouteErrorBoundary } from "@/components/ui/route-error-boundary";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, ComponentType } from "react";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { useKeyboardAware } from "@/hooks/useKeyboardAware";
+import { usePageTransition } from "@/hooks/usePageTransition";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { useDeepLinks } from "@/hooks/useDeepLinks";
+import { useSwipeBack } from "@/hooks/useSwipeBack";
+import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation } from "react-router-dom";
@@ -204,15 +210,33 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
     onShowHelp: () => setShowShortcutsModal(true),
   });
 
+  // Ensure iOS keyboard doesn't obscure focused inputs
+  useKeyboardAware();
+
+  // Register for push notifications on Capacitor (auto-registers if previously enabled)
+  usePushNotifications();
+
+  // Handle incoming deep links (Universal Links / App Links)
+  useDeepLinks();
+
+  // Enable swipe-from-left-edge to go back on iOS
+  useSwipeBack();
+
+  // Switch status bar text color based on page (light on dark heroes, dark elsewhere)
+  useStatusBarStyle();
+
+  // Subtle page transition animation for Capacitor (no-op on web)
+  const pageTransitionRef = usePageTransition<HTMLDivElement>();
+
   return (
-    <>
+    <div ref={pageTransitionRef}>
       {children}
       <KeyboardShortcutsModal
         open={showShortcutsModal}
         onOpenChange={setShowShortcutsModal}
       />
       <WelcomeModal />
-    </>
+    </div>
   );
 };
 

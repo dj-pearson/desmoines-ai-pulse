@@ -61,8 +61,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "The Capacitor config already has Keyboard resize: 'native'. May need CSS adjustments for specific views where the keyboard overlaps. Key files: search inputs in EventsPage, RestaurantsPage, auth forms in Auth.tsx, trip planner input."
+      "passes": true,
+      "notes": "Created useKeyboardAware hook that listens for Capacitor Keyboard plugin events (keyboardWillShow/keyboardWillHide) and scrolls focused inputs into view. Falls back to focusin listener with scrollIntoView for environments without the plugin. Added CSS: hides bottom nav when keyboard is visible, adjusts main padding, adds scroll-margin-bottom to focused inputs."
     },
     {
       "id": "IOS-005",
@@ -93,8 +93,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "The ptr-content and ptr-indicator CSS classes already exist in index.css. Can use the overscroll-behavior-y: contain approach. Key pages: EventsPage, RestaurantsPage, Attractions."
+      "passes": true,
+      "notes": "usePullToRefresh hook already existed with touch gesture detection. Added hapticTap() feedback on pull trigger. Added pull-to-refresh to RestaurantsPage (EventsPage already had it). Uses ptr-indicator CSS class for the refresh spinner."
     },
     {
       "id": "IOS-007",
@@ -108,8 +108,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "The Capacitor CSS section has header::before with env(safe-area-inset-top). Need to verify the Header component's sticky positioning works properly with this. Also check MobileNav sheet positioning."
+      "passes": true,
+      "notes": "Fixed double safe area spacing. The header had three overlapping safe-area mechanisms: .safe-area-top class, .capacitor-app header padding-top override, and ::before pseudo-element. Set padding-top to 0 in Capacitor so only the ::before handles it. MobileNav sheet already has safe-area-inset class. viewport-fit=cover is set in index.html."
     },
     {
       "id": "IOS-008",
@@ -124,8 +124,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Can be done with CSS animations on route change. Use the capacitor-app class to scope. Keep transitions simple — slide + fade, not complex 3D transforms. Key file: App.tsx route container."
+      "passes": true,
+      "notes": "Created usePageTransition hook that detects route changes and applies a cap-page-enter CSS class for a subtle slide-fade animation (250ms ease-out). Scoped to .capacitor-app. Respects prefers-reduced-motion via existing CSS rule. Attached via KeyboardShortcutsProvider wrapper div."
     },
     {
       "id": "IOS-009",
@@ -140,8 +140,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "OfflineBanner component already exists and is imported in App.tsx. Needs verification that it works properly in Capacitor context. Capacitor Network plugin can provide more reliable status than navigator.onLine."
+      "passes": true,
+      "notes": "Enhanced useNetworkStatus hook to use Capacitor Network plugin for reliable detection. Added queryClient.invalidateQueries() on reconnect for auto-refetch. OfflineBanner now respects safe area insets with z-[60] to sit above the header. TanStack Query already uses networkMode: 'always' with gcTime caching."
     },
     {
       "id": "IOS-010",
@@ -156,8 +156,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "EnhancedHero.tsx already conditionally loads HeroCityLite only for web builds. The .capacitor-app section[class*='min-h-'] rule already removes min-height. Verify end-to-end that the hero is fast and compact."
+      "passes": true,
+      "notes": "Verified: EnhancedHero sets HeroCityLite = null when __MOBILE_APP__ is true (build-time tree-shaking). CSS .capacitor-app section[class*='min-h-'] forces min-height: auto. QuickActionsMobile renders with large touch targets and gold gradient primary action. No changes needed — all criteria already met."
     },
     {
       "id": "IOS-011",
@@ -172,8 +172,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Capacitor PushNotifications and LocalNotifications plugins are configured in capacitor.config.ts. EventReminderSettings component exists. Need to wire the Capacitor plugin calls. Edge function send-event-reminders exists."
+      "passes": true,
+      "notes": "Created usePushNotifications hook for the main web app that registers with APNs/FCM via Capacitor PushNotifications plugin, stores token in Supabase device_tokens table, handles notification tap navigation. Added scheduleEventReminder() for local notifications. Wired into App.tsx for auto-registration and EventReminderSettings for local notification scheduling."
     },
     {
       "id": "IOS-012",
@@ -188,8 +188,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "The public/.well-known/ directory exists. Capacitor App plugin listener is typed in capacitorUtils.ts. The App Clip functionality was recently added (commit history shows associated domains work)."
+      "passes": true,
+      "notes": "apple-app-site-association file already exists with /events/*, /restaurants/*, /attractions/* paths. Created useDeepLinks hook that listens for Capacitor App plugin 'appUrlOpen' events and navigates to the corresponding route. Wired into App.tsx. Associated Domains already configured in iOS project."
     },
     {
       "id": "IOS-013",
@@ -203,8 +203,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "iOS WKWebView has built-in swipe-back but it may need allowsBackForwardNavigationGestures enabled in the native config. Alternatively implement in JS with touch event listeners."
+      "passes": true,
+      "notes": "Created useSwipeBack hook that detects left-edge swipe gestures (within 30px of screen edge) and triggers React Router navigate(-1). Only active on Capacitor iOS, not on home page. Uses velocity and distance thresholds to avoid false positives. Doesn't conflict with horizontal scrolling elements."
     },
     {
       "id": "IOS-014",
@@ -217,8 +217,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": "StatusBar plugin is configured in capacitor.config.ts. capacitorUtils.ts has the StatusBar type. Need to call setStyle on route change and scroll events for detail pages."
+      "passes": true,
+      "notes": "Created useStatusBarStyle hook that switches status bar text color on route change. Light text on detail pages with dark heroes (/events/:slug, /restaurants/:slug, etc.) and home page. Dark text on list pages. Uses Capacitor StatusBar plugin setStyle."
     },
     {
       "id": "IOS-015",
@@ -233,8 +233,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": "EventPhotoGallery.tsx has a basic modal viewer. Could enhance it or create a separate native-feel viewer. CSS touch-action and transform: scale() for zoom."
+      "passes": true,
+      "notes": "Created ImageViewer component with full-screen overlay, pinch-to-zoom (2-finger gesture using Math.hypot distance), and swipe-down-to-dismiss (opacity fades as user swipes). Only activates in Capacitor. Uses touch-action: none for gesture control. Close button respects safe area insets."
     },
     {
       "id": "IOS-016",
@@ -248,8 +248,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "Currently all events render at once. For 100+ events this causes memory pressure on iOS. Can use a lightweight virtual scroll approach with IntersectionObserver. The cv-auto class provides some help but real virtualization would be better."
+      "passes": true,
+      "notes": "Created useVirtualList hook — lightweight scroll-based virtualization using requestAnimationFrame for scroll tracking. Only activates when itemCount exceeds threshold (default 50). Returns startIndex/endIndex for slicing, totalHeight/offsetTop for spacer positioning. No external dependencies."
     },
     {
       "id": "IOS-017",
@@ -264,8 +264,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "WKWebView has its own HTTP cache but it may be cleared. A more persistent Cache API or service worker approach ensures images survive app restarts. Consider registering a service worker in main.tsx for Capacitor builds."
+      "passes": true,
+      "notes": "Service worker (sw.js) already caches images with Cache First strategy. Updated limit from 50 to 100 and added LRU eviction — oldest entries are deleted when over limit, recently accessed images are re-put to move to front. Cache persists across app restarts via Cache API."
     },
     {
       "id": "IOS-018",
@@ -279,8 +279,8 @@
         "Typecheck passes (no code changes, docs only)"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": "Fastlane is already set up in mobile-app/fastlane/. This story focuses on preparing the content needed before submission."
+      "passes": true,
+      "notes": "Created mobile-app/docs/app-store-metadata.md with app name/subtitle, full description, keywords, screenshot requirements (6.7/6.1/5.5 iPhone + iPad sizes), privacy nutrition labels (data collected/not collected/tracking), App Store Connect fields, and Fastlane integration commands."
     },
     {
       "id": "IOS-019",
@@ -309,8 +309,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": "Some skeleton/loading states may already exist. The skeleton-mobile and loading-shimmer CSS classes are in index.css. Focus on the main user-facing pages: events list, restaurants list, detail pages."
+      "passes": true,
+      "notes": "Created EventCardSkeleton (matches SocialEventCard: image area, date badge, category badges, title, location/time), RestaurantCardSkeleton (matches RestaurantCard: image, badges, star rating row, description, location), and DetailHeroSkeleton. Added variant prop to CardsGridSkeleton ('event'|'restaurant'|'default'). Updated EventsPage, Restaurants, and RestaurantsPage to use layout-matched skeletons. Uses existing skeleton-mobile CSS class for image areas."
     }
   ]
 }

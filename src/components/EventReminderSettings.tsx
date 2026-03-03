@@ -5,13 +5,17 @@ import { Label } from '@/components/ui/label';
 import { Bell, BellOff, Clock, Calendar } from 'lucide-react';
 import { useEventReminders, type ReminderType } from '@/hooks/useEventReminders';
 import { Skeleton } from '@/components/ui/skeleton';
+import { scheduleEventReminder } from '@/hooks/usePushNotifications';
+import { isCapacitor } from '@/lib/capacitorUtils';
 
 interface EventReminderSettingsProps {
   eventId: string;
+  eventTitle?: string;
+  eventDate?: Date;
   className?: string;
 }
 
-export function EventReminderSettings({ eventId, className = '' }: EventReminderSettingsProps) {
+export function EventReminderSettings({ eventId, eventTitle, eventDate, className = '' }: EventReminderSettingsProps) {
   const {
     isAuthenticated,
     isLoading,
@@ -86,7 +90,7 @@ export function EventReminderSettings({ eventId, className = '' }: EventReminder
           Event Reminders
         </CardTitle>
         <CardDescription>
-          Get email reminders before this event starts
+          Get reminders before this event starts
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -100,7 +104,18 @@ export function EventReminderSettings({ eventId, className = '' }: EventReminder
               <Checkbox
                 id={`reminder-${option.type}`}
                 checked={enabled}
-                onCheckedChange={() => toggleReminder(option.type)}
+                onCheckedChange={() => {
+                  toggleReminder(option.type);
+                  // Also schedule a local notification on Capacitor
+                  if (!enabled && isCapacitor() && eventTitle && eventDate) {
+                    scheduleEventReminder({
+                      eventId,
+                      eventTitle,
+                      eventDate,
+                      reminderType: option.type,
+                    });
+                  }
+                }}
                 disabled={isTogglingReminder}
                 className="h-5 w-5"
               />

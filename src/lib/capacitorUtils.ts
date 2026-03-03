@@ -40,6 +40,29 @@ interface CapacitorGlobal {
     Share?: {
       share: (opts: { title?: string; text?: string; url?: string; dialogTitle?: string }) => Promise<void>;
     };
+    Keyboard?: {
+      addListener: (event: string, cb: (info: { keyboardHeight: number }) => void) => Promise<{ remove: () => void }>;
+      removeAllListeners: () => Promise<void>;
+      hide: () => Promise<void>;
+      setAccessoryBarVisible: (opts: { isVisible: boolean }) => Promise<void>;
+      setScroll: (opts: { isDisabled: boolean }) => Promise<void>;
+    };
+    Network?: {
+      addListener: (event: string, cb: (status: { connected: boolean; connectionType: string }) => void) => Promise<{ remove: () => void }>;
+      getStatus: () => Promise<{ connected: boolean; connectionType: string }>;
+    };
+    PushNotifications?: {
+      checkPermissions: () => Promise<{ receive: string }>;
+      requestPermissions: () => Promise<{ receive: string }>;
+      register: () => Promise<void>;
+      addListener: (event: string, cb: (data: unknown) => void) => Promise<{ remove: () => void }>;
+      removeAllListeners: () => Promise<void>;
+    };
+    LocalNotifications?: {
+      schedule: (opts: { notifications: unknown[] }) => Promise<void>;
+      cancel: (opts: { notifications: Array<{ id: number }> }) => Promise<void>;
+      removeAllListeners: () => Promise<void>;
+    };
     [key: string]: unknown;
   };
 }

@@ -2156,6 +2156,59 @@
       "priority": 130,
       "passes": false,
       "notes": "UX AUDIT: Breadcrumbs are implemented on listing pages but may not be consistently applied to all detail pages. Breadcrumbs improve navigation (reducing bounce rate by 5-10%), provide context (users know where they are), and generate structured data that Google displays in search results. BreadcrumbList schema can increase CTR in search results by 20-30%."
+    },
+    {
+      "id": "US-131",
+      "title": "iOS Dark Interface — dynamic status bar and system theme support",
+      "description": "As an iOS user with system dark mode enabled, I need the app to honor my OS dark/light preference so that the interface matches my system setting and reduces eye strain for dark-mode users.",
+      "acceptanceCriteria": [
+        "mobile-app/capacitor.config.ts StatusBar.style changed from 'DARK' to 'DEFAULT' (follows system preference)",
+        "mobile-app/src/services/native-bridge.ts initializeStatusBar() reads window.matchMedia('(prefers-color-scheme: dark)') and sets Style.Dark or Style.Light accordingly",
+        "native-bridge.ts adds a change listener on the prefers-color-scheme media query and updates StatusBar style at runtime when system theme changes",
+        "src/index.css .capacitor-app block uses color-scheme: light dark instead of color-scheme: light",
+        "src/index.css removes the .capacitor-app .dark override that was forcing light-mode variables",
+        "src/index.css adds .capacitor-app:not(.dark) { ...light vars... } block (light-only default)",
+        "src/index.css adds .capacitor-app.dark header, nav, card, tab, and muted-text dark-mode overrides",
+        "Typecheck passes"
+      ],
+      "priority": 131,
+      "passes": true,
+      "notes": "Apple App Store accessibility requirement: iOS Dark Interface. Previously the Capacitor wrapper hard-coded light mode via color-scheme: light and the .capacitor-app .dark selector overrode all dark variables back to light values. StatusBar was hardcoded to Style.Dark. All three layers (Capacitor config, native bridge JS, CSS) needed to be updated to allow the system preference to flow through."
+    },
+    {
+      "id": "US-132",
+      "title": "iOS Captions — enable inline media playback for WebVTT caption tracks",
+      "description": "As an iOS user who relies on captions, I need video content to play inline with WebVTT caption tracks available so that I can read captions without entering fullscreen and without the WKWebView blocking track loading.",
+      "acceptanceCriteria": [
+        "mobile-app/capacitor.config.ts ios section adds allowsInlineMediaPlayback: true",
+        "VideoPlayer.tsx caption tracks render as <track kind='captions'> elements directly inside <video>",
+        "VideoPlayer captions toggle button shows when captions prop is non-empty",
+        "VideoPlayer keyboard shortcut 'C' toggles captions on/off",
+        "aria-pressed attribute on the captions button reflects current state",
+        "Typecheck passes"
+      ],
+      "priority": 132,
+      "passes": true,
+      "notes": "Apple App Store accessibility requirement: Captions. Without allowsInlineMediaPlayback: true in the iOS Capacitor config, the WKWebView forces all video into fullscreen mode which can disrupt WebVTT track rendering. The VideoPlayer component already has full caption support (captions prop, <track kind=captions>, toggle button, keyboard shortcut) — this story ensures the native iOS layer does not block it."
+    },
+    {
+      "id": "US-133",
+      "title": "iOS Audio Descriptions — add audio description track support to VideoPlayer",
+      "description": "As a blind or low-vision iOS user, I need video content to offer audio description tracks (kind='descriptions') so that I can hear narration of on-screen visual content that is not conveyed through dialogue alone.",
+      "acceptanceCriteria": [
+        "VideoPlayer.tsx defines VideoAudioDescription interface (src, srclang, label, default?) matching VideoCaption",
+        "VideoPlayerProps includes audioDescriptions?: VideoAudioDescription[] prop",
+        "VideoPlayer renders <track kind='descriptions'> elements for each audioDescriptions entry",
+        "VideoPlayer has audioDescEnabled state initialized from audioDescriptions.some(d => d.default)",
+        "VideoPlayer has toggleAudioDesc callback that finds all tracks with kind === 'descriptions' and toggles mode between 'showing' and 'hidden'",
+        "VideoPlayer right-controls renders an AudioLines icon button (aria-label and aria-pressed) when audioDescriptions.length > 0",
+        "Keyboard shortcut 'D' toggles audio descriptions",
+        "AudioLines icon is imported from lucide-react",
+        "Typecheck passes"
+      ],
+      "priority": 133,
+      "passes": true,
+      "notes": "Apple App Store accessibility requirement: Audio Descriptions. The VideoPlayer previously only had caption track support (kind='captions'). This story adds a parallel system for audio description tracks (kind='descriptions'), which is the HTML5 standard mechanism for providing narration of visual content to blind and low-vision users. Both the track element and the toggle UI are now in place."
     }
   ]
 }

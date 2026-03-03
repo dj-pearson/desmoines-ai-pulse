@@ -1,4 +1,4 @@
-import type { CapacitorConfig } from '@capacitor/cli';
+import type { CapacitorConfig } from "@capacitor/cli";
 
 /**
  * Capacitor Configuration
@@ -7,17 +7,17 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * This file replaces capacitor.config.json with TypeScript for type safety.
  */
 const config: CapacitorConfig = {
-  appId: 'com.desmoines.aipulse',
-  appName: 'Des Moines Insider',
-  webDir: 'www',
+  appId: "com.desmoines.aipulse",
+  appName: "Des Moines Insider",
+  webDir: "www",
 
   // Server configuration
   server: {
     // Use HTTPS scheme for proper cookie/auth handling
-    androidScheme: 'https',
-    iosScheme: 'https',
+    androidScheme: "https",
+    iosScheme: "https",
     // Hostname for the web view (helps with cookie domain matching)
-    hostname: 'app.desmoinespulse.com',
+    hostname: "app.desmoinespulse.com",
   },
 
   // ================================================================
@@ -29,46 +29,48 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 2000,
       launchAutoHide: true, // Auto-hide after launchShowDuration
-      backgroundColor: '#000000',
+      backgroundColor: "#000000",
       showSpinner: false,
-      androidSpinnerStyle: 'small',
-      iosSpinnerStyle: 'small',
-      spinnerColor: '#ffffff',
+      androidSpinnerStyle: "small",
+      iosSpinnerStyle: "small",
+      spinnerColor: "#ffffff",
       // Use the launch screen storyboard / theme
       launchFadeOutDuration: 300,
-      androidSplashResourceName: 'splash',
+      androidSplashResourceName: "splash",
     },
 
     // Status Bar
     StatusBar: {
-      style: 'DARK',
-      backgroundColor: '#000000',
+      // DEFAULT lets iOS/Android follow the system light/dark preference.
+      // The native bridge will call setStyle() at runtime for fine-grained control.
+      style: "DEFAULT",
+      backgroundColor: "#000000",
       overlaysWebView: true, // Edge-to-edge (Android 15 requirement)
     },
 
     // Keyboard
     Keyboard: {
-      resize: 'native',
-      style: 'DARK',
+      resize: "native",
+      style: "DARK",
       resizeOnFullScreen: true,
     },
 
     // Push Notifications
     PushNotifications: {
-      presentationOptions: ['badge', 'sound', 'alert'],
+      presentationOptions: ["badge", "sound", "alert"],
     },
 
     // Local Notifications
     LocalNotifications: {
-      smallIcon: 'ic_stat_icon_config_sample',
-      iconColor: '#488AFF',
-      sound: 'beep.wav',
+      smallIcon: "ic_stat_icon_config_sample",
+      iconColor: "#488AFF",
+      sound: "beep.wav",
     },
 
     // Camera
     Camera: {
       // Use the Photos framework on iOS (better UX)
-      presentationStyle: 'popover',
+      presentationStyle: "popover",
     },
 
     // Geolocation
@@ -107,11 +109,13 @@ const config: CapacitorConfig = {
   // ================================================================
 
   ios: {
-    contentInset: 'automatic',
-    scheme: 'Des Moines Insider',
+    contentInset: "automatic",
+    scheme: "Des Moines Insider",
     // Prefer WKWebView (default in Capacitor 6)
-    preferredContentMode: 'mobile',
-    // Allow inline media playback
+    preferredContentMode: "mobile",
+    // Required for HTML5 video inline playback and WebVTT caption/description tracks
+    allowsInlineMediaPlayback: true,
+    // Allow link previews (3D touch / long-press)
     allowsLinkPreview: true,
     // Scroll behavior
     scrollEnabled: true,
@@ -128,7 +132,7 @@ const config: CapacitorConfig = {
     // Disable WebView debugging in production
     webContentsDebuggingEnabled: false,
     // Background color while loading
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
     // Edge-to-edge display support (Android 15)
     buildOptions: {
       keystorePath: undefined, // Set during release builds

@@ -157,12 +157,17 @@ async function cacheFirst(request, cacheName) {
 }
 
 // Cache First with Fallback for Images
+// Caches up to 100 most recently viewed images with LRU eviction
+const IMAGE_CACHE_LIMIT = 100;
+
 async function cacheFirstWithFallback(request, cacheName) {
   try {
     const cache = await caches.open(cacheName);
     const cachedResponse = await cache.match(request);
 
     if (cachedResponse) {
+      // Move to front of cache (LRU: re-put to update ordering)
+      cache.put(request, cachedResponse.clone());
       return cachedResponse;
     }
 
@@ -172,11 +177,17 @@ async function cacheFirstWithFallback(request, cacheName) {
       networkResponse.status !== 206 &&
       !request.headers.has("range")
     ) {
-      // Only cache successful responses and limit cache size
-      const cacheSize = await getCacheSize(cache);
-      if (cacheSize < 50) {
-        // Limit to 50 images
-        cache.put(request, networkResponse.clone());
+      // Cache the image and evict oldest if over limit
+      cache.put(request, networkResponse.clone());
+
+      // LRU eviction: remove oldest entries when over limit
+      const keys = await cache.keys();
+      if (keys.length > IMAGE_CACHE_LIMIT) {
+        // Delete the oldest entries (first in the list)
+        const toDelete = keys.length - IMAGE_CACHE_LIMIT;
+        for (let i = 0; i < toDelete; i++) {
+          cache.delete(keys[i]);
+        }
       }
     }
     return networkResponse;

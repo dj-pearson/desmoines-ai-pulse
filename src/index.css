@@ -170,7 +170,6 @@ All colors MUST be HSL. Touch targets minimum 44px.
 
 /* Critical CSS for mobile performance */
 @layer utilities {
-
   /* Mobile-first touch targets */
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
@@ -237,7 +236,7 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 
   .btn-ripple::before {
-    content: '';
+    content: "";
     position: absolute;
     top: 50%;
     left: 50%;
@@ -247,7 +246,9 @@ All colors MUST be HSL. Touch targets minimum 44px.
     background: currentColor;
     opacity: 0.3;
     transform: translate(-50%, -50%);
-    transition: width 0.3s, height 0.3s;
+    transition:
+      width 0.3s,
+      height 0.3s;
   }
 
   .btn-ripple:active::before {
@@ -275,7 +276,7 @@ All colors MUST be HSL. Touch targets minimum 44px.
   }
 
   /* Staggered animations */
-  .stagger-children>* {
+  .stagger-children > * {
     animation-delay: calc(var(--stagger-delay, 100ms) * var(--index, 0));
   }
 
@@ -711,7 +712,6 @@ All colors MUST be HSL. Touch targets minimum 44px.
 
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
-
   *,
   *::before,
   *::after {
@@ -790,7 +790,7 @@ All colors MUST be HSL. Touch targets minimum 44px.
 
 /* Dyslexia-friendly font */
 .a11y-dyslexia-font {
-  font-family: 'OpenDyslexic', 'Comic Sans MS', 'Arial', sans-serif !important;
+  font-family: "OpenDyslexic", "Comic Sans MS", "Arial", sans-serif !important;
   word-spacing: 0.15em;
 }
 
@@ -811,7 +811,10 @@ All colors MUST be HSL. Touch targets minimum 44px.
 /* Large cursor */
 .a11y-large-cursor,
 .a11y-large-cursor * {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 4l20 8-8 4-4 8z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 4 4, auto !important;
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M4 4l20 8-8 4-4 8z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E")
+      4 4,
+    auto !important;
 }
 
 .a11y-large-cursor a,
@@ -821,7 +824,10 @@ All colors MUST be HSL. Touch targets minimum 44px.
 .a11y-large-cursor select,
 .a11y-large-cursor textarea,
 .a11y-large-cursor label {
-  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M8 4v24h4l4-8h8z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 8 4, pointer !important;
+  cursor:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cpath d='M8 4v24h4l4-8h8z' fill='black' stroke='white' stroke-width='2'/%3E%3C/svg%3E")
+      8 4,
+    pointer !important;
 }
 
 /* Enhanced focus indicators */
@@ -856,9 +862,8 @@ All colors MUST be HSL. Touch targets minimum 44px.
 /* ================================================================== */
 
 .capacitor-app {
-  /* Force light mode for a clean iOS feel regardless of system setting.
-     Dark mode can be re-enabled later via in-app toggle. */
-  color-scheme: light;
+  /* Respect the user's system light/dark preference (iOS Dark Interface a11y) */
+  color-scheme: light dark;
 
   /* Prevent text inflation on iOS */
   -webkit-text-size-adjust: 100%;
@@ -870,9 +875,8 @@ All colors MUST be HSL. Touch targets minimum 44px.
   -webkit-overflow-scrolling: touch;
 }
 
-/* --- Force light theme variables in Capacitor --- */
-.capacitor-app,
-.capacitor-app .dark {
+/* --- Light theme variables for Capacitor (applied when not in dark mode) --- */
+.capacitor-app:not(.dark) {
   --background: 0 0% 98%;
   --foreground: 220 20% 10%;
   --card: 0 0% 100%;
@@ -896,12 +900,21 @@ All colors MUST be HSL. Touch targets minimum 44px.
 }
 
 /* --- Header: compact, clean for native app --- */
+/* Safe area is handled by the ::before pseudo-element below,
+   so we reset any padding-top from the .safe-area-top utility class
+   to avoid double spacing on notched iPhones. */
 .capacitor-app header {
-  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-top: 0 !important;
   background: hsl(0 0% 100% / 0.97) !important;
   backdrop-filter: saturate(180%) blur(20px) !important;
   -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
   border-bottom: 0.5px solid hsl(220 13% 88%) !important;
+}
+
+/* Dark mode header */
+.capacitor-app.dark header {
+  background: hsl(225 50% 6% / 0.97) !important;
+  border-bottom: 0.5px solid hsl(225 30% 15%) !important;
 }
 
 /* Hide hamburger/MobileNav trigger in Capacitor (bottom tab handles nav) */
@@ -935,6 +948,12 @@ All colors MUST be HSL. Touch targets minimum 44px.
   height: auto !important;
 }
 
+/* Dark mode bottom tab */
+.capacitor-app.dark nav[aria-label="Bottom navigation"] {
+  background: hsl(225 50% 6% / 0.97) !important;
+  border-top: 0.5px solid hsl(225 30% 15%) !important;
+}
+
 .capacitor-app nav[aria-label="Bottom navigation"] > div {
   height: 50px !important;
 }
@@ -961,20 +980,41 @@ All colors MUST be HSL. Touch targets minimum 44px.
 }
 
 /* Active indicator: remove top pill, use color only */
-.capacitor-app nav[aria-label="Bottom navigation"] a[aria-current="page"] > div:first-child {
+.capacitor-app
+  nav[aria-label="Bottom navigation"]
+  a[aria-current="page"]
+  > div:first-child {
   display: none !important;
 }
 
 /* Inactive: muted gray like iOS */
-.capacitor-app nav[aria-label="Bottom navigation"] a:not([aria-current="page"]) {
+.capacitor-app
+  nav[aria-label="Bottom navigation"]
+  a:not([aria-current="page"]) {
   color: hsl(220 10% 55%) !important;
+}
+
+/* Dark mode inactive tab: lighter gray */
+.capacitor-app.dark
+  nav[aria-label="Bottom navigation"]
+  a:not([aria-current="page"]) {
+  color: hsl(225 20% 60%) !important;
 }
 
 /* --- Cards: clean iOS style --- */
 .capacitor-app [class*="card"] {
   border-radius: 12px !important;
   border: none !important;
-  box-shadow: 0 1px 3px hsl(220 20% 10% / 0.06), 0 1px 2px hsl(220 20% 10% / 0.04) !important;
+  box-shadow:
+    0 1px 3px hsl(220 20% 10% / 0.06),
+    0 1px 2px hsl(220 20% 10% / 0.04) !important;
+}
+
+/* Dark mode cards */
+.capacitor-app.dark [class*="card"] {
+  box-shadow:
+    0 1px 3px hsl(0 0% 0% / 0.3),
+    0 1px 2px hsl(0 0% 0% / 0.2) !important;
 }
 
 /* --- Buttons & interactive elements: iOS-like --- */
@@ -1017,12 +1057,18 @@ html.capacitor-app,
 
 /* --- Typography: iOS system font --- */
 .capacitor-app {
-  font-family: -apple-system, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif !important;
+  font-family:
+    -apple-system, "SF Pro Display", "SF Pro Text", "Helvetica Neue", system-ui,
+    sans-serif !important;
 }
 
 /* --- Improve text contrast --- */
 .capacitor-app .text-muted-foreground {
   color: hsl(220 10% 38%) !important;
+}
+
+.capacitor-app.dark .text-muted-foreground {
+  color: hsl(225 20% 65%) !important;
 }
 
 /* --- Tab list: proper spacing and iOS-like pills --- */
@@ -1046,6 +1092,12 @@ html.capacitor-app,
   box-shadow: 0 1px 3px hsl(220 20% 10% / 0.1) !important;
   color: hsl(220 20% 10%) !important;
   font-weight: 600 !important;
+}
+
+.capacitor-app.dark [role="tab"][data-state="active"] {
+  background: hsl(225 50% 12%) !important;
+  box-shadow: 0 1px 3px hsl(0 0% 0% / 0.3) !important;
+  color: hsl(225 20% 98%) !important;
 }
 
 /* --- Hero section: compact in Capacitor --- */
@@ -1083,9 +1135,43 @@ html.capacitor-app,
   }
 }
 
+/* --- Keyboard-aware adjustments --- */
+/* When the iOS keyboard is visible, add bottom padding to ensure inputs
+   aren't hidden behind it and hide the bottom nav to free screen space. */
+.capacitor-app.keyboard-visible nav[aria-label="Bottom navigation"] {
+  display: none !important;
+}
+
+.capacitor-app.keyboard-visible main#main-content {
+  padding-bottom: var(--keyboard-height, 0px);
+}
+
+/* Ensure inputs scroll smoothly into view when focused on iOS */
+.capacitor-app input:focus,
+.capacitor-app textarea:focus,
+.capacitor-app select:focus {
+  scroll-margin-bottom: 120px;
+}
+
+/* --- Page transitions: subtle slide-fade for native feel --- */
+@keyframes cap-page-enter {
+  from {
+    opacity: 0.85;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.capacitor-app .cap-page-enter {
+  animation: cap-page-enter 250ms ease-out both;
+}
+
 /* --- Status bar spacer (iOS notch) --- */
 .capacitor-app header::before {
-  content: '';
+  content: "";
   display: block;
   height: env(safe-area-inset-top, 0px);
 }

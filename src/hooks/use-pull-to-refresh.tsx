@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback, useState } from 'react';
+import { hapticTap } from '@/lib/capacitorUtils';
 
 export interface PullToRefreshOptions {
   onRefresh: () => Promise<void>;
@@ -79,6 +80,9 @@ export function usePullToRefresh<T extends HTMLElement = HTMLDivElement>(
     const shouldRefresh = currentPullDistance.current >= threshold;
 
     if (shouldRefresh) {
+      // Haptic feedback when pull-to-refresh triggers (native feel)
+      hapticTap();
+
       setState(prev => ({
         ...prev,
         isPulling: false,
