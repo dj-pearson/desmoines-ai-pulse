@@ -100,7 +100,7 @@ struct RestaurantDetailView: View {
                         HStack(spacing: 2) {
                             ForEach(1...5, id: \.self) { star in
                                 Image(systemName: Double(star) <= rating ? "star.fill" : (Double(star) - 0.5 <= rating ? "star.leadinghalf.filled" : "star"))
-                                    .font(.system(size: 14))
+                                    .font(.system(size: 14, relativeTo: .subheadline))
                                     .foregroundStyle(Double(star) <= rating ? .yellow : .gray.opacity(0.3))
                             }
                         }

@@ -75,6 +75,8 @@ struct EventDetailView: View {
             }
             .frame(height: 300)
             .clipped()
+            // Decorative — title is in the text overlay below; hide from VoiceOver
+            .accessibilityHidden(true)
 
             // Gradient overlay
             LinearGradient(

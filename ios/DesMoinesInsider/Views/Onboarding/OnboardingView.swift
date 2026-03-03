@@ -4,6 +4,7 @@ import SwiftUI
 struct OnboardingView: View {
     @Binding var hasCompletedOnboarding: Bool
     @State private var currentPage = 0
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let pages: [OnboardingPage] = [
         OnboardingPage(
@@ -52,7 +53,7 @@ struct OnboardingView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.easeInOut, value: currentPage)
+            .animation(reduceMotion ? nil : .easeInOut, value: currentPage)
 
             // Bottom controls
             VStack(spacing: 16) {
@@ -62,7 +63,7 @@ struct OnboardingView: View {
                         Capsule()
                             .fill(index == currentPage ? Color.accentColor : Color(.systemGray4))
                             .frame(width: index == currentPage ? 24 : 8, height: 8)
-                            .animation(.spring(response: 0.3), value: currentPage)
+                            .animation(reduceMotion ? nil : .spring(response: 0.3), value: currentPage)
                     }
                 }
                 .accessibilityElement(children: .ignore)
@@ -72,7 +73,7 @@ struct OnboardingView: View {
                 HStack(spacing: 16) {
                     if currentPage > 0 {
                         Button("Back") {
-                            withAnimation { currentPage -= 1 }
+                            withAnimation(reduceMotion ? nil : .default) { currentPage -= 1 }
                         }
                         .foregroundStyle(.secondary)
                     }
@@ -81,7 +82,7 @@ struct OnboardingView: View {
 
                     if currentPage < pages.count - 1 {
                         Button {
-                            withAnimation { currentPage += 1 }
+                            withAnimation(reduceMotion ? nil : .default) { currentPage += 1 }
                         } label: {
                             Text("Next")
                                 .fontWeight(.semibold)
@@ -92,9 +93,8 @@ struct OnboardingView: View {
                         }
                     } else {
                         Button {
-                            withAnimation {
-                                hasCompletedOnboarding = true
-                            }
+                            // No animation on dismissal — avoids issues for reduceMotion users
+                            hasCompletedOnboarding = true
                         } label: {
                             Text("Get Started")
                                 .fontWeight(.semibold)

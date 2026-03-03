@@ -90,7 +90,7 @@ struct RestaurantsView: View {
                             Image(systemName: "line.3.horizontal.decrease.circle")
                             if viewModel.activeFilterCount > 0 {
                                 Text("\(viewModel.activeFilterCount)")
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.system(size: 10, weight: .bold, relativeTo: .caption2))
                                     .foregroundStyle(.white)
                                     .frame(width: 16, height: 16)
                                     .background(Color.red, in: Circle())

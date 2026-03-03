@@ -77,7 +77,7 @@ struct RestaurantCardView: View {
                     HStack(spacing: 3) {
                         ForEach(1...5, id: \.self) { star in
                             Image(systemName: Double(star) <= rating ? "star.fill" : (Double(star) - 0.5 <= rating ? "star.leadinghalf.filled" : "star"))
-                                .font(.system(size: 10))
+                                .font(.system(size: 10, relativeTo: .caption2))
                                 .foregroundStyle(Double(star) <= rating ? .yellow : .gray.opacity(0.3))
                         }
                         Text(String(format: "%.1f", rating))
@@ -90,7 +90,7 @@ struct RestaurantCardView: View {
                 if !restaurant.displayLocation.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin")
-                            .font(.system(size: 9))
+                            .font(.system(size: 9, relativeTo: .caption2))
                         Text(restaurant.displayLocation)
                             .font(.caption2)
                     }

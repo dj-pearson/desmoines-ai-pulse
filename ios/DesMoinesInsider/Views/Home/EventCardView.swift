@@ -27,6 +27,8 @@ struct EventCardView: View {
                 }
                 .frame(height: 180)
                 .clipped()
+                // Decorative — card label provides the full description; hide from VoiceOver
+                .accessibilityHidden(true)
 
                 // Overlays
                 VStack(alignment: .trailing, spacing: 6) {
