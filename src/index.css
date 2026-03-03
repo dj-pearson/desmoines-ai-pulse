@@ -896,8 +896,11 @@ All colors MUST be HSL. Touch targets minimum 44px.
 }
 
 /* --- Header: compact, clean for native app --- */
+/* Safe area is handled by the ::before pseudo-element below,
+   so we reset any padding-top from the .safe-area-top utility class
+   to avoid double spacing on notched iPhones. */
 .capacitor-app header {
-  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-top: 0 !important;
   background: hsl(0 0% 100% / 0.97) !important;
   backdrop-filter: saturate(180%) blur(20px) !important;
   -webkit-backdrop-filter: saturate(180%) blur(20px) !important;

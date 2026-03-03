@@ -108,8 +108,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "The Capacitor CSS section has header::before with env(safe-area-inset-top). Need to verify the Header component's sticky positioning works properly with this. Also check MobileNav sheet positioning."
+      "passes": true,
+      "notes": "Fixed double safe area spacing. The header had three overlapping safe-area mechanisms: .safe-area-top class, .capacitor-app header padding-top override, and ::before pseudo-element. Set padding-top to 0 in Capacitor so only the ::before handles it. MobileNav sheet already has safe-area-inset class. viewport-fit=cover is set in index.html."
     },
     {
       "id": "IOS-008",

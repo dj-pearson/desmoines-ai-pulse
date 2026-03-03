@@ -91,6 +91,18 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-007
+- **Implemented**: Fix header safe area overlap on notched iPhones
+- **Changes**:
+  - `src/index.css`: Changed `.capacitor-app header` padding-top from `env(safe-area-inset-top, 0px)` to `0` to prevent double spacing with the `::before` pseudo-element that already handles the safe area inset
+- **Why**: Three overlapping safe-area mechanisms competed: (1) `.safe-area-top` class on the header element, (2) `.capacitor-app header` padding-top override, (3) `header::before` height. On notched iPhones this produced ~2x the needed spacing. Now only `::before` handles the inset, and padding-top is zeroed in Capacitor.
+- **Learnings for future iterations:**
+  - Pick ONE mechanism for safe area spacing, not multiple — `::before` is cleanest for sticky headers
+  - The `.safe-area-top` utility class is for non-Capacitor use; in Capacitor the `!important` overrides must account for it
+  - `viewport-fit=cover` in the viewport meta tag is required for `env(safe-area-inset-*)` to work
+  - MobileNav sheet already uses `safe-area-inset` class — covers all four edges
+---
+
 ## 2026-03-02 — IOS-006
 - **Implemented**: Add pull-to-refresh on main list pages
 - **Changes**:
