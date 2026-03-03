@@ -140,8 +140,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "OfflineBanner component already exists and is imported in App.tsx. Needs verification that it works properly in Capacitor context. Capacitor Network plugin can provide more reliable status than navigator.onLine."
+      "passes": true,
+      "notes": "Enhanced useNetworkStatus hook to use Capacitor Network plugin for reliable detection. Added queryClient.invalidateQueries() on reconnect for auto-refetch. OfflineBanner now respects safe area insets with z-[60] to sit above the header. TanStack Query already uses networkMode: 'always' with gcTime caching."
     },
     {
       "id": "IOS-010",

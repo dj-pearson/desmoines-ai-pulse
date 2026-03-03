@@ -91,6 +91,20 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-009
+- **Implemented**: Add network status indicator for offline/slow connections
+- **Changes**:
+  - `src/hooks/useNetworkStatus.ts`: Added Capacitor Network plugin listener (`networkStatusChange`) for reliable detection in WKWebView. Added `queryClient.invalidateQueries()` on reconnect to auto-refetch visible queries. Gets initial status from Network plugin.
+  - `src/components/OfflineBanner.tsx`: Added safe area inset support via inline style `paddingTop: max(0.5rem, env(safe-area-inset-top))`. Bumped z-index to 60 to sit above the header (z-50).
+  - `src/lib/capacitorUtils.ts`: Added Network plugin type to CapacitorGlobal interface
+- **Why**: `navigator.onLine` is unreliable in WKWebView — it may not fire events or report incorrect status. The Capacitor Network plugin provides native-level network monitoring. Auto-refetching on reconnect ensures users see fresh data immediately.
+- **Learnings for future iterations:**
+  - `queryClient.invalidateQueries()` without arguments invalidates ALL queries, causing visible ones to refetch
+  - The Network plugin's `addListener` is async — returns a Promise<{remove}> unlike browser events
+  - `networkMode: 'always'` in TanStack Query config means queries fire even offline (using cache) — no need for extra offline handling
+  - Safe area insets in inline styles need `max()` for fallback on non-notched devices
+---
+
 ## 2026-03-02 — IOS-008
 - **Implemented**: Implement native-feel page transitions
 - **Changes**:

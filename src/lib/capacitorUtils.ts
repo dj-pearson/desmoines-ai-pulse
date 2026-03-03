@@ -47,6 +47,10 @@ interface CapacitorGlobal {
       setAccessoryBarVisible: (opts: { isVisible: boolean }) => Promise<void>;
       setScroll: (opts: { isDisabled: boolean }) => Promise<void>;
     };
+    Network?: {
+      addListener: (event: string, cb: (status: { connected: boolean; connectionType: string }) => void) => Promise<{ remove: () => void }>;
+      getStatus: () => Promise<{ connected: boolean; connectionType: string }>;
+    };
     [key: string]: unknown;
   };
 }
