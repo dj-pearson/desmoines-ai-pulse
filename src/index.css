@@ -977,10 +977,16 @@ All colors MUST be HSL. Touch targets minimum 44px.
   box-shadow: 0 1px 3px hsl(220 20% 10% / 0.06), 0 1px 2px hsl(220 20% 10% / 0.04) !important;
 }
 
-/* --- Buttons: iOS-like --- */
+/* --- Buttons & interactive elements: iOS-like --- */
 .capacitor-app button,
-.capacitor-app [role="button"] {
+.capacitor-app a,
+.capacitor-app [role="button"],
+.capacitor-app input,
+.capacitor-app select,
+.capacitor-app textarea,
+.capacitor-app label {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* Prevents double-tap zoom on interactive elements */
 }
 
 /* --- Remove web-only sections in Capacitor --- */
@@ -1053,11 +1059,26 @@ html.capacitor-app,
   font-weight: 600 !important;
 }
 
-/* --- Disable hover effects (touch only) --- */
+/* --- Scroll performance: CSS containment for cards --- */
+.capacitor-app [class*="card"] {
+  contain: layout style paint;
+}
+
+/* --- Disable hover effects and expensive transitions (touch only) --- */
 @media (hover: none) {
   .capacitor-app .hover\:shadow-lg:hover,
   .capacitor-app .hover\:scale-\[1\.02\]:hover {
     box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .capacitor-app .hover\:shadow-xl:hover {
+    box-shadow: none !important;
+  }
+
+  .capacitor-app .hover\:-translate-y-1:hover,
+  .capacitor-app .hover\:-translate-y-1\.5:hover,
+  .capacitor-app .hover\:-translate-y-2:hover {
     transform: none !important;
   }
 }

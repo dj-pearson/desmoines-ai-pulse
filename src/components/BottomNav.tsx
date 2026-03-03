@@ -3,6 +3,7 @@ import { Home, Calendar, UtensilsCrossed, Compass, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { prefetchRoute } from "@/lib/prefetch";
+import { hapticTap } from "@/lib/capacitorUtils";
 
 interface NavItem {
   href: string;
@@ -78,10 +79,8 @@ export default function BottomNav() {
               onMouseEnter={() => prefetchRoute(item.href)}
               onFocus={() => prefetchRoute(item.href)}
               onClick={() => {
-                // Haptic feedback if supported
-                if ("vibrate" in navigator) {
-                  navigator.vibrate(10);
-                }
+                // Native haptic feedback (Capacitor) with web fallback
+                hapticTap();
               }}
             >
               {isActive && (

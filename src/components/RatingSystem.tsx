@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Star, ThumbsUp, ThumbsDown, Flag, Edit, Trash2 } from "lucide-react";
+import { hapticTap } from "@/lib/capacitorUtils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,7 +49,7 @@ const StarRating: React.FC<StarRatingProps> = ({
                 ? "fill-yellow-400 text-yellow-400" 
                 : "text-muted-foreground hover:text-yellow-400"
             } ${readonly ? "cursor-default" : ""}`}
-            onClick={() => !readonly && onRatingChange?.(star.toString() as RatingValue)}
+            onClick={() => { if (!readonly) { hapticTap(); onRatingChange?.(star.toString() as RatingValue); } }}
             onMouseEnter={() => !readonly && setHoverRating(star)}
             onMouseLeave={() => !readonly && setHoverRating(0)}
           />
