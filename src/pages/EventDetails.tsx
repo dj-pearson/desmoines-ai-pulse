@@ -45,6 +45,7 @@ import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { NearbyContent } from "@/components/NearbyContent";
+import { EventLocationMap } from "@/components/EventLocationMap";
 
 export default function EventDetails() {
   const { slug } = useParams<{ slug: string }>();
@@ -419,15 +420,16 @@ export default function EventDetails() {
 
               {/* Sidebar */}
               <aside className="space-y-5">
-                {/* Map Card */}
+                {/* Map Card - Leaflet with OSM tiles (iframe embed is blocked by OSM's X-Frame-Options) */}
                 {event.latitude && event.longitude && (
                   <Card className="overflow-hidden shadow-sm">
                     <div className="h-48 overflow-hidden">
-                      <iframe
-                        src={`https://www.openstreetmap.org/export/embed.html?bbox=${event.longitude - 0.01},${event.latitude - 0.01},${event.longitude + 0.01},${event.latitude + 0.01}&marker=${event.latitude},${event.longitude}&layer=mapnik`}
-                        className="w-full h-full border-0"
-                        title={`Map showing ${event.venue || event.location}`}
-                        loading="lazy"
+                      <EventLocationMap
+                        latitude={event.latitude}
+                        longitude={event.longitude}
+                        venue={event.venue}
+                        location={event.location}
+                        className="h-48 w-full"
                       />
                     </div>
                     <CardContent className="p-4">
