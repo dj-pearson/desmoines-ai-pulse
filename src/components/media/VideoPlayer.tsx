@@ -10,6 +10,7 @@ import {
   SkipBack,
   SkipForward,
   Subtitles,
+  AudioLines,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Slider } from "@/components/ui/slider";
@@ -24,6 +25,14 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('VideoPlayer');
 
 export interface VideoCaption {
+  src: string;
+  srclang: string;
+  label: string;
+  default?: boolean;
+}
+
+/** Audio description track — a narration of visual content for blind/low-vision users. */
+export interface VideoAudioDescription {
   src: string;
   srclang: string;
   label: string;
@@ -48,6 +57,8 @@ export interface VideoPlayerProps {
   playbackRates?: number[];
   /** Array of caption tracks for accessibility */
   captions?: VideoCaption[];
+  /** Array of audio description tracks (kind="descriptions") for blind/low-vision users */
+  audioDescriptions?: VideoAudioDescription[];
 }
 
 /**
@@ -92,6 +103,7 @@ export function VideoPlayer({
   onTimeUpdate,
   playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 2],
   captions = [],
+  audioDescriptions = [],
 }: VideoPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -107,6 +119,9 @@ export function VideoPlayer({
   const [isBuffering, setIsBuffering] = useState(false);
   const [captionsEnabled, setCaptionsEnabled] = useState(
     captions.some(c => c.default) || false
+  );
+  const [audioDescEnabled, setAudioDescEnabled] = useState(
+    audioDescriptions.some(d => d.default) || false
   );
 
   const hideControlsTimeout = useRef<NodeJS.Timeout | null>(null);
@@ -202,6 +217,18 @@ export function VideoPlayer({
     }
   }, [captionsEnabled]);
 
+  // Toggle audio descriptions (kind="descriptions" tracks come after captions)
+  const toggleAudioDesc = useCallback(() => {
+    if (!videoRef.current) return;
+    const tracks = Array.from(videoRef.current.textTracks).filter(
+      t => t.kind === 'descriptions'
+    );
+    if (tracks.length === 0) return;
+    const newEnabled = !audioDescEnabled;
+    tracks.forEach(t => { t.mode = newEnabled ? 'showing' : 'hidden'; });
+    setAudioDescEnabled(newEnabled);
+  }, [audioDescEnabled]);
+
   // Show/hide controls on mouse activity
   const handleMouseMove = useCallback(() => {
     setShowControls(true);
@@ -237,6 +264,10 @@ export function VideoPlayer({
         case "c":
           toggleCaptions();
           break;
+        case "d":
+          e.preventDefault();
+          toggleAudioDesc();
+          break;
         case "ArrowLeft":
           e.preventDefault();
           skip(-10);
@@ -258,7 +289,7 @@ export function VideoPlayer({
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [togglePlay, toggleMute, toggleFullscreen, toggleCaptions, skip, handleVolumeChange, volume]);
+    [togglePlay, toggleMute, toggleFullscreen, toggleCaptions, toggleAudioDesc, skip, handleVolumeChange, volume]
 
   // Video event handlers
   useEffect(() => {
@@ -344,12 +375,23 @@ export function VideoPlayer({
         {/* Caption tracks for accessibility */}
         {captions.map((caption, index) => (
           <track
-            key={index}
+            key={`caption-${index}`}
             kind="captions"
             src={caption.src}
             srcLang={caption.srclang}
             label={caption.label}
             default={caption.default}
+          />
+        ))}
+        {/* Audio description tracks for blind/low-vision users */}
+        {audioDescriptions.map((desc, index) => (
+          <track
+            key={`desc-${index}`}
+            kind="descriptions"
+            src={desc.src}
+            srcLang={desc.srclang}
+            label={desc.label}
+            default={desc.default}
           />
         ))}
         Your browser does not support the video tag.
@@ -470,10 +512,25 @@ export function VideoPlayer({
                     "p-1 hover:bg-white/20 rounded transition-colors",
                     captionsEnabled && "bg-white/20"
                   )}
-                  aria-label={captionsEnabled ? "Disable captions" : "Enable captions"}
+                  aria-label={captionsEnabled ? "Disable captions" : "Enable captions (C)"}
                   aria-pressed={captionsEnabled}
                 >
                   <Subtitles className="h-5 w-5 text-white" aria-hidden="true" />
+                </button>
+              )}
+
+              {/* Audio Descriptions Toggle */}
+              {audioDescriptions.length > 0 && (
+                <button
+                  onClick={toggleAudioDesc}
+                  className={cn(
+                    "p-1 hover:bg-white/20 rounded transition-colors",
+                    audioDescEnabled && "bg-white/20"
+                  )}
+                  aria-label={audioDescEnabled ? "Disable audio descriptions" : "Enable audio descriptions (D)"}
+                  aria-pressed={audioDescEnabled}
+                >
+                  <AudioLines className="h-5 w-5 text-white" aria-hidden="true" />
                 </button>
               )}
 

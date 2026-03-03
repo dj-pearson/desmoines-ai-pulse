@@ -5,12 +5,17 @@
  * This is called once at app startup from the mobile entry point.
  */
 
-import { App, type URLOpenListenerEvent } from '@capacitor/app';
-import { StatusBar, Style } from '@capacitor/status-bar';
-import { SplashScreen } from '@capacitor/splash-screen';
-import { Keyboard, KeyboardResize } from '@capacitor/keyboard';
-import { Network, type ConnectionStatus } from '@capacitor/network';
-import { isNative, isIOS, isAndroid, isPluginAvailable } from '../config/platform';
+import { App, type URLOpenListenerEvent } from "@capacitor/app";
+import { StatusBar, Style } from "@capacitor/status-bar";
+import { SplashScreen } from "@capacitor/splash-screen";
+import { Keyboard, KeyboardResize } from "@capacitor/keyboard";
+import { Network, type ConnectionStatus } from "@capacitor/network";
+import {
+  isNative,
+  isIOS,
+  isAndroid,
+  isPluginAvailable,
+} from "../config/platform";
 
 export interface NativeBridgeOptions {
   onDeepLink?: (url: string) => void;
@@ -22,7 +27,9 @@ export interface NativeBridgeOptions {
  * Initialize all native plugins and register lifecycle listeners.
  * Call this once at app startup, before rendering the React tree.
  */
-export async function initializeNativeBridge(options: NativeBridgeOptions = {}): Promise<void> {
+export async function initializeNativeBridge(
+  options: NativeBridgeOptions = {},
+): Promise<void> {
   if (!isNative) return;
 
   // Run initializations in parallel where possible
@@ -39,22 +46,45 @@ export async function initializeNativeBridge(options: NativeBridgeOptions = {}):
 }
 
 /**
- * Configure the native status bar appearance.
+ * Resolve the correct Capacitor StatusBar Style from the system colour scheme.
+ */
+function resolveStatusBarStyle(): typeof Style.Dark | typeof Style.Light {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? Style.Dark
+    : Style.Light;
+}
+
+/**
+ * Configure the native status bar appearance and keep it in sync with the
+ * system light/dark preference so iOS VoiceOver / accessibility users who
+ * switch themes see a consistent UI.
  */
 async function initializeStatusBar(): Promise<void> {
-  if (!isPluginAvailable('StatusBar')) return;
+  if (!isPluginAvailable("StatusBar")) return;
 
   try {
-    await StatusBar.setStyle({ style: Style.Dark });
+    // Set initial style based on the current system preference
+    await StatusBar.setStyle({ style: resolveStatusBarStyle() });
 
     if (isAndroid) {
-      await StatusBar.setBackgroundColor({ color: '#000000' });
+      await StatusBar.setBackgroundColor({ color: "#000000" });
       // Enable overlay mode for edge-to-edge display (Android 15 requirement)
       await StatusBar.setOverlaysWebView({ overlay: true });
     }
+
+    // Keep status bar style in sync when the user changes their system theme
+    window
+      .matchMedia("(prefers-color-scheme: dark)")
+      .addEventListener("change", async () => {
+        try {
+          await StatusBar.setStyle({ style: resolveStatusBarStyle() });
+        } catch {
+          // Non-critical — ignore if plugin becomes unavailable
+        }
+      });
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.warn('StatusBar initialization failed:', error);
+      console.warn("StatusBar initialization failed:", error);
     }
   }
 }
@@ -63,7 +93,7 @@ async function initializeStatusBar(): Promise<void> {
  * Configure the native keyboard behavior.
  */
 async function initializeKeyboard(): Promise<void> {
-  if (!isPluginAvailable('Keyboard')) return;
+  if (!isPluginAvailable("Keyboard")) return;
 
   try {
     // Resize the web view when keyboard appears (better than pan)
@@ -78,7 +108,7 @@ async function initializeKeyboard(): Promise<void> {
     await Keyboard.setScroll({ isDisabled: false });
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.warn('Keyboard initialization failed:', error);
+      console.warn("Keyboard initialization failed:", error);
     }
   }
 }
@@ -87,7 +117,7 @@ async function initializeKeyboard(): Promise<void> {
  * Hide the splash screen after the app has initialized.
  */
 async function initializeSplashScreen(): Promise<void> {
-  if (!isPluginAvailable('SplashScreen')) return;
+  if (!isPluginAvailable("SplashScreen")) return;
 
   try {
     // The splash screen will be hidden after the app renders.
@@ -95,7 +125,7 @@ async function initializeSplashScreen(): Promise<void> {
     await SplashScreen.hide({ fadeOutDuration: 300 });
   } catch (error) {
     if (import.meta.env.DEV) {
-      console.warn('SplashScreen hide failed:', error);
+      console.warn("SplashScreen hide failed:", error);
     }
   }
 }
@@ -106,7 +136,7 @@ async function initializeSplashScreen(): Promise<void> {
 function registerDeepLinkListener(callback?: (url: string) => void): void {
   if (!callback) return;
 
-  App.addListener('appUrlOpen', (event: URLOpenListenerEvent) => {
+  App.addListener("appUrlOpen", (event: URLOpenListenerEvent) => {
     // Parse the URL and extract the path for React Router navigation
     try {
       const url = new URL(event.url);
@@ -122,10 +152,12 @@ function registerDeepLinkListener(callback?: (url: string) => void): void {
 /**
  * Register a listener for network connectivity changes.
  */
-function registerNetworkListener(callback?: (status: ConnectionStatus) => void): void {
+function registerNetworkListener(
+  callback?: (status: ConnectionStatus) => void,
+): void {
   if (!callback) return;
 
-  Network.addListener('networkStatusChange', callback);
+  Network.addListener("networkStatusChange", callback);
 }
 
 /**
@@ -134,7 +166,7 @@ function registerNetworkListener(callback?: (status: ConnectionStatus) => void):
 function registerBackButtonListener(callback?: () => void): void {
   if (!isAndroid || !callback) return;
 
-  App.addListener('backButton', ({ canGoBack }) => {
+  App.addListener("backButton", ({ canGoBack }) => {
     if (canGoBack) {
       window.history.back();
     } else {
