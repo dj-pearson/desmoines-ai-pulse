@@ -91,6 +91,22 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-011
+- **Implemented**: Wire up push notification registration and event reminders
+- **Changes**:
+  - `src/hooks/usePushNotifications.ts`: New hook — registers with APNs/FCM via Capacitor PushNotifications plugin, stores device token in Supabase `device_tokens` table, handles notification tap navigation to event/restaurant detail pages. Also exports `scheduleEventReminder()` for local notifications.
+  - `src/lib/capacitorUtils.ts`: Added PushNotifications and LocalNotifications plugin types
+  - `src/components/EventReminderSettings.tsx`: Added local notification scheduling when toggling reminders on Capacitor. Added `eventTitle` and `eventDate` optional props.
+  - `src/App.tsx`: Wired `usePushNotifications()` into KeyboardShortcutsProvider for auto-registration on launch
+- **Why**: Push notifications are essential for event reminders on mobile. The mobile-app/ directory had a separate implementation, but the main web app (which gets bundled into Capacitor) needed its own version using window.Capacitor.Plugins.
+- **Learnings for future iterations:**
+  - Capacitor PushNotifications plugin requires `checkPermissions` → `requestPermissions` → `register` flow
+  - `device_tokens` table upsert uses `onConflict: 'token'` to prevent duplicates
+  - Local notifications need a stable numeric ID — use a hash function on `eventId + reminderType`
+  - The `registration` event fires after `register()` with the device token
+  - `pushNotificationActionPerformed` fires when user taps a notification — use for deep linking
+---
+
 ## 2026-03-02 — IOS-010
 - **Verified**: Optimize hero section for Capacitor (skip Three.js) — already fully implemented
 - **No changes needed**:

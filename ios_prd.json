@@ -172,8 +172,8 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Capacitor PushNotifications and LocalNotifications plugins are configured in capacitor.config.ts. EventReminderSettings component exists. Need to wire the Capacitor plugin calls. Edge function send-event-reminders exists."
+      "passes": true,
+      "notes": "Created usePushNotifications hook for the main web app that registers with APNs/FCM via Capacitor PushNotifications plugin, stores token in Supabase device_tokens table, handles notification tap navigation. Added scheduleEventReminder() for local notifications. Wired into App.tsx for auto-registration and EventReminderSettings for local notification scheduling."
     },
     {
       "id": "IOS-012",
