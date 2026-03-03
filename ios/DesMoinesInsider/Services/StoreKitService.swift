@@ -8,14 +8,16 @@ import StoreKit
 final class StoreKitService {
     static let shared = StoreKitService()
 
-    // MARK: - Product IDs
+    // MARK: - Product IDs (from App Store Connect "Insider" subscription group)
 
+    /// Product IDs from App Store Connect. Add yearly products here when created.
     static let productIDs: Set<String> = [
-        "com.desmoines.aipulse.insider.monthly",
-        "com.desmoines.aipulse.insider.yearly",
-        "com.desmoines.aipulse.vip.monthly",
-        "com.desmoines.aipulse.vip.yearly",
+        "prod_U4oa7Cpn0bRnuo",  // Insider Monthly
+        "prod_U4oaGFEy12auTx",  // VIP Monthly
     ]
+
+    static let insiderProductIDs: Set<String> = ["prod_U4oa7Cpn0bRnuo"]
+    static let vipProductIDs: Set<String> = ["prod_U4oaGFEy12auTx"]
 
     // MARK: - Published State
 
@@ -28,6 +30,13 @@ final class StoreKitService {
 
     var currentTier: SubscriptionTier {
         for id in purchasedProductIDs {
+            if Self.vipProductIDs.contains(id) { return .vip }
+        }
+        for id in purchasedProductIDs {
+            if Self.insiderProductIDs.contains(id) { return .insider }
+        }
+        // Fallback for legacy product IDs
+        for id in purchasedProductIDs {
             if id.contains("vip") { return .vip }
         }
         for id in purchasedProductIDs {
@@ -37,12 +46,12 @@ final class StoreKitService {
     }
 
     var insiderProducts: [Product] {
-        products.filter { $0.id.contains("insider") }
+        products.filter { Self.insiderProductIDs.contains($0.id) }
             .sorted { $0.price < $1.price }
     }
 
     var vipProducts: [Product] {
-        products.filter { $0.id.contains("vip") }
+        products.filter { Self.vipProductIDs.contains($0.id) }
             .sorted { $0.price < $1.price }
     }
 
@@ -127,6 +136,7 @@ final class StoreKitService {
         do {
             try await AppStore.sync()
             await updatePurchasedProducts()
+            await syncAllEntitlementsToBackend()
         } catch {
             errorMessage = StoreError.restoreFailed.localizedDescription
         }
@@ -176,7 +186,18 @@ final class StoreKitService {
         }
     }
 
-    // MARK: - Sync Entitlement to Backend
+    // MARK: - Sync Entitlements to Backend
+
+    /// Syncs all current subscription entitlements to the backend.
+    /// Called after restore so user_subscriptions stays in sync across devices and web.
+    private func syncAllEntitlementsToBackend() async {
+        for await result in Transaction.currentEntitlements {
+            if let transaction = try? checkVerified(result),
+               Self.productIDs.contains(transaction.productID) {
+                await syncEntitlementToBackend(transaction: transaction, productId: transaction.productID)
+            }
+        }
+    }
 
     private func syncEntitlementToBackend(transaction: Transaction, productId: String) async {
         guard let client = supabase else { return }

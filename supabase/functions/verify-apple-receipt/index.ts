@@ -72,11 +72,14 @@ serve(async (req) => {
       );
     }
 
-    // Determine tier from product ID
+    // Determine tier from product ID (App Store Connect "Insider" group + legacy format)
+    const INSIDER_PRODUCT_IDS = new Set(["prod_U4oa7Cpn0bRnuo"]);
+    const VIP_PRODUCT_IDS = new Set(["prod_U4oaGFEy12auTx"]);
+
     let tier: string;
-    if (productId.includes("vip")) {
+    if (VIP_PRODUCT_IDS.has(productId) || productId.includes("vip")) {
       tier = "vip";
-    } else if (productId.includes("insider")) {
+    } else if (INSIDER_PRODUCT_IDS.has(productId) || productId.includes("insider")) {
       tier = "insider";
     } else {
       return new Response(

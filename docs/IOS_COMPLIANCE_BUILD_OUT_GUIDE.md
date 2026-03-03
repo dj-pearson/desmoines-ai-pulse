@@ -174,22 +174,39 @@ func deleteAccount() async {
 
 ### 3.2 Apple App Store Connect Setup
 
-Create these products in App Store Connect → In-App Purchases:
+**Subscription Group**: "Insider" (ID: 21957951)
 
-| Reference Name | Product ID | Type | Price |
-|----------------|-----------|------|-------|
-| Insider Monthly | `com.desmoines.aipulse.insider.monthly` | Auto-Renewable | $4.99/mo |
-| Insider Yearly | `com.desmoines.aipulse.insider.yearly` | Auto-Renewable | $49.99/yr |
-| VIP Monthly | `com.desmoines.aipulse.vip.monthly` | Auto-Renewable | $12.99/mo |
-| VIP Yearly | `com.desmoines.aipulse.vip.yearly` | Auto-Renewable | $129.99/yr |
+The iOS app is wired to these product IDs from App Store Connect:
 
-**Subscription Group**: "Des Moines Insider Premium"
+| Reference Name | Product ID | Duration | Price |
+|----------------|-----------|----------|-------|
+| prod_Insider_Monthly | `prod_U4oa7Cpn0bRnuo` | 1 month | $4.99/mo |
+| prod_VIP_Monthly | `prod_U4oaGFEy12auTx` | 1 month | $12.99/mo |
 
-Subscription hierarchy (highest to lowest):
-1. VIP Yearly
-2. VIP Monthly
-3. Insider Yearly
-4. Insider Monthly
+**Subscription hierarchy** (Edit Order in App Store Connect): VIP should be Level 1 (highest), Insider Level 2. If reversed, use Edit Order to drag VIP above Insider.
+
+**Adding yearly products later**: Create `prod_Insider_Yearly` and `prod_VIP_Yearly` in App Store Connect, then add their Product IDs to `StoreKitService.productIDs` and the backend mappings.
+
+#### 3.2.1 Fix "Missing Metadata" for Subscriptions
+
+Per [Apple's guidance](https://developer.apple.com/help/app-store-connect/manage-subscriptions/offer-auto-renewable-subscriptions), each subscription must have:
+
+1. **Subscription Duration** — Set (1 month is already configured).
+2. **Subscription Prices** — Set price for your territories.
+3. **Review Information** — Screenshot and notes for App Review.
+4. **App Store Localizations** — Add English (U.S.) at minimum:
+
+   **For each subscription** (prod_Insider_Monthly, prod_VIP_Monthly):
+   - Click the subscription → App Store Localizations → (+) Add
+   - **Display Name**: e.g. "Insider Monthly" / "VIP Monthly"
+   - **Description**: e.g. "Unlimited favorites, advanced filters, event reminders, ad-free experience." / "Everything in Insider plus AI Trip Planner, priority support, early access."
+
+   **For the subscription group** (Insider):
+   - Subscription Group → App Store Localizations → (+) Add
+   - **Subscription Group Display Name**: e.g. "Monthly" or "Des Moines Insider Premium"
+   - **App Name**: "Des Moines Insider"
+
+5. **First submission**: Your first subscription must be submitted with a new app version. Create the subscription, then select it from the app's In-App Purchases and Subscriptions section on the version page before submitting.
 
 ### 3.3 StoreKit 2 Service
 
