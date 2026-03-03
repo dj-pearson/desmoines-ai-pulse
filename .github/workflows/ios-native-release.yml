@@ -21,6 +21,19 @@
 #   7. VITE_SUPABASE_URL            - Supabase project URL (reused from web)
 #   8. VITE_SUPABASE_ANON_KEY       - Supabase anon key (reused from web)
 #
+# OPTIONAL GITHUB SECRETS:
+#   9. IOS_CLIP_PROVISIONING_PROFILE - Base64-encoded .mobileprovision for App Clip
+#      (bundle ID: com.desmoines.aipulse.Clip)
+#      If not set, the App Clip target is excluded from the archive.
+#
+# PROVISIONING PROFILE REQUIREMENTS:
+#   The main app profile (IOS_PROVISIONING_PROFILE) must include these capabilities:
+#     - Associated Domains (for universal links)
+#     - Sign in with Apple
+#   Enable them in Apple Developer Portal → Identifiers → your App ID,
+#   then regenerate the distribution profile.
+#   If capabilities are missing, they will be stripped from the build with warnings.
+#
 # ================================================================
 
 name: iOS Native Release - TestFlight
@@ -111,7 +124,65 @@ jobs:
       # ==============================================================
       - name: Generate Xcode project
         working-directory: ${{ env.PROJECT_DIR }}
+        env:
+          IOS_CLIP_PROVISIONING_PROFILE: ${{ secrets.IOS_CLIP_PROVISIONING_PROFILE }}
         run: |
+          # If no App Clip provisioning profile is available, remove the clip
+          # target from the project to avoid "requires a provisioning profile"
+          # errors. Xcode 26+ validates all embedded targets at archive time.
+          if [ -z "$IOS_CLIP_PROVISIONING_PROFILE" ]; then
+            echo "ℹ️  No IOS_CLIP_PROVISIONING_PROFILE secret — excluding App Clip from build"
+            python3 << 'PYEOF'
+          with open('project.yml') as f:
+              lines = f.readlines()
+
+          output = []
+          i = 0
+          skip_section = False
+          skip_indent = -1
+
+          while i < len(lines):
+              line = lines[i]
+              raw = line.rstrip('\n')
+              stripped = raw.lstrip()
+              indent = len(raw) - len(stripped)
+
+              # When skipping a section, continue until a non-empty line at
+              # the same or lesser indentation is found.
+              if skip_section:
+                  if stripped == '':
+                      i += 1
+                      continue
+                  if indent > skip_indent:
+                      i += 1
+                      continue
+                  skip_section = False
+
+              # Detect and skip any DesMoinesInsiderClip section (target def or scheme entry)
+              if stripped.startswith('DesMoinesInsiderClip:'):
+                  skip_section = True
+                  skip_indent = indent
+                  i += 1
+                  continue
+
+              # Remove the dependency reference from the main app target
+              if stripped == '- target: DesMoinesInsiderClip':
+                  i += 1
+                  # Also skip the 'embed: true' line that follows
+                  if i < len(lines) and 'embed:' in lines[i]:
+                      i += 1
+                  continue
+
+              output.append(line)
+              i += 1
+
+          with open('project.yml', 'w') as f:
+              f.writelines(output)
+
+          print('  Removed App Clip target from project.yml')
+          PYEOF
+          fi
+
           xcodegen generate
           echo "✅ Xcode project generated from project.yml"
 
@@ -212,6 +283,61 @@ jobs:
           echo "✅ Provisioning profile installed: $PP_NAME (UUID: $PP_UUID, Team: $TEAM_ID)"
 
       # ==============================================================
+      # 7b. VALIDATE PROFILE CAPABILITIES & ADJUST ENTITLEMENTS
+      # ==============================================================
+      - name: Validate profile capabilities
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          # Xcode 26+ strictly validates that provisioning profile capabilities
+          # match the entitlements declared by the app. If capabilities are missing
+          # from the profile, strip them from the entitlements file so the archive
+          # succeeds, and warn the user to update their profile.
+
+          /usr/libexec/PlistBuddy -x -c "Print :Entitlements" "$RUNNER_TEMP/pp_info.plist" \
+            > "$RUNNER_TEMP/profile_entitlements.plist" 2>/dev/null || true
+
+          ENTITLEMENTS_FILE="DesMoinesInsider/App/DesMoinesInsider.entitlements"
+          STRIPPED=""
+
+          # Check Associated Domains
+          if ! /usr/libexec/PlistBuddy -c "Print :com.apple.developer.associated-domains" \
+               "$RUNNER_TEMP/profile_entitlements.plist" >/dev/null 2>&1; then
+            echo "::warning::Provisioning profile missing 'Associated Domains' — stripping from build entitlements"
+            /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.associated-domains" "$ENTITLEMENTS_FILE" 2>/dev/null || true
+            STRIPPED="${STRIPPED} Associated-Domains"
+          else
+            echo "✅ Profile includes Associated Domains"
+          fi
+
+          # Check Sign in with Apple
+          if ! /usr/libexec/PlistBuddy -c "Print :com.apple.developer.applesignin" \
+               "$RUNNER_TEMP/profile_entitlements.plist" >/dev/null 2>&1; then
+            echo "::warning::Provisioning profile missing 'Sign in with Apple' — stripping from build entitlements"
+            /usr/libexec/PlistBuddy -c "Delete :com.apple.developer.applesignin" "$ENTITLEMENTS_FILE" 2>/dev/null || true
+            STRIPPED="${STRIPPED} Sign-in-with-Apple"
+          else
+            echo "✅ Profile includes Sign in with Apple"
+          fi
+
+          if [ -n "$STRIPPED" ]; then
+            echo ""
+            echo "============================================================"
+            echo "⚠️  ENTITLEMENTS STRIPPED (profile does not include them):"
+            echo "   ${STRIPPED}"
+            echo ""
+            echo "The build will succeed but these features will be DISABLED."
+            echo ""
+            echo "To restore full functionality:"
+            echo "  1. Apple Developer Portal → Identifiers → ${{ env.BUNDLE_ID }}"
+            echo "  2. Enable the missing capabilities listed above"
+            echo "  3. Profiles → regenerate your distribution profile"
+            echo "  4. Re-download, base64-encode, and update IOS_PROVISIONING_PROFILE secret"
+            echo "============================================================"
+          else
+            echo "✅ All required capabilities present in provisioning profile"
+          fi
+
+      # ==============================================================
       # 8. CONFIGURE CODE SIGNING
       # ==============================================================
       - name: Configure code signing
@@ -219,38 +345,19 @@ jobs:
         run: |
           PBXPROJ="DesMoinesInsider.xcodeproj/project.pbxproj"
 
-          # Set Manual signing
+          # Switch from Automatic to Manual signing (required for CI)
           sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
 
           # Set DEVELOPMENT_TEAM in ALL build configs (XcodeGen generates empty values)
           sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = '"$TEAM_ID"';/g' "$PBXPROJ"
 
-          # Inject remaining signing settings into Release config
-          python3 -c "
-          with open('$PBXPROJ', 'r') as f:
-              content = f.read()
+          # Signing identity and provisioning profile are passed directly to
+          # xcodebuild in the archive step (command-line overrides are
+          # authoritative and apply to all targets, which is safe now that
+          # the App Clip target has been removed when no clip profile exists).
 
-          old = 'CODE_SIGN_STYLE = Manual;'
-          new_block = '''CODE_SIGN_STYLE = Manual;
-          \t\t\t\tCODE_SIGN_IDENTITY = \"Apple Distribution\";
-          \t\t\t\tPROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";'''
-
-          # Replace second occurrence (Release config)
-          first_pos = content.find(old)
-          if first_pos >= 0:
-              second_pos = content.find(old, first_pos + len(old))
-              if second_pos >= 0:
-                  content = content[:second_pos] + new_block + content[second_pos + len(old):]
-              else:
-                  content = content[:first_pos] + new_block + content[first_pos + len(old):]
-
-          with open('$PBXPROJ', 'w') as f:
-              f.write(content)
-          "
-
-          echo "✅ Code signing configured"
-          grep "PROVISIONING_PROFILE_SPECIFIER" "$PBXPROJ" || echo "⚠️ Profile specifier not found"
-          grep "DEVELOPMENT_TEAM" "$PBXPROJ" || echo "⚠️ Team not found"
+          echo "✅ Code signing configured (identity & profile passed via xcodebuild)"
+          grep -c "DEVELOPMENT_TEAM = $TEAM_ID;" "$PBXPROJ" | xargs -I{} echo "   DEVELOPMENT_TEAM set in {} build configs"
 
       # ==============================================================
       # 9. BUILD XCODE ARCHIVE
@@ -272,6 +379,9 @@ jobs:
             -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
             IPHONEOS_DEPLOYMENT_TARGET=17.0 \
             DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty --color || {
               echo "::error::Archive failed. Last 80 lines:"
