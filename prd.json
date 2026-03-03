@@ -2209,6 +2209,108 @@
       "priority": 133,
       "passes": true,
       "notes": "Apple App Store accessibility requirement: Audio Descriptions. The VideoPlayer previously only had caption track support (kind='captions'). This story adds a parallel system for audio description tracks (kind='descriptions'), which is the HTML5 standard mechanism for providing narration of visual content to blind and low-vision users. Both the track element and the toggle UI are now in place."
+    },
+    {
+      "id": "US-134",
+      "title": "Add SSRF validation to validate-source-urls and fix-broken-event-urls edge functions",
+      "description": "As a security engineer, I need all URL-fetching edge functions to validate URLs with validateURLForSSRF before fetch so that SSRF attacks (e.g. from tools like Shannon) cannot reach internal networks.",
+      "acceptanceCriteria": [
+        "Import validateURLForSSRF from _shared/validation.ts in validate-source-urls/index.ts",
+        "Before fetch(event.source_url), call validateURLForSSRF and return 400 if invalid",
+        "Import and apply same validation in fix-broken-event-urls/index.ts before any fetch",
+        "Reject localhost, 127.0.0.1, 192.168.*, 10.*, 172.16-31.*, .internal, .local",
+        "Typecheck passes"
+      ],
+      "priority": 134,
+      "passes": false,
+      "notes": "SHANNON DEFENSE: validate-source-urls and fix-broken-event-urls fetch URLs from the database. An attacker could potentially inject malicious URLs. validateURLForSSRF already exists in _shared/validation.ts — apply it before every fetch."
+    },
+    {
+      "id": "US-135",
+      "title": "Add SSRF validation to check-broken-links and crawl-site edge functions",
+      "description": "As a security engineer, I need check-broken-links and crawl-site to validate all URLs before fetching so that SSRF cannot be used to probe internal services.",
+      "acceptanceCriteria": [
+        "In check-broken-links/index.ts: validate base URL and each discovered link URL with validateURLForSSRF before fetch",
+        "In crawl-site/index.ts: validate startUrl and each crawled URL with validateURLForSSRF before fetch",
+        "Return 400 or skip invalid URLs with clear error message",
+        "Typecheck passes"
+      ],
+      "priority": 135,
+      "passes": false,
+      "notes": "SHANNON DEFENSE: Both functions accept or discover URLs and fetch them. Without validation, an attacker could use them to reach metadata services (169.254.169.254) or internal APIs."
+    },
+    {
+      "id": "US-136",
+      "title": "Add SSRF validation to analyze-competitor and firecrawl-scraper edge functions",
+      "description": "As a security engineer, I need analyze-competitor and firecrawl-scraper to validate competitor/job URLs before fetching so that SSRF attacks are blocked.",
+      "acceptanceCriteria": [
+        "In analyze-competitor/index.ts: validate competitor.website_url and all extracted hrefs with validateURLForSSRF before fetch",
+        "In firecrawl-scraper/index.ts: validate job URL (from config or request) with validateURLForSSRF before passing to Firecrawl API",
+        "Reject private IPs, localhost, and internal hostnames",
+        "Typecheck passes"
+      ],
+      "priority": 136,
+      "passes": false,
+      "notes": "SHANNON DEFENSE: analyze-competitor fetches competitor websites; firecrawl-scraper fetches arbitrary URLs. Both are SSRF vectors if URLs come from user input or config."
+    },
+    {
+      "id": "US-137",
+      "title": "Add SSRF validation to image-transform and _shared/imageStorage",
+      "description": "As a security engineer, I need image-transform and imageStorage to validate source URLs before fetch so that image proxy endpoints cannot be abused for SSRF.",
+      "acceptanceCriteria": [
+        "In image-transform/index.ts: validate url query param with validateURLForSSRF before fetch (use allowedDomains if needed for known image CDNs)",
+        "In _shared/imageStorage.ts: validate sourceImageUrl with validateURLForSSRF before fetch in downloadImageFromUrl",
+        "Block localhost, private IPs, metadata endpoints",
+        "Typecheck passes"
+      ],
+      "priority": 137,
+      "passes": false,
+      "notes": "SHANNON DEFENSE: image-proxy already has SSRF protection. image-transform and imageStorage also fetch URLs and need the same validation."
+    },
+    {
+      "id": "US-138",
+      "title": "Add webhook URL validation to test-article-webhook and publish-article-webhook",
+      "description": "As a security engineer, I need webhook URLs validated before server-side fetch so that attackers cannot use our webhook tester to perform SSRF.",
+      "acceptanceCriteria": [
+        "In test-article-webhook/index.ts: validate webhookUrl with validateURLForSSRF before fetch(webhookUrl)",
+        "In publish-article-webhook/index.ts: validate webhookUrl with validateURLForSSRF before fetch",
+        "Return 400 with clear error if URL targets localhost, private IPs, or internal hostnames",
+        "Typecheck passes"
+      ],
+      "priority": 138,
+      "passes": false,
+      "notes": "SHANNON DEFENSE: Webhook test endpoints accept arbitrary URLs. Without validation, an attacker could point them at http://169.254.169.254/latest/meta-data/ or internal services."
+    },
+    {
+      "id": "US-139",
+      "title": "Create SECURITY_PRINCIPLES.md with defense-in-depth documentation",
+      "description": "As a developer, I need a SECURITY_PRINCIPLES.md document so that the team has clear principles for defending against AI pentesters (e.g. Shannon) and automated attacks.",
+      "acceptanceCriteria": [
+        "Create docs/SECURITY_PRINCIPLES.md (or root SECURITY_PRINCIPLES.md)",
+        "Document: Defense in depth, Input validation (schema + allowlist), SSRF protection (validate all outbound URLs), Auth/authz (IDOR prevention), Rate limiting, Security headers",
+        "Include references to existing patterns: validateURLForSSRF, security middleware, RLS",
+        "Add 'No trust in client' and 'Assume breach' principles",
+        "Typecheck passes"
+      ],
+      "priority": 139,
+      "passes": false,
+      "notes": "SHANNON DEFENSE: Principles document helps future developers and Ralph iterations maintain security posture. Aligns with OWASP and Shannon's attack vectors (Injection, XSS, SSRF, Broken Auth)."
+    },
+    {
+      "id": "US-140",
+      "title": "Create PENTEST_WORKFLOW.md for internal Shannon-style testing",
+      "description": "As a security engineer, I need a documented workflow for running internal pentests (Shannon or similar) so that we can proactively find vulnerabilities before attackers do.",
+      "acceptanceCriteria": [
+        "Create docs/PENTEST_WORKFLOW.md",
+        "Document: When to run (quarterly, pre-release), Target environment (staging only, never production)",
+        "Include Shannon setup steps: clone, repos/, config, URL=staging, REPO=desmoines-ai-pulse",
+        "Document alternative: OWASP ZAP baseline, Semgrep, manual SecurityTestingPanel checks",
+        "Add disclaimer: Only run on systems you own, with authorization",
+        "Typecheck passes"
+      ],
+      "priority": 140,
+      "passes": false,
+      "notes": "SHANNON DEFENSE: Internal testing using Shannon's methodology (recon, vuln analysis, exploitation, reporting) closes the security gap between shipping code and annual pentests. Document the workflow so it can be run consistently."
     }
   ]
 }

@@ -64,7 +64,6 @@ targets:
         com.apple.developer.associated-domains:
           - applinks:desmoinesinsider.com
           - webcredentials:desmoinesinsider.com
-          - appclip:desmoinesinsider.com
 
   # ──────────────────────────────────────────────────
   # App Clip Target
