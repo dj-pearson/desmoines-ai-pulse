@@ -91,6 +91,13 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-018
+- **Implemented**: Add App Store metadata and screenshot generation docs
+- **Changes**:
+  - `mobile-app/docs/app-store-metadata.md`: New doc — app name, subtitle, description, keywords, screenshot requirements (5 device sizes), privacy nutrition labels, App Store Connect fields, Fastlane commands
+- **No code changes** — documentation only as specified in acceptance criteria
+---
+
 ## 2026-03-02 — IOS-017
 - **Implemented**: Cache images locally for faster repeat loads
 - **Changes**:

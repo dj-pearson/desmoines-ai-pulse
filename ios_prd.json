@@ -279,8 +279,8 @@
         "Typecheck passes (no code changes, docs only)"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": "Fastlane is already set up in mobile-app/fastlane/. This story focuses on preparing the content needed before submission."
+      "passes": true,
+      "notes": "Created mobile-app/docs/app-store-metadata.md with app name/subtitle, full description, keywords, screenshot requirements (6.7/6.1/5.5 iPhone + iPad sizes), privacy nutrition labels (data collected/not collected/tracking), App Store Connect fields, and Fastlane integration commands."
     },
     {
       "id": "IOS-019",
