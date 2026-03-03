@@ -28,22 +28,140 @@ export function CardSkeleton({ showImage = true }: { showImage?: boolean }) {
   );
 }
 
+// Event card skeleton — matches SocialEventCard layout (image + date badge + category + title + location/time)
+export function EventCardSkeleton() {
+  return (
+    <div className="rounded-xl overflow-hidden border-0 shadow-md bg-card">
+      {/* Image area with overlaid elements */}
+      <div className="relative h-52 skeleton-mobile">
+        {/* Date badge top-left */}
+        <div className="absolute top-3 left-3 z-10">
+          <div className="bg-background rounded-lg w-14 h-16 overflow-hidden">
+            <Skeleton className="h-4 w-full rounded-none" />
+            <div className="p-1 space-y-1">
+              <Skeleton className="h-5 w-8 mx-auto" />
+              <Skeleton className="h-3 w-6 mx-auto" />
+            </div>
+          </div>
+        </div>
+        {/* Badge top-right */}
+        <Skeleton className="absolute top-3 right-3 h-5 w-16 rounded-full" />
+        {/* Bottom overlay: category badge + title */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+          <div className="flex gap-2 mb-2">
+            <Skeleton className="h-5 w-14 rounded-full" />
+            <Skeleton className="h-5 w-10 rounded-full" />
+          </div>
+          <Skeleton className="h-5 w-4/5 mb-1" />
+          <Skeleton className="h-5 w-3/5" />
+        </div>
+      </div>
+      {/* Footer: location + time */}
+      <div className="p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded-full" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4 rounded-full" />
+          <Skeleton className="h-4 w-1/3" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Restaurant card skeleton — matches RestaurantCard layout (image + badges + name + rating/price + description + location)
+export function RestaurantCardSkeleton() {
+  return (
+    <div className="rounded-2xl overflow-hidden border bg-card shadow-sm">
+      {/* Image header */}
+      <div className="relative h-48 skeleton-mobile">
+        {/* Badge top-left */}
+        <Skeleton className="absolute top-3 left-3 h-5 w-20 rounded-full z-10" />
+        {/* Price top-right */}
+        <Skeleton className="absolute top-3 right-3 h-5 w-10 rounded-full z-10" />
+        {/* Bottom overlay: name + cuisine */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+          <Skeleton className="h-5 w-3/4 mb-1.5" />
+          <div className="flex items-center gap-1.5">
+            <Skeleton className="h-3.5 w-3.5 rounded-full" />
+            <Skeleton className="h-3.5 w-20" />
+          </div>
+        </div>
+      </div>
+      {/* Card body */}
+      <div className="p-4 space-y-3">
+        {/* Rating row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-3.5 w-3.5 rounded-sm" />
+            ))}
+            <Skeleton className="h-4 w-6 ml-1" />
+          </div>
+          <Skeleton className="h-5 w-16 rounded-full" />
+        </div>
+        {/* Description */}
+        <div className="space-y-1.5">
+          <Skeleton className="h-3.5 w-full" />
+          <Skeleton className="h-3.5 w-4/5" />
+        </div>
+        {/* Location */}
+        <div className="flex items-center gap-1.5">
+          <Skeleton className="h-3.5 w-3.5 rounded-full" />
+          <Skeleton className="h-3.5 w-1/2" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Detail page hero skeleton — full-width image with overlaid content
+export function DetailHeroSkeleton() {
+  return (
+    <div className="relative h-72 md:h-96 skeleton-mobile overflow-hidden">
+      {/* Back button */}
+      <Skeleton className="absolute top-4 left-4 h-9 w-9 rounded-full z-10" />
+      {/* Share button */}
+      <Skeleton className="absolute top-4 right-4 h-9 w-9 rounded-full z-10" />
+      {/* Bottom overlay */}
+      <div className="absolute bottom-0 left-0 right-0 p-6 z-10 space-y-3">
+        <div className="flex gap-2">
+          <Skeleton className="h-6 w-16 rounded-full" />
+          <Skeleton className="h-6 w-12 rounded-full" />
+        </div>
+        <Skeleton className="h-8 w-4/5" />
+        <Skeleton className="h-5 w-3/5" />
+      </div>
+    </div>
+  );
+}
+
 // Grid of cards skeleton with accessibility
 export function CardsGridSkeleton({
   count = 6,
   showImage = true,
   className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
-  label = "Loading content..."
+  label = "Loading content...",
+  variant = "default",
 }: {
   count?: number;
   showImage?: boolean;
   className?: string;
   label?: string;
+  variant?: "default" | "event" | "restaurant";
 }) {
+  const SkeletonCard = variant === "event"
+    ? EventCardSkeleton
+    : variant === "restaurant"
+      ? RestaurantCardSkeleton
+      : () => <CardSkeleton showImage={showImage} />;
+
   return (
     <SkeletonGroup label={label} className={className}>
       {Array.from({ length: count }).map((_, i) => (
-        <CardSkeleton key={i} showImage={showImage} />
+        <SkeletonCard key={i} />
       ))}
     </SkeletonGroup>
   );

@@ -546,7 +546,7 @@ export default function EventsPage() {
             </div>
           </section>
           <div className="container mx-auto px-4 py-8">
-            <CardsGridSkeleton count={9} className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" label="Loading events..." />
+            <CardsGridSkeleton count={9} variant="event" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3" label="Loading events..." />
           </div>
           <Footer />
         </div>
@@ -920,7 +920,7 @@ export default function EventsPage() {
           </div>
 
           {/* Event Grid / Map */}
-          {isLoading && <CardsGridSkeleton count={6} label="Loading events..." />}
+          {isLoading && <CardsGridSkeleton count={6} variant="event" label="Loading events..." />}
 
           {!isLoading && viewMode === "map" ? (
             <Suspense fallback={<LoadingSpinner label="Loading map..." />}>
