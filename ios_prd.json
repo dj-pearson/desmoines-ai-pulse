@@ -124,8 +124,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Can be done with CSS animations on route change. Use the capacitor-app class to scope. Keep transitions simple — slide + fade, not complex 3D transforms. Key file: App.tsx route container."
+      "passes": true,
+      "notes": "Created usePageTransition hook that detects route changes and applies a cap-page-enter CSS class for a subtle slide-fade animation (250ms ease-out). Scoped to .capacitor-app. Respects prefers-reduced-motion via existing CSS rule. Attached via KeyboardShortcutsProvider wrapper div."
     },
     {
       "id": "IOS-009",

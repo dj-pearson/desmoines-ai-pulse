@@ -91,6 +91,20 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-008
+- **Implemented**: Implement native-feel page transitions
+- **Changes**:
+  - `src/hooks/usePageTransition.ts`: New hook — detects route changes via useLocation, applies `cap-page-enter` CSS class to a ref'd container for a slide-fade animation. No-op on web.
+  - `src/index.css`: Added `@keyframes cap-page-enter` (opacity 0.85→1, translateX 8px→0, 250ms ease-out), scoped to `.capacitor-app`
+  - `src/App.tsx`: Added `usePageTransition` to KeyboardShortcutsProvider, wrapping children in a `<div>` with the transition ref
+- **Why**: Native iOS apps have subtle slide-in transitions between screens. A lightweight CSS-only approach avoids heavy dependencies like framer-motion while achieving a native feel.
+- **Learnings for future iterations:**
+  - Force reflow (`void el.offsetWidth`) between removing and adding a CSS class to re-trigger animations
+  - 250ms is the sweet spot — fast enough to feel snappy, slow enough to register visually
+  - `translateX(8px)` is a subtle hint of direction without being disorienting
+  - The existing `@media (prefers-reduced-motion: reduce)` rule suppresses all animations, so this respects it automatically
+---
+
 ## 2026-03-02 — IOS-007
 - **Implemented**: Fix header safe area overlap on notched iPhones
 - **Changes**:

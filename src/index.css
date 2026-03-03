@@ -1104,6 +1104,22 @@ html.capacitor-app,
   scroll-margin-bottom: 120px;
 }
 
+/* --- Page transitions: subtle slide-fade for native feel --- */
+@keyframes cap-page-enter {
+  from {
+    opacity: 0.85;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.capacitor-app .cap-page-enter {
+  animation: cap-page-enter 250ms ease-out both;
+}
+
 /* --- Status bar spacer (iOS notch) --- */
 .capacitor-app header::before {
   content: '';

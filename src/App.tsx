@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useState, useEffect, ComponentType } from "react";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useKeyboardAware } from "@/hooks/useKeyboardAware";
+import { usePageTransition } from "@/hooks/usePageTransition";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation } from "react-router-dom";
@@ -208,15 +209,18 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
   // Ensure iOS keyboard doesn't obscure focused inputs
   useKeyboardAware();
 
+  // Subtle page transition animation for Capacitor (no-op on web)
+  const pageTransitionRef = usePageTransition<HTMLDivElement>();
+
   return (
-    <>
+    <div ref={pageTransitionRef}>
       {children}
       <KeyboardShortcutsModal
         open={showShortcutsModal}
         onOpenChange={setShowShortcutsModal}
       />
       <WelcomeModal />
-    </>
+    </div>
   );
 };
 
