@@ -10,7 +10,6 @@
 	<array>
 		<string>applinks:desmoinesinsider.com</string>
 		<string>webcredentials:desmoinesinsider.com</string>
-		<string>appclip:desmoinesinsider.com</string>
 	</array>
 </dict>
 </plist>
