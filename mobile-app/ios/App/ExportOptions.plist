@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ExportOptions.plist
+
+  Used by xcodebuild -exportArchive to produce a signed .ipa.
+  Values reference the Apple Developer Team and bundle ID.
+
+  IMPORTANT: The teamID and signingCertificate are injected during CI
+  via the provisioning profile and distribution certificate stored
+  in GitHub repository secrets.
+-->
+<plist version="1.0">
+<dict>
+	<!-- Export method: app-store for TestFlight/App Store distribution -->
+	<key>method</key>
+	<string>app-store</string>
+
+	<!-- Apple Developer Team ID (set in GitHub secret: APPLE_TEAM_ID) -->
+	<key>teamID</key>
+	<string>TEAM_ID_PLACEHOLDER</string>
+
+	<!-- Signing style: manual for CI builds -->
+	<key>signingStyle</key>
+	<string>manual</string>
+
+	<!-- Provisioning profiles mapped by bundle ID -->
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>com.desmoines.aipulse</key>
+		<string>DSM AI Pulse AppStore</string>
+	</dict>
+
+	<!-- Signing certificate type -->
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
+
+	<!-- Upload to App Store Connect -->
+	<key>uploadBitcode</key>
+	<false/>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>compileBitcode</key>
+	<false/>
+
+	<!-- Destination: upload (for TestFlight) or export (for local .ipa) -->
+	<key>destination</key>
+	<string>upload</string>
+</dict>
+</plist>

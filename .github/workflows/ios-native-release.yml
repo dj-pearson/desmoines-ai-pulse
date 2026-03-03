@@ -351,13 +351,20 @@ jobs:
           # Set DEVELOPMENT_TEAM in ALL build configs (XcodeGen generates empty values)
           sed -i '' 's/DEVELOPMENT_TEAM = "";/DEVELOPMENT_TEAM = '"$TEAM_ID"';/g' "$PBXPROJ"
 
-          # Signing identity and provisioning profile are passed directly to
-          # xcodebuild in the archive step (command-line overrides are
-          # authoritative and apply to all targets, which is safe now that
-          # the App Clip target has been removed when no clip profile exists).
+          # Set PROVISIONING_PROFILE_SPECIFIER in the project file rather than as a
+          # global xcodebuild CLI override. A global CLI override propagates to every
+          # compiled target — including SPM dependency targets like swift-crypto_Crypto
+          # which do not support provisioning profiles. Xcode 26+ rejects this with a
+          # hard error. Writing to project.pbxproj scopes the setting to the main app
+          # target only; SPM packages use their own Package.swift and are unaffected.
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = "";/PROVISIONING_PROFILE_SPECIFIER = "'"$PP_UUID"'";/g' "$PBXPROJ"
 
-          echo "✅ Code signing configured (identity & profile passed via xcodebuild)"
+          # Set the signing identity for Release builds
+          sed -i '' 's/CODE_SIGN_IDENTITY = "";/CODE_SIGN_IDENTITY = "Apple Distribution";/g' "$PBXPROJ"
+
+          echo "✅ Code signing configured in project.pbxproj"
           grep -c "DEVELOPMENT_TEAM = $TEAM_ID;" "$PBXPROJ" | xargs -I{} echo "   DEVELOPMENT_TEAM set in {} build configs"
+          grep -c "PROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";" "$PBXPROJ" | xargs -I{} echo "   PROVISIONING_PROFILE_SPECIFIER set in {} build configs"
 
       # ==============================================================
       # 9. BUILD XCODE ARCHIVE
@@ -370,6 +377,11 @@ jobs:
           # NOTE: Supabase credentials are injected via Secrets.generated.swift
           # (step 2), NOT via build settings. Passing URLs as build settings
           # is fragile because :// is treated as a comment in xcconfig context.
+          # NOTE: PROVISIONING_PROFILE_SPECIFIER and CODE_SIGN_IDENTITY are set
+          # directly in project.pbxproj (step 8) rather than here as global
+          # overrides. Global CLI overrides apply to ALL targets including SPM
+          # dependencies, which causes Xcode 26+ to error on packages like
+          # swift-crypto_Crypto that do not support provisioning profiles.
           xcodebuild archive \
             -project DesMoinesInsider.xcodeproj \
             -scheme "${{ env.SCHEME }}" \
@@ -380,8 +392,6 @@ jobs:
             IPHONEOS_DEPLOYMENT_TARGET=17.0 \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PP_UUID" \
             OTHER_CODE_SIGN_FLAGS="--keychain $KEYCHAIN_PATH" \
             2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty --color || {
               echo "::error::Archive failed. Last 80 lines:"
