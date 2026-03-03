@@ -91,6 +91,19 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-013
+- **Implemented**: Add swipe-back gesture support for navigation
+- **Changes**:
+  - `src/hooks/useSwipeBack.ts`: New hook — detects left-edge swipe gestures (30px zone) with threshold (80px) and velocity (0.3px/ms) checks, triggers `navigate(-1)`. Only iOS Capacitor, disabled on home page.
+  - `src/App.tsx`: Wired `useSwipeBack()` into KeyboardShortcutsProvider
+- **Why**: iOS users expect swipe-from-left-edge to go back. This JS implementation works in WKWebView alongside the native gesture support.
+- **Learnings for future iterations:**
+  - Edge zone (30px) prevents false positives from normal horizontal scrolling
+  - Check `deltaY > deltaX` to distinguish vertical scrolls from horizontal swipes
+  - Disable on home page (`/`) since there's nothing to go back to
+  - `{ passive: true }` on touch listeners is important for scroll performance
+---
+
 ## 2026-03-02 — IOS-012
 - **Implemented**: Implement deep linking for event/restaurant URLs
 - **Changes**:

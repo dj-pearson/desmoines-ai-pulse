@@ -203,8 +203,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "iOS WKWebView has built-in swipe-back but it may need allowsBackForwardNavigationGestures enabled in the native config. Alternatively implement in JS with touch event listeners."
+      "passes": true,
+      "notes": "Created useSwipeBack hook that detects left-edge swipe gestures (within 30px of screen edge) and triggers React Router navigate(-1). Only active on Capacitor iOS, not on home page. Uses velocity and distance thresholds to avoid false positives. Doesn't conflict with horizontal scrolling elements."
     },
     {
       "id": "IOS-014",

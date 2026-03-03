@@ -10,6 +10,7 @@ import { useKeyboardAware } from "@/hooks/useKeyboardAware";
 import { usePageTransition } from "@/hooks/usePageTransition";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { useDeepLinks } from "@/hooks/useDeepLinks";
+import { useSwipeBack } from "@/hooks/useSwipeBack";
 import { useFocusOnRouteChange } from "@/hooks/useFocusOnRouteChange";
 import { usePageTracking } from "@/hooks/usePageTracking";
 import { useLocation } from "react-router-dom";
@@ -216,6 +217,9 @@ const KeyboardShortcutsProvider = ({ children }: { children: React.ReactNode }) 
 
   // Handle incoming deep links (Universal Links / App Links)
   useDeepLinks();
+
+  // Enable swipe-from-left-edge to go back on iOS
+  useSwipeBack();
 
   // Subtle page transition animation for Capacitor (no-op on web)
   const pageTransitionRef = usePageTransition<HTMLDivElement>();
