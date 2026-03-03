@@ -3,7 +3,7 @@
  * Used by both the Advertise page (informational) and CreativeUploader (validation).
  */
 
-export type PlacementType = 'top_banner' | 'featured_spot' | 'below_fold';
+export type PlacementType = 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing';
 
 export interface PlacementDimension {
   width: number;
@@ -24,6 +24,8 @@ export interface PlacementSpec {
   animationType: string;
   features: string[];
   specifications: string[];
+  /** When true, no image creative upload is required — uses the listing's own image */
+  noCreativeRequired?: boolean;
 }
 
 export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
@@ -92,6 +94,32 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
       'Blend with editorial content design',
       'Focus on value proposition',
       'Local Des Moines imagery encouraged',
+    ],
+  },
+  sponsored_listing: {
+    type: 'sponsored_listing',
+    name: 'Sponsored Listing',
+    description: 'Promote your event or restaurant as a sponsored featured item — appears first in the featured section with a "Sponsored" badge. Uses your existing listing details, no image upload needed.',
+    dailyCost: 15,
+    dimensions: [],
+    maxSize: 0,
+    maxSizeLabel: 'N/A',
+    aspectRatio: 'N/A',
+    formats: [],
+    animationType: 'N/A',
+    noCreativeRequired: true,
+    features: [
+      'Priority placement in Featured section',
+      '"Sponsored" badge (FTC-compliant)',
+      'Boosted in AI recommendations',
+      'Auto-expires when campaign ends',
+      'Uses your existing listing image & details',
+    ],
+    specifications: [
+      'Select the specific event or restaurant to promote',
+      'Listing must already exist on Des Moines AI Pulse',
+      'Sponsored label shown per FTC 16 CFR Part 255 guidelines',
+      'Campaign end date removes sponsorship automatically',
     ],
   },
 };

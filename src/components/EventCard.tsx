@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, memo, useCallback } from "react";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
 
 const createSlug = (name: string): string => {
   return name
@@ -88,7 +89,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   };
 
   return (
-    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group">
+    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
       {/* Image with overlay badges */}
       <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (
@@ -110,8 +111,9 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
         {/* Overlay badges for urgency/social proof */}
         <div className="absolute top-2 left-2 right-2 flex items-start justify-between gap-2">
           <div className="flex flex-col gap-2">
-            {isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
-            {isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
+            {event.is_sponsored && <SponsoredBadge />}
+            {!event.is_sponsored && isTrending && <SocialProofBadge type="trending" count={viewData.recent_views} size="sm" />}
+            {!event.is_sponsored && isNew && !isTrending && <SocialProofBadge type="new" size="sm" />}
           </div>
 
           {/* Distance Badge (only shown in Near Me mode) */}

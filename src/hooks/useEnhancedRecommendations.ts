@@ -197,8 +197,11 @@ export function useRestaurantRecommendations(
             reasons.push('Highly rated');
           }
 
-          // Featured boost
-          if (restaurant.is_featured) {
+          // Sponsored restaurants get the highest boost
+          if ((restaurant as any).is_sponsored) {
+            score += 20;
+            reasons.push('Sponsored');
+          } else if (restaurant.is_featured) {
             score += 10;
             reasons.push('Featured restaurant');
           }

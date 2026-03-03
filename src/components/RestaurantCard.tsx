@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles } from "lucide-react";
 import { useState, useMemo } from "react";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
 
 interface RestaurantCardProps {
   restaurant: {
@@ -18,6 +19,7 @@ interface RestaurantCardProps {
     status?: string;
     opening?: string;
     is_featured?: boolean;
+    is_sponsored?: boolean;
     image_url?: string;
     phone?: string;
     website?: string;
@@ -96,7 +98,7 @@ export default function RestaurantCard({ restaurant, variant = "default" }: Rest
     >
       <article
         className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-300 group-hover:shadow-xl group-hover:-translate-y-1.5 ${
-          isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
+          restaurant.is_sponsored ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
         }`}
       >
         {/* Image / Gradient Header */}
@@ -124,7 +126,8 @@ export default function RestaurantCard({ restaurant, variant = "default" }: Rest
 
           {/* Top badges */}
           <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 z-10">
-            {isFeatured && (
+            {restaurant.is_sponsored && <SponsoredBadge />}
+            {!restaurant.is_sponsored && isFeatured && (
               <Badge className="bg-amber-500 text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5">
                 <Sparkles className="h-3 w-3 mr-1" />
                 Featured

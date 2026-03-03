@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAdminCampaigns } from "@/hooks/useAdminCampaigns";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -10,8 +10,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Filter, Eye, DollarSign, Calendar, User, Settings } from "lucide-react";
+import { Search, Filter, Eye, DollarSign, Calendar, User, Settings, Megaphone, XCircle } from "lucide-react";
 import { AdRateManager } from "@/components/admin/AdRateManager";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { SponsoredBadge } from "@/components/SponsoredBadge";
+
+interface SponsoredListingRow {
+  id: string;
+  campaign_id: string;
+  listing_type: 'event' | 'restaurant';
+  listing_id: string;
+  created_at: string;
+  listing_name: string;
+  campaign_name: string;
+  campaign_end_date: string | null;
+  campaign_status: string;
+}
 
 const statusColors: Record<string, string> = {
   draft: "bg-gray-500",
@@ -40,11 +55,15 @@ const statusLabels: Record<string, string> = {
 export default function AdminCampaigns() {
   const navigate = useNavigate();
   const { campaigns, isLoading, fetchCampaigns } = useAdminCampaigns();
+  const { toast } = useToast();
   useDocumentTitle("Campaign Management");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [sponsoredListings, setSponsoredListings] = useState<SponsoredListingRow[]>([]);
+  const [sponsoredLoading, setSponsoredLoading] = useState(false);
+  const [endingId, setEndingId] = useState<string | null>(null);
 
   useEffect(() => {
     applyFilters();
@@ -57,6 +76,99 @@ export default function AdminCampaigns() {
       dateTo: dateTo || undefined,
       searchQuery: searchQuery || undefined,
     });
+  };
+
+  const fetchSponsoredListings = useCallback(async () => {
+    setSponsoredLoading(true);
+    try {
+      const { data: links, error } = await supabase
+        .from('sponsored_listing_links')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const enriched: SponsoredListingRow[] = await Promise.all(
+        (links || []).map(async (link) => {
+          // Fetch listing name
+          const listingTable = link.listing_type === 'event' ? 'events' : 'restaurants';
+          const nameField = link.listing_type === 'event' ? 'title' : 'name';
+          const { data: listing } = await supabase
+            .from(listingTable)
+            .select(`id, ${nameField}`)
+            .eq('id', link.listing_id)
+            .maybeSingle();
+
+          // Fetch campaign info
+          const { data: campaign } = await supabase
+            .from('campaigns')
+            .select('name, end_date, status')
+            .eq('id', link.campaign_id)
+            .maybeSingle();
+
+          return {
+            id: link.id,
+            campaign_id: link.campaign_id,
+            listing_type: link.listing_type as 'event' | 'restaurant',
+            listing_id: link.listing_id,
+            created_at: link.created_at,
+            listing_name: listing ? (listing as any)[nameField] : 'Unknown listing',
+            campaign_name: campaign?.name ?? 'Unknown campaign',
+            campaign_end_date: campaign?.end_date ?? null,
+            campaign_status: campaign?.status ?? 'unknown',
+          };
+        })
+      );
+
+      setSponsoredListings(enriched);
+    } catch (err) {
+      console.error('Failed to fetch sponsored listings:', err);
+    } finally {
+      setSponsoredLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSponsoredListings();
+  }, [fetchSponsoredListings]);
+
+  const handleEndSponsorshipEarly = async (row: SponsoredListingRow) => {
+    setEndingId(row.id);
+    try {
+      // Clear is_sponsored on the listing
+      const table = row.listing_type === 'event' ? 'events' : 'restaurants';
+      const { error: listingError } = await supabase
+        .from(table)
+        .update({ is_sponsored: false, sponsored_until: null })
+        .eq('id', row.listing_id);
+
+      if (listingError) throw listingError;
+
+      // Mark the campaign as cancelled
+      const { error: campaignError } = await supabase
+        .from('campaigns')
+        .update({ status: 'cancelled' })
+        .eq('id', row.campaign_id);
+
+      if (campaignError) throw campaignError;
+
+      toast({
+        title: 'Sponsorship Ended',
+        description: `"${row.listing_name}" is no longer sponsored.`,
+      });
+
+      // Refresh lists
+      fetchSponsoredListings();
+      applyFilters();
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to end sponsorship. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setEndingId(null);
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -125,6 +237,15 @@ export default function AdminCampaigns() {
             Campaigns
             {stats.needsReview > 0 && (
               <Badge className="ml-2 bg-red-500 text-white text-xs px-1.5 py-0">{stats.needsReview}</Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="sponsored">
+            <Megaphone className="h-4 w-4 mr-1" />
+            Sponsored Listings
+            {sponsoredListings.filter(s => s.campaign_status === 'active').length > 0 && (
+              <Badge className="ml-2 bg-amber-500 text-white text-xs px-1.5 py-0">
+                {sponsoredListings.filter(s => s.campaign_status === 'active').length}
+              </Badge>
             )}
           </TabsTrigger>
           <TabsTrigger value="rates">
@@ -343,6 +464,102 @@ export default function AdminCampaigns() {
           )}
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="sponsored">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-amber-500" />
+                Sponsored Listings
+              </CardTitle>
+              <CardDescription>
+                Active and historical sponsored listing campaigns. Use "End Early" to immediately remove a sponsorship badge and cancel the campaign.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {sponsoredLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((i) => <Skeleton key={i} className="h-16 w-full" />)}
+                </div>
+              ) : sponsoredListings.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <Megaphone className="h-12 w-12 mx-auto mb-4 opacity-30" />
+                  <p className="font-medium">No sponsored listings yet</p>
+                  <p className="text-sm mt-1">When businesses sponsor an event or restaurant, they will appear here.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Listing</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Campaign</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Ends</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sponsoredListings.map((row) => (
+                      <TableRow key={row.id}>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            {row.campaign_status === 'active' && <SponsoredBadge />}
+                            <span>{row.listing_name}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">{row.listing_type}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <button
+                            className="text-sm text-primary underline-offset-2 hover:underline"
+                            onClick={() => navigate(`/admin/campaigns/${row.campaign_id}`)}
+                          >
+                            {row.campaign_name}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            className={`text-white text-xs ${
+                              row.campaign_status === 'active'
+                                ? 'bg-green-500'
+                                : row.campaign_status === 'completed'
+                                ? 'bg-gray-400'
+                                : row.campaign_status === 'cancelled'
+                                ? 'bg-red-500'
+                                : 'bg-yellow-500'
+                            }`}
+                          >
+                            {row.campaign_status.replace(/_/g, ' ')}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {row.campaign_end_date
+                            ? new Date(row.campaign_end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                            : '—'}
+                        </TableCell>
+                        <TableCell>
+                          {row.campaign_status === 'active' && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={endingId === row.id}
+                              onClick={() => handleEndSponsorshipEarly(row)}
+                            >
+                              <XCircle className="h-4 w-4 mr-1" />
+                              {endingId === row.id ? 'Ending…' : 'End Early'}
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="rates">

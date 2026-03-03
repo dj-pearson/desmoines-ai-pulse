@@ -40,11 +40,11 @@ serve(async (req) => {
 
     console.log("Campaign lifecycle processed:", JSON.stringify(result));
 
-    // Send notifications for activated campaigns
+    // Send notifications for activated campaigns + activate sponsored listings
     if (result.activated > 0) {
       const { data: justActivated } = await supabase
         .from("campaigns")
-        .select("id, name, user_id")
+        .select("id, name, user_id, end_date")
         .eq("status", "active")
         .gte("updated_at", new Date(Date.now() - 60000).toISOString()); // Updated in last minute
 
@@ -60,10 +60,34 @@ serve(async (req) => {
             metadata: {},
           });
         }
+
+        // Activate sponsored listings for newly-active campaigns
+        const activatedIds = justActivated.map((c) => c.id);
+        const { data: activatedLinks } = await supabase
+          .from("sponsored_listing_links")
+          .select("listing_type, listing_id, campaign_id")
+          .in("campaign_id", activatedIds);
+
+        if (activatedLinks) {
+          for (const link of activatedLinks) {
+            const campaign = justActivated.find((c) => c.id === link.campaign_id);
+            const table = link.listing_type === "event" ? "events" : "restaurants";
+            await supabase
+              .from(table)
+              .update({
+                is_sponsored: true,
+                sponsored_until: campaign?.end_date
+                  ? new Date(campaign.end_date + "T23:59:59Z").toISOString()
+                  : null,
+              })
+              .eq("id", link.listing_id);
+          }
+          console.log(`Activated ${activatedLinks.length} sponsored listing(s).`);
+        }
       }
     }
 
-    // Send notifications for completed campaigns
+    // Send notifications for completed campaigns + clear sponsored listings
     if (result.completed > 0) {
       const { data: justCompleted } = await supabase
         .from("campaigns")
@@ -82,6 +106,24 @@ serve(async (req) => {
             is_read: false,
             metadata: {},
           });
+        }
+
+        // Clear sponsored flags for completed campaigns
+        const completedIds = justCompleted.map((c) => c.id);
+        const { data: completedLinks } = await supabase
+          .from("sponsored_listing_links")
+          .select("listing_type, listing_id")
+          .in("campaign_id", completedIds);
+
+        if (completedLinks) {
+          for (const link of completedLinks) {
+            const table = link.listing_type === "event" ? "events" : "restaurants";
+            await supabase
+              .from(table)
+              .update({ is_sponsored: false, sponsored_until: null })
+              .eq("id", link.listing_id);
+          }
+          console.log(`Cleared ${completedLinks.length} sponsored listing(s).`);
         }
       }
     }

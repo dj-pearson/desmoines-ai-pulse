@@ -456,6 +456,8 @@ export type Database = {
           image_url: string | null
           is_enhanced: boolean | null
           is_featured: boolean | null
+          is_sponsored: boolean
+          sponsored_until: string | null
           latitude: number | null
           location: string
           longitude: number | null
@@ -491,6 +493,8 @@ export type Database = {
           image_url?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location: string
           longitude?: number | null
@@ -526,6 +530,8 @@ export type Database = {
           image_url?: string | null
           is_enhanced?: boolean | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string
           longitude?: number | null
@@ -3956,6 +3962,8 @@ export type Database = {
           id: string
           image_url: string | null
           is_featured: boolean | null
+          is_sponsored: boolean
+          sponsored_until: string | null
           latitude: number | null
           location: string | null
           longitude: number | null
@@ -3996,6 +4004,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -4036,6 +4046,8 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_featured?: boolean | null
+          is_sponsored?: boolean
+          sponsored_until?: string | null
           latitude?: number | null
           location?: string | null
           longitude?: number | null
@@ -5691,6 +5703,38 @@ export type Database = {
           webhook_url?: string
         }
         Relationships: []
+      }
+      sponsored_listing_links: {
+        Row: {
+          id: string
+          campaign_id: string
+          listing_type: string
+          listing_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          listing_type: string
+          listing_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          campaign_id?: string
+          listing_type?: string
+          listing_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sponsored_listing_links_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       spatial_ref_sys: {
         Row: {
@@ -8950,7 +8994,7 @@ export type Database = {
         | "base_uri"
         | "form_action"
       invitation_status: "pending" | "accepted" | "declined" | "expired"
-      placement_type: "top_banner" | "featured_spot" | "below_fold"
+      placement_type: "top_banner" | "featured_spot" | "below_fold" | "sponsored_listing"
       rating_value: "1" | "2" | "3" | "4" | "5"
       refund_status: "pending" | "completed" | "failed"
       reputation_level:
@@ -9124,7 +9168,7 @@ export const Constants = {
         "form_action",
       ],
       invitation_status: ["pending", "accepted", "declined", "expired"],
-      placement_type: ["top_banner", "featured_spot", "below_fold"],
+      placement_type: ["top_banner", "featured_spot", "below_fold", "sponsored_listing"],
       rating_value: ["1", "2", "3", "4", "5"],
       refund_status: ["pending", "completed", "failed"],
       reputation_level: [

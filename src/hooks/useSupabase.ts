@@ -2,6 +2,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Event, RestaurantOpening, Restaurant, Attraction, Playground } from "@/lib/types";
 
+/** Deterministic daily shuffle using a numeric seed (e.g. date as YYYYMMDD integer).
+ *  Returns a new array — original is not mutated. */
+function deterministicShuffle<T>(arr: T[], seed: number): T[] {
+  const result = [...arr];
+  let s = seed;
+  for (let i = result.length - 1; i > 0; i--) {
+    s = (s * 1664525 + 1013904223) & 0xffffffff; // LCG
+    const j = Math.abs(s) % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 // Events hooks
 export function useFeaturedEvents() {
   const today = new Date().toISOString().split('T')[0];
@@ -9,21 +22,48 @@ export function useFeaturedEvents() {
   return useQuery<Event[]>({
     queryKey: ['events', 'featured', today],
     queryFn: async () => {
-      console.log('Fetching featured events for date >= ', today);
-      const { data, error } = await supabase
+      const MAX_DISPLAY = 6;
+
+      // Pass 1: sponsored events take priority
+      const { data: sponsoredData, error: sponsoredError } = await supabase
+        .from('events')
+        .select('*')
+        .eq('is_sponsored', true)
+        .gte('date', today)
+        .order('date', { ascending: true });
+
+      if (sponsoredError) {
+        console.error('Error fetching sponsored events:', sponsoredError);
+        throw sponsoredError;
+      }
+
+      const sponsored = (sponsoredData || []).map(transformEvent);
+      const remainingSlots = Math.max(0, MAX_DISPLAY - sponsored.length);
+
+      if (remainingSlots === 0) return sponsored.slice(0, MAX_DISPLAY);
+
+      // Pass 2: fill remaining slots with rotated organic featured items
+      const { data: featuredData, error: featuredError } = await supabase
         .from('events')
         .select('*')
         .eq('is_featured', true)
+        .eq('is_sponsored', false)
         .gte('date', today)
         .order('date', { ascending: true })
-        .limit(6);
-      
-      if (error) {
-        console.error('Error fetching featured events:', error);
-        throw error;
+        .limit(20); // fetch more than needed to enable rotation
+
+      if (featuredError) {
+        console.error('Error fetching featured events:', featuredError);
+        throw featuredError;
       }
-      console.log('Featured events fetched:', data?.length, 'events');
-      return data?.map(transformEvent) || [];
+
+      // Daily deterministic rotation so the selection changes each day
+      const seed = parseInt(today.replace(/-/g, ''), 10);
+      const rotated = deterministicShuffle(featuredData || [], seed)
+        .slice(0, remainingSlots)
+        .map(transformEvent);
+
+      return [...sponsored, ...rotated];
     },
     staleTime: 60000, // 1 minute
     gcTime: 300000, // 5 minutes
@@ -92,22 +132,59 @@ export function useRestaurantOpenings() {
 }
 
 export function useFeaturedRestaurants() {
+  const today = new Date().toISOString().split('T')[0];
+
   return useQuery<Restaurant[]>({
-    queryKey: ['restaurants', 'featured'],
+    queryKey: ['restaurants', 'featured', today],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const MAX_DISPLAY = 6;
+
+      // Pass 1: sponsored restaurants take priority
+      const { data: sponsoredData, error: sponsoredError } = await supabase
         .from('restaurants')
         .select('*')
-        .eq('is_featured', true)
-        .order('rating', { ascending: false })
-        .limit(6);
-      
-      if (error) {
-        console.error('Error fetching featured restaurants:', error);
-        throw error;
+        .eq('is_sponsored', true)
+        .order('rating', { ascending: false });
+
+      if (sponsoredError) {
+        console.error('Error fetching sponsored restaurants:', sponsoredError);
+        throw sponsoredError;
       }
-      console.log('Featured restaurants fetched:', data?.length);
-      return data?.map(transformRestaurant) || [];
+
+      const sponsored = (sponsoredData || []).map(transformRestaurant);
+      const remainingSlots = Math.max(0, MAX_DISPLAY - sponsored.length);
+
+      if (remainingSlots === 0) return sponsored.slice(0, MAX_DISPLAY);
+
+      // Pass 2: organic featured + highly-rated (≥4.0) restaurants as rotation pool
+      const { data: featuredData, error: featuredError } = await supabase
+        .from('restaurants')
+        .select('*')
+        .or('is_featured.eq.true,rating.gte.4.0')
+        .eq('is_sponsored', false)
+        .order('rating', { ascending: false })
+        .limit(30); // fetch more than needed to enable rotation
+
+      if (featuredError) {
+        console.error('Error fetching featured restaurants:', featuredError);
+        throw featuredError;
+      }
+
+      // Deduplicate (in case a restaurant is both is_featured and high-rated)
+      const seen = new Set<string>();
+      const pool = (featuredData || []).filter((r) => {
+        if (seen.has(r.id)) return false;
+        seen.add(r.id);
+        return true;
+      });
+
+      // Daily deterministic rotation
+      const seed = parseInt(today.replace(/-/g, ''), 10);
+      const rotated = deterministicShuffle(pool, seed)
+        .slice(0, remainingSlots)
+        .map(transformRestaurant);
+
+      return [...sponsored, ...rotated];
     },
     staleTime: 120000,
     gcTime: 600000,
@@ -182,6 +259,8 @@ function transformEvent(event: Record<string, unknown>): Event {
     source_url: event.source_url as string,
     is_enhanced: event.is_enhanced as boolean,
     is_featured: event.is_featured as boolean,
+    is_sponsored: event.is_sponsored as boolean,
+    sponsored_until: event.sponsored_until as string | null,
     created_at: event.created_at as string,
     updated_at: event.updated_at as string,
   };
@@ -200,6 +279,8 @@ function transformRestaurant(restaurant: Record<string, unknown>): Restaurant {
     website: restaurant.website as string,
     image_url: restaurant.image_url as string,
     isFeatured: restaurant.is_featured as boolean,
+    isSponsored: restaurant.is_sponsored as boolean,
+    sponsoredUntil: restaurant.sponsored_until as string | null,
     openingDate: restaurant.opening_date as string | undefined,
     openingTimeframe: restaurant.opening_timeframe as string | undefined,
     status: restaurant.status as string | undefined,

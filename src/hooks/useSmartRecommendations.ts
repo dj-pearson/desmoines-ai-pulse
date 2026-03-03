@@ -310,9 +310,15 @@ export function useSmartRecommendations() {
         }
       }
 
-      // Featured content boost
-      if (rec.event.is_featured) {
-        contextBoost += 0.1;
+      // Sponsored content gets the highest boost
+      if ((rec.event as any).is_sponsored) {
+        contextBoost += 0.25;
+        newReasoning.push('Sponsored');
+      } else if (rec.event.is_featured) {
+        // Small daily jitter on the boost to vary results each day
+        const daySeed = parseInt(new Date().toISOString().split('T')[0].replace(/-/g, ''), 10);
+        const jitter = ((daySeed ^ parseInt(rec.event.id.replace(/-/g, '').slice(0, 8), 16)) % 3) * 0.01;
+        contextBoost += 0.1 + jitter;
         newReasoning.push('Featured event');
       }
 
@@ -352,8 +358,14 @@ export function useSmartRecommendations() {
       score += (matches.length / categoryMappings.length) * 0.4;
     }
 
-    // Featured boost
-    if (event.is_featured) score += 0.2;
+    // Sponsored events always score highest; featured events get a rotation-aware boost
+    if ((event as any).is_sponsored) {
+      score += 0.35;
+    } else if (event.is_featured) {
+      const daySeed = parseInt(new Date().toISOString().split('T')[0].replace(/-/g, ''), 10);
+      const jitter = ((daySeed ^ parseInt(event.id.replace(/-/g, '').slice(0, 8), 16)) % 3) * 0.01;
+      score += 0.2 + jitter;
+    }
 
     // Recent events boost
     if (event.date) {
@@ -380,7 +392,8 @@ export function useSmartRecommendations() {
       }
     }
 
-    if (event.is_featured) reasons.push('Featured event');
+    if ((event as any).is_sponsored) reasons.push('Sponsored');
+    else if (event.is_featured) reasons.push('Featured event');
 
     if (event.date) {
       const daysUntilEvent = Math.ceil((new Date(event.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24));

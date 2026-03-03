@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Star, Eye, Target } from "lucide-react";
+import { CalendarIcon, Star, Eye, Target, Megaphone } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import { useCampaigns } from "@/hooks/useCampaigns";
@@ -18,16 +18,20 @@ import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
 import type { PlacementType } from "@/lib/placementSpecs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { notifyAdmins } from "@/hooks/useCampaignNotifications";
+import { supabase } from "@/integrations/supabase/client";
+import { ListingPicker } from "@/components/advertising/ListingPicker";
+import type { LinkedListing } from "@/components/advertising/ListingPicker";
 
 /** Minimum number of days from today before a campaign can start.
  *  Gives time for creative upload + admin review. */
 const MIN_LEAD_TIME_DAYS = 3;
 
-const ICON_MAP = {
+const ICON_MAP: Record<PlacementType, React.ElementType> = {
   top_banner: Star,
   featured_spot: Eye,
   below_fold: Target,
-} as const;
+  sponsored_listing: Megaphone,
+};
 
 const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SPECS[PlacementType][]).map(spec => ({
   type: spec.type,
@@ -36,6 +40,7 @@ const PLACEMENT_OPTIONS = (Object.values(PLACEMENT_SPECS) as typeof PLACEMENT_SP
   dailyCost: spec.dailyCost,
   icon: ICON_MAP[spec.type],
   features: spec.features,
+  noCreativeRequired: spec.noCreativeRequired ?? false,
   assetRequirements: {
     dimensions: spec.dimensions.map(d => d.label).join(', '),
     formats: spec.formats,
@@ -57,6 +62,9 @@ export default function Advertise() {
   >([]);
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
+  const [linkedListing, setLinkedListing] = useState<LinkedListing | null>(null);
+
+  const hasSponsoredListing = selectedPlacements.some(p => p.type === 'sponsored_listing');
 
   // Allow viewing the page without login - only require login at checkout
   const handlePlacementToggle = (type: string, checked: boolean) => {
@@ -104,6 +112,15 @@ export default function Advertise() {
       return;
     }
 
+    if (hasSponsoredListing && !linkedListing) {
+      toast({
+        title: "Listing Required",
+        description: "Please select the event or restaurant you want to sponsor.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const campaign = await createCampaign({
         name: campaignName,
@@ -115,10 +132,20 @@ export default function Advertise() {
         end_date: format(endDate, "yyyy-MM-dd"),
       });
 
+      // If a sponsored listing was selected, link it to the campaign
+      if (hasSponsoredListing && linkedListing) {
+        await supabase.from('sponsored_listing_links').insert({
+          campaign_id: campaign.id,
+          listing_type: linkedListing.type,
+          listing_id: linkedListing.id,
+        });
+      }
+
       // Notify admins about new campaign
       notifyAdmins(campaign.id, campaignName, 'campaign_created', {
         totalCost: calculateTotalCost(),
         startDate: format(startDate, "yyyy-MM-dd"),
+        ...(linkedListing && { sponsoredListing: `${linkedListing.type}:${linkedListing.id}` }),
       });
 
       toast({
@@ -319,21 +346,28 @@ export default function Advertise() {
                            </div>
                            
                            {/* Asset Requirements */}
-                           <div className="bg-muted/50 p-3 rounded-md mb-3 text-xs space-y-1">
-                             <h4 className="font-semibold text-sm mb-2">Asset Requirements:</h4>
-                             <div>
-                               <span className="font-medium">Accepted Sizes:</span> {option.assetRequirements.dimensions}
+                           {option.noCreativeRequired ? (
+                             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 rounded-md mb-3 text-xs">
+                               <h4 className="font-semibold text-sm mb-1 text-amber-700 dark:text-amber-400">No Creative Upload Needed</h4>
+                               <p className="text-muted-foreground">Your existing listing image, name, and details will be used automatically. Simply select the listing you want to promote below.</p>
                              </div>
-                             <div>
-                               <span className="font-medium">Formats:</span> {option.assetRequirements.formats.join(", ")}
+                           ) : (
+                             <div className="bg-muted/50 p-3 rounded-md mb-3 text-xs space-y-1">
+                               <h4 className="font-semibold text-sm mb-2">Asset Requirements:</h4>
+                               <div>
+                                 <span className="font-medium">Accepted Sizes:</span> {option.assetRequirements.dimensions}
+                               </div>
+                               <div>
+                                 <span className="font-medium">Formats:</span> {option.assetRequirements.formats.join(", ")}
+                               </div>
+                               <div>
+                                 <span className="font-medium">Max Size:</span> {option.assetRequirements.maxFileSize}
+                               </div>
+                               <div>
+                                 <span className="font-medium">Animation:</span> {option.assetRequirements.animationType}
+                               </div>
                              </div>
-                             <div>
-                               <span className="font-medium">Max Size:</span> {option.assetRequirements.maxFileSize}
-                             </div>
-                             <div>
-                               <span className="font-medium">Animation:</span> {option.assetRequirements.animationType}
-                             </div>
-                           </div>
+                           )}
 
                            {/* Design Specifications */}
                            <div className="space-y-1">
@@ -375,6 +409,24 @@ export default function Advertise() {
                 })}
               </CardContent>
             </Card>
+
+            {/* Listing Picker — shown only when sponsored_listing is selected */}
+            {hasSponsoredListing && (
+              <Card className="border-amber-300 dark:border-amber-700">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Megaphone className="h-5 w-5 text-amber-500" />
+                    Select Your Listing to Sponsor
+                  </CardTitle>
+                  <CardDescription>
+                    Choose the specific event or restaurant you want to promote as a sponsored featured item. A <strong>Sponsored</strong> badge will be displayed per FTC guidelines.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ListingPicker value={linkedListing} onChange={setLinkedListing} />
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           <div>
@@ -397,6 +449,20 @@ export default function Advertise() {
                     <span>{endDate ? format(endDate, "MMM dd, yyyy") : "Not set"}</span>
                   </div>
                 </div>
+
+                {hasSponsoredListing && (
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold mb-2">Sponsored Listing:</h4>
+                    {linkedListing ? (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-amber-600 capitalize">{linkedListing.type}:</span>
+                        <span className="truncate">{linkedListing.name}</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-destructive">No listing selected yet</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="border-t pt-4">
                   <h4 className="font-semibold mb-2">Selected Placements:</h4>

@@ -14,6 +14,8 @@ export interface Event {
   source_url?: string;
   is_enhanced?: boolean;
   is_featured?: boolean;
+  is_sponsored?: boolean;
+  sponsored_until?: string | null;
   created_at?: string;
   updated_at?: string;
   // New timezone fields
@@ -55,6 +57,8 @@ export interface Restaurant {
   website?: string;
   image_url?: string;
   isFeatured?: boolean;
+  isSponsored?: boolean;
+  sponsoredUntil?: string | null;
   openingDate?: string;
   openingTimeframe?: string;
   status?: "open" | "opening_soon" | "newly_opened" | "announced" | "closed";

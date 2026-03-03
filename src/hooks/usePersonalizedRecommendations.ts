@@ -160,9 +160,14 @@ export function usePersonalizedRecommendations() {
           }
         }
 
-        // Trending bonus
-        if (event.is_featured) {
-          score += 10;
+        // Sponsored content gets priority; featured gets a rotation-aware boost
+        if ((event as any).is_sponsored) {
+          score += 20;
+          reasons.push('Sponsored');
+        } else if (event.is_featured) {
+          const daySeed = parseInt(new Date().toISOString().split('T')[0].replace(/-/g, ''), 10);
+          const jitter = ((daySeed ^ parseInt(event.id.replace(/-/g, '').slice(0, 8), 16)) % 5) - 2;
+          score += 10 + jitter;
           reasons.push('Trending now');
         }
 
@@ -240,8 +245,11 @@ export function usePersonalizedRecommendations() {
           reasons.push('Highly rated');
         }
 
-        // Featured bonus
-        if (restaurant.is_featured) {
+        // Sponsored restaurants get priority boost
+        if ((restaurant as any).is_sponsored) {
+          score += 18;
+          reasons.push('Sponsored');
+        } else if (restaurant.is_featured) {
           score += 8;
           reasons.push('Featured restaurant');
         }

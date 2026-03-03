@@ -226,9 +226,15 @@ function calculatePopularityBoost(event: Event): { score: number; reasons: strin
   const reasons: string[] = [];
   let score = 0;
 
-  // Featured events
-  if (event.is_featured) {
-    score += 15;
+  // Sponsored events get the highest editorial boost
+  if ((event as any).is_sponsored) {
+    score += 25;
+    reasons.push('Sponsored');
+  } else if (event.is_featured) {
+    // Apply daily jitter (±2 pts) to break ties among featured items and improve rotation
+    const daySeed = parseInt(new Date().toISOString().split('T')[0].replace(/-/g, ''), 10);
+    const jitter = ((daySeed ^ parseInt(event.id.replace(/-/g, '').slice(0, 8), 16)) % 5) - 2;
+    score += 15 + jitter;
     reasons.push('Featured event');
   }
 

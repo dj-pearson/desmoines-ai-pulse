@@ -26,7 +26,7 @@ export interface Campaign {
 export interface CampaignPlacement {
   id: string;
   campaign_id: string;
-  placement_type: 'top_banner' | 'featured_spot' | 'below_fold';
+  placement_type: 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing';
   daily_cost: number;
   days_count: number;
   total_cost: number;
@@ -36,7 +36,7 @@ export interface CampaignPlacement {
 export interface CampaignCreative {
   id: string;
   campaign_id: string;
-  placement_type: 'top_banner' | 'featured_spot' | 'below_fold';
+  placement_type: 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing';
   title?: string;
   description?: string;
   image_url?: string;
@@ -96,9 +96,28 @@ export function useCampaigns() {
   };
 
   const getCurrentPricing = async (
-    placementType: 'top_banner' | 'featured_spot' | 'below_fold',
+    placementType: 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing',
     daysCount: number
   ): Promise<PricingInfo> => {
+    const defaultPrices: Record<string, number> = {
+      top_banner: 10,
+      featured_spot: 5,
+      below_fold: 5,
+      sponsored_listing: 15,
+    };
+
+    // sponsored_listing pricing is flat-rate (no DB rate card entry yet)
+    if (placementType === 'sponsored_listing') {
+      const dailyPrice = defaultPrices.sponsored_listing;
+      return {
+        daily_price: dailyPrice,
+        total_price: dailyPrice * daysCount,
+        base_price: dailyPrice,
+        traffic_multiplier: 1.0,
+        demand_multiplier: 1.0,
+      };
+    }
+
     try {
       const { data, error } = await supabase.rpc("calculate_campaign_pricing", {
         p_placement_type: placementType,
@@ -107,12 +126,6 @@ export function useCampaigns() {
 
       if (error) throw error;
       if (!data || data.length === 0) {
-        // Fallback to default pricing if function fails
-        const defaultPrices = {
-          top_banner: 10,
-          featured_spot: 5,
-          below_fold: 5,
-        };
         const dailyPrice = defaultPrices[placementType];
         return {
           daily_price: dailyPrice,
@@ -125,12 +138,6 @@ export function useCampaigns() {
 
       return data[0];
     } catch (err) {
-      // Fallback pricing on error
-      const defaultPrices = {
-        top_banner: 10,
-        featured_spot: 5,
-        below_fold: 5,
-      };
       const dailyPrice = defaultPrices[placementType];
       return {
         daily_price: dailyPrice,
@@ -145,7 +152,7 @@ export function useCampaigns() {
   const createCampaign = async (campaignData: {
     name: string;
     placements: Array<{
-      placement_type: 'top_banner' | 'featured_spot' | 'below_fold';
+      placement_type: 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing';
       days_count: number;
     }>;
     start_date: string;
