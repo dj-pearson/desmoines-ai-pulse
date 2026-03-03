@@ -1083,6 +1083,24 @@ html.capacitor-app,
   }
 }
 
+/* --- Keyboard-aware adjustments --- */
+/* When the iOS keyboard is visible, add bottom padding to ensure inputs
+   aren't hidden behind it and hide the bottom nav to free screen space. */
+.capacitor-app.keyboard-visible nav[aria-label="Bottom navigation"] {
+  display: none !important;
+}
+
+.capacitor-app.keyboard-visible main#main-content {
+  padding-bottom: var(--keyboard-height, 0px);
+}
+
+/* Ensure inputs scroll smoothly into view when focused on iOS */
+.capacitor-app input:focus,
+.capacitor-app textarea:focus,
+.capacitor-app select:focus {
+  scroll-margin-bottom: 120px;
+}
+
 /* --- Status bar spacer (iOS notch) --- */
 .capacitor-app header::before {
   content: '';

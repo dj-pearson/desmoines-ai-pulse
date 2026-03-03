@@ -61,8 +61,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "The Capacitor config already has Keyboard resize: 'native'. May need CSS adjustments for specific views where the keyboard overlaps. Key files: search inputs in EventsPage, RestaurantsPage, auth forms in Auth.tsx, trip planner input."
+      "passes": true,
+      "notes": "Created useKeyboardAware hook that listens for Capacitor Keyboard plugin events (keyboardWillShow/keyboardWillHide) and scrolls focused inputs into view. Falls back to focusin listener with scrollIntoView for environments without the plugin. Added CSS: hides bottom nav when keyboard is visible, adjusts main padding, adds scroll-margin-bottom to focused inputs."
     },
     {
       "id": "IOS-005",

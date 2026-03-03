@@ -91,6 +91,21 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-004
+- **Implemented**: Fix keyboard push-up behavior on iOS form inputs
+- **Changes**:
+  - `src/lib/capacitorUtils.ts`: Added Keyboard plugin type (addListener, hide, setAccessoryBarVisible, setScroll)
+  - `src/hooks/useKeyboardAware.ts`: New hook — listens for `keyboardWillShow`/`keyboardWillHide` via Capacitor Keyboard plugin, scrolls focused input into view above keyboard, sets `--keyboard-height` CSS variable and `.keyboard-visible` class on html. Falls back to `focusin` + `scrollIntoView` when plugin unavailable.
+  - `src/index.css`: Added keyboard-aware CSS — hides bottom nav when keyboard visible, adjusts main padding to `var(--keyboard-height)`, adds `scroll-margin-bottom: 120px` to focused inputs in Capacitor
+  - `src/App.tsx`: Wired `useKeyboardAware()` into KeyboardShortcutsProvider
+- **Why**: iOS WKWebView with `resize: 'native'` can still obscure inputs, especially when the bottom nav takes space. Hiding the nav during keyboard input frees ~80px. The scrollIntoView with 300ms delay lets the keyboard finish animating before adjusting scroll position.
+- **Learnings for future iterations:**
+  - Capacitor Keyboard plugin provides `keyboardHeight` in `keyboardWillShow` — use it for precise positioning
+  - `scroll-margin-bottom` CSS property is the modern way to ensure scroll targets have clearance
+  - Always fall back gracefully when Keyboard plugin isn't available (web builds)
+  - Hiding bottom nav during keyboard input is standard iOS UX (native apps do this)
+---
+
 ## 2026-03-03 — IOS-005
 - **Implemented**: Optimize scroll performance with CSS containment
 - **Changes**:

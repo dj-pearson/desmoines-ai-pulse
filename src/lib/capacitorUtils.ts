@@ -40,6 +40,13 @@ interface CapacitorGlobal {
     Share?: {
       share: (opts: { title?: string; text?: string; url?: string; dialogTitle?: string }) => Promise<void>;
     };
+    Keyboard?: {
+      addListener: (event: string, cb: (info: { keyboardHeight: number }) => void) => Promise<{ remove: () => void }>;
+      removeAllListeners: () => Promise<void>;
+      hide: () => Promise<void>;
+      setAccessoryBarVisible: (opts: { isVisible: boolean }) => Promise<void>;
+      setScroll: (opts: { isDisabled: boolean }) => Promise<void>;
+    };
     [key: string]: unknown;
   };
 }
