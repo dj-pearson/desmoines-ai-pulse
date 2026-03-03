@@ -1,7 +1,7 @@
 {
   "project": "Des Moines AI Pulse — iOS Native App",
   "branchName": "ralph/ios-native-polish",
-  "description": "iOS Native App Hardening — Comprehensive audit-driven improvements focused on the Capacitor iOS shell (WKWebView). Covers layout overflow bugs, safe area compliance, native-feel interactions (haptics, pull-to-refresh), performance optimizations (image lazy-loading, scroll performance), navigation polish, keyboard handling, accessibility in native context, push notification wiring, deep link support, and App Store readiness.",
+  "description": "iOS Native App Hardening — Comprehensive audit-driven improvements now fully implemented in the native SwiftUI app (ios/DesMoinesInsider/). Original Capacitor-based mobile-app/ has been removed. All features are native Swift: haptics via UIImpactFeedbackGenerator, pull-to-refresh via .refreshable, LazyVStack virtualization, NavigationStack transitions, NWPathMonitor networking, CachedAsyncImage, and UNUserNotificationCenter for local reminders.",
   "userStories": [
     {
       "id": "IOS-001",
@@ -17,7 +17,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "Root cause: images with intrinsic widths larger than viewport push the entire page wider on iOS WKWebView. Fixed in components: EventCard, EventsNearMe, Index modal. Global CSS catches all others."
+      "notes": "Native SwiftUI: handled by .resizable() + .clipped() on all CachedAsyncImage usages. No viewport overflow possible in native layout."
     },
     {
       "id": "IOS-002",
@@ -31,7 +31,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Replaced navigator.vibrate(10) with hapticTap() from capacitorUtils. Much better native haptic feel on iOS."
+      "notes": "Native SwiftUI: UIImpactFeedbackGenerator used throughout — nav items, favorite toggles, share buttons, filter selections."
     },
     {
       "id": "IOS-003",
@@ -47,7 +47,7 @@
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Added hapticTap() to FavoriteButton (on toggle), ShareDialog (on native share), and RatingSystem (on star click). All gracefully no-op on web."
+      "notes": "Native SwiftUI: UIImpactFeedbackGenerator(.medium) on favorite toggles in EventCardView and RestaurantCardView, UIImpactFeedbackGenerator(.light) on share buttons."
     },
     {
       "id": "IOS-004",
@@ -62,7 +62,7 @@
       ],
       "priority": 4,
       "passes": true,
-      "notes": "Created useKeyboardAware hook that listens for Capacitor Keyboard plugin events (keyboardWillShow/keyboardWillHide) and scrolls focused inputs into view. Falls back to focusin listener with scrollIntoView for environments without the plugin. Added CSS: hides bottom nav when keyboard is visible, adjusts main padding, adds scroll-margin-bottom to focused inputs."
+      "notes": "Native SwiftUI: keyboard avoidance handled automatically by SwiftUI. No additional work needed."
     },
     {
       "id": "IOS-005",
@@ -78,7 +78,7 @@
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Added contain: layout style paint to all cards in Capacitor. Disabled hover shadow/translate transitions on touch-only devices. Prevents layout thrashing during scroll."
+      "notes": "Native SwiftUI: LazyVStack provides native virtualization with automatic cell recycling. No CSS containment needed."
     },
     {
       "id": "IOS-006",
@@ -94,7 +94,7 @@
       ],
       "priority": 6,
       "passes": true,
-      "notes": "usePullToRefresh hook already existed with touch gesture detection. Added hapticTap() feedback on pull trigger. Added pull-to-refresh to RestaurantsPage (EventsPage already had it). Uses ptr-indicator CSS class for the refresh spinner."
+      "notes": "Native SwiftUI: .refreshable {} modifier on HomeView, RestaurantsView, and SearchView. Native iOS pull-to-refresh with haptic feedback built in."
     },
     {
       "id": "IOS-007",
@@ -109,7 +109,7 @@
       ],
       "priority": 7,
       "passes": true,
-      "notes": "Fixed double safe area spacing. The header had three overlapping safe-area mechanisms: .safe-area-top class, .capacitor-app header padding-top override, and ::before pseudo-element. Set padding-top to 0 in Capacitor so only the ::before handles it. MobileNav sheet already has safe-area-inset class. viewport-fit=cover is set in index.html."
+      "notes": "Native SwiftUI: safe areas handled automatically by SwiftUI layout system. .ignoresSafeArea(edges: .top) used on detail views for hero images."
     },
     {
       "id": "IOS-008",
@@ -125,7 +125,7 @@
       ],
       "priority": 8,
       "passes": true,
-      "notes": "Created usePageTransition hook that detects route changes and applies a cap-page-enter CSS class for a subtle slide-fade animation (250ms ease-out). Scoped to .capacitor-app. Respects prefers-reduced-motion via existing CSS rule. Attached via KeyboardShortcutsProvider wrapper div."
+      "notes": "Native SwiftUI: NavigationStack provides native iOS push/pop transitions automatically."
     },
     {
       "id": "IOS-009",
@@ -141,7 +141,7 @@
       ],
       "priority": 9,
       "passes": true,
-      "notes": "Enhanced useNetworkStatus hook to use Capacitor Network plugin for reliable detection. Added queryClient.invalidateQueries() on reconnect for auto-refetch. OfflineBanner now respects safe area insets with z-[60] to sit above the header. TanStack Query already uses networkMode: 'always' with gcTime caching."
+      "notes": "Native SwiftUI: NetworkMonitor uses NWPathMonitor with reconnection detection. OfflineBanner shows orange 'No internet' and green 'Back online' banners with spring animations. showReconnected auto-dismisses after 5 seconds."
     },
     {
       "id": "IOS-010",
@@ -157,7 +157,7 @@
       ],
       "priority": 10,
       "passes": true,
-      "notes": "Verified: EnhancedHero sets HeroCityLite = null when __MOBILE_APP__ is true (build-time tree-shaking). CSS .capacitor-app section[class*='min-h-'] forces min-height: auto. QuickActionsMobile renders with large touch targets and gold gradient primary action. No changes needed — all criteria already met."
+      "notes": "Native SwiftUI: no Three.js — HomeView renders native SwiftUI components directly. No hero section needed; events list loads instantly."
     },
     {
       "id": "IOS-011",
@@ -173,7 +173,7 @@
       ],
       "priority": 11,
       "passes": true,
-      "notes": "Created usePushNotifications hook for the main web app that registers with APNs/FCM via Capacitor PushNotifications plugin, stores token in Supabase device_tokens table, handles notification tap navigation. Added scheduleEventReminder() for local notifications. Wired into App.tsx for auto-registration and EventReminderSettings for local notification scheduling."
+      "notes": "Native SwiftUI: PushNotificationService registers with APNs, syncs token to Supabase via edge function. LocalNotificationService schedules event reminders via UNCalendarNotificationTrigger (1hr before). Remind Me button in EventDetailView toggles reminders with haptic feedback."
     },
     {
       "id": "IOS-012",
@@ -189,7 +189,7 @@
       ],
       "priority": 12,
       "passes": true,
-      "notes": "apple-app-site-association file already exists with /events/*, /restaurants/*, /attractions/* paths. Created useDeepLinks hook that listens for Capacitor App plugin 'appUrlOpen' events and navigates to the corresponding route. Wired into App.tsx. Associated Domains already configured in iOS project."
+      "notes": "Native SwiftUI: DeepLinkHandler.swift handles universal links. Associated Domains configured in entitlements. apple-app-site-association served from web app."
     },
     {
       "id": "IOS-013",
@@ -204,7 +204,7 @@
       ],
       "priority": 13,
       "passes": true,
-      "notes": "Created useSwipeBack hook that detects left-edge swipe gestures (within 30px of screen edge) and triggers React Router navigate(-1). Only active on Capacitor iOS, not on home page. Uses velocity and distance thresholds to avoid false positives. Doesn't conflict with horizontal scrolling elements."
+      "notes": "Native SwiftUI: NavigationStack provides native swipe-back gesture automatically."
     },
     {
       "id": "IOS-014",
@@ -218,7 +218,7 @@
       ],
       "priority": 14,
       "passes": true,
-      "notes": "Created useStatusBarStyle hook that switches status bar text color on route change. Light text on detail pages with dark heroes (/events/:slug, /restaurants/:slug, etc.) and home page. Dark text on list pages. Uses Capacitor StatusBar plugin setStyle."
+      "notes": "Native SwiftUI: status bar style handled by .navigationBarTitleDisplayMode and system appearance. Dark hero images use .ignoresSafeArea(edges: .top) with system-managed status bar."
     },
     {
       "id": "IOS-015",
@@ -234,7 +234,7 @@
       ],
       "priority": 15,
       "passes": true,
-      "notes": "Created ImageViewer component with full-screen overlay, pinch-to-zoom (2-finger gesture using Math.hypot distance), and swipe-down-to-dismiss (opacity fades as user swipes). Only activates in Capacitor. Uses touch-action: none for gesture control. Close button respects safe area insets."
+      "notes": "Native SwiftUI: FullScreenImageViewer with MagnifyGesture (0.5x-5x scale), DragGesture for swipe-down-to-dismiss (150px threshold), double-tap to toggle zoom (1x/2.5x). Background opacity fades on drag. Integrated into EventDetailView and RestaurantDetailView via .fullScreenCover."
     },
     {
       "id": "IOS-016",
@@ -249,7 +249,7 @@
       ],
       "priority": 16,
       "passes": true,
-      "notes": "Created useVirtualList hook — lightweight scroll-based virtualization using requestAnimationFrame for scroll tracking. Only activates when itemCount exceeds threshold (default 50). Returns startIndex/endIndex for slicing, totalHeight/offsetTop for spacer positioning. No external dependencies."
+      "notes": "Native SwiftUI: LazyVStack is SwiftUI's built-in virtualization — only renders visible cells with automatic recycling. No custom implementation needed."
     },
     {
       "id": "IOS-017",
@@ -265,7 +265,7 @@
       ],
       "priority": 17,
       "passes": true,
-      "notes": "Service worker (sw.js) already caches images with Cache First strategy. Updated limit from 50 to 100 and added LRU eviction — oldest entries are deleted when over limit, recently accessed images are re-put to move to front. Cache persists across app restarts via Cache API."
+      "notes": "Native SwiftUI: ImageCache (NSCache) with 200-count / 100MB limit. CachedAsyncImage component caches downloaded images in memory. Sufficient for native app usage."
     },
     {
       "id": "IOS-018",
@@ -280,7 +280,7 @@
       ],
       "priority": 18,
       "passes": true,
-      "notes": "Created mobile-app/docs/app-store-metadata.md with app name/subtitle, full description, keywords, screenshot requirements (6.7/6.1/5.5 iPhone + iPad sizes), privacy nutrition labels (data collected/not collected/tracking), App Store Connect fields, and Fastlane integration commands."
+      "notes": "Native SwiftUI: ios/ directory has fastlane config, app metadata, and screenshot generation workflows (.github/workflows/ios-screenshots.yml). App Store metadata covered by existing ios/ setup."
     },
     {
       "id": "IOS-019",
@@ -294,7 +294,7 @@
       ],
       "priority": 19,
       "passes": true,
-      "notes": "Added touch-action: manipulation to all interactive elements (button, a, input, select, textarea, label) scoped to .capacitor-app. Prevents double-tap zoom while preserving pinch-zoom on images/maps."
+      "notes": "Native SwiftUI: double-tap zoom is not an issue in native apps — SwiftUI buttons and gestures don't trigger Safari-style zoom. Not applicable."
     },
     {
       "id": "IOS-020",
@@ -310,7 +310,7 @@
       ],
       "priority": 20,
       "passes": true,
-      "notes": "Created EventCardSkeleton (matches SocialEventCard: image area, date badge, category badges, title, location/time), RestaurantCardSkeleton (matches RestaurantCard: image, badges, star rating row, description, location), and DetailHeroSkeleton. Added variant prop to CardsGridSkeleton ('event'|'restaurant'|'default'). Updated EventsPage, Restaurants, and RestaurantsPage to use layout-matched skeletons. Uses existing skeleton-mobile CSS class for image areas."
+      "notes": "Native SwiftUI: EventCardSkeleton matches EventCardView (180pt image + date badge + favorite + category + title + time/location + price). RestaurantCardSkeleton matches RestaurantCardView (100x100 image + name/heart + cuisine/price + 5-star rating + location). DetailHeroSkeleton added to LoadingView (300pt image + gradient + badge/title). All use .redacted(reason: .placeholder).shimmer()."
     }
   ]
 }
