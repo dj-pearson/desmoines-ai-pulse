@@ -32,18 +32,23 @@ extension View {
 }
 
 private struct ContrastAwareCardShadow: ViewModifier {
-    @Environment(\.accessibilityContrast) private var contrast: AccessibilityContrast
+    @State private var isHighContrast = UIAccessibility.isDarkerSystemColorsEnabled
 
     func body(content: Content) -> some View {
         content
             .shadow(
-                color: contrast == .high
-                    ? Color.black.opacity(0.28)
-                    : Color.black.opacity(0.08),
-                radius: contrast == .high ? 4 : 8,
+                color: isHighContrast ? Color.black.opacity(0.28) : Color.black.opacity(0.08),
+                radius: isHighContrast ? 4 : 8,
                 x: 0,
-                y: contrast == .high ? 1 : 2
+                y: isHighContrast ? 1 : 2
             )
+            .onReceive(
+                NotificationCenter.default.publisher(
+                    for: UIAccessibility.darkerSystemColorsStatusDidChangeNotification
+                )
+            ) { _ in
+                isHighContrast = UIAccessibility.isDarkerSystemColorsEnabled
+            }
     }
 }
 
