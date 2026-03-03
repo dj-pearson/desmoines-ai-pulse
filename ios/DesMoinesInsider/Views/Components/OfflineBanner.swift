@@ -1,25 +1,45 @@
 import SwiftUI
 
-/// Shows an orange banner when the device has no internet connection.
+/// Shows an orange banner when offline and a green "Back online" banner on reconnection.
 struct OfflineBanner: View {
     @State private var network = NetworkMonitor.shared
 
     var body: some View {
         if !network.isConnected {
-            HStack(spacing: 8) {
-                Image(systemName: "wifi.slash")
-                    .font(.caption.weight(.semibold))
-                    .accessibilityHidden(true)
-                Text("No internet connection")
-                    .font(.caption.weight(.medium))
-            }
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(Color.orange)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("No internet connection. Some features may be unavailable.")
+            bannerContent(
+                icon: "wifi.slash",
+                text: "No internet connection",
+                color: .orange,
+                accessibilityText: "No internet connection. Some features may be unavailable."
+            )
+            .transition(.move(edge: .top).combined(with: .opacity))
+        } else if network.showReconnected {
+            bannerContent(
+                icon: "wifi",
+                text: "Back online",
+                color: .green,
+                accessibilityText: "Internet connection restored."
+            )
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
+    }
+
+    private func bannerContent(icon: String, text: String, color: Color, accessibilityText: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.caption.weight(.medium))
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 8)
+        .background(color)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityText)
+        .animation(.spring(duration: 0.35), value: network.isConnected)
+        .animation(.spring(duration: 0.35), value: network.showReconnected)
     }
 }
 
