@@ -264,8 +264,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "WKWebView has its own HTTP cache but it may be cleared. A more persistent Cache API or service worker approach ensures images survive app restarts. Consider registering a service worker in main.tsx for Capacitor builds."
+      "passes": true,
+      "notes": "Service worker (sw.js) already caches images with Cache First strategy. Updated limit from 50 to 100 and added LRU eviction — oldest entries are deleted when over limit, recently accessed images are re-put to move to front. Cache persists across app restarts via Cache API."
     },
     {
       "id": "IOS-018",

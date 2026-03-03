@@ -91,6 +91,13 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-017
+- **Implemented**: Cache images locally for faster repeat loads
+- **Changes**:
+  - `public/sw.js`: Updated image cache limit from 50 to 100. Added LRU eviction — when cache exceeds limit, oldest entries (first in `cache.keys()`) are deleted. Re-puts cached responses on hit to move to front.
+- **Learnings**: `cache.keys()` returns entries in insertion order — re-putting an entry moves it to the end (newest). Deleting from the start of the keys list implements simple LRU.
+---
+
 ## 2026-03-02 — IOS-016
 - **Implemented**: Optimize list rendering with virtualization for long lists
 - **Changes**:
