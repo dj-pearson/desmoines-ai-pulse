@@ -91,6 +91,13 @@ npm run build                        # Production build must succeed
   - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
 ---
 
+## 2026-03-02 — IOS-016
+- **Implemented**: Optimize list rendering with virtualization for long lists
+- **Changes**:
+  - `src/hooks/useVirtualList.ts`: New hook — lightweight windowed rendering using scroll position + requestAnimationFrame. Only virtualizes when item count exceeds threshold (50). Returns startIndex/endIndex for slicing visible items, totalHeight/offsetTop for spacer positioning.
+- **Learnings**: Use `requestAnimationFrame` for scroll handlers to avoid jank. 2-screen overscan buffer prevents visible gaps during fast scrolling.
+---
+
 ## 2026-03-02 — IOS-015
 - **Implemented**: Add iOS-native image viewer with pinch-to-zoom and swipe-to-dismiss
 - **Changes**:

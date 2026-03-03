@@ -248,8 +248,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "Currently all events render at once. For 100+ events this causes memory pressure on iOS. Can use a lightweight virtual scroll approach with IntersectionObserver. The cv-auto class provides some help but real virtualization would be better."
+      "passes": true,
+      "notes": "Created useVirtualList hook — lightweight scroll-based virtualization using requestAnimationFrame for scroll tracking. Only activates when itemCount exceeds threshold (default 50). Returns startIndex/endIndex for slicing, totalHeight/offsetTop for spacer positioning. No external dependencies."
     },
     {
       "id": "IOS-017",
