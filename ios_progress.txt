@@ -1,0 +1,104 @@
+# iOS Native App — Progress Log
+
+## Codebase Patterns (iOS-Specific)
+
+### Platform Detection
+- Use `isCapacitor()` from `@/lib/capacitorUtils` for runtime detection
+- Use `isMobileApp()` for build-time detection (__MOBILE_APP__ flag)
+- Use `getPlatform()` to distinguish 'ios' vs 'android' vs 'web'
+- CSS: scope iOS-only styles under `.capacitor-app` class (added to html+body in main.tsx)
+
+### Capacitor Plugin Access
+- Access plugins via `window.Capacitor?.Plugins?.PluginName`
+- Always guard with `isCapacitor()` check first
+- Available: Browser, SplashScreen, StatusBar, Haptics, Share, App, PushNotifications, LocalNotifications, Camera, Geolocation, Network, Preferences, Keyboard
+
+### Key Utilities
+- `hapticTap()` — light haptic feedback (Capacitor Haptics plugin)
+- `openExternalUrl(url)` — opens in system browser via Browser plugin
+- `nativeShare(opts)` — native share sheet via Share plugin
+- All in `src/lib/capacitorUtils.ts`
+
+### CSS Architecture
+- Global Capacitor overrides in `src/index.css` under `/* CAPACITOR / MOBILE APP OVERRIDES */`
+- Forces light theme, iOS system font, compact headers, native-feel cards
+- Safe area support via `env(safe-area-inset-*)` CSS functions
+- Existing utility classes: safe-area-top, safe-area-bottom, safe-area-inset, touch-feedback, swipeable, img-mobile, btn-mobile, card-mobile, sheet-mobile, skeleton-mobile, loading-shimmer
+
+### Mobile Build
+- Config: `mobile-app/capacitor.config.ts`
+- Vite config: `mobile-app/vite.config.mobile.ts`
+- iOS project: `mobile-app/ios/App/`
+- Build: uses `__MOBILE_APP__` define for tree-shaking heavy web-only code (Three.js)
+
+### Quality Checks
+```
+npm run type-check && npm run lint   # Must pass before commit
+npm run build                        # Production build must succeed
+```
+
+---
+
+## Progress Log
+
+## 2026-03-03 — IOS-001
+- **Implemented**: Fix image overflow breaking page layout on iOS
+- **Changes**:
+  - `src/index.css`: Added global `img, video { max-width: 100%; height: auto }` CSS reset in @layer base
+  - `src/index.css`: Added `html.capacitor-app` to overflow-x: hidden rule (was only body/#root)
+  - `src/index.css`: Added `.capacitor-app img { max-width: 100% !important }` safety net
+  - `src/components/EventCard.tsx`: Added `overflow-hidden` to image container div
+  - `src/pages/EventsNearMe.tsx`: Wrapped bare `<img>` in overflow-hidden container
+  - `src/pages/Index.tsx`: Wrapped modal event image in overflow-hidden container
+- **Root Cause**: Images with intrinsic widths larger than viewport pushed the entire page wider on iOS WKWebView. The `w-full` Tailwind class sets `width: 100%` but without `max-width: 100%`, the image's natural size can expand the parent container.
+- **Learnings for future iterations:**
+  - Always pair `w-full` with a container that has `overflow-hidden` on images
+  - iOS WKWebView needs overflow-x: hidden on the `<html>` element, not just body
+  - The Capacitor CSS section only had body/#root — html element was missing
+  - Global `img { max-width: 100% }` is a modern CSS reset best practice
+---
+
+## 2026-03-03 — IOS-002
+- **Implemented**: Improve BottomNav haptic feedback with Capacitor Haptics
+- **Changes**:
+  - `src/components/BottomNav.tsx`: Replaced `navigator.vibrate(10)` with `hapticTap()` from capacitorUtils
+- **Why**: `navigator.vibrate()` is a web API with poor iOS support. The Capacitor Haptics plugin provides proper UIKit haptic feedback (UIImpactFeedbackGenerator) that feels native.
+- **Learnings for future iterations:**
+  - Always use `hapticTap()` instead of `navigator.vibrate()` for iOS haptics
+  - `hapticTap()` is a no-op on web, so safe to call unconditionally
+---
+
+## 2026-03-03 — IOS-003
+- **Implemented**: Add haptic feedback to favorite, share, and rating actions
+- **Changes**:
+  - `src/components/FavoriteButton.tsx`: Added `hapticTap()` on favorite toggle click
+  - `src/components/ShareDialog.tsx`: Added `hapticTap()` before native share
+  - `src/components/RatingSystem.tsx`: Added `hapticTap()` on star rating click
+- **Why**: Tactile feedback on key user interactions (favorite, share, rate) makes the app feel significantly more native and responsive.
+- **Learnings for future iterations:**
+  - Keep haptic calls lightweight — only on user-initiated actions, never on data loads
+  - `hapticTap()` is async but fire-and-forget (no need to await)
+---
+
+## 2026-03-03 — IOS-019
+- **Implemented**: Fix double-tap zoom on iOS interactive elements
+- **Changes**:
+  - `src/index.css`: Added `touch-action: manipulation` to all interactive elements (button, a, [role="button"], input, select, textarea, label) scoped to `.capacitor-app`
+- **Why**: iOS double-tap-to-zoom on buttons/links causes a 300ms delay and unexpected zooming. `touch-action: manipulation` prevents this while preserving pinch-to-zoom on images and maps.
+- **Learnings for future iterations:**
+  - `touch-action: manipulation` is the modern replacement for the deprecated `<meta name="viewport" ... user-scalable=no>`
+  - Scope to `.capacitor-app` so web users keep full zoom capability
+  - Applies to all form elements too (prevents zoom on input focus for 16px+ font sizes)
+---
+
+## 2026-03-03 — IOS-005
+- **Implemented**: Optimize scroll performance with CSS containment
+- **Changes**:
+  - `src/index.css`: Added `contain: layout style paint` to all cards in Capacitor
+  - `src/index.css`: Disabled hover shadow-xl, translate-y transitions on touch-only devices
+- **Why**: iOS WKWebView struggles with long lists of cards that have box-shadow transitions and transform animations. CSS containment tells the browser it can optimize rendering of each card independently. Disabling hover transitions on touch devices avoids unnecessary repaints.
+- **Learnings for future iterations:**
+  - `contain: layout style paint` is safe for card-like elements that don't overflow
+  - `@media (hover: none)` targets touch-only devices without affecting desktop
+  - Key hover classes to suppress: `hover:shadow-lg`, `hover:shadow-xl`, `hover:-translate-y-*`
+---

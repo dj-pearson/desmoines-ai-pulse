@@ -1,0 +1,316 @@
+{
+  "project": "Des Moines AI Pulse — iOS Native App",
+  "branchName": "ralph/ios-native-polish",
+  "description": "iOS Native App Hardening — Comprehensive audit-driven improvements focused on the Capacitor iOS shell (WKWebView). Covers layout overflow bugs, safe area compliance, native-feel interactions (haptics, pull-to-refresh), performance optimizations (image lazy-loading, scroll performance), navigation polish, keyboard handling, accessibility in native context, push notification wiring, deep link support, and App Store readiness.",
+  "userStories": [
+    {
+      "id": "IOS-001",
+      "title": "Fix image overflow breaking page layout on iOS",
+      "description": "As a mobile user, I need images to never exceed the viewport width so that the page layout stays intact and all buttons/text remain accessible.",
+      "acceptanceCriteria": [
+        "Global CSS reset: img, video { max-width: 100%; height: auto } in @layer base",
+        "html.capacitor-app has overflow-x: hidden (not just body/#root)",
+        "Capacitor-specific img max-width: 100% !important safety net",
+        "All image containers in cards/detail pages have overflow-hidden",
+        "No horizontal scroll on any page when viewing wide event/restaurant images",
+        "Build passes (npm run build)"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Root cause: images with intrinsic widths larger than viewport push the entire page wider on iOS WKWebView. Fixed in components: EventCard, EventsNearMe, Index modal. Global CSS catches all others."
+    },
+    {
+      "id": "IOS-002",
+      "title": "Improve BottomNav haptic feedback with Capacitor Haptics",
+      "description": "As a mobile user, I want to feel subtle haptic feedback when tapping navigation items so the app feels more native and responsive.",
+      "acceptanceCriteria": [
+        "Import hapticTap from @/lib/capacitorUtils in BottomNav",
+        "Call hapticTap() on nav item click instead of navigator.vibrate",
+        "Fallback gracefully on web (no-op when Haptics plugin unavailable)",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Replaced navigator.vibrate(10) with hapticTap() from capacitorUtils. Much better native haptic feel on iOS."
+    },
+    {
+      "id": "IOS-003",
+      "title": "Add haptic feedback to favorite/like and share actions",
+      "description": "As a mobile user, I want haptic feedback when I favorite an event, rate a restaurant, or share content so interactions feel tactile and confirmed.",
+      "acceptanceCriteria": [
+        "Import hapticTap from @/lib/capacitorUtils",
+        "Add hapticTap() call to favorite toggle actions across event/restaurant cards",
+        "Add hapticTap() call to share button actions",
+        "Add hapticTap() call to rating interactions",
+        "Fallback gracefully on web",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Added hapticTap() to FavoriteButton (on toggle), ShareDialog (on native share), and RatingSystem (on star click). All gracefully no-op on web."
+    },
+    {
+      "id": "IOS-004",
+      "title": "Fix keyboard push-up behavior on iOS form inputs",
+      "description": "As a mobile user, when I tap a search field or form input, the keyboard should push the content up smoothly without obscuring the input field.",
+      "acceptanceCriteria": [
+        "Verify Capacitor Keyboard plugin resize mode is 'native' (already set)",
+        "Add scrollIntoView behavior on input focus for search fields",
+        "Test on iOS: search bar, auth forms, and trip planner input stay visible above keyboard",
+        "No layout jump or content hidden behind keyboard",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "The Capacitor config already has Keyboard resize: 'native'. May need CSS adjustments for specific views where the keyboard overlaps. Key files: search inputs in EventsPage, RestaurantsPage, auth forms in Auth.tsx, trip planner input."
+    },
+    {
+      "id": "IOS-005",
+      "title": "Optimize scroll performance with CSS containment",
+      "description": "As a mobile user, I want smooth 60fps scrolling on long event/restaurant list pages without jank or stutter.",
+      "acceptanceCriteria": [
+        "Add CSS contain: layout style paint to card components in list views",
+        "Add content-visibility: auto to below-the-fold sections (already have cv-auto class)",
+        "Apply will-change: transform to cards that have hover/tap animations",
+        "Remove unnecessary box-shadow transitions on mobile (use @media (hover: none))",
+        "Scrolling on Events page with 50+ events is smooth on iOS simulator",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Added contain: layout style paint to all cards in Capacitor. Disabled hover shadow/translate transitions on touch-only devices. Prevents layout thrashing during scroll."
+    },
+    {
+      "id": "IOS-006",
+      "title": "Add pull-to-refresh on main list pages",
+      "description": "As a mobile user, I want to pull down on the events/restaurants list to refresh the data, matching the standard iOS interaction pattern.",
+      "acceptanceCriteria": [
+        "Create a usePullToRefresh hook that detects pull-down gesture on touch devices",
+        "Integrate with TanStack Query's refetch() on events and restaurants pages",
+        "Show a subtle loading indicator during refresh (spinner or shimmer)",
+        "Only activate on Capacitor/touch devices (not desktop)",
+        "Pull-to-refresh triggers haptic feedback via hapticTap()",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "The ptr-content and ptr-indicator CSS classes already exist in index.css. Can use the overscroll-behavior-y: contain approach. Key pages: EventsPage, RestaurantsPage, Attractions."
+    },
+    {
+      "id": "IOS-007",
+      "title": "Fix header safe area overlap on notched iPhones",
+      "description": "As an iPhone user with a notch/Dynamic Island, the header content should not overlap with the status bar or notch area.",
+      "acceptanceCriteria": [
+        "Header uses env(safe-area-inset-top) consistently across all pages",
+        "Content below header is not obscured on iPhone 14 Pro / 15 Pro (Dynamic Island)",
+        "Capacitor CSS already adds padding-top via header::before — verify it works for all header variants",
+        "No double spacing on non-notched devices",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "The Capacitor CSS section has header::before with env(safe-area-inset-top). Need to verify the Header component's sticky positioning works properly with this. Also check MobileNav sheet positioning."
+    },
+    {
+      "id": "IOS-008",
+      "title": "Implement native-feel page transitions",
+      "description": "As a mobile user, I want smooth slide-in/out page transitions when navigating between pages so the app feels native rather than web-like.",
+      "acceptanceCriteria": [
+        "Add CSS-based slide transition for forward navigation (slide left)",
+        "Add slide-back transition for back navigation (slide right)",
+        "Transitions are 200-300ms (fast enough to feel snappy)",
+        "Transitions respect prefers-reduced-motion",
+        "Only active in Capacitor context (web stays instant)",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Can be done with CSS animations on route change. Use the capacitor-app class to scope. Keep transitions simple — slide + fade, not complex 3D transforms. Key file: App.tsx route container."
+    },
+    {
+      "id": "IOS-009",
+      "title": "Add network status indicator for offline/slow connections",
+      "description": "As a mobile user on a spotty connection, I want to see a clear indicator when I'm offline and be able to view cached content.",
+      "acceptanceCriteria": [
+        "OfflineBanner component shows when network is unavailable",
+        "Banner is styled for iOS (matches Capacitor theme, uses safe areas)",
+        "TanStack Query serves stale cached data when offline",
+        "Network recovery triggers automatic refetch of visible queries",
+        "Banner dismisses automatically when connection restored",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "OfflineBanner component already exists and is imported in App.tsx. Needs verification that it works properly in Capacitor context. Capacitor Network plugin can provide more reliable status than navigator.onLine."
+    },
+    {
+      "id": "IOS-010",
+      "title": "Optimize hero section for Capacitor (skip Three.js)",
+      "description": "As a mobile user, the home page hero should load instantly without the heavy Three.js 3D city model that's designed for desktop.",
+      "acceptanceCriteria": [
+        "EnhancedHero already skips Three.js in mobile builds (IS_NATIVE check) — verify this works",
+        "Mobile hero shows a fast static or CSS-animated alternative",
+        "Hero height is compact in Capacitor (no min-h-screen)",
+        "Quick actions are prominently displayed for fast navigation",
+        "LCP (Largest Contentful Paint) under 2s on mobile",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "EnhancedHero.tsx already conditionally loads HeroCityLite only for web builds. The .capacitor-app section[class*='min-h-'] rule already removes min-height. Verify end-to-end that the hero is fast and compact."
+    },
+    {
+      "id": "IOS-011",
+      "title": "Wire up push notification registration and event reminders",
+      "description": "As a mobile user, I want to receive push notifications for events I've set reminders for so I don't miss them.",
+      "acceptanceCriteria": [
+        "Register for push notifications on app launch (with user permission prompt)",
+        "Store device token in Supabase user profile or device_tokens table",
+        "EventReminderSettings component triggers local notification scheduling",
+        "Notifications show event title, time, and deep link back to event",
+        "Handle notification tap to navigate to event detail page",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Capacitor PushNotifications and LocalNotifications plugins are configured in capacitor.config.ts. EventReminderSettings component exists. Need to wire the Capacitor plugin calls. Edge function send-event-reminders exists."
+    },
+    {
+      "id": "IOS-012",
+      "title": "Implement deep linking for event/restaurant URLs",
+      "description": "As a mobile user, when I tap a shared link to an event or restaurant, it should open directly in the app instead of the browser.",
+      "acceptanceCriteria": [
+        "Configure Associated Domains in iOS project (applinks:desmoinespulse.com)",
+        "Add apple-app-site-association file to public/.well-known/",
+        "Handle incoming deep link URLs in Capacitor App plugin listener",
+        "Route /events/:slug and /restaurants/:slug to correct pages",
+        "Fallback to web for unmatched URLs",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "The public/.well-known/ directory exists. Capacitor App plugin listener is typed in capacitorUtils.ts. The App Clip functionality was recently added (commit history shows associated domains work)."
+    },
+    {
+      "id": "IOS-013",
+      "title": "Add swipe-back gesture support for navigation",
+      "description": "As an iOS user, I want to swipe from the left edge to go back, matching the standard iOS navigation pattern.",
+      "acceptanceCriteria": [
+        "Detect left-edge swipe gesture on detail pages",
+        "Trigger React Router back navigation on successful swipe",
+        "Only active in Capacitor context",
+        "Gesture does not conflict with horizontal scrolling elements (maps, carousels)",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "iOS WKWebView has built-in swipe-back but it may need allowsBackForwardNavigationGestures enabled in the native config. Alternatively implement in JS with touch event listeners."
+    },
+    {
+      "id": "IOS-014",
+      "title": "Fix status bar text color on dark hero images",
+      "description": "As an iOS user, the status bar text should be white/light when viewing pages with dark hero images (event detail, restaurant detail) so it's readable.",
+      "acceptanceCriteria": [
+        "Use Capacitor StatusBar plugin to set light text on dark-hero pages",
+        "Revert to dark text when navigating away from hero pages",
+        "Handle scroll: switch to dark text when scrolled past hero image",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "StatusBar plugin is configured in capacitor.config.ts. capacitorUtils.ts has the StatusBar type. Need to call setStyle on route change and scroll events for detail pages."
+    },
+    {
+      "id": "IOS-015",
+      "title": "Add iOS-native image viewer for event/restaurant photos",
+      "description": "As a mobile user, tapping an event/restaurant image should open a full-screen native-feel image viewer with pinch-to-zoom and swipe-to-dismiss.",
+      "acceptanceCriteria": [
+        "Create ImageViewer component with full-screen overlay",
+        "Support pinch-to-zoom gesture on iOS",
+        "Support swipe-down-to-dismiss gesture",
+        "Show image loading state while high-res version loads",
+        "Only activate in Capacitor (web uses existing lightbox behavior)",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "EventPhotoGallery.tsx has a basic modal viewer. Could enhance it or create a separate native-feel viewer. CSS touch-action and transform: scale() for zoom."
+    },
+    {
+      "id": "IOS-016",
+      "title": "Optimize list rendering with virtualization for long lists",
+      "description": "As a mobile user scrolling through 100+ events, the page should remain smooth without memory issues from rendering all cards at once.",
+      "acceptanceCriteria": [
+        "Implement windowed rendering for event/restaurant lists with 50+ items",
+        "Use IntersectionObserver-based approach (no heavy library dependency)",
+        "Only render cards within viewport + 2 screen heights buffer",
+        "Maintain scroll position when navigating back to list",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Currently all events render at once. For 100+ events this causes memory pressure on iOS. Can use a lightweight virtual scroll approach with IntersectionObserver. The cv-auto class provides some help but real virtualization would be better."
+    },
+    {
+      "id": "IOS-017",
+      "title": "Cache images locally for faster repeat loads",
+      "description": "As a mobile user, previously viewed event/restaurant images should load instantly from cache on repeat visits.",
+      "acceptanceCriteria": [
+        "Use service worker or Cache API to cache loaded images",
+        "Cache up to 100 most recently viewed images (LRU eviction)",
+        "Cached images serve instantly on repeat page visits",
+        "Cache persists across app restarts",
+        "No impact on first-load performance",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "WKWebView has its own HTTP cache but it may be cleared. A more persistent Cache API or service worker approach ensures images survive app restarts. Consider registering a service worker in main.tsx for Capacitor builds."
+    },
+    {
+      "id": "IOS-018",
+      "title": "Add App Store metadata and screenshot generation",
+      "description": "As a developer preparing for App Store submission, I need proper metadata, screenshots, and privacy labels configured.",
+      "acceptanceCriteria": [
+        "Create mobile-app/docs/app-store-metadata.md with title, subtitle, description, keywords",
+        "Document required screenshots sizes (6.7\", 6.1\", 5.5\" iPhones, iPad Pro)",
+        "Document privacy nutrition labels (data collected, tracking)",
+        "List all required App Store Connect fields",
+        "Typecheck passes (no code changes, docs only)"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Fastlane is already set up in mobile-app/fastlane/. This story focuses on preparing the content needed before submission."
+    },
+    {
+      "id": "IOS-019",
+      "title": "Fix double-tap zoom on iOS interactive elements",
+      "description": "As a mobile user, double-tapping buttons or cards should not trigger the iOS zoom behavior — it should just register as two taps.",
+      "acceptanceCriteria": [
+        "Add touch-action: manipulation to all interactive elements in Capacitor",
+        "Buttons, cards, links, and form elements do not trigger double-tap zoom",
+        "Pinch-to-zoom still works on images and maps",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "Added touch-action: manipulation to all interactive elements (button, a, input, select, textarea, label) scoped to .capacitor-app. Prevents double-tap zoom while preserving pinch-zoom on images/maps."
+    },
+    {
+      "id": "IOS-020",
+      "title": "Add loading skeleton screens for iOS-native feel",
+      "description": "As a mobile user, I want to see skeleton placeholder screens while content loads instead of a spinner, matching modern iOS app patterns.",
+      "acceptanceCriteria": [
+        "Create skeleton variants for EventCard, RestaurantCard, and detail page hero",
+        "Skeletons match the actual card layout (image placeholder, text lines, badges)",
+        "Use the existing skeleton-mobile CSS class",
+        "Replace loading spinners with skeletons on main list pages",
+        "Skeletons animate with a subtle shimmer (already have loading-shimmer class)",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Some skeleton/loading states may already exist. The skeleton-mobile and loading-shimmer CSS classes are in index.css. Focus on the main user-facing pages: events list, restaurants list, detail pages."
+    }
+  ]
+}

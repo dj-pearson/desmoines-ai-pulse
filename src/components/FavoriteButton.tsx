@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Heart } from "lucide-react";
 import { useFavorites } from "@/hooks/useFavorites";
 import { cn } from "@/lib/utils";
+import { hapticTap } from "@/lib/capacitorUtils";
 
 interface FavoriteButtonProps {
   eventId: string;
@@ -27,6 +28,7 @@ export function FavoriteButton({
       size={size}
       onClick={(e) => {
         e.stopPropagation(); // Prevent triggering parent click events
+        hapticTap();
         toggleFavorite(eventId);
       }}
       disabled={isToggling}

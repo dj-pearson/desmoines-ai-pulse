@@ -215,11 +215,14 @@ export default function EventsNearMe() {
                 <Card key={event.id} className="hover:shadow-lg transition-shadow">
                   <Link to={`/events/${event.id}`}>
                     {event.image_url && (
-                      <img
-                        src={event.image_url}
-                        alt={event.title}
-                        className="w-full h-48 object-cover rounded-t-lg"
-                      />
+                      <div className="overflow-hidden rounded-t-lg">
+                        <img
+                          src={event.image_url}
+                          alt={event.title}
+                          className="w-full h-48 object-cover"
+                          loading="lazy"
+                        />
+                      </div>
                     )}
                     <CardHeader>
                       <div className="flex justify-between items-start mb-2">
