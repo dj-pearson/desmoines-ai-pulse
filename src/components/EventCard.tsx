@@ -90,7 +90,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group">
       {/* Image with overlay badges */}
-      <div className="relative">
+      <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (
           <img
             src={event.image_url}

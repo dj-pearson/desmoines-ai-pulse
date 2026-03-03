@@ -777,17 +777,19 @@ export default function Index() {
 
               <div className="space-y-4">
                 {selectedEvent.image_url && (
-                  <img
-                    src={selectedEvent.image_url}
-                    alt={selectedEvent.title}
-                    className="w-full h-48 sm:h-64 object-cover rounded-lg"
-                    loading="lazy"
-                    decoding="async"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = "none";
-                    }}
-                  />
+                  <div className="overflow-hidden rounded-lg">
+                    <img
+                      src={selectedEvent.image_url}
+                      alt={selectedEvent.title}
+                      className="w-full h-48 sm:h-64 object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = "none";
+                      }}
+                    />
+                  </div>
                 )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

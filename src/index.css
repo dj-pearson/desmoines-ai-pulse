@@ -129,6 +129,13 @@
 }
 
 @layer base {
+  /* Prevent images/video from overflowing their containers (critical for iOS) */
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+  }
+
   /* WCAG 1.4.3 - Ensure placeholder text meets 3:1 minimum contrast */
   ::placeholder {
     opacity: 0.65;
@@ -988,11 +995,18 @@ All colors MUST be HSL. Touch targets minimum 44px.
 }
 
 /* --- Fix overflow issues in Capacitor --- */
+html.capacitor-app,
 .capacitor-app body,
 .capacitor-app #root {
   overflow-x: hidden !important;
   width: 100% !important;
   max-width: 100vw !important;
+}
+
+/* Constrain all images inside Capacitor to never exceed viewport */
+.capacitor-app img {
+  max-width: 100% !important;
+  height: auto;
 }
 
 /* --- Typography: iOS system font --- */
