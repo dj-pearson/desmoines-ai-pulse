@@ -201,11 +201,24 @@ jobs:
       - name: Resolve Swift Package Manager dependencies
         working-directory: ${{ env.PROJECT_DIR }}
         run: |
-          xcodebuild -resolvePackageDependencies \
-            -project DesMoinesInsider.xcodeproj \
-            -scheme "${{ env.SCHEME }}" \
-            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache"
-          echo "✅ SPM dependencies resolved"
+          # Retry up to 3 times — GitHub occasionally returns HTTP 500
+          # when cloning SPM dependencies (transient server errors).
+          for attempt in 1 2 3; do
+            echo "SPM resolve attempt $attempt/3..."
+            if xcodebuild -resolvePackageDependencies \
+              -project DesMoinesInsider.xcodeproj \
+              -scheme "${{ env.SCHEME }}" \
+              -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache"; then
+              echo "✅ SPM dependencies resolved"
+              exit 0
+            fi
+            echo "::warning::SPM resolve attempt $attempt failed"
+            # Clean cache before retry to avoid stale state
+            rm -rf "$RUNNER_TEMP/spm-cache" 2>/dev/null || true
+            sleep $((attempt * 10))
+          done
+          echo "::error::SPM dependency resolution failed after 3 attempts"
+          exit 1
 
       # ==============================================================
       # 5. SET VERSION & BUILD NUMBER
