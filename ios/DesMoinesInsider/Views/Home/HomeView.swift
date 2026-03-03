@@ -97,34 +97,26 @@ struct HomeView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(DateFilterPreset.allCases) { preset in
+                    let isSelected = viewModel.selectedDatePreset == preset
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation(reduceMotion ? nil : .snappy) {
-                            if viewModel.selectedDatePreset == preset {
-                                viewModel.selectedDatePreset = nil
-                            } else {
-                                viewModel.selectedDatePreset = preset
-                            }
+                            viewModel.selectedDatePreset = isSelected ? nil : preset
                         }
                     } label: {
                         Text(preset.rawValue)
                             .font(.subheadline.weight(.medium))
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
-                            .background(
-                                viewModel.selectedDatePreset == preset
-                                    ? Color.accentColor
-                                    : Color(.systemGray6)
-                            )
-                            .foregroundStyle(
-                                viewModel.selectedDatePreset == preset
-                                    ? .white
-                                    : .primary
-                            )
+                            .background(isSelected ? Color.accentColor : Color(.systemGray6))
+                            .foregroundStyle(isSelected ? .white : .primary)
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    // VoiceOver: announces "selected" / "not selected" in addition to label
                     .accessibilityLabel("Filter by \(preset.rawValue)")
+                    .accessibilitySelected(isSelected)
+                    .accessibilityHint(isSelected ? "Tap to clear this filter" : "Tap to apply this filter")
                 }
             }
             .padding(.horizontal)
@@ -138,14 +130,11 @@ struct HomeView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(EventCategory.allCases.prefix(8)) { category in
+                    let isSelected = viewModel.selectedCategory == category
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         withAnimation(reduceMotion ? nil : .snappy) {
-                            if viewModel.selectedCategory == category {
-                                viewModel.selectedCategory = nil
-                            } else {
-                                viewModel.selectedCategory = category
-                            }
+                            viewModel.selectedCategory = isSelected ? nil : category
                         }
                     } label: {
                         HStack(spacing: 6) {
@@ -156,29 +145,22 @@ struct HomeView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 7)
-                        .background(
-                            viewModel.selectedCategory == category
-                                ? category.color.opacity(0.2)
-                                : Color(.systemGray6)
-                        )
-                        .foregroundStyle(
-                            viewModel.selectedCategory == category
-                                ? category.color
-                                : .secondary
-                        )
+                        .background(isSelected ? category.color.opacity(0.2) : Color(.systemGray6))
+                        .foregroundStyle(isSelected ? category.color : .secondary)
                         .clipShape(Capsule())
                         .overlay(
                             Capsule()
                                 .stroke(
-                                    viewModel.selectedCategory == category
-                                        ? category.color.opacity(0.3)
-                                        : Color.clear,
+                                    isSelected ? category.color.opacity(0.3) : Color.clear,
                                     lineWidth: 1
                                 )
                         )
                     }
                     .buttonStyle(.plain)
+                    // VoiceOver: announces "selected" / "not selected" in addition to label
                     .accessibilityLabel("Filter by \(category.displayName)")
+                    .accessibilitySelected(isSelected)
+                    .accessibilityHint(isSelected ? "Tap to clear this filter" : "Tap to apply this filter")
                 }
             }
             .padding(.horizontal)
@@ -207,6 +189,8 @@ struct HomeView: View {
                             FeaturedEventCard(event: event)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(event.featuredCardAccessibilityLabel)
+                        .accessibilityHint("Double-tap to view event details")
                     }
                 }
                 .padding(.horizontal)
@@ -236,6 +220,8 @@ struct HomeView: View {
                             CompactRestaurantCard(restaurant: restaurant)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(restaurant.compactCardAccessibilityLabel)
+                        .accessibilityHint("Double-tap to view restaurant details")
                     }
                 }
                 .padding(.horizontal)
@@ -422,8 +408,9 @@ private struct CompactRestaurantCard: View {
             }
         }
         .frame(width: 180)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(restaurant.name), \(restaurant.cuisine ?? "restaurant"), rated \(restaurant.ratingText)")
+        // Suppress redundant child reads — full label set on the Button wrapper above
+        .accessibilityElement(children: .ignore)
+        .accessibilityHidden(true)
     }
 }
 
@@ -466,7 +453,8 @@ private struct FeaturedEventCard: View {
                 Spacer()
 
                 if event.isFree {
-                    Text("FREE")
+                    // Uses icon + text so colour alone is not the only differentiator
+                    Label("FREE", systemImage: "ticket")
                         .font(.caption2.bold())
                         .foregroundStyle(.green)
                         .padding(.horizontal, 6)
@@ -477,8 +465,9 @@ private struct FeaturedEventCard: View {
             .foregroundStyle(.secondary)
         }
         .frame(width: 260)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(event.title), \(event.eventCategory.displayName)")
+        // Suppress redundant child reads — full label set on the Button wrapper above
+        .accessibilityElement(children: .ignore)
+        .accessibilityHidden(true)
     }
 }
 

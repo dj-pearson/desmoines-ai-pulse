@@ -9,6 +9,44 @@ extension View {
     }
 }
 
+// MARK: - Accessibility: Selected Toggle Trait
+
+extension View {
+    /// Marks a toggle-style button as selected or unselected for VoiceOver and Voice Control.
+    /// VoiceOver will announce "selected" / "not selected" automatically.
+    func accessibilitySelected(_ isSelected: Bool) -> some View {
+        self
+            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+            .accessibilityRemoveTraits(isSelected ? [] : [.isSelected])
+    }
+}
+
+// MARK: - Accessibility: Contrast-Aware Card Shadow
+
+extension View {
+    /// Applies a card shadow that strengthens when the user has enabled Increase Contrast,
+    /// ensuring the card boundary remains visible without relying on colour alone.
+    func accessibleCardShadow() -> some View {
+        modifier(ContrastAwareCardShadow())
+    }
+}
+
+private struct ContrastAwareCardShadow: ViewModifier {
+    @Environment(\.accessibilityContrast) private var contrast
+
+    func body(content: Content) -> some View {
+        content
+            .shadow(
+                color: contrast == .high
+                    ? Color.black.opacity(0.28)
+                    : Color.black.opacity(0.08),
+                radius: contrast == .high ? 4 : 8,
+                x: 0,
+                y: contrast == .high ? 1 : 2
+            )
+    }
+}
+
 private struct ShimmerModifier: ViewModifier {
     @State private var phase: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion

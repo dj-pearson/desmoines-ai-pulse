@@ -12,6 +12,23 @@ struct EventCardView: View {
         self._toast = toast
     }
 
+    // Full VoiceOver description that covers every piece of visible info on the card.
+    private var cardAccessibilityLabel: String {
+        var parts: [String] = [event.title]
+        if let date = event.parsedDate {
+            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day().hour().minute()))
+        }
+        parts.append(event.displayLocation)
+        if event.isFree {
+            parts.append("Free event")
+        } else if let price = event.price, !price.isEmpty {
+            parts.append(price)
+        }
+        if event.isFeatured == true { parts.append("Featured event") }
+        if let urgency = event.urgencyLabel { parts.append(urgency) }
+        return parts.joined(separator: ". ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Image
@@ -32,7 +49,7 @@ struct EventCardView: View {
 
                 // Overlays
                 VStack(alignment: .trailing, spacing: 6) {
-                    // Favorite button
+                    // Favorite button — separate focusable element inside the card container
                     Button {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         let wasFavorited = favorites.isFavorited(event.id)
@@ -53,20 +70,26 @@ struct EventCardView: View {
                             .frame(width: 36, height: 36)
                             .background(.ultraThinMaterial, in: Circle())
                     }
-                    .accessibilityLabel(favorites.isFavorited(event.id) ? "Remove from saved" : "Save event")
+                    .accessibilityLabel(
+                        favorites.isFavorited(event.id)
+                            ? "Remove \(event.title) from saved"
+                            : "Save \(event.title)"
+                    )
 
                     Spacer()
 
-                    // Date badge
+                    // Date badge — hidden from VoiceOver; date is in the card label
                     if let date = event.parsedDate {
                         DateBadge(date: date)
+                            .accessibilityHidden(true)
                     }
                 }
                 .padding(10)
 
-                // Category badge
+                // Category badge — hidden from VoiceOver; category is in card label via title context
                 CategoryBadge(category: event.eventCategory)
                     .position(x: 60, y: 14)
+                    .accessibilityHidden(true)
             }
 
             // Content
@@ -80,10 +103,13 @@ struct EventCardView: View {
                 // Meta info
                 HStack(spacing: 12) {
                     if let date = event.parsedDate {
-                        Label(date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()), systemImage: "clock")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        Label(
+                            date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day().hour().minute()),
+                            systemImage: "clock"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     }
                 }
 
@@ -93,17 +119,19 @@ struct EventCardView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                // Bottom row: price + urgency
+                // Bottom row: price + urgency.
+                // Both price states use an icon-bearing Label so colour is never the
+                // only differentiator (Differentiate Without Color Alone).
                 HStack {
                     if event.isFree {
-                        Text("FREE")
+                        Label("FREE", systemImage: "ticket")
                             .font(.caption.bold())
                             .foregroundStyle(.green)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 3)
                             .background(Color.green.opacity(0.12), in: Capsule())
                     } else if let price = event.price, !price.isEmpty {
-                        Text(price)
+                        Label(price, systemImage: "ticket")
                             .font(.caption.weight(.medium))
                             .foregroundStyle(.blue)
                             .padding(.horizontal, 8)
@@ -114,7 +142,7 @@ struct EventCardView: View {
                     Spacer()
 
                     if let urgency = event.urgencyLabel {
-                        Text(urgency)
+                        Label(urgency, systemImage: "clock.badge.exclamationmark")
                             .font(.caption.bold())
                             .foregroundStyle(.orange)
                     }
@@ -130,9 +158,10 @@ struct EventCardView: View {
         }
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
+        .accessibleCardShadow()
+        // .contain so VoiceOver can separately focus the favorite button inside
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(event.title), \(event.displayLocation)")
+        .accessibilityLabel(cardAccessibilityLabel)
     }
 }
 
@@ -141,21 +170,27 @@ struct EventCardView: View {
 private struct DateBadge: View {
     let date: Date
 
+    // Scale with the user's preferred text size (Larger Text accessibility feature).
+    @ScaledMetric(relativeTo: .caption2) private var labelSize: CGFloat = 9
+    @ScaledMetric(relativeTo: .title3)  private var daySize: CGFloat   = 18
+    @ScaledMetric private var badgeWidth: CGFloat  = 48
+    @ScaledMetric private var badgeHeight: CGFloat = 52
+
     var body: some View {
         VStack(spacing: 1) {
             Text(date.formatted(.dateTime.weekday(.short)).uppercased())
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(size: labelSize, weight: .bold))
                 .foregroundStyle(Color.accentColor)
 
             Text(date.formatted(.dateTime.day()))
-                .font(.system(size: 18, weight: .bold))
+                .font(.system(size: daySize, weight: .bold))
                 .foregroundStyle(.primary)
 
             Text(date.formatted(.dateTime.month(.abbreviated)).uppercased())
-                .font(.system(size: 9, weight: .medium))
+                .font(.system(size: labelSize, weight: .medium))
                 .foregroundStyle(.secondary)
         }
-        .frame(width: 48, height: 52)
+        .frame(width: badgeWidth, height: badgeHeight)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 }

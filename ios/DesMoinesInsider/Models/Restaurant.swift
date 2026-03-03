@@ -79,6 +79,17 @@ struct Restaurant: Identifiable, Codable, Hashable {
     static func == (lhs: Restaurant, rhs: Restaurant) -> Bool {
         lhs.id == rhs.id
     }
+
+    // MARK: - Accessibility
+
+    /// Full VoiceOver label for a compact card button (name, cuisine, price range, rating).
+    var compactCardAccessibilityLabel: String {
+        var parts: [String] = [name]
+        if let cuisine { parts.append(cuisine) }
+        if let priceRange, !priceRange.isEmpty { parts.append(priceRange) }
+        if rating != nil { parts.append("Rated \(ratingText)") }
+        return parts.joined(separator: ". ")
+    }
 }
 
 // MARK: - Preview Helpers

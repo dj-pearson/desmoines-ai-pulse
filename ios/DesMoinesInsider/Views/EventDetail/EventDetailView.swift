@@ -8,6 +8,7 @@ struct EventDetailView: View {
     @State private var showShareSheet = false
     @State private var showImageViewer = false
     @State private var notifications = LocalNotificationService.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView {
@@ -114,13 +115,14 @@ struct EventDetailView: View {
 
     private var contentSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            // Date & Time
+            // Date & Time — grouped so VoiceOver reads it as one element
             if let date = event.parsedDate {
                 HStack(spacing: 10) {
                     Image(systemName: "calendar")
                         .font(.title3)
                         .foregroundStyle(Color.accentColor)
                         .frame(width: 28)
+                        .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(date.formatted(.dateTime.weekday(.wide).month(.wide).day().year()))
@@ -132,8 +134,9 @@ struct EventDetailView: View {
 
                     Spacer()
 
+                    // Icon + text so urgency is not conveyed by colour alone
                     if let urgency = event.urgencyLabel {
-                        Text(urgency)
+                        Label(urgency, systemImage: "clock.badge.exclamationmark")
                             .font(.caption.bold())
                             .foregroundStyle(.white)
                             .padding(.horizontal, 10)
@@ -141,16 +144,24 @@ struct EventDetailView: View {
                             .background(Color.orange, in: Capsule())
                     }
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel({
+                    var label = date.formatted(.dateTime.weekday(.wide).month(.wide).day().year())
+                        + ", " + date.formatted(.dateTime.hour().minute())
+                    if let urgency = event.urgencyLabel { label += ". \(urgency)" }
+                    return label
+                }())
             }
 
             Divider()
 
-            // Location
+            // Location — grouped so VoiceOver reads venue + address together
             HStack(spacing: 10) {
                 Image(systemName: "mappin.circle.fill")
                     .font(.title3)
                     .foregroundStyle(.red)
                     .frame(width: 28)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     if let venue = event.venue {
@@ -168,6 +179,7 @@ struct EventDetailView: View {
                             .foregroundStyle(.tertiary)
                     }
                 }
+                .accessibilityElement(children: .combine)
 
                 Spacer()
 
@@ -180,21 +192,22 @@ struct EventDetailView: View {
                             .font(.title2)
                             .foregroundStyle(.blue)
                     }
-                    .accessibilityLabel("Get directions")
+                    .accessibilityLabel("Get directions to \(event.venue ?? event.displayLocation)")
                 }
             }
 
             Divider()
 
-            // Price
+            // Price — icon + text so colour is not the only differentiator
             HStack(spacing: 10) {
                 Image(systemName: "ticket.fill")
                     .font(.title3)
                     .foregroundStyle(.green)
                     .frame(width: 28)
+                    .accessibilityHidden(true)
 
                 if event.isFree {
-                    Text("Free Event")
+                    Label("Free Event", systemImage: "checkmark.seal.fill")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.green)
                 } else if let price = event.price {
@@ -215,10 +228,13 @@ struct EventDetailView: View {
                         .font(.title3)
                         .foregroundStyle(.blue)
                         .frame(width: 28)
+                        .accessibilityHidden(true)
                     Text(distance)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(distance) away")
             }
         }
         .padding()
@@ -243,13 +259,19 @@ struct EventDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(
+                            // State change uses both icon AND colour — no colour-only reliance
                             viewModel.calendarAdded ? Color.green : Color.accentColor,
                             in: RoundedRectangle(cornerRadius: 12)
                         )
                         .foregroundStyle(.white)
                     }
                     .disabled(viewModel.calendarAdded)
-                    .accessibilityLabel(viewModel.calendarAdded ? "Event added to calendar" : "Add event to your calendar")
+                    .accessibilityLabel(
+                        viewModel.calendarAdded
+                            ? "\(event.title) added to calendar"
+                            : "Add \(event.title) to your calendar"
+                    )
+                    .accessibilityHint(viewModel.calendarAdded ? "" : "Adds event to your iOS Calendar app")
                 }
 
                 // External Link
@@ -262,30 +284,42 @@ struct EventDetailView: View {
                             .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
                             .foregroundStyle(.primary)
                     }
+                    .accessibilityLabel("More info about \(event.title)")
+                    .accessibilityHint("Opens in Safari")
                 }
             }
 
-            // Remind Me
+            // Remind Me — uses icon + colour + text for state (no colour-only reliance)
             if event.parsedDate != nil {
+                let isReminderSet = notifications.isReminderSet(for: event.id)
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     Task { await notifications.toggleReminder(for: event) }
                 } label: {
-                    let isSet = notifications.isReminderSet(for: event.id)
                     Label(
-                        isSet ? "Reminder Set" : "Remind Me",
-                        systemImage: isSet ? "bell.fill" : "bell"
+                        isReminderSet ? "Reminder Set" : "Remind Me",
+                        systemImage: isReminderSet ? "bell.fill" : "bell"
                     )
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
-                        isSet ? Color.orange : Color(.systemGray5),
+                        isReminderSet ? Color.orange : Color(.systemGray5),
                         in: RoundedRectangle(cornerRadius: 12)
                     )
-                    .foregroundStyle(isSet ? .white : .primary)
+                    .foregroundStyle(isReminderSet ? .white : .primary)
                 }
-                .accessibilityLabel(notifications.isReminderSet(for: event.id) ? "Cancel event reminder" : "Set event reminder for 1 hour before")
+                .accessibilityLabel(
+                    isReminderSet
+                        ? "Cancel reminder for \(event.title)"
+                        : "Remind me about \(event.title)"
+                )
+                .accessibilityHint(
+                    isReminderSet
+                        ? "Removes your notification"
+                        : "Sends a notification 1 hour before the event"
+                )
+                .accessibilitySelected(isReminderSet)
             }
         }
         .padding(.horizontal)

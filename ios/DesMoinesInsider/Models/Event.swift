@@ -117,6 +117,19 @@ struct Event: Identifiable, Codable, Hashable {
     static func == (lhs: Event, rhs: Event) -> Bool {
         lhs.id == rhs.id
     }
+
+    // MARK: - Accessibility
+
+    /// Full VoiceOver label for a featured card button (title, category, date, price).
+    var featuredCardAccessibilityLabel: String {
+        var parts: [String] = [title, eventCategory.displayName]
+        if let date = parsedDate {
+            parts.append(date.formatted(.dateTime.weekday(.wide).month(.wide).day()))
+        }
+        if isFree { parts.append("Free event") }
+        else if let price, !price.isEmpty { parts.append(price) }
+        return parts.joined(separator: ". ")
+    }
 }
 
 // MARK: - Preview Helpers
