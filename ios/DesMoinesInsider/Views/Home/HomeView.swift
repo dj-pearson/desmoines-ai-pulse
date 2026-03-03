@@ -482,26 +482,77 @@ private struct FeaturedEventCard: View {
     }
 }
 
-// MARK: - Skeleton
+// MARK: - Skeleton (matches EventCardView layout)
 
 private struct EventCardSkeleton: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray5))
-                .frame(height: 160)
+        VStack(alignment: .leading, spacing: 0) {
+            // Image area with overlays
+            ZStack(alignment: .topTrailing) {
+                RoundedRectangle(cornerRadius: 0)
+                    .fill(Color(.systemGray5))
+                    .frame(height: 180)
 
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color(.systemGray5))
-                .frame(height: 18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.trailing, 40)
+                VStack(alignment: .trailing, spacing: 6) {
+                    // Favorite button placeholder
+                    Circle()
+                        .fill(Color(.systemGray4))
+                        .frame(width: 36, height: 36)
 
-            RoundedRectangle(cornerRadius: 4)
-                .fill(Color(.systemGray6))
-                .frame(height: 14)
-                .frame(maxWidth: 200, alignment: .leading)
+                    Spacer()
+
+                    // Date badge placeholder
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.systemGray4))
+                        .frame(width: 48, height: 52)
+                }
+                .padding(10)
+
+                // Category badge placeholder
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color(.systemGray4))
+                    .frame(width: 70, height: 22)
+                    .position(x: 60, y: 14)
+            }
+
+            // Content area
+            VStack(alignment: .leading, spacing: 8) {
+                // Title
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color(.systemGray5))
+                    .frame(height: 18)
+                    .padding(.trailing, 40)
+
+                // Time row
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color(.systemGray6))
+                        .frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(.systemGray6))
+                        .frame(width: 160, height: 12)
+                }
+
+                // Location row
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color(.systemGray6))
+                        .frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(.systemGray6))
+                        .frame(width: 120, height: 12)
+                }
+
+                // Price badge
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color(.systemGray6))
+                    .frame(width: 60, height: 22)
+            }
+            .padding(14)
         }
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
         .redacted(reason: .placeholder)
         .shimmer()
     }
