@@ -32,7 +32,7 @@ extension View {
 }
 
 private struct ContrastAwareCardShadow: ViewModifier {
-    @Environment(\.accessibilityContrast) private var contrast
+    @Environment(\.accessibilityContrast) private var contrast: AccessibilityContrast
 
     func body(content: Content) -> some View {
         content
