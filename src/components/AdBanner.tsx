@@ -1,8 +1,10 @@
 import { useActiveAds } from "@/hooks/useActiveAds";
 import { useAdTracking } from "@/hooks/useAdTracking";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
+import { openExternalUrl, isCapacitor } from "@/lib/capacitorUtils";
 
 interface AdBannerProps {
   placement: 'top_banner' | 'featured_spot' | 'below_fold';
@@ -12,7 +14,8 @@ interface AdBannerProps {
 }
 
 export function AdBanner({ placement, className = "", fallback }: AdBannerProps) {
-  const { ad, isLoading } = useActiveAds(placement);
+  const { hasFeature, isLoading: subscriptionLoading } = useSubscription();
+  const { ad, isLoading: adLoading } = useActiveAds(placement);
 
   const { adRef, trackClick } = useAdTracking({
     campaignId: ad?.campaign_id || '',
@@ -23,7 +26,12 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
     viewabilityDuration: 1000,
   });
 
-  if (isLoading) {
+  // Insider and VIP members get an ad-free experience
+  if (hasFeature('ad_free')) {
+    return fallback ? <>{fallback}</> : null;
+  }
+
+  if (subscriptionLoading || adLoading) {
     return null;
   }
 
@@ -34,20 +42,24 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
   const handleAdClick = async () => {
     await trackClick();
     if (ad.link_url) {
-      window.open(ad.link_url, '_blank', 'noopener,noreferrer');
+      if (isCapacitor()) {
+        await openExternalUrl(ad.link_url);
+      } else {
+        window.open(ad.link_url, '_blank', 'noopener,noreferrer');
+      }
     }
   };
 
   const getAdSizeClasses = () => {
     switch (placement) {
       case 'top_banner':
-        return "h-24 md:h-28";
+        return "h-20 md:h-28";
       case 'featured_spot':
-        return "min-h-[250px]";
+        return "min-h-[220px] md:min-h-[250px]";
       case 'below_fold':
-        return "h-24 md:h-28";
+        return "h-20 md:h-28";
       default:
-        return "h-28";
+        return "h-24 md:h-28";
     }
   };
 
@@ -80,15 +92,15 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
         )}
 
         {/* Content wrapper */}
-        <div className="relative z-10 flex items-center justify-between w-full p-4">
-          <div className="flex-1 min-w-0 mr-4">
+        <div className="relative z-10 flex items-center justify-between w-full p-3 md:p-4">
+          <div className="flex-1 min-w-0 mr-3 md:mr-4">
             {ad.title && (
-              <h3 className={`font-semibold mb-0.5 line-clamp-1 ${ad.image_url ? 'text-white drop-shadow-lg' : 'text-foreground'} ${placement === 'featured_spot' ? 'text-lg' : 'text-base'}`}>
+              <h3 className={`font-semibold mb-0.5 line-clamp-1 ${ad.image_url ? 'text-white drop-shadow-lg' : 'text-foreground'} ${placement === 'featured_spot' ? 'text-base md:text-lg' : 'text-sm md:text-base'}`}>
                 {ad.title}
               </h3>
             )}
             {ad.description && (
-              <p className={`text-sm line-clamp-2 ${ad.image_url ? 'text-white/90 drop-shadow-md' : 'text-muted-foreground'}`}>
+              <p className={`text-xs md:text-sm line-clamp-2 ${ad.image_url ? 'text-white/90 drop-shadow-md' : 'text-muted-foreground'}`}>
                 {ad.description}
               </p>
             )}
@@ -97,11 +109,11 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
           {ad.link_url && (
             <Button
               size="sm"
-              className="flex-shrink-0 bg-white/90 text-primary hover:bg-white shadow-md group-hover:shadow-lg transition-shadow"
+              className="flex-shrink-0 bg-white/90 text-primary hover:bg-white shadow-md group-hover:shadow-lg transition-shadow text-xs md:text-sm h-8 md:h-9 px-2.5 md:px-3"
               aria-label={ad.title ? `${ad.cta_text || 'Learn more'} - ${ad.title}` : "Learn more about this advertisement"}
             >
               {ad.cta_text || "Learn More"}
-              <ExternalLink className="ml-1.5 h-3 w-3" />
+              <ExternalLink className="ml-1 md:ml-1.5 h-3 w-3" />
             </Button>
           )}
         </div>
