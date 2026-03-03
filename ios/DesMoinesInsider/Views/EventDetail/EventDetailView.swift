@@ -7,6 +7,7 @@ struct EventDetailView: View {
     @State private var viewModel = EventDetailViewModel()
     @State private var showShareSheet = false
     @State private var showImageViewer = false
+    @State private var notifications = LocalNotificationService.shared
 
     var body: some View {
         ScrollView {
@@ -224,40 +225,65 @@ struct EventDetailView: View {
     // MARK: - Actions
 
     private var actionsSection: some View {
-        HStack(spacing: 12) {
-            // Add to Calendar (native EventKit)
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                // Add to Calendar (native EventKit)
+                if event.parsedDate != nil {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                        Task { await viewModel.addToCalendar() }
+                    } label: {
+                        Label(
+                            viewModel.calendarAdded ? "Added to Calendar" : "Add to Calendar",
+                            systemImage: viewModel.calendarAdded ? "checkmark.circle.fill" : "calendar.badge.plus"
+                        )
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(
+                            viewModel.calendarAdded ? Color.green : Color.accentColor,
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                        .foregroundStyle(.white)
+                    }
+                    .disabled(viewModel.calendarAdded)
+                    .accessibilityLabel(viewModel.calendarAdded ? "Event added to calendar" : "Add event to your calendar")
+                }
+
+                // External Link
+                if let sourceUrl = event.sourceUrl, let url = URL(string: sourceUrl) {
+                    Link(destination: url) {
+                        Label("More Info", systemImage: "safari")
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
+                            .foregroundStyle(.primary)
+                    }
+                }
+            }
+
+            // Remind Me
             if event.parsedDate != nil {
                 Button {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                    Task { await viewModel.addToCalendar() }
+                    Task { await notifications.toggleReminder(for: event) }
                 } label: {
+                    let isSet = notifications.isReminderSet(for: event.id)
                     Label(
-                        viewModel.calendarAdded ? "Added to Calendar" : "Add to Calendar",
-                        systemImage: viewModel.calendarAdded ? "checkmark.circle.fill" : "calendar.badge.plus"
+                        isSet ? "Reminder Set" : "Remind Me",
+                        systemImage: isSet ? "bell.fill" : "bell"
                     )
                     .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
-                        viewModel.calendarAdded ? Color.green : Color.accentColor,
+                        isSet ? Color.orange : Color(.systemGray5),
                         in: RoundedRectangle(cornerRadius: 12)
                     )
-                    .foregroundStyle(.white)
+                    .foregroundStyle(isSet ? .white : .primary)
                 }
-                .disabled(viewModel.calendarAdded)
-                .accessibilityLabel(viewModel.calendarAdded ? "Event added to calendar" : "Add event to your calendar")
-            }
-
-            // External Link
-            if let sourceUrl = event.sourceUrl, let url = URL(string: sourceUrl) {
-                Link(destination: url) {
-                    Label("More Info", systemImage: "safari")
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(.primary)
-                }
+                .accessibilityLabel(notifications.isReminderSet(for: event.id) ? "Cancel event reminder" : "Set event reminder for 1 hour before")
             }
         }
         .padding(.horizontal)
