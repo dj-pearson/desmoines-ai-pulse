@@ -137,7 +137,7 @@ export default function Gamification() {
         />
 
         <div className="text-center mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Your Des Moines Adventure</h1>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-4">Your Des Moines Adventure</h2>
           <p className="text-xl text-muted-foreground">
             Level up by exploring, reviewing, and engaging with the Des Moines community
           </p>

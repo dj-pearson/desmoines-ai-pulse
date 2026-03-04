@@ -68,6 +68,7 @@ import {
 } from "@/lib/timezone";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import { BackToTop } from "@/components/BackToTop";
+import { useAnnounce } from "@/hooks/use-announce";
 import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
 import { SmartFilterChips } from "@/components/SmartFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
@@ -146,6 +147,7 @@ export default function EventsPage() {
   const EVENTS_PER_PAGE = 30;
   const { toast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const { announce, announcement, regionProps } = useAnnounce();
 
   // Geolocation state for "Near Me" feature
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -395,6 +397,15 @@ export default function EventsPage() {
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
   useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange]);
+
+  // Announce result count to screen readers after search/filter changes
+  useEffect(() => {
+    if (!isLoading && events) {
+      const count = events.length;
+      const context = searchQuery ? ` matching "${searchQuery}"` : '';
+      announce(`Found ${count} event${count !== 1 ? 's' : ''}${context}`);
+    }
+  }, [events?.length, isLoading, searchQuery, announce]);
 
   const { data: categories } = useQuery({
     queryKey: ["event-categories"],
@@ -893,6 +904,9 @@ export default function EventsPage() {
           <div className="mb-5">
             <AdBanner placement="top_banner" />
           </div>
+
+          {/* Screen reader announcement for result count changes */}
+          <div {...regionProps}>{announcement}</div>
 
           {/* Results Header */}
           <div className="flex items-center justify-between mb-5">

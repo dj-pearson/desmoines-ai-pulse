@@ -1,4 +1,4 @@
-import React, { useState, useMemo, lazy } from "react";
+import React, { useState, useMemo, useEffect, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -10,6 +10,7 @@ import { getCanonicalUrl } from "@/lib/brandConfig";
 import { useToast } from "@/hooks/use-toast";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { BackToTop } from "@/components/BackToTop";
+import { useAnnounce } from "@/hooks/use-announce";
 import {
   Card,
   CardContent,
@@ -28,7 +29,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight } from "lucide-react";
+import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle } from "lucide-react";
+import { EmptyState } from "@/components/ui/empty-state";
 import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
 import { Link } from "react-router-dom";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -67,6 +69,7 @@ export default function Attractions() {
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error } = useAttractions({});
+  const { announce, announcement, regionProps } = useAnnounce();
 
   // Get unique types for filter options
   const attractionTypes = useMemo(() => {
@@ -128,6 +131,15 @@ export default function Attractions() {
     }
     return sorted;
   }, [filteredAttractions, sortBy]);
+
+  // Announce result count to screen readers
+  useEffect(() => {
+    if (!isLoading && filteredAttractions) {
+      const count = filteredAttractions.length;
+      const context = searchQuery ? ` matching "${searchQuery}"` : '';
+      announce(`Found ${count} attraction${count !== 1 ? 's' : ''}${context}`);
+    }
+  }, [filteredAttractions?.length, isLoading, searchQuery, announce]);
 
   const getActiveFiltersCount = () => {
     let count = 0;
@@ -439,6 +451,9 @@ export default function Attractions() {
           </div>
         )}
 
+        {/* Screen reader announcement for result count changes */}
+        <div {...regionProps}>{announcement}</div>
+
         {/* Results Header */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">
@@ -455,27 +470,70 @@ export default function Attractions() {
           />
         </div>
 
+        {/* Active Filter Badges */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-sm text-muted-foreground">Active filters:</span>
+            {searchQuery && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Search: &quot;{searchQuery}&quot;
+                <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove search filter "${searchQuery}"`}><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {selectedType !== "all" && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Type: {selectedType}
+                <button onClick={() => setSelectedType("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove type filter "${selectedType}"`}><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {minRating !== "any-rating" && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Rating: {minRating}+
+                <button onClick={() => setMinRating("any-rating")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove rating filter"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {featuredOnly !== "all" && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Featured Only
+                <button onClick={() => setFeaturedOnly("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove featured filter"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground h-7 text-xs">
+              Clear All
+            </Button>
+          </div>
+        )}
+
         {viewMode === 'map' ? (
           <AttractionsMap attractions={sortedAttractions} />
         ) : isLoading ? (
           <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" />
         ) : error ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">
-              Error loading attractions. Please try again later.
-            </p>
-          </div>
+          <EmptyState
+            icon={AlertCircle}
+            title="Unable to load attractions"
+            description="We're having trouble loading attractions. Please check your connection and try again."
+            actions={[{ label: "Try Again", onClick: () => window.location.reload() }]}
+          />
         ) : sortedAttractions.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">
-              {searchQuery ||
-              selectedType !== "all" ||
-              minRating !== "any-rating" ||
-              featuredOnly !== "all"
-                ? "No attractions match your current filters."
-                : "No attractions found."}
-            </p>
-          </div>
+          <EmptyState
+            icon={searchQuery || selectedType !== "all" || minRating !== "any-rating" || featuredOnly !== "all" ? SearchX : Landmark}
+            title={searchQuery ? `No results for "${searchQuery}"` : "No attractions found"}
+            description={
+              searchQuery || selectedType !== "all" || minRating !== "any-rating" || featuredOnly !== "all"
+                ? "Try adjusting your search criteria or filters to find more attractions."
+                : "No attractions available at the moment. Check back soon!"
+            }
+            actions={
+              searchQuery || selectedType !== "all" || minRating !== "any-rating" || featuredOnly !== "all"
+                ? [
+                    { label: "Clear Filters", onClick: handleClearFilters, variant: "outline" as const, icon: X },
+                    { label: "Browse All Attractions", onClick: () => { handleClearFilters(); window.scrollTo({ top: 0, behavior: 'smooth' }); } },
+                  ]
+                : undefined
+            }
+            compact={isMobile}
+          />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {sortedAttractions.map((attraction) => (

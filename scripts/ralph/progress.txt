@@ -31,3 +31,21 @@ Started: 2026-02-28T03:00:00Z
   - Supabase tables added via migration but not in generated types — cast with `as unknown as T`
   - Leaflet lazy loading pattern: `lazy(() => import('react-leaflet').then(m => ({ default: m.Component })))`
 ---
+
+## 2026-03-04 — US-077, US-078, US-084, US-091, US-098, US-099, US-107, US-109
+- US-077: Fixed heading hierarchy — demoted duplicate h1s in Gamification and EventPromotionPlanner; strengthened a11y test to enforce (not just warn)
+- US-078: Created useAnnounce hook (src/hooks/use-announce.ts) for screen reader aria-live announcements; wired to EventsPage, Restaurants, Attractions listing pages
+- US-084: Attractions page upgraded from plain text empty state to proper EmptyState component with contextual actions (clear filters, browse all); Events and Restaurants already had EmptyState
+- US-091: Added BreadcrumbListSchema to RestaurantDetails and HotelDetails pages; all detail pages now have consistent breadcrumb structured data
+- US-098: Verified prefers-reduced-motion already fully implemented in index.css (two media queries disabling all animations/transitions)
+- US-099: Created src/lib/categoryColors.ts shared category color map with CATEGORY_COLORS, getCategoryColor(), getCategoryHex(); wired into InteractiveMap
+- US-107: Verified all three listing pages (Events, Restaurants, Attractions) already have sort functionality
+- US-109: Added active filter badge display to Attractions page with individual dismiss buttons and clear-all action
+- **Build**: npm run build passes (55s, no errors)
+- Files changed: src/hooks/use-announce.ts, src/lib/categoryColors.ts, src/pages/Attractions.tsx, src/pages/EventPromotionPlanner.tsx, src/pages/EventsPage.tsx, src/pages/Gamification.tsx, src/pages/Restaurants.tsx, src/pages/RestaurantDetails.tsx, src/pages/HotelDetails.tsx, src/components/InteractiveMap.tsx, tests/accessibility.spec.ts, prd.json
+- **Progress**: 76/140 stories complete (54%), 64 remaining
+- **Learnings for future iterations:**
+  - useAnnounce pattern: clear then setTimeout(100ms) to ensure re-announcement of same message
+  - EmptyState component already exists at src/components/ui/empty-state.tsx — reuse it
+  - SortDropdown exports shared option arrays (EVENT_SORT_OPTIONS, RESTAURANT_SORT_OPTIONS, ATTRACTION_SORT_OPTIONS)
+---

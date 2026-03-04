@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Navigation, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getCategoryHex } from '@/lib/categoryColors';
 
 // Fix for default marker icon issue with bundlers
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -180,17 +181,9 @@ export function InteractiveMap({
     return [41.5868, -93.625]; // Des Moines default
   }, [center, userLocation, validLocations]);
 
-  // Category colors for markers
+  // Category colors for markers — uses shared color map
   const getCategoryColor = (category?: string) => {
-    const colors: Record<string, string> = {
-      Music: '#8b5cf6',
-      Food: '#f59e0b',
-      'Arts & Culture': '#ec4899',
-      Sports: '#10b981',
-      Community: '#3b82f6',
-      default: '#6b7280',
-    };
-    return colors[category || ''] || colors.default;
+    return getCategoryHex(category);
   };
 
   const handleZoomIn = () => {
