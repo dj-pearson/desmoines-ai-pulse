@@ -22,6 +22,8 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import AffiliateDisclosureBanner from "@/components/AffiliateDisclosureBanner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 
 function StarRating({ rating }: { rating: number }) {
   const stars = [];
@@ -131,6 +133,13 @@ export default function HotelDetails() {
         starRating={hotel.star_rating || undefined}
         checkInTime={hotel.check_in_time || undefined}
         checkOutTime={hotel.check_out_time || undefined}
+      />
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: getCanonicalUrl("/") },
+          { name: "Hotels", url: getCanonicalUrl("/hotels") },
+          { name: hotel.name, url: getCanonicalUrl(`/hotels/${slug}`) },
+        ]}
       />
 
       <div className="min-h-screen bg-background pb-24">

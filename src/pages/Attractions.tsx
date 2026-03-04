@@ -470,6 +470,40 @@ export default function Attractions() {
           />
         </div>
 
+        {/* Active Filter Badges */}
+        {hasActiveFilters && (
+          <div className="flex flex-wrap items-center gap-2 mb-4">
+            <span className="text-sm text-muted-foreground">Active filters:</span>
+            {searchQuery && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Search: &quot;{searchQuery}&quot;
+                <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove search filter "${searchQuery}"`}><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {selectedType !== "all" && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Type: {selectedType}
+                <button onClick={() => setSelectedType("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label={`Remove type filter "${selectedType}"`}><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {minRating !== "any-rating" && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Rating: {minRating}+
+                <button onClick={() => setMinRating("any-rating")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove rating filter"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            {featuredOnly !== "all" && (
+              <Badge variant="secondary" className="gap-1 pr-1">
+                Featured Only
+                <button onClick={() => setFeaturedOnly("all")} className="ml-1 hover:bg-accent rounded-full p-0.5" aria-label="Remove featured filter"><X className="h-3 w-3" /></button>
+              </Badge>
+            )}
+            <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground h-7 text-xs">
+              Clear All
+            </Button>
+          </div>
+        )}
+
         {viewMode === 'map' ? (
           <AttractionsMap attractions={sortedAttractions} />
         ) : isLoading ? (

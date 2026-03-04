@@ -15,6 +15,8 @@ import ShareDialog from "@/components/ShareDialog";
 import RestaurantCard from "@/components/RestaurantCard";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
+import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
+import { getCanonicalUrl } from "@/lib/brandConfig";
 import {
   MapPin,
   Phone,
@@ -340,6 +342,14 @@ export default function RestaurantDetails() {
           longitude: restaurant.longitude,
         }}
         modifiedTime={restaurant.updated_at}
+      />
+      <BreadcrumbListSchema
+        items={[
+          { name: "Home", url: getCanonicalUrl("/") },
+          { name: "Restaurants", url: getCanonicalUrl("/restaurants") },
+          ...(restaurant.cuisine ? [{ name: restaurant.cuisine, url: getCanonicalUrl(`/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}`) }] : []),
+          { name: restaurant.name, url: getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`) },
+        ]}
       />
 
       <div className="min-h-screen bg-gray-50">
