@@ -96,6 +96,35 @@
 
 ## Progress Log
 
+## 2026-03-04 — Ralph Loop 9: Accessibility, SEO, UX Polish
+
+- **US-077**: Fixed heading hierarchy violations across pages:
+  - Demoted duplicate h1 to h2 in Gamification.tsx (authenticated view) and EventPromotionPlanner.tsx (results view)
+  - Strengthened accessibility test in tests/accessibility.spec.ts to enforce single h1 and no heading-level skips
+- **US-078**: Added aria-live regions for screen reader announcements:
+  - Created `src/hooks/use-announce.ts` — useAnnounce hook with configurable politeness, sr-only region, debounced re-announcement
+  - Wired to EventsPage, Restaurants, and Attractions listing pages — announces result count on filter/search changes
+- **US-084**: Verified empty states with contextual actions on all listing pages:
+  - Upgraded Attractions page from plain text empty state to proper EmptyState component with clear-filters and browse-all actions
+  - Events and Restaurants already had full EmptyState implementations
+- **US-091**: Added BreadcrumbListSchema structured data to all detail pages:
+  - RestaurantDetails: breadcrumb chain Home → Restaurants → Cuisine → Restaurant Name
+  - HotelDetails: breadcrumb chain Home → Hotels → Hotel Name
+  - EventDetails, AttractionDetails, PlaygroundDetails already had BreadcrumbListSchema
+- **US-098**: Verified prefers-reduced-motion already fully implemented in index.css (two `@media (prefers-reduced-motion: reduce)` rules disabling all animations/transitions globally)
+- **US-099**: Created shared category color map:
+  - `src/lib/categoryColors.ts` with CATEGORY_COLORS record (15 categories), getCategoryColor(), getCategoryHex()
+  - Wired into InteractiveMap component replacing inline color map
+- **US-107**: Verified sort dropdowns on all three listing pages (Events, Restaurants, Attractions) — all functional
+- **US-109**: Added active filter badge display to Attractions page:
+  - Badges for search query, type, rating, featured filters with individual dismiss (X) buttons
+  - Clear All button when any filter is active
+  - Accessible aria-labels on all dismiss buttons
+
+**Build verified**: `npm run build` passes (55s, no errors)
+
+**Progress: 76/140 stories complete (54%), 64 remaining**
+
 ## 2026-02-28 — Ralph Loop 8: Security Hardening, Code Cleanup, UX Improvements
 
 - **US-072**: Fixed critical Stripe webhook signature verification bypass:
