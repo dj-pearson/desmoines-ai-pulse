@@ -85,6 +85,24 @@ interface AttractionData {
   website?: string;
 }
 
+// Sports schedule domains - use domain-specific URL strategy (never add CatchDesMoines)
+const SPORTS_SCHEDULE_DOMAINS = [
+  "milb.com/iowa",
+  "iowawild.com",
+  "theiowabarnstormers.com",
+  "iowa.gleague.nba.com",
+];
+
+function isSportsScheduleDomain(url: string): boolean {
+  const lower = url.toLowerCase();
+  return SPORTS_SCHEDULE_DOMAINS.some((d) => lower.includes(d));
+}
+
+// Domain-specific URLs for sports schedules - ONLY use the provided URL, never CatchDesMoines
+function getSportsScheduleUrls(originalUrl: string): string[] {
+  return [originalUrl];
+}
+
 // Preprocess URL to try to find better event-specific pages
 function findBestEventUrl(originalUrl: string): string[] {
   const baseUrl = originalUrl.replace(/\/$/, ""); // Remove trailing slash
@@ -347,7 +365,7 @@ async function extractCatchDesMoinesVisitWebsiteUrl(
 }
 
 // Enhanced HTML content extraction with better patterns for CatchDesMoines
-function extractRelevantContent(html: string): string {
+function extractRelevantContent(html: string, url?: string): string {
   console.log(
     `🔍 Starting content extraction from ${html.length} character HTML`
   );
@@ -358,13 +376,100 @@ function extractRelevantContent(html: string): string {
     .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
     .replace(/<!--[\s\S]*?-->/g, "");
 
-  // Limit to 15000 characters to avoid CPU timeout
-  const finalContent = cleanHtml.substring(0, 15000);
+  // Sports schedules may need more content (many games, dynamic structure)
+  const maxChars = url && isSportsScheduleDomain(url) ? 25000 : 15000;
+  const finalContent = cleanHtml.substring(0, maxChars);
 
   console.log(
-    `📏 Final content length: ${finalContent.length} characters (reduced from ${html.length})`
+    `📏 Final content length: ${finalContent.length} characters (reduced from ${html.length}, max ${maxChars})`
   );
   return finalContent;
+}
+
+// Sports schedule AI prompt - for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
+function getSportsSchedulePrompt(url: string, relevantContent: string): string {
+  const now = new Date();
+  const currentDate = dateFnsFormat(now, "MMMM d, yyyy");
+  const currentYear = now.getFullYear();
+
+  let teamName = "Des Moines Sports Team";
+  let venue = "Des Moines, IA";
+  let defaultTicketBase = "";
+
+  const lower = url.toLowerCase();
+  if (lower.includes("milb.com/iowa")) {
+    teamName = "Iowa Cubs";
+    venue = "Principal Park";
+    defaultTicketBase = "https://www.milb.com/iowa/tickets";
+  } else if (lower.includes("iowawild.com")) {
+    teamName = "Iowa Wild";
+    venue = "Wells Fargo Arena";
+    defaultTicketBase = "https://www.iowawild.com/tickets";
+  } else if (lower.includes("theiowabarnstormers.com")) {
+    teamName = "Iowa Barnstormers";
+    venue = "Wells Fargo Arena";
+    defaultTicketBase = "https://theiowabarnstormers.com/tickets";
+  } else if (lower.includes("iowa.gleague.nba.com")) {
+    teamName = "Iowa Wolves";
+    venue = "Wells Fargo Arena";
+    defaultTicketBase = "https://iowa.gleague.nba.com/tickets";
+  }
+
+  return `You are an expert at extracting SPORTS GAME SCHEDULES from team websites. Extract EVERY game/event from this content from ${url}.
+
+CURRENT DATE: ${currentDate}
+WEBSITE CONTENT:
+${relevantContent}
+
+🎯 SPORTS SCHEDULE EXTRACTION - WHAT TO LOOK FOR:
+- Game matchups: "vs [Opponent]", "at [Opponent]", "@ [Opponent]"
+- Date patterns: "Fri, Mar 6", "Sat, Oct 11 6:00PM", "Mar 21 5:00 PM CDT"
+- Home vs Away: "Home" / "VS" = home game, "Away" / "AT" / "@" = away game
+- **CRITICAL**: Extract ONLY HOME games (games at ${venue}) - skip away games
+- "Buy Tickets" links, "BUYTIX", ticket buttons - use as source_url
+- Opponent team names (Storm Chasers, Griffins, Thunderbirds, Blizzard, etc.)
+- Tables, schedule grids, game cards, list items with dates
+
+📅 DATE CONVERSION (Central Time - Des Moines, Iowa):
+- All times are Central (CT/CDT)
+- "6:00PM" → "19:00:00", "7:00 PM" → "19:00:00", "5:05PM" → "17:05:00"
+- "Fri, Mar 6 6:05PM" → "2026-03-06 18:05:00"
+- No time? Default to 19:00:00 (7:00 PM)
+- SKIP past dates (before ${currentDate})
+
+🔗 TICKET/SOURCE URL (CRITICAL):
+- Look for "Buy Tickets", "BUYTIX", "tickets" links - use the href as source_url
+- Pattern: <a href="...">Buy Tickets</a> or similar
+- If per-game ticket link found, use it. Else use: ${defaultTicketBase}
+- source_url MUST be a full https:// URL
+
+For EVERY HOME GAME you find, extract:
+- title: "${teamName} vs [Opponent]" (e.g., "Iowa Cubs vs Storm Chasers")
+- description: Brief description (e.g., "Triple-A baseball at Principal Park")
+- date: YYYY-MM-DD HH:MM:SS (future dates only, Central Time)
+- location: "Des Moines, IA"
+- venue: "${venue}"
+- category: "Sports"
+- price: "See website" or price if shown
+- source_url: Ticket purchase URL (Buy Tickets link or ${defaultTicketBase})
+- image_url: null (omit unless team/venue image found)
+
+FORMAT AS JSON ARRAY:
+[
+  {
+    "title": "${teamName} vs Opponent Name",
+    "description": "Game description",
+    "date": "2026-MM-DD HH:MM:SS",
+    "location": "Des Moines, IA",
+    "venue": "${venue}",
+    "category": "Sports",
+    "price": "See website",
+    "source_url": "https://...ticket-url...",
+    "image_url": null
+  }
+]
+
+🚨 Extract EVERY home game. Return [] ONLY if no games found. Include source_url (ticket link) for each event.`;
 }
 
 // AI-powered content extraction using Claude
@@ -374,10 +479,12 @@ async function extractContentWithAI(
   url: string,
   claudeApiKey: string
 ): Promise<any[]> {
-  const relevantContent = extractRelevantContent(html);
+  const relevantContent = extractRelevantContent(html, url);
 
   const prompts = {
-    events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${url}.
+    events: isSportsScheduleDomain(url)
+      ? getSportsSchedulePrompt(url, relevantContent)
+      : `You are an expert at extracting event information from websites, especially from CatchDesMoines.com. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${url}.
 
 CURRENT DATE: July 26, 2025
 WEBSITE CONTENT:
@@ -841,13 +948,26 @@ Return empty array [] if no attractions found.`,
           );
 
            // Add source_url to each extracted item
-           // For CatchDesMoines events, try to extract the actual venue website URL
            const itemsWithSource = await Promise.all(
              extractedData.map(async (item) => {
                let actualSourceUrl = url;
 
-               // If this is a catchdesmoines.com event, try to extract the "Visit Website" link
-               if (category === "events" && url.includes("catchdesmoines.com")) {
+               // Sports schedules: use AI-extracted source_url (ticket link) when present
+               if (category === "events" && isSportsScheduleDomain(url)) {
+                 if (item.source_url && item.source_url.startsWith("http")) {
+                   actualSourceUrl = item.source_url;
+                 } else if (item.ticket_url && item.ticket_url.startsWith("http")) {
+                   actualSourceUrl = item.ticket_url;
+                 } else {
+                   const lower = url.toLowerCase();
+                   if (lower.includes("milb.com/iowa")) actualSourceUrl = "https://www.milb.com/iowa/tickets";
+                   else if (lower.includes("iowawild.com")) actualSourceUrl = "https://www.iowawild.com/tickets";
+                   else if (lower.includes("theiowabarnstormers.com")) actualSourceUrl = "https://theiowabarnstormers.com/tickets";
+                   else if (lower.includes("iowa.gleague.nba.com")) actualSourceUrl = "https://iowa.gleague.nba.com/tickets";
+                 }
+               }
+               // CatchDesMoines events: try to extract the "Visit Website" link
+               else if (category === "events" && url.includes("catchdesmoines.com")) {
                  try {
                    let eventDetailUrl = null;
                    
@@ -1425,19 +1545,21 @@ Deno.serve(async (req) => {
 
     console.log(`🚀 Starting AI crawl of ${url} for ${category}`);
 
-    // For CatchDesMoines and similar sites, try multiple strategies
+    // For sports schedule domains: use ONLY the provided URL (never CatchDesMoines)
+    // For other events: try multiple strategies including CatchDesMoines
     const urlsToTry =
-      category === "events"
-        ? [
-            url,
-            url.replace(/\/$/, "") + "/events/",
-            url.replace(/\/$/, "") + "/calendar/",
-            // Try common CatchDesMoines patterns
-            "https://www.catchdesmoines.com/events/",
-            "https://www.catchdesmoines.com/events/search/",
-            "https://www.catchdesmoines.com/calendar/",
-          ]
-        : findBestEventUrl(url);
+      category === "events" && isSportsScheduleDomain(url)
+        ? getSportsScheduleUrls(url)
+        : category === "events"
+          ? [
+              url,
+              url.replace(/\/$/, "") + "/events/",
+              url.replace(/\/$/, "") + "/calendar/",
+              "https://www.catchdesmoines.com/events/",
+              "https://www.catchdesmoines.com/events/search/",
+              "https://www.catchdesmoines.com/calendar/",
+            ]
+          : findBestEventUrl(url);
 
     console.log(`🔍 Will try these URLs: ${urlsToTry.join(", ")}`);
 
@@ -1468,7 +1590,9 @@ Deno.serve(async (req) => {
         const html = result.html;
         console.log(`✅ Got ${html.length} chars from ${tryUrl} using ${result.backend} (took ${result.duration}ms)`);
 
-        // Enhanced scoring for CatchDesMoines-style content
+        // Sports schedule domains: use sports-specific scoring
+        // Other sites: use CatchDesMoines-style scoring
+        const isSports = isSportsScheduleDomain(tryUrl);
         const eventKeywords = (
           html.match(
             /event|concert|show|game|performance|calendar|festival|fair|exhibition|theater|sports/gi
@@ -1476,28 +1600,34 @@ Deno.serve(async (req) => {
         ).length;
         const venueKeywords = (
           html.match(
-            /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall/gi
+            /arena|center|theatre|theater|park|fairground|stadium|auditorium|hall|principal park|wells fargo|casey's center|vibrant arena/gi
           ) || []
         ).length;
         const dateKeywords = (
           html.match(
-            /2025|july|august|september|october|november|december|\d{1,2}\/\d{1,2}/gi
+            /2025|2026|july|august|september|october|november|december|january|february|march|april|may|june|\d{1,2}\/\d{1,2}|mon|tue|wed|thu|fri|sat|sun/gi
           ) || []
         ).length;
-        const titleKeywords = (
-          html.match(
-            /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
-          ) || []
-        ).length;
+        const titleKeywords = isSports
+          ? (
+              html.match(
+                /iowa cubs|iowa wild|iowa wolves|barnstormers|vs\.?|storm chasers|mud hens|griffins|thunderbirds|icehogs|reign|admirals|moose|marlies|roadrunners|checkers|stars|blizzard|steamwheelers|buy tickets|tickets|promotions/gi
+              ) || []
+            ).length
+          : (
+              html.match(
+                /warren|anastasia|senior games|painting|sale-a-bration|waitress|iowa artists|horse racing|biergarten/gi
+              ) || []
+            ).length;
 
         const totalScore =
           eventKeywords +
           venueKeywords * 2 +
           dateKeywords * 1.5 +
-          titleKeywords * 3;
+          titleKeywords * (isSports ? 3 : 3);
 
         console.log(
-          `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}) in ${html.length} chars`
+          `📊 ${tryUrl}: Score ${totalScore} (events:${eventKeywords}, venues:${venueKeywords}, dates:${dateKeywords}, titles:${titleKeywords}${isSports ? " [sports]" : ""}) in ${html.length} chars`
         );
 
         if (totalScore > maxEventContent) {

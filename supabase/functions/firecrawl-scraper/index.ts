@@ -7,13 +7,26 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { parseISO } from "https://esm.sh/date-fns@3.6.0";
+import { parseISO, format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0";
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
+
+// Sports schedule domains - use domain-specific prompt and ticket URL handling
+const SPORTS_SCHEDULE_DOMAINS = [
+  "milb.com/iowa",
+  "iowawild.com",
+  "theiowabarnstormers.com",
+  "iowa.gleague.nba.com",
+];
+
+function isSportsScheduleDomain(url: string): boolean {
+  const lower = url.toLowerCase();
+  return SPORTS_SCHEDULE_DOMAINS.some((d) => lower.includes(d));
+}
 
 // Domains to exclude from Visit Website URLs
 const EXCLUDED_DOMAINS = [
@@ -553,6 +566,89 @@ Focus on Des Moines local SEO and GEO optimization for AI search engines.`;
   }
 }
 
+// Sports schedule AI prompt - for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
+function getSportsSchedulePrompt(url: string, content: string): string {
+  const now = new Date();
+  const currentDate = dateFnsFormat(now, "MMMM d, yyyy");
+
+  let teamName = "Des Moines Sports Team";
+  let venue = "Des Moines, IA";
+  let defaultTicketBase = "";
+
+  const lower = url.toLowerCase();
+  if (lower.includes("milb.com/iowa")) {
+    teamName = "Iowa Cubs";
+    venue = "Principal Park";
+    defaultTicketBase = "https://www.milb.com/iowa/tickets";
+  } else if (lower.includes("iowawild.com")) {
+    teamName = "Iowa Wild";
+    venue = "Wells Fargo Arena";
+    defaultTicketBase = "https://www.iowawild.com/tickets";
+  } else if (lower.includes("theiowabarnstormers.com")) {
+    teamName = "Iowa Barnstormers";
+    venue = "Wells Fargo Arena";
+    defaultTicketBase = "https://theiowabarnstormers.com/tickets";
+  } else if (lower.includes("iowa.gleague.nba.com")) {
+    teamName = "Iowa Wolves";
+    venue = "Wells Fargo Arena";
+    defaultTicketBase = "https://iowa.gleague.nba.com/tickets";
+  }
+
+  return `You are an expert at extracting SPORTS GAME SCHEDULES from team websites. Extract EVERY game/event from this content from ${url}.
+
+CURRENT DATE: ${currentDate}
+WEBSITE CONTENT:
+${content.substring(0, 25000)}
+
+🎯 SPORTS SCHEDULE EXTRACTION - WHAT TO LOOK FOR:
+- Game matchups: "vs [Opponent]", "at [Opponent]", "@ [Opponent]"
+- Date patterns: "Fri, Mar 6", "Sat, Oct 11 6:00PM", "Mar 21 5:00 PM CDT"
+- Home vs Away: "Home" / "VS" = home game, "Away" / "AT" / "@" = away game
+- **CRITICAL**: Extract ONLY HOME games (games at ${venue}) - skip away games
+- "Buy Tickets" links, "BUYTIX", ticket buttons - use as source_url
+- Opponent team names (Storm Chasers, Griffins, Thunderbirds, Blizzard, etc.)
+- Tables, schedule grids, game cards, list items with dates
+
+📅 DATE CONVERSION (Central Time - Des Moines, Iowa):
+- All times are Central (CT/CDT)
+- "6:00PM" → "19:00:00", "7:00 PM" → "19:00:00", "5:05PM" → "17:05:00"
+- "Fri, Mar 6 6:05PM" → "2026-03-06 18:05:00"
+- No time? Default to 19:00:00 (7:00 PM)
+- SKIP past dates (before ${currentDate})
+
+🔗 TICKET/SOURCE URL (CRITICAL):
+- Look for "Buy Tickets", "BUYTIX", "tickets" links - use the href as source_url
+- Pattern: <a href="...">Buy Tickets</a> or similar
+- If per-game ticket link found, use it. Else use: ${defaultTicketBase}
+- source_url MUST be a full https:// URL
+
+For EVERY HOME GAME you find, extract:
+- title: "${teamName} vs [Opponent]" (e.g., "Iowa Cubs vs Storm Chasers")
+- description: Brief description (e.g., "Triple-A baseball at Principal Park")
+- date: YYYY-MM-DD HH:MM:SS (future dates only, Central Time)
+- location: "Des Moines, IA"
+- venue: "${venue}"
+- category: "Sports"
+- price: "See website" or price if shown
+- source_url: Ticket purchase URL (Buy Tickets link or ${defaultTicketBase})
+
+FORMAT AS JSON ARRAY ONLY - no other text:
+[
+  {
+    "title": "${teamName} vs Opponent Name",
+    "description": "Game description",
+    "date": "2026-MM-DD HH:MM:SS",
+    "location": "Des Moines, IA",
+    "venue": "${venue}",
+    "category": "Sports",
+    "price": "See website",
+    "source_url": "https://...ticket-url..."
+  }
+]
+
+🚨 Extract EVERY home game. Return [] ONLY if no games found. Include source_url (ticket link) for each event.`;
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -592,10 +688,13 @@ serve(async (req) => {
     console.log(`🚀 Starting scrape of ${url} for ${category} (max ${maxPages} pages) using ${scraperBackend || 'default backend'}`);
 
     // Generate URLs for pagination if it's a Catch Des Moines events page
+    // Sports schedule domains: use ONLY the provided URL (never add CatchDesMoines)
     const urlsToScrape = [];
     const urlObj = new URL(url);
-    
-    if (urlObj.hostname.includes('catchdesmoines.com') && urlObj.pathname.includes('/events')) {
+
+    if (isSportsScheduleDomain(url)) {
+      urlsToScrape.push(url);
+    } else if (urlObj.hostname.includes('catchdesmoines.com') && urlObj.pathname.includes('/events')) {
       // Generate paginated URLs for Catch Des Moines
       for (let page = 0; page < maxPages; page++) {
         const pageUrl = new URL(url);
@@ -655,8 +754,11 @@ serve(async (req) => {
       }
 
       // Generate category-specific prompts
+      // Use sports schedule prompt for Iowa Cubs, Iowa Wild, Iowa Barnstormers, Iowa Wolves
       const prompts = {
-        events: `You are an expert at extracting event information from websites, especially from CatchDesMoines.com and other Des Moines area event sites. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${currentUrl}.
+        events: isSportsScheduleDomain(currentUrl)
+          ? getSportsSchedulePrompt(currentUrl, content)
+          : `You are an expert at extracting event information from websites, especially from CatchDesMoines.com and other Des Moines area event sites. Your task is to find EVERY SINGLE EVENT mentioned in this content from ${currentUrl}.
 
 CURRENT DATE: July 30, 2025
 WEBSITE CONTENT:
@@ -1045,9 +1147,27 @@ Return empty array [] if no competitive content found.`
       skippedVisitWebsite: skipVisitWebsite,
     };
 
+    // For sports schedule events: ensure source_url (ticket link) is set
+    if (category === 'events' && isSportsScheduleDomain(url) && filteredItems.length > 0) {
+      const lower = url.toLowerCase();
+      const defaultTicketUrl =
+        lower.includes("milb.com/iowa") ? "https://www.milb.com/iowa/tickets" :
+        lower.includes("iowawild.com") ? "https://www.iowawild.com/tickets" :
+        lower.includes("theiowabarnstormers.com") ? "https://theiowabarnstormers.com/tickets" :
+        lower.includes("iowa.gleague.nba.com") ? "https://iowa.gleague.nba.com/tickets" : url;
+
+      for (let i = 0; i < filteredItems.length; i++) {
+        const item = filteredItems[i];
+        if (!item.source_url || !item.source_url.startsWith("http")) {
+          item.source_url = item.ticket_url?.startsWith("http") ? item.ticket_url : defaultTicketUrl;
+        }
+      }
+      console.log(`🏟️ Sports schedule: Set source_url (ticket links) for ${filteredItems.length} events`);
+    }
+
     // CRITICAL: For CatchDesMoines events, fetch each event's detail page to get the REAL source URL
     // The "Visit Website" URL is the external link to the actual event organizer's site
-    if (category === 'events' && url.includes('catchdesmoines.com') && filteredItems.length > 0) {
+    else if (category === 'events' && url.includes('catchdesmoines.com') && filteredItems.length > 0) {
       // Apply skip and batch size to limit processing
       const startIndex = Math.min(skipEvents, filteredItems.length);
       const endIndex = Math.min(startIndex + batchSize, filteredItems.length);
