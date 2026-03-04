@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Calendar, MapPin, ExternalLink, Sparkles, CalendarPlus, Brain, Zap, TrendingUp, Share2, ArrowRight } from "lucide-react";
 import { downloadICS } from "@/lib/calendar";
+import { createEventSlugWithCentralTime } from "@/lib/timezone";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -150,7 +151,7 @@ export default function Index() {
   };
 
   const handleShareEvent = async (event: Event) => {
-    const shareUrl = `${window.location.origin}/events/${event.id}`;
+    const shareUrl = `${window.location.origin}/events/${createEventSlugWithCentralTime(event.title, event)}`;
     const shareData = {
       title: event.title,
       text: `Check out ${event.title} in Des Moines!`,
@@ -839,7 +840,7 @@ export default function Index() {
                   {/* View full event page */}
                   <Button asChild className="w-full">
                     <Link
-                      to={`/events/${selectedEvent.id}`}
+                      to={`/events/${createEventSlugWithCentralTime(selectedEvent.title, selectedEvent)}`}
                       onClick={() => setShowEventDetails(false)}
                     >
                       View Full Event Details

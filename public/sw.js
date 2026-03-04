@@ -1,9 +1,9 @@
 // Service Worker for Des Moines Insider
 // CRITICAL: Increment version on every deploy to force cache clear
-const CACHE_NAME = "dmi-cache-v4";
-const STATIC_CACHE = "dmi-static-v4";
-const API_CACHE = "dmi-api-v4";
-const IMAGE_CACHE = "dmi-images-v4";
+const CACHE_NAME = "dmi-cache-v5";
+const STATIC_CACHE = "dmi-static-v5";
+const API_CACHE = "dmi-api-v5";
+const IMAGE_CACHE = "dmi-images-v5";
 
 // Assets to cache immediately
 const STATIC_ASSETS = [
@@ -92,8 +92,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Images - Cache First with fallback
+  // Images - Cache First with fallback (skip extension URLs - Cache API rejects chrome-extension:)
   if (request.destination === "image") {
+    const url = request.url || "";
+    if (url.startsWith("chrome-extension:") || url.startsWith("moz-extension:")) {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith(cacheFirstWithFallback(request, IMAGE_CACHE));
     return;
   }
@@ -166,8 +171,6 @@ async function cacheFirstWithFallback(request, cacheName) {
     const cachedResponse = await cache.match(request);
 
     if (cachedResponse) {
-      // Move to front of cache (LRU: re-put to update ordering)
-      cache.put(request, cachedResponse.clone());
       return cachedResponse;
     }
 
@@ -177,17 +180,20 @@ async function cacheFirstWithFallback(request, cacheName) {
       networkResponse.status !== 206 &&
       !request.headers.has("range")
     ) {
-      // Cache the image and evict oldest if over limit
-      cache.put(request, networkResponse.clone());
+      // Cache the image and evict oldest if over limit (skip if Cache.put would fail)
+      try {
+        cache.put(request, networkResponse.clone());
 
-      // LRU eviction: remove oldest entries when over limit
-      const keys = await cache.keys();
-      if (keys.length > IMAGE_CACHE_LIMIT) {
-        // Delete the oldest entries (first in the list)
-        const toDelete = keys.length - IMAGE_CACHE_LIMIT;
-        for (let i = 0; i < toDelete; i++) {
-          cache.delete(keys[i]);
+        // LRU eviction: remove oldest entries when over limit
+        const keys = await cache.keys();
+        if (keys.length > IMAGE_CACHE_LIMIT) {
+          const toDelete = keys.length - IMAGE_CACHE_LIMIT;
+          for (let i = 0; i < toDelete; i++) {
+            cache.delete(keys[i]);
+          }
         }
+      } catch (putErr) {
+        // Cache.put can fail for chrome-extension:, etc. - continue without caching
       }
     }
     return networkResponse;
