@@ -8,7 +8,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:infisical": "infisical run --env=dev -- vite",
     "build": "vite build",
+    "build:infisical": "infisical run --env=prod -- vite build",
     "build:dev": "vite build --mode development",
     "build:analyze": "ANALYZE=true vite build",
     "lint": "eslint .",
