@@ -5,15 +5,43 @@ Copy/paste the sections below into the corresponding fields.
 
 ---
 
+## ASO Strategy Notes
+
+Apple's search algorithm indexes **only** Title + Subtitle + Keyword field (160 chars total).
+The Description is NOT indexed for search — it exists for conversion, not ranking.
+
+**Rules:**
+1. Title has the highest indexing weight — put your most valuable keywords here
+2. Subtitle and Keyword field have equal weight (second tier)
+3. NEVER repeat a word across Title/Subtitle/Keywords — Apple indexes all three together
+4. Use singular forms in keywords (Apple matches both singular and plural)
+5. No spaces after commas in the keyword field to save characters
+6. Use all 100 keyword characters — every unused character is a missed opportunity
+
+**Target searches:** "Des Moines", "Des Moines events", "things to do in Des Moines",
+"Des Moines restaurants", "Des Moines food", "Des Moines nightlife"
+
+---
+
 ## App Information
 
-- **App Name:** Des Moines Insider
-- **Subtitle:** Events, Dining & Local Guide
+- **App Name:** Des Moines Insider - Events _(27/30 chars)_
+- **Subtitle:** Restaurants & Things to Do _(26/30 chars)_
 - **Bundle ID:** com.desmoines.aipulse
 - **Primary Category:** Lifestyle
 - **Secondary Category:** Food & Drink
 - **Age Rating:** 4+ (no objectionable content)
 - **Content Rights:** Does not contain third-party content that requires rights
+
+> **Why this Title:** Puts "Des Moines" AND "Events" in the highest-weight field.
+> A user searching "Des Moines Events" now gets an exact match in the title.
+> Previous title ("Des Moines Insider") wasted 12 chars of indexing power.
+>
+> **Why this Subtitle:** Captures "Restaurants" and "Things to Do" — two high-volume
+> search phrases. Combined with "Des Moines" from the title, Apple will match
+> "Des Moines restaurants" and "things to do in Des Moines" automatically.
+> Stays at 26 chars to avoid the known App Store bug where the last word of a
+> 30-char subtitle sometimes doesn't get indexed.
 
 ---
 
@@ -28,43 +56,76 @@ Copy/paste the sections below into the corresponding fields.
 
 ## Promotional Text (170 chars max — can be updated without a new build)
 
-Discover what's happening in Des Moines! Browse events, find top restaurants, explore attractions, and save your favorites — all in one app.
+> **Note:** Promotional text is NOT indexed for search. Its job is conversion — convincing
+> users who land on your page to tap Install. Update seasonally for relevance.
+
+Discover what's happening in Des Moines! Browse events, find top restaurants, explore attractions, and plan your weekend — all in one free app.
 
 ---
 
 ## Description (4000 chars max)
 
-Des Moines Insider is your go-to guide for everything happening in the Greater Des Moines area. Whether you're a local looking for tonight's plans or a visitor exploring Iowa's capital city, we've got you covered.
+> **Note:** Apple does NOT index the description for search ranking. However, it heavily
+> influences conversion rate (install/view ratio), which indirectly affects ranking.
+> Front-load the most compelling value prop in the first 3 lines (visible before "Read More").
 
-DISCOVER EVENTS
-Browse hundreds of upcoming events across Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, and the surrounding metro. Filter by date, category, or location to find exactly what you're looking for — from live music and food festivals to art shows, family activities, and community gatherings.
+Des Moines Insider is the #1 local guide for events, restaurants, and things to do in the Greater Des Moines area. Whether you're looking for tonight's plans or planning a weekend trip to Iowa's capital city, we've got you covered.
 
-FIND GREAT RESTAURANTS
-Explore the Des Moines dining scene with our curated restaurant directory. Sort by cuisine, price range, rating, or popularity. Whether you want a quick bite, a date night spot, or the newest opening in town, Des Moines Insider helps you decide where to eat.
+DES MOINES EVENTS — UPDATED DAILY
+Browse hundreds of upcoming events across Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, and the surrounding metro. Filter by date, category, or location to find exactly what you're looking for — from live music and food festivals to art shows, family activities, and community gatherings. Never miss what's happening tonight or this weekend.
 
-EXPLORE THE MAP
-See events, restaurants, and attractions plotted on an interactive map. Find what's happening near you or discover new neighborhoods to explore. Perfect for planning a night out or a weekend adventure.
+TOP RESTAURANTS & DINING
+Explore the Des Moines dining scene with our curated restaurant directory. Sort by cuisine, price range, rating, or dietary needs. Whether you want a quick bite, a date night spot, the best happy hour, or the newest opening in town, Des Moines Insider helps you decide where to eat.
 
-SEARCH EVERYTHING
-Use our unified search to find events, restaurants, and attractions all in one place. Search by name, category, or keyword to quickly find what you need.
+NIGHTLIFE & BARS
+Discover the best bars, breweries, and nightlife spots across the metro. Plan your night out with hours, locations, and what's happening tonight all in one place.
+
+INTERACTIVE MAP
+See events, restaurants, and attractions plotted on a live map. Find what's happening near you or discover new neighborhoods to explore. Perfect for planning a night out or a weekend adventure in Des Moines.
+
+SEARCH & DISCOVER
+Use unified search to find events, restaurants, and attractions instantly. Search by name, category, or keyword to find exactly what you need.
 
 SAVE YOUR FAVORITES
 Heart the events and restaurants you love to build your personal list. Keep track of upcoming plans and revisit your favorite spots anytime.
 
-YOUR PROFILE
-Sign in with email or Apple to sync your favorites across devices. Manage your profile, preferences, and saved content — all in one place.
+SYNC ACROSS DEVICES
+Sign in with Apple or email to sync your favorites everywhere. Manage your profile, preferences, and saved content — all in one place.
 
-ALWAYS UP TO DATE
-Our events are updated daily so you never miss what's happening. Restaurant information is refreshed weekly to keep hours, menus, and details accurate.
-
-BUILT FOR DES MOINES
-Des Moines Insider is made by locals, for locals. We cover the entire Greater Des Moines metro including Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, and surrounding communities.
+BUILT FOR DES MOINES, BY DES MOINES
+Made by locals, for locals. We cover the entire Greater Des Moines metro including Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, Grimes, Altoona, Pleasant Hill, and surrounding communities. Updated daily so you always have the freshest local info.
 
 ---
 
-## Keywords (100 chars max, comma-separated)
+## Keywords (100 chars max, comma-separated, no spaces after commas)
 
-Des Moines,events,restaurants,Iowa,things to do,local guide,dining,attractions,DSM,food
+Iowa,dining,food,attraction,DSM,nightlife,tonight,weekend,local,guide,live music,festival,family,bar
+
+> **Keyword budget breakdown (100/100 chars used):**
+>
+> Words indexed from **Title** (free — don't repeat): des, moines, insider, events
+> Words indexed from **Subtitle** (free — don't repeat): restaurants, things, to, do
+>
+> **Keyword field adds 14 NEW searchable terms:**
+> Iowa, dining, food, attraction, DSM, nightlife, tonight, weekend,
+> local, guide, live music, festival, family, bar
+>
+> **Combined searchable phrases Apple can now match:**
+> - "Des Moines events" (title exact match)
+> - "Des Moines restaurants" (title + subtitle)
+> - "things to do in Des Moines" (subtitle + title)
+> - "Des Moines nightlife" (title + keyword)
+> - "Des Moines food" / "Des Moines dining" (title + keyword)
+> - "Des Moines bars" (title + keyword)
+> - "events tonight" / "events this weekend" (title + keyword)
+> - "live music Des Moines" (keyword + title)
+> - "food festivals Des Moines" (keyword + keyword + title)
+> - "family events Des Moines" (keyword + title)
+> - "Iowa events" / "Iowa restaurants" (keyword + title/subtitle)
+> - "local guide" / "DSM events" (keyword + title)
+>
+> **Previous keyword field wasted ~35 chars** on words already in title/subtitle:
+> "Des Moines" (10), "events" (6), "restaurants" (11), "local guide" (11)
 
 ---
 
