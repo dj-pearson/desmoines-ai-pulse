@@ -667,6 +667,13 @@ test.describe('WCAG 4.1.2 - Icon Button Labels', () => {
 
 test.describe('WCAG 1.3.1 - Heading Hierarchy', () => {
   for (const page of pages.slice(0, 8)) {
+    test(`${page.name} should have exactly one h1`, async ({ page: pw }) => {
+      await pw.goto(page.path, { waitUntil: 'networkidle' });
+
+      const h1Count = await pw.locator('h1').count();
+      expect(h1Count, `${page.name} should have exactly one h1 element`).toBe(1);
+    });
+
     test(`${page.name} should not skip heading levels`, async ({ page: pw }) => {
       await pw.goto(page.path, { waitUntil: 'networkidle' });
 
@@ -687,9 +694,7 @@ test.describe('WCAG 1.3.1 - Heading Hierarchy', () => {
         }
       }
 
-      if (skips.length > 0) {
-        console.warn(`Heading skips on ${page.name}:`, skips);
-      }
+      expect(skips, `${page.name} should not skip heading levels`).toHaveLength(0);
     });
   }
 });

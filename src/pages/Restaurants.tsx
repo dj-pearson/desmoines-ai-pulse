@@ -45,6 +45,7 @@ import { useToast } from "@/hooks/use-toast";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
+import { useAnnounce } from "@/hooks/use-announce";
 import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -111,6 +112,7 @@ export default function Restaurants() {
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
+  const { announce, announcement, regionProps } = useAnnounce();
 
   // Debounced search
   useEffect(() => {
@@ -121,6 +123,15 @@ export default function Restaurants() {
     }, 300);
     return () => clearTimeout(timer);
   }, [searchInput, filters.search]);
+
+  // Announce result count to screen readers
+  useEffect(() => {
+    if (!isLoading && restaurants) {
+      const count = restaurants.length;
+      const context = filters.search ? ` matching "${filters.search}"` : '';
+      announce(`Found ${count} restaurant${count !== 1 ? 's' : ''}${context}`);
+    }
+  }, [restaurants?.length, isLoading, filters.search, announce]);
 
   const handleCuisineQuickFilter = useCallback((cuisineValue: string) => {
     setActiveCuisineQuick(cuisineValue);
@@ -708,6 +719,9 @@ export default function Restaurants() {
             <div className="my-6">
               <AdBanner placement="featured_spot" />
             </div>
+
+            {/* Screen reader announcement for result count changes */}
+            <div {...regionProps}>{announcement}</div>
 
             {/* Main Restaurant Grid */}
             <section aria-labelledby="all-restaurants-heading">

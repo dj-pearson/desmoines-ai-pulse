@@ -317,7 +317,7 @@ export default function EventPromotionPlanner() {
         {step === 'wizard' && (
           <div className="container mx-auto px-4 py-12 max-w-4xl">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold mb-2">Let's Create Your Promotion Timeline</h1>
+              <h2 className="text-3xl font-bold mb-2">Let's Create Your Promotion Timeline</h2>
               <p className="text-gray-600">Answer a few quick questions about your event</p>
             </div>
             <Card className="p-6">
@@ -333,7 +333,7 @@ export default function EventPromotionPlanner() {
             <div className="mb-8">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
                 <div>
-                  <h1 className="text-3xl font-bold mb-2">Your Event Promotion Timeline</h1>
+                  <h2 className="text-3xl font-bold mb-2">Your Event Promotion Timeline</h2>
                   <p className="text-gray-600">
                     {timeline.eventData.eventType.toUpperCase()} event •{' '}
                     {timeline.eventData.expectedAttendance} expected attendees
