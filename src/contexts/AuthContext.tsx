@@ -42,6 +42,47 @@ const adminStatusCache = new Map<string, { isAdmin: boolean; timestamp: number }
 const CACHE_TTL = 5 * 60 * 1000;
 const pendingChecks = new Map<string, Promise<boolean>>();
 
+// Login attempt throttling — max 5 failed attempts per email per 15 minutes
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const MAX_ATTEMPTS_PER_EMAIL = 5;
+const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
+
+function checkLoginThrottle(email: string): { allowed: boolean; retryAfterSec?: number } {
+  const key = email.toLowerCase();
+  const entry = loginAttempts.get(key);
+  if (!entry) return { allowed: true };
+
+  const elapsed = Date.now() - entry.firstAttempt;
+  if (elapsed > LOGIN_WINDOW_MS) {
+    loginAttempts.delete(key);
+    return { allowed: true };
+  }
+
+  if (entry.count >= MAX_ATTEMPTS_PER_EMAIL) {
+    const retryAfterSec = Math.ceil((LOGIN_WINDOW_MS - elapsed) / 1000);
+    return { allowed: false, retryAfterSec };
+  }
+
+  return { allowed: true };
+}
+
+function recordFailedLogin(email: string) {
+  const key = email.toLowerCase();
+  const entry = loginAttempts.get(key);
+  if (!entry || Date.now() - entry.firstAttempt > LOGIN_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstAttempt: Date.now() });
+  } else {
+    entry.count++;
+    if (entry.count >= MAX_ATTEMPTS_PER_EMAIL) {
+      log.warn('login', 'Login throttle triggered', { email: key, attempts: entry.count });
+    }
+  }
+}
+
+function resetLoginAttempts(email: string) {
+  loginAttempts.delete(email.toLowerCase());
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
@@ -236,13 +277,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [checkIsAdmin, handleAuthChange]);
 
-  // Login with email/password
+  // Login with email/password (with attempt throttling)
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string; requiresMFA?: boolean; factorId?: string }> => {
     try {
+      // Check throttle before attempting
+      const throttle = checkLoginThrottle(email);
+      if (!throttle.allowed) {
+        const minutes = Math.ceil((throttle.retryAfterSec || 60) / 60);
+        log.warn('login', 'Login throttled', { email, retryAfterSec: throttle.retryAfterSec });
+        return { success: false, error: `Too many login attempts. Please try again in ${minutes} minute${minutes === 1 ? '' : 's'}.` };
+      }
+
       log.info('login', 'Attempting login', { email });
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
       if (error) {
+        recordFailedLogin(email);
         log.error('login', 'Login error', { message: error.message });
         return { success: false, error: error.message };
       }
@@ -275,6 +325,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
 
+      resetLoginAttempts(email);
       log.info('login', 'Login successful');
       return { success: !!data.session };
     } catch (error: unknown) {

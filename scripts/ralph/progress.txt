@@ -69,3 +69,24 @@ Started: 2026-02-28T03:00:00Z
   - FAQSection already embeds FAQSchema via showSchema prop — no need to import FAQSchema separately
   - Sonner position="top-center" avoids mobile BottomNav overlap
 ---
+
+## 2026-03-05 — Ralph Loop 11: US-096, US-101, US-103, US-105, US-108, US-114, US-117, US-118, US-119
+- US-096: Login attempt throttling — in-memory Map tracking failed attempts per email (max 5 per 15min), integrated into AuthContext login flow with reset on success
+- US-101: Optimistic updates for useFavorites — added onMutate/onError/onSettled to both add/remove mutations with cache snapshot rollback
+- US-103: Replace 'any' types in useAnalytics (5 instances), useAIConfiguration (3), useAdminCampaigns (1) with proper interfaces
+- US-105: Verified already complete — StickyMobileCTA exists on all 3 detail pages
+- US-108: Featured events section on EventsPage — filters is_featured events, shows up to 3 with Star icon, only when no filters active
+- US-114: Created LastUpdatedBadge component with relative time + verification checkmark for recent updates; added to EventDetails, RestaurantDetails, AttractionDetails
+- US-117: Verified already complete — EmptyState with contextual icons/messages on Attractions page
+- US-118: Added group-focus-within:translate-y-0 to RestaurantCard CTA strip for keyboard accessibility
+- US-119: New Restaurant badge — SocialProofBadge type="new" shown for restaurants created within 14 days, hidden when Featured takes priority
+- **Build**: npx vite build passes (59s, no errors)
+- Files changed: src/contexts/AuthContext.tsx, src/hooks/useFavorites.ts, src/hooks/useAnalytics.ts, src/hooks/useAIConfiguration.ts, src/hooks/useAdminCampaigns.ts, src/components/RestaurantCard.tsx, src/components/LastUpdatedBadge.tsx (new), src/pages/EventDetails.tsx, src/pages/RestaurantDetails.tsx, src/pages/AttractionDetails.tsx, src/pages/EventsPage.tsx, prd.json
+- **Progress**: 93/140 stories complete (66%), 47 remaining
+- **Learnings for future iterations:**
+  - SocialProofBadge supports type="new" — reuse for any "new" badge instead of custom Badge
+  - RestaurantCard props interface needs created_at added when using time-based badges
+  - LastUpdatedBadge is a reusable component for any detail page showing freshness
+  - group-focus-within: is the keyboard equivalent of group-hover: for nested focusable elements
+  - Login throttling uses in-memory Map (resets on page reload) — suitable for client-side rate limiting
+---

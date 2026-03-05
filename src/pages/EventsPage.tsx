@@ -401,6 +401,10 @@ export default function EventsPage() {
   const totalCount = eventsData?.totalCount || 0;
   const hasMore = totalCount > page * EVENTS_PER_PAGE;
 
+  const featuredEvents = useMemo(() => {
+    return (rawEvents || []).filter((e: any) => e.is_featured).slice(0, 3);
+  }, [rawEvents]);
+
   useEffect(() => { setPage(1); }, [debouncedSearchQuery, selectedCategory, dateFilter, location, priceRange]);
 
   // Announce result count to screen readers after search/filter changes
@@ -937,6 +941,35 @@ export default function EventsPage() {
               onChange={setSortBy}
             />
           </div>
+
+          {/* Featured Events Section */}
+          {!isLoading && activeFiltersCount === 0 && featuredEvents.length > 0 && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
+                  Featured Events
+                </h2>
+                <Link
+                  to="/events?featured=true"
+                  className="text-sm text-primary hover:underline font-medium"
+                >
+                  View All Featured
+                </Link>
+              </div>
+              <div className={`grid gap-5 ${isMobile ? 'grid-cols-1' : 'sm:grid-cols-2 lg:grid-cols-3'}`}>
+                {featuredEvents.map((event: any) => (
+                  <SocialEventCard
+                    key={`featured-${event.id}`}
+                    event={event}
+                    socialData={batchSocialData?.[event.id]}
+                    featured
+                    onViewDetails={handleViewEventDetails}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Event Grid / Map */}
           {isLoading && <CardsGridSkeleton count={6} variant="event" label="Loading events..." />}

@@ -1601,7 +1601,7 @@
         "Typecheck passes"
       ],
       "priority": 96,
-      "passes": false,
+      "passes": true,
       "notes": "SECURITY AUDIT: No login attempt throttling exists. Supabase Auth handles authentication but edge functions don't add any additional rate limiting on auth endpoints. An attacker can make unlimited login attempts against any email address. This is a basic security requirement that should complement Supabase's built-in protections."
     },
     {
@@ -1680,7 +1680,7 @@
         "Typecheck passes"
       ],
       "priority": 101,
-      "passes": false,
+      "passes": true,
       "notes": "DATA LAYER AUDIT: No mutation in the codebase uses TanStack Query's optimistic update pattern (onMutate + rollback). Users currently wait for the full server round-trip before seeing UI changes — toggling a favorite takes 300-800ms of visible delay. Optimistic updates make this instant with automatic rollback on failure."
     },
     {
@@ -1714,7 +1714,7 @@
         "Typecheck passes"
       ],
       "priority": 103,
-      "passes": false,
+      "passes": true,
       "notes": "DATA LAYER AUDIT: ~110 instances of 'any' type across 130 hooks (85% of hooks use 'any' somewhere). The 5 worst offenders are useAdvancedAnalytics (12+), useAnalytics (10+), useAIConfiguration (3+), useAdminSecurity (mixed), and useAdminCampaigns. These are analytics and admin hooks that handle complex data — proper types prevent silent data corruption bugs."
     },
     {
@@ -1748,7 +1748,7 @@
         "Typecheck passes"
       ],
       "priority": 105,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: On mobile, important CTAs (Get Tickets, Call, Directions) scroll off-screen as users read detail content. Mobile users are the majority of traffic. A sticky CTA bar keeps conversion paths visible at all times, directly improving engagement and conversion rates. Pattern is standard on Yelp, Google Maps, Eventbrite, and similar platforms."
     },
     {
@@ -1800,7 +1800,7 @@
         "Typecheck passes"
       ],
       "priority": 108,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Restaurants page has an excellent dedicated featured section that promotes premium listings. Events page lacks this, despite events being the primary content type. Featured events drive venue/promoter partnerships and give users a curated starting point. The inconsistency between pages creates a fragmented UX."
     },
     {
@@ -1896,7 +1896,7 @@
         "Typecheck passes"
       ],
       "priority": 114,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Users have no way to know if listing information is current. Outdated hours, prices, or closed venues erode trust. A last-updated timestamp with verification badge increases user confidence and reduces support inquiries. Google also uses freshness signals in ranking, so this benefits SEO."
     },
     {
@@ -1944,7 +1944,7 @@
         "Typecheck passes"
       ],
       "priority": 117,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Events page has an excellent contextual empty state with recovery actions. Attractions page only shows plain text with no actions when filters return no results. Good empty states reduce user frustration, decrease bounce rate, and guide users toward successful content discovery. This is a quick win for UX consistency."
     },
     {
@@ -1960,7 +1960,7 @@
         "Typecheck passes"
       ],
       "priority": 118,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: RestaurantCard has a hover CTA strip that slides up from the bottom on mouse hover. This is invisible to keyboard users, making the card actions inaccessible without a mouse. This is a WCAG 2.1 Level AA compliance issue (Success Criterion 2.1.1 Keyboard). The fix is simple CSS but critical for accessibility."
     },
     {
@@ -1976,7 +1976,7 @@
         "Typecheck passes"
       ],
       "priority": 119,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: EventCard shows 'New' and 'Trending' badges for social proof, but RestaurantCard has no 'New' indicator. Users love discovering what's new in their city. A 'New' badge creates urgency and excitement around recently added restaurants, driving clicks and engagement. This is a freshness signal that also benefits SEO."
     },
     {

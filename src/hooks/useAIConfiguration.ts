@@ -8,7 +8,7 @@ const log = createLogger('useAIConfiguration');
 export interface AIConfigSetting {
   id: string;
   setting_key: string;
-  setting_value: any;
+  setting_value: Record<string, unknown> | string | number | boolean | null;
   description: string | null;
   updated_at: string;
 }
@@ -35,7 +35,7 @@ export function useAIConfiguration() {
       value,
     }: {
       key: string;
-      value: any;
+      value: AIConfigSetting['setting_value'];
     }) => {
       const { data: { user } } = await supabase.auth.getUser();
       
@@ -60,7 +60,7 @@ export function useAIConfiguration() {
   });
 
   // Helper function to get a specific setting value
-  const getSetting = (key: string, defaultValue?: any) => {
+  const getSetting = (key: string, defaultValue?: AIConfigSetting['setting_value']) => {
     const setting = settings?.find((s) => s.setting_key === key);
     return setting?.setting_value ?? defaultValue;
   };

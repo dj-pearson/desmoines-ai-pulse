@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles } from "lucide-react";
 import { memo, useState, useMemo } from "react";
+import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 
@@ -24,6 +25,7 @@ interface RestaurantCardProps {
     phone?: string;
     website?: string;
     popularity_score?: number;
+    created_at?: string;
   };
   variant?: "default" | "compact" | "featured";
 }
@@ -89,6 +91,11 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
   const showImage = restaurant.image_url && !imageError;
   const isFeatured = variant === "featured" || restaurant.is_featured;
   const openStatus = useMemo(() => getRestaurantOpenStatus(restaurant.opening), [restaurant.opening]);
+  const isNew = useMemo(() => {
+    if (!restaurant.created_at) return false;
+    const daysSince = (Date.now() - new Date(restaurant.created_at).getTime()) / (1000 * 60 * 60 * 24);
+    return daysSince <= 14;
+  }, [restaurant.created_at]);
 
   return (
     <Link
@@ -132,6 +139,9 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
                 <Sparkles className="h-3 w-3 mr-1" />
                 Featured
               </Badge>
+            )}
+            {!restaurant.is_sponsored && !isFeatured && isNew && (
+              <SocialProofBadge type="new" size="sm" />
             )}
             {openStatus.isOpen && (
               <Badge className={`${openStatus.closingSoon ? 'bg-amber-500' : 'bg-emerald-500'} text-white border-0 shadow-md text-xs font-semibold px-2.5 py-0.5`}>
@@ -212,7 +222,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
         </div>
 
         {/* Hover CTA strip */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] text-white text-center py-2 text-sm font-medium translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] text-white text-center py-2 text-sm font-medium translate-y-full group-hover:translate-y-0 group-focus-within:translate-y-0 transition-transform duration-300">
           View Restaurant Details
         </div>
       </article>

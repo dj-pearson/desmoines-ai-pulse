@@ -40,6 +40,7 @@ import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
+import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 
 export default function RestaurantDetails() {
@@ -803,6 +804,8 @@ export default function RestaurantDetails() {
             </Link>
           </div>
         </div>
+
+        <LastUpdatedBadge updatedAt={restaurant.updated_at} className="mt-6 justify-center" />
       </div>
       <Footer />
       <BackToTop />

@@ -274,7 +274,7 @@ export function useAdminCampaigns() {
     notes?: string
   ): Promise<boolean> => {
     try {
-      const updates: any = { status };
+      const updates: Record<string, string> = { status };
 
       if (notes) {
         updates.approval_notes = notes;

@@ -31,7 +31,9 @@ export function useFavorites() {
     enabled: !!user,
   });
 
-  // Add favorite
+  const favoritesQueryKey = ["favorites", user?.id];
+
+  // Add favorite with optimistic update
   const addFavoriteMutation = useMutation({
     mutationFn: async (eventId: string) => {
       if (!user) throw new Error("Must be logged in");
@@ -47,28 +49,35 @@ export function useFavorites() {
       if (error) throw error;
       return eventId;
     },
-    onSuccess: (eventId) => {
-      queryClient.invalidateQueries({ queryKey: ["favorites", user?.id] });
-
-      // Award XP for favoriting
-      awardPoints("favorite_event", 10, "event", eventId);
-
-      toast({
-        title: "Added to Favorites ❤️",
-        description: "Event saved to your favorites • +10 XP earned!",
-      });
+    onMutate: async (eventId: string) => {
+      await queryClient.cancelQueries({ queryKey: favoritesQueryKey });
+      const previous = queryClient.getQueryData<string[]>(favoritesQueryKey);
+      queryClient.setQueryData<string[]>(favoritesQueryKey, old => [...(old || []), eventId]);
+      return { previous };
     },
-    onError: (error) => {
+    onError: (_error, _eventId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(favoritesQueryKey, context.previous);
+      }
       toast({
         title: "Error",
         description: "Failed to add to favorites",
         variant: "destructive",
       });
-      console.error("Add favorite error:", error);
+    },
+    onSuccess: (eventId) => {
+      awardPoints("favorite_event", 10, "event", eventId);
+      toast({
+        title: "Added to Favorites",
+        description: "Event saved to your favorites",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: favoritesQueryKey });
     },
   });
 
-  // Remove favorite
+  // Remove favorite with optimistic update
   const removeFavoriteMutation = useMutation({
     mutationFn: async (eventId: string) => {
       if (!user) throw new Error("Must be logged in");
@@ -83,20 +92,30 @@ export function useFavorites() {
       if (error) throw error;
       return eventId;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["favorites", user?.id] });
-      toast({
-        title: "Removed from Favorites",
-        description: "Event removed from your favorites",
-      });
+    onMutate: async (eventId: string) => {
+      await queryClient.cancelQueries({ queryKey: favoritesQueryKey });
+      const previous = queryClient.getQueryData<string[]>(favoritesQueryKey);
+      queryClient.setQueryData<string[]>(favoritesQueryKey, old => (old || []).filter(id => id !== eventId));
+      return { previous };
     },
-    onError: (error) => {
+    onError: (_error, _eventId, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(favoritesQueryKey, context.previous);
+      }
       toast({
         title: "Error",
         description: "Failed to remove from favorites",
         variant: "destructive",
       });
-      console.error("Remove favorite error:", error);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Removed from Favorites",
+        description: "Event removed from your favorites",
+      });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: favoritesQueryKey });
     },
   });
 
