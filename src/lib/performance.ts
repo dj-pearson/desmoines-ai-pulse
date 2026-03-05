@@ -105,66 +105,27 @@ export const loadResourceAsync = (src: string, type: 'script' | 'style'): Promis
   });
 };
 
-// Service Worker registration - Production only
+// Service Worker cleanup - unregister all SWs and clear caches to prevent
+// stale cached HTML from referencing old hashed asset filenames.
+// The SW was causing "Unexpected token '<'" errors after deploys because
+// cacheFirst strategy served old index.html with outdated asset hashes.
 export const registerServiceWorker = async () => {
-  // Only register in production AND when served from HTTPS (or localhost)
-  const isProd = import.meta.env.PROD && import.meta.env.MODE === 'production';
-  const isSecureContext = location.protocol === 'https:' || location.hostname === 'localhost';
-
   if (!('serviceWorker' in navigator)) {
-    logger.debug('registerServiceWorker', 'Service Worker not supported');
-    return;
-  }
-
-  // ALWAYS unregister and clear caches if not production or not secure
-  if (!isProd || !isSecureContext) {
-    try {
-      // Unregister ALL service workers
-      const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map((r) => r.unregister()));
-
-      // Clear ALL caches that might interfere
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.all(keys.map((k) => caches.delete(k)));
-      }
-
-      logger.debug('registerServiceWorker', 'Service Workers disabled for development/insecure context');
-    } catch (err) {
-      logger.warn('registerServiceWorker', 'Failed to clear service workers/caches', { error: String(err) });
-    }
     return;
   }
 
   try {
-    // Check if service worker script exists before registering
-    const response = await fetch('/sw.js', { method: 'HEAD' });
-    if (!response.ok) {
-      logger.warn('registerServiceWorker', 'Service Worker script not found, skipping registration');
-      return;
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map((r) => r.unregister()));
+
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
     }
 
-    const registration = await navigator.serviceWorker.register('/sw.js', {
-      scope: '/'
-    });
-    logger.debug('registerServiceWorker', 'Service Worker registered successfully');
-
-    // Handle updates
-    registration.addEventListener('updatefound', () => {
-      const newWorker = registration.installing;
-      if (newWorker) {
-        newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            logger.info('registerServiceWorker', 'New content available, please refresh.');
-          }
-        });
-      }
-    });
-    return registration;
-  } catch (error) {
-    logger.error('registerServiceWorker', 'Service Worker registration failed', { error: String(error) });
-    // Don't let SW registration failures break the app
-    return null;
+    logger.debug('registerServiceWorker', 'All service workers unregistered and caches cleared');
+  } catch (err) {
+    logger.warn('registerServiceWorker', 'Failed to clear service workers/caches', { error: String(err) });
   }
 };
 
