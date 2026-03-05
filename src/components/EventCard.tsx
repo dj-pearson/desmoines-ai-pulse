@@ -89,7 +89,7 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   };
 
   return (
-    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
+    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
       {/* Image with overlay badges */}
       <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (

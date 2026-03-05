@@ -34,7 +34,7 @@ interface SocialEventCardProps {
   featured?: boolean;
 }
 
-export function SocialEventCard({
+function SocialEventCardComponent({
   event,
   onViewDetails,
   onViewSocial,
@@ -89,7 +89,7 @@ export function SocialEventCard({
         featured ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
-      <Link to={eventUrl} className="block" aria-label={`View details for ${event.title}`}>
+      <Link to={eventUrl} className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-xl" aria-label={`View details for ${event.title}`}>
         <CardContent className="p-0">
           {/* Image Section with Overlay */}
           <div className={`relative overflow-hidden ${featured ? 'h-64 md:h-80' : 'h-52'}`}>
@@ -255,3 +255,5 @@ export function SocialEventCard({
     </Card>
   );
 }
+
+export const SocialEventCard = React.memo(SocialEventCardComponent);

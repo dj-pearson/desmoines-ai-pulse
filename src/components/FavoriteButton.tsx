@@ -3,6 +3,7 @@ import { Heart } from "lucide-react";
 import { useFavorites } from "@/hooks/useFavorites";
 import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
+import { toast } from "sonner";
 
 interface FavoriteButtonProps {
   eventId: string;
@@ -27,9 +28,11 @@ export function FavoriteButton({
       variant={variant}
       size={size}
       onClick={(e) => {
-        e.stopPropagation(); // Prevent triggering parent click events
+        e.stopPropagation();
         hapticTap();
+        const wasFavorited = favorited;
         toggleFavorite(eventId);
+        toast.success(wasFavorited ? 'Removed from favorites' : 'Added to favorites', { id: `fav-${eventId}` });
       }}
       disabled={isToggling}
       className={cn(className)}

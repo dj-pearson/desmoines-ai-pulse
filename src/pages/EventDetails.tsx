@@ -44,6 +44,7 @@ import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
+import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { EventLocationMap } from "@/components/EventLocationMap";
 
@@ -580,6 +581,8 @@ export default function EventDetails() {
               excludeId={event.id}
             />
           </div>
+
+          <LastUpdatedBadge updatedAt={event.updated_at} className="mt-6 justify-center" />
         </div>
 
         <Footer />

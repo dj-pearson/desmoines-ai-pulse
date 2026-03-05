@@ -38,6 +38,7 @@ import { useState } from "react";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
+import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 
 const createSlug = (name: string): string => {
@@ -680,6 +681,8 @@ export default function AttractionDetails() {
             </Link>
           </div>
         </div>
+
+        <LastUpdatedBadge updatedAt={attraction.updated_at} className="mt-6 justify-center" />
       </div>
       <Footer />
       <BackToTop />

@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Link, useNavigate } from "react-router-dom";
 import { format, addDays, differenceInDays } from "date-fns";
 import { EmailCaptureModal } from "@/components/EmailCaptureModal";
+import { FAQSection } from "@/components/FAQSection";
 import {
   Calendar,
   MapPin,
@@ -748,6 +749,40 @@ export default function TripPlanner() {
             </TabsContent>
           </Tabs>
         </div>
+
+        {/* FAQ Section */}
+        <section className="py-16 bg-muted/30" aria-labelledby="trip-faq-heading">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <FAQSection
+              title="AI Trip Planner - Frequently Asked Questions"
+              description="Common questions about planning your Des Moines trip with our AI assistant."
+              faqs={[
+                {
+                  question: "How does the AI Trip Planner work?",
+                  answer: "Our AI Trip Planner uses advanced AI to create personalized Des Moines itineraries based on your preferences, travel dates, group size, and interests. Simply tell us what you enjoy and we'll suggest the best restaurants, events, attractions, and activities for your visit."
+                },
+                {
+                  question: "Is the AI Trip Planner free to use?",
+                  answer: "Yes! The AI Trip Planner is free for all users. You can generate unlimited itineraries, save your favorites, and share them with travel companions. Premium subscribers get additional features like detailed time-block scheduling and restaurant reservation suggestions."
+                },
+                {
+                  question: "What is the best time to visit Des Moines?",
+                  answer: "Des Moines is great year-round! Summer (June-August) offers the Iowa State Fair, outdoor festivals, and farmers markets. Fall (September-October) features beautiful foliage and harvest festivals. Spring brings the Drake Relays and blooming botanical gardens. Winter has holiday markets, indoor attractions, and cozy dining experiences."
+                },
+                {
+                  question: "How many days should I plan for a Des Moines trip?",
+                  answer: "A 2-3 day trip covers the highlights: downtown dining, Pappajohn Sculpture Park, Science Center of Iowa, and the East Village. For a deeper experience including day trips to nearby attractions like Adventureland or the Bridges of Madison County, plan 4-5 days."
+                },
+                {
+                  question: "Can I customize my AI-generated itinerary?",
+                  answer: "Absolutely! After the AI generates your itinerary, you can swap activities, adjust timing, add your own stops, and save multiple versions. The itinerary is fully editable and can be exported to your calendar or printed as a checklist."
+                }
+              ]}
+              showSchema={true}
+              className="border-0 shadow-lg"
+            />
+          </div>
+        </section>
 
         <Footer />
         <EmailCaptureModal

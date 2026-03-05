@@ -15,7 +15,7 @@ interface TrackingEvent {
   contentType: 'event' | 'restaurant' | 'attraction' | 'playground' | 'page' | 'search_result';
   contentId: string;
   searchQuery?: string;
-  filters?: any;
+  filters?: Record<string, string | undefined>;
   duration?: number; // Time spent viewing content
   elementType?: 'card' | 'button' | 'link' | 'search_input' | 'filter_dropdown' | 'navigation' | 'image';
   elementId?: string;
@@ -40,7 +40,7 @@ export function useAnalytics() {
   });
   
   // Queue for batching analytics events
-  const eventQueue = useRef<any[]>([]);
+  const eventQueue = useRef<Record<string, unknown>[]>([]);
   const flushTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -160,7 +160,7 @@ export function useAnalytics() {
 
       // Batch content metrics to Edge Function (reduces overhead)
       try {
-        const isUuid = (v: any) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
+        const isUuid = (v: unknown) => typeof v === 'string' && /[0-9a-fA-F-]{36}/.test(v);
         const allowedTypes = new Set(['view','search','click','share','bookmark','hover','scroll','filter']);
         const allowedContent = new Set(['event','restaurant','attraction','playground','page','search_result']);
 
@@ -204,7 +204,7 @@ export function useAnalytics() {
   }, [sessionId, userId]);
 
   // Enhanced search tracking with user journey data
-  const trackSearch = async (query: string, filters: any, resultsCount: number, clickedResultId?: string) => {
+  const trackSearch = async (query: string, filters: Record<string, string | undefined>, resultsCount: number, clickedResultId?: string) => {
     try {
       // Track in existing search analytics table
       await supabase.from('search_analytics').insert({
@@ -290,7 +290,7 @@ export function useAnalytics() {
       // Always track as regular event too
       await trackEvent({
         eventType: 'click',
-        contentType: contentType as any,
+        contentType: contentType as TrackingEvent['contentType'],
         contentId: contentId,
         elementType: 'button',
         value: conversionType

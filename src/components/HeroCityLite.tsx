@@ -202,7 +202,7 @@ function Scene() {
     );
 }
 
-export default function HeroCityLite() {
+function HeroCityLiteComponent() {
     const [isMounted, setIsMounted] = useState(false);
     const [shouldRender, setShouldRender] = useState(false);
 
@@ -251,3 +251,6 @@ export default function HeroCityLite() {
         </div>
     );
 }
+
+const HeroCityLite = React.memo(HeroCityLiteComponent);
+export default HeroCityLite;
