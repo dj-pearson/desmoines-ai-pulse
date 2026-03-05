@@ -49,8 +49,11 @@ The Description is NOT indexed for search — it exists for conversion, not rank
 ## URLs
 
 - **Privacy Policy URL:** https://desmoinesinsider.com/privacy-policy
+- **Terms of Use (EULA):** https://desmoinesinsider.com/terms
 - **Support URL:** https://desmoinesinsider.com/contact
 - **Marketing URL:** https://desmoinesinsider.com
+
+> **Guideline 3.1.2(c):** For subscription apps, include the Terms of Use link in the App Description or EULA field.
 
 ---
 

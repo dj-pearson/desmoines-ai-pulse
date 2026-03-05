@@ -102,6 +102,12 @@ struct SubscriptionView: View {
             }
             .toastOverlay(message: $toast)
         }
+        .task {
+            // Reload products when view appears (helps if initial load failed or IAP became available)
+            if storeKit.products.isEmpty && !storeKit.isLoading {
+                await storeKit.loadProducts()
+            }
+        }
     }
 
     // MARK: - Header
@@ -240,16 +246,33 @@ struct SubscriptionView: View {
         .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    // MARK: - Legal Text
+    // MARK: - Legal Text (Guideline 3.1.2(c): subscription apps must include links to Privacy Policy and Terms of Use)
 
     private var legalText: some View {
-        Text("Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period. You can manage or cancel your subscription in your Apple ID settings. Payment will be charged to your Apple ID account at confirmation of purchase.")
-            .font(.caption2)
-            .foregroundStyle(.tertiary)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .accessibilityLabel("Auto-renewal legal terms")
+        VStack(spacing: 12) {
+            Text("Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period. You can manage or cancel your subscription in your Apple ID settings. Payment will be charged to your Apple ID account at confirmation of purchase.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 16) {
+                Link(destination: Config.siteURL.appendingPathComponent("privacy-policy")) {
+                    Text("Privacy Policy")
+                        .font(.caption2)
+                }
+                Text("•")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+                Link(destination: Config.siteURL.appendingPathComponent("terms")) {
+                    Text("Terms of Use")
+                        .font(.caption2)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Subscription terms. Links to Privacy Policy and Terms of Use")
     }
 
     // MARK: - Helpers
