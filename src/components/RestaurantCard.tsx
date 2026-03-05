@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles } from "lucide-react";
-import { useState, useMemo } from "react";
+import { memo, useState, useMemo } from "react";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 
@@ -83,7 +83,7 @@ function StarRating({ rating }: { rating: number }) {
   return <div className="flex items-center gap-0.5">{stars}</div>;
 }
 
-export default function RestaurantCard({ restaurant, variant = "default" }: RestaurantCardProps) {
+function RestaurantCardComponent({ restaurant, variant = "default" }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
   const gradient = getGradient(restaurant.cuisine);
   const showImage = restaurant.image_url && !imageError;
@@ -219,3 +219,6 @@ export default function RestaurantCard({ restaurant, variant = "default" }: Rest
     </Link>
   );
 }
+
+const RestaurantCard = memo(RestaurantCardComponent);
+export default RestaurantCard;

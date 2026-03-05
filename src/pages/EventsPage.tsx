@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, lazy, Suspense, useRef, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -127,6 +127,11 @@ const CATEGORY_ICONS: Record<string, any> = {
 export default function EventsPage() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+
+  const handleViewEventDetails = useCallback((event: { id: string; title: string; date?: string }) => {
+    navigate(`/events/${createEventSlugWithCentralTime(event.title, event as any)}`);
+  }, [navigate]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -948,9 +953,7 @@ export default function EventsPage() {
                   event={event}
                   socialData={batchSocialData?.[event.id]}
                   featured={index === 0 && !searchQuery && selectedCategory === "all" && events.length > 6}
-                  onViewDetails={() => {
-                    navigate(`/events/${createEventSlugWithCentralTime(event.title, event)}`);
-                  }}
+                  onViewDetails={handleViewEventDetails}
                 />
               ))}
             </div>

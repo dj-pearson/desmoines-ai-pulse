@@ -17,6 +17,7 @@ import { useSubmitEvent, useUpdateEvent, type UserSubmittedEvent } from "@/hooks
 import { useMediaUpload } from "@/hooks/useMediaUpload";
 import { toast } from "sonner";
 import { createLogger } from '@/lib/logger';
+import { FormErrorSummary, useFormErrors } from "./ui/form-error-summary";
 
 const log = createLogger('EventSubmissionForm');
 
@@ -68,7 +69,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string>(editEvent?.image_url || '');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { register, handleSubmit, formState: { errors }, setValue, watch, reset } = useForm({
+  const { register, handleSubmit, formState: { errors, isSubmitted }, setValue, watch, reset, setFocus } = useForm({
     defaultValues: editEvent ? {
       title: editEvent.title,
       description: editEvent.description || '',
@@ -88,6 +89,17 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
   const submitEvent = useSubmitEvent();
   const updateEvent = useUpdateEvent();
   const { upload, isUploading, progress, error: uploadError } = useMediaUpload();
+
+  const formErrors = useFormErrors(errors as Record<string, { message?: string } | undefined>);
+
+  const focusField = useCallback((field: string) => {
+    try {
+      setFocus(field as any);
+    } catch {
+      const el = document.getElementById(field);
+      el?.focus();
+    }
+  }, [setFocus]);
 
   const addTag = (tag: string) => {
     if (tag && !selectedTags.includes(tag)) {
@@ -193,138 +205,153 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
         </AlertDescription>
       </Alert>
 
+      {isSubmitted && formErrors.length > 0 && (
+        <FormErrorSummary errors={formErrors} onFieldClick={focusField} />
+      )}
+
       {/* Basic Information */}
       <Card>
         <CardContent className="pt-6">
-          <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <Label htmlFor="title">Event Title *</Label>
-              <Input
-                id="title"
-                {...register("title", { required: "Event title is required" })}
-                placeholder="e.g., Summer Jazz in the Park"
-              />
-              {errors.title && (
-                <p className="text-sm text-red-500 mt-1">{errors.title.message as string}</p>
-              )}
-            </div>
+          <fieldset className="border-0 p-0 m-0">
+            <legend className="text-lg font-semibold mb-4">Basic Information</legend>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Label htmlFor="title">Event Title *</Label>
+                <Input
+                  id="title"
+                  {...register("title", { required: "Event title is required" })}
+                  placeholder="e.g., Summer Jazz in the Park"
+                  aria-invalid={!!errors.title}
+                  aria-describedby={errors.title ? "title-error" : undefined}
+                />
+                {errors.title && (
+                  <p id="title-error" className="text-sm text-red-500 mt-1" role="alert">{errors.title.message as string}</p>
+                )}
+              </div>
 
-            <div className="md:col-span-2">
-              <Label htmlFor="description">Description *</Label>
-              <Textarea
-                id="description"
-                {...register("description", { required: "Please describe your event" })}
-                placeholder="Tell people what your event is about, what to expect, who should attend..."
-                rows={5}
-              />
-              {errors.description && (
-                <p className="text-sm text-red-500 mt-1">{errors.description.message as string}</p>
-              )}
-            </div>
+              <div className="md:col-span-2">
+                <Label htmlFor="description">Description *</Label>
+                <Textarea
+                  id="description"
+                  {...register("description", { required: "Please describe your event" })}
+                  placeholder="Tell people what your event is about, what to expect, who should attend..."
+                  rows={5}
+                  aria-invalid={!!errors.description}
+                  aria-describedby={errors.description ? "description-error" : undefined}
+                />
+                {errors.description && (
+                  <p id="description-error" className="text-sm text-red-500 mt-1" role="alert">{errors.description.message as string}</p>
+                )}
+              </div>
 
-            <div>
-              <Label htmlFor="category">Category *</Label>
-              <Select defaultValue={editEvent?.category || undefined} onValueChange={(value) => setValue("category", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {EVENT_CATEGORIES.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.category && (
-                <p className="text-sm text-red-500 mt-1">Please select a category</p>
-              )}
-            </div>
+              <div>
+                <Label htmlFor="category">Category *</Label>
+                <Select defaultValue={editEvent?.category || undefined} onValueChange={(value) => setValue("category", value)}>
+                  <SelectTrigger aria-invalid={!!errors.category} aria-describedby={errors.category ? "category-error" : undefined}>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {EVENT_CATEGORIES.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.category && (
+                  <p id="category-error" className="text-sm text-red-500 mt-1" role="alert">Please select a category</p>
+                )}
+              </div>
 
-            <div>
-              <Label>Event Date *</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !selectedDate && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={setSelectedDate}
-                    disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+              <div>
+                <Label>Event Date *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !selectedDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? format(selectedDate, "PPP") : "Pick a date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={setSelectedDate}
+                      disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-            <div>
-              <Label htmlFor="start_time">Start Time</Label>
-              <Input
-                id="start_time"
-                type="time"
-                {...register("start_time")}
-              />
-            </div>
+              <div>
+                <Label htmlFor="start_time">Start Time</Label>
+                <Input
+                  id="start_time"
+                  type="time"
+                  {...register("start_time")}
+                />
+              </div>
 
-            <div>
-              <Label htmlFor="end_time">End Time</Label>
-              <Input
-                id="end_time"
-                type="time"
-                {...register("end_time")}
-              />
+              <div>
+                <Label htmlFor="end_time">End Time</Label>
+                <Input
+                  id="end_time"
+                  type="time"
+                  {...register("end_time")}
+                />
+              </div>
             </div>
-          </div>
+          </fieldset>
         </CardContent>
       </Card>
 
       {/* Location Information */}
       <Card>
         <CardContent className="pt-6">
-          <h3 className="text-lg font-semibold mb-4">Location Information</h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label htmlFor="venue">Venue Name *</Label>
-              <Input
-                id="venue"
-                {...register("venue", { required: "Venue name is required" })}
-                placeholder="e.g., Downtown Des Moines Park"
-              />
-              {errors.venue && (
-                <p className="text-sm text-red-500 mt-1">{errors.venue.message as string}</p>
-              )}
-            </div>
+          <fieldset className="border-0 p-0 m-0">
+            <legend className="text-lg font-semibold mb-4">Location Information</legend>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="venue">Venue Name *</Label>
+                <Input
+                  id="venue"
+                  {...register("venue", { required: "Venue name is required" })}
+                  placeholder="e.g., Downtown Des Moines Park"
+                  aria-invalid={!!errors.venue}
+                  aria-describedby={errors.venue ? "venue-error" : undefined}
+                />
+                {errors.venue && (
+                  <p id="venue-error" className="text-sm text-red-500 mt-1" role="alert">{errors.venue.message as string}</p>
+                )}
+              </div>
 
-            <div>
-              <Label htmlFor="location">City/Area</Label>
-              <Input
-                id="location"
-                {...register("location")}
-                placeholder="e.g., Des Moines, West Des Moines"
-              />
-            </div>
+              <div>
+                <Label htmlFor="location">City/Area</Label>
+                <Input
+                  id="location"
+                  {...register("location")}
+                  placeholder="e.g., Des Moines, West Des Moines"
+                />
+              </div>
 
-            <div className="md:col-span-2">
-              <Label htmlFor="address">Full Address</Label>
-              <Input
-                id="address"
-                {...register("address")}
-                placeholder="123 Main St, Des Moines, IA 50309"
-              />
+              <div className="md:col-span-2">
+                <Label htmlFor="address">Full Address</Label>
+                <Input
+                  id="address"
+                  {...register("address")}
+                  placeholder="123 Main St, Des Moines, IA 50309"
+                  autoComplete="street-address"
+                />
+              </div>
             </div>
-          </div>
+          </fieldset>
         </CardContent>
       </Card>
 
@@ -416,54 +443,60 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
       {/* Additional Details */}
       <Card>
         <CardContent className="pt-6">
-          <h3 className="text-lg font-semibold mb-4">Additional Details</h3>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div>
-              <Label htmlFor="price">Price/Cost</Label>
-              <Input
-                id="price"
-                {...register("price")}
-                placeholder="e.g., Free, $10, $5-15"
-              />
-            </div>
+          <fieldset className="border-0 p-0 m-0">
+            <legend className="text-lg font-semibold mb-4">Additional Details</legend>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Label htmlFor="price">Price/Cost</Label>
+                <Input
+                  id="price"
+                  {...register("price")}
+                  placeholder="e.g., Free, $10, $5-15"
+                />
+              </div>
 
-            <div>
-              <Label htmlFor="website_url">Event Website or Ticket Link</Label>
-              <Input
-                id="website_url"
-                type="url"
-                {...register("website_url")}
-                placeholder="https://yourwebsite.com/tickets"
-              />
-            </div>
+              <div>
+                <Label htmlFor="website_url">Event Website or Ticket Link</Label>
+                <Input
+                  id="website_url"
+                  type="url"
+                  {...register("website_url")}
+                  placeholder="https://yourwebsite.com/tickets"
+                  autoComplete="url"
+                />
+              </div>
 
-            <div>
-              <Label htmlFor="contact_email">Contact Email</Label>
-              <Input
-                id="contact_email"
-                type="email"
-                {...register("contact_email")}
-                placeholder="contact@yourevent.com"
-              />
-            </div>
+              <div>
+                <Label htmlFor="contact_email">Contact Email</Label>
+                <Input
+                  id="contact_email"
+                  type="email"
+                  {...register("contact_email")}
+                  placeholder="contact@yourevent.com"
+                  autoComplete="email"
+                />
+              </div>
 
-            <div>
-              <Label htmlFor="contact_phone">Contact Phone</Label>
-              <Input
-                id="contact_phone"
-                type="tel"
-                {...register("contact_phone")}
-                placeholder="(515) 555-0123"
-              />
+              <div>
+                <Label htmlFor="contact_phone">Contact Phone</Label>
+                <Input
+                  id="contact_phone"
+                  type="tel"
+                  {...register("contact_phone")}
+                  placeholder="(515) 555-0123"
+                  autoComplete="tel"
+                />
+              </div>
             </div>
-          </div>
+          </fieldset>
         </CardContent>
       </Card>
 
       {/* Tags */}
       <Card>
         <CardContent className="pt-6">
-          <h3 className="text-lg font-semibold mb-4">Tags</h3>
+          <fieldset className="border-0 p-0 m-0">
+          <legend className="text-lg font-semibold mb-4">Tags</legend>
           <p className="text-sm text-muted-foreground mb-4">
             Add tags to help people find your event
           </p>
@@ -524,6 +557,7 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
               </div>
             </div>
           )}
+          </fieldset>
         </CardContent>
       </Card>
 

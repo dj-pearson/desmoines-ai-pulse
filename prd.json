@@ -1,7 +1,7 @@
 {
   "project": "Des Moines AI Pulse",
   "branchName": "ralph/platform-hardening-v2",
-  "description": "Platform Hardening V2 \u2014 Comprehensive audit-driven improvements across security (Stripe webhook fix, rate limiting persistence, SQL injection prevention), performance (Three.js deferral, AuthContext splitting, TanStack Query standardization, image optimization), UI/UX (empty states, search autocomplete, dark mode, pagination, toast feedback), accessibility (heading hierarchy, aria-live regions, form accessibility, keyboard navigation), SEO (sitemap domain fix, breadcrumb schema, FAQ schema), and code quality (dead hook removal, optimistic updates, type safety).",
+  "description": "Platform Hardening V2 — Comprehensive audit-driven improvements across security (Stripe webhook fix, rate limiting persistence, SQL injection prevention), performance (Three.js deferral, AuthContext splitting, TanStack Query standardization, image optimization), UI/UX (empty states, search autocomplete, dark mode, pagination, toast feedback), accessibility (heading hierarchy, aria-live regions, form accessibility, keyboard navigation), SEO (sitemap domain fix, breadcrumb schema, FAQ schema), and code quality (dead hook removal, optimistic updates, type safety).",
   "userStories": [
     {
       "id": "US-001",
@@ -16,7 +16,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "The project currently only has an event-crawler.yml workflow. This is the single most critical gap for enterprise readiness \u2014 no code quality gates exist in CI."
+      "notes": "The project currently only has an event-crawler.yml workflow. This is the single most critical gap for enterprise readiness — no code quality gates exist in CI."
     },
     {
       "id": "US-002",
@@ -110,7 +110,7 @@
       ],
       "priority": 7,
       "passes": true,
-      "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage \u2014 skip those."
+      "notes": "There are 116 custom hooks. Focus on replacing console.* with logger calls. Some hooks may have no console usage — skip those."
     },
     {
       "id": "US-008",
@@ -137,7 +137,7 @@
       ],
       "priority": 9,
       "passes": true,
-      "notes": "This is the largest batch \u2014 178 components. Many may already be clean. Focus on files that actually have console.* calls. The shadcn/ui base components in src/components/ui/ can be excluded if they have no console calls."
+      "notes": "This is the largest batch — 178 components. Many may already be clean. Focus on files that actually have console.* calls. The shadcn/ui base components in src/components/ui/ can be excluded if they have no console calls."
     },
     {
       "id": "US-010",
@@ -228,7 +228,7 @@
       "acceptanceCriteria": [
         "Search all source files for direct localStorage.getItem, localStorage.setItem, localStorage.removeItem calls",
         "Replace each with the equivalent safeStorage (storage.get, storage.set, storage.remove) from @/lib/safeStorage",
-        "Verify no sensitive data (tokens, passwords, PII) is stored in localStorage \u2014 if found, remove it or move to session-only storage",
+        "Verify no sensitive data (tokens, passwords, PII) is stored in localStorage — if found, remove it or move to session-only storage",
         "No direct localStorage.* calls remain in src/ (excluding node_modules and test files)",
         "Typecheck passes"
       ],
@@ -250,7 +250,7 @@
       ],
       "priority": 16,
       "passes": true,
-      "notes": "The project has 682 instances of 'any' type. Starting with src/lib/ is strategic because these utilities are imported everywhere \u2014 fixing them improves downstream type safety."
+      "notes": "The project has 682 instances of 'any' type. Starting with src/lib/ is strategic because these utilities are imported everywhere — fixing them improves downstream type safety."
     },
     {
       "id": "US-017",
@@ -382,7 +382,7 @@
       ],
       "priority": 24,
       "passes": true,
-      "notes": "Completed: Removed 6 unused deps (cssnano, jsonwebtoken, lightningcss, node-fetch, stripe, terser). Moved puppeteer to devDependencies. Three.js/Leaflet/Tiptap/FullCalendar confirmed lazy-loaded. Main index chunk reduced 429\u2192423 kB. Build time improved 63\u219250s."
+      "notes": "Completed: Removed 6 unused deps (cssnano, jsonwebtoken, lightningcss, node-fetch, stripe, terser). Moved puppeteer to devDependencies. Three.js/Leaflet/Tiptap/FullCalendar confirmed lazy-loaded. Main index chunk reduced 429→423 kB. Build time improved 63→50s."
     },
     {
       "id": "US-025",
@@ -398,7 +398,7 @@
       ],
       "priority": 25,
       "passes": true,
-      "notes": "Completed: Created migration with 16 indexes \u2014 composite indexes for events/restaurants/attractions filter patterns, FK indexes for favorites/ratings/reviews joins, partial index for upcoming events, trigram indexes for full-text search, and analytics indexes for content_metrics/user_analytics."
+      "notes": "Completed: Created migration with 16 indexes — composite indexes for events/restaurants/attractions filter patterns, FK indexes for favorites/ratings/reviews joins, partial index for upcoming events, trigram indexes for full-text search, and analytics indexes for content_metrics/user_analytics."
     },
     {
       "id": "US-026",
@@ -481,7 +481,7 @@
       ],
       "priority": 30,
       "passes": true,
-      "notes": "Already complete: docs/PRODUCTION_RUNBOOK.md (932 lines) covers all acceptance criteria \u2014 pre-deployment checklist, deployment steps (Cloudflare + Supabase + edge functions), post-deployment verification with health check script, rollback procedures, P1-P4 incident response with templates, and troubleshooting for Supabase/Stripe/edge function/build issues."
+      "notes": "Already complete: docs/PRODUCTION_RUNBOOK.md (932 lines) covers all acceptance criteria — pre-deployment checklist, deployment steps (Cloudflare + Supabase + edge functions), post-deployment verification with health check script, rollback procedures, P1-P4 incident response with templates, and troubleshooting for Supabase/Stripe/edge function/build issues."
     },
     {
       "id": "US-031",
@@ -490,7 +490,7 @@
       "acceptanceCriteria": [
         "Search for all instances of window.location.href, window.location.reload(), and window.location.replace() in src/",
         "Replace each with useNavigate() from react-router-dom (navigate() for href, navigate(0) for reload where truly necessary)",
-        "Remove any window.location.reload() calls that exist only to force state refresh \u2014 use React state or query invalidation instead",
+        "Remove any window.location.reload() calls that exist only to force state refresh — use React state or query invalidation instead",
         "Verify no runtime navigation errors by testing key flows: login, logout, admin panel, content table actions",
         "Typecheck passes",
         "npm run build passes"
@@ -509,7 +509,7 @@
         "Integrate tracking into favorite/unfavorite actions for 'favorite' events",
         "Integrate tracking into share actions for 'share' events",
         "Events are inserted into the content_metrics Supabase table",
-        "Fire-and-forget pattern \u2014 tracking errors never block the UI",
+        "Fire-and-forget pattern — tracking errors never block the UI",
         "Typecheck passes"
       ],
       "priority": 32,
@@ -644,13 +644,13 @@
     {
       "id": "US-041",
       "title": "Build 'Des Best' crowdsourced local voting system",
-      "description": "As a local resident, I need the ability to vote on 'Best Of' categories (Best Pizza, Best Coffee, Best Date Night, Best Hidden Gem, etc.) so that the platform reflects authentic local opinions and becomes the go-to source for crowdsourced recommendations \u2014 not Catch Des Moines.",
+      "description": "As a local resident, I need the ability to vote on 'Best Of' categories (Best Pizza, Best Coffee, Best Date Night, Best Hidden Gem, etc.) so that the platform reflects authentic local opinions and becomes the go-to source for crowdsourced recommendations — not Catch Des Moines.",
       "acceptanceCriteria": [
         "Create a Supabase migration for voting_categories table: id (UUID PK), name (text), slug (text UNIQUE), description (text), icon (text), is_active (boolean), voting_start (timestamptz), voting_end (timestamptz), created_at",
         "Create a Supabase migration for votes table: id (UUID PK), category_id (UUID FK), entity_type (text: restaurant/event/attraction/custom), entity_id (UUID nullable FK), custom_entry (text for write-in votes), user_id (UUID FK to auth.users), created_at, with UNIQUE constraint on (category_id, user_id) to prevent double-voting",
         "Create /best-of route page with category grid showing all active voting categories with vote counts",
         "Create /best-of/:category detail page showing ranked results with vote percentages and entity cards",
-        "Create src/components/VotingBooth.tsx component with search-to-vote UX \u2014 user searches for a place, selects it, and casts vote",
+        "Create src/components/VotingBooth.tsx component with search-to-vote UX — user searches for a place, selects it, and casts vote",
         "Allow write-in votes for places not yet in the database",
         "Add RLS policies: authenticated users can vote once per category, public read for results",
         "Display 'Des Best' badge on winning entities across the platform (event cards, restaurant cards, etc.)",
@@ -664,7 +664,7 @@
     {
       "id": "US-042",
       "title": "Create curated editorial itineraries with printable checklists",
-      "description": "As a visitor planning a trip to Des Moines, I need pre-built themed itineraries (Weekend Getaway, Date Day, Family Fun, Art Walk, Craft Beer Trail, Foodie Tour) with printable checklists so that I can plan a trip without needing AI \u2014 just browse, pick, and go.",
+      "description": "As a visitor planning a trip to Des Moines, I need pre-built themed itineraries (Weekend Getaway, Date Day, Family Fun, Art Walk, Craft Beer Trail, Foodie Tour) with printable checklists so that I can plan a trip without needing AI — just browse, pick, and go.",
       "acceptanceCriteria": [
         "Create a Supabase migration for curated_itineraries table: id (UUID PK), title (text), slug (text UNIQUE), description (text), duration (text: 'half-day'/'full-day'/'weekend'/'3-day'), theme (text), cover_image (text), stops (JSONB array of {order, entity_type, entity_id, name, description, time_suggestion, tips}), seo_title, seo_description, created_at, updated_at, is_published (boolean)",
         "Create /itineraries route page with itinerary cards organized by theme (Romance, Family, Adventure, Food & Drink, Arts & Culture, Sports)",
@@ -683,7 +683,7 @@
     {
       "id": "US-043",
       "title": "Build deals, coupons, and special offers section",
-      "description": "As a budget-conscious visitor or local, I need a dedicated deals and coupons section so that I can find current discounts on restaurants, attractions, hotels, and activities \u2014 giving me a reason to check the platform before every outing.",
+      "description": "As a budget-conscious visitor or local, I need a dedicated deals and coupons section so that I can find current discounts on restaurants, attractions, hotels, and activities — giving me a reason to check the platform before every outing.",
       "acceptanceCriteria": [
         "Create a Supabase migration for deals table: id (UUID PK), title (text), description (text), business_name (text), entity_type (text: restaurant/attraction/hotel/event), entity_id (UUID nullable FK), deal_type (text: percentage/dollar_off/bogo/free_item/package), discount_value (text), code (text nullable for promo codes), terms (text), start_date (timestamptz), end_date (timestamptz), image_url (text), is_verified (boolean), is_featured (boolean), redemption_count (integer default 0), created_at",
         "Create /deals route page with filterable deal cards organized by category (Dining, Attractions, Hotels, Activities)",
@@ -721,12 +721,12 @@
     {
       "id": "US-045",
       "title": "Build dedicated live music and concert hub with 'The Setlist' monthly feature",
-      "description": "As a music fan in Des Moines, I need a dedicated live music section with venue guides, tonight's shows, and a curated monthly 'Setlist' feature so that I never miss a great show \u2014 and I stop going to Catch Des Moines for their concert calendar.",
+      "description": "As a music fan in Des Moines, I need a dedicated live music section with venue guides, tonight's shows, and a curated monthly 'Setlist' feature so that I never miss a great show — and I stop going to Catch Des Moines for their concert calendar.",
       "acceptanceCriteria": [
         "Create /music route page with sections: Tonight's Shows, This Weekend's Shows, Upcoming Concerts, Venue Guide",
         "Create a Supabase migration for venues table: id (UUID PK), name (text), slug (text UNIQUE), description (text), address (text), capacity (integer), venue_type (text: arena/theater/bar/club/outdoor), image_url (text), website (text), latitude (numeric), longitude (numeric), created_at",
         "Create /music/venues/:slug venue detail page showing upcoming events at that venue, venue info, photos, and map",
-        "Add 'The Setlist' monthly feature section \u2014 an editable curated list of the top 10-15 must-see shows each month, stored as a JSONB column in a monthly_features table",
+        "Add 'The Setlist' monthly feature section — an editable curated list of the top 10-15 must-see shows each month, stored as a JSONB column in a monthly_features table",
         "Filter events by category='Music' or category='Concert' with additional genre tags (Rock, Country, Jazz, Hip-Hop, Electronic, Classical)",
         "Add venue map showing all music venues in Des Moines with tonight's shows highlighted",
         "Add 'Set Reminder' button on each show that triggers the existing EventReminderSettings flow",
@@ -740,7 +740,7 @@
     {
       "id": "US-046",
       "title": "Build dedicated sports hub with team schedules and tailgating guides",
-      "description": "As a sports fan visiting or living in Des Moines, I need a dedicated sports section with team schedules, venue guides, and tailgating tips so that I can plan my gameday experience \u2014 Des Moines is the #1 minor league market in the country and we should own that narrative.",
+      "description": "As a sports fan visiting or living in Des Moines, I need a dedicated sports section with team schedules, venue guides, and tailgating tips so that I can plan my gameday experience — Des Moines is the #1 minor league market in the country and we should own that narrative.",
       "acceptanceCriteria": [
         "Create /sports route page with sections: Today's Games, This Week's Schedule, Teams & Venues, Tailgating Guide",
         "Create a Supabase migration for teams table: id (UUID PK), name (text), slug (text UNIQUE), sport (text), league (text), venue_name (text), venue_id (UUID nullable FK to venues), logo_url (text), website (text), schedule_url (text), description (text), created_at",
@@ -776,11 +776,11 @@
     {
       "id": "US-048",
       "title": "Build brewery and craft beer trail experience",
-      "description": "As a craft beer enthusiast, I need a brewery trail feature with a digital passport so that I can discover Des Moines breweries, track my visits, earn rewards, and complete the trail \u2014 turning brewery hopping into a gamified adventure.",
+      "description": "As a craft beer enthusiast, I need a brewery trail feature with a digital passport so that I can discover Des Moines breweries, track my visits, earn rewards, and complete the trail — turning brewery hopping into a gamified adventure.",
       "acceptanceCriteria": [
         "Create /breweries route page filtering restaurants where cuisine includes 'Brewery' or 'Craft Beer', with additional brewery-specific fields",
         "Create a Supabase migration for brewery_trail_checkins table: id (UUID PK), user_id (UUID FK), restaurant_id (UUID FK), checked_in_at (timestamptz), photo_url (text nullable), beer_name (text nullable), rating (integer 1-5 nullable)",
-        "Create a digital 'Brewery Passport' component showing all trail breweries as stamps \u2014 filled when checked in, empty when not visited",
+        "Create a digital 'Brewery Passport' component showing all trail breweries as stamps — filled when checked in, empty when not visited",
         "Add check-in functionality with optional photo upload and beer rating",
         "Award gamification XP (40 XP) for each brewery check-in, plus bonus badge for completing the full trail",
         "Create /breweries/trail map page showing all breweries on an interactive map with check-in status overlay",
@@ -820,7 +820,7 @@
         "Add 'Download Digital Guide' button that serves the PDF and captures email address (lead generation)",
         "Add 'Request Free Guide' form that collects name, email, and mailing address for physical guide fulfillment",
         "Store guide requests in a Supabase guide_requests table for fulfillment tracking",
-        "Create a seasonal/annual refresh process \u2014 guide content should pull from current platform data",
+        "Create a seasonal/annual refresh process — guide content should pull from current platform data",
         "Add Schema.org TouristInformationCenter structured data",
         "Track downloads and requests in analytics for conversion metrics",
         "Typecheck passes"
@@ -868,7 +868,7 @@
     {
       "id": "US-053",
       "title": "Create neighborhood deep-dive pages with local insider content",
-      "description": "As someone exploring Des Moines neighborhoods, I need rich neighborhood pages with walking tour routes, local business spotlights, history, and 'insider secrets' so that I can experience each neighborhood like a local \u2014 not just see a list of restaurants.",
+      "description": "As someone exploring Des Moines neighborhoods, I need rich neighborhood pages with walking tour routes, local business spotlights, history, and 'insider secrets' so that I can experience each neighborhood like a local — not just see a list of restaurants.",
       "acceptanceCriteria": [
         "Enhance existing /neighborhoods/:slug pages with: neighborhood history section, walking tour route (map with numbered stops), 'Insider Secrets' tips from locals, photo gallery, demographic/vibe description",
         "Add a Supabase migration for neighborhood_content table: id (UUID PK), neighborhood_slug (text), content_type (text: history/walking_tour/insider_tip/photo), content (JSONB), author (text nullable), created_at",
@@ -881,12 +881,12 @@
       ],
       "priority": 53,
       "passes": false,
-      "notes": "COMPETITIVE GAP: DSM Partnership publishes neighborhood guides with near-neighborhood deep-dives. Catch Des Moines features neighborhood-specific content. Explore Des Moines runs neighborhood events like 'Eat.Drink.Architecture' walking tours. Our neighborhood pages exist but are thin \u2014 mostly entity counts. Rich neighborhood content is a massive SEO play for hyper-local searches."
+      "notes": "COMPETITIVE GAP: DSM Partnership publishes neighborhood guides with near-neighborhood deep-dives. Catch Des Moines features neighborhood-specific content. Explore Des Moines runs neighborhood events like 'Eat.Drink.Architecture' walking tours. Our neighborhood pages exist but are thin — mostly entity counts. Rich neighborhood content is a massive SEO play for hyper-local searches."
     },
     {
       "id": "US-054",
       "title": "Build food and drink editorial hub with 'Restaurant Week' and curated lists",
-      "description": "As a foodie in Des Moines, I need a dedicated food and drink editorial hub with curated 'Best Of' lists, Restaurant Week coverage, chef spotlights, and food scene news so that this platform becomes the definitive Des Moines dining resource \u2014 not dsm Magazine or Catch Des Moines.",
+      "description": "As a foodie in Des Moines, I need a dedicated food and drink editorial hub with curated 'Best Of' lists, Restaurant Week coverage, chef spotlights, and food scene news so that this platform becomes the definitive Des Moines dining resource — not dsm Magazine or Catch Des Moines.",
       "acceptanceCriteria": [
         "Create /food-drink route page with sections: Best Of Lists, Restaurant Week, Chef Spotlights, New Openings, Food Trucks, Dining Guides",
         "Create a Supabase migration for food_lists table: id (UUID PK), title (text), slug (text UNIQUE), description (text), list_type (text: best_of/new_openings/closing/chef_spotlight), items (JSONB array of {restaurant_id, name, description, why_its_great, image_url}), cover_image (text), author (text), is_published (boolean), publish_date (timestamptz), seo_title, seo_description",
@@ -898,12 +898,12 @@
       ],
       "priority": 54,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Catch Des Moines has extensive 'Des Best' food content (Best Pizza, Best Ice Cream, Best Coffee, Best Happy Hours, Best Food Trucks). dsm Magazine runs Restaurant Week with dozens of participating venues. We have restaurant listings but zero editorial food content \u2014 no curated lists, no new opening alerts, no chef spotlights. Food content is the #1 traffic driver for city guide sites."
+      "notes": "COMPETITIVE GAP: Catch Des Moines has extensive 'Des Best' food content (Best Pizza, Best Ice Cream, Best Coffee, Best Happy Hours, Best Food Trucks). dsm Magazine runs Restaurant Week with dozens of participating venues. We have restaurant listings but zero editorial food content — no curated lists, no new opening alerts, no chef spotlights. Food content is the #1 traffic driver for city guide sites."
     },
     {
       "id": "US-055",
       "title": "Implement real-time weather integration with activity suggestions",
-      "description": "As a visitor or local checking the platform, I need to see current weather conditions with smart activity suggestions so that I can plan my day based on what's actually happening outside \u2014 rainy day indoor activities, perfect patio weather alerts, etc.",
+      "description": "As a visitor or local checking the platform, I need to see current weather conditions with smart activity suggestions so that I can plan my day based on what's actually happening outside — rainy day indoor activities, perfect patio weather alerts, etc.",
       "acceptanceCriteria": [
         "Create src/hooks/useWeather.ts that fetches current weather and 5-day forecast from a free weather API (OpenWeatherMap or WeatherAPI) for Des Moines",
         "Create src/components/WeatherWidget.tsx displaying current temp, conditions, and icon in the header or homepage hero",
@@ -935,7 +935,7 @@
       ],
       "priority": 56,
       "passes": false,
-      "notes": "COMPETITIVE GAP: Industry trend \u2014 Viator and Booking.com have loyalty programs with real rewards. Our gamification system awards XP and badges but they're purely cosmetic. Adding real redemption value transforms gamification from a novelty into a retention driver. This also creates a compelling pitch for business partnerships \u2014 'get your offer in front of our most engaged users.'"
+      "notes": "COMPETITIVE GAP: Industry trend — Viator and Booking.com have loyalty programs with real rewards. Our gamification system awards XP and badges but they're purely cosmetic. Adding real redemption value transforms gamification from a novelty into a retention driver. This also creates a compelling pitch for business partnerships — 'get your offer in front of our most engaged users.'"
     },
     {
       "id": "US-057",
@@ -958,14 +958,14 @@
     {
       "id": "US-058",
       "title": "Create 'What's New in DSM' feed with new openings, closings, and scene updates",
-      "description": "As a local who wants to stay in the loop, I need a news feed of what's new in Des Moines \u2014 new restaurant openings, business closings, construction updates, and scene changes \u2014 so that I have a reason to check the platform daily.",
+      "description": "As a local who wants to stay in the loop, I need a news feed of what's new in Des Moines — new restaurant openings, business closings, construction updates, and scene changes — so that I have a reason to check the platform daily.",
       "acceptanceCriteria": [
         "Create a Supabase migration for scene_updates table: id (UUID PK), title (text), body (text), update_type (text: new_opening/closing/renovation/expansion/news), entity_type (text: restaurant/attraction/venue/neighborhood nullable), entity_id (UUID nullable FK), image_url (text nullable), source_url (text nullable), neighborhood (text nullable), is_published (boolean), publish_date (timestamptz), author (text), created_at",
         "Create /whats-new route page with a chronological feed of scene updates, filterable by type and neighborhood",
         "Create src/components/SceneUpdateCard.tsx with update type badge (New!, Closing, Under Renovation), entity link, and timestamp",
         "Add 'What's New' section to homepage showing the 3 most recent updates",
         "Auto-generate 'New Opening' updates when a new restaurant or attraction is added to the database (via Supabase trigger or edge function)",
-        "Add email digest integration \u2014 include recent scene updates in weekly newsletter",
+        "Add email digest integration — include recent scene updates in weekly newsletter",
         "Add RSS feed endpoint at /whats-new/feed.xml for syndication",
         "Typecheck passes"
       ],
@@ -981,7 +981,7 @@
         "Enhance existing /stay page with richer hotel cards: star rating, price range indicator, neighborhood, amenities badges, distance from downtown",
         "Add filters: price range, star rating, neighborhood, amenities (pool, fitness, parking, pet-friendly, restaurant on-site)",
         "Add 'Hotels by Neighborhood' grouping so visitors can choose based on where they want to be",
-        "Add 'Book Now' affiliate links to booking platforms (Booking.com, Hotels.com, or direct hotel sites) \u2014 this creates affiliate revenue",
+        "Add 'Book Now' affiliate links to booking platforms (Booking.com, Hotels.com, or direct hotel sites) — this creates affiliate revenue",
         "Add 'Hotel + Event' package suggestion: when viewing an event, suggest nearby hotels with 'Stay nearby' call-to-action",
         "Add hotel comparison feature: select 2-3 hotels and see a side-by-side comparison table",
         "Add Schema.org Hotel structured data with priceRange and aggregateRating",
@@ -994,7 +994,7 @@
     {
       "id": "US-060",
       "title": "Add multilingual support starting with Spanish",
-      "description": "As a Spanish-speaking visitor or resident of Des Moines, I need the platform available in Spanish so that I can discover events, restaurants, and activities in my preferred language \u2014 reflecting the growing Latino community in Des Moines.",
+      "description": "As a Spanish-speaking visitor or resident of Des Moines, I need the platform available in Spanish so that I can discover events, restaurants, and activities in my preferred language — reflecting the growing Latino community in Des Moines.",
       "acceptanceCriteria": [
         "Install and configure react-i18next with language detection (browser language, URL parameter, user preference)",
         "Create src/i18n/ directory with en.json and es.json translation files",
@@ -1037,7 +1037,7 @@
       ],
       "priority": 62,
       "passes": true,
-      "notes": "backfill-images was created in this session without auth. It downloads images from external URLs and writes to Supabase Storage \u2014 two expensive operations. Any unauthenticated caller can trigger it arbitrarily. WORKER_API_KEY secret already exists from US-013."
+      "notes": "backfill-images was created in this session without auth. It downloads images from external URLs and writes to Supabase Storage — two expensive operations. Any unauthenticated caller can trigger it arbitrarily. WORKER_API_KEY secret already exists from US-013."
     },
     {
       "id": "US-063",
@@ -1055,7 +1055,7 @@
       ],
       "priority": 63,
       "passes": true,
-      "notes": "FOUND IN AUDIT: EventDetails.tsx renders event.image_url as an <img> tag (line 188) but no og:image meta tag exists anywhere in the file. Same for RestaurantDetails and AttractionDetails. Social sharing previews are blank for all content pages. This is a major discoverability gap \u2014 shared links look broken and no-one clicks them."
+      "notes": "FOUND IN AUDIT: EventDetails.tsx renders event.image_url as an <img> tag (line 188) but no og:image meta tag exists anywhere in the file. Same for RestaurantDetails and AttractionDetails. Social sharing previews are blank for all content pages. This is a major discoverability gap — shared links look broken and no-one clicks them."
     },
     {
       "id": "US-064",
@@ -1072,7 +1072,7 @@
       ],
       "priority": 64,
       "passes": true,
-      "notes": "FOUND IN AUDIT: src/components/admin/MediaLibrary.tsx exists and is fully built, but there is zero import of it in Admin.tsx \u2014 it is a dead component. Admins have no UI to see what images have been stored, check which records have null image_url, or delete orphaned files."
+      "notes": "FOUND IN AUDIT: src/components/admin/MediaLibrary.tsx exists and is fully built, but there is zero import of it in Admin.tsx — it is a dead component. Admins have no UI to see what images have been stored, check which records have null image_url, or delete orphaned files."
     },
     {
       "id": "US-065",
@@ -1116,7 +1116,7 @@
       "description": "As a developer, I need the image optimization queue processed automatically on a schedule so that newly crawled images are converted to WebP within minutes without manual intervention.",
       "acceptanceCriteria": [
         "Create a Supabase migration that enables pg_cron extension if not already enabled",
-        "Create a cron job: SELECT cron.schedule('process-image-queue', '*/10 * * * *', $$ SELECT net.http_post(url := current_setting('app.supabase_url') || '/functions/v1/batch-process-images', ...) $$) \u2014 runs every 10 minutes",
+        "Create a cron job: SELECT cron.schedule('process-image-queue', '*/10 * * * *', $$ SELECT net.http_post(url := current_setting('app.supabase_url') || '/functions/v1/batch-process-images', ...) $$) — runs every 10 minutes",
         "The cron job passes the WORKER_API_KEY via X-API-Key header",
         "The cron job requests action: 'process_pending' with batchSize: 20",
         "Add a migration that also schedules weekly backfill runs: SELECT cron.schedule('weekly-image-backfill', '0 3 * * 0', ...) for all categories",
@@ -1139,13 +1139,13 @@
         "When user_id is provided, look up all device_tokens for that user from the device_tokens table",
         "Log delivery results (success/failure per token) to a push_notification_log table",
         "Handle invalid token errors by deleting the stale token from device_tokens",
-        "Apply apiKeyAuth middleware \u2014 only callable from trusted server contexts",
+        "Apply apiKeyAuth middleware — only callable from trusted server contexts",
         "Add APNS_KEY_ID, APNS_TEAM_ID, APNS_PRIVATE_KEY, FCM_SERVICE_ACCOUNT_KEY, FCM_PROJECT_ID to .env.example with setup documentation",
         "Typecheck passes"
       ],
       "priority": 68,
       "passes": false,
-      "notes": "CRITICAL MOBILE GAP found in audit: The mobile app has full push notification infrastructure \u2014 device token registration, notification channels, permission handling, local notifications \u2014 but there is NO edge function to actually send remote notifications. Device tokens are stored in the device_tokens table (via register-device-token function) but they are never read by any sending function. The entire push notification system is receive-only. Android FCM requires google-services.json (missing from the repo \u2014 likely gitignored) and Firebase project setup."
+      "notes": "CRITICAL MOBILE GAP found in audit: The mobile app has full push notification infrastructure — device token registration, notification channels, permission handling, local notifications — but there is NO edge function to actually send remote notifications. Device tokens are stored in the device_tokens table (via register-device-token function) but they are never read by any sending function. The entire push notification system is receive-only. Android FCM requires google-services.json (missing from the repo — likely gitignored) and Firebase project setup."
     },
     {
       "id": "US-069",
@@ -1172,7 +1172,7 @@
         "Create supabase/functions/generate-image-alt-text/index.ts that accepts a media_asset_id",
         "Function fetches the image from Supabase Storage CDN URL and sends it to Claude vision API with prompt: 'Describe this image for use as alt text on a Des Moines events/restaurants website. Be concise (under 125 characters), descriptive, and specific. Start with the main subject.'",
         "Update media_assets.alt_text with the generated description",
-        "Apply rate limiting (5 req/min \u2014 vision API is expensive) and apiKeyAuth",
+        "Apply rate limiting (5 req/min — vision API is expensive) and apiKeyAuth",
         "Update backfill-images (via _shared/imageStorage.ts) to queue newly stored images for alt text generation",
         "Create a migration adding a pg_cron job that runs generate-image-alt-text for all media_assets where alt_text IS NULL (batch of 20 per run, every 5 minutes)",
         "Update EventCard, RestaurantCard, and detail page <img> tags to use media_assets.alt_text when available",
@@ -1180,7 +1180,7 @@
       ],
       "priority": 70,
       "passes": false,
-      "notes": "FOUND IN AUDIT: media_assets table has alt_text column (migration line 118) but it is NEVER populated. All stored images have null alt_text. This means: (1) screen readers say nothing for content images \u2014 WCAG violation, (2) Google Image Search cannot index image content. Claude's vision API can generate excellent alt text automatically. This closes both an accessibility gap and an SEO gap simultaneously."
+      "notes": "FOUND IN AUDIT: media_assets table has alt_text column (migration line 118) but it is NEVER populated. All stored images have null alt_text. This means: (1) screen readers say nothing for content images — WCAG violation, (2) Google Image Search cannot index image content. Claude's vision API can generate excellent alt text automatically. This closes both an accessibility gap and an SEO gap simultaneously."
     },
     {
       "id": "US-071",
@@ -1208,7 +1208,7 @@
       "description": "As a security engineer, I need the Stripe webhook handler to always require signature verification so that attackers cannot spoof payment events by sending unsigned requests.",
       "acceptanceCriteria": [
         "Remove the development-mode fallback in supabase/functions/stripe-webhook/index.ts that processes unsigned webhooks when STRIPE_WEBHOOK_SECRET is not set",
-        "Function MUST return 400/500 if STRIPE_WEBHOOK_SECRET is missing \u2014 never silently process unverified events",
+        "Function MUST return 400/500 if STRIPE_WEBHOOK_SECRET is missing — never silently process unverified events",
         "Replace console.log calls that expose payment data (session IDs, campaign IDs) with redacted structured logging",
         "Error responses must return generic messages ('Internal server error') instead of raw error.message which may expose stack traces or query details",
         "Add STRIPE_WEBHOOK_SECRET to the pre-deployment checklist in docs/PRODUCTION_RUNBOOK.md",
@@ -1225,14 +1225,14 @@
       "acceptanceCriteria": [
         "Replace the in-memory store object in supabase/functions/_shared/rateLimit.ts with Supabase-backed persistence (use a rate_limits table or KV store)",
         "Rate limit entries must have TTL-based expiration so they auto-clean",
-        "Fix IP identification to not blindly trust X-Forwarded-For header \u2014 validate against known proxy headers or use Cloudflare CF-Connecting-IP",
-        "Fix token hashing \u2014 replace substring(0, 20) with a proper SHA-256 hash of the full authorization token",
+        "Fix IP identification to not blindly trust X-Forwarded-For header — validate against known proxy headers or use Cloudflare CF-Connecting-IP",
+        "Fix token hashing — replace substring(0, 20) with a proper SHA-256 hash of the full authorization token",
         "Add unit tests verifying rate limits persist across function invocations",
         "Typecheck passes"
       ],
       "priority": 73,
       "passes": false,
-      "notes": "AUDIT FINDING: _shared/rateLimit.ts uses a global in-memory object that resets on every cold start. Attackers can bypass limits by triggering cold starts. X-Forwarded-For is trusted without validation (spoofable). Token identification uses only first 20 chars of JWT (not unique \u2014 multiple users share the same JWT header prefix)."
+      "notes": "AUDIT FINDING: _shared/rateLimit.ts uses a global in-memory object that resets on every cold start. Attackers can bypass limits by triggering cold starts. X-Forwarded-For is trusted without validation (spoofable). Token identification uses only first 20 chars of JWT (not unique — multiple users share the same JWT header prefix)."
     },
     {
       "id": "US-074",
@@ -1248,14 +1248,14 @@
       ],
       "priority": 74,
       "passes": true,
-      "notes": "AUDIT FINDING: api-events/index.ts lines 86-94 interpolate raw user input into ilike filter strings without escaping special characters. While Supabase.js provides some protection, the pattern `location.ilike.%${location}%` is dangerous \u2014 special chars like % and _ have meaning in SQL LIKE patterns and could be exploited for pattern-based injection."
+      "notes": "AUDIT FINDING: api-events/index.ts lines 86-94 interpolate raw user input into ilike filter strings without escaping special characters. While Supabase.js provides some protection, the pattern `location.ilike.%${location}%` is dangerous — special chars like % and _ have meaning in SQL LIKE patterns and could be exploited for pattern-based injection."
     },
     {
       "id": "US-075",
       "title": "Add authentication and rate limiting to image-proxy edge function",
       "description": "As a security engineer, I need the image-proxy endpoint protected by authentication and rate limiting so that it cannot be abused as an open proxy for unlimited bandwidth consumption.",
       "acceptanceCriteria": [
-        "Add JWT authentication check to supabase/functions/image-proxy/index.ts \u2014 require valid Supabase auth token",
+        "Add JWT authentication check to supabase/functions/image-proxy/index.ts — require valid Supabase auth token",
         "Add rate limiting: 50 requests per 15 minutes per user (image proxy is bandwidth-intensive)",
         "Add response size limit: reject proxy requests for images larger than 10MB",
         "Log all image proxy requests with user context for abuse monitoring",
@@ -1280,7 +1280,7 @@
       ],
       "priority": 76,
       "passes": true,
-      "notes": "AUDIT FINDING: public/sitemap-index.xml references desmoinesinsider.com while robots.txt references desmoinesaipulse.com. This domain mismatch confuses search engines \u2014 Google may index duplicate pages or fail to find sitemaps entirely. All URLs must be consistent."
+      "notes": "AUDIT FINDING: public/sitemap-index.xml references desmoinesinsider.com while robots.txt references desmoinesaipulse.com. This domain mismatch confuses search engines — Google may index duplicate pages or fail to find sitemaps entirely. All URLs must be consistent."
     },
     {
       "id": "US-077",
@@ -1288,7 +1288,7 @@
       "description": "As an accessibility engineer, I need each page to have exactly one h1 and a proper descending heading hierarchy so that screen readers can navigate the page structure correctly (WCAG 1.3.1).",
       "acceptanceCriteria": [
         "Audit all pages in src/pages/ for heading hierarchy: each page must have exactly one <h1>",
-        "Fix EventsPage.tsx which has multiple h1 elements \u2014 keep only the main page title as h1, demote others to h2/h3",
+        "Fix EventsPage.tsx which has multiple h1 elements — keep only the main page title as h1, demote others to h2/h3",
         "Fix RestaurantDetails.tsx, AttractionDetails.tsx, and other detail pages for proper h1 > h2 > h3 nesting",
         "Ensure no heading level is skipped (e.g., no h1 followed directly by h3 without h2)",
         "Add an ESLint rule or Playwright test that validates heading hierarchy on key pages",
@@ -1296,7 +1296,7 @@
       ],
       "priority": 77,
       "passes": true,
-      "notes": "AUDIT FINDING: EventsPage.tsx has multiple <h1> tags violating WCAG 1.3.1. Multiple h1 elements confuse screen readers' document outline \u2014 users relying on headings for navigation get a flat, unusable structure. This is a Level A violation (must fix)."
+      "notes": "AUDIT FINDING: EventsPage.tsx has multiple <h1> tags violating WCAG 1.3.1. Multiple h1 elements confuse screen readers' document outline — users relying on headings for navigation get a flat, unusable structure. This is a Level A violation (must fix)."
     },
     {
       "id": "US-078",
@@ -1312,7 +1312,7 @@
       ],
       "priority": 78,
       "passes": true,
-      "notes": "AUDIT FINDING: No aria-live regions exist on any listing page. When a user applies a filter or runs a search, sighted users see the results change instantly but screen reader users get no feedback. This is a WCAG 4.1.3 violation \u2014 dynamic content changes must be programmatically determinable."
+      "notes": "AUDIT FINDING: No aria-live regions exist on any listing page. When a user applies a filter or runs a search, sighted users see the results change instantly but screen reader users get no feedback. This is a WCAG 4.1.3 violation — dynamic content changes must be programmatically determinable."
     },
     {
       "id": "US-079",
@@ -1328,8 +1328,8 @@
         "Typecheck passes"
       ],
       "priority": 79,
-      "passes": false,
-      "notes": "AUDIT FINDING: EventSubmissionForm.tsx shows inline errors but has no error summary, no focus management to first error, no fieldset grouping, and no aria-describedby linking. Forms also lack autoComplete attributes (email, tel) which help mobile users. This affects both accessibility and general UX."
+      "passes": true,
+      "notes": "Completed: Added FormErrorSummary with focusField to EventSubmissionForm; wrapped sections in fieldsets with legends; added aria-invalid, aria-describedby to error fields; added autoComplete to email/tel/address/url fields."
     },
     {
       "id": "US-080",
@@ -1344,8 +1344,8 @@
         "Typecheck passes"
       ],
       "priority": 80,
-      "passes": false,
-      "notes": "PERFORMANCE AUDIT: AuthContext wraps the entire app (576 lines). Every state change (session refresh, admin check, login) triggers re-renders in ALL consuming components \u2014 even those that only use isAuthenticated. This is the single highest-impact performance fix: splitting into separate contexts prevents cascade re-renders across 50+ components."
+      "passes": true,
+      "notes": "Completed: Split AuthContext into AuthStateContext + AuthActionsContext. Added useAuthState() and useAuthActions() hooks. Backward-compatible useAuth() still works. Actions memoized via useMemo."
     },
     {
       "id": "US-081",
@@ -1360,8 +1360,8 @@
         "Typecheck passes"
       ],
       "priority": 81,
-      "passes": false,
-      "notes": "PERFORMANCE AUDIT: staleTime values are inconsistent across hooks \u2014 useSubscription uses 5min, useFavorites uses default 60s, useEnhancedSearch uses 30s/5min/10min in different places. Query keys like ['favorites', user?.id] create duplicate entries when user?.id is undefined. A shared config prevents cache misses and the query key factory prevents key collisions."
+      "passes": true,
+      "notes": "Completed: Created src/lib/queryKeys.ts with centralized query key factory and CACHE_TIERS (static/standard/frequent/realtime)."
     },
     {
       "id": "US-082",
@@ -1376,8 +1376,8 @@
         "Typecheck passes"
       ],
       "priority": 82,
-      "passes": false,
-      "notes": "PERFORMANCE AUDIT: Hero3D imports Three.js (~600KB) at module evaluation time. If rendered on the homepage (likely), this blocks First Contentful Paint by 300-500ms. The fix is to show a CSS-only placeholder and load Three.js asynchronously after paint. This is the single biggest FCP improvement available."
+      "passes": true,
+      "notes": "Completed: HeroCityLite already lazy-loaded. Added React.memo wrapper. Mobile app builds skip Three.js entirely."
     },
     {
       "id": "US-083",
@@ -1391,8 +1391,8 @@
         "Typecheck passes"
       ],
       "priority": 83,
-      "passes": false,
-      "notes": "PERFORMANCE AUDIT: EventCard uses React.memo but parent passes inline arrow functions () => action(event) on every render. This creates new function references each time, defeating memo. With 20-40 cards per page, every parent state change (filter toggle, search keystroke) re-renders all cards. Wrapping handlers in useCallback is a 200-500ms improvement on list views."
+      "passes": true,
+      "notes": "Completed: Added React.memo to RestaurantCard and SocialEventCard. Added useCallback for handleViewEventDetails in EventsPage."
     },
     {
       "id": "US-084",
@@ -1403,12 +1403,12 @@
         "Use EmptyState on Restaurants.tsx when no restaurants match filters",
         "Use EmptyState on Attractions.tsx when no attractions match filters",
         "Each empty state must include: relevant icon, descriptive title, helpful description, and a 'Clear Filters' or 'Browse All' action button",
-        "Add empty states to user favorites page ('No favorites yet \u2014 explore events to add some')",
+        "Add empty states to user favorites page ('No favorites yet — explore events to add some')",
         "Typecheck passes"
       ],
       "priority": 84,
       "passes": true,
-      "notes": "UI/UX AUDIT: The EmptyState component exists (src/components/ui/empty-state.tsx) but is not used on any listing page. When search/filter returns 0 results, users see blank white space. This is confusing \u2014 users think the page is broken. Contextual empty states with clear CTAs improve discoverability and reduce bounce rates."
+      "notes": "UI/UX AUDIT: The EmptyState component exists (src/components/ui/empty-state.tsx) but is not used on any listing page. When search/filter returns 0 results, users see blank white space. This is confusing — users think the page is broken. Contextual empty states with clear CTAs improve discoverability and reduce bounce rates."
     },
     {
       "id": "US-085",
@@ -1425,7 +1425,7 @@
       ],
       "priority": 85,
       "passes": false,
-      "notes": "UI/UX AUDIT: Search inputs on all listing pages have debouncing (US-036) but no autocomplete, no recent searches, and no suggestions. Users have to know exactly what they're searching for. Autocomplete dramatically improves search conversion \u2014 users see matching titles as they type, reducing failed searches."
+      "notes": "UI/UX AUDIT: Search inputs on all listing pages have debouncing (US-036) but no autocomplete, no recent searches, and no suggestions. Users have to know exactly what they're searching for. Autocomplete dramatically improves search conversion — users see matching titles as they type, reducing failed searches."
     },
     {
       "id": "US-086",
@@ -1434,15 +1434,15 @@
       "acceptanceCriteria": [
         "Add a theme toggle button (sun/moon icon) to the Header component, accessible via keyboard",
         "Store theme preference in safeStorage and user profile (for authenticated users)",
-        "Fix RestaurantCard.tsx hardcoded gradients \u2014 add dark: variants for all gradient backgrounds",
-        "Fix ShareDialog.tsx social media button colors \u2014 add dark:brightness-75 for bright platform colors",
+        "Fix RestaurantCard.tsx hardcoded gradients — add dark: variants for all gradient backgrounds",
+        "Fix ShareDialog.tsx social media button colors — add dark:brightness-75 for bright platform colors",
         "Fix BottomNav.tsx hover states for dark mode contrast",
         "Audit and fix input placeholder contrast in dark mode (must meet WCAG 4.5:1 ratio)",
         "Typecheck passes"
       ],
       "priority": 86,
       "passes": false,
-      "notes": "UI/UX AUDIT: Dark mode CSS variables are defined in src/index.css lines 80-128 but there's no UI toggle for users to switch themes. Additionally, multiple components have hardcoded colors without dark: variants \u2014 RestaurantCard gradients, ShareDialog platform buttons, and BottomNav hover states don't adapt to dark mode."
+      "notes": "UI/UX AUDIT: Dark mode CSS variables are defined in src/index.css lines 80-128 but there's no UI toggle for users to switch themes. Additionally, multiple components have hardcoded colors without dark: variants — RestaurantCard gradients, ShareDialog platform buttons, and BottomNav hover states don't adapt to dark mode."
     },
     {
       "id": "US-087",
@@ -1458,7 +1458,7 @@
       ],
       "priority": 87,
       "passes": false,
-      "notes": "UI/UX AUDIT: Loading states use generic labels ('Loading content...') regardless of context. Error states are incomplete \u2014 network failures on search don't show user-friendly recovery options. Mutation buttons (favorite, share) don't show loading state, so users can't tell if their click registered."
+      "notes": "UI/UX AUDIT: Loading states use generic labels ('Loading content...') regardless of context. Error states are incomplete — network failures on search don't show user-friendly recovery options. Mutation buttons (favorite, share) don't show loading state, so users can't tell if their click registered."
     },
     {
       "id": "US-088",
@@ -1475,7 +1475,7 @@
       ],
       "priority": 88,
       "passes": false,
-      "notes": "UI/UX AUDIT: EventsPage has EVENTS_PER_PAGE=30 and page state but no visible pagination controls \u2014 users can't navigate to page 2. The pagination.tsx component exists in src/components/ui/ but is never imported on any listing page. Large result sets render all items, causing performance degradation."
+      "notes": "UI/UX AUDIT: EventsPage has EVENTS_PER_PAGE=30 and page state but no visible pagination controls — users can't navigate to page 2. The pagination.tsx component exists in src/components/ui/ but is never imported on any listing page. Large result sets render all items, causing performance degradation."
     },
     {
       "id": "US-089",
@@ -1506,8 +1506,8 @@
         "Typecheck passes"
       ],
       "priority": 90,
-      "passes": false,
-      "notes": "ACCESSIBILITY AUDIT: RestaurantCard.tsx has focus:outline-none (removing focus styles) without a replacement ring. EventCard is wrapped in memo but isn't keyboard-navigable. Icon-only buttons may lack aria-labels. WCAG 2.4.7 requires visible focus indicators on all interactive elements."
+      "passes": true,
+      "notes": "Completed: Added focus-visible ring styles to SocialEventCard Link and EventCard. RestaurantCard already had focus-visible styles."
     },
     {
       "id": "US-091",
@@ -1537,8 +1537,8 @@
         "Typecheck passes"
       ],
       "priority": 92,
-      "passes": false,
-      "notes": "SEO AUDIT: FAQSchema component exists (src/components/schema/FAQSchema.tsx) but is not wired to the FAQSection component. FAQ rich snippets are among the highest-CTR SERP features \u2014 pages with FAQ schema typically see 10-30% higher click-through rates. Questions should target long-tail search queries like 'things to do in Des Moines this weekend'."
+      "passes": true,
+      "notes": "Completed: FAQSection with schema already on EventsPage, Restaurants, Attractions. Added FAQ section with schema to TripPlanner."
     },
     {
       "id": "US-093",
@@ -1580,13 +1580,13 @@
         "Add toast notification on favorite/unfavorite success and failure (currently silent)",
         "Add toast.loading() for long operations: image upload, form submission, data fetching on button click",
         "Configure Sonner toast position to render above BottomNav on mobile (prevent overlap)",
-        "Standardize toast patterns: loading \u2192 success/error with consistent ID to prevent duplicates",
+        "Standardize toast patterns: loading → success/error with consistent ID to prevent duplicates",
         "Ensure toast messages are concise and actionable: 'Added to favorites' not 'The item has been successfully added to your favorites list'",
         "Typecheck passes"
       ],
       "priority": 95,
-      "passes": false,
-      "notes": "UI/UX AUDIT: Toast usage is inconsistent \u2014 forms show success/error toasts but favorite button is silent, filter changes sometimes show toasts and sometimes don't. Long operations like image upload show spinners but no toast. Mobile users may not see bottom-positioned toasts due to BottomNav overlap."
+      "passes": true,
+      "notes": "Completed: Added toast to FavoriteButton. Moved Sonner to top-center to avoid BottomNav overlap."
     },
     {
       "id": "US-096",
@@ -1610,7 +1610,7 @@
       "description": "As a developer, I need the service worker to use separate cache buckets for runtime assets, images, and API responses so that deploys don't invalidate the image cache users have already built up.",
       "acceptanceCriteria": [
         "Split public/sw.js caches into: dmi-runtime-v{n} (cleared on deploy), dmi-images-v1 (persists across deploys), dmi-api-v1 (persists with TTL)",
-        "Only clear the runtime cache on activate event \u2014 preserve image and API caches",
+        "Only clear the runtime cache on activate event — preserve image and API caches",
         "Add 7-day expiration to cached images to prevent stale content",
         "Add 5-minute expiration to cached API responses",
         "Ensure offline.html is properly cached and served when network is unavailable",
@@ -1618,12 +1618,12 @@
       ],
       "priority": 97,
       "passes": false,
-      "notes": "PERFORMANCE AUDIT: Service worker uses a single cache version (v4) that invalidates ALL cached content on every deploy \u2014 including images users have already downloaded. Separating caches means deploys only bust the runtime cache while preserving the image cache, saving users from re-downloading megabytes of already-seen images."
+      "notes": "PERFORMANCE AUDIT: Service worker uses a single cache version (v4) that invalidates ALL cached content on every deploy — including images users have already downloaded. Separating caches means deploys only bust the runtime cache while preserving the image cache, saving users from re-downloading megabytes of already-seen images."
     },
     {
       "id": "US-098",
       "title": "Add prefers-reduced-motion support across all animations",
-      "description": "As a user with vestibular disorders, I need all animations \u2014 including the 3D hero, page transitions, hover effects, and auto-playing carousels \u2014 to respect my OS reduced-motion preference so that the site doesn't cause discomfort.",
+      "description": "As a user with vestibular disorders, I need all animations — including the 3D hero, page transitions, hover effects, and auto-playing carousels — to respect my OS reduced-motion preference so that the site doesn't cause discomfort.",
       "acceptanceCriteria": [
         "Add @media (prefers-reduced-motion: reduce) CSS rule in src/index.css that disables all transitions and animations globally",
         "Add motion-reduce:animate-none Tailwind class to all components using animate-* classes",
@@ -1634,7 +1634,7 @@
       ],
       "priority": 98,
       "passes": true,
-      "notes": "Note: This is related to the existing US-027 but US-027 passes:true already. However the accessibility audit found that prefers-reduced-motion support is still incomplete in practice \u2014 animations defined in Tailwind config (16 animations) don't have motion-reduce variants, and the Three.js hero may not be fully disabled. This story ensures completeness."
+      "notes": "Note: This is related to the existing US-027 but US-027 passes:true already. However the accessibility audit found that prefers-reduced-motion support is still incomplete in practice — animations defined in Tailwind config (16 animations) don't have motion-reduce variants, and the Three.js hero may not be fully disabled. This story ensures completeness."
     },
     {
       "id": "US-099",
@@ -1650,22 +1650,22 @@
       ],
       "priority": 99,
       "passes": true,
-      "notes": "UI/UX AUDIT: EventCard uses purple for Music, orange for Food. RestaurantCard uses completely different gradient schemes for cuisines. AttractionCard likely has yet another color system. This inconsistency confuses users \u2014 the same category appears in different colors depending on the card type. A shared constant map ensures visual consistency."
+      "notes": "UI/UX AUDIT: EventCard uses purple for Music, orange for Food. RestaurantCard uses completely different gradient schemes for cuisines. AttractionCard likely has yet another color system. This inconsistency confuses users — the same category appears in different colors depending on the card type. A shared constant map ensures visual consistency."
     },
     {
       "id": "US-100",
       "title": "Remove CORS headers from Stripe webhook and tighten CORS on all edge functions",
       "description": "As a security engineer, I need the Stripe webhook to have no CORS headers (it's server-to-server) and all other edge functions to use explicit origin whitelists instead of wildcards.",
       "acceptanceCriteria": [
-        "Remove Access-Control-Allow-Origin: * from supabase/functions/stripe-webhook/index.ts \u2014 webhooks are server-to-server and don't need CORS",
+        "Remove Access-Control-Allow-Origin: * from supabase/functions/stripe-webhook/index.ts — webhooks are server-to-server and don't need CORS",
         "Audit all edge functions for wildcard CORS (*) and replace with explicit origin whitelist from _shared/cors.ts",
         "Verify _shared/cors.ts allowedOrigins includes only production domain(s) and localhost for development",
-        "Add Origin header validation \u2014 reject requests from unlisted origins with 403",
+        "Add Origin header validation — reject requests from unlisted origins with 403",
         "Typecheck passes"
       ],
       "priority": 100,
       "passes": true,
-      "notes": "SECURITY AUDIT: stripe-webhook/index.ts has Access-Control-Allow-Origin: * which is dangerous for any endpoint. Webhooks don't need CORS at all \u2014 they're called server-to-server by Stripe. Other edge functions should also be audited to ensure they don't use wildcard CORS."
+      "notes": "SECURITY AUDIT: stripe-webhook/index.ts has Access-Control-Allow-Origin: * which is dangerous for any endpoint. Webhooks don't need CORS at all — they're called server-to-server by Stripe. Other edge functions should also be audited to ensure they don't use wildcard CORS."
     },
     {
       "id": "US-101",
@@ -1681,24 +1681,24 @@
       ],
       "priority": 101,
       "passes": false,
-      "notes": "DATA LAYER AUDIT: No mutation in the codebase uses TanStack Query's optimistic update pattern (onMutate + rollback). Users currently wait for the full server round-trip before seeing UI changes \u2014 toggling a favorite takes 300-800ms of visible delay. Optimistic updates make this instant with automatic rollback on failure."
+      "notes": "DATA LAYER AUDIT: No mutation in the codebase uses TanStack Query's optimistic update pattern (onMutate + rollback). Users currently wait for the full server round-trip before seeing UI changes — toggling a favorite takes 300-800ms of visible delay. Optimistic updates make this instant with automatic rollback on failure."
     },
     {
       "id": "US-102",
       "title": "Remove dead/unused hooks from src/hooks/",
       "description": "As a developer, I need unused hooks removed from the codebase so that the project is cleaner, easier to navigate, and has less dead code to maintain.",
       "acceptanceCriteria": [
-        "Verify and remove useCompetitorAnalysis.ts \u2014 confirmed 0 imports anywhere in src/",
-        "Verify and remove useLocationTracking.ts \u2014 confirmed 0 imports",
-        "Verify and remove useEventClone.ts \u2014 confirmed 0 imports",
-        "Verify and remove useFormAccessibility.ts \u2014 confirmed 0 imports",
+        "Verify and remove useCompetitorAnalysis.ts — confirmed 0 imports anywhere in src/",
+        "Verify and remove useLocationTracking.ts — confirmed 0 imports",
+        "Verify and remove useEventClone.ts — confirmed 0 imports",
+        "Verify and remove useFormAccessibility.ts — confirmed 0 imports",
         "Audit suspicious low-usage hooks (useDomainHighlights, useKnownVenues, useNLPSearch, useProximitySearch, useSimplePersonalization, useWriteupGenerator) and remove if truly unused",
-        "Verify no runtime errors from removals \u2014 typecheck passes and build passes",
+        "Verify no runtime errors from removals — typecheck passes and build passes",
         "Typecheck passes"
       ],
       "priority": 102,
       "passes": true,
-      "notes": "DATA LAYER AUDIT: 4 hooks confirmed with zero imports anywhere in src/. Several more hooks have suspiciously low usage. The hooks/ directory has 101+ hooks \u2014 removing dead ones reduces cognitive load and maintenance burden."
+      "notes": "DATA LAYER AUDIT: 4 hooks confirmed with zero imports anywhere in src/. Several more hooks have suspiciously low usage. The hooks/ directory has 101+ hooks — removing dead ones reduces cognitive load and maintenance burden."
     },
     {
       "id": "US-103",
@@ -1715,7 +1715,7 @@
       ],
       "priority": 103,
       "passes": false,
-      "notes": "DATA LAYER AUDIT: ~110 instances of 'any' type across 130 hooks (85% of hooks use 'any' somewhere). The 5 worst offenders are useAdvancedAnalytics (12+), useAnalytics (10+), useAIConfiguration (3+), useAdminSecurity (mixed), and useAdminCampaigns. These are analytics and admin hooks that handle complex data \u2014 proper types prevent silent data corruption bugs."
+      "notes": "DATA LAYER AUDIT: ~110 instances of 'any' type across 130 hooks (85% of hooks use 'any' somewhere). The 5 worst offenders are useAdvancedAnalytics (12+), useAnalytics (10+), useAIConfiguration (3+), useAdminSecurity (mixed), and useAdminCampaigns. These are analytics and admin hooks that handle complex data — proper types prevent silent data corruption bugs."
     },
     {
       "id": "US-104",
@@ -1955,7 +1955,7 @@
         "RestaurantCard hover CTA strip becomes visible on keyboard focus-within (not just mouse hover)",
         "Add group-focus-within:translate-y-0 class alongside existing group-hover:translate-y-0",
         "CTA buttons within the strip are reachable via Tab key",
-        "Focus order is logical: card content \u2192 CTA buttons",
+        "Focus order is logical: card content → CTA buttons",
         "Visual focus indicator is visible on CTA buttons",
         "Typecheck passes"
       ],
@@ -2117,7 +2117,7 @@
         "Time is formatted in 12-hour format with AM/PM for US audience",
         "If time is not available (date-only events), only the date is shown",
         "Time display is compact and doesn't increase card height significantly",
-        "Time uses a subtle visual separator (@ or \u2022) between date and time",
+        "Time uses a subtle visual separator (@ or •) between date and time",
         "Typecheck passes"
       ],
       "priority": 128,
@@ -2159,7 +2159,7 @@
     },
     {
       "id": "US-131",
-      "title": "iOS Dark Interface \u2014 dynamic status bar and system theme support",
+      "title": "iOS Dark Interface — dynamic status bar and system theme support",
       "description": "As an iOS user with system dark mode enabled, I need the app to honor my OS dark/light preference so that the interface matches my system setting and reduces eye strain for dark-mode users.",
       "acceptanceCriteria": [
         "mobile-app/capacitor.config.ts StatusBar.style changed from 'DARK' to 'DEFAULT' (follows system preference)",
@@ -2177,7 +2177,7 @@
     },
     {
       "id": "US-132",
-      "title": "iOS Captions \u2014 enable inline media playback for WebVTT caption tracks",
+      "title": "iOS Captions — enable inline media playback for WebVTT caption tracks",
       "description": "As an iOS user who relies on captions, I need video content to play inline with WebVTT caption tracks available so that I can read captions without entering fullscreen and without the WKWebView blocking track loading.",
       "acceptanceCriteria": [
         "mobile-app/capacitor.config.ts ios section adds allowsInlineMediaPlayback: true",
@@ -2189,11 +2189,11 @@
       ],
       "priority": 132,
       "passes": true,
-      "notes": "Apple App Store accessibility requirement: Captions. Without allowsInlineMediaPlayback: true in the iOS Capacitor config, the WKWebView forces all video into fullscreen mode which can disrupt WebVTT track rendering. The VideoPlayer component already has full caption support (captions prop, <track kind=captions>, toggle button, keyboard shortcut) \u2014 this story ensures the native iOS layer does not block it."
+      "notes": "Apple App Store accessibility requirement: Captions. Without allowsInlineMediaPlayback: true in the iOS Capacitor config, the WKWebView forces all video into fullscreen mode which can disrupt WebVTT track rendering. The VideoPlayer component already has full caption support (captions prop, <track kind=captions>, toggle button, keyboard shortcut) — this story ensures the native iOS layer does not block it."
     },
     {
       "id": "US-133",
-      "title": "iOS Audio Descriptions \u2014 add audio description track support to VideoPlayer",
+      "title": "iOS Audio Descriptions — add audio description track support to VideoPlayer",
       "description": "As a blind or low-vision iOS user, I need video content to offer audio description tracks (kind='descriptions') so that I can hear narration of on-screen visual content that is not conveyed through dialogue alone.",
       "acceptanceCriteria": [
         "VideoPlayer.tsx defines VideoAudioDescription interface (src, srclang, label, default?) matching VideoCaption",
@@ -2223,7 +2223,7 @@
       ],
       "priority": 134,
       "passes": false,
-      "notes": "SHANNON DEFENSE: validate-source-urls and fix-broken-event-urls fetch URLs from the database. An attacker could potentially inject malicious URLs. validateURLForSSRF already exists in _shared/validation.ts \u2014 apply it before every fetch."
+      "notes": "SHANNON DEFENSE: validate-source-urls and fix-broken-event-urls fetch URLs from the database. An attacker could potentially inject malicious URLs. validateURLForSSRF already exists in _shared/validation.ts — apply it before every fetch."
     },
     {
       "id": "US-135",

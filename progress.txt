@@ -96,6 +96,32 @@
 
 ## Progress Log
 
+## 2026-03-05 — Ralph Loop 10: Form A11y, AuthContext Split, Performance, SEO, UX
+
+- **US-079**: Improved form accessibility in EventSubmissionForm:
+  - Added FormErrorSummary with clickable field links at form top on validation failure
+  - Wrapped all sections in `<fieldset>` + `<legend>` (Basic Info, Location, Additional Details, Tags)
+  - Added `aria-invalid` and `aria-describedby` to all error-producing fields
+  - Added `autoComplete` attributes: email, tel, street-address, url
+- **US-080**: Split AuthContext into state and actions contexts:
+  - Created `AuthStateContext` (read-only state) and `AuthActionsContext` (actions only)
+  - Added `useAuthState()` — components reading only state won't re-render when action refs change
+  - Added `useAuthActions()` — action-only components won't re-render on session changes
+  - `useAuth()` remains backward-compatible, combines both contexts
+  - Actions memoized via `useMemo` for stable references
+- **US-081**: Created centralized TanStack Query configuration:
+  - `src/lib/queryKeys.ts` with query key factory for events, restaurants, attractions, favorites, ratings, search, admin, user
+  - `CACHE_TIERS` with 4 tiers: static (10m), standard (2m), frequent (30s), realtime (15s)
+- **US-082**: Verified Three.js already deferred, added React.memo to HeroCityLite
+- **US-083**: Added React.memo to RestaurantCard and SocialEventCard; added useCallback for event detail navigation handler in EventsPage
+- **US-090**: Added focus-visible ring styles to SocialEventCard and EventCard for keyboard navigation
+- **US-092**: Added FAQ section with Schema.org FAQPage structured data to TripPlanner (5 questions targeting long-tail search)
+- **US-095**: Added toast feedback to FavoriteButton; moved Sonner to top-center to avoid BottomNav overlap
+
+**Build verified**: `npm run build` passes (56s, no errors)
+
+**Progress: 84/140 stories complete (60%), 56 remaining**
+
 ## 2026-03-04 — Ralph Loop 9: Accessibility, SEO, UX Polish
 
 - **US-077**: Fixed heading hierarchy violations across pages:

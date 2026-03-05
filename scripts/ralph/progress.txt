@@ -49,3 +49,23 @@ Started: 2026-02-28T03:00:00Z
   - EmptyState component already exists at src/components/ui/empty-state.tsx — reuse it
   - SortDropdown exports shared option arrays (EVENT_SORT_OPTIONS, RESTAURANT_SORT_OPTIONS, ATTRACTION_SORT_OPTIONS)
 ---
+
+## 2026-03-05 — US-079, US-080, US-081, US-082, US-083, US-090, US-092, US-095
+- US-079: Improved form accessibility in EventSubmissionForm — added FormErrorSummary with focusField, wrapped sections in fieldsets/legends, added aria-invalid + aria-describedby to error fields, added autoComplete to email/tel/address/url
+- US-080: Split AuthContext into AuthStateContext + AuthActionsContext — useAuthState() for read-only state, useAuthActions() for dispatch-only; useAuth() remains backward-compatible; actions memoized via useMemo
+- US-081: Created src/lib/queryKeys.ts — centralized query key factory (events, restaurants, attractions, favorites, ratings, search, admin, user) + CACHE_TIERS (static 10m, standard 2m, frequent 30s, realtime 15s)
+- US-082: Verified HeroCityLite already lazy-loaded via React.lazy+Suspense; added React.memo wrapper to prevent re-renders; mobile builds skip Three.js via __MOBILE_APP__ dead code elimination
+- US-083: Added React.memo to RestaurantCard and SocialEventCard; added useCallback for handleViewEventDetails in EventsPage; EventCard already had memo wrapper
+- US-090: Added focus-visible:ring-2 styles to SocialEventCard Link and focus-within:ring-2 to EventCard; RestaurantCard already had focus-visible styling; global focus-visible styles exist in index.css
+- US-092: FAQSection with showSchema=true already on EventsPage, Restaurants, Attractions; added FAQ section with 5 questions to TripPlanner page targeting long-tail search queries
+- US-095: Added toast feedback to FavoriteButton (Added/Removed from favorites with dedup IDs); moved Sonner position to top-center to avoid BottomNav overlap on mobile
+- **Build**: npm run build passes (56s, no errors)
+- Files changed: src/components/EventSubmissionForm.tsx, src/contexts/AuthContext.tsx, src/lib/queryKeys.ts, src/components/HeroCityLite.tsx, src/components/RestaurantCard.tsx, src/components/SocialEventCard.tsx, src/components/EventCard.tsx, src/pages/EventsPage.tsx, src/pages/TripPlanner.tsx, src/components/FavoriteButton.tsx, src/components/ui/sonner.tsx, prd.json
+- **Progress**: 84/140 stories complete (60%), 56 remaining
+- **Learnings for future iterations:**
+  - FormErrorSummary + useFormErrors already exist at src/components/ui/form-error-summary.tsx — reuse them
+  - AuthContext split pattern: keep combined useAuth() for backward compat, add useAuthState()/useAuthActions() for granular consumption
+  - queryKeys factory pattern: use `as const` for type-safe keys, nest by domain
+  - FAQSection already embeds FAQSchema via showSchema prop — no need to import FAQSchema separately
+  - Sonner position="top-center" avoids mobile BottomNav overlap
+---
