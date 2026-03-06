@@ -90,10 +90,10 @@ function DefaultErrorFallback({ error, resetError }: { error?: Error; resetError
             We encountered an unexpected error. Please try refreshing the page or return to the homepage.
           </p>
           
-          {error && import.meta.env.DEV && (
-            <details className="bg-muted p-3 rounded text-sm">
+          {error && (
+            <details className="bg-muted p-3 rounded text-sm" open>
               <summary className="cursor-pointer font-medium">Error Details</summary>
-              <pre className="mt-2 whitespace-pre-wrap text-xs">{error.message}</pre>
+              <pre className="mt-2 whitespace-pre-wrap text-xs break-all">{error.message}{'\n'}{error.stack}</pre>
             </details>
           )}
 
