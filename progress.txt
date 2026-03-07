@@ -96,6 +96,41 @@
 
 ## Progress Log
 
+## 2026-03-07 — Ralph Loop 12: Critical Platform Improvements (Performance, UX, Accessibility)
+
+- **US-144**: Reduced hover animation durations across all card components:
+  - RestaurantCard: duration-300 → duration-200 on article, image scale, and CTA strip transitions
+  - HotelCard: duration-300 → duration-200 on image scale, overlay, and CTA transitions
+  - Attractions page: duration-300 → duration-200 on card hover and image scale
+  - EventCard already used duration-200 (verified)
+- **US-093**: Replaced raw `<img>` tags with OptimizedImage component:
+  - EventCard: switched to OptimizedImage with 640x192 dimensions, aspect ratio, responsive sizes
+  - RestaurantCard: switched to OptimizedImage with 640x192 dimensions, responsive sizes
+  - Attractions page: switched inline card images to OptimizedImage with aspect-video wrapper
+  - All images now get Intersection Observer lazy loading, blur placeholders, and WebP/AVIF via picture element
+- **US-088**: Added pagination controls to Restaurants and Attractions pages:
+  - Both pages: 30 items per page, page state resets on filter changes
+  - Desktop: full pagination controls using shadcn pagination component (Previous, page numbers, Ellipsis, Next)
+  - Mobile: "Load More" button pattern for touch-friendly infinite scroll
+  - Results count display: "Showing X-Y of Z" on desktop, "Showing X of Z" on mobile
+  - Scroll-to-top on page change (desktop)
+- **US-094**: Added interactive map accessibility:
+  - Added `role="application"` and descriptive `aria-label` to InteractiveMap container
+  - Added "Skip map, view as list" link (sr-only, visible on focus) before map
+  - Added "Show list view" toggle button for all users
+  - Built keyboard-accessible list alternative showing all map locations with name, category, rating, distance
+  - List view uses semantic `<ul>` with `<Link>` items for full keyboard navigation
+- **US-141/US-142/US-143/US-146/US-120**: Verified already complete in codebase, marked as passed:
+  - Card images already have width/height attributes (US-141)
+  - All cards have decoding="async" + loading="lazy" (US-142)
+  - Image fallback placeholders have role="img" + aria-label (US-143)
+  - Three.js skipped on mobile via useMediaQuery (US-146)
+  - FAQ sections with schema on Events and Attractions pages (US-120)
+
+**Build verified**: `npm run build` passes (45s, no errors)
+
+**Progress: 102/147 stories complete (69%), 45 remaining**
+
 ## 2026-03-05 — Ralph Loop 10: Form A11y, AuthContext Split, Performance, SEO, UX
 
 - **US-079**: Improved form accessibility in EventSubmissionForm:

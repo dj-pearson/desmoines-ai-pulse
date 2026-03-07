@@ -1474,7 +1474,7 @@
         "Typecheck passes"
       ],
       "priority": 88,
-      "passes": false,
+      "passes": true,
       "notes": "UI/UX AUDIT: EventsPage has EVENTS_PER_PAGE=30 and page state but no visible pagination controls — users can't navigate to page 2. The pagination.tsx component exists in src/components/ui/ but is never imported on any listing page. Large result sets render all items, causing performance degradation."
     },
     {
@@ -1554,7 +1554,7 @@
         "Typecheck passes"
       ],
       "priority": 93,
-      "passes": false,
+      "passes": true,
       "notes": "PERFORMANCE AUDIT: EventCard.tsx uses raw <img> tags instead of the existing OptimizedImage component. No aspect ratio wrappers mean images cause layout shift as they load. Card images load full-resolution (~800KB) instead of thumbnail sizes. On mobile list views, this wastes 2-5MB of bandwidth per page. The OptimizedImage component already exists and handles lazy loading, WebP, and error states."
     },
     {
@@ -1569,7 +1569,7 @@
         "Typecheck passes"
       ],
       "priority": 94,
-      "passes": false,
+      "passes": true,
       "notes": "ACCESSIBILITY AUDIT: Leaflet maps are notoriously inaccessible to screen reader users. The InteractiveMap component lacks role, aria-label, and any keyboard alternative. Users who can't interact with the visual map have no way to access the location-based content it displays. WCAG 1.1.1 requires a text alternative for all non-text content."
     },
     {
@@ -1993,7 +1993,7 @@
         "Typecheck passes"
       ],
       "priority": 120,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: FAQ sections with schema markup can earn rich snippets in Google search results, increasing CTR by 20-30%. Restaurants page has good FAQ implementation. Events and Attractions pages should have equally strong FAQ sections. FAQ content also improves time on page and provides value to users who scroll below listings."
     },
     {
@@ -2327,7 +2327,7 @@
         "Typecheck passes"
       ],
       "priority": 141,
-      "passes": false,
+      "passes": true,
       "notes": "PAGESPEED CRITICAL: Missing width/height on images is the #1 CLS culprit on mobile. Even though CSS sets h-48/h-40, the browser can't reserve layout space without intrinsic dimensions. Adding width=640 height=192 (or equivalent aspect ratio) prevents the jank users see when scrolling through card lists on 4G connections. This is the single cheapest fix for the biggest PageSpeed score improvement."
     },
     {
@@ -2343,7 +2343,7 @@
         "Typecheck passes"
       ],
       "priority": 142,
-      "passes": false,
+      "passes": true,
       "notes": "PAGESPEED HIGH: EventCard and RestaurantCard already have loading='lazy' and decoding='async', but HotelCard only has loading='lazy' (missing decoding='async'), and DealCard has loading='lazy' but no decoding='async'. Consistency matters — every card image in a scrollable list should defer decoding to the browser's idle time."
     },
     {
@@ -2358,7 +2358,7 @@
         "Typecheck passes"
       ],
       "priority": 143,
-      "passes": false,
+      "passes": true,
       "notes": "PAGESPEED ACCESSIBILITY: When an image fails to load, sighted users see a gradient placeholder with an icon. Screen reader users get nothing — the div has no semantic meaning. Adding role='img' with a descriptive aria-label closes this accessibility gap. Affects the Accessibility score category in PageSpeed."
     },
     {
@@ -2374,7 +2374,7 @@
         "Typecheck passes"
       ],
       "priority": 144,
-      "passes": false,
+      "passes": true,
       "notes": "PAGESPEED MEDIUM: On mobile devices without hover, these animations still get parsed and the 300-500ms durations contribute to style recalculation costs. The 500ms scale transition on RestaurantCard is particularly expensive when 20+ cards are in the DOM. Reducing durations improves INP by 20-50ms on mid-range Android devices."
     },
     {
@@ -2406,7 +2406,7 @@
         "Typecheck passes"
       ],
       "priority": 146,
-      "passes": false,
+      "passes": true,
       "notes": "PAGESPEED CRITICAL: The HeroCityLite component imports Three.js + React Three Fiber + custom WebGL shaders, producing an 800KB chunk. On mobile 4G, downloading and parsing this adds 2-4 seconds to TBT. The 3D effect is barely visible on small screens anyway. The useMediaQuery fix (initializing from window.matchMedia synchronously) prevents the lazy import from triggering on the first render cycle before the effect runs."
     },
     {

@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Navigation, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { MapPin, Navigation, ZoomIn, ZoomOut, Maximize2, List, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCategoryHex } from '@/lib/categoryColors';
 
@@ -273,15 +273,45 @@ export function InteractiveMap({
     });
   };
 
+  const [showListView, setShowListView] = useState(false);
+
   return (
-    <div
-      className={cn(
-        'relative rounded-lg overflow-hidden shadow-lg',
-        isFullscreen && 'fixed inset-0 z-[9999] rounded-none',
-        className
-      )}
-      style={{ height: isFullscreen ? '100vh' : height }}
-    >
+    <div className={cn('relative', className)}>
+      {/* Skip link for screen readers and keyboard users */}
+      <a
+        href="#map-list-alternative"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[1001] focus:top-2 focus:left-2 focus:bg-white focus:text-primary focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg focus:text-sm focus:font-medium"
+        onClick={(e) => {
+          e.preventDefault();
+          setShowListView(true);
+          document.getElementById('map-list-alternative')?.scrollIntoView({ behavior: 'smooth' });
+        }}
+      >
+        Skip map, view as list
+      </a>
+
+      {/* Map toggle */}
+      <div className="flex justify-end mb-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowListView(!showListView)}
+          className="text-xs"
+        >
+          <List className="h-3.5 w-3.5 mr-1.5" />
+          {showListView ? 'Hide list view' : 'Show list view'}
+        </Button>
+      </div>
+
+      <div
+        role="application"
+        aria-label={`Interactive map showing ${validLocations.length} locations in Des Moines`}
+        className={cn(
+          'relative rounded-lg overflow-hidden shadow-lg',
+          isFullscreen && 'fixed inset-0 z-[9999] rounded-none',
+        )}
+        style={{ height: isFullscreen ? '100vh' : height }}
+      >
       <MapContainer
         center={mapCenter}
         zoom={zoom}
@@ -365,6 +395,45 @@ export function InteractiveMap({
         <span className="text-sm font-medium">
           {validLocations.length} location{validLocations.length !== 1 ? 's' : ''}
         </span>
+      </div>
+      </div>
+
+      {/* Keyboard-accessible list alternative */}
+      <div id="map-list-alternative" tabIndex={-1}>
+        {showListView && validLocations.length > 0 && (
+          <div className="mt-4 border rounded-lg overflow-hidden" role="region" aria-label="Map locations as list">
+            <div className="bg-muted px-4 py-2 border-b">
+              <h3 className="text-sm font-semibold">{validLocations.length} Locations</h3>
+            </div>
+            <ul className="divide-y max-h-[400px] overflow-y-auto">
+              {validLocations.map((location) => (
+                <li key={location.id}>
+                  <Link
+                    to={`${linkPrefix}/${location.slug || location.id}`}
+                    className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{location.name}</p>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                        {location.category && <span>{location.category}</span>}
+                        {location.rating && (
+                          <span className="flex items-center gap-0.5">
+                            <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                            {location.rating.toFixed(1)}
+                          </span>
+                        )}
+                        {location.distance_miles !== undefined && (
+                          <span>{location.distance_miles.toFixed(1)} mi</span>
+                        )}
+                      </div>
+                    </div>
+                    <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0 ml-2" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </div>
   );

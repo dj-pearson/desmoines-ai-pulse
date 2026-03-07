@@ -63,7 +63,7 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
               alt={hotel.name}
               width={640}
               height={192}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
               loading="lazy"
               decoding="async"
             />
@@ -88,8 +88,8 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
           )}
 
           {/* Hover CTA */}
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300 flex items-end justify-center pb-4">
-            <span className="text-white text-sm font-medium opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-300 bg-black/60 px-4 py-1.5 rounded-full">
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-end justify-center pb-4">
+            <span className="text-white text-sm font-medium opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all duration-200 bg-black/60 px-4 py-1.5 rounded-full">
               View Hotel Details
             </span>
           </div>

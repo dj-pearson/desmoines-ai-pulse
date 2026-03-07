@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles } from "lucide-react";
 import { memo, useState, useMemo } from "react";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
@@ -104,21 +105,21 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
       aria-label={`View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
     >
       <article
-        className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-300 group-hover:shadow-xl group-hover:-translate-y-1.5 ${
+        className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-200 group-hover:shadow-xl group-hover:-translate-y-1.5 ${
           restaurant.is_sponsored ? "ring-2 ring-amber-400 shadow-lg" : isFeatured ? "ring-2 ring-amber-400/50 shadow-lg" : "shadow-sm"
         }`}
       >
         {/* Image / Gradient Header */}
         <div className={`relative overflow-hidden ${variant === "compact" ? "h-36" : "h-48"}`}>
           {showImage ? (
-            <img
-              src={restaurant.image_url}
+            <OptimizedImage
+              src={restaurant.image_url!}
               alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in Des Moines`}
               width={640}
               height={192}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-              loading="lazy"
-              decoding="async"
+              className="transition-transform duration-200 group-hover:scale-105 object-cover"
+              containerClassName="absolute inset-0"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               onError={() => setImageError(true)}
             />
           ) : (
@@ -224,7 +225,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
         </div>
 
         {/* Hover CTA strip */}
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] text-white text-center py-2 text-sm font-medium translate-y-full group-hover:translate-y-0 group-focus-within:translate-y-0 transition-transform duration-300">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] text-white text-center py-2 text-sm font-medium translate-y-full group-hover:translate-y-0 group-focus-within:translate-y-0 transition-transform duration-200">
           View Restaurant Details
         </div>
       </article>
