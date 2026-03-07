@@ -2311,6 +2311,86 @@
       "priority": 140,
       "passes": false,
       "notes": "SHANNON DEFENSE: Internal testing using Shannon's methodology (recon, vuln analysis, exploitation, reporting) closes the security gap between shipping code and annual pentests. Document the workflow so it can be run consistently."
+    },
+    {
+      "id": "US-141",
+      "title": "Add explicit width/height to card images to eliminate CLS",
+      "description": "As a mobile user, I need images in event, restaurant, hotel, and deal cards to have explicit width and height attributes so that the browser can reserve space before images load and prevent Cumulative Layout Shift (CLS).",
+      "acceptanceCriteria": [
+        "All <img> tags in EventCard.tsx include width and height attributes matching their CSS container dimensions",
+        "All <img> tags in RestaurantCard.tsx include width and height attributes",
+        "All <img> tags in HotelCard.tsx include width and height attributes",
+        "All <img> tags in DealCard.tsx include width and height attributes",
+        "Image fallback divs include role='img' and descriptive aria-label for accessibility",
+        "CLS contribution from card images reduced to near-zero",
+        "No visual regressions — images still display correctly with object-cover",
+        "Typecheck passes"
+      ],
+      "priority": 141,
+      "passes": false,
+      "notes": "PAGESPEED CRITICAL: Missing width/height on images is the #1 CLS culprit on mobile. Even though CSS sets h-48/h-40, the browser can't reserve layout space without intrinsic dimensions. Adding width=640 height=192 (or equivalent aspect ratio) prevents the jank users see when scrolling through card lists on 4G connections. This is the single cheapest fix for the biggest PageSpeed score improvement."
+    },
+    {
+      "id": "US-142",
+      "title": "Add decoding='async' and loading='lazy' to all card images consistently",
+      "description": "As a mobile user on a slow connection, I need all card images to use consistent lazy loading and async decoding so that images below the fold don't block the critical rendering path.",
+      "acceptanceCriteria": [
+        "All <img> tags in HotelCard.tsx include decoding='async' attribute",
+        "All <img> tags in DealCard.tsx include decoding='async' attribute",
+        "All <img> tags in EventHotelCallout.tsx include decoding='async' attribute",
+        "Verify EventCard.tsx and RestaurantCard.tsx already have both attributes",
+        "No above-the-fold hero images use loading='lazy' (that would hurt LCP)",
+        "Typecheck passes"
+      ],
+      "priority": 142,
+      "passes": false,
+      "notes": "PAGESPEED HIGH: EventCard and RestaurantCard already have loading='lazy' and decoding='async', but HotelCard only has loading='lazy' (missing decoding='async'), and DealCard has loading='lazy' but no decoding='async'. Consistency matters — every card image in a scrollable list should defer decoding to the browser's idle time."
+    },
+    {
+      "id": "US-143",
+      "title": "Add accessible roles and labels to image fallback placeholders",
+      "description": "As a screen reader user, I need image fallback placeholders (gradient divs shown when images fail to load) to have proper ARIA roles and labels so that I understand what content is missing.",
+      "acceptanceCriteria": [
+        "EventCard.tsx fallback div includes role='img' and aria-label describing the missing image",
+        "RestaurantCard.tsx gradient fallback includes role='img' and aria-label",
+        "HotelCard.tsx gradient fallback includes role='img' and aria-label",
+        "Screen readers announce meaningful text (e.g., 'No image available for [item name]') instead of nothing",
+        "Typecheck passes"
+      ],
+      "priority": 143,
+      "passes": false,
+      "notes": "PAGESPEED ACCESSIBILITY: When an image fails to load, sighted users see a gradient placeholder with an icon. Screen reader users get nothing — the div has no semantic meaning. Adding role='img' with a descriptive aria-label closes this accessibility gap. Affects the Accessibility score category in PageSpeed."
+    },
+    {
+      "id": "US-144",
+      "title": "Reduce excessive hover animation durations for mobile TBT improvement",
+      "description": "As a mobile user, I need hover/transition animations on cards to use shorter durations so that Total Blocking Time (TBT) and Interaction to Next Paint (INP) are reduced on low-end devices.",
+      "acceptanceCriteria": [
+        "EventCard.tsx hover:scale transition reduced from duration-300 to duration-200",
+        "RestaurantCard.tsx group-hover:scale transition reduced from duration-500 to duration-300",
+        "HotelCard.tsx hover:-translate-y transition reduced from duration-300 to duration-200",
+        "Card hover shadow transitions use duration-200 instead of duration-300 where applicable",
+        "No visual regression — animations still feel smooth but snappier",
+        "Typecheck passes"
+      ],
+      "priority": 144,
+      "passes": false,
+      "notes": "PAGESPEED MEDIUM: On mobile devices without hover, these animations still get parsed and the 300-500ms durations contribute to style recalculation costs. The 500ms scale transition on RestaurantCard is particularly expensive when 20+ cards are in the DOM. Reducing durations improves INP by 20-50ms on mid-range Android devices."
+    },
+    {
+      "id": "US-145",
+      "title": "Optimize Google Analytics fallback timeout for slower devices",
+      "description": "As a mobile user on a slow device, I need the Google Analytics fallback to use a longer timeout so that the GA script doesn't compete with critical rendering during Time to Interactive (TTI).",
+      "acceptanceCriteria": [
+        "index.html GA fallback setTimeout changed from 2000ms to 4000ms",
+        "requestIdleCallback path remains unchanged (already optimal)",
+        "GA still loads on all browsers including those without requestIdleCallback",
+        "No impact on analytics data collection accuracy",
+        "Typecheck passes"
+      ],
+      "priority": 145,
+      "passes": false,
+      "notes": "PAGESPEED LOW: The GA script correctly uses requestIdleCallback for modern browsers, but the fallback path fires at 2000ms which can overlap with TTI on 3G connections. Pushing to 4000ms gives the main thread more room to finish critical work. Minor impact but easy win."
     }
   ]
 }

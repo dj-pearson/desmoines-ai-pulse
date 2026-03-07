@@ -24,9 +24,9 @@ function HotelMiniCard({ hotel, distance, notes }: { hotel: Hotel; distance?: nu
           {/* Image or placeholder */}
           <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0">
             {hotel.image_url ? (
-              <img src={hotel.image_url} alt={hotel.name} className="w-full h-full object-cover" loading="lazy" />
+              <img src={hotel.image_url} alt={hotel.name} width={80} height={80} className="w-full h-full object-cover" loading="lazy" decoding="async" />
             ) : (
-              <div className="w-full h-full bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center">
+              <div className="w-full h-full bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${hotel.name}`}>
                 <Building2 className="h-6 w-6 text-white/70" />
               </div>
             )}

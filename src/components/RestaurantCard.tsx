@@ -114,13 +114,15 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
             <img
               src={restaurant.image_url}
               alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in Des Moines`}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+              width={640}
+              height={192}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
               loading="lazy"
               decoding="async"
               onError={() => setImageError(true)}
             />
           ) : (
-            <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`}>
+            <div className={`absolute inset-0 bg-gradient-to-br ${gradient}`} role="img" aria-label={`No image available for ${restaurant.name}`}>
               <div className="absolute inset-0 opacity-10">
                 <div className="absolute top-4 right-4 w-24 h-24 border-2 border-white/30 rounded-full" />
                 <div className="absolute bottom-4 left-4 w-16 h-16 border-2 border-white/20 rounded-full" />

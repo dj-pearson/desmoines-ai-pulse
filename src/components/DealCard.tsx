@@ -33,7 +33,7 @@ export function DealCard({ deal, onClaim }: DealCardProps) {
     <Card className="h-full flex flex-col">
       {deal.image_url && (
         <div className="h-40 overflow-hidden rounded-t-lg">
-          <img src={deal.image_url} alt={deal.title} className="w-full h-full object-cover" loading="lazy" />
+          <img src={deal.image_url} alt={deal.title} width={640} height={160} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         </div>
       )}
       <CardContent className="p-5 flex flex-col flex-1">
