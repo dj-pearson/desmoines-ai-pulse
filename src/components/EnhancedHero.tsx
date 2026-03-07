@@ -12,7 +12,7 @@ declare const __MOBILE_APP__: boolean | undefined;
 const IS_NATIVE = typeof __MOBILE_APP__ !== 'undefined' && __MOBILE_APP__;
 
 // Lazy load the 3D component – skip entirely in mobile app builds
-// (Three.js + WebGL is too heavy for the native WKWebView/WebView)
+// AND on mobile-width browsers (Three.js + WebGL is too heavy for mobile)
 const HeroCityLite = IS_NATIVE
   ? null
   : lazy(() => import("./HeroCityLite"));
@@ -75,8 +75,8 @@ export function EnhancedHero({
         className
       )}
     >
-      {/* 3D City Background – replaced with lightweight gradient in mobile app */}
-      {HeroCityLite ? (
+      {/* 3D City Background – skip on mobile web (saves 800KB Three.js) and native apps */}
+      {HeroCityLite && !isMobile ? (
         <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-[#0a0a1a] via-[#1a1a2e] to-[#2D1B69]" />}>
           <HeroCityLite />
         </Suspense>
