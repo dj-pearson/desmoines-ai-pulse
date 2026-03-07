@@ -2391,6 +2391,40 @@
       "priority": 145,
       "passes": false,
       "notes": "PAGESPEED LOW: The GA script correctly uses requestIdleCallback for modern browsers, but the fallback path fires at 2000ms which can overlap with TTI on 3G connections. Pushing to 4000ms gives the main thread more room to finish critical work. Minor impact but easy win."
+    },
+    {
+      "id": "US-146",
+      "title": "Skip Three.js 3D hero on mobile web to save 800KB JS",
+      "description": "As a mobile web user, I need the homepage to skip loading the Three.js 3D cityscape background so that the page loads 800KB less JavaScript and achieves dramatically better TBT, LCP, and Speed Index scores.",
+      "acceptanceCriteria": [
+        "EnhancedHero.tsx skips rendering HeroCityLite when useMediaQuery detects mobile viewport (max-width: 768px)",
+        "Mobile users see the lightweight gradient fallback instead of 3D canvas",
+        "Desktop users still see the full 3D cityscape",
+        "useMediaQuery hook initializes synchronously via window.matchMedia to prevent flash-loading Three.js on first render",
+        "HeroCityLite chunk (800KB) is never downloaded on mobile viewports",
+        "No visual regression on desktop",
+        "Typecheck passes"
+      ],
+      "priority": 146,
+      "passes": false,
+      "notes": "PAGESPEED CRITICAL: The HeroCityLite component imports Three.js + React Three Fiber + custom WebGL shaders, producing an 800KB chunk. On mobile 4G, downloading and parsing this adds 2-4 seconds to TBT. The 3D effect is barely visible on small screens anyway. The useMediaQuery fix (initializing from window.matchMedia synchronously) prevents the lazy import from triggering on the first render cycle before the effect runs."
+    },
+    {
+      "id": "US-147",
+      "title": "Create pagespeed-report edge function for comprehensive PageSpeed analysis",
+      "description": "As an admin, I need an edge function that calls the Google PageSpeed Insights API across all categories (Performance, Accessibility, Best Practices, SEO) and returns a structured JSON report so that I can monitor site health programmatically.",
+      "acceptanceCriteria": [
+        "Edge function pagespeed-report/index.ts created following existing patterns",
+        "Accepts optional url, strategy (mobile/desktop), and categories parameters",
+        "Defaults to desmoinesinsider.com mobile with all 4 categories",
+        "Returns structured JSON with: scores per category, Core Web Vitals, field data, failed/passed audits, top opportunities, resource breakdown",
+        "Uses PAGESPEED_INSIGHTS_API_KEY from Supabase secrets",
+        "CORS headers configured correctly",
+        "Typecheck passes"
+      ],
+      "priority": 147,
+      "passes": false,
+      "notes": "TOOLING: The existing check-core-web-vitals function only fetches performance category. This new function fetches all 4 categories and structures results for easy consumption by admin dashboards or CI pipelines. Can be called via: supabase functions invoke pagespeed-report --body '{\"url\":\"https://desmoinesinsider.com\"}'"
     }
   ]
 }
