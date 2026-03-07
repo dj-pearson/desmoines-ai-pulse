@@ -39,6 +39,7 @@ import {
   Beef,
   Coffee,
   Globe,
+  ChevronDown,
 } from "lucide-react";
 import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +51,15 @@ import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import {
   Select,
   SelectContent,
@@ -110,9 +120,33 @@ export default function Restaurants() {
   const [activeCuisineQuick, setActiveCuisineQuick] = useState("");
   const { toast } = useToast();
 
+  const ITEMS_PER_PAGE = 30;
+  const [page, setPage] = useState(1);
+
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
   const { announce, announcement, regionProps } = useAnnounce();
+
+  // Paginate restaurants
+  const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
+  const paginatedRestaurants = useMemo(() => {
+    if (isMobile) {
+      // Mobile: show all up to current page (load more pattern)
+      return restaurants.slice(0, page * ITEMS_PER_PAGE);
+    }
+    // Desktop: show current page only
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return restaurants.slice(start, start + ITEMS_PER_PAGE);
+  }, [restaurants, page, isMobile]);
+
+  const hasMorePages = isMobile
+    ? page * ITEMS_PER_PAGE < restaurants.length
+    : page < totalPages;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
 
   // Debounced search
   useEffect(() => {
@@ -790,14 +824,99 @@ export default function Restaurants() {
                   <RestaurantsMap restaurants={restaurants || []} />
                 </Suspense>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {restaurants.map((restaurant) => (
-                    <RestaurantCard
-                      key={restaurant.id}
-                      restaurant={restaurant}
-                    />
-                  ))}
-                </div>
+                <>
+                  {/* Results count */}
+                  <p className="text-sm text-muted-foreground mb-4">
+                    {isMobile
+                      ? `Showing ${Math.min(paginatedRestaurants.length, restaurants.length)} of ${restaurants.length} restaurants`
+                      : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, restaurants.length)}-${Math.min(page * ITEMS_PER_PAGE, restaurants.length)} of ${restaurants.length} restaurants`}
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {paginatedRestaurants.map((restaurant) => (
+                      <RestaurantCard
+                        key={restaurant.id}
+                        restaurant={restaurant}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Pagination controls */}
+                  {restaurants.length > ITEMS_PER_PAGE && (
+                    <div className="mt-8">
+                      {isMobile ? (
+                        hasMorePages && (
+                          <Button
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => setPage((p) => p + 1)}
+                          >
+                            <ChevronDown className="h-4 w-4 mr-2" />
+                            Load More Restaurants
+                          </Button>
+                        )
+                      ) : (
+                        <Pagination>
+                          <PaginationContent>
+                            {page > 1 && (
+                              <PaginationItem>
+                                <PaginationPrevious
+                                  onClick={() => {
+                                    setPage((p) => Math.max(1, p - 1));
+                                    document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
+                                  }}
+                                  className="cursor-pointer"
+                                />
+                              </PaginationItem>
+                            )}
+                            {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                              let pageNum: number;
+                              if (totalPages <= 5) {
+                                pageNum = i + 1;
+                              } else if (page <= 3) {
+                                pageNum = i + 1;
+                              } else if (page >= totalPages - 2) {
+                                pageNum = totalPages - 4 + i;
+                              } else {
+                                pageNum = page - 2 + i;
+                              }
+                              return (
+                                <PaginationItem key={pageNum}>
+                                  <PaginationLink
+                                    isActive={pageNum === page}
+                                    onClick={() => {
+                                      setPage(pageNum);
+                                      document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    {pageNum}
+                                  </PaginationLink>
+                                </PaginationItem>
+                              );
+                            })}
+                            {totalPages > 5 && page < totalPages - 2 && (
+                              <PaginationItem>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            )}
+                            {page < totalPages && (
+                              <PaginationItem>
+                                <PaginationNext
+                                  onClick={() => {
+                                    setPage((p) => Math.min(totalPages, p + 1));
+                                    document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
+                                  }}
+                                  className="cursor-pointer"
+                                />
+                              </PaginationItem>
+                            )}
+                          </PaginationContent>
+                        </Pagination>
+                      )}
+                    </div>
+                  )}
+                </>
               )}
             </section>
 

@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect, memo, useCallback } from "react";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
 
 const createSlug = (name: string): string => {
@@ -93,14 +94,15 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
       {/* Image with overlay badges */}
       <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (
-          <img
+          <OptimizedImage
             src={event.image_url}
             alt={event.title}
             width={640}
             height={192}
-            className="w-full h-48 object-cover transition-transform duration-200 group-hover:scale-105"
-            loading="lazy"
-            decoding="async"
+            className="transition-transform duration-200 group-hover:scale-105 object-cover"
+            containerClassName="w-full h-48"
+            aspectRatio="640/192"
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             onError={() => setImageError(true)}
           />
         ) : (

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, lazy } from "react";
+import React, { useState, useMemo, useEffect, lazy, Suspense } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -29,11 +29,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle } from "lucide-react";
+import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle, ChevronDown } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
 import { Link } from "react-router-dom";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import {
   Sheet,
   SheetContent,
@@ -66,6 +76,9 @@ export default function Attractions() {
   const [featuredOnly, setFeaturedOnly] = useState("all");
   const [sortBy, setSortBy] = useState("rating");
   const [viewMode, setViewMode] = useState('list');
+
+  const ITEMS_PER_PAGE = 30;
+  const [page, setPage] = useState(1);
 
   // Get all attractions first
   const { attractions: allAttractions, isLoading, error } = useAttractions({});
@@ -131,6 +144,25 @@ export default function Attractions() {
     }
     return sorted;
   }, [filteredAttractions, sortBy]);
+
+  // Pagination
+  const totalPages = Math.ceil(sortedAttractions.length / ITEMS_PER_PAGE);
+  const paginatedAttractions = useMemo(() => {
+    if (isMobile) {
+      return sortedAttractions.slice(0, page * ITEMS_PER_PAGE);
+    }
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return sortedAttractions.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedAttractions, page, isMobile]);
+
+  const hasMorePages = isMobile
+    ? page * ITEMS_PER_PAGE < sortedAttractions.length
+    : page < totalPages;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, selectedType, minRating, featuredOnly, sortBy]);
 
   // Announce result count to screen readers
   useEffect(() => {
@@ -535,68 +567,154 @@ export default function Attractions() {
             compact={isMobile}
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sortedAttractions.map((attraction) => (
-              <Link
-                key={attraction.id}
-                to={`/attractions/${createSlug(attraction.name)}`}
-                className="block"
-              >
-                <Card className="h-full hover:shadow-lg transition-all duration-300 hover:-translate-y-1 rounded-2xl overflow-hidden">
-                  {attraction.image_url ? (
-                    <div className="aspect-video overflow-hidden">
-                      <img
+          <>
+            {/* Results count */}
+            <p className="text-sm text-muted-foreground mb-4">
+              {isMobile
+                ? `Showing ${Math.min(paginatedAttractions.length, sortedAttractions.length)} of ${sortedAttractions.length} attractions`
+                : `Showing ${Math.min((page - 1) * ITEMS_PER_PAGE + 1, sortedAttractions.length)}-${Math.min(page * ITEMS_PER_PAGE, sortedAttractions.length)} of ${sortedAttractions.length} attractions`}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {paginatedAttractions.map((attraction) => (
+                <Link
+                  key={attraction.id}
+                  to={`/attractions/${createSlug(attraction.name)}`}
+                  className="block"
+                >
+                  <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
+                    {attraction.image_url ? (
+                      <OptimizedImage
                         src={attraction.image_url}
                         alt={`${attraction.name} - ${attraction.type} in Des Moines`}
-                        className="w-full h-full object-cover transition-transform duration-300 hover:scale-105"
-                        loading="lazy"
+                        width={640}
+                        height={360}
+                        className="transition-transform duration-200 hover:scale-105 object-cover"
+                        containerClassName="aspect-video overflow-hidden"
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       />
-                    </div>
-                  ) : (
-                    <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center">
-                      <Landmark className="h-12 w-12 text-white/40" />
-                    </div>
-                  )}
-                  <CardContent className="p-5">
-                    <div className="flex items-center justify-between mb-2">
-                      <Badge
-                        variant="outline"
-                        className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
-                      >
-                        <Landmark className="h-3 w-3 mr-1" />
-                        {attraction.type}
-                      </Badge>
-                      {attraction.is_featured && (
-                        <Badge className="bg-[#DC143C] text-white text-xs">Featured</Badge>
-                      )}
-                    </div>
-                    <h3 className="font-semibold text-lg line-clamp-2 mb-2">
-                      {attraction.name}
-                    </h3>
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      {attraction.rating && (
-                        <div className="flex items-center gap-2">
-                          <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          <span>{attraction.rating}/5</span>
-                        </div>
-                      )}
-                      {attraction.location && (
-                        <div className="flex items-center gap-2">
-                          <MapPin className="h-4 w-4" />
-                          <span className="line-clamp-1">{attraction.location}</span>
-                        </div>
-                      )}
-                    </div>
-                    {attraction.description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
-                        {attraction.description}
-                      </p>
+                    ) : (
+                      <div className="aspect-video bg-gradient-to-br from-[#2D1B69] to-[#DC143C] flex items-center justify-center" role="img" aria-label={`No image available for ${attraction.name}`}>
+                        <Landmark className="h-12 w-12 text-white/40" />
+                      </div>
                     )}
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                    <CardContent className="p-5">
+                      <div className="flex items-center justify-between mb-2">
+                        <Badge
+                          variant="outline"
+                          className="bg-[#2D1B69]/10 text-[#2D1B69] text-xs"
+                        >
+                          <Landmark className="h-3 w-3 mr-1" />
+                          {attraction.type}
+                        </Badge>
+                        {attraction.is_featured && (
+                          <Badge className="bg-[#DC143C] text-white text-xs">Featured</Badge>
+                        )}
+                      </div>
+                      <h3 className="font-semibold text-lg line-clamp-2 mb-2">
+                        {attraction.name}
+                      </h3>
+                      <div className="space-y-2 text-sm text-muted-foreground">
+                        {attraction.rating && (
+                          <div className="flex items-center gap-2">
+                            <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                            <span>{attraction.rating}/5</span>
+                          </div>
+                        )}
+                        {attraction.location && (
+                          <div className="flex items-center gap-2">
+                            <MapPin className="h-4 w-4" />
+                            <span className="line-clamp-1">{attraction.location}</span>
+                          </div>
+                        )}
+                      </div>
+                      {attraction.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-2">
+                          {attraction.description}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+
+            {/* Pagination controls */}
+            {sortedAttractions.length > ITEMS_PER_PAGE && (
+              <div className="mt-8">
+                {isMobile ? (
+                  hasMorePages && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setPage((p) => p + 1)}
+                    >
+                      <ChevronDown className="h-4 w-4 mr-2" />
+                      Load More Attractions
+                    </Button>
+                  )
+                ) : (
+                  <Pagination>
+                    <PaginationContent>
+                      {page > 1 && (
+                        <PaginationItem>
+                          <PaginationPrevious
+                            onClick={() => {
+                              setPage((p) => Math.max(1, p - 1));
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="cursor-pointer"
+                          />
+                        </PaginationItem>
+                      )}
+                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                        let pageNum: number;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (page <= 3) {
+                          pageNum = i + 1;
+                        } else if (page >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = page - 2 + i;
+                        }
+                        return (
+                          <PaginationItem key={pageNum}>
+                            <PaginationLink
+                              isActive={pageNum === page}
+                              onClick={() => {
+                                setPage(pageNum);
+                                window.scrollTo({ top: 0, behavior: 'smooth' });
+                              }}
+                              className="cursor-pointer"
+                            >
+                              {pageNum}
+                            </PaginationLink>
+                          </PaginationItem>
+                        );
+                      })}
+                      {totalPages > 5 && page < totalPages - 2 && (
+                        <PaginationItem>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      )}
+                      {page < totalPages && (
+                        <PaginationItem>
+                          <PaginationNext
+                            onClick={() => {
+                              setPage((p) => Math.min(totalPages, p + 1));
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="cursor-pointer"
+                          />
+                        </PaginationItem>
+                      )}
+                    </PaginationContent>
+                  </Pagination>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
 

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles } from "lucide-react";
 import { memo, useState, useMemo } from "react";
+import { OptimizedImage } from "@/components/OptimizedImage";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
@@ -111,14 +112,14 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
         {/* Image / Gradient Header */}
         <div className={`relative overflow-hidden ${variant === "compact" ? "h-36" : "h-48"}`}>
           {showImage ? (
-            <img
-              src={restaurant.image_url}
+            <OptimizedImage
+              src={restaurant.image_url!}
               alt={`${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in Des Moines`}
               width={640}
               height={192}
-              className="absolute inset-0 w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
-              loading="lazy"
-              decoding="async"
+              className="transition-transform duration-200 group-hover:scale-105 object-cover"
+              containerClassName="absolute inset-0"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
               onError={() => setImageError(true)}
             />
           ) : (
