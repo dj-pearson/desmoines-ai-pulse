@@ -89,20 +89,22 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
   };
 
   return (
-    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-300 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
+    <Card className={`overflow-hidden hover:shadow-lg transition-all duration-200 hover:scale-[1.02] card-interactive group focus-within:ring-2 focus-within:ring-primary focus-within:ring-offset-2 ${event.is_sponsored ? 'ring-2 ring-amber-400/60' : ''}`}>
       {/* Image with overlay badges */}
       <div className="relative overflow-hidden">
         {event.image_url && !imageError ? (
           <img
             src={event.image_url}
             alt={event.title}
-            className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+            width={640}
+            height={192}
+            className="w-full h-48 object-cover transition-transform duration-200 group-hover:scale-105"
             loading="lazy"
             decoding="async"
             onError={() => setImageError(true)}
           />
         ) : (
-          <div className="w-full h-48 bg-gradient-to-br from-muted to-muted/50 flex flex-col items-center justify-center gap-2">
+          <div className="w-full h-48 bg-gradient-to-br from-muted to-muted/50 flex flex-col items-center justify-center gap-2" role="img" aria-label={`No image available for ${event.title}`}>
             <ImageOff className="h-10 w-10 text-muted-foreground/50" aria-hidden="true" />
             <span className="text-xs text-muted-foreground/70">No image available</span>
           </div>

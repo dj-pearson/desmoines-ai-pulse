@@ -1,4 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from "react";
+import { Helmet } from "react-helmet-async";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -29,6 +30,7 @@ import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
 import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
+import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { AdBanner } from "@/components/AdBanner";
 
 // Lazy load below-the-fold and heavy components to improve initial load
@@ -402,15 +404,24 @@ export default function Index() {
       />
 
       {/* LocalBusiness Structured Data - Critical for Local SEO */}
-      <script type="application/ld+json">
-        {JSON.stringify(localBusinessData)}
-      </script>
+      <Helmet>
+        <script type="application/ld+json">
+          {JSON.stringify(localBusinessData)}
+        </script>
+      </Helmet>
 
       {/* BreadcrumbList Schema - Helps with rich snippets in search results */}
       <BreadcrumbListSchema
         items={[
           { name: "Home", url: BRAND.baseUrl }
         ]}
+      />
+
+      {/* Speakable Schema for GEO - enables AI search engine attribution */}
+      <SpeakableSchema
+        name={`${BRAND.name} - AI-Powered City Guide`}
+        description={BRAND.description}
+        url={BRAND.baseUrl}
       />
 
       {/* SEO and structured data for AI optimization */}

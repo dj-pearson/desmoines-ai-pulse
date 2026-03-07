@@ -54,18 +54,21 @@ export default function HotelCard({ hotel, variant = "default", showBookButton =
   const bookUrl = hotel.affiliate_url || hotel.website;
 
   return (
-    <Card className="group overflow-hidden hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+    <Card className="group overflow-hidden hover:shadow-lg transition-all duration-200 hover:-translate-y-1">
       <Link to={`/stay/${hotel.slug}`} className="block">
         <div className={`relative ${imageHeight} overflow-hidden`}>
           {hotel.image_url ? (
             <img
               src={hotel.image_url}
               alt={hotel.name}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              width={640}
+              height={192}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               loading="lazy"
+              decoding="async"
             />
           ) : (
-            <div className={`w-full h-full bg-gradient-to-br ${getGradient(hotel.hotel_type)} flex items-center justify-center`}>
+            <div className={`w-full h-full bg-gradient-to-br ${getGradient(hotel.hotel_type)} flex items-center justify-center`} role="img" aria-label={`No image available for ${hotel.name}`}>
               <Building2 className="h-12 w-12 text-white/70" />
             </div>
           )}
