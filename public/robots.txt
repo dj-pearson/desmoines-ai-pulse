@@ -171,6 +171,30 @@ Disallow: /
 User-agent: Omgilibot
 Disallow: /
 
+User-agent: Diffbot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+User-agent: img2dataset
+Disallow: /
+
+User-agent: Scrapy
+Disallow: /
+
+User-agent: Timpibot
+Disallow: /
+
+User-agent: AmazonBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
 # ============================================
 # Sitemap Locations
 # ============================================

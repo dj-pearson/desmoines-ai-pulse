@@ -10,3 +10,6 @@ export { default as LocalBusinessSchema } from './LocalBusinessSchema';
 export { default as OrganizationSchema } from './OrganizationSchema';
 export { default as HowToSchema } from './HowToSchema';
 export { default as ItemListSchema } from './ItemListSchema';
+export { default as ProductSchema } from './ProductSchema';
+export { default as SpeakableSchema } from './SpeakableSchema';
+export { default as NoIndexMeta } from './NoIndexMeta';
