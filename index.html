@@ -231,6 +231,7 @@
     </style>
 
     <!-- Core Web Vitals optimization: DNS prefetch and preconnect for critical resources -->
+    <!-- Optimized for INP (Interaction to Next Paint), LCP, and CLS -->
     <!-- Fonts: Critical for FCP and LCP -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -348,7 +349,7 @@
       }
     </script>
 
-    <!-- Defer Google Analytics to reduce FID -->
+    <!-- Defer Google Analytics to reduce INP (Interaction to Next Paint) -->
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag() {

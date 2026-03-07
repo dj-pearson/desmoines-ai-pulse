@@ -29,6 +29,8 @@ import SEOHead from '@/components/SEOHead';
 import ShareDialog from '@/components/ShareDialog';
 import { Helmet } from 'react-helmet-async';
 import { BRAND } from '@/lib/brandConfig';
+import SpeakableSchema from '@/components/schema/SpeakableSchema';
+import FAQSchema from '@/components/schema/FAQSchema';
 
 const ArticleDetails: React.FC = () => {
   const { slug } = useParams();
@@ -155,6 +157,14 @@ const ArticleDetails: React.FC = () => {
           {JSON.stringify(articleSchema)}
         </script>
       </Helmet>
+      <SpeakableSchema
+        name={article.title}
+        description={article.excerpt || article.seo_description || `Read ${article.title} on ${BRAND.name}`}
+        url={`${BRAND.baseUrl}/articles/${article.slug}`}
+        datePublished={article.published_at || article.created_at}
+        dateModified={article.updated_at}
+        speakableCssSelectors={["[data-speakable]", "h1", "article > p:first-of-type", ".article-content > p:first-of-type"]}
+      />
       <Header />
       
       <div className="min-h-screen bg-background">
