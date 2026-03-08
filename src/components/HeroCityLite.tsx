@@ -76,7 +76,7 @@ const BuildingShaderMaterial = {
   `
 };
 
-function CityInstances({ count = 400 }) {
+function CityInstances({ count = 200 }) {
     const meshRef = useRef<InstancedMesh>(null);
     const materialRef = useRef<ShaderMaterial>(null);
     const dummy = useMemo(() => new Object3D(), []);
@@ -135,7 +135,7 @@ function CityInstances({ count = 400 }) {
 }
 
 function FloatingParticles() {
-    const count = 100;
+    const count = 50;
     const meshRef = useRef<InstancedMesh>(null);
     const dummy = useMemo(() => new Object3D(), []);
 
@@ -194,7 +194,7 @@ function Scene() {
             <ambientLight intensity={0.2} />
             <CityInstances />
             <FloatingParticles />
-            <Stars radius={100} depth={50} count={1000} factor={4} saturation={0} fade speed={1} />
+            <Stars radius={100} depth={50} count={500} factor={4} saturation={0} fade speed={1} />
 
             {/* Ground grid for extra Tron feel */}
             <gridHelper args={[100, 50, '#1a1a2e', '#051429']} position={[0, 0, 0]} />
@@ -209,16 +209,17 @@ function HeroCityLiteComponent() {
     useEffect(() => {
         setIsMounted(true);
 
-        // Defer 3D rendering to prioritize critical content (LCP optimization)
-        // Use requestIdleCallback if available, otherwise setTimeout
+        // Defer 3D rendering until well after LCP completes.
+        // requestIdleCallback fires when the main thread is idle, but we also
+        // set a generous timeout so it doesn't block on slow 4G devices.
         const scheduleRender = () => {
             if ('requestIdleCallback' in window) {
                 (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => number }).requestIdleCallback(
                     () => setShouldRender(true),
-                    { timeout: 3000 }
+                    { timeout: 8000 } // increased from 3s to 8s to avoid competing with LCP
                 );
             } else {
-                setTimeout(() => setShouldRender(true), 1500);
+                setTimeout(() => setShouldRender(true), 5000); // increased from 1.5s
             }
         };
 
@@ -239,7 +240,7 @@ function HeroCityLiteComponent() {
         <div className="absolute inset-0 w-full h-full z-0 opacity-60">
             <Canvas
                 camera={{ position: [0, 15, 25], fov: 60 }}
-                dpr={[1, 1.5]} // Limit DPR for performance
+                dpr={[1, 1]} // Fixed DPR of 1 - reduces GPU work, Tron style doesn't need high res
                 gl={{ antialias: false, powerPreference: "high-performance" }} // Disable AA for performance, Tron style looks fine without it
             >
                 <Suspense fallback={null}>

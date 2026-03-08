@@ -53,7 +53,8 @@ export function EnhancedHero({
         ? "Find the perfect dinner reservation or tonight's entertainment"
         : "Late-night dining, live music, and events happening right now";
 
-  const statPlaceholder = "—";
+  // Use zero as placeholder so the numeric width stays stable (prevents CLS)
+  const statPlaceholder = 0;
 
   return (
     <section
@@ -111,7 +112,9 @@ export function EnhancedHero({
           </p>
         </div>
 
-        {/* Live Stats - Database-driven */}
+        {/* Live Stats - Database-driven
+             CLS fix: min-h on each tile + tabular-nums ensures numbers occupy
+             consistent space regardless of loading state. */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12 max-w-4xl mx-auto">
           {([
             { to: "/events/today", value: isLoadingStats ? statPlaceholder : eventsToday, label: "Events Today" },
@@ -123,11 +126,11 @@ export function EnhancedHero({
               key={stat.to}
               to={stat.to}
               className={cn(
-                "bg-white/10 rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-colors duration-200",
+                "bg-white/10 rounded-lg p-4 border border-white/20 hover:bg-white/15 transition-colors duration-200 min-h-[76px]",
                 !isMobile && "backdrop-blur-sm hover:scale-105 transition-all duration-200"
               )}
             >
-              <div className="text-3xl font-bold text-[#FFD700] mb-1">
+              <div className="text-3xl font-bold text-[#FFD700] mb-1 min-h-[36px] tabular-nums">
                 {stat.value}
               </div>
               <p className="text-sm text-white/80">{stat.label}</p>
