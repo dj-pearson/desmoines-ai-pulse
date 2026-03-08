@@ -96,6 +96,33 @@
 
 ## Progress Log
 
+## 2026-03-08 — Ralph Loop 13: Critical Platform Improvements (Security, SEO, Conversion, UX)
+
+- **US-134**: Added SSRF validation to validate-source-urls and fix-broken-event-urls edge functions:
+  - Imported `validateURLForSSRF` from `_shared/validation.ts` (existing but unused)
+  - validate-source-urls: SSRF check before fetching source_url, before storing extracted URLs from HTML, before AI fallback fetch, and on AI-returned URLs
+  - fix-broken-event-urls: SSRF check on Google search result URLs before storing in database
+  - Blocks private IPs (10.x, 172.16.x, 192.168.x), localhost, embedded credentials, non-HTTP protocols
+- **US-121**: Added SEOHead component to AttractionDetails page:
+  - Added SEOHead with location schema (Place structured data with geo coordinates), breadcrumb schema, keywords, og:image with fallback
+  - Replaced separate BreadcrumbListSchema component (now handled by SEOHead)
+  - EnhancedAttractionSEO retained for TouristAttraction, FAQPage, Speakable, and LocalBusiness schemas
+  - Matches RestaurantDetails SEO pattern
+- **US-110**: Added social proof and value proposition to homepage hero:
+  - Added trust metrics strip between subheading and stats tiles in EnhancedHero
+  - Displays: "15,000+ locals trust us", "4.8/5 user rating", "500+ events weekly"
+  - Uses Users, Star (filled), TrendingUp icons from Lucide in gold accent color
+  - Responsive flex-wrap layout for mobile
+- **US-113**: Added dietary restriction badges to RestaurantCard:
+  - Created `inferDietaryTags()` utility that matches restaurant description/cuisine text against dietary keywords
+  - Supports Vegan (green), Vegetarian (green), Gluten-Free (amber) badge types
+  - Badges rendered with Leaf/Wheat icons in compact pill format between description and location
+  - Memoized with useMemo for performance (RestaurantCard is already React.memo wrapped)
+
+**Build verified**: `npm run build` passes (34s, no errors)
+
+**Progress: 106/147 stories complete (72%), 41 remaining**
+
 ## 2026-03-07 — Ralph Loop 12: Critical Platform Improvements (Performance, UX, Accessibility)
 
 - **US-144**: Reduced hover animation durations across all card components:

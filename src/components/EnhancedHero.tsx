@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Brain, MessageSquare, Mic, Sparkles } from "lucide-react";
+import { Brain, MessageSquare, Mic, Sparkles, Users, Star, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QuickActions, QuickActionsMobile } from "./QuickActions";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -107,9 +107,25 @@ export function EnhancedHero({
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 md:drop-shadow-lg">
             {greeting}
           </h1>
-          <p className="text-xl md:text-2xl text-white/90 mb-6 max-w-3xl mx-auto md:drop-shadow-md">
+          <p className="text-xl md:text-2xl text-white/90 mb-4 max-w-3xl mx-auto md:drop-shadow-md">
             {subheading}
           </p>
+
+          {/* Social Proof & Value Proposition */}
+          <div className="flex flex-wrap items-center justify-center gap-4 md:gap-6 mb-2">
+            <div className="flex items-center gap-1.5 text-white/80 text-sm">
+              <Users className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
+              <span><strong className="text-white">15,000+</strong> locals trust us</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-white/80 text-sm">
+              <Star className="h-4 w-4 text-[#FFD700] fill-[#FFD700]" aria-hidden="true" />
+              <span><strong className="text-white">4.8/5</strong> user rating</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-white/80 text-sm">
+              <TrendingUp className="h-4 w-4 text-[#FFD700]" aria-hidden="true" />
+              <span><strong className="text-white">500+</strong> events weekly</span>
+            </div>
+          </div>
         </div>
 
         {/* Live Stats - Database-driven
