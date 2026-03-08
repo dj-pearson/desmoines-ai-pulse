@@ -14,17 +14,22 @@ function injectBuildTimestamp(): Plugin {
   };
 }
 
-// Custom plugin to remove vendor-maps from preload list
-function removeMapPreload(): Plugin {
+// Custom plugin to remove heavy lazy-loaded chunks from preload list
+function removeLazyPreloads(): Plugin {
   return {
-    name: "remove-map-preload",
+    name: "remove-lazy-preloads",
     enforce: "post",
     transformIndexHtml(html) {
-      // Remove modulepreload for vendor-maps to prevent it loading before React
-      return html.replace(
-        /<link rel="modulepreload"[^>]*vendor-maps[^>]*>/g,
-        "",
-      );
+      // Remove modulepreload for lazy-loaded vendor chunks that are NOT
+      // needed on initial page load. These will load on-demand when needed.
+      return html
+        .replace(/<link rel="modulepreload"[^>]*vendor-maps[^>]*>/g, "")
+        .replace(/<link rel="modulepreload"[^>]*vendor-three[^>]*>/g, "")
+        .replace(/<link rel="modulepreload"[^>]*vendor-editor[^>]*>/g, "")
+        .replace(/<link rel="modulepreload"[^>]*vendor-recharts[^>]*>/g, "")
+        .replace(/<link rel="modulepreload"[^>]*vendor-d3[^>]*>/g, "")
+        .replace(/<link rel="modulepreload"[^>]*HeroCityLite[^>]*>/g, "")
+        .replace(/<link rel="modulepreload"[^>]*HeroCity[^>]*>/g, "");
     },
   };
 }
@@ -39,7 +44,7 @@ export default defineConfig(({ command, mode }) => ({
   },
   plugins: [
     injectBuildTimestamp(), // Add timestamp to prevent HTML caching
-    removeMapPreload(), // Remove vendor-maps from preload list
+    removeLazyPreloads(), // Remove vendor-maps/vendor-three from preload list
     react({
       babel: {
         plugins: [
@@ -111,6 +116,19 @@ export default defineConfig(({ command, mode }) => ({
           // UI Framework - Radix UI primitives (heavily used)
           if (id.includes("@radix-ui/")) {
             return "vendor-ui";
+          }
+
+          // Three.js + React Three Fiber - separate chunk so it's only loaded
+          // when HeroCityLite renders (lazy-loaded, deferred via requestIdleCallback).
+          // Without this, Three.js gets bundled into the HeroCityLite page chunk
+          // which Vite may decide to preload.
+          if (
+            id.includes("/three/") ||
+            id.includes("@react-three/") ||
+            id.includes("react-three") ||
+            id.includes("react-reconciler")
+          ) {
+            return "vendor-three";
           }
 
           // Maps - Leaflet (DO NOT BUNDLE - causes preload issues)
@@ -189,7 +207,6 @@ export default defineConfig(({ command, mode }) => ({
       "@tanstack/react-query",
       "@supabase/supabase-js",
       "lucide-react", // Pre-bundle icons for faster dev
-      "react-reconciler",
     ],
     exclude: [
       "react-leaflet", // Exclude to prevent pre-bundling issues AND loading order problems
