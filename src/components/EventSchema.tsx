@@ -83,12 +83,12 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
           price: "0",
           priceCurrency: "USD",
           availability: "https://schema.org/InStock",
-          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`
+          url: event.source_url || `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
+          validFrom: new Date().toISOString()
         },
-    performer: event.venue ? {
-      "@type": "Organization",
-      name: event.venue
-    } : undefined,
+    performer: event.venue
+      ? { "@type": "Organization", name: event.venue }
+      : { "@type": "Organization", name: BRAND.name, url: BRAND.baseUrl },
     keywords: [
       event.category,
       "Des Moines events",

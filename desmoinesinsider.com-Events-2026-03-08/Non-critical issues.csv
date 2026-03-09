@@ -1,0 +1,10 @@
+Issue,Validation,Items
+"Missing field ""availability"" (in ""offers"")",Not Started,3
+"Missing field ""validFrom"" (in ""offers"")",Not Started,3
+"Missing field ""endDate""",Not Started,3
+"Missing field ""image""",Not Started,3
+"Missing field ""eventStatus""",Not Started,3
+"Missing field ""description""",Not Started,3
+"Missing field ""url"" (in ""offers"")",Not Started,3
+"Missing field ""performer""",Not Started,3
+"Missing field ""organizer""",Not Started,3

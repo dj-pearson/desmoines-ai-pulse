@@ -115,7 +115,7 @@ export default function EnhancedEventSEO({
     "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
     "location": {
       "@type": "Place",
-      "@id": `${BRAND.baseUrl}/venues/${event.venue?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+      "@id": `${BRAND.baseUrl}/venues/${event.venue ? event.venue.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'des-moines'}`,
       "name": event.venue || event.location || `${BRAND.city} Area`,
       "address": {
         "@type": "PostalAddress",
@@ -165,13 +165,20 @@ export default function EnhancedEventSEO({
           "price": "0",
           "priceCurrency": "USD",
           "availability": "https://schema.org/InStock",
-          "url": event.source_url || eventUrl
+          "url": event.source_url || eventUrl,
+          "validFrom": new Date().toISOString()
         },
-    "performer": event.venue ? {
-      "@type": "PerformingGroup",
-      "name": event.venue,
-      "location": { "@type": "Place", "name": event.venue, "address": { "@type": "PostalAddress", "addressLocality": BRAND.city, "addressRegion": BRAND.state } }
-    } : undefined,
+    "performer": event.venue
+      ? {
+          "@type": "PerformingGroup",
+          "name": event.venue,
+          "location": { "@type": "Place", "name": event.venue, "address": { "@type": "PostalAddress", "addressLocality": BRAND.city, "addressRegion": BRAND.state } }
+        }
+      : {
+          "@type": "Organization",
+          "name": BRAND.name,
+          "url": BRAND.baseUrl
+        },
     "keywords": getLocalKeywords().join(", "),
     "about": [
       { "@type": "Thing", "name": event.category, "sameAs": `https://en.wikipedia.org/wiki/${event.category.replace(/\s+/g, '_')}` },
