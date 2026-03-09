@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { validateURLForSSRF } from '../_shared/validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -63,8 +64,15 @@ async function searchGoogleForEvent(eventTitle: string, location: string, apiKey
             continue;
           }
           
+          // SSRF validation: ensure the URL points to a public host
+          const ssrfCheck = validateURLForSSRF(link);
+          if (!ssrfCheck.valid) {
+            console.log(`SSRF blocked result: ${link} — ${ssrfCheck.error}`);
+            continue;
+          }
+
           // Prefer official venue websites or event pages
-          if (link.includes('eventbrite.com') || 
+          if (link.includes('eventbrite.com') ||
               link.includes('tickets.') ||
               link.includes('events.') ||
               link.includes('ticketmaster.com') ||
@@ -74,7 +82,7 @@ async function searchGoogleForEvent(eventTitle: string, location: string, apiKey
             console.log(`Found priority result: ${link}`);
             return link;
           }
-          
+
           // Return first valid external link
           console.log(`Found valid result: ${link}`);
           return link;

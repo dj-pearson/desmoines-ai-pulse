@@ -12,7 +12,7 @@ import ShareDialog from "@/components/ShareDialog";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import EnhancedAttractionSEO from "@/components/EnhancedAttractionSEO";
-import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
+import SEOHead from "@/components/SEOHead";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import {
   MapPin,
@@ -203,12 +203,31 @@ export default function AttractionDetails() {
         attraction={attraction}
         slug={attractionSlug}
       />
-      <BreadcrumbListSchema
-        items={[
-          { name: "Home", url: BRAND.baseUrl },
-          { name: "Attractions", url: getCanonicalUrl("/attractions") },
-          { name: attraction.type, url: getCanonicalUrl(`/attractions?type=${encodeURIComponent(attraction.type)}`) },
-          { name: attraction.name, url: attractionUrl },
+      <SEOHead
+        title={`${attraction.name} - ${attraction.type} in ${BRAND.city}, ${BRAND.state}`}
+        description={attraction.description ? `${attraction.description.slice(0, 160)}` : `Visit ${attraction.name}, a popular ${attraction.type?.toLowerCase()} attraction in ${BRAND.city}, ${BRAND.state}.`}
+        type="website"
+        imageUrl={attraction.image_url || undefined}
+        url={`/attractions/${attractionSlug}`}
+        keywords={[
+          attraction.name,
+          attraction.type,
+          `${BRAND.city} attractions`,
+          `things to do ${BRAND.city}`,
+          `${attraction.type} ${BRAND.city}`,
+        ].filter(Boolean) as string[]}
+        modifiedTime={attraction.updated_at}
+        location={{
+          name: attraction.name,
+          address: attraction.location || `${BRAND.city}, ${BRAND.state}`,
+          latitude: attraction.latitude,
+          longitude: attraction.longitude,
+        }}
+        breadcrumbs={[
+          { name: "Home", url: "/" },
+          { name: "Attractions", url: "/attractions" },
+          { name: attraction.type, url: `/attractions?type=${encodeURIComponent(attraction.type)}` },
+          { name: attraction.name, url: `/attractions/${attractionSlug}` },
         ]}
       />
 

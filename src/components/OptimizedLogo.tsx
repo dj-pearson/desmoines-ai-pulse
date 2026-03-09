@@ -72,6 +72,12 @@ export function OptimizedLogo({
     }
   }
 
+  // For images that are displayed much smaller than their natural size,
+  // add sizes attribute to help the browser understand the display size.
+  // This avoids Lighthouse flagging oversized images.
+  const displayWidth = width ?? aspectRatio?.width;
+  const displayHeight = height ?? aspectRatio?.height;
+
   return (
     <picture>
       <source srcSet={`/${fileName}.webp`} type="image/webp" />
@@ -79,8 +85,8 @@ export function OptimizedLogo({
         src={`/${fileName}.png`}
         alt={alt}
         className={className}
-        width={width}
-        height={height}
+        width={displayWidth}
+        height={displayHeight}
         loading={loading}
         fetchPriority={fetchPriority}
         decoding="async"

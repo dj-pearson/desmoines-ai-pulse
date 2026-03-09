@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { validateURLForSSRF } from '../_shared/validation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -70,6 +71,13 @@ async function findActualEventUrl(event: any): Promise<string | null> {
   try {
     console.log(`🔍 Analyzing ${event.title} - ${event.source_url}`);
 
+    // SSRF validation: ensure source_url points to a public host
+    const ssrfCheck = validateURLForSSRF(event.source_url);
+    if (!ssrfCheck.valid) {
+      console.log(`⚠️ SSRF blocked for ${event.source_url}: ${ssrfCheck.error}`);
+      return null;
+    }
+
     // Fetch the aggregator page
     const response = await fetch(event.source_url, {
       headers: {
@@ -99,6 +107,11 @@ async function findActualEventUrl(event: any): Promise<string | null> {
       for (const match of matches) {
         const foundUrl = match[1];
         if (foundUrl && isTicketPlatform(foundUrl)) {
+          const urlCheck = validateURLForSSRF(foundUrl);
+          if (!urlCheck.valid) {
+            console.log(`⚠️ SSRF blocked extracted URL: ${foundUrl}`);
+            continue;
+          }
           console.log(`✅ Found ticket URL: ${foundUrl}`);
           return foundUrl;
         }
@@ -120,6 +133,11 @@ async function findActualEventUrl(event: any): Promise<string | null> {
             !foundUrl.includes('twitter.com') &&
             !foundUrl.includes('instagram.com') &&
             !isAggregatorUrl(foundUrl)) {
+          const urlCheck = validateURLForSSRF(foundUrl);
+          if (!urlCheck.valid) {
+            console.log(`⚠️ SSRF blocked extracted URL: ${foundUrl}`);
+            continue;
+          }
           console.log(`✅ Found official website: ${foundUrl}`);
           return foundUrl;
         }
@@ -185,6 +203,11 @@ URL:`;
     const url = data.content?.[0]?.text?.trim();
 
     if (url && url !== 'NONE' && !url.includes('facebook.com')) {
+      const urlCheck = validateURLForSSRF(url);
+      if (!urlCheck.valid) {
+        console.log(`⚠️ SSRF blocked AI-returned URL: ${url}`);
+        return null;
+      }
       console.log(`✅ AI found URL: ${url}`);
       return url;
     }
@@ -256,6 +279,11 @@ serve(async (req) => {
 
         // Fallback to AI if enabled and no URL found
         if (!actualUrl && useAI && claudeApiKey) {
+          const aiFetchCheck = validateURLForSSRF(event.source_url);
+          if (!aiFetchCheck.valid) {
+            console.log(`⚠️ SSRF blocked AI fallback fetch: ${event.source_url}`);
+            continue;
+          }
           const response = await fetch(event.source_url);
           if (response.ok) {
             const html = await response.text();

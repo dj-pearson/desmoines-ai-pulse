@@ -231,27 +231,24 @@
     </style>
 
     <!-- Core Web Vitals optimization: DNS prefetch and preconnect for critical resources -->
-    <!-- Optimized for INP (Interaction to Next Paint), LCP, and CLS -->
+    <!-- IMPORTANT: Use at most 4 preconnect hints (Lighthouse recommendation) -->
     <!-- Fonts: Critical for FCP and LCP -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-    <!-- Database: Critical for interactivity -->
-    <link rel="preconnect" href="https://wtkhfqpmcegzcbngroui.supabase.co" />
+    <!-- Database: Critical for interactivity (crossorigin needed for fetch/XHR requests) -->
+    <link rel="preconnect" href="https://wtkhfqpmcegzcbngroui.supabase.co" crossorigin />
     <link rel="dns-prefetch" href="https://wtkhfqpmcegzcbngroui.supabase.co" />
 
     <!-- Analytics: Non-critical, DNS prefetch only -->
     <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
     <link rel="dns-prefetch" href="https://www.google-analytics.com" />
 
-    <!-- CDN for assets -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <!-- CDN: DNS prefetch only (not used on initial load) -->
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net" />
 
     <!-- External resources: DNS prefetch for better performance -->
     <link rel="dns-prefetch" href="https://images.unsplash.com" />
-    <link rel="dns-prefetch" href="https://cdn.cloudflare.com" />
-    <link rel="dns-prefetch" href="https://places.googleapis.com" />
-    <link rel="dns-prefetch" href="https://maps.googleapis.com" />
 
     <!-- Critical resource preloading for LCP - WebP only (PNG used as img fallback, no preload needed) -->
     <link

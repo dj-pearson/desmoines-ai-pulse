@@ -1,11 +1,23 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
-import { ChefHat, Star, MapPin, Flame, Sparkles } from "lucide-react";
+import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
 import { memo, useState, useMemo } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
+
+const DIETARY_TAGS = [
+  { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50", text: "text-green-700", keywords: ["vegan"] },
+  { id: "vegetarian", label: "Vegetarian", icon: Leaf, bg: "bg-green-50", text: "text-green-600", keywords: ["vegetarian", "veggie"] },
+  { id: "gluten-free", label: "GF", icon: Wheat, bg: "bg-amber-50", text: "text-amber-700", keywords: ["gluten free", "gluten-free", "celiac"] },
+] as const;
+
+function inferDietaryTags(description?: string, cuisine?: string): typeof DIETARY_TAGS[number][] {
+  if (!description && !cuisine) return [];
+  const text = `${description || ''} ${cuisine || ''}`.toLowerCase();
+  return DIETARY_TAGS.filter(tag => tag.keywords.some(kw => text.includes(kw)));
+}
 
 interface RestaurantCardProps {
   restaurant: {
@@ -92,6 +104,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
   const showImage = restaurant.image_url && !imageError;
   const isFeatured = variant === "featured" || restaurant.is_featured;
   const openStatus = useMemo(() => getRestaurantOpenStatus(restaurant.opening), [restaurant.opening]);
+  const dietaryTags = useMemo(() => inferDietaryTags(restaurant.description, restaurant.cuisine), [restaurant.description, restaurant.cuisine]);
   const isNew = useMemo(() => {
     if (!restaurant.created_at) return false;
     const daysSince = (Date.now() - new Date(restaurant.created_at).getTime()) / (1000 * 60 * 60 * 24);
@@ -211,6 +224,18 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
             <p className="text-sm text-muted-foreground leading-relaxed line-clamp-2">
               {restaurant.description}
             </p>
+          )}
+
+          {/* Dietary Restriction Badges */}
+          {dietaryTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {dietaryTags.map(tag => (
+                <span key={tag.id} className={`inline-flex items-center gap-1 ${tag.bg} ${tag.text} text-xs font-medium px-2 py-0.5 rounded-full`}>
+                  <tag.icon className="h-3 w-3" aria-hidden="true" />
+                  {tag.label}
+                </span>
+              ))}
+            </div>
           )}
 
           {/* Location */}
