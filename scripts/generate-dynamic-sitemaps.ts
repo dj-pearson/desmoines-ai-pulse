@@ -131,6 +131,16 @@ async function generateEventsSitemap(): Promise<number | null> {
     };
   });
 
+  // Sitemap spec requires at least one <url> - include events index if empty
+  if (urls.length === 0) {
+    urls.push({
+      loc: `${baseUrl}/events`,
+      lastmod: currentDate,
+      changefreq: 'daily',
+      priority: '0.9'
+    });
+  }
+
   const xml = generateSitemapXML(urls);
   writeFileSync(join(process.cwd(), 'public', 'sitemap-events.xml'), xml);
   console.log(`✅ Events sitemap generated: ${urls.length} URLs`);
@@ -163,6 +173,10 @@ async function generateRestaurantsSitemap(): Promise<number | null> {
     };
   });
 
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/restaurants`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
+  }
+
   const xml = generateSitemapXML(urls);
   writeFileSync(join(process.cwd(), 'public', 'sitemap-restaurants.xml'), xml);
   console.log(`✅ Restaurants sitemap generated: ${urls.length} URLs`);
@@ -192,6 +206,10 @@ async function generateAttractionsSitemap(): Promise<number | null> {
       priority: '0.7'
     };
   });
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/attractions`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' });
+  }
 
   const xml = generateSitemapXML(urls);
   writeFileSync(join(process.cwd(), 'public', 'sitemap-attractions.xml'), xml);
@@ -223,6 +241,10 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
     };
   });
 
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/playgrounds`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' });
+  }
+
   const xml = generateSitemapXML(urls);
   writeFileSync(join(process.cwd(), 'public', 'sitemap-playgrounds.xml'), xml);
   console.log(`✅ Playgrounds sitemap generated: ${urls.length} URLs`);
@@ -249,6 +271,10 @@ async function generateArticlesSitemap(): Promise<number | null> {
     priority: '0.8'
   }));
 
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/articles`, lastmod: currentDate, changefreq: 'weekly', priority: '0.8' });
+  }
+
   const xml = generateSitemapXML(urls);
   writeFileSync(join(process.cwd(), 'public', 'sitemap-articles.xml'), xml);
   console.log(`✅ Articles sitemap generated: ${urls.length} URLs`);
@@ -274,6 +300,10 @@ async function generateGuidesSitemap(): Promise<number | null> {
     changefreq: 'monthly',
     priority: '0.7'
   }));
+
+  if (urls.length === 0) {
+    urls.push({ loc: `${baseUrl}/guides`, lastmod: currentDate, changefreq: 'monthly', priority: '0.7' });
+  }
 
   const xml = generateSitemapXML(urls);
   writeFileSync(join(process.cwd(), 'public', 'sitemap-guides.xml'), xml);
