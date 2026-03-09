@@ -9,6 +9,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MapPin, Calendar, Users, Star } from "lucide-react";
@@ -232,6 +233,12 @@ export default function EventsByLocation() {
         breadcrumbs={breadcrumbs}
         faqData={faqData}
         suburb={suburbInfo.name}
+      />
+      <EventListJsonLd
+        events={upcomingEvents || []}
+        listName={`Events in ${suburbInfo.name}, Iowa`}
+        listDescription={pageDescription}
+        listUrl={`${BRAND.baseUrl}/events/${location}`}
       />
 
       <Header />

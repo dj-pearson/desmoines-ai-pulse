@@ -100,22 +100,25 @@ export default function EnhancedEventSEO({
 
   const eventUrl = `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`;
 
-  // Primary Event Schema
+  // Use actual event description for schema (Google penalizes keyword-stuffed descriptions)
+  const schemaDescription = event.enhanced_description || event.original_description || `${event.title} - ${event.category} event in ${event.city || BRAND.city}, ${BRAND.state}`;
+
+  const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0' || event.price === '0';
+
+  // Primary Event Schema - Google Events compliant
+  // Required: name, startDate, location
+  // Recommended: endDate, eventStatus, eventAttendanceMode, image, description, offers, organizer, performer
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
     "@id": eventUrl,
     "name": event.title,
-    "description": getGEODescription(),
+    "description": schemaDescription,
     "startDate": event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString()),
-    "endDate": event.event_start_utc
-      ? new Date(new Date(event.event_start_utc).getTime() + 3 * 60 * 60 * 1000).toISOString()
-      : new Date(new Date(typeof event.date === 'string' ? event.date : event.date.toISOString()).getTime() + 3 * 60 * 60 * 1000).toISOString(),
     "eventStatus": isUpcoming ? "https://schema.org/EventScheduled" : "https://schema.org/EventPostponed",
     "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
     "location": {
       "@type": "Place",
-      "@id": `${BRAND.baseUrl}/venues/${event.venue ? event.venue.toLowerCase().replace(/[^a-z0-9]/g, '-') : 'des-moines'}`,
       "name": event.venue || event.location || `${BRAND.city} Area`,
       "address": {
         "@type": "PostalAddress",
@@ -123,7 +126,6 @@ export default function EnhancedEventSEO({
         "addressLocality": event.city || BRAND.city,
         "addressRegion": BRAND.state,
         "addressCountry": BRAND.country,
-        "postalCode": event.city === BRAND.city ? "50309" : undefined
       },
       ...(event.latitude && event.longitude && {
         "geo": {
@@ -132,67 +134,27 @@ export default function EnhancedEventSEO({
           "longitude": event.longitude
         }
       }),
-      "areaServed": [
-        { "@type": "City", "name": BRAND.city, "sameAs": `https://en.wikipedia.org/wiki/${BRAND.city.replace(' ', '_')},_${BRAND.state}` },
-        { "@type": "AdministrativeArea", "name": BRAND.region }
-      ]
     },
     "organizer": {
       "@type": "Organization",
       "@id": `${BRAND.baseUrl}/#organization`,
       "name": BRAND.name,
       "url": BRAND.baseUrl,
-      "logo": { "@type": "ImageObject", "url": `${BRAND.baseUrl}${BRAND.logo}`, "width": 512, "height": 512 },
-      "sameAs": ["https://facebook.com/desmoinespulse", "https://twitter.com/desmoinespulse", "https://instagram.com/desmoinespulse"],
-      "contactPoint": { "@type": "ContactPoint", "contactType": "customer service", "areaServed": `US-${BRAND.stateAbbr}`, "availableLanguage": "English" }
+      "logo": `${BRAND.baseUrl}${BRAND.logo}`,
     },
-    "publisher": { "@type": "Organization", "name": BRAND.name, "url": BRAND.baseUrl },
-    "image": [event.image_url || `${BRAND.baseUrl}/default-event-image.jpg`],
+    ...(event.image_url && { "image": [event.image_url] }),
     "url": eventUrl,
-    "offers": event.price && event.price.toLowerCase() !== 'free'
-      ? {
-          "@type": "Offer",
-          "price": event.price.replace(/[^0-9.]/g, '') || "0",
-          "priceCurrency": "USD",
-          "availability": "https://schema.org/InStock",
-          "url": event.source_url || eventUrl,
-          "validFrom": new Date().toISOString(),
-          "seller": { "@type": "Organization", "name": event.venue || BRAND.name },
-          "category": event.category
-        }
-      : {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD",
-          "availability": "https://schema.org/InStock",
-          "url": event.source_url || eventUrl,
-          "validFrom": new Date().toISOString()
-        },
-    "performer": event.venue
-      ? {
-          "@type": "PerformingGroup",
-          "name": event.venue,
-          "location": { "@type": "Place", "name": event.venue, "address": { "@type": "PostalAddress", "addressLocality": BRAND.city, "addressRegion": BRAND.state } }
-        }
-      : {
-          "@type": "Organization",
-          "name": BRAND.name,
-          "url": BRAND.baseUrl
-        },
-    "keywords": getLocalKeywords().join(", "),
-    "about": [
-      { "@type": "Thing", "name": event.category, "sameAs": `https://en.wikipedia.org/wiki/${event.category.replace(/\s+/g, '_')}` },
-      { "@type": "Place", "name": `${BRAND.city}, ${BRAND.state}`, "sameAs": `https://en.wikipedia.org/wiki/${BRAND.city.replace(' ', '_')},_${BRAND.state}` }
-    ],
-    "isAccessibleForFree": !event.price || event.price.toLowerCase().includes('free'),
-    "inLanguage": "en-US",
-    "audience": {
-      "@type": "Audience",
-      "audienceType": "local residents and visitors",
-      "geographicArea": { "@type": "AdministrativeArea", "name": BRAND.region }
+    "offers": {
+      "@type": "Offer",
+      "price": isFree ? "0" : (event.price?.replace(/[^0-9.]/g, '') || "0"),
+      "priceCurrency": "USD",
+      "availability": "https://schema.org/InStock",
+      "url": event.source_url || eventUrl,
+      "validFrom": new Date().toISOString(),
     },
+    "isAccessibleForFree": isFree,
+    "inLanguage": "en-US",
     "mainEntityOfPage": { "@type": "WebPage", "@id": eventUrl },
-    "subjectOf": { "@type": "WebPage", "url": eventUrl, "name": `${event.title} Event Details` }
   };
 
   // FAQ Schema for Voice Search & AI Chatbots
@@ -258,21 +220,6 @@ export default function EnhancedEventSEO({
     "url": eventUrl
   };
 
-  // LocalBusiness context
-  const localBusinessSchema = {
-    "@context": "https://schema.org",
-    "@type": "LocalBusiness",
-    "@id": `${BRAND.baseUrl}/#localbusiness`,
-    "name": BRAND.name,
-    "description": BRAND.tagline,
-    "url": BRAND.baseUrl,
-    "address": { "@type": "PostalAddress", "addressLocality": BRAND.city, "addressRegion": BRAND.state, "addressCountry": BRAND.country },
-    "geo": { "@type": "GeoCoordinates", "latitude": 41.5868, "longitude": -93.6250 },
-    "areaServed": { "@type": "GeoCircle", "geoMidpoint": { "@type": "GeoCoordinates", "latitude": 41.5868, "longitude": -93.6250 }, "geoRadius": "50000" },
-    "serviceType": "Local Event Information",
-    "knowsAbout": [`${BRAND.city} events`, `${BRAND.state} entertainment`, "local activities", "community events", event.category]
-  };
-
   return (
     <Helmet>
       {/* Core Meta */}
@@ -326,11 +273,10 @@ export default function EnhancedEventSEO({
       <meta name="twitter:image" content={event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`} />
       <meta name="twitter:site" content={BRAND.twitter} />
 
-      {/* Structured Data */}
+      {/* Structured Data - Event Schema (primary for Google Events indexing) */}
       <script type="application/ld+json">{JSON.stringify(eventSchema)}</script>
       <script type="application/ld+json">{JSON.stringify(faqSchema)}</script>
       <script type="application/ld+json">{JSON.stringify(speakableSchema)}</script>
-      <script type="application/ld+json">{JSON.stringify(localBusinessSchema)}</script>
     </Helmet>
   );
 }

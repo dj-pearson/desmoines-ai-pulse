@@ -115,18 +115,7 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
       "@type": "Audience",
       audienceType: "general public"
     },
-    // Additional Google-specific properties
-    typicalAgeRange: "18-65",
-    doorTime: event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString()),
-    maximumAttendeeCapacity: 1000, // Default capacity
-    remainingAttendeeCapacity: 950, // Default remaining
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.5",
-      reviewCount: "25",
-      bestRating: "5",
-      worstRating: "1"
-    }
+    inLanguage: "en-US"
   };
 
   // Remove undefined properties

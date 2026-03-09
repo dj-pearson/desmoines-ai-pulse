@@ -4,6 +4,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, MapPin, Clock, Filter } from "lucide-react";
 import {
@@ -136,6 +137,12 @@ export default function EventsThisWeekend() {
         breadcrumbs={breadcrumbs}
         faqData={faqData}
         isTimeSensitive={true}
+      />
+      <EventListJsonLd
+        events={filteredEvents}
+        listName="Des Moines Weekend Events"
+        listDescription={pageDescription}
+        listUrl={getCanonicalUrl('/events/this-weekend')}
       />
 
       <Header />

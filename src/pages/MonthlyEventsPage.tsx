@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { FAQSection } from "@/components/FAQSection";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -132,6 +133,12 @@ export default function MonthlyEventsPage() {
         pageType="website"
         breadcrumbs={breadcrumbs}
         isTimeSensitive={true}
+      />
+      <EventListJsonLd
+        events={events || []}
+        listName={pageTitle}
+        listDescription={pageDescription}
+        listUrl={`${BRAND.baseUrl}/events/${monthYear}`}
       />
 
       <Header />
