@@ -1,16 +1,60 @@
+/**
+ * Generate dynamic sitemaps for events, restaurants, attractions, playgrounds, articles, and guides.
+ * Run before build to populate individual sitemap XML files.
+ *
+ * Requires: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
+ * Optional: VITE_SITE_URL (defaults to https://desmoinesaipulse.com)
+ */
+
 import { createClient } from '@supabase/supabase-js';
-import { writeFileSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
-// Supabase configuration
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://wtkhfqpmcegzcbngroui.supabase.co';
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY ||
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind0a2hmcXBtY2VnemNibmdyb3VpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM1Mzc5NzcsImV4cCI6MjA2OTExMzk3N30.a-qKhaxy7l72IyT0eLq7kYuxm-wypuMxgycDy95r1aE';
+// Load .env for local development (Cloudflare Pages / Infisical set env vars at build time)
+function loadEnvFile(filePath: string): void {
+  if (!existsSync(filePath)) return;
+  try {
+    const content = readFileSync(filePath, 'utf8').replace(/\r\n/g, '\n');
+    for (const line of content.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIndex = trimmed.indexOf('=');
+      if (eqIndex <= 0) continue;
+      const key = trimmed.slice(0, eqIndex).trim();
+      let value = trimmed.slice(eqIndex + 1).trim();
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      if (key && !process.env[key]) process.env[key] = value;
+    }
+  } catch {
+    // Ignore .env parse errors
+  }
+}
+loadEnvFile(join(process.cwd(), '.env'));
+loadEnvFile(join(process.cwd(), '.env.local'));
+import { toZonedTime } from 'date-fns-tz';
+import { parseISO } from 'date-fns';
+
+const CENTRAL_TIMEZONE = 'America/Chicago';
+
+// Environment variables - no hardcoded secrets
+// Support both VITE_* (frontend) and plain names (Infisical/server scripts)
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+const baseUrl = process.env.VITE_SITE_URL || process.env.SITE_URL || 'https://desmoinesaipulse.com';
+const currentDate = new Date().toISOString().split('T')[0];
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error('❌ Missing required env vars. Set one of:');
+  console.error('   VITE_SUPABASE_URL or SUPABASE_URL');
+  console.error('   VITE_SUPABASE_ANON_KEY or SUPABASE_ANON_KEY');
+  console.error('');
+  console.error('For Infisical: npm run generate-sitemaps:infisical');
+  process.exit(1);
+}
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-
-const baseUrl = 'https://desmoinesinsider.com';
-const currentDate = new Date().toISOString().split('T')[0];
 
 interface SitemapUrl {
   loc: string;
@@ -19,9 +63,37 @@ interface SitemapUrl {
   priority?: string;
 }
 
+function createSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 /**
- * Generate XML sitemap content
+ * Create event slug matching app's createEventSlugWithCentralTime (Central Time)
  */
+function createEventSlug(title: string, event?: { date?: string; event_start_utc?: string; slug?: string }): string {
+  if (event?.slug) return event.slug;
+  const titleSlug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+  if (!event) return titleSlug;
+  try {
+    const dateToUse = event.event_start_utc || event.date;
+    if (!dateToUse) return titleSlug;
+    const dateObj = typeof dateToUse === 'string' ? parseISO(dateToUse) : dateToUse;
+    const centralDate = toZonedTime(dateObj, CENTRAL_TIMEZONE);
+    const year = centralDate.getFullYear();
+    const month = String(centralDate.getMonth() + 1).padStart(2, '0');
+    const day = String(centralDate.getDate()).padStart(2, '0');
+    return `${titleSlug}-${year}-${month}-${day}`;
+  } catch {
+    return titleSlug;
+  }
+}
+
 function generateSitemapXML(urls: SitemapUrl[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -34,9 +106,69 @@ ${urls.map(url => `  <url>
 </urlset>`;
 }
 
-/**
- * Generate attractions sitemap
- */
+async function generateEventsSitemap(): Promise<number | null> {
+  console.log('📅 Generating events sitemap...');
+
+  const { data: events, error } = await supabase
+    .from('events')
+    .select('title, date, event_start_utc, slug, updated_at')
+    .order('date', { ascending: false })
+    .limit(5000);
+
+  if (error) {
+    console.error('❌ Error fetching events:', error);
+    return null;
+  }
+
+  const urls = events.map(event => {
+    const slug = createEventSlug(event.title, event);
+    const lastmod = event.updated_at ? event.updated_at.split('T')[0] : currentDate;
+    return {
+      loc: `${baseUrl}/events/${slug}`,
+      lastmod,
+      changefreq: 'weekly',
+      priority: '0.7'
+    };
+  });
+
+  const xml = generateSitemapXML(urls);
+  writeFileSync(join(process.cwd(), 'public', 'sitemap-events.xml'), xml);
+  console.log(`✅ Events sitemap generated: ${urls.length} URLs`);
+  return urls.length;
+}
+
+async function generateRestaurantsSitemap(): Promise<number | null> {
+  console.log('🍽️ Generating restaurants sitemap...');
+
+  const { data: restaurants, error } = await supabase
+    .from('restaurants')
+    .select('name, slug, is_featured, updated_at')
+    .order('name')
+    .limit(5000);
+
+  if (error) {
+    console.error('❌ Error fetching restaurants:', error);
+    return null;
+  }
+
+  const urls = restaurants.map(restaurant => {
+    const slug = restaurant.slug || createSlug(restaurant.name);
+    const lastmod = restaurant.updated_at ? restaurant.updated_at.split('T')[0] : currentDate;
+    const priority = restaurant.is_featured ? '0.8' : '0.6';
+    return {
+      loc: `${baseUrl}/restaurants/${slug}`,
+      lastmod,
+      changefreq: 'monthly',
+      priority
+    };
+  });
+
+  const xml = generateSitemapXML(urls);
+  writeFileSync(join(process.cwd(), 'public', 'sitemap-restaurants.xml'), xml);
+  console.log(`✅ Restaurants sitemap generated: ${urls.length} URLs`);
+  return urls.length;
+}
+
 async function generateAttractionsSitemap(): Promise<number | null> {
   console.log('📍 Generating attractions sitemap...');
 
@@ -50,24 +182,23 @@ async function generateAttractionsSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = attractions.map(attraction => ({
-    loc: `${baseUrl}/attractions/${attraction.id}`,
-    lastmod: attraction.updated_at ? attraction.updated_at.split('T')[0] : currentDate,
-    changefreq: 'monthly',
-    priority: '0.7'
-  }));
+  const urls = attractions.map(attraction => {
+    const slug = createSlug(attraction.name);
+    const lastmod = attraction.updated_at ? attraction.updated_at.split('T')[0] : currentDate;
+    return {
+      loc: `${baseUrl}/attractions/${slug}`,
+      lastmod,
+      changefreq: 'monthly',
+      priority: '0.7'
+    };
+  });
 
   const xml = generateSitemapXML(urls);
-  const filePath = join(process.cwd(), 'public', 'sitemap-attractions.xml');
-  writeFileSync(filePath, xml);
-
+  writeFileSync(join(process.cwd(), 'public', 'sitemap-attractions.xml'), xml);
   console.log(`✅ Attractions sitemap generated: ${urls.length} URLs`);
   return urls.length;
 }
 
-/**
- * Generate playgrounds sitemap
- */
 async function generatePlaygroundsSitemap(): Promise<number | null> {
   console.log('🎮 Generating playgrounds sitemap...');
 
@@ -81,24 +212,23 @@ async function generatePlaygroundsSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = playgrounds.map(playground => ({
-    loc: `${baseUrl}/playgrounds/${playground.id}`,
-    lastmod: playground.updated_at ? playground.updated_at.split('T')[0] : currentDate,
-    changefreq: 'monthly',
-    priority: '0.6'
-  }));
+  const urls = playgrounds.map(playground => {
+    const slug = createSlug(playground.name);
+    const lastmod = playground.updated_at ? playground.updated_at.split('T')[0] : currentDate;
+    return {
+      loc: `${baseUrl}/playgrounds/${slug}`,
+      lastmod,
+      changefreq: 'monthly',
+      priority: '0.6'
+    };
+  });
 
   const xml = generateSitemapXML(urls);
-  const filePath = join(process.cwd(), 'public', 'sitemap-playgrounds.xml');
-  writeFileSync(filePath, xml);
-
+  writeFileSync(join(process.cwd(), 'public', 'sitemap-playgrounds.xml'), xml);
   console.log(`✅ Playgrounds sitemap generated: ${urls.length} URLs`);
   return urls.length;
 }
 
-/**
- * Generate articles sitemap
- */
 async function generateArticlesSitemap(): Promise<number | null> {
   console.log('📰 Generating articles sitemap...');
 
@@ -120,16 +250,11 @@ async function generateArticlesSitemap(): Promise<number | null> {
   }));
 
   const xml = generateSitemapXML(urls);
-  const filePath = join(process.cwd(), 'public', 'sitemap-articles.xml');
-  writeFileSync(filePath, xml);
-
+  writeFileSync(join(process.cwd(), 'public', 'sitemap-articles.xml'), xml);
   console.log(`✅ Articles sitemap generated: ${urls.length} URLs`);
   return urls.length;
 }
 
-/**
- * Generate guides sitemap
- */
 async function generateGuidesSitemap(): Promise<number | null> {
   console.log('📖 Generating guides sitemap...');
 
@@ -151,16 +276,11 @@ async function generateGuidesSitemap(): Promise<number | null> {
   }));
 
   const xml = generateSitemapXML(urls);
-  const filePath = join(process.cwd(), 'public', 'sitemap-guides.xml');
-  writeFileSync(filePath, xml);
-
+  writeFileSync(join(process.cwd(), 'public', 'sitemap-guides.xml'), xml);
   console.log(`✅ Guides sitemap generated: ${urls.length} URLs`);
   return urls.length;
 }
 
-/**
- * Main execution
- */
 async function main(): Promise<void> {
   console.log('🚀 Starting dynamic sitemap generation...\n');
   console.log(`📅 Date: ${currentDate}`);
@@ -168,13 +288,50 @@ async function main(): Promise<void> {
 
   try {
     const results = await Promise.all([
+      generateEventsSitemap(),
+      generateRestaurantsSitemap(),
       generateAttractionsSitemap(),
       generatePlaygroundsSitemap(),
       generateArticlesSitemap(),
       generateGuidesSitemap()
     ]);
 
-    const totalUrls = results.filter(r => r !== null).reduce((sum, count) => sum + count, 0);
+    const totalUrls = results.filter((r): r is number => r !== null).reduce((sum, count) => sum + count, 0);
+
+    // Update sitemap.xml index lastmod date
+    const sitemapIndexPath = join(process.cwd(), 'public', 'sitemap.xml');
+    const sitemapIndex = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap>
+    <loc>${baseUrl}/sitemap-static.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-events.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-restaurants.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-attractions.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-playgrounds.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-articles.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+  <sitemap>
+    <loc>${baseUrl}/sitemap-guides.xml</loc>
+    <lastmod>${currentDate}</lastmod>
+  </sitemap>
+</sitemapindex>`;
+    writeFileSync(sitemapIndexPath, sitemapIndex);
 
     console.log('\n' + '='.repeat(50));
     console.log('✨ Dynamic sitemap generation complete!');

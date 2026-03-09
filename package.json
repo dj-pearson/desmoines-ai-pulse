@@ -9,8 +9,8 @@
   "scripts": {
     "dev": "vite",
     "dev:infisical": "infisical run --env=dev -- vite",
-    "build": "vite build",
-    "build:infisical": "infisical run --env=prod -- vite build",
+    "build": "npm run generate-sitemaps && vite build",
+    "build:infisical": "infisical run --env=prod -- npm run build",
     "build:dev": "vite build --mode development",
     "build:analyze": "ANALYZE=true vite build",
     "lint": "eslint .",
@@ -24,6 +24,7 @@
     "convert-timezones": "tsx scripts/convert-timezones.ts --dry-run",
     "convert-timezones:apply": "tsx scripts/convert-timezones.ts --apply",
     "generate-sitemaps": "tsx scripts/generate-dynamic-sitemaps.ts",
+    "generate-sitemaps:infisical": "infisical run --env=dev -- npm run generate-sitemaps",
     "test:unit": "vitest run",
     "test:unit:coverage": "vitest run --coverage",
     "test:unit:watch": "vitest",
