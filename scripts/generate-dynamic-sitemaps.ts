@@ -73,8 +73,7 @@ function createSlug(name: string): string {
 /**
  * Create event slug matching app's createEventSlugWithCentralTime (Central Time)
  */
-function createEventSlug(title: string, event?: { date?: string; event_start_utc?: string; slug?: string }): string {
-  if (event?.slug) return event.slug;
+function createEventSlug(title: string, event?: { date?: string; event_start_utc?: string }): string {
   const titleSlug = title
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -111,7 +110,7 @@ async function generateEventsSitemap(): Promise<number | null> {
 
   const { data: events, error } = await supabase
     .from('events')
-    .select('title, date, event_start_utc, slug, updated_at')
+    .select('title, date, event_start_utc, updated_at')
     .order('date', { ascending: false })
     .limit(5000);
 
@@ -120,7 +119,12 @@ async function generateEventsSitemap(): Promise<number | null> {
     return null;
   }
 
-  const urls = events.map(event => {
+  const eventList = events ?? [];
+  if (eventList.length === 0) {
+    console.warn('⚠️ No events found in database - check RLS policies or add events');
+  }
+
+  const urls = eventList.map(event => {
     const slug = createEventSlug(event.title, event);
     const lastmod = event.updated_at ? event.updated_at.split('T')[0] : currentDate;
     return {
