@@ -147,7 +147,6 @@ export default function GuidesPage() {
         canonicalUrl={getCanonicalUrl('/guides')}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        faqData={faqData}
       />
 
       <Header />

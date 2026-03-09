@@ -120,46 +120,7 @@ export default function EnhancedAttractionSEO({
     keywords: getLocalKeywords().join(", "),
   };
 
-  const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: [
-      {
-        "@type": "Question",
-        name: `What is ${attraction.name}?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: `${attraction.name} is a ${attraction.type?.toLowerCase()} attraction located in ${BRAND.city}, ${BRAND.state}. ${attraction.description ? attraction.description.substring(0, 200) : `It's one of the popular destinations in the ${BRAND.region}.`}`,
-        },
-      },
-      {
-        "@type": "Question",
-        name: `Where is ${attraction.name} located?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: `${attraction.name} is located at ${attraction.location || BRAND.city + ", " + BRAND.state}. ${BRAND.city} is easily accessible by car via I-235 and I-80. Parking is available nearby.`,
-        },
-      },
-      {
-        "@type": "Question",
-        name: `Is ${attraction.name} worth visiting?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: attraction.rating
-            ? `${attraction.name} has a rating of ${attraction.rating.toFixed(1)} out of 5 stars from visitors. ${attraction.rating >= 4.0 ? "It's highly recommended by locals and tourists alike." : "Visitors enjoy its unique offerings in the " + BRAND.region + "."} ${attraction.is_featured ? "It's also a featured attraction on Des Moines AI Pulse." : ""}`
-            : `${attraction.name} is a popular ${attraction.type?.toLowerCase()} in the ${BRAND.region}. Many visitors recommend it for its ${attraction.type?.toLowerCase()} experience.`,
-        },
-      },
-      {
-        "@type": "Question",
-        name: `How do I get to ${attraction.name}?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: `${attraction.name} is located ${attraction.location ? `at ${attraction.location}` : ""} in ${BRAND.city}, ${BRAND.state}. The area is easily accessible by car via I-235 and I-80. Downtown parking is available in public garages and street parking. DART public transit also serves the area.`,
-        },
-      },
-    ],
-  };
+  // FAQ schema is output by FAQSection on AttractionDetails - avoid duplicate FAQPage
 
   const speakableSchema = {
     "@context": "https://schema.org",
@@ -288,9 +249,6 @@ export default function EnhancedAttractionSEO({
       {/* Structured Data */}
       <script type="application/ld+json">
         {JSON.stringify(attractionSchema)}
-      </script>
-      <script type="application/ld+json">
-        {JSON.stringify(faqSchema)}
       </script>
       <script type="application/ld+json">
         {JSON.stringify(speakableSchema)}

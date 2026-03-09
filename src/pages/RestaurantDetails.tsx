@@ -16,7 +16,6 @@ import RestaurantCard from "@/components/RestaurantCard";
 import { FAQSection } from "@/components/FAQSection";
 import { BackToTop } from "@/components/BackToTop";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
-import FAQSchema from "@/components/schema/FAQSchema";
 import SpeakableSchema from "@/components/schema/SpeakableSchema";
 import { getCanonicalUrl } from "@/lib/brandConfig";
 import {
@@ -353,9 +352,6 @@ export default function RestaurantDetails() {
           ...(restaurant.cuisine ? [{ name: restaurant.cuisine, url: getCanonicalUrl(`/restaurants?cuisine=${encodeURIComponent(restaurant.cuisine)}`) }] : []),
           { name: restaurant.name, url: getCanonicalUrl(`/restaurants/${restaurant.slug || restaurant.id}`) },
         ]}
-      />
-      <FAQSchema
-        faqItems={restaurantFaqs.map(faq => ({ question: faq.question, answer: faq.answer }))}
       />
       <SpeakableSchema
         name={seoTitle}

@@ -137,49 +137,7 @@ export default function EnhancedPlaygroundSEO({
     keywords: getLocalKeywords().join(", "),
   };
 
-  const faqSchema = {
-    "@context": "https://schema.org",
-    "@type": "FAQPage",
-    mainEntity: [
-      {
-        "@type": "Question",
-        name: `What ages is ${playground.name} suitable for?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: playground.age_range
-            ? `${playground.name} is designed for ages ${playground.age_range}. The playground features age-appropriate equipment and safe play areas for this age group.`
-            : `${playground.name} is a playground in ${BRAND.city} that welcomes children of various ages. Visit the park to see the specific equipment available.`,
-        },
-      },
-      {
-        "@type": "Question",
-        name: `Where is ${playground.name} located?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: `${playground.name} is located at ${playground.location || BRAND.city + ", " + BRAND.state}. ${BRAND.city} is easily accessible by car via I-235 and I-80. Free parking is typically available at the park.`,
-        },
-      },
-      {
-        "@type": "Question",
-        name: `What amenities does ${playground.name} have?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text:
-            playground.amenities && playground.amenities.length > 0
-              ? `${playground.name} features the following amenities: ${playground.amenities.join(", ")}. The playground is part of the ${BRAND.city} parks system.`
-              : `${playground.name} is a playground in the ${BRAND.city} parks system. Visit the park for detailed information about available equipment and amenities.`,
-        },
-      },
-      {
-        "@type": "Question",
-        name: `Is ${playground.name} free?`,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: `Yes, ${playground.name} is a free public playground in ${BRAND.city}, ${BRAND.state}. It is part of the city's parks system and is open to all visitors during park hours.`,
-        },
-      },
-    ],
-  };
+  // FAQ schema is output by FAQSection on PlaygroundDetails - avoid duplicate FAQPage
 
   const speakableSchema = {
     "@context": "https://schema.org",
@@ -311,9 +269,6 @@ export default function EnhancedPlaygroundSEO({
       {/* Structured Data */}
       <script type="application/ld+json">
         {JSON.stringify(playgroundSchema)}
-      </script>
-      <script type="application/ld+json">
-        {JSON.stringify(faqSchema)}
       </script>
       <script type="application/ld+json">
         {JSON.stringify(speakableSchema)}

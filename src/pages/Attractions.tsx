@@ -231,7 +231,6 @@ export default function Attractions() {
         canonicalUrl={getCanonicalUrl("/attractions")}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        faqData={faqData}
         keywords={[
           "Des Moines attractions",
           "things to do Des Moines",

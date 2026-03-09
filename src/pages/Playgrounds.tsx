@@ -188,7 +188,6 @@ export default function Playgrounds() {
         canonicalUrl={getCanonicalUrl("/playgrounds")}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        faqData={faqData}
         keywords={[
           "Des Moines playgrounds",
           "Iowa playgrounds",

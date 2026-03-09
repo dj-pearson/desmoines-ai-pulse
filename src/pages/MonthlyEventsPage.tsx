@@ -131,7 +131,6 @@ export default function MonthlyEventsPage() {
         canonicalUrl={`${BRAND.baseUrl}/events/${monthYear}`}
         pageType="website"
         breadcrumbs={breadcrumbs}
-        faqData={faqData}
         isTimeSensitive={true}
       />
 
