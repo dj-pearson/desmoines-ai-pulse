@@ -7,6 +7,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, MapPin, Clock } from "lucide-react";
 import { format } from "date-fns";
@@ -110,6 +111,12 @@ export default function EventsToday() {
         breadcrumbs={breadcrumbs}
         faqData={faqData}
         isTimeSensitive={true}
+      />
+      <EventListJsonLd
+        events={todaysEvents}
+        listName={`Events Today in Des Moines - ${format(new Date(), "MMMM d, yyyy")}`}
+        listDescription={pageDescription}
+        listUrl={getCanonicalUrl('/events/today')}
       />
 
       <Header />

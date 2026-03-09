@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -126,6 +127,12 @@ export default function DateNightEvents() {
           "dinner and a show Des Moines",
           "date ideas Iowa",
         ]}
+      />
+      <EventListJsonLd
+        events={dateEvents}
+        listName="Date Night Events in Des Moines, Iowa"
+        listDescription={pageDescription}
+        listUrl={getCanonicalUrl('/events/date-night')}
       />
 
       <Header />

@@ -8,6 +8,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EventCard from "@/components/EventCard";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { EventListJsonLd } from "@/components/schema/EventListJsonLd";
 import RelatedContent from "@/components/RelatedContent";
 import { FAQSection } from "@/components/FAQSection";
 import { Card, CardContent } from "@/components/ui/card";
@@ -128,6 +129,12 @@ export default function FreeEvents() {
           "free entertainment Des Moines",
           "budget friendly Des Moines",
         ]}
+      />
+      <EventListJsonLd
+        events={freeEvents}
+        listName="Free Events in Des Moines, Iowa"
+        listDescription={pageDescription}
+        listUrl={getCanonicalUrl('/events/free')}
       />
 
       <Header />
