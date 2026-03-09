@@ -75,6 +75,9 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
+import { RestaurantListJsonLd } from "@/components/schema/RestaurantListJsonLd";
+import { getCanonicalUrl } from "@/lib/brandConfig";
+
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
@@ -324,6 +327,12 @@ export default function Restaurants() {
 
   return (
     <>
+      <RestaurantListJsonLd
+        restaurants={restaurants}
+        listName="Des Moines Restaurants"
+        listDescription="Complete guide to the best restaurants in Des Moines, Iowa. Browse by cuisine, price range, and neighborhood."
+        listUrl={getCanonicalUrl("/restaurants")}
+      />
       <SEOHead
         title="Best Restaurants in Des Moines, Iowa - Complete Dining Guide 2026"
         description="Find the best restaurants in Des Moines, Iowa. Browse 200+ local restaurants with ratings, reviews, photos, and real-time open/closed status. Filter by cuisine, price, and neighborhood."

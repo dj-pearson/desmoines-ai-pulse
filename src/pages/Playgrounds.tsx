@@ -2,6 +2,8 @@ import React, { useState, useMemo, lazy } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { PlaygroundListJsonLd } from "@/components/schema/PlaygroundListJsonLd";
+import { PlaygroundListJsonLd } from "@/components/schema/PlaygroundListJsonLd";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
@@ -182,6 +184,18 @@ export default function Playgrounds() {
 
   return (
     <div className="min-h-screen bg-background">
+      <PlaygroundListJsonLd
+        playgrounds={filteredPlaygrounds}
+        listName="Des Moines Playgrounds"
+        listDescription="Find the best playgrounds, parks, and splash pads for families in Des Moines, Iowa."
+        listUrl={getCanonicalUrl("/playgrounds")}
+      />
+      <PlaygroundListJsonLd
+        playgrounds={filteredPlaygrounds}
+        listName="Des Moines Playgrounds"
+        listDescription="Find the best playgrounds in Des Moines, Iowa. Parks with splash pads, climbing structures, and accessible equipment for all ages."
+        listUrl={getCanonicalUrl("/playgrounds")}
+      />
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}

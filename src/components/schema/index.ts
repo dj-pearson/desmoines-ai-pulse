@@ -14,3 +14,6 @@ export { default as ProductSchema } from './ProductSchema';
 export { default as SpeakableSchema } from './SpeakableSchema';
 export { default as NoIndexMeta } from './NoIndexMeta';
 export { EventListJsonLd } from './EventListJsonLd';
+export { RestaurantListJsonLd } from './RestaurantListJsonLd';
+export { AttractionListJsonLd } from './AttractionListJsonLd';
+export { PlaygroundListJsonLd } from './PlaygroundListJsonLd';

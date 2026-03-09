@@ -3,6 +3,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
 import EnhancedLocalSEO from "@/components/EnhancedLocalSEO";
+import { AttractionListJsonLd } from "@/components/schema/AttractionListJsonLd";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { FAQSection } from "@/components/FAQSection";
 import { useAttractions } from "@/hooks/useAttractions";
@@ -225,6 +226,12 @@ export default function Attractions() {
 
   return (
     <div className="min-h-screen bg-background">
+      <AttractionListJsonLd
+        attractions={sortedAttractions}
+        listName="Des Moines Attractions"
+        listDescription="Discover museums, parks, entertainment venues, and cultural attractions in Des Moines, Iowa."
+        listUrl={getCanonicalUrl("/attractions")}
+      />
       <EnhancedLocalSEO
         pageTitle={pageTitle}
         pageDescription={pageDescription}
