@@ -1,11 +1,12 @@
 import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { ChefHat, Star, MapPin, Flame, Sparkles, Leaf, Wheat } from "lucide-react";
-import { memo, useState, useMemo } from "react";
+import { memo, useState, useMemo, useCallback } from "react";
 import { OptimizedImage } from "@/components/OptimizedImage";
 import { SocialProofBadge } from "@/components/SocialProofBadge";
 import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
+import { usePrefetchRestaurant } from "@/hooks/usePrefetchDetail";
 
 const DIETARY_TAGS = [
   { id: "vegan", label: "Vegan", icon: Leaf, bg: "bg-green-50", text: "text-green-700", keywords: ["vegan"] },
@@ -111,11 +112,17 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
     return daysSince <= 14;
   }, [restaurant.created_at]);
 
+  const prefetchRestaurant = usePrefetchRestaurant();
+  const handleMouseEnter = useCallback(() => {
+    prefetchRestaurant(restaurant.slug || restaurant.id);
+  }, [prefetchRestaurant, restaurant.slug, restaurant.id]);
+
   return (
     <Link
       to={`/restaurants/${restaurant.slug || restaurant.id}`}
       className="group block focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 rounded-2xl"
       aria-label={`View ${restaurant.name} - ${restaurant.cuisine || "Restaurant"} in ${restaurant.city || "Des Moines"}`}
+      onMouseEnter={handleMouseEnter}
     >
       <article
         className={`relative h-full rounded-2xl overflow-hidden border bg-card transition-all duration-200 group-hover:shadow-xl group-hover:-translate-y-1.5 ${

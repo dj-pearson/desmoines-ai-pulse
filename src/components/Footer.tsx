@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Heart, Mail, Calendar, Utensils, MapPin, Building2, Crown, ArrowRight, Facebook, Twitter, Instagram, PlusCircle } from "lucide-react";
+import { Heart, Mail, Calendar, Utensils, MapPin, Building2, Crown, ArrowRight, Facebook, Twitter, Instagram, PlusCircle, Users, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,13 +97,19 @@ export default function Footer() {
                 in Des Moines. Join 15,000+ locals who trust us for their weekend plans.
               </p>
 
+              {/* Newsletter Benefit Line */}
+              <p className="text-neutral-300 text-sm mb-2 flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" aria-hidden="true" />
+                Weekly digest of trending events + AI-powered recommendations
+              </p>
+
               {/* Newsletter Mini Form */}
-              <form onSubmit={handleNewsletterSubmit} className="flex gap-2 mb-4" aria-label="Newsletter subscription">
+              <form onSubmit={handleNewsletterSubmit} className="flex gap-2 mb-2" aria-label="Newsletter subscription">
                 <label htmlFor="footer-newsletter-email" className="sr-only">Email address for newsletter</label>
                 <Input
                   id="footer-newsletter-email"
                   type="email"
-                  placeholder="Your email"
+                  placeholder="Get your weekly Des Moines plan"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-neutral-800 border-neutral-700 text-white placeholder:text-neutral-500 h-10"
@@ -111,10 +117,16 @@ export default function Footer() {
                   aria-describedby="newsletter-description"
                 />
                 <span id="newsletter-description" className="sr-only">Subscribe to receive weekly updates about Des Moines events</span>
-                <Button type="submit" disabled={isLoading} size="sm" className="h-10 px-4" aria-label="Subscribe to newsletter">
-                  <Mail className="h-4 w-4" aria-hidden="true" />
+                <Button type="submit" disabled={isLoading} size="sm" className="h-10 px-5 whitespace-nowrap" aria-label="Subscribe to newsletter">
+                  Subscribe Free
                 </Button>
               </form>
+
+              {/* Social Proof */}
+              <p className="text-neutral-500 text-xs mb-4 flex items-center gap-1">
+                <Users className="h-3 w-3" aria-hidden="true" />
+                Join 15,000+ Des Moines locals. Free forever, unsubscribe anytime.
+              </p>
 
               {/* Social Links */}
               <div className="flex gap-3" role="group" aria-label="Social media links">

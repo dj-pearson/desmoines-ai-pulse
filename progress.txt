@@ -96,6 +96,41 @@
 
 ## Progress Log
 
+## 2026-03-10 — Ralph Loop 14: Critical Platform Improvements (Search UX, Performance, Conversion, Loading States)
+
+- **US-085**: Added search autocomplete with recent searches and suggestions:
+  - Created `src/components/SearchAutocomplete.tsx` with dropdown showing Recent Searches and Suggested Results
+  - Recent searches stored in safeStorage (last 10, scoped per content type)
+  - Database title matches via debounced ilike query (3+ chars, top 5 suggestions)
+  - Keyboard accessible: arrow keys navigate, Enter selects, Escape closes
+  - Clear recent searches button in dropdown
+  - Integrated into EventsPage, Restaurants, and Attractions search inputs
+  - Exported `addRecentSearch()` for tracking searches on submit
+- **US-087**: Added context-aware loading states and error recovery:
+  - EventsPage: loading label shows "Searching for [query]..." or "Loading [category] events..."
+  - Restaurants: loading label shows search context or cuisine filter context
+  - Attractions: loading label shows search or type filter context
+  - RestaurantDetails: labeled skeleton sections (Restaurant Info, Hours & Location, Reviews & Rating) with sr-only status
+  - FavoriteButton: spinner replaces heart icon during mutation, aria-label updates to "Updating favorite..."
+- **US-104**: Added detail page data prefetching on card hover:
+  - Created `src/hooks/usePrefetchDetail.ts` with `usePrefetchRestaurant()` and `usePrefetchAttraction()` hooks
+  - Uses `requestIdleCallback` to avoid blocking main thread
+  - Guards against repeated prefetch via `useRef<Set>` (fires once per item)
+  - RestaurantCard: prefetches restaurant data on mouse enter
+  - Attractions page: prefetches attraction data on card hover
+  - 2-minute stale time for prefetched data
+- **US-122**: Improved footer newsletter conversion:
+  - Added benefit line above form: "Weekly digest of trending events + AI-powered recommendations" with sparkle icon
+  - Updated placeholder from "Your email" to "Get your weekly Des Moines plan"
+  - Changed button text from icon-only to "Subscribe Free"
+  - Added subscriber social proof: "Join 15,000+ Des Moines locals. Free forever, unsubscribe anytime."
+- **US-106**: Verified already complete - NearbyContent component on all 3 detail pages (EventDetails, RestaurantDetails, AttractionDetails)
+- **US-130**: Verified already complete - Breadcrumbs with BreadcrumbListSchema on all detail pages
+
+**Build verified**: `npx vite build` passes (50s, no errors)
+
+**Progress: 112/147 stories complete (76%), 35 remaining**
+
 ## 2026-03-08 — Ralph Loop 13: Critical Platform Improvements (Security, SEO, Conversion, UX)
 
 - **US-134**: Added SSRF validation to validate-source-urls and fix-broken-event-urls edge functions:

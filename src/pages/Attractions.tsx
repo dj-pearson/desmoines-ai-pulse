@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, lazy, Suspense } from "react";
+import React, { useState, useMemo, useEffect, lazy, Suspense, useRef } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -44,6 +44,8 @@ import {
 } from "@/components/ui/pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { OptimizedImage } from "@/components/OptimizedImage";
+import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
+import { usePrefetchAttraction } from "@/hooks/usePrefetchDetail";
 import {
   Sheet,
   SheetContent,
@@ -67,6 +69,8 @@ export default function Attractions() {
   const isMobile = useIsMobile();
   useDocumentTitle("Attractions");
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const prefetchAttraction = usePrefetchAttraction();
   // Filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedType, setSelectedType] = useState("all");
@@ -260,15 +264,27 @@ export default function Attractions() {
           {/* Search Bar */}
           <div className="max-w-2xl mx-auto">
             <div className="flex flex-col sm:flex-row gap-3">
-              <div className="flex-1">
+              <div className="flex-1 relative">
                 <Input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Search attractions..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchQuery.trim()) {
+                      addRecentSearch('attractions', searchQuery);
+                    }
+                  }}
                   className="text-base bg-white/95 backdrop-blur border-0 focus:ring-2 focus:ring-white h-12"
                   aria-label="Search attractions"
                   role="searchbox"
+                />
+                <SearchAutocomplete
+                  contentType="attractions"
+                  value={searchQuery}
+                  onSelect={setSearchQuery}
+                  inputRef={searchInputRef}
                 />
               </div>
               <div className="flex items-center gap-3">
@@ -538,7 +554,7 @@ export default function Attractions() {
         {viewMode === 'map' ? (
           <AttractionsMap attractions={sortedAttractions} />
         ) : isLoading ? (
-          <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" />
+          <CardsGridSkeleton count={6} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" label={searchQuery ? `Searching for "${searchQuery}"...` : selectedType !== "all" ? `Loading ${selectedType} attractions...` : "Loading attractions..."} />
         ) : error ? (
           <EmptyState
             icon={AlertCircle}
@@ -580,6 +596,7 @@ export default function Attractions() {
                   key={attraction.id}
                   to={`/attractions/${createSlug(attraction.name)}`}
                   className="block"
+                  onMouseEnter={() => prefetchAttraction(createSlug(attraction.name))}
                 >
                   <Card className="h-full hover:shadow-lg transition-all duration-200 hover:-translate-y-1 rounded-2xl overflow-hidden">
                     {attraction.image_url ? (

@@ -143,17 +143,24 @@ export default function RestaurantDetails() {
     return (
       <>
         <Header />
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50" role="status" aria-live="polite" aria-busy="true">
           <div className="container mx-auto px-4 py-8 max-w-6xl">
-            <div className="animate-pulse space-y-6">
+            <div className="animate-pulse space-y-6 motion-reduce:animate-none">
               <div className="h-6 w-48 bg-gray-200 rounded" />
               <div className="h-80 bg-gray-200 rounded-3xl" />
               <div className="grid md:grid-cols-3 gap-4">
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
-                <div className="h-24 bg-gray-200 rounded-2xl" />
+                <div className="h-24 bg-gray-200 rounded-2xl relative">
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Restaurant Info</span>
+                </div>
+                <div className="h-24 bg-gray-200 rounded-2xl relative">
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Hours & Location</span>
+                </div>
+                <div className="h-24 bg-gray-200 rounded-2xl relative">
+                  <span className="absolute inset-0 flex items-center justify-center text-xs text-gray-400 font-medium">Reviews & Rating</span>
+                </div>
               </div>
               <div className="h-48 bg-gray-200 rounded-2xl" />
+              <span className="sr-only">Loading restaurant details...</span>
             </div>
           </div>
         </div>

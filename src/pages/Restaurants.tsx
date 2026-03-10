@@ -51,6 +51,7 @@ import { OpenNowBanner } from "@/components/OpenNowBanner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { useIsMobile } from "@/hooks/use-mobile";
 import RestaurantCard from "@/components/RestaurantCard";
+import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 import {
   Pagination,
   PaginationContent,
@@ -369,6 +370,11 @@ export default function Restaurants() {
                   placeholder={isMobile ? "Search restaurants..." : "Search restaurants, cuisines, neighborhoods..."}
                   value={searchInput}
                   onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && searchInput.trim()) {
+                      addRecentSearch('restaurants', searchInput);
+                    }
+                  }}
                   className="w-full h-14 pl-14 pr-36 text-base md:text-lg bg-white border-0 rounded-2xl shadow-2xl shadow-black/20 focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-0 placeholder:text-gray-400"
                   aria-label="Search restaurants"
                 />
@@ -390,12 +396,24 @@ export default function Restaurants() {
                   )}
                   <Button
                     className="h-10 bg-gradient-to-r from-[#2D1B69] to-[#DC143C] hover:opacity-90 text-white rounded-xl px-5 font-semibold"
-                    onClick={() => setFilters((prev) => ({ ...prev, search: searchInput }))}
+                    onClick={() => {
+                      if (searchInput.trim()) addRecentSearch('restaurants', searchInput);
+                      setFilters((prev) => ({ ...prev, search: searchInput }));
+                    }}
                   >
                     <Search className="h-4 w-4 mr-2" />
                     Search
                   </Button>
                 </div>
+                <SearchAutocomplete
+                  contentType="restaurants"
+                  value={searchInput}
+                  onSelect={(val) => {
+                    setSearchInput(val);
+                    setFilters((prev) => ({ ...prev, search: val }));
+                  }}
+                  inputRef={searchInputRef}
+                />
               </div>
 
               {/* Quick action pills below search */}
@@ -770,7 +788,7 @@ export default function Restaurants() {
                   count={9}
                   variant="restaurant"
                   className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-                  label="Loading restaurants..."
+                  label={filters.search ? `Searching for "${filters.search}"...` : filters.cuisine.length > 0 ? `Loading ${filters.cuisine.join(', ')} restaurants...` : "Loading restaurants..."}
                 />
               ) : error ? (
                 <EmptyState
