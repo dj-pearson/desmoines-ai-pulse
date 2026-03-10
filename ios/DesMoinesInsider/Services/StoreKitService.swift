@@ -15,7 +15,7 @@ final class StoreKitService {
 
     /// The subscription group ID from App Store Connect.
     /// Find this in App Store Connect → My Apps → Subscriptions → Group ID.
-    static let subscriptionGroupID = "21611498"
+    static let subscriptionGroupID = "21957951"
 
     // MARK: - Product IDs (must match App Store Connect exactly)
 

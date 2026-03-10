@@ -51,6 +51,13 @@ struct ProfileView: View {
                 .padding(.vertical, 4)
             }
 
+            // Subscription Status — prominent upgrade CTA for free users
+            Section {
+                SubscriptionBanner(style: .full)
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
+
             // Edit Profile
             Section("Personal Info") {
                 TextField("First Name", text: $viewModel.firstName)
@@ -216,6 +223,10 @@ struct ProfileView: View {
                     .foregroundStyle(.white)
                     .padding(.horizontal, 40)
             }
+
+            // Premium teaser for guests
+            SubscriptionBanner(style: .compact)
+                .padding(.horizontal, 24)
 
             Button {
                 showSettings = true

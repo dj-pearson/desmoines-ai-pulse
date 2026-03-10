@@ -13,6 +13,9 @@ struct RestaurantsView: View {
                     // Sort picker
                     sortPicker
 
+                    // Ad banner for free users (hidden for subscribers)
+                    AdBannerView()
+
                     // Active filters
                     if viewModel.activeFilterCount > 0 {
                         activeFiltersBar

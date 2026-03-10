@@ -26,6 +26,11 @@ struct HomeView: View {
                         featuredSection
                     }
 
+                    // Ad banner for free users (hidden for subscribers — ad-free experience)
+                    AdBannerView()
+                        .padding(.horizontal)
+                        .padding(.vertical, 4)
+
                     // Popular Restaurants
                     if !restaurantsVM.restaurants.isEmpty {
                         restaurantsSection
@@ -52,6 +57,9 @@ struct HomeView: View {
                     selectedCategory: $viewModel.selectedCategory,
                     selectedDatePreset: $viewModel.selectedDatePreset,
                     showFeaturedOnly: $viewModel.showFeaturedOnly,
+                    showFreeOnly: $viewModel.showFreeOnly,
+                    maxDistance: $viewModel.maxDistance,
+                    minRating: $viewModel.minRating,
                     onClear: { viewModel.clearFilters() }
                 )
                 .presentationDetents([.medium, .large])

@@ -86,12 +86,25 @@ struct SubscriptionView: View {
 
     private var featuresList: some View {
         VStack(alignment: .leading, spacing: 10) {
+            Text("Insider")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.orange)
             featureRow(icon: "heart.fill", color: .orange, text: "Unlimited favorites")
-            featureRow(icon: "magnifyingglass", color: .orange, text: "Advanced search filters")
-            featureRow(icon: "bell.fill", color: .orange, text: "Event reminders")
             featureRow(icon: "eye.slash.fill", color: .orange, text: "Ad-free experience")
-            featureRow(icon: "map.fill", color: .purple, text: "AI Trip Planner (VIP)")
-            featureRow(icon: "star.fill", color: .purple, text: "Priority support (VIP)")
+            featureRow(icon: "slider.horizontal.3", color: .orange, text: "Advanced filters (distance, price, rating)")
+            featureRow(icon: "calendar.badge.plus", color: .orange, text: "Calendar integration")
+            featureRow(icon: "star.circle.fill", color: .orange, text: "Insider tips on events & restaurants")
+
+            Divider()
+                .padding(.vertical, 4)
+
+            Text("VIP")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.purple)
+            featureRow(icon: "map.fill", color: .purple, text: "AI Trip Planner")
+            featureRow(icon: "bolt.fill", color: .purple, text: "Early access to new features")
+            featureRow(icon: "star.fill", color: .purple, text: "Priority support")
+            featureRow(icon: "crown.fill", color: .purple, text: "VIP-exclusive content")
         }
         .padding(.horizontal)
     }

@@ -7,8 +7,14 @@ struct EventDetailView: View {
     @State private var viewModel = EventDetailViewModel()
     @State private var showShareSheet = false
     @State private var showImageViewer = false
+    @State private var showSubscription = false
     @State private var notifications = LocalNotificationService.shared
+    @State private var storeKit = StoreKitService.shared
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var hasPremiumAccess: Bool {
+        storeKit.currentTier == .insider || storeKit.currentTier == .vip
+    }
 
     var body: some View {
         ScrollView {
@@ -17,6 +23,9 @@ struct EventDetailView: View {
                 contentSection
                 actionsSection
                 descriptionSection
+
+                // Insider Tip — exclusive content for subscribers
+                insiderTipSection
 
                 if !viewModel.relatedEvents.isEmpty {
                     relatedEventsSection
@@ -61,6 +70,9 @@ struct EventDetailView: View {
         }
         .fullScreenCover(isPresented: $showImageViewer) {
             FullScreenImageViewer(imageUrl: event.imageUrl, isPresented: $showImageViewer)
+        }
+        .sheet(isPresented: $showSubscription) {
+            SubscriptionView()
         }
         .task {
             await viewModel.loadEvent(event)
@@ -245,33 +257,54 @@ struct EventDetailView: View {
     private var actionsSection: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                // Add to Calendar (native EventKit)
+                // Add to Calendar — Insider+ feature
                 if event.parsedDate != nil {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        Task { await viewModel.addToCalendar() }
-                    } label: {
-                        Label(
-                            viewModel.calendarAdded ? "Added to Calendar" : "Add to Calendar",
-                            systemImage: viewModel.calendarAdded ? "checkmark.circle.fill" : "calendar.badge.plus"
+                    if hasPremiumAccess {
+                        Button {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            Task { await viewModel.addToCalendar() }
+                        } label: {
+                            Label(
+                                viewModel.calendarAdded ? "Added to Calendar" : "Add to Calendar",
+                                systemImage: viewModel.calendarAdded ? "checkmark.circle.fill" : "calendar.badge.plus"
+                            )
+                            .font(.subheadline.weight(.medium))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                viewModel.calendarAdded ? Color.green : Color.accentColor,
+                                in: RoundedRectangle(cornerRadius: 12)
+                            )
+                            .foregroundStyle(.white)
+                        }
+                        .disabled(viewModel.calendarAdded)
+                        .accessibilityLabel(
+                            viewModel.calendarAdded
+                                ? "\(event.title) added to calendar"
+                                : "Add \(event.title) to your calendar"
                         )
-                        .font(.subheadline.weight(.medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(
-                            // State change uses both icon AND colour — no colour-only reliance
-                            viewModel.calendarAdded ? Color.green : Color.accentColor,
-                            in: RoundedRectangle(cornerRadius: 12)
-                        )
-                        .foregroundStyle(.white)
+                        .accessibilityHint(viewModel.calendarAdded ? "" : "Adds event to your iOS Calendar app")
+                    } else {
+                        // Locked calendar button for free users
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            showSubscription = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "lock.fill")
+                                    .font(.caption)
+                                Text("Add to Calendar")
+                                    .font(.subheadline.weight(.medium))
+                                PremiumBadge()
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color(.systemGray5), in: RoundedRectangle(cornerRadius: 12))
+                            .foregroundStyle(.secondary)
+                        }
+                        .accessibilityLabel("Add to Calendar — requires Insider subscription")
+                        .accessibilityHint("Tap to upgrade to Insider for calendar integration")
                     }
-                    .disabled(viewModel.calendarAdded)
-                    .accessibilityLabel(
-                        viewModel.calendarAdded
-                            ? "\(event.title) added to calendar"
-                            : "Add \(event.title) to your calendar"
-                    )
-                    .accessibilityHint(viewModel.calendarAdded ? "" : "Adds event to your iOS Calendar app")
                 }
 
                 // External Link
@@ -364,6 +397,105 @@ struct EventDetailView: View {
             }
         }
         .padding(.vertical)
+    }
+
+    // MARK: - Insider Tip (Premium Content)
+
+    @ViewBuilder
+    private var insiderTipSection: some View {
+        if hasPremiumAccess {
+            // Show exclusive insider content for subscribers
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Image(systemName: "star.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.orange)
+                    Text("Insider Tip")
+                        .font(.headline)
+                        .foregroundStyle(.orange)
+                    Spacer()
+                    PremiumBadge(tier: storeKit.currentTier == .vip ? .vip : .insider)
+                }
+
+                Text(insiderTipText)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(3)
+            }
+            .padding()
+            .background(Color.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal)
+            .padding(.top, 8)
+        } else {
+            // Teaser for free users showing they're missing exclusive content
+            Button {
+                showSubscription = true
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "lock.fill")
+                        .font(.subheadline)
+                        .foregroundStyle(.orange)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Insider Tips Available")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("Upgrade to get exclusive tips, calendar sync, and ad-free browsing")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                }
+                .padding(14)
+                .background(Color.orange.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.orange.opacity(0.15), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal)
+            .padding(.top, 8)
+            .accessibilityLabel("Unlock Insider Tips by upgrading to a premium plan")
+        }
+    }
+
+    /// Generates a contextual insider tip based on event attributes.
+    private var insiderTipText: String {
+        var tips: [String] = []
+
+        if event.isFree {
+            tips.append("This is a free event — arrive early for the best spots!")
+        }
+
+        if let venue = event.venue, venue.lowercased().contains("downtown") {
+            tips.append("Parking can fill up fast downtown. Consider using the Des Moines Skywalk system or DART bus.")
+        } else if event.coordinate != nil {
+            tips.append("Check the map for nearby parking options. Rideshare drops off nearby too.")
+        }
+
+        switch event.eventCategory {
+        case .music:
+            tips.append("Bring ear protection for indoor venues. Outdoor shows are great with a blanket or lawn chair.")
+        case .food:
+            tips.append("Come hungry! Many food events offer sample-size portions so you can try everything.")
+        case .outdoor:
+            tips.append("Check the weather forecast and dress in layers. Iowa weather can change quickly!")
+        case .family:
+            tips.append("Most family events have activities for all ages. Strollers are usually welcome.")
+        case .art:
+            tips.append("Many art events feature local Des Moines artists. Ask about pieces — they love to talk about their work!")
+        default:
+            tips.append("Get there a bit early to find your spot and enjoy the full experience.")
+        }
+
+        return tips.joined(separator: " ")
     }
 
     // MARK: - Helpers

@@ -245,4 +245,34 @@ enum SubscriptionTier: String, Codable {
         case .insider, .vip: return -1  // unlimited
         }
     }
+
+    /// Features included in this tier (for display in subscription UI).
+    var features: [String] {
+        switch self {
+        case .free:
+            return [
+                "Browse events & restaurants",
+                "Save up to 50 favorites",
+                "Basic search & filters",
+                "Event reminders",
+            ]
+        case .insider:
+            return [
+                "Everything in Free, plus:",
+                "Unlimited favorites",
+                "Ad-free experience",
+                "Advanced filters (distance, price, rating)",
+                "Calendar integration",
+                "Insider tips on events & restaurants",
+            ]
+        case .vip:
+            return [
+                "Everything in Insider, plus:",
+                "AI Trip Planner",
+                "Priority support",
+                "Early access to new features",
+                "VIP-exclusive content",
+            ]
+        }
+    }
 }

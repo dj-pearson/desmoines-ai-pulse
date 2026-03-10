@@ -21,13 +21,18 @@ struct FavoritesView: View {
                         action: { Task { await viewModel.refresh() } }
                     )
                 } else if !viewModel.hasAnyFavorites {
-                    EmptyStateView(
-                        icon: "heart",
-                        title: "No Saved Items",
-                        message: "Events and restaurants you save will appear here. Tap the heart icon on any item to save it.",
-                        actionTitle: nil,
-                        action: nil
-                    )
+                    VStack(spacing: 24) {
+                        EmptyStateView(
+                            icon: "heart",
+                            title: "No Saved Items",
+                            message: "Events and restaurants you save will appear here. Tap the heart icon on any item to save it.",
+                            actionTitle: nil,
+                            action: nil
+                        )
+
+                        SubscriptionBanner(style: .compact)
+                            .padding(.horizontal, 24)
+                    }
                 } else {
                     savedContent
                 }
@@ -53,6 +58,10 @@ struct FavoritesView: View {
     private var savedContent: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Favorites limit indicator for free users
+                FavoritesLimitBanner(currentCount: viewModel.totalFavoriteCount)
+                    .padding(.horizontal)
+
                 // Header count
                 HStack {
                     Text("\(viewModel.totalFavoriteCount) saved item\(viewModel.totalFavoriteCount == 1 ? "" : "s")")

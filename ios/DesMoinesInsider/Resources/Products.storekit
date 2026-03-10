@@ -17,7 +17,7 @@
   },
   "subscriptionGroups" : [
     {
-      "id" : "21611498",
+      "id" : "21957951",
       "localizations" : [
         {
           "description" : "Premium subscription tiers for Des Moines Insider",
@@ -45,7 +45,7 @@
           "productID" : "prod_U4oa7Cpn0bRnuo",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "prod_Insider_Monthly",
-          "subscriptionGroupID" : "21611498",
+          "subscriptionGroupID" : "21957951",
           "type" : "RecurringSubscription",
           "winbackOffers" : []
         },
@@ -67,7 +67,7 @@
           "productID" : "prod_U4oaGFEy12auTx",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "prod_VIP_Monthly",
-          "subscriptionGroupID" : "21611498",
+          "subscriptionGroupID" : "21957951",
           "type" : "RecurringSubscription",
           "winbackOffers" : []
         }

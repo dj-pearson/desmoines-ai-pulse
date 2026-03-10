@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 /// ViewModel for the home/events feed. Handles fetching, filtering, and pagination.
 @MainActor
@@ -26,6 +27,17 @@ final class EventsViewModel {
         didSet { resetAndFetch() }
     }
     var showFeaturedOnly = false {
+        didSet { resetAndFetch() }
+    }
+
+    // Premium filters (Insider+ only)
+    var showFreeOnly = false {
+        didSet { resetAndFetch() }
+    }
+    var maxDistance: Double? {
+        didSet { resetAndFetch() }
+    }
+    var minRating: Double? {
         didSet { resetAndFetch() }
     }
 
@@ -77,10 +89,13 @@ final class EventsViewModel {
 
             let response = try await service.fetchEvents(query: query)
 
+            // Apply premium filters client-side
+            let filtered = applyPremiumFilters(response.events)
+
             if reset {
-                events = response.events
+                events = filtered
             } else {
-                events.append(contentsOf: response.events)
+                events.append(contentsOf: filtered)
             }
 
             totalCount = response.totalCount
@@ -124,6 +139,9 @@ final class EventsViewModel {
         if selectedDatePreset != nil { count += 1 }
         if showFeaturedOnly { count += 1 }
         if !searchText.isEmpty { count += 1 }
+        if showFreeOnly { count += 1 }
+        if maxDistance != nil { count += 1 }
+        if minRating != nil { count += 1 }
         return count
     }
 
@@ -132,6 +150,31 @@ final class EventsViewModel {
         selectedDatePreset = nil
         showFeaturedOnly = false
         searchText = ""
+        showFreeOnly = false
+        maxDistance = nil
+        minRating = nil
+    }
+
+    // MARK: - Premium Filters (applied client-side)
+
+    private func applyPremiumFilters(_ events: [Event]) -> [Event] {
+        var result = events
+
+        if showFreeOnly {
+            result = result.filter { $0.isFree }
+        }
+
+        if let maxDistance, let userLocation = LocationService.shared.userLocation {
+            result = result.filter { event in
+                guard let coord = event.coordinate else { return true }
+                let eventLocation = CLLocation(latitude: coord.latitude, longitude: coord.longitude)
+                let distanceMiles = userLocation.distance(from: eventLocation) / 1609.34
+                return distanceMiles <= maxDistance
+            }
+        }
+
+        // minRating is available for future use when events have ratings
+        return result
     }
 
     // MARK: - Debounced Search
