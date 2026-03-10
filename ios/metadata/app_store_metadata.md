@@ -98,6 +98,11 @@ Sign in with Apple or email to sync your favorites everywhere. Manage your profi
 BUILT FOR DES MOINES, BY DES MOINES
 Made by locals, for locals. We cover the entire Greater Des Moines metro including Des Moines, West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, Windsor Heights, Grimes, Altoona, Pleasant Hill, and surrounding communities. Updated daily so you always have the freshest local info.
 
+SUBSCRIPTION INFORMATION
+Des Moines Insider offers optional auto-renewable subscriptions (Insider and VIP) for premium features. Payment is charged to your Apple ID account. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current period. Manage or cancel anytime in Settings → Apple ID → Subscriptions.
+Terms of Use: https://desmoinesinsider.com/terms
+Privacy Policy: https://desmoinesinsider.com/privacy-policy
+
 ---
 
 ## Keywords (100 chars max, comma-separated, no spaces after commas)
@@ -132,6 +137,13 @@ Iowa,dining,food,attraction,DSM,nightlife,tonight,weekend,local,guide,live music
 
 ---
 
+## What's New (Release Notes — for version 1.1.1)
+
+- Improved subscription experience with native Apple SubscriptionStoreView
+- Subscription Terms of Use and Privacy Policy now linked directly in purchase flow
+- Updated privacy declarations for full App Store compliance
+- Performance and stability improvements
+
 ## What's New (Release Notes — for version 1.0)
 
 Welcome to Des Moines Insider! Your new guide to events, restaurants, and attractions in the Greater Des Moines area.
@@ -149,6 +161,21 @@ Welcome to Des Moines Insider! Your new guide to events, restaurants, and attrac
 Des Moines Insider is a local city guide for Des Moines, Iowa. The app displays publicly available event and restaurant information. No demo account is required — all content is accessible without signing in. Sign-in (via Apple or email) is only needed to save favorites.
 
 The app requires a network connection to load content from our backend (Supabase). Location access is optional and used only to show nearby events and restaurants on the map.
+
+SUBSCRIPTIONS (Guideline 3.1.2):
+The app uses SubscriptionStoreView for the subscription purchase flow, located in Settings → Subscription. Two auto-renewable subscription tiers are offered:
+- Insider Monthly ($4.99/month): Unlimited favorites, advanced search, event reminders, ad-free
+- VIP Monthly ($12.99/month): All Insider features plus AI Trip Planner, priority support, early access
+Terms of Use and Privacy Policy links are displayed within the SubscriptionStoreView and in the App Description. The standard Apple EULA applies. Links: https://desmoinesinsider.com/terms and https://desmoinesinsider.com/privacy-policy
+
+PRIVACY (Guideline 5.1.2):
+This app does NOT track users across apps or websites. No App Tracking Transparency permission is needed because:
+- No IDFA or advertising identifier is collected
+- No third-party analytics or ad SDKs are included
+- User ID (Supabase Auth UUID) is used solely for app functionality (authentication, favorites sync) and is never shared with third parties for tracking
+- The Privacy Manifest (PrivacyInfo.xcprivacy) declares NSPrivacyTracking = false
+- All collected data (location, email, user ID, name) is used only for core app functionality
+The App Store Connect privacy labels have been updated to reflect this accurately.
 
 ---
 

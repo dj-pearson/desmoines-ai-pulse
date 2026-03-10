@@ -72,9 +72,17 @@ serve(async (req) => {
       );
     }
 
-    // Determine tier from product ID (App Store Connect "Insider" group + legacy format)
-    const INSIDER_PRODUCT_IDS = new Set(["prod_U4oa7Cpn0bRnuo"]);
-    const VIP_PRODUCT_IDS = new Set(["prod_U4oaGFEy12auTx"]);
+    // Determine tier from product ID (App Store Connect "Des Moines Insider Premium" group)
+    const INSIDER_PRODUCT_IDS = new Set([
+      "com.desmoines.aipulse.insider.monthly",
+      "com.desmoines.aipulse.insider.yearly",
+      "prod_U4oa7Cpn0bRnuo", // legacy Stripe-format ID (safe to remove after migration)
+    ]);
+    const VIP_PRODUCT_IDS = new Set([
+      "com.desmoines.aipulse.vip.monthly",
+      "com.desmoines.aipulse.vip.yearly",
+      "prod_U4oaGFEy12auTx", // legacy Stripe-format ID (safe to remove after migration)
+    ]);
 
     let tier: string;
     if (VIP_PRODUCT_IDS.has(productId) || productId.includes("vip")) {

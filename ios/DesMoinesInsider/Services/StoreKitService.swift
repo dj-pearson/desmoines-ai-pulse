@@ -3,21 +3,34 @@ import StoreKit
 
 /// Manages In-App Purchases via StoreKit 2.
 /// Handles product loading, purchasing, restoring, and entitlement verification.
+///
+/// Product IDs must match exactly what is configured in App Store Connect under
+/// Subscriptions → "Des Moines Insider Premium" subscription group.
 @MainActor
 @Observable
 final class StoreKitService {
     static let shared = StoreKitService()
 
-    // MARK: - Product IDs (from App Store Connect "Insider" subscription group)
+    // MARK: - Subscription Group (from App Store Connect → Subscriptions)
 
-    /// Product IDs from App Store Connect. Add yearly products here when created.
+    /// The subscription group ID from App Store Connect.
+    /// Find this in App Store Connect → My Apps → Subscriptions → Group ID.
+    static let subscriptionGroupID = "21611498"
+
+    // MARK: - Product IDs (must match App Store Connect exactly)
+
+    /// Product IDs configured in App Store Connect.
+    /// These follow Apple's recommended naming: bundleId.tier.period
+    static let insiderMonthlyID = "com.desmoines.aipulse.insider.monthly"
+    static let vipMonthlyID = "com.desmoines.aipulse.vip.monthly"
+
     static let productIDs: Set<String> = [
-        "prod_U4oa7Cpn0bRnuo",  // Insider Monthly
-        "prod_U4oaGFEy12auTx",  // VIP Monthly
+        insiderMonthlyID,
+        vipMonthlyID,
     ]
 
-    static let insiderProductIDs: Set<String> = ["prod_U4oa7Cpn0bRnuo"]
-    static let vipProductIDs: Set<String> = ["prod_U4oaGFEy12auTx"]
+    static let insiderProductIDs: Set<String> = [insiderMonthlyID]
+    static let vipProductIDs: Set<String> = [vipMonthlyID]
 
     // MARK: - Published State
 
@@ -79,10 +92,23 @@ final class StoreKitService {
         errorMessage = nil
 
         do {
-            products = try await Product.products(for: Self.productIDs)
-                .sorted { $0.price < $1.price }
+            let loaded = try await Product.products(for: Self.productIDs)
+            products = loaded.sorted { $0.price < $1.price }
+
+            if loaded.isEmpty {
+                // Products exist in code but not in App Store Connect (sandbox or production).
+                // This is the most common cause of Guideline 2.1(b) rejections.
+                errorMessage = StoreError.productLoadFailed.localizedDescription
+                #if DEBUG
+                print("[StoreKit] No products found for IDs: \(Self.productIDs)")
+                print("[StoreKit] Ensure products are created in App Store Connect and are in 'Ready to Submit' state.")
+                #endif
+            }
         } catch {
             errorMessage = StoreError.productLoadFailed.localizedDescription
+            #if DEBUG
+            print("[StoreKit] Product load error: \(error.localizedDescription)")
+            #endif
         }
 
         isLoading = false

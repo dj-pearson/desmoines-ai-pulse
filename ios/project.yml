@@ -130,6 +130,7 @@ schemes:
         DesMoinesInsiderClip: all
     run:
       config: Debug
+      storeKitConfiguration: DesMoinesInsider/Resources/Products.storekit
     profile:
       config: Release
     archive:

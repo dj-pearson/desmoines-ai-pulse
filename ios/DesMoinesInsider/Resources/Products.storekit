@@ -1,0 +1,77 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : "https://desmoinesinsider.com/terms"
+      }
+    ]
+  },
+  "identifier" : "D1A2B3C4-E5F6-7890-ABCD-EF1234567890",
+  "type" : "AutoRenewableSubscription",
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21611498",
+      "localizations" : [
+        {
+          "description" : "Premium subscription tiers for Des Moines Insider",
+          "displayName" : "Des Moines Insider Premium",
+          "locale" : "en_US"
+        }
+      ],
+      "name" : "Des Moines Insider Premium",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "4.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "INSIDER_MONTHLY_001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Unlimited favorites, advanced search, event reminders, ad-free experience",
+              "displayName" : "Insider Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.desmoines.aipulse.insider.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Insider Monthly",
+          "subscriptionGroupID" : "21611498",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        },
+        {
+          "adHocOffers" : [],
+          "codeOffers" : [],
+          "displayPrice" : "12.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "VIP_MONTHLY_001",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "Everything in Insider plus AI Trip Planner, priority support, early access to features",
+              "displayName" : "VIP Monthly",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "com.desmoines.aipulse.vip.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "VIP Monthly",
+          "subscriptionGroupID" : "21611498",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : []
+        }
+      ]
+    }
+  ]
+}
