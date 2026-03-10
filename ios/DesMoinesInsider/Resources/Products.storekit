@@ -42,9 +42,9 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.desmoines.aipulse.insider.monthly",
+          "productID" : "prod_U4oa7Cpn0bRnuo",
           "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "Insider Monthly",
+          "referenceName" : "prod_Insider_Monthly",
           "subscriptionGroupID" : "21611498",
           "type" : "RecurringSubscription",
           "winbackOffers" : []
@@ -64,9 +64,9 @@
               "locale" : "en_US"
             }
           ],
-          "productID" : "com.desmoines.aipulse.vip.monthly",
+          "productID" : "prod_U4oaGFEy12auTx",
           "recurringSubscriptionPeriod" : "P1M",
-          "referenceName" : "VIP Monthly",
+          "referenceName" : "prod_VIP_Monthly",
           "subscriptionGroupID" : "21611498",
           "type" : "RecurringSubscription",
           "winbackOffers" : []

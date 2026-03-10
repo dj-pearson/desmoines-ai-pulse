@@ -19,10 +19,10 @@ final class StoreKitService {
 
     // MARK: - Product IDs (must match App Store Connect exactly)
 
-    /// Product IDs configured in App Store Connect.
-    /// These follow Apple's recommended naming: bundleId.tier.period
-    static let insiderMonthlyID = "com.desmoines.aipulse.insider.monthly"
-    static let vipMonthlyID = "com.desmoines.aipulse.vip.monthly"
+    /// Product IDs from App Store Connect subscription group.
+    /// Reference names: prod_Insider_Monthly, prod_VIP_Monthly
+    static let insiderMonthlyID = "prod_U4oa7Cpn0bRnuo"
+    static let vipMonthlyID = "prod_U4oaGFEy12auTx"
 
     static let productIDs: Set<String> = [
         insiderMonthlyID,

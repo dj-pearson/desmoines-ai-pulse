@@ -6,7 +6,7 @@ import { BackToTop } from "@/components/BackToTop";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function Terms() {
-  const lastUpdated = "November 25, 2025";
+  const lastUpdated = "March 10, 2026";
 
   return (
     <div className="min-h-screen bg-background">
@@ -208,7 +208,63 @@ export default function Terms() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">10. Disclaimer of Warranties</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">10. Subscriptions and In-App Purchases (EULA)</h2>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Subscription Plans</h3>
+            <p>
+              Des Moines Insider offers optional auto-renewable subscription plans ("Insider" and "VIP") that unlock
+              premium features. Subscription details, including pricing and included features, are displayed within the
+              app prior to purchase.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Billing and Renewal</h3>
+            <ul className="list-disc pl-6 space-y-2">
+              <li>Payment is charged to your Apple ID account at confirmation of purchase.</li>
+              <li>Subscriptions automatically renew unless canceled at least 24 hours before the end of the current billing period.</li>
+              <li>Your account will be charged for renewal within 24 hours prior to the end of the current period at the same price you originally paid, unless the pricing has changed, in which case you will be notified in advance.</li>
+              <li>Any unused portion of a free trial period, if offered, will be forfeited when you purchase a subscription.</li>
+            </ul>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Managing and Canceling Subscriptions</h3>
+            <p>
+              You can manage or cancel your subscription at any time through your Apple ID account settings. Navigate
+              to Settings &gt; [your name] &gt; Subscriptions on your iOS device, or visit{" "}
+              <a href="https://apps.apple.com/account/subscriptions" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                Apple Subscription Management
+              </a>. Cancellation takes effect at the end of the current billing period. No refunds are provided for
+              partial billing periods.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Subscription Features</h3>
+            <ul className="list-disc pl-6 space-y-2">
+              <li><strong>Insider</strong> ($4.99/month): Unlimited favorites, advanced search filters, event reminders, and ad-free experience.</li>
+              <li><strong>VIP</strong> ($12.99/month): All Insider features plus AI Trip Planner, priority support, and early access to new features.</li>
+            </ul>
+            <p className="mt-2">
+              Pricing is in US dollars and may vary by region. Applicable taxes may apply based on your location.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">License Grant</h3>
+            <p>
+              Subject to your compliance with these Terms, Des Moines Insider grants you a limited, non-exclusive,
+              non-transferable, revocable license to access and use the app and its premium features on any Apple device
+              that you own or control, as permitted by the Apple Media Services Terms and Conditions. This license does not
+              allow you to use the app on any device you do not own or control, and you may not distribute or make the app
+              available over a network where it could be used by multiple devices at the same time.
+            </p>
+
+            <h3 className="text-xl font-medium mt-6 mb-3">Refunds</h3>
+            <p>
+              All subscription purchases are processed by Apple. Refund requests must be submitted through Apple's
+              support channels at{" "}
+              <a href="https://reportaproblem.apple.com" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">
+                reportaproblem.apple.com
+              </a>. Des Moines Insider does not process refunds directly for App Store purchases.
+            </p>
+          </section>
+
+          <section className="mb-8">
+            <h2 className="text-2xl font-semibold mt-8 mb-4">11. Disclaimer of Warranties</h2>
             <p className="uppercase text-sm">
               THE SERVICES ARE PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS
               OR IMPLIED. TO THE FULLEST EXTENT PERMITTED BY LAW, WE DISCLAIM ALL WARRANTIES, INCLUDING BUT NOT
@@ -223,7 +279,7 @@ export default function Terms() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">11. Limitation of Liability</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">12. Limitation of Liability</h2>
             <p className="uppercase text-sm">
               TO THE MAXIMUM EXTENT PERMITTED BY LAW, DES MOINES INSIDER AND ITS OFFICERS, DIRECTORS, EMPLOYEES,
               AND AGENTS SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE
@@ -242,7 +298,7 @@ export default function Terms() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">12. Indemnification</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">13. Indemnification</h2>
             <p>
               You agree to indemnify, defend, and hold harmless Des Moines Insider and its affiliates from any claims,
               damages, losses, and expenses (including reasonable attorneys' fees) arising from:
@@ -256,7 +312,7 @@ export default function Terms() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">13. Dispute Resolution</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">14. Dispute Resolution</h2>
 
             <h3 className="text-xl font-medium mt-6 mb-3">Governing Law</h3>
             <p>
@@ -278,7 +334,7 @@ export default function Terms() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">14. Changes to Terms</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">15. Changes to Terms</h2>
             <p>
               We may modify these Terms at any time. We will notify you of material changes by posting the updated
               Terms on this page and updating the "Last Updated" date. For significant changes affecting your rights,
@@ -290,7 +346,7 @@ export default function Terms() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">15. General Provisions</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">16. General Provisions</h2>
 
             <h3 className="text-xl font-medium mt-6 mb-3">Entire Agreement</h3>
             <p>
@@ -318,7 +374,7 @@ export default function Terms() {
           </section>
 
           <section className="mb-8">
-            <h2 className="text-2xl font-semibold mt-8 mb-4">16. Contact Information</h2>
+            <h2 className="text-2xl font-semibold mt-8 mb-4">17. Contact Information</h2>
             <p>
               If you have any questions about these Terms, please contact us at:
             </p>

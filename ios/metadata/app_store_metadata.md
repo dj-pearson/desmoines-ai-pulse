@@ -57,6 +57,60 @@ The Description is NOT indexed for search — it exists for conversion, not rank
 
 ---
 
+## Custom EULA (License Agreement)
+
+In App Store Connect → My Apps → App Information → License Agreement, select **"Custom App License Agreement"**
+and paste the following text. This covers Apple's required auto-renewable subscription terms.
+
+```
+END USER LICENSE AGREEMENT
+
+Last Updated: March 10, 2026
+
+This End User License Agreement ("EULA") is a legal agreement between you and Des Moines Insider ("we", "us", or "our") for the Des Moines Insider mobile application ("App").
+
+By downloading, installing, or using the App, you agree to be bound by this EULA. If you do not agree, do not use the App.
+
+1. LICENSE GRANT
+We grant you a limited, non-exclusive, non-transferable, revocable license to use the App on any Apple device that you own or control, subject to the Apple Media Services Terms and Conditions. You may not distribute or make the App available over a network where it could be used by multiple devices at the same time.
+
+2. SUBSCRIPTIONS
+The App offers optional auto-renewable subscription plans:
+- Insider ($4.99/month): Unlimited favorites, advanced search filters, event reminders, ad-free experience.
+- VIP ($12.99/month): All Insider features plus AI Trip Planner, priority support, early access to new features.
+
+Payment is charged to your Apple ID account at confirmation of purchase. Subscriptions automatically renew unless canceled at least 24 hours before the end of the current billing period. Your account will be charged for renewal within 24 hours prior to the end of the current period. You can manage or cancel subscriptions in your Apple ID account settings (Settings > [your name] > Subscriptions). Any unused portion of a free trial period will be forfeited upon purchasing a subscription. Pricing is in US dollars and may vary by region.
+
+3. REFUNDS
+All purchases are processed by Apple. Refund requests must be submitted through Apple at reportaproblem.apple.com.
+
+4. CONTENT AND DATA
+The App provides information about events, restaurants, and attractions in the Des Moines, Iowa area. Content may include AI-generated descriptions and recommendations, which may not be 100% accurate. You should verify important information before making decisions based on App content.
+
+5. PRIVACY
+Your use of the App is also governed by our Privacy Policy at https://desmoinesinsider.com/privacy-policy. The App does not track you across other apps or websites.
+
+6. DISCLAIMER OF WARRANTIES
+THE APP IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND. WE DO NOT WARRANT THAT THE APP WILL BE UNINTERRUPTED, ERROR-FREE, OR FREE OF HARMFUL COMPONENTS.
+
+7. LIMITATION OF LIABILITY
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, OUR TOTAL LIABILITY SHALL NOT EXCEED THE AMOUNT YOU PAID US IN THE TWELVE MONTHS PRECEDING THE CLAIM, OR $100, WHICHEVER IS GREATER.
+
+8. GOVERNING LAW
+This EULA is governed by the laws of the State of Iowa, USA. Any disputes shall be brought in the courts of Polk County, Iowa.
+
+9. CHANGES
+We may update this EULA from time to time. Continued use of the App constitutes acceptance of the updated terms.
+
+10. CONTACT
+Questions about this EULA: legal@desmoinesinsider.com
+
+Full Terms of Service: https://desmoinesinsider.com/terms
+Privacy Policy: https://desmoinesinsider.com/privacy-policy
+```
+
+---
+
 ## Promotional Text (170 chars max — can be updated without a new build)
 
 > **Note:** Promotional text is NOT indexed for search. Its job is conversion — convincing
