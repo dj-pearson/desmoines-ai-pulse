@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Heart } from "lucide-react";
+import { Heart, Loader2 } from "lucide-react";
 import { useFavorites } from "@/hooks/useFavorites";
 import { cn } from "@/lib/utils";
 import { hapticTap } from "@/lib/capacitorUtils";
@@ -36,16 +36,20 @@ export function FavoriteButton({
       }}
       disabled={isToggling}
       className={cn(className)}
-      aria-label={favorited ? "Remove from favorites" : "Add to favorites"}
+      aria-label={isToggling ? "Updating favorite..." : favorited ? "Remove from favorites" : "Add to favorites"}
     >
-      <Heart
-        className={cn(
-          "h-5 w-5 transition-all",
-          favorited
-            ? "fill-red-500 text-red-500"
-            : "text-muted-foreground hover:text-red-500"
-        )}
-      />
+      {isToggling ? (
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      ) : (
+        <Heart
+          className={cn(
+            "h-5 w-5 transition-all",
+            favorited
+              ? "fill-red-500 text-red-500"
+              : "text-muted-foreground hover:text-red-500"
+          )}
+        />
+      )}
       {showText && (
         <span className="ml-2">{favorited ? "Saved" : "Save"}</span>
       )}

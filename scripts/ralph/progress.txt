@@ -90,3 +90,20 @@ Started: 2026-02-28T03:00:00Z
   - group-focus-within: is the keyboard equivalent of group-hover: for nested focusable elements
   - Login throttling uses in-memory Map (resets on page reload) — suitable for client-side rate limiting
 ---
+
+## 2026-03-10 — Ralph Loop 14: US-085, US-087, US-104, US-106, US-122, US-130
+- US-085: Search autocomplete with recent searches (safeStorage) and DB title suggestions (debounced ilike, 3+ chars), integrated into Events/Restaurants/Attractions
+- US-087: Context-aware loading states ("Searching for...", "Loading [cuisine]...") + labeled skeleton sections in RestaurantDetails + FavoriteButton loading spinner
+- US-104: Detail page data prefetching on card hover via usePrefetchRestaurant/usePrefetchAttraction hooks with requestIdleCallback + once-per-item guard
+- US-106: Verified already complete (NearbyContent on all detail pages)
+- US-122: Footer newsletter improved with benefit copy, "Subscribe Free" CTA, social proof ("Join 15,000+ locals")
+- US-130: Verified already complete (Breadcrumbs + BreadcrumbListSchema on all detail pages)
+- Files changed: src/components/SearchAutocomplete.tsx (new), src/hooks/usePrefetchDetail.ts (new), src/pages/EventsPage.tsx, src/pages/Restaurants.tsx, src/pages/Attractions.tsx, src/pages/RestaurantDetails.tsx, src/components/RestaurantCard.tsx, src/components/FavoriteButton.tsx, src/components/Footer.tsx, prd.json, progress.txt, scripts/ralph/progress.txt
+- **Build**: npx vite build passes (50s, no errors)
+- **Progress**: 112/147 stories complete (76%), 35 remaining
+- **Learnings for future iterations:**
+  - SearchAutocomplete uses useDebouncedValue internally — no need for external debounce
+  - requestIdleCallback not available in all browsers — provide setTimeout fallback
+  - CardsGridSkeleton already accepts a `label` prop for context-aware loading text
+  - Footer newsletter social proof should use subscriber count for trust signals
+---

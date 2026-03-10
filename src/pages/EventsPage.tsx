@@ -73,6 +73,7 @@ import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
 import { SmartFilterChips } from "@/components/SmartFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
 
 // Lazy load heavy map component (includes Leaflet library ~150KB)
 const EventsMap = lazy(() => import("@/components/EventsMap"));
@@ -694,6 +695,11 @@ export default function EventsPage() {
                     placeholder={isMobile ? "Search events..." : "Search events, venues, or keywords..."}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && searchQuery.trim()) {
+                        addRecentSearch('events', searchQuery);
+                      }
+                    }}
                     className="pl-12 pr-12 h-14 bg-white/10 backdrop-blur-md border-white/20 text-white placeholder:text-white/50 rounded-xl text-base focus:bg-white/15 focus:border-white/40 focus:ring-2 focus:ring-indigo-400/50 transition-all"
                     aria-label="Search events (Press 'f' to focus)"
                     role="searchbox"
@@ -710,6 +716,12 @@ export default function EventsPage() {
                       <X className="h-4 w-4" />
                     </Button>
                   )}
+                  <SearchAutocomplete
+                    contentType="events"
+                    value={searchQuery}
+                    onSelect={setSearchQuery}
+                    inputRef={searchInputRef}
+                  />
                 </div>
               </div>
 
@@ -972,7 +984,7 @@ export default function EventsPage() {
           )}
 
           {/* Event Grid / Map */}
-          {isLoading && <CardsGridSkeleton count={6} variant="event" label="Loading events..." />}
+          {isLoading && <CardsGridSkeleton count={6} variant="event" label={debouncedSearchQuery ? `Searching for "${debouncedSearchQuery}"...` : selectedCategory !== "all" ? `Loading ${selectedCategory} events...` : "Loading events..."} />}
 
           {!isLoading && viewMode === "map" ? (
             <Suspense fallback={<LoadingSpinner label="Loading map..." />}>

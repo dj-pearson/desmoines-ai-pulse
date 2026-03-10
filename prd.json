@@ -1424,7 +1424,7 @@
         "Typecheck passes"
       ],
       "priority": 85,
-      "passes": false,
+      "passes": true,
       "notes": "UI/UX AUDIT: Search inputs on all listing pages have debouncing (US-036) but no autocomplete, no recent searches, and no suggestions. Users have to know exactly what they're searching for. Autocomplete dramatically improves search conversion \u2014 users see matching titles as they type, reducing failed searches."
     },
     {
@@ -1457,7 +1457,7 @@
         "Typecheck passes"
       ],
       "priority": 87,
-      "passes": false,
+      "passes": true,
       "notes": "UI/UX AUDIT: Loading states use generic labels ('Loading content...') regardless of context. Error states are incomplete \u2014 network failures on search don't show user-friendly recovery options. Mutation buttons (favorite, share) don't show loading state, so users can't tell if their click registered."
     },
     {
@@ -1730,7 +1730,7 @@
         "Typecheck passes"
       ],
       "priority": 104,
-      "passes": false,
+      "passes": true,
       "notes": "DATA LAYER AUDIT: Route-level prefetching exists (src/lib/prefetch.ts) but only prefetches code bundles, not data. When a user clicks a card, they wait for both the route bundle AND the API data to load. Prefetching data on hover means the API response is already cached when the user clicks, making navigation feel instant."
     },
     {
@@ -1766,7 +1766,7 @@
         "Typecheck passes"
       ],
       "priority": 106,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Detail pages currently only recommend same-type content (events show related events, restaurants show related restaurants). Cross-content linking is a major opportunity for increasing time on site (+20-40% in industry benchmarks), improving internal linking for SEO, and helping users plan complete outings. Google rewards sites with strong internal linking structures."
     },
     {
@@ -2026,7 +2026,7 @@
         "Typecheck passes"
       ],
       "priority": 122,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: The footer newsletter form has a generic 'Your email' placeholder with no benefit messaging. Newsletter conversion rates improve 25-50% when the form communicates specific value (what subscribers get) and includes social proof (how many others subscribe). The Newsletter component elsewhere in the app already has social proof but the footer implementation lacks it."
     },
     {
@@ -2154,7 +2154,7 @@
         "Typecheck passes"
       ],
       "priority": 130,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Breadcrumbs are implemented on listing pages but may not be consistently applied to all detail pages. Breadcrumbs improve navigation (reducing bounce rate by 5-10%), provide context (users know where they are), and generate structured data that Google displays in search results. BreadcrumbList schema can increase CTR in search results by 20-30%."
     },
     {
