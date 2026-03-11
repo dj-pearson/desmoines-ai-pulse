@@ -253,6 +253,47 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
   };
 }
 
+// Hook to get cuisine counts for "Browse by Cuisine" section
+export function useCuisineCounts() {
+  const [cuisineCounts, setCuisineCounts] = useState<{ cuisine: string; count: number }[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCuisineCounts = async () => {
+      try {
+        const { data } = await supabase
+          .from("restaurants")
+          .select("cuisine")
+          .not("cuisine", "is", null);
+
+        if (data) {
+          const counts: Record<string, number> = {};
+          data.forEach((r) => {
+            if (r.cuisine) {
+              counts[r.cuisine] = (counts[r.cuisine] || 0) + 1;
+            }
+          });
+
+          const sorted = Object.entries(counts)
+            .map(([cuisine, count]) => ({ cuisine, count }))
+            .filter((item) => item.count >= 1)
+            .sort((a, b) => b.count - a.count);
+
+          setCuisineCounts(sorted);
+        }
+      } catch {
+        // Silently fail — section just won't render
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchCuisineCounts();
+  }, []);
+
+  return { cuisineCounts, isLoading };
+}
+
 // Utility hook to get available filter options
 export function useRestaurantFilterOptions() {
   const [options, setOptions] = useState({

@@ -4,9 +4,14 @@
 // Map app routes to their lazily-loaded page modules
 const routeModuleMap: Record<string, () => Promise<unknown>> = {
   "/events": () => import("@/pages/EventsPage"),
-  "/restaurants": () => import("@/pages/RestaurantsPage"),
+  "/events/today": () => import("@/pages/EventsToday"),
+  "/events/free": () => import("@/pages/FreeEvents"),
+  "/restaurants": () => import("@/pages/Restaurants"),
   "/attractions": () => import("@/pages/Attractions"),
   "/playgrounds": () => import("@/pages/Playgrounds"),
+  "/trip-planner": () => import("@/pages/TripPlanner"),
+  "/best-of": () => import("@/pages/BestOf"),
+  "/whats-new": () => import("@/pages/WhatsNew"),
 };
 
 // Prefetch a route's chunk using a dynamic import (Vite will prefetch/cache it)

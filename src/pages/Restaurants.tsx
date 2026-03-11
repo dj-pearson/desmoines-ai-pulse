@@ -10,6 +10,7 @@ import {
 import {
   useRestaurants,
   useRestaurantFilterOptions,
+  useCuisineCounts,
 } from "@/hooks/useRestaurants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,6 +127,7 @@ export default function Restaurants() {
 
   const { restaurants, isLoading, error, totalCount, refetch } = useRestaurants(filters);
   const filterOptions = useRestaurantFilterOptions();
+  const { cuisineCounts } = useCuisineCounts();
   const { announce, announcement, regionProps } = useAnnounce();
 
   // Paginate restaurants
@@ -506,8 +508,8 @@ export default function Restaurants() {
                     onClick={() => handleCuisineQuickFilter(item.value)}
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-full whitespace-nowrap transition-all duration-200 text-sm font-medium border ${
                       isActive
-                        ? "bg-[#2D1B69] text-white border-[#2D1B69] shadow-md"
-                        : "bg-white text-gray-700 border-gray-200 hover:border-[#2D1B69]/30 hover:bg-[#2D1B69]/5 shadow-sm"
+                        ? "bg-[#2D1B69] text-white border-[#2D1B69] shadow-md dark:bg-primary dark:border-primary"
+                        : "bg-white text-gray-700 border-gray-200 hover:border-[#2D1B69]/30 hover:bg-[#2D1B69]/5 shadow-sm dark:bg-card dark:text-gray-300 dark:border-gray-700 dark:hover:border-primary/40 dark:hover:bg-primary/10"
                     }`}
                     aria-pressed={isActive}
                   >
@@ -528,7 +530,7 @@ export default function Restaurants() {
                     setFilters((prev) => ({ ...prev, sortBy: value as RestaurantFilterOptions["sortBy"] }))
                   }
                 >
-                  <SelectTrigger className="w-44 bg-white rounded-xl shadow-sm">
+                  <SelectTrigger className="w-44 bg-white dark:bg-card rounded-xl shadow-sm">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -629,7 +631,7 @@ export default function Restaurants() {
                   </Badge>
                 )}
                 {filters.cuisine.map((cuisine) => (
-                  <Badge key={cuisine} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
+                  <Badge key={cuisine} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white dark:bg-card shadow-sm border">
                     <ChefHat className="h-3 w-3" />
                     {cuisine}
                     <button onClick={() => removeFilter("cuisine", cuisine)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
@@ -703,7 +705,7 @@ export default function Restaurants() {
 
             {/* Advanced Filters Panel */}
             {showAdvancedFilters && !isMobile && (
-              <div className="bg-white rounded-2xl shadow-md p-6 border">
+              <div className="bg-white dark:bg-card rounded-2xl shadow-md p-6 border">
                 <RestaurantFilters
                   filters={filters}
                   onFiltersChange={setFilters}
@@ -741,7 +743,7 @@ export default function Restaurants() {
             {!hasActiveFilters && featuredRestaurants.length > 0 && (
               <section aria-labelledby="featured-heading">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 id="featured-heading" className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                  <h2 id="featured-heading" className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
                     <Sparkles className="h-6 w-6 text-amber-500" />
                     Featured Restaurants
                   </h2>
@@ -778,7 +780,7 @@ export default function Restaurants() {
             {/* Main Restaurant Grid */}
             <section aria-labelledby="all-restaurants-heading">
               <div className="flex items-center justify-between mb-4">
-                <h2 id="all-restaurants-heading" className="text-2xl font-bold text-gray-900">
+                <h2 id="all-restaurants-heading" className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {hasActiveFilters ? "Search Results" : "All Restaurants"}
                 </h2>
               </div>
@@ -943,15 +945,47 @@ export default function Restaurants() {
               <AdBanner placement="below_fold" />
             </div>
 
+            {/* Browse by Cuisine Section */}
+            {cuisineCounts.length > 0 && (
+              <section className="py-8" aria-labelledby="browse-cuisine-heading">
+                <h2
+                  id="browse-cuisine-heading"
+                  className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2"
+                >
+                  Browse by Cuisine
+                </h2>
+                <p className="text-muted-foreground mb-6">
+                  Explore Des Moines restaurants by cuisine type
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {cuisineCounts.map(({ cuisine, count }) => (
+                    <button
+                      key={cuisine}
+                      onClick={() => {
+                        setFilters((prev) => ({ ...prev, cuisine: [cuisine] }));
+                        setActiveCuisineQuick('');
+                        document.getElementById('all-restaurants-heading')?.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border border-gray-200 dark:border-gray-700 bg-white dark:bg-card text-gray-700 dark:text-gray-300 hover:border-[#2D1B69] dark:hover:border-primary hover:bg-[#2D1B69]/5 dark:hover:bg-primary/10 transition-all duration-200 shadow-sm"
+                    >
+                      <ChefHat className="h-3.5 w-3.5 text-muted-foreground" />
+                      {cuisine}
+                      <span className="text-xs text-muted-foreground ml-0.5">({count})</span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
             {/* SEO Content Section */}
             <section className="max-w-4xl mx-auto space-y-12 mt-16" aria-labelledby="guide-heading">
               <div className="prose prose-lg max-w-none">
-                <h2 id="guide-heading" className="text-3xl font-bold mb-6 text-center text-gray-900">
+                <h2 id="guide-heading" className="text-3xl font-bold mb-6 text-center text-gray-900 dark:text-gray-100">
                   Des Moines Restaurant Guide: Your Complete Local Dining Directory
                 </h2>
 
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-2xl mb-8 border border-blue-100">
-                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-gray-900">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 p-6 rounded-2xl mb-8 border border-blue-100 dark:border-blue-900">
+                  <h3 className="text-xl font-semibold mb-3 flex items-center gap-2 text-gray-900 dark:text-gray-100">
                     <ChefHat className="h-5 w-5 text-blue-600" />
                     Des Moines Dining at a Glance
                   </h3>
@@ -1079,7 +1113,7 @@ export default function Restaurants() {
         </div>
 
         {/* FAQ Section */}
-        <section className="py-16 bg-white" aria-labelledby="faq-heading">
+        <section className="py-16 bg-white dark:bg-background" aria-labelledby="faq-heading">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
             <FAQSection
               title="Des Moines Restaurants - Frequently Asked Questions"

@@ -140,6 +140,12 @@
   ::placeholder {
     opacity: 0.65;
   }
+
+  /* Dark mode: ensure placeholder meets WCAG 4.5:1 against dark backgrounds */
+  .dark ::placeholder {
+    opacity: 1;
+    color: hsl(225 15% 55%);
+  }
 }
 
 @layer utilities {

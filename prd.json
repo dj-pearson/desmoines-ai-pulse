@@ -1263,7 +1263,7 @@
         "Typecheck passes"
       ],
       "priority": 75,
-      "passes": false,
+      "passes": true,
       "notes": "AUDIT FINDING: image-proxy has SSRF validation (good) but zero authentication. Any unauthenticated caller can use it to proxy unlimited image requests, causing high egress costs. It could also be abused as a general-purpose proxy despite SSRF checks."
     },
     {
@@ -1441,7 +1441,7 @@
         "Typecheck passes"
       ],
       "priority": 86,
-      "passes": false,
+      "passes": true,
       "notes": "UI/UX AUDIT: Dark mode CSS variables are defined in src/index.css lines 80-128 but there's no UI toggle for users to switch themes. Additionally, multiple components have hardcoded colors without dark: variants \u2014 RestaurantCard gradients, ShareDialog platform buttons, and BottomNav hover states don't adapt to dark mode."
     },
     {
@@ -1490,7 +1490,7 @@
         "Typecheck passes"
       ],
       "priority": 89,
-      "passes": false,
+      "passes": true,
       "notes": "PERFORMANCE AUDIT: Only 4 routes are prefetchable (/events, /restaurants, /attractions, /playgrounds). BottomNav imports prefetchRoute but doesn't call it on hover/touch. Missing DNS prefetch hints for Stripe. Expanding prefetch to all popular routes saves 200-500ms per navigation."
     },
     {
@@ -2042,7 +2042,7 @@
         "Typecheck passes"
       ],
       "priority": 123,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Attractions page has a 'Browse by Type' section that allows quick category filtering. Events page has SmartFilterChips. Restaurants page lacks equivalent category quick-links, forcing users to open the full filter panel to browse by cuisine. Cuisine browsing is one of the most common restaurant search patterns."
     },
     {

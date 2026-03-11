@@ -72,11 +72,12 @@ export default function BottomNav() {
                 "relative flex flex-col items-center justify-center min-w-[60px] h-full px-3 smooth-transition touch-feedback rounded-xl",
                 isActive
                   ? "text-primary bg-primary/10"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50 active:scale-95"
+                  : "text-muted-foreground hover:text-foreground hover:bg-muted/50 dark:hover:bg-muted/30 active:scale-95"
               )}
               aria-label={item.label}
               aria-current={isActive ? "page" : undefined}
               onMouseEnter={() => prefetchRoute(item.href)}
+              onTouchStart={() => prefetchRoute(item.href)}
               onFocus={() => prefetchRoute(item.href)}
               onClick={() => {
                 // Native haptic feedback (Capacitor) with web fallback
