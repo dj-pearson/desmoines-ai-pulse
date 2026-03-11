@@ -173,7 +173,7 @@ export default function ShareDialog({
               <Button
                 key={option.name}
                 onClick={() => handleShareClick(option.url)}
-                className={`flex items-center justify-center transition-all duration-200 transform hover:scale-105 ${option.color} shadow-sm hover:shadow-md`}
+                className={`flex items-center justify-center transition-all duration-200 transform hover:scale-105 ${option.color} shadow-sm hover:shadow-md dark:brightness-90`}
                 size="sm"
               >
                 <option.icon className="h-4 w-4" />

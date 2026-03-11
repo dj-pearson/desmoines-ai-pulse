@@ -84,7 +84,7 @@ function StarRating({ rating }: { rating: number }) {
     } else if (i === fullStars && hasHalf) {
       stars.push(
         <div key={i} className="relative h-3.5 w-3.5">
-          <Star className="absolute h-3.5 w-3.5 text-gray-200" />
+          <Star className="absolute h-3.5 w-3.5 text-gray-200 dark:text-gray-600" />
           <div className="absolute overflow-hidden w-1/2">
             <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
           </div>
@@ -92,7 +92,7 @@ function StarRating({ rating }: { rating: number }) {
       );
     } else {
       stars.push(
-        <Star key={i} className="h-3.5 w-3.5 text-gray-200" />
+        <Star key={i} className="h-3.5 w-3.5 text-gray-200 dark:text-gray-600" />
       );
     }
   }
@@ -210,7 +210,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               {restaurant.rating ? (
                 <>
                   <StarRating rating={restaurant.rating} />
-                  <span className="text-sm font-semibold text-gray-800">
+                  <span className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                     {restaurant.rating.toFixed(1)}
                   </span>
                 </>
@@ -219,7 +219,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
               )}
             </div>
             {restaurant.popularity_score && restaurant.popularity_score > 70 && (
-              <Badge variant="outline" className="text-xs border-orange-200 text-orange-600 bg-orange-50 gap-1">
+              <Badge variant="outline" className="text-xs border-orange-200 text-orange-600 bg-orange-50 dark:bg-orange-950 dark:border-orange-800 dark:text-orange-400 gap-1">
                 <Flame className="h-3 w-3" />
                 Popular
               </Badge>
@@ -237,7 +237,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
           {dietaryTags.length > 0 && (
             <div className="flex flex-wrap gap-1">
               {dietaryTags.map(tag => (
-                <span key={tag.id} className={`inline-flex items-center gap-1 ${tag.bg} ${tag.text} text-xs font-medium px-2 py-0.5 rounded-full`}>
+                <span key={tag.id} className={`inline-flex items-center gap-1 ${tag.bg} ${tag.text} dark:bg-opacity-20 dark:text-opacity-90 text-xs font-medium px-2 py-0.5 rounded-full`}>
                   <tag.icon className="h-3 w-3" aria-hidden="true" />
                   {tag.label}
                 </span>
@@ -247,7 +247,7 @@ function RestaurantCardComponent({ restaurant, variant = "default" }: Restaurant
 
           {/* Location */}
           {(restaurant.location || restaurant.city) && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-gray-100">
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1 border-t border-gray-100 dark:border-gray-800">
               <MapPin className="h-3.5 w-3.5 shrink-0" />
               <span className="line-clamp-1">
                 {restaurant.location || restaurant.city}

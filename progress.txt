@@ -96,6 +96,38 @@
 
 ## Progress Log
 
+## 2026-03-11 — Ralph Loop 15: Critical Platform Improvements (Dark Mode, Security, Restaurant UX, Prefetching)
+
+- **US-086**: Fixed incomplete dark mode styling across platform:
+  - RestaurantCard: added dark: variants for star rating empty states, rating text, popularity badge, dietary tag backgrounds, location border
+  - ShareDialog: added `dark:brightness-90` to social media buttons for reduced eye strain
+  - BottomNav: added `dark:hover:bg-muted/30` for proper dark mode hover contrast
+  - Restaurants page: dark mode fixes for cuisine quick-filter buttons, sort dropdown, filter panel, filter chips, headings, FAQ section, SEO content gradients
+  - index.css: added dark mode placeholder color override (`hsl(225 15% 55%)`) for WCAG 4.5:1 contrast compliance
+- **US-075**: Added authentication and rate limiting to image-proxy edge function:
+  - JWT authentication required for non-internal URLs (verifies via Supabase auth)
+  - Unauthenticated access allowed only for internal Supabase Storage URLs (pattern match)
+  - Rate limiting: 50 requests per 15 minutes per client (bandwidth-intensive endpoint)
+  - Response size limit: 10MB max (checked via Content-Length header and actual buffer size)
+  - Logs all authenticated proxy requests with user ID for abuse monitoring
+  - Returns 413 for oversized images, 401 for invalid/missing auth
+- **US-123**: Added "Browse by Cuisine" section to Restaurants listing page:
+  - Created `useCuisineCounts()` hook in useRestaurants.ts fetching cuisine names with restaurant counts
+  - Section displays all cuisines as clickable pills with count badges (e.g., "Italian (23)")
+  - Clicking a cuisine applies filter and smooth-scrolls to results grid
+  - Dark mode compatible styling with hover effects
+  - Positioned between below-fold ad and SEO content section
+- **US-089**: Expanded route prefetching and added hover/touch prefetch:
+  - Extended routeModuleMap in prefetch.ts: added /events/today, /events/free, /trip-planner, /best-of, /whats-new (total 9 routes)
+  - Fixed incorrect RestaurantsPage import path to match actual Restaurants page module
+  - Added `onTouchStart` prefetch trigger to BottomNav links (mobile touch pre-loading)
+  - Added DNS prefetch hints to index.html for js.stripe.com and tile.openstreetmap.org
+  - DesktopNav already had onMouseEnter prefetch (verified)
+
+**Build verified**: `npx vite build` passes (40s, no errors)
+
+**Progress: 116/147 stories complete (78%), 31 remaining**
+
 ## 2026-03-10 — Ralph Loop 14: Critical Platform Improvements (Search UX, Performance, Conversion, Loading States)
 
 - **US-085**: Added search autocomplete with recent searches and suggestions:
