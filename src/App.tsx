@@ -147,6 +147,9 @@ const BreweryTrail = lazyWithRetry(() => import("./pages/BreweryTrail"));
 // Affiliate disclosure
 const AffiliateDisclosure = lazyWithRetry(() => import("./pages/AffiliateDisclosure"));
 
+// pSEO 2.0 programmatic pages
+const PseoRoutePage = lazyWithRetry(() => import("./pseo/pages/PseoRoutePage"));
+
 // Event submission
 const SubmitEvent = lazyWithRetry(() => import("./pages/SubmitEvent"));
 
@@ -396,6 +399,12 @@ const App = () => (
             <Route path="/outdoors" element={<OutdoorsHub />} />
             <Route path="/outdoors/:slug" element={<TrailDetail />} />
             <Route path="/breweries" element={<BreweryTrail />} />
+            {/* pSEO 2.0 programmatic pages — catch-all before 404 */}
+            <Route path="/guide/:location" element={<PseoRoutePage />} />
+            <Route path="/things-to-do/:seg1" element={<PseoRoutePage />} />
+            <Route path="/things-to-do/:seg1/:seg2" element={<PseoRoutePage />} />
+            <Route path="/nightlife/:seg1" element={<PseoRoutePage />} />
+            <Route path="/nightlife/:seg1/:seg2" element={<PseoRoutePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
