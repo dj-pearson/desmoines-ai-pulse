@@ -16,13 +16,22 @@ CREATE TABLE IF NOT EXISTS public.teams (
 
 -- RLS
 ALTER TABLE public.teams ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read access" ON public.teams FOR SELECT USING (true);
-CREATE POLICY "Admin insert" ON public.teams FOR INSERT WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-CREATE POLICY "Admin update" ON public.teams FOR UPDATE USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+DO $$ BEGIN
+  CREATE POLICY "Public read access" ON public.teams FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin insert" ON public.teams FOR INSERT WITH CHECK (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin update" ON public.teams FOR UPDATE USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_teams_slug ON public.teams(slug);

@@ -25,21 +25,21 @@ CREATE INDEX idx_curated_itineraries_published ON curated_itineraries(is_publish
 -- RLS
 ALTER TABLE curated_itineraries ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public read for published itineraries"
-  ON curated_itineraries FOR SELECT
-  USING (is_published = true);
+DO $$ BEGIN
+  CREATE POLICY "Public read for published itineraries"
+    ON curated_itineraries FOR SELECT USING (is_published = true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admins can manage itineraries"
-  ON curated_itineraries FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can manage itineraries"
+    ON curated_itineraries FOR ALL
+    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Auto-update updated_at
+DROP TRIGGER IF EXISTS update_curated_itineraries_updated_at ON curated_itineraries;
 CREATE TRIGGER update_curated_itineraries_updated_at
   BEFORE UPDATE ON curated_itineraries
   FOR EACH ROW

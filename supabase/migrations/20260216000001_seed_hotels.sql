@@ -283,4 +283,5 @@ INSERT INTO public.hotels (name, slug, short_description, description, address, 
   true,
   '3:00 PM',
   '11:00 AM'
-);
+)
+ON CONFLICT (slug) DO NOTHING;

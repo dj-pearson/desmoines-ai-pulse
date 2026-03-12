@@ -34,17 +34,26 @@ CREATE INDEX IF NOT EXISTS idx_campaign_notifications_created ON campaign_notifi
 ALTER TABLE campaign_notifications ENABLE ROW LEVEL SECURITY;
 
 -- Users can read their own notifications
-CREATE POLICY "Users can read own notifications" ON campaign_notifications
-  FOR SELECT USING (auth.uid() = recipient_user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can read own notifications" ON campaign_notifications
+    FOR SELECT USING (auth.uid() = recipient_user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Users can mark their own notifications as read
-CREATE POLICY "Users can update own notifications" ON campaign_notifications
-  FOR UPDATE USING (auth.uid() = recipient_user_id)
-  WITH CHECK (auth.uid() = recipient_user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can update own notifications" ON campaign_notifications
+    FOR UPDATE USING (auth.uid() = recipient_user_id)
+    WITH CHECK (auth.uid() = recipient_user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Service role can manage all notifications
-CREATE POLICY "Service role manages notifications" ON campaign_notifications
-  FOR ALL USING (auth.role() = 'service_role');
+DO $$ BEGIN
+  CREATE POLICY "Service role manages notifications" ON campaign_notifications
+    FOR ALL USING (auth.role() = 'service_role');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
 -- ============================================================================
@@ -207,18 +216,20 @@ ON CONFLICT (placement_type) DO NOTHING;
 ALTER TABLE ad_rate_card ENABLE ROW LEVEL SECURITY;
 
 -- Public read access (for pricing display)
-CREATE POLICY "Public can read rate card" ON ad_rate_card
-  FOR SELECT USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public can read rate card" ON ad_rate_card
+    FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Only admins can modify
-CREATE POLICY "Admins can manage rate card" ON ad_rate_card
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can manage rate card" ON ad_rate_card
+    FOR ALL USING (
+      EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 
 -- ============================================================================

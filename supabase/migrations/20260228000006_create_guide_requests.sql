@@ -15,13 +15,22 @@ CREATE TABLE IF NOT EXISTS public.guide_requests (
 
 -- RLS
 ALTER TABLE public.guide_requests ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can insert guide requests" ON public.guide_requests FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admin read" ON public.guide_requests FOR SELECT USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-CREATE POLICY "Admin update" ON public.guide_requests FOR UPDATE USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+DO $$ BEGIN
+  CREATE POLICY "Users can insert guide requests" ON public.guide_requests FOR INSERT WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin read" ON public.guide_requests FOR SELECT USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin update" ON public.guide_requests FOR UPDATE USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_guide_requests_type ON public.guide_requests(request_type);

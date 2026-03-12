@@ -64,26 +64,30 @@ CREATE TRIGGER hotel_blacklist_updated_at
 ALTER TABLE hotel_blacklist ENABLE ROW LEVEL SECURITY;
 
 -- Allow anyone to read blacklist (needed for search filtering)
-CREATE POLICY "Public read access for hotel_blacklist"
-  ON hotel_blacklist
-  FOR SELECT
-  USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read access for hotel_blacklist"
+    ON hotel_blacklist FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Authenticated users can manage (admin enforced at app level)
-CREATE POLICY "Authenticated users can insert hotel_blacklist"
-  ON hotel_blacklist
-  FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can insert hotel_blacklist"
+    ON hotel_blacklist FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can update hotel_blacklist"
-  ON hotel_blacklist
-  FOR UPDATE
-  USING (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can update hotel_blacklist"
+    ON hotel_blacklist FOR UPDATE USING (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can delete hotel_blacklist"
-  ON hotel_blacklist
-  FOR DELETE
-  USING (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can delete hotel_blacklist"
+    ON hotel_blacklist FOR DELETE USING (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Also add google_place_id to hotels table for dedup
 ALTER TABLE public.hotels ADD COLUMN IF NOT EXISTS google_place_id TEXT;

@@ -63,6 +63,7 @@ CREATE INDEX IF NOT EXISTS idx_event_hotels_event ON public.event_hotels(event_i
 CREATE INDEX IF NOT EXISTS idx_event_hotels_hotel ON public.event_hotels(hotel_id);
 
 -- Auto-update timestamp trigger for hotels
+DROP TRIGGER IF EXISTS hotels_updated_at ON public.hotels;
 CREATE TRIGGER hotels_updated_at
   BEFORE UPDATE ON public.hotels
   FOR EACH ROW
@@ -73,30 +74,54 @@ ALTER TABLE public.hotels ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_hotels ENABLE ROW LEVEL SECURITY;
 
 -- Public read access
-CREATE POLICY "Public read access for hotels" ON public.hotels
-  FOR SELECT USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read access for hotels" ON public.hotels
+    FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Public read access for event_hotels" ON public.event_hotels
-  FOR SELECT USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read access for event_hotels" ON public.event_hotels
+    FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Authenticated users can manage (admin will be enforced at app level)
-CREATE POLICY "Authenticated users can insert hotels" ON public.hotels
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can insert hotels" ON public.hotels
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can update hotels" ON public.hotels
-  FOR UPDATE USING (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can update hotels" ON public.hotels
+    FOR UPDATE USING (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can delete hotels" ON public.hotels
-  FOR DELETE USING (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can delete hotels" ON public.hotels
+    FOR DELETE USING (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can insert event_hotels" ON public.event_hotels
-  FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can insert event_hotels" ON public.event_hotels
+    FOR INSERT WITH CHECK (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can update event_hotels" ON public.event_hotels
-  FOR UPDATE USING (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can update event_hotels" ON public.event_hotels
+    FOR UPDATE USING (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can delete event_hotels" ON public.event_hotels
-  FOR DELETE USING (auth.role() = 'authenticated');
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can delete event_hotels" ON public.event_hotels
+    FOR DELETE USING (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Add to realtime publication
 ALTER PUBLICATION supabase_realtime ADD TABLE public.hotels;

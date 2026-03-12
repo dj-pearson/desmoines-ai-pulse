@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS scraping_jobs (
 );
 
 -- Auto-update updated_at
+DROP TRIGGER IF EXISTS set_scraping_jobs_updated_at ON scraping_jobs;
 CREATE TRIGGER set_scraping_jobs_updated_at
   BEFORE UPDATE ON scraping_jobs
   FOR EACH ROW
@@ -27,45 +28,33 @@ CREATE TRIGGER set_scraping_jobs_updated_at
 -- RLS: admins can CRUD, authenticated users can read their own jobs
 ALTER TABLE scraping_jobs ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Admins can read all scraping jobs"
-  ON scraping_jobs FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can read all scraping jobs"
+    ON scraping_jobs FOR SELECT
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admins can insert scraping jobs"
-  ON scraping_jobs FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can insert scraping jobs"
+    ON scraping_jobs FOR INSERT
+    WITH CHECK (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admins can update scraping jobs"
-  ON scraping_jobs FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can update scraping jobs"
+    ON scraping_jobs FOR UPDATE
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admins can delete scraping jobs"
-  ON scraping_jobs FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can delete scraping jobs"
+    ON scraping_jobs FOR DELETE
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes for common queries
 CREATE INDEX idx_scraping_jobs_status ON scraping_jobs (status);

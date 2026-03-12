@@ -31,28 +31,23 @@ CREATE INDEX idx_deals_active ON deals(start_date, end_date);
 -- RLS
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public read for active deals"
-  ON deals FOR SELECT
-  USING (
-    start_date <= now()
-    AND (end_date IS NULL OR end_date >= now())
-  );
+DO $$ BEGIN
+  CREATE POLICY "Public read for active deals" ON deals FOR SELECT
+    USING (start_date <= now() AND (end_date IS NULL OR end_date >= now()));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Business owners and admins can insert deals"
-  ON deals FOR INSERT
-  WITH CHECK (
-    auth.role() = 'authenticated'
-  );
+DO $$ BEGIN
+  CREATE POLICY "Business owners and admins can insert deals" ON deals FOR INSERT
+    WITH CHECK (auth.role() = 'authenticated');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admins can manage all deals"
-  ON deals FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-      AND profiles.role = 'admin'
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can manage all deals" ON deals FOR ALL
+    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Seed sample deals
 INSERT INTO deals (title, business_name, entity_type, deal_type, discount_value, terms, start_date, end_date, is_verified, is_featured, description) VALUES

@@ -12,10 +12,22 @@ CREATE TABLE IF NOT EXISTS public.brewery_trail_checkins (
 
 -- RLS
 ALTER TABLE public.brewery_trail_checkins ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Users can view own checkins" ON public.brewery_trail_checkins FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Public read checkin counts" ON public.brewery_trail_checkins FOR SELECT USING (true);
-CREATE POLICY "Authenticated users can check in" ON public.brewery_trail_checkins FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY "Users can update own checkins" ON public.brewery_trail_checkins FOR UPDATE USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can view own checkins" ON public.brewery_trail_checkins FOR SELECT USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Public read checkin counts" ON public.brewery_trail_checkins FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can check in" ON public.brewery_trail_checkins FOR INSERT WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Users can update own checkins" ON public.brewery_trail_checkins FOR UPDATE USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_brewery_checkins_user ON public.brewery_trail_checkins(user_id);

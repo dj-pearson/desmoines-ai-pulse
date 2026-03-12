@@ -20,13 +20,22 @@ CREATE TABLE IF NOT EXISTS public.trails (
 
 -- RLS
 ALTER TABLE public.trails ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read access" ON public.trails FOR SELECT USING (true);
-CREATE POLICY "Admin insert" ON public.trails FOR INSERT WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-CREATE POLICY "Admin update" ON public.trails FOR UPDATE USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+DO $$ BEGIN
+  CREATE POLICY "Public read access" ON public.trails FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin insert" ON public.trails FOR INSERT WITH CHECK (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin update" ON public.trails FOR UPDATE USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_trails_slug ON public.trails(slug);

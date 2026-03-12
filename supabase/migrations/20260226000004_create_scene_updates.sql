@@ -20,22 +20,29 @@ CREATE TABLE IF NOT EXISTS scene_updates (
 ALTER TABLE scene_updates ENABLE ROW LEVEL SECURITY;
 
 -- Public read for published updates
-CREATE POLICY "Public read published scene updates"
-  ON scene_updates FOR SELECT
-  USING (is_published = true);
+DO $$ BEGIN
+  CREATE POLICY "Public read published scene updates" ON scene_updates FOR SELECT USING (is_published = true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Admin CRUD
-CREATE POLICY "Admin insert scene updates"
-  ON scene_updates FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+DO $$ BEGIN
+  CREATE POLICY "Admin insert scene updates" ON scene_updates FOR INSERT
+    WITH CHECK (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin update scene updates"
-  ON scene_updates FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+DO $$ BEGIN
+  CREATE POLICY "Admin update scene updates" ON scene_updates FOR UPDATE
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin delete scene updates"
-  ON scene_updates FOR DELETE
-  USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+DO $$ BEGIN
+  CREATE POLICY "Admin delete scene updates" ON scene_updates FOR DELETE
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_scene_updates_type ON scene_updates (update_type);
@@ -61,6 +68,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_new_restaurant_scene_update ON restaurants;
 CREATE TRIGGER trg_new_restaurant_scene_update
   AFTER INSERT ON restaurants
   FOR EACH ROW

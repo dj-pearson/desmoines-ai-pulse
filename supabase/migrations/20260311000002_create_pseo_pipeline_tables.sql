@@ -45,28 +45,28 @@ ALTER TABLE pseo_generation_queue ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pseo_generation_log ENABLE ROW LEVEL SECURITY;
 
 -- Service role full access (for Edge Functions and n8n)
-CREATE POLICY "Service role full access queue"
-  ON pseo_generation_queue FOR ALL
-  USING (true)
-  WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "Service role full access queue" ON pseo_generation_queue FOR ALL USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Service role full access log"
-  ON pseo_generation_log FOR ALL
-  USING (true)
-  WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "Service role full access log" ON pseo_generation_log FOR ALL USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Admin read access
-CREATE POLICY "Admin read queue"
-  ON pseo_generation_queue FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admin read queue" ON pseo_generation_queue FOR SELECT
+    USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin read log"
-  ON pseo_generation_log FOR SELECT
-  USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admin read log" ON pseo_generation_log FOR SELECT
+    USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Helper function to enqueue a page generation
 CREATE OR REPLACE FUNCTION enqueue_pseo_generation(

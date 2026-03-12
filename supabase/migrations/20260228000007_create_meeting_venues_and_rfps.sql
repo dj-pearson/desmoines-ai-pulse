@@ -37,19 +37,34 @@ CREATE TABLE IF NOT EXISTS public.rfp_submissions (
 
 -- RLS
 ALTER TABLE public.meeting_venues ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read access" ON public.meeting_venues FOR SELECT USING (true);
-CREATE POLICY "Admin insert" ON public.meeting_venues FOR INSERT WITH CHECK (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+DO $$ BEGIN
+  CREATE POLICY "Public read access" ON public.meeting_venues FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin insert" ON public.meeting_venues FOR INSERT WITH CHECK (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 ALTER TABLE public.rfp_submissions ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Anyone can submit RFP" ON public.rfp_submissions FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admin read RFPs" ON public.rfp_submissions FOR SELECT USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
-CREATE POLICY "Admin update RFPs" ON public.rfp_submissions FOR UPDATE USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+DO $$ BEGIN
+  CREATE POLICY "Anyone can submit RFP" ON public.rfp_submissions FOR INSERT WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin read RFPs" ON public.rfp_submissions FOR SELECT USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin update RFPs" ON public.rfp_submissions FOR UPDATE USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_meeting_venues_slug ON public.meeting_venues(slug);

@@ -37,48 +37,32 @@ ALTER TABLE sponsored_listing_links ENABLE ROW LEVEL SECURITY;
 
 -- 8. RLS policies
 -- Authenticated users can read their own campaign's links
-CREATE POLICY "Users can read own sponsored links"
-  ON sponsored_listing_links FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM campaigns
-      WHERE campaigns.id = sponsored_listing_links.campaign_id
-        AND campaigns.user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Users can read own sponsored links" ON sponsored_listing_links FOR SELECT
+    USING (EXISTS (SELECT 1 FROM campaigns WHERE campaigns.id = sponsored_listing_links.campaign_id AND campaigns.user_id = auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Admins can read all
-CREATE POLICY "Admins can read all sponsored links"
-  ON sponsored_listing_links FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-        AND profiles.role = 'admin'
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins can read all sponsored links" ON sponsored_listing_links FOR SELECT
+    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Authenticated users can insert links for their own campaigns
-CREATE POLICY "Users can insert own sponsored links"
-  ON sponsored_listing_links FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM campaigns
-      WHERE campaigns.id = campaign_id
-        AND campaigns.user_id = auth.uid()
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Users can insert own sponsored links" ON sponsored_listing_links FOR INSERT
+    WITH CHECK (EXISTS (SELECT 1 FROM campaigns WHERE campaigns.id = campaign_id AND campaigns.user_id = auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Admins can do anything
-CREATE POLICY "Admins full access to sponsored links"
-  ON sponsored_listing_links FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE profiles.id = auth.uid()
-        AND profiles.role = 'admin'
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admins full access to sponsored links" ON sponsored_listing_links FOR ALL
+    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 9. Indexes on events and restaurants for sponsored queries
 CREATE INDEX IF NOT EXISTS idx_events_is_sponsored

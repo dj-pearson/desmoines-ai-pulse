@@ -31,28 +31,38 @@ ALTER TABLE voting_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE votes ENABLE ROW LEVEL SECURITY;
 
 -- Voting categories: public read, admin write
-CREATE POLICY "Public read voting categories"
-  ON voting_categories FOR SELECT USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read voting categories" ON voting_categories FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin insert voting categories"
-  ON voting_categories FOR INSERT
-  WITH CHECK (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+DO $$ BEGIN
+  CREATE POLICY "Admin insert voting categories" ON voting_categories FOR INSERT
+    WITH CHECK (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin update voting categories"
-  ON voting_categories FOR UPDATE
-  USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+DO $$ BEGIN
+  CREATE POLICY "Admin update voting categories" ON voting_categories FOR UPDATE
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Votes: authenticated users can vote (one per category), public read for results
-CREATE POLICY "Public read votes"
-  ON votes FOR SELECT USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read votes" ON votes FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Authenticated users can vote"
-  ON votes FOR INSERT
-  WITH CHECK (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Authenticated users can vote" ON votes FOR INSERT WITH CHECK (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Users can delete own votes"
-  ON votes FOR DELETE
-  USING (auth.uid() = user_id);
+DO $$ BEGIN
+  CREATE POLICY "Users can delete own votes" ON votes FOR DELETE USING (auth.uid() = user_id);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_votes_category_id ON votes (category_id);

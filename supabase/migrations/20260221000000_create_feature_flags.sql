@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS feature_flags (
 );
 
 -- Auto-update updated_at
+DROP TRIGGER IF EXISTS set_feature_flags_updated_at ON feature_flags;
 CREATE TRIGGER set_feature_flags_updated_at
   BEFORE UPDATE ON feature_flags
   FOR EACH ROW
@@ -18,39 +19,38 @@ CREATE TRIGGER set_feature_flags_updated_at
 -- RLS: public read, admin-only write
 ALTER TABLE feature_flags ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Public read access for feature flags"
-  ON feature_flags FOR SELECT
-  USING (true);
+DO $$ BEGIN
+  CREATE POLICY "Public read access for feature flags"
+    ON feature_flags FOR SELECT USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin-only insert for feature flags"
-  ON feature_flags FOR INSERT
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admin-only insert for feature flags"
+    ON feature_flags FOR INSERT
+    WITH CHECK (
+      EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin-only update for feature flags"
-  ON feature_flags FOR UPDATE
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admin-only update for feature flags"
+    ON feature_flags FOR UPDATE
+    USING (
+      EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
-CREATE POLICY "Admin-only delete for feature flags"
-  ON feature_flags FOR DELETE
-  USING (
-    EXISTS (
-      SELECT 1 FROM user_roles
-      WHERE user_id = auth.uid()
-      AND role IN ('admin', 'root_admin')
-    )
-  );
+DO $$ BEGIN
+  CREATE POLICY "Admin-only delete for feature flags"
+    ON feature_flags FOR DELETE
+    USING (
+      EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Seed initial feature flags
 INSERT INTO feature_flags (flag_key, enabled, description, target_tiers) VALUES

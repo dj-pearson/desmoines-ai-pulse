@@ -35,6 +35,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_pseo_pages_updated_at ON pseo_pages;
 CREATE TRIGGER trigger_pseo_pages_updated_at
   BEFORE UPDATE ON pseo_pages
   FOR EACH ROW
@@ -51,6 +52,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_pseo_pages_published_at ON pseo_pages;
 CREATE TRIGGER trigger_pseo_pages_published_at
   BEFORE UPDATE ON pseo_pages
   FOR EACH ROW
@@ -60,15 +62,16 @@ CREATE TRIGGER trigger_pseo_pages_published_at
 ALTER TABLE pseo_pages ENABLE ROW LEVEL SECURITY;
 
 -- Public read access for published pages
-CREATE POLICY "Public can read published pseo pages"
-  ON pseo_pages FOR SELECT
-  USING (is_published = true);
+DO $$ BEGIN
+  CREATE POLICY "Public can read published pseo pages" ON pseo_pages FOR SELECT USING (is_published = true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Service role can do everything (for edge functions)
-CREATE POLICY "Service role full access to pseo pages"
-  ON pseo_pages FOR ALL
-  USING (true)
-  WITH CHECK (true);
+DO $$ BEGIN
+  CREATE POLICY "Service role full access to pseo pages" ON pseo_pages FOR ALL USING (true) WITH CHECK (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Increment view count function
 CREATE OR REPLACE FUNCTION increment_pseo_page_views(page_slug TEXT)

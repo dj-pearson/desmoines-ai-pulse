@@ -17,10 +17,16 @@ CREATE TABLE IF NOT EXISTS public.seasonal_guides (
 
 -- RLS
 ALTER TABLE public.seasonal_guides ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read published" ON public.seasonal_guides FOR SELECT USING (is_published = true);
-CREATE POLICY "Admin full access" ON public.seasonal_guides FOR ALL USING (
-  (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
-);
+DO $$ BEGIN
+  CREATE POLICY "Public read published" ON public.seasonal_guides FOR SELECT USING (is_published = true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY "Admin full access" ON public.seasonal_guides FOR ALL USING (
+    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Indexes
 CREATE INDEX idx_seasonal_guides_slug ON public.seasonal_guides(slug);
