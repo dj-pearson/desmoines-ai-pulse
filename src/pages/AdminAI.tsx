@@ -12,6 +12,7 @@ import AIArticleGenerator from "@/components/AIArticleGenerator";
 import ScraperConfigWizard from "@/components/ScraperConfigWizard";
 import ScrapingJobManager from "@/components/ScrapingJobManager";
 import CronMonitorSimple from "@/components/CronMonitorSimple";
+import PseoAdmin from "@/pseo/components/PseoAdmin";
 import {
   Card,
   CardContent,
@@ -27,6 +28,7 @@ import {
   Zap,
   Settings,
   UtensilsCrossed,
+  Globe,
 } from "lucide-react";
 import { useScraping } from "@/hooks/useScraping";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +40,7 @@ const AI_TABS = [
   { id: "ai-enhancement", label: "AI Event Enhancement", icon: Sparkles },
   { id: "ai-article-generator", label: "AI Article Generator", icon: Bot },
   { id: "scraping", label: "Scraping", icon: Zap },
+  { id: "pseo", label: "pSEO Pages", icon: Globe },
 ];
 
 export default function AdminAI() {
@@ -98,6 +101,8 @@ export default function AdminAI() {
           {activeTab === "ai-enhancement" && <AIEnhancementManager />}
 
           {activeTab === "ai-article-generator" && <AIArticleGenerator />}
+
+          {activeTab === "pseo" && <PseoAdmin />}
 
           {activeTab === "scraping" && (
             <div className="space-y-6">
