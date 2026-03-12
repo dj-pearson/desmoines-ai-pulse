@@ -1,0 +1,2 @@
+[functions.pseo-batch-worker]
+verify_jwt = false
