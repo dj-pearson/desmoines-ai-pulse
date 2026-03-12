@@ -3,18 +3,24 @@
  *
  * Designed to be called by Make.com (or any scheduler) via HTTP POST.
  * On each invocation it:
- *   1. Seeds the generation queue from the full taxonomy (once, on first call)
- *   2. Picks the next N pending items ordered by tier → priority
- *   3. Calls the existing generate-pseo-page function for each item
- *   4. Updates queue status and logs results
- *   5. Returns a summary including how many pages remain
+ *   1. Resets any items stuck in "in_progress" for >5 minutes back to "pending"
+ *   2. Seeds the generation queue from the full taxonomy (once, on first call)
+ *   3. Picks the next N pending items ordered by tier → priority
+ *   4. Calls generate-pseo-page for each item CONCURRENTLY (not sequentially)
+ *   5. Updates queue status and logs results
+ *   6. Returns a summary including how many pages remain
+ *
+ * Tier ordering (guaranteed correct):
+ *   tier = number of dimensions in the page type (1-dim < 2-dim < 3-dim)
+ *   priority = (page_type_priority × 10) + (max_dimension_tier - 1)
+ *   This ensures location-guide pages are always generated before complex combos.
  *
  * Make.com setup:
  *   Method:  POST
  *   URL:     https://<project-ref>.supabase.co/functions/v1/pseo-batch-worker
  *   Headers: x-worker-secret: <PSEO_WORKER_SECRET>
  *             Content-Type: application/json
- *   Body:    {} (or { "batchSize": 5 } to override)
+ *   Body:    {} (or { "batchSize": 3 } to override)
  *   Schedule: Every 1 hour
  *
  * SECURITY: verify_jwt = false
@@ -32,7 +38,6 @@ const corsHeaders = {
 
 // ---------------------------------------------------------------------------
 // Taxonomy — embedded so the worker has no external TypeScript imports
-// Only includes fields needed for queue seeding: slug, name, dimension, tier
 // ---------------------------------------------------------------------------
 
 interface DimValue {
@@ -122,108 +127,30 @@ const CATEGORIES: DimValue[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Page type definitions: which dimension arrays to cross-product
-// Priority drives ordering within the queue (lower = generated first)
+// Page type definitions
+//
+// tier  = number of dimensions (1, 2, or 3) — ensures simple pages first
+// priority = base × 10 + (max_dim_tier - 1)
+//   so same tier pages sort by page type importance first, dim quality second
 // ---------------------------------------------------------------------------
 
 interface PageTypeSpec {
   id: string;
-  priority: number;
-  // Each entry is a DimValue[] to cross-product. Arrays are cross-multiplied in order.
-  // Filters limit which tier values are included per dimension.
+  basePriority: number; // 10 = most important, 100 = least
   dims: Array<{ values: DimValue[]; maxTier?: 1 | 2 | 3 }>;
 }
 
 const PAGE_TYPES: PageTypeSpec[] = [
-  // Tier-1 priority: location-guide hub pages (one per neighborhood)
-  {
-    id: "location-guide",
-    priority: 10,
-    dims: [{ values: LOCATIONS }],
-  },
-  // Tier-2: content × location  ("restaurants in east village")
-  {
-    id: "content-location",
-    priority: 20,
-    dims: [
-      { values: CONTENT_TYPES, maxTier: 1 },
-      { values: LOCATIONS, maxTier: 1 },
-    ],
-  },
-  // Tier-3: content × category ("best italian restaurants des moines")
-  {
-    id: "content-category",
-    priority: 30,
-    dims: [
-      { values: CONTENT_TYPES, maxTier: 1 },
-      { values: CATEGORIES, maxTier: 1 },
-    ],
-  },
-  // Tier-4: content × audience ("date night restaurants des moines")
-  {
-    id: "content-audience",
-    priority: 40,
-    dims: [
-      { values: CONTENT_TYPES, maxTier: 1 },
-      { values: AUDIENCES, maxTier: 1 },
-    ],
-  },
-  // Tier-5: content × temporal ("events this weekend des moines")
-  {
-    id: "content-temporal",
-    priority: 50,
-    dims: [
-      { values: CONTENT_TYPES, maxTier: 1 },
-      { values: TEMPORALS, maxTier: 1 },
-    ],
-  },
-  // Tier-6: category × location ("italian east village")
-  {
-    id: "category-location",
-    priority: 60,
-    dims: [
-      { values: CATEGORIES, maxTier: 1 },
-      { values: LOCATIONS, maxTier: 1 },
-    ],
-  },
-  // Tier-7: audience × temporal ("family things to do this weekend")
-  {
-    id: "audience-temporal",
-    priority: 70,
-    dims: [
-      { values: AUDIENCES, maxTier: 1 },
-      { values: TEMPORALS, maxTier: 1 },
-    ],
-  },
-  // Tier-8: category × temporal ("live music summer des moines")
-  {
-    id: "category-temporal",
-    priority: 80,
-    dims: [
-      { values: CATEGORIES, maxTier: 1 },
-      { values: TEMPORALS, maxTier: 1 },
-    ],
-  },
-  // Tier-9: 3-dim — content × location × audience (only tier-1 × tier-1 × tier-1)
-  {
-    id: "content-location-audience",
-    priority: 90,
-    dims: [
-      { values: CONTENT_TYPES, maxTier: 1 },
-      { values: LOCATIONS, maxTier: 1 },
-      { values: AUDIENCES, maxTier: 1 },
-    ],
-  },
-  // Tier-10: 3-dim — content × location × temporal (only tier-1 × tier-1 × tier-1)
-  {
-    id: "content-location-temporal",
-    priority: 100,
-    dims: [
-      { values: CONTENT_TYPES, maxTier: 1 },
-      { values: LOCATIONS, maxTier: 1 },
-      { values: TEMPORALS, maxTier: 1 },
-    ],
-  },
+  { id: "location-guide",            basePriority: 10,  dims: [{ values: LOCATIONS }] },
+  { id: "content-location",          basePriority: 20,  dims: [{ values: CONTENT_TYPES, maxTier: 1 }, { values: LOCATIONS, maxTier: 1 }] },
+  { id: "content-category",          basePriority: 30,  dims: [{ values: CONTENT_TYPES, maxTier: 1 }, { values: CATEGORIES, maxTier: 1 }] },
+  { id: "content-audience",          basePriority: 40,  dims: [{ values: CONTENT_TYPES, maxTier: 1 }, { values: AUDIENCES, maxTier: 1 }] },
+  { id: "content-temporal",          basePriority: 50,  dims: [{ values: CONTENT_TYPES, maxTier: 1 }, { values: TEMPORALS, maxTier: 1 }] },
+  { id: "category-location",         basePriority: 60,  dims: [{ values: CATEGORIES, maxTier: 1 }, { values: LOCATIONS, maxTier: 1 }] },
+  { id: "audience-temporal",         basePriority: 70,  dims: [{ values: AUDIENCES, maxTier: 1 }, { values: TEMPORALS, maxTier: 1 }] },
+  { id: "category-temporal",         basePriority: 80,  dims: [{ values: CATEGORIES, maxTier: 1 }, { values: TEMPORALS, maxTier: 1 }] },
+  { id: "content-location-audience", basePriority: 90,  dims: [{ values: CONTENT_TYPES, maxTier: 1 }, { values: LOCATIONS, maxTier: 1 }, { values: AUDIENCES, maxTier: 1 }] },
+  { id: "content-location-temporal", basePriority: 100, dims: [{ values: CONTENT_TYPES, maxTier: 1 }, { values: LOCATIONS, maxTier: 1 }, { values: TEMPORALS, maxTier: 1 }] },
 ];
 
 // ---------------------------------------------------------------------------
@@ -242,17 +169,7 @@ function crossProduct<T>(arrays: T[][]): T[][] {
   );
 }
 
-/** Build every queue row for a given page type spec */
-function buildQueueRows(
-  spec: PageTypeSpec
-): Array<{
-  id: string;
-  page_type_id: string;
-  dimensions: DimValue[];
-  tier: number;
-  priority: number;
-}> {
-  // Filter each dim array by maxTier
+function buildQueueRows(spec: PageTypeSpec) {
   const filteredDims = spec.dims.map(({ values, maxTier }) =>
     maxTier ? values.filter((v) => v.tier <= maxTier) : values
   );
@@ -260,14 +177,18 @@ function buildQueueRows(
   const combos = crossProduct(filteredDims);
 
   return combos.map((dims) => {
-    // Tier = max tier across all dimensions in the combo
-    const tier = Math.max(...dims.map((d) => d.tier)) as 1 | 2 | 3;
+    const maxDimTier = Math.max(...dims.map((d) => d.tier));
+    // tier = number of dimensions so 1-dim < 2-dim < 3-dim in the queue ordering
+    const tier = dims.length as 1 | 2 | 3;
+    // priority encodes page type importance + dimension quality as a tiebreaker
+    const priority = spec.basePriority * 10 + (maxDimTier - 1);
+
     return {
       id: buildQueueId(spec.id, dims),
       page_type_id: spec.id,
       dimensions: dims,
       tier,
-      priority: spec.priority,
+      priority,
       status: "pending",
     };
   });
@@ -296,6 +217,7 @@ serve(async (req) => {
       req.headers.get("x-worker-secret") ??
       req.headers.get("authorization")?.replace("Bearer ", "");
     if (provided !== workerSecret) {
+      console.error("pseo-batch-worker: unauthorized request");
       return jsonResponse({ error: "Unauthorized" }, 401);
     }
   }
@@ -309,15 +231,18 @@ serve(async (req) => {
   } = {};
   try {
     if (req.headers.get("content-type")?.includes("application/json")) {
-      body = await req.json();
+      const text = await req.text();
+      if (text.trim()) body = JSON.parse(text);
     }
   } catch {
     // empty body is fine
   }
 
-  const batchSize = Math.min(body.batchSize ?? 5, 20); // cap at 20 per invocation
+  const batchSize = Math.min(Math.max(body.batchSize ?? 3, 1), 10);
   const forceRegenerate = body.forceRegenerate ?? false;
   const dryRun = body.dryRun ?? false;
+
+  console.log(`pseo-batch-worker: starting — batchSize=${batchSize}, dryRun=${dryRun}`);
 
   // ── Supabase client ───────────────────────────────────────────────────────
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
@@ -329,7 +254,20 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // ── Check queue state ─────────────────────────────────────────────────────
+  // ── Step 1: Unstick items — reset in_progress items older than 5 min ──────
+  const stuckCutoff = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const { count: unstuckCount } = await supabase
+    .from("pseo_generation_queue")
+    .update({ status: "pending", started_at: null, error_message: "Reset after timeout" })
+    .eq("status", "in_progress")
+    .lt("started_at", stuckCutoff)
+    .select("*", { count: "exact", head: true } as never);
+
+  if (unstuckCount && unstuckCount > 0) {
+    console.log(`pseo-batch-worker: reset ${unstuckCount} stuck in_progress items back to pending`);
+  }
+
+  // ── Step 2: Seed queue if needed ──────────────────────────────────────────
   const { count: totalCount } = await supabase
     .from("pseo_generation_queue")
     .select("*", { count: "exact", head: true });
@@ -337,11 +275,9 @@ serve(async (req) => {
   const queueIsEmpty = !totalCount || totalCount === 0;
   const forceSeed = body.seed === true;
 
-  // ── Seed queue if needed ──────────────────────────────────────────────────
   let seedResult: { inserted: number; skipped: number } | null = null;
 
   if (queueIsEmpty || forceSeed) {
-    // Build all rows
     const allRows = PAGE_TYPES.flatMap(buildQueueRows);
 
     if (dryRun) {
@@ -351,11 +287,12 @@ serve(async (req) => {
         byPageType: PAGE_TYPES.map((pt) => ({
           pageTypeId: pt.id,
           count: buildQueueRows(pt).length,
+          tier: pt.dims.length,
+          basePriority: pt.basePriority,
         })),
       });
     }
 
-    // Insert in chunks of 500 to avoid request size limits
     const CHUNK = 500;
     let inserted = 0;
     let skipped = 0;
@@ -364,14 +301,10 @@ serve(async (req) => {
       const chunk = allRows.slice(i, i + CHUNK);
       const { error, count } = await supabase
         .from("pseo_generation_queue")
-        .upsert(chunk, {
-          onConflict: "id",
-          ignoreDuplicates: true,
-          count: "exact",
-        });
+        .upsert(chunk, { onConflict: "id", ignoreDuplicates: true, count: "exact" } as never);
 
       if (error) {
-        console.error("Queue seed error:", error);
+        console.error("pseo-batch-worker: queue seed error:", error);
         return jsonResponse({ error: "Failed to seed queue", details: error.message }, 500);
       }
 
@@ -380,10 +313,10 @@ serve(async (req) => {
     }
 
     seedResult = { inserted, skipped };
-    console.log(`Queue seeded: ${inserted} inserted, ${skipped} already existed`);
+    console.log(`pseo-batch-worker: seeded queue — ${inserted} inserted, ${skipped} already existed`);
   }
 
-  // ── Fetch next batch of pending items ─────────────────────────────────────
+  // ── Step 3: Fetch next batch of pending items ─────────────────────────────
   const { data: pendingItems, error: fetchError } = await supabase
     .from("pseo_generation_queue")
     .select("id, page_type_id, dimensions, tier, priority, attempts, max_attempts")
@@ -393,16 +326,17 @@ serve(async (req) => {
     .limit(batchSize);
 
   if (fetchError) {
+    console.error("pseo-batch-worker: fetch error:", fetchError);
     return jsonResponse({ error: "Failed to fetch queue", details: fetchError.message }, 500);
   }
 
   if (!pendingItems || pendingItems.length === 0) {
-    // Check overall remaining counts
     const { count: remainingCount } = await supabase
       .from("pseo_generation_queue")
       .select("*", { count: "exact", head: true })
       .eq("status", "pending");
 
+    console.log(`pseo-batch-worker: no pending items, remaining=${remainingCount ?? 0}`);
     return jsonResponse({
       success: true,
       processed: 0,
@@ -415,32 +349,25 @@ serve(async (req) => {
     });
   }
 
-  // Mark batch as in_progress
+  console.log(`pseo-batch-worker: processing ${pendingItems.length} items concurrently`);
+
+  // Mark all as in_progress before firing concurrent requests
   const batchIds = pendingItems.map((item) => item.id);
   await supabase
     .from("pseo_generation_queue")
     .update({ status: "in_progress", started_at: new Date().toISOString() })
     .in("id", batchIds);
 
-  // ── Process each item ─────────────────────────────────────────────────────
+  // ── Step 4: Generate all items concurrently ───────────────────────────────
   const functionUrl = `${supabaseUrl}/functions/v1/generate-pseo-page`;
-  const results: Array<{
-    queueId: string;
-    pageTypeId: string;
-    status: "succeeded" | "failed" | "skipped";
-    slug?: string;
-    error?: string;
-    generationTimeMs?: number;
-  }> = [];
 
-  for (const item of pendingItems) {
+  const generateOne = async (item: typeof pendingItems[0]) => {
     const startTime = Date.now();
     try {
       const response = await fetch(functionUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          // Pass service role key so generate-pseo-page can access DB
           Authorization: `Bearer ${supabaseKey}`,
           apikey: supabaseKey,
         },
@@ -458,45 +385,34 @@ serve(async (req) => {
         throw new Error(resultJson.error ?? `HTTP ${response.status}`);
       }
 
-      if (resultJson.skipped) {
-        // Page already existed — mark completed anyway
-        await supabase
-          .from("pseo_generation_queue")
-          .update({ status: "completed", completed_at: new Date().toISOString() })
-          .eq("id", item.id);
-
-        results.push({ queueId: item.id, pageTypeId: item.page_type_id, status: "skipped", slug: resultJson.slug });
-        continue;
-      }
-
-      // Success
+      // Mark completed (whether generated fresh or already existed/skipped)
       await supabase
         .from("pseo_generation_queue")
         .update({ status: "completed", completed_at: new Date().toISOString() })
         .eq("id", item.id);
 
-      // Log to audit table
-      await supabase.from("pseo_generation_log").insert({
-        page_id: resultJson.pageId,
-        action: "generated",
-        details: { queueId: item.id, pageTypeId: item.page_type_id },
-        generation_time_ms: generationTimeMs,
-        quality_score: 0.8,
-      });
+      if (!resultJson.skipped) {
+        await supabase.from("pseo_generation_log").insert({
+          page_id: resultJson.pageId ?? item.id,
+          action: "generated",
+          details: { queueId: item.id, pageTypeId: item.page_type_id },
+          generation_time_ms: generationTimeMs,
+          quality_score: 0.8,
+        });
+      }
 
-      results.push({
+      return {
         queueId: item.id,
         pageTypeId: item.page_type_id,
-        status: "succeeded",
+        status: resultJson.skipped ? "skipped" : "succeeded",
         slug: resultJson.slug,
         generationTimeMs,
-      });
+      };
     } catch (err) {
       const generationTimeMs = Date.now() - startTime;
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error(`Failed to generate ${item.id}:`, errorMessage);
+      console.error(`pseo-batch-worker: failed ${item.id}: ${errorMessage}`);
 
-      // Increment attempts, mark failed if max reached
       const newAttempts = (item.attempts ?? 0) + 1;
       const maxAttempts = item.max_attempts ?? 3;
 
@@ -510,7 +426,6 @@ serve(async (req) => {
         })
         .eq("id", item.id);
 
-      // Log the failure
       await supabase.from("pseo_generation_log").insert({
         page_id: item.id,
         action: "failed",
@@ -518,17 +433,25 @@ serve(async (req) => {
         generation_time_ms: generationTimeMs,
       });
 
-      results.push({
+      return {
         queueId: item.id,
         pageTypeId: item.page_type_id,
-        status: "failed",
+        status: "failed" as const,
         error: errorMessage,
         generationTimeMs,
-      });
+      };
     }
-  }
+  };
 
-  // ── Count remaining ───────────────────────────────────────────────────────
+  // Fire all items in parallel — each Claude call takes ~20s,
+  // but concurrently they all finish in ~20-30s total (well within timeout)
+  const settledResults = await Promise.allSettled(pendingItems.map(generateOne));
+
+  const results = settledResults.map((r) =>
+    r.status === "fulfilled" ? r.value : { status: "failed" as const, error: String(r.reason) }
+  );
+
+  // ── Step 5: Count remaining ───────────────────────────────────────────────
   const { count: remainingCount } = await supabase
     .from("pseo_generation_queue")
     .select("*", { count: "exact", head: true })
@@ -537,6 +460,8 @@ serve(async (req) => {
   const succeeded = results.filter((r) => r.status === "succeeded").length;
   const skippedCount = results.filter((r) => r.status === "skipped").length;
   const failed = results.filter((r) => r.status === "failed").length;
+
+  console.log(`pseo-batch-worker: done — succeeded=${succeeded}, skipped=${skippedCount}, failed=${failed}, remaining=${remainingCount ?? 0}`);
 
   return jsonResponse({
     success: true,
