@@ -7,7 +7,7 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
 } from "@/components/ui/navigation-menu";
-import { Calendar, Utensils, Compass, FileText } from "lucide-react";
+import { Calendar, Utensils, Compass, FileText, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { prefetchRoute } from "@/lib/prefetch";
 import { navigationGroups } from "./navigationConfig";
@@ -22,6 +22,41 @@ export function DesktopNav() {
   return (
     <NavigationMenu className="hidden lg:flex flex-1 min-w-0" aria-label="Main navigation">
       <NavigationMenuList className="gap-1">
+        {/* Things to Do */}
+        <NavigationMenuItem>
+          <NavigationMenuTrigger className="h-9 text-sm">
+            <MapPin className="h-4 w-4 mr-1.5" />
+            Things to Do
+          </NavigationMenuTrigger>
+          <NavigationMenuContent>
+            <div className="w-[520px] p-4">
+              <div className="grid grid-cols-2 gap-3">
+                {navigationGroups.thingsToDo.items.map((item) => (
+                  <NavigationMenuLink asChild key={item.href}>
+                    <Link
+                      to={item.href}
+                      className={cn(
+                        "block select-none space-y-1 rounded-md p-3 leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground",
+                        item.featured && "bg-primary/5 border-l-2 border-primary",
+                        isActivePath(item.href) && "bg-accent/50"
+                      )}
+                      onMouseEnter={() => prefetchRoute(item.href)}
+                      aria-current={isActivePath(item.href) ? "page" : undefined}
+                    >
+                      <div className="flex items-center gap-2">
+                        <item.icon className="h-4 w-4" aria-hidden="true" />
+                        <div className="text-sm font-medium leading-none">
+                          {item.label}
+                        </div>
+                      </div>
+                    </Link>
+                  </NavigationMenuLink>
+                ))}
+              </div>
+            </div>
+          </NavigationMenuContent>
+        </NavigationMenuItem>
+
         {/* Events */}
         <NavigationMenuItem>
           <NavigationMenuTrigger className="h-9 text-sm">

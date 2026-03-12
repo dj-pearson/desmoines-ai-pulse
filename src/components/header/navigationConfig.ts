@@ -18,6 +18,10 @@ import {
   Navigation,
   BookOpen,
   Briefcase,
+  MapPin,
+  Heart,
+  Users,
+  DollarSign,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,6 +41,25 @@ export interface NavGroup {
 }
 
 export const navigationGroups: Record<string, NavGroup> = {
+  thingsToDo: {
+    label: "Things to Do",
+    icon: MapPin,
+    href: "/things-to-do",
+    items: [
+      { href: "/things-to-do", label: "All Things to Do", icon: MapPin, featured: true },
+      { href: "/things-to-do/downtown", label: "Downtown", icon: MapPin },
+      { href: "/things-to-do/east-village", label: "East Village", icon: MapPin },
+      { href: "/things-to-do/west-des-moines", label: "West Des Moines", icon: MapPin },
+      { href: "/things-to-do/ankeny", label: "Ankeny", icon: MapPin },
+      { href: "/things-to-do/families", label: "For Families", icon: Baby },
+      { href: "/things-to-do/date-night", label: "Date Night", icon: Heart },
+      { href: "/things-to-do/budget", label: "Budget-Friendly", icon: DollarSign },
+      { href: "/things-to-do/tourists", label: "Visitor Guide", icon: Camera },
+      { href: "/things-to-do/groups", label: "For Groups", icon: Users },
+      { href: "/things-to-do/this-weekend", label: "This Weekend", icon: CalendarDays, featured: true },
+      { href: "/things-to-do/today", label: "Today", icon: Clock },
+    ],
+  },
   events: {
     label: "Events",
     icon: Calendar,

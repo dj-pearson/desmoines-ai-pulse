@@ -23,6 +23,7 @@ import {
   Shield,
   LogOut,
   Trophy,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { prefetchRoute } from "@/lib/prefetch";
@@ -107,6 +108,15 @@ export function MobileNav({
           role="none"
         >
           <nav className="space-y-6" role="navigation" aria-label="Mobile navigation">
+            {/* Things to Do Section */}
+            <NavSection
+              title="Things to Do"
+              icon={MapPin}
+              items={navigationGroups.thingsToDo.items}
+              isActivePath={isActivePath}
+              onLinkClick={handleLinkClick}
+            />
+
             {/* Events Section */}
             <NavSection
               title="Events"

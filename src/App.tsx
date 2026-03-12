@@ -149,6 +149,7 @@ const AffiliateDisclosure = lazyWithRetry(() => import("./pages/AffiliateDisclos
 
 // pSEO 2.0 programmatic pages
 const PseoRoutePage = lazyWithRetry(() => import("./pseo/pages/PseoRoutePage"));
+const ThingsToDoHub = lazyWithRetry(() => import("./pages/ThingsToDoHub"));
 
 // Event submission
 const SubmitEvent = lazyWithRetry(() => import("./pages/SubmitEvent"));
@@ -400,6 +401,7 @@ const App = () => (
             <Route path="/outdoors/:slug" element={<TrailDetail />} />
             <Route path="/breweries" element={<BreweryTrail />} />
             {/* pSEO 2.0 programmatic pages — catch-all before 404 */}
+            <Route path="/things-to-do" element={<ThingsToDoHub />} />
             <Route path="/guide/:location" element={<PseoRoutePage />} />
             <Route path="/things-to-do/:seg1" element={<PseoRoutePage />} />
             <Route path="/things-to-do/:seg1/:seg2" element={<PseoRoutePage />} />
