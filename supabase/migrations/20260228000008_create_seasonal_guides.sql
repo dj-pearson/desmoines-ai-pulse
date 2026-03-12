@@ -23,15 +23,15 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin full access" ON public.seasonal_guides FOR ALL USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_seasonal_guides_slug ON public.seasonal_guides(slug);
-CREATE INDEX idx_seasonal_guides_season ON public.seasonal_guides(season);
-CREATE INDEX idx_seasonal_guides_published ON public.seasonal_guides(is_published) WHERE is_published = true;
+CREATE INDEX IF NOT EXISTS idx_seasonal_guides_slug ON public.seasonal_guides(slug);
+CREATE INDEX IF NOT EXISTS idx_seasonal_guides_season ON public.seasonal_guides(season);
+CREATE INDEX IF NOT EXISTS idx_seasonal_guides_published ON public.seasonal_guides(is_published) WHERE is_published = true;
 
 -- Seed seasonal guides
 INSERT INTO public.seasonal_guides (title, slug, season, description, content, is_published, publish_date, seo_title, seo_description) VALUES

@@ -46,7 +46,7 @@ END $$;
 -- Admins can read all
 DO $$ BEGIN
   CREATE POLICY "Admins can read all sponsored links" ON sponsored_listing_links FOR SELECT
-    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -60,7 +60,7 @@ END $$;
 -- Admins can do anything
 DO $$ BEGIN
   CREATE POLICY "Admins full access to sponsored links" ON sponsored_listing_links FOR ALL
-    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

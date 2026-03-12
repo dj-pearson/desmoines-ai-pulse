@@ -23,7 +23,7 @@ DROP TRIGGER IF EXISTS set_scraping_jobs_updated_at ON scraping_jobs;
 CREATE TRIGGER set_scraping_jobs_updated_at
   BEFORE UPDATE ON scraping_jobs
   FOR EACH ROW
-  EXECUTE FUNCTION moddatetime(updated_at);
+  EXECUTE FUNCTION update_updated_at_column();
 
 -- RLS: admins can CRUD, authenticated users can read their own jobs
 ALTER TABLE scraping_jobs ENABLE ROW LEVEL SECURITY;
@@ -56,13 +56,17 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
--- Indexes for common queries
-CREATE INDEX idx_scraping_jobs_status ON scraping_jobs (status);
-CREATE INDEX idx_scraping_jobs_job_type ON scraping_jobs (job_type);
-CREATE INDEX idx_scraping_jobs_last_run ON scraping_jobs (last_run DESC NULLS LAST);
+-- Ensure job_type column exists (may be missing if table was created with older schema)
+ALTER TABLE scraping_jobs ADD COLUMN IF NOT EXISTS job_type TEXT NOT NULL DEFAULT 'event_scraper';
 
--- Seed default Des Moines event scraping jobs
-INSERT INTO scraping_jobs (id, name, job_type, status, config) VALUES
+-- Indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_scraping_jobs_status ON scraping_jobs (status);
+CREATE INDEX IF NOT EXISTS idx_scraping_jobs_job_type ON scraping_jobs (job_type);
+CREATE INDEX IF NOT EXISTS idx_scraping_jobs_last_run ON scraping_jobs (last_run DESC NULLS LAST);
+
+-- Seed default Des Moines event scraping jobs (only if table is empty)
+INSERT INTO scraping_jobs (id, name, job_type, status, config)
+SELECT * FROM (VALUES
   (gen_random_uuid(), 'Catch Des Moines Events', 'event_scraper', 'idle', '{"url": "https://www.catchdesmoines.com/events/", "schedule": "0 */6 * * *", "isActive": true}'::jsonb),
   (gen_random_uuid(), 'Iowa Cubs Schedule', 'event_scraper', 'idle', '{"url": "https://www.milb.com/iowa/schedule", "schedule": "0 */12 * * *", "isActive": true}'::jsonb),
   (gen_random_uuid(), 'Iowa Wolves G-League', 'event_scraper', 'idle', '{"url": "https://iowa.gleague.nba.com/schedule", "schedule": "0 */12 * * *", "isActive": true}'::jsonb),
@@ -71,4 +75,5 @@ INSERT INTO scraping_jobs (id, name, job_type, status, config) VALUES
   (gen_random_uuid(), 'Iowa Events Center', 'event_scraper', 'idle', '{"url": "https://www.iowaeventscenter.com/", "schedule": "0 */8 * * *", "isActive": true}'::jsonb),
   (gen_random_uuid(), 'Vibrant Music Hall', 'event_scraper', 'idle', '{"url": "https://www.vibrantmusichall.com/", "schedule": "0 */6 * * *", "isActive": true}'::jsonb),
   (gen_random_uuid(), 'Google Events - Des Moines', 'event_scraper', 'idle', '{"url": "https://www.google.com/search?q=events+in+des+moines+iowa", "schedule": "0 */4 * * *", "isActive": true}'::jsonb)
-ON CONFLICT DO NOTHING;
+) AS v(id, name, job_type, status, config)
+WHERE NOT EXISTS (SELECT 1 FROM scraping_jobs LIMIT 1);

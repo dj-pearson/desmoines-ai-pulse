@@ -226,7 +226,7 @@ END $$;
 DO $$ BEGIN
   CREATE POLICY "Admins can manage rate card" ON ad_rate_card
     FOR ALL USING (
-      EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin')
+      EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
     );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;

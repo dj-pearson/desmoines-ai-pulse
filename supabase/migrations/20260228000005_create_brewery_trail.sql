@@ -30,5 +30,5 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_brewery_checkins_user ON public.brewery_trail_checkins(user_id);
-CREATE INDEX idx_brewery_checkins_restaurant ON public.brewery_trail_checkins(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_brewery_checkins_user ON public.brewery_trail_checkins(user_id);
+CREATE INDEX IF NOT EXISTS idx_brewery_checkins_restaurant ON public.brewery_trail_checkins(restaurant_id);

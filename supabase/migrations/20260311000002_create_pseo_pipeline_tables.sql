@@ -58,13 +58,13 @@ END $$;
 -- Admin read access
 DO $$ BEGIN
   CREATE POLICY "Admin read queue" ON pseo_generation_queue FOR SELECT
-    USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 DO $$ BEGIN
   CREATE POLICY "Admin read log" ON pseo_generation_log FOR SELECT
-    USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

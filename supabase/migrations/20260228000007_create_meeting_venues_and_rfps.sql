@@ -43,7 +43,7 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin insert" ON public.meeting_venues FOR INSERT WITH CHECK (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
@@ -55,22 +55,22 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin read RFPs" ON public.rfp_submissions FOR SELECT USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin update RFPs" ON public.rfp_submissions FOR UPDATE USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_meeting_venues_slug ON public.meeting_venues(slug);
-CREATE INDEX idx_meeting_venues_type ON public.meeting_venues(venue_type);
-CREATE INDEX idx_meeting_venues_capacity ON public.meeting_venues(max_capacity);
-CREATE INDEX idx_rfp_submissions_status ON public.rfp_submissions(status);
+CREATE INDEX IF NOT EXISTS idx_meeting_venues_slug ON public.meeting_venues(slug);
+CREATE INDEX IF NOT EXISTS idx_meeting_venues_type ON public.meeting_venues(venue_type);
+CREATE INDEX IF NOT EXISTS idx_meeting_venues_capacity ON public.meeting_venues(max_capacity);
+CREATE INDEX IF NOT EXISTS idx_rfp_submissions_status ON public.rfp_submissions(status);
 
 -- Seed meeting venues
 INSERT INTO public.meeting_venues (name, slug, venue_type, max_capacity, min_capacity, sq_footage, amenities, catering, av_equipment, description) VALUES

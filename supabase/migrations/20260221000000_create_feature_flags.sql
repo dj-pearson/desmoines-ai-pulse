@@ -14,7 +14,7 @@ DROP TRIGGER IF EXISTS set_feature_flags_updated_at ON feature_flags;
 CREATE TRIGGER set_feature_flags_updated_at
   BEFORE UPDATE ON feature_flags
   FOR EACH ROW
-  EXECUTE FUNCTION moddatetime(updated_at);
+  EXECUTE FUNCTION update_updated_at_column();
 
 -- RLS: public read, admin-only write
 ALTER TABLE feature_flags ENABLE ROW LEVEL SECURITY;

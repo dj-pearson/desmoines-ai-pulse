@@ -45,10 +45,10 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_scene_updates_type ON scene_updates (update_type);
-CREATE INDEX idx_scene_updates_publish_date ON scene_updates (publish_date DESC);
-CREATE INDEX idx_scene_updates_neighborhood ON scene_updates (neighborhood);
-CREATE INDEX idx_scene_updates_published ON scene_updates (is_published, publish_date DESC);
+CREATE INDEX IF NOT EXISTS idx_scene_updates_type ON scene_updates (update_type);
+CREATE INDEX IF NOT EXISTS idx_scene_updates_publish_date ON scene_updates (publish_date DESC);
+CREATE INDEX IF NOT EXISTS idx_scene_updates_neighborhood ON scene_updates (neighborhood);
+CREATE INDEX IF NOT EXISTS idx_scene_updates_published ON scene_updates (is_published, publish_date DESC);
 
 -- Auto-generate scene updates for new restaurants via trigger
 CREATE OR REPLACE FUNCTION notify_new_restaurant()

@@ -65,11 +65,11 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_votes_category_id ON votes (category_id);
-CREATE INDEX idx_votes_entity_id ON votes (entity_id);
-CREATE INDEX idx_votes_user_id ON votes (user_id);
-CREATE INDEX idx_voting_categories_slug ON voting_categories (slug);
-CREATE INDEX idx_voting_categories_active ON voting_categories (is_active) WHERE is_active = true;
+CREATE INDEX IF NOT EXISTS idx_votes_category_id ON votes (category_id);
+CREATE INDEX IF NOT EXISTS idx_votes_entity_id ON votes (entity_id);
+CREATE INDEX IF NOT EXISTS idx_votes_user_id ON votes (user_id);
+CREATE INDEX IF NOT EXISTS idx_voting_categories_slug ON voting_categories (slug);
+CREATE INDEX IF NOT EXISTS idx_voting_categories_active ON voting_categories (is_active) WHERE is_active = true;
 
 -- Seed initial categories
 INSERT INTO voting_categories (name, slug, description, icon) VALUES

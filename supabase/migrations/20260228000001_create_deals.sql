@@ -23,10 +23,10 @@ CREATE TABLE IF NOT EXISTS deals (
 );
 
 -- Indexes
-CREATE INDEX idx_deals_entity_type ON deals(entity_type);
-CREATE INDEX idx_deals_end_date ON deals(end_date) WHERE end_date IS NOT NULL;
-CREATE INDEX idx_deals_featured ON deals(is_featured) WHERE is_featured = true;
-CREATE INDEX idx_deals_active ON deals(start_date, end_date);
+CREATE INDEX IF NOT EXISTS idx_deals_entity_type ON deals(entity_type);
+CREATE INDEX IF NOT EXISTS idx_deals_end_date ON deals(end_date) WHERE end_date IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_deals_featured ON deals(is_featured) WHERE is_featured = true;
+CREATE INDEX IF NOT EXISTS idx_deals_active ON deals(start_date, end_date);
 
 -- RLS
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
@@ -45,7 +45,7 @@ END $$;
 
 DO $$ BEGIN
   CREATE POLICY "Admins can manage all deals" ON deals FOR ALL
-    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 

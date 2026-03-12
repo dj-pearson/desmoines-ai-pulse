@@ -22,20 +22,20 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin insert" ON public.teams FOR INSERT WITH CHECK (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin update" ON public.teams FOR UPDATE USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_teams_slug ON public.teams(slug);
-CREATE INDEX idx_teams_sport ON public.teams(sport);
+CREATE INDEX IF NOT EXISTS idx_teams_slug ON public.teams(slug);
+CREATE INDEX IF NOT EXISTS idx_teams_sport ON public.teams(sport);
 
 -- Seed Des Moines teams
 INSERT INTO public.teams (name, slug, sport, league, venue_name, description, website) VALUES

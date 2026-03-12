@@ -26,21 +26,21 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin insert" ON public.trails FOR INSERT WITH CHECK (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin update" ON public.trails FOR UPDATE USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_trails_slug ON public.trails(slug);
-CREATE INDEX idx_trails_difficulty ON public.trails(difficulty);
-CREATE INDEX idx_trails_featured ON public.trails(is_featured) WHERE is_featured = true;
+CREATE INDEX IF NOT EXISTS idx_trails_slug ON public.trails(slug);
+CREATE INDEX IF NOT EXISTS idx_trails_difficulty ON public.trails(difficulty);
+CREATE INDEX IF NOT EXISTS idx_trails_featured ON public.trails(is_featured) WHERE is_featured = true;
 
 -- Seed major Des Moines area trails
 INSERT INTO public.trails (name, slug, description, length_miles, difficulty, surface_type, activities, highlights, trailhead_address, latitude, longitude, is_featured) VALUES

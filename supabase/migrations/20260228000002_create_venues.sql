@@ -23,20 +23,20 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin insert" ON public.venues FOR INSERT WITH CHECK (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin update" ON public.venues FOR UPDATE USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_venues_slug ON public.venues(slug);
-CREATE INDEX idx_venues_type ON public.venues(venue_type);
+CREATE INDEX IF NOT EXISTS idx_venues_slug ON public.venues(slug);
+CREATE INDEX IF NOT EXISTS idx_venues_type ON public.venues(venue_type);
 
 -- Seed major Des Moines music venues
 INSERT INTO public.venues (name, slug, description, address, capacity, venue_type, latitude, longitude) VALUES

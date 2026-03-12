@@ -18,9 +18,9 @@ CREATE TABLE IF NOT EXISTS curated_itineraries (
 );
 
 -- Indexes
-CREATE INDEX idx_curated_itineraries_theme ON curated_itineraries(theme);
-CREATE INDEX idx_curated_itineraries_duration ON curated_itineraries(duration);
-CREATE INDEX idx_curated_itineraries_published ON curated_itineraries(is_published) WHERE is_published = true;
+CREATE INDEX IF NOT EXISTS idx_curated_itineraries_theme ON curated_itineraries(theme);
+CREATE INDEX IF NOT EXISTS idx_curated_itineraries_duration ON curated_itineraries(duration);
+CREATE INDEX IF NOT EXISTS idx_curated_itineraries_published ON curated_itineraries(is_published) WHERE is_published = true;
 
 -- RLS
 ALTER TABLE curated_itineraries ENABLE ROW LEVEL SECURITY;
@@ -34,7 +34,7 @@ END $$;
 DO $$ BEGIN
   CREATE POLICY "Admins can manage itineraries"
     ON curated_itineraries FOR ALL
-    USING (EXISTS (SELECT 1 FROM profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+    USING (EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin')));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -77,7 +77,7 @@ INSERT INTO curated_itineraries (title, slug, description, duration, theme, is_p
   '[
     {"order":1,"entity_type":"restaurant","name":"Kitchen Collective","description":"Start with brunch at this chef-driven East Village spot.","time_suggestion":"10:00 AM","tips":"Share the seasonal bruschetta board."},
     {"order":2,"entity_type":"attraction","name":"Greater Des Moines Botanical Garden","description":"Wander through lush conservatory gardens and outdoor spaces.","time_suggestion":"12:00 PM","tips":"The seasonal exhibits change quarterly — check what is on display."},
-    {"order":3,"entity_type":"attraction","name":"East Village Shopping","description":"Browse boutiques and galleries in the colorful East Village district.","time_suggestion":"2:00 PM","tips":"Don't miss Raygun for Iowa-themed gifts."},
+    {"order":3,"entity_type":"attraction","name":"East Village Shopping","description":"Browse boutiques and galleries in the colorful East Village district.","time_suggestion":"2:00 PM","tips":"Don''t miss Raygun for Iowa-themed gifts."},
     {"order":4,"entity_type":"restaurant","name":"Hello, Marjorie","description":"Pre-dinner craft cocktails at this acclaimed bar.","time_suggestion":"5:00 PM","tips":"Try the seasonal cocktail menu — always creative."},
     {"order":5,"entity_type":"attraction","name":"Gray''s Lake Park","description":"Sunset walk around the lake on the illuminated bridge.","time_suggestion":"7:00 PM","tips":"The pedestrian bridge lights up at dusk — gorgeous for photos."},
     {"order":6,"entity_type":"restaurant","name":"Harbinger","description":"End with a memorable farm-to-table tasting menu dinner.","time_suggestion":"8:00 PM","tips":"Reservations essential. The tasting menu changes weekly."}

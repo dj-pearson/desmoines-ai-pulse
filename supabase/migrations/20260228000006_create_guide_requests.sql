@@ -21,17 +21,17 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin read" ON public.guide_requests FOR SELECT USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 DO $$ BEGIN
   CREATE POLICY "Admin update" ON public.guide_requests FOR UPDATE USING (
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) = 'admin'
+    EXISTS (SELECT 1 FROM user_roles WHERE user_id = auth.uid() AND role IN ('admin', 'root_admin'))
   );
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
 -- Indexes
-CREATE INDEX idx_guide_requests_type ON public.guide_requests(request_type);
-CREATE INDEX idx_guide_requests_email ON public.guide_requests(email);
+CREATE INDEX IF NOT EXISTS idx_guide_requests_type ON public.guide_requests(request_type);
+CREATE INDEX IF NOT EXISTS idx_guide_requests_email ON public.guide_requests(email);
