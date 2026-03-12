@@ -105,12 +105,10 @@ serve(async (req) => {
 
     // Call Claude
     const startTime = Date.now();
+    const claudeHeaders = await getClaudeHeaders(claudeApiKey, supabaseUrl, supabaseKey);
     const claudeResponse = await fetch(aiConfig.api_endpoint, {
       method: 'POST',
-      headers: {
-        ...getClaudeHeaders(claudeApiKey),
-        'Content-Type': 'application/json',
-      },
+      headers: claudeHeaders,
       body: JSON.stringify({
         model: aiConfig.default_model,
         max_tokens: aiConfig.max_tokens_large,
