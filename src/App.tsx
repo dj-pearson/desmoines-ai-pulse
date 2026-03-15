@@ -407,6 +407,12 @@ const App = () => (
             <Route path="/things-to-do/:seg1/:seg2" element={<PseoRoutePage />} />
             <Route path="/nightlife/:seg1" element={<PseoRoutePage />} />
             <Route path="/nightlife/:seg1/:seg2" element={<PseoRoutePage />} />
+            {/* Generic pSEO catch-all for category/location combos like
+                /brunch/east-village, /italian/valley-junction, /asian/ankeny.
+                React Router v6 ranks static segments higher than dynamic ones,
+                so existing routes (e.g. /restaurants/:slug) still match first. */}
+            <Route path="/:seg1/:seg2" element={<PseoRoutePage />} />
+            <Route path="/:seg1" element={<PseoRoutePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
