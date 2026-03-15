@@ -7,6 +7,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +41,15 @@ serve(async (req) => {
 
     if (!url) {
       return new Response(JSON.stringify({ error: "URL is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // SSRF validation: prevent requests to private/internal addresses
+    const ssrfCheck = validateURLForSSRF(url);
+    if (!ssrfCheck.valid) {
+      return new Response(JSON.stringify({ error: `URL rejected: ${ssrfCheck.error}` }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -110,6 +120,13 @@ serve(async (req) => {
 
       if (checked % 10 === 0) {
         console.log(`Checked ${checked}/${links.size} links...`);
+      }
+
+      // SSRF validation for each link before fetching
+      const linkSsrfCheck = validateURLForSSRF(linkUrl);
+      if (!linkSsrfCheck.valid) {
+        // Skip private/internal URLs silently
+        continue;
       }
 
       try {

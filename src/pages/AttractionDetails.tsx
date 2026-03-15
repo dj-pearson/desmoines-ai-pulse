@@ -24,12 +24,10 @@ import {
   Heart,
   Sparkles,
   Globe,
-  Check,
   Info,
   Camera,
   Landmark,
   ChevronRight,
-  Compass,
   Clock,
   Ticket,
   TreePine,
@@ -40,6 +38,35 @@ import { useContentTracking } from "@/hooks/useContentTracking";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
+
+// Estimated visit duration by attraction type (in minutes)
+const VISIT_DURATION_BY_TYPE: Record<string, { min: number; max: number }> = {
+  'Museum': { min: 60, max: 180 },
+  'Park': { min: 30, max: 120 },
+  'Garden': { min: 30, max: 90 },
+  'Zoo': { min: 120, max: 240 },
+  'Historic Site': { min: 30, max: 90 },
+  'Theater': { min: 90, max: 180 },
+  'Art Gallery': { min: 45, max: 120 },
+  'Stadium': { min: 120, max: 240 },
+  'Landmark': { min: 15, max: 60 },
+  'Trail': { min: 60, max: 180 },
+  'Recreation': { min: 60, max: 180 },
+  'Shopping': { min: 30, max: 120 },
+  'Entertainment': { min: 60, max: 180 },
+};
+const DEFAULT_DURATION = { min: 30, max: 120 };
+
+function getEstimatedDuration(type: string | null): string {
+  const duration = (type && VISIT_DURATION_BY_TYPE[type]) || DEFAULT_DURATION;
+  const formatTime = (minutes: number) => {
+    if (minutes < 60) return `${minutes} min`;
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  };
+  return `${formatTime(duration.min)} - ${formatTime(duration.max)}`;
+}
 
 const createSlug = (name: string): string => {
   return name
@@ -189,6 +216,10 @@ export default function AttractionDetails() {
     {
       question: `How do I get to ${attraction.name}?`,
       answer: `${attraction.name} is located ${attraction.location ? `at ${attraction.location}` : ""} in ${BRAND.city}, ${BRAND.state}. The area is easily accessible by car via I-235 and I-80/I-35. Downtown parking is available in public garages and street parking. DART public transit routes also serve the area.`,
+    },
+    {
+      question: `How long should I spend at ${attraction.name}?`,
+      answer: `We recommend planning ${getEstimatedDuration(attraction.type)} for your visit to ${attraction.name}. This is an estimate based on the typical ${attraction.type?.toLowerCase()} experience. Your actual visit time may vary depending on your interests, group size, and the time of year.`,
     },
     {
       question: `Is ${attraction.name} good for families?`,
@@ -394,17 +425,11 @@ export default function AttractionDetails() {
                   <div className="text-sm text-gray-600">Location</div>
                 </div>
                 <div className="text-center p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                  <Compass className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
-                  <div className="text-2xl font-bold text-gray-900">
-                    {attraction.is_featured ? (
-                      <Check className="h-7 w-7 text-emerald-500 mx-auto" />
-                    ) : (
-                      "--"
-                    )}
+                  <Clock className="h-6 w-6 text-emerald-500 mx-auto mb-2" />
+                  <div className="text-lg font-bold text-gray-900">
+                    {getEstimatedDuration(attraction.type)}
                   </div>
-                  <div className="text-sm text-gray-600">
-                    {attraction.is_featured ? "Editor's Pick" : "Featured"}
-                  </div>
+                  <div className="text-sm text-gray-600">Est. Visit Time</div>
                 </div>
               </div>
 
@@ -562,6 +587,10 @@ export default function AttractionDetails() {
                         </a>
                       </div>
                     )}
+                    <div>
+                      <h3 className="font-semibold text-sm text-gray-900">Estimated Duration</h3>
+                      <p className="text-sm text-gray-600">{getEstimatedDuration(attraction.type)}</p>
+                    </div>
                     <div>
                       <h3 className="font-semibold text-sm text-gray-900">Good For</h3>
                       <p className="text-sm text-gray-600">Families, Couples, Solo Travelers, Groups</p>

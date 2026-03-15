@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { AdBanner } from "@/components/AdBanner";
@@ -41,6 +42,7 @@ import {
   Coffee,
   Globe,
   ChevronDown,
+  Shuffle,
 } from "lucide-react";
 import { useState, lazy, Suspense, useMemo, useCallback, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -102,6 +104,7 @@ const sortOptions = [
 ];
 
 export default function Restaurants() {
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [filters, setFilters] = useState<RestaurantFilterOptions>({
@@ -129,6 +132,12 @@ export default function Restaurants() {
   const filterOptions = useRestaurantFilterOptions();
   const { cuisineCounts } = useCuisineCounts();
   const { announce, announcement, regionProps } = useAnnounce();
+
+  const handleSurpriseMe = useCallback(() => {
+    if (!restaurants || restaurants.length === 0) return;
+    const random = restaurants[Math.floor(Math.random() * restaurants.length)];
+    navigate(`/restaurants/${random.slug || random.id}`);
+  }, [restaurants, navigate]);
 
   // Paginate restaurants
   const totalPages = Math.ceil((restaurants?.length || 0) / ITEMS_PER_PAGE);
@@ -420,6 +429,16 @@ export default function Restaurants() {
 
               {/* Quick action pills below search */}
               <div className="flex items-center justify-center gap-2 mt-4 flex-wrap">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleSurpriseMe}
+                  disabled={!restaurants || restaurants.length === 0}
+                  className="rounded-full text-sm bg-white/15 hover:bg-white/25 text-white border-white/20"
+                >
+                  <Shuffle className="h-3.5 w-3.5 mr-1.5" />
+                  Surprise Me
+                </Button>
                 <Button
                   variant={filters.openNow ? "default" : "secondary"}
                   size="sm"

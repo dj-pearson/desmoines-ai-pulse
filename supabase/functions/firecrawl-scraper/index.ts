@@ -11,6 +11,7 @@ import { parseISO, format as dateFnsFormat } from "https://esm.sh/date-fns@3.6.0
 import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -678,6 +679,18 @@ serve(async (req) => {
     if (!url || !category) {
       return new Response(
         JSON.stringify({ error: "URL and category are required" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // SSRF validation: prevent requests to private/internal addresses
+    const ssrfCheck = validateURLForSSRF(url);
+    if (!ssrfCheck.valid) {
+      return new Response(
+        JSON.stringify({ error: `URL rejected: ${ssrfCheck.error}` }),
         {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -1912,7 +1912,7 @@
         "Typecheck passes"
       ],
       "priority": 115,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Attractions detail pages show hours and admission but not how long a typical visit takes. This is critical information for trip planning. Without it, users must guess or search externally. TripAdvisor and Google Maps both surface this information prominently. Adding it improves the trip planning use case and keeps users on-platform."
     },
     {
@@ -2089,7 +2089,7 @@
         "Typecheck passes"
       ],
       "priority": 126,
-      "passes": false,
+      "passes": true,
       "notes": "UX AUDIT: Many users visit discovery platforms without a specific intent. A 'Surprise Me' button capitalizes on serendipity browsing behavior, increases engagement with lesser-known content, and creates a playful interaction that differentiates the platform. This feature is used by Netflix (shuffle), Spotify (lucky pick), and Yelp (surprise me)."
     },
     {
@@ -2236,7 +2236,7 @@
         "Typecheck passes"
       ],
       "priority": 135,
-      "passes": false,
+      "passes": true,
       "notes": "SHANNON DEFENSE: Both functions accept or discover URLs and fetch them. Without validation, an attacker could use them to reach metadata services (169.254.169.254) or internal APIs."
     },
     {
@@ -2250,7 +2250,7 @@
         "Typecheck passes"
       ],
       "priority": 136,
-      "passes": false,
+      "passes": true,
       "notes": "SHANNON DEFENSE: analyze-competitor fetches competitor websites; firecrawl-scraper fetches arbitrary URLs. Both are SSRF vectors if URLs come from user input or config."
     },
     {
