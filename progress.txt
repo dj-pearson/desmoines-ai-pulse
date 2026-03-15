@@ -96,6 +96,41 @@
 
 ## Progress Log
 
+## 2026-03-15 — Ralph Loop 16: Critical Platform Improvements (SSRF Security, UX Discovery, Attraction Details)
+
+- **US-135**: Added SSRF validation to check-broken-links edge function:
+  - Imported `validateURLForSSRF` from `_shared/validation.ts`
+  - Validates initial page URL before fetching (returns 400 if blocked)
+  - Validates each extracted link before HEAD request (skips private/internal URLs)
+  - Blocks private IPs, localhost, embedded credentials, non-HTTP protocols
+  - crawl-site already had SSRF validation (verified)
+- **US-136**: Added SSRF validation to analyze-competitor and firecrawl-scraper edge functions:
+  - analyze-competitor: SSRF check before fetching competitor.website_url in scrapeCompetitorContent; logs blocked attempts
+  - firecrawl-scraper: SSRF check on user-provided URL before generating paginated scrape URLs; returns 400 if rejected
+- **US-126**: Added "Surprise Me" random discovery button to all 3 listing pages:
+  - EventsPage: Shuffle icon button in action row (between date presets and Near Me); navigates to random event from current filtered results
+  - Restaurants: Shuffle button in quick action pills (alongside Open Now, Featured); navigates to random restaurant
+  - Attractions: Shuffle button next to filter controls; navigates to random attraction from filtered results
+  - All buttons disabled when no results available
+- **US-115**: Added estimated visit duration to attraction detail pages:
+  - Created type-based duration mapping (13 attraction types: Museum 1-3h, Park 30m-2h, Zoo 2-4h, etc.)
+  - Replaced "Editor's Pick" stat card (showed "--" for non-featured) with "Est. Visit Time" using Clock icon
+  - Added estimated duration to "Things To Know" section
+  - Added FAQ question "How long should I spend at [attraction]?" with contextual answer
+  - Cleaned up unused Compass and Check icon imports
+
+**Build verified**: `npx vite build` passes (36s, no errors)
+
+**Progress: 120/147 stories complete (82%), 27 remaining**
+
+**Files changed**: supabase/functions/check-broken-links/index.ts, supabase/functions/analyze-competitor/index.ts, supabase/functions/firecrawl-scraper/index.ts, src/pages/EventsPage.tsx, src/pages/Restaurants.tsx, src/pages/Attractions.tsx, src/pages/AttractionDetails.tsx, prd.json, progress.txt
+- **Learnings for future iterations:**
+  - crawl-site already had SSRF validation via `validateURLForSSRF` with `ALLOWED_CRAWL_DOMAINS` — no changes needed
+  - Shuffle icon from lucide-react is perfect for "Surprise Me" / random discovery UX
+  - Type-based visit duration estimates are more maintainable than per-record DB columns when data doesn't exist yet
+  - filteredAttractions must be defined before handleSurpriseMe callback (ordering matters for non-hook functions referencing useMemo results)
+---
+
 ## 2026-03-11 — Ralph Loop 15: Critical Platform Improvements (Dark Mode, Security, Restaurant UX, Prefetching)
 
 - **US-086**: Fixed incomplete dark mode styling across platform:

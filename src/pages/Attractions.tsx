@@ -29,10 +29,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CardsGridSkeleton } from "@/components/ui/loading-skeleton";
-import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle, ChevronDown } from "lucide-react";
+import { MapPin, Star, Filter, List, Map, SlidersHorizontal, Landmark, ChevronRight, SearchX, X, AlertCircle, ChevronDown, Shuffle } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SortDropdown, ATTRACTION_SORT_OPTIONS } from "@/components/SortDropdown";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Pagination,
   PaginationContent,
@@ -65,6 +65,7 @@ const createSlug = (name: string): string => {
 };
 
 export default function Attractions() {
+  const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   useDocumentTitle("Attractions");
@@ -148,6 +149,12 @@ export default function Attractions() {
     }
     return sorted;
   }, [filteredAttractions, sortBy]);
+
+  const handleSurpriseMe = () => {
+    if (!filteredAttractions || filteredAttractions.length === 0) return;
+    const random = filteredAttractions[Math.floor(Math.random() * filteredAttractions.length)];
+    navigate(`/attractions/${createSlug(random.name)}`);
+  };
 
   // Pagination
   const totalPages = Math.ceil(sortedAttractions.length / ITEMS_PER_PAGE);
@@ -288,6 +295,15 @@ export default function Attractions() {
                 />
               </div>
               <div className="flex items-center gap-3">
+                <Button
+                  onClick={handleSurpriseMe}
+                  disabled={!filteredAttractions || filteredAttractions.length === 0}
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30 h-12"
+                  variant="secondary"
+                >
+                  <Shuffle className="h-4 w-4 mr-2" />
+                  Surprise Me
+                </Button>
                 {/* Filter Button - Mobile Sheet or Desktop Toggle */}
                 {isMobile ? (
                   <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>

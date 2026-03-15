@@ -8,6 +8,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -93,7 +94,19 @@ async function scrapeCompetitorContent(supabaseClient: any, competitorId?: strin
   for (const competitor of competitors) {
     try {
       console.log(`Scraping content for ${competitor.name} at ${competitor.website_url}`);
-      
+
+      // SSRF validation: prevent requests to private/internal addresses
+      const ssrfCheck = validateURLForSSRF(competitor.website_url);
+      if (!ssrfCheck.valid) {
+        console.error(`SSRF blocked for ${competitor.name}: ${ssrfCheck.error}`);
+        results.push({
+          competitor: competitor.name,
+          success: false,
+          error: `URL rejected: ${ssrfCheck.error}`
+        });
+        continue;
+      }
+
       // Fetch competitor website
       const response = await fetch(competitor.website_url, {
         headers: {

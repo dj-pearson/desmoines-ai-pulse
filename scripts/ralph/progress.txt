@@ -91,6 +91,20 @@ Started: 2026-02-28T03:00:00Z
   - Login throttling uses in-memory Map (resets on page reload) — suitable for client-side rate limiting
 ---
 
+## 2026-03-15 — Ralph Loop 16: US-135, US-136, US-126, US-115
+- US-135: SSRF validation on check-broken-links (initial URL + each extracted link); crawl-site already had it
+- US-136: SSRF validation on analyze-competitor (competitor.website_url) and firecrawl-scraper (user-provided URL)
+- US-126: "Surprise Me" Shuffle button on EventsPage, Restaurants, Attractions — random item from filtered results
+- US-115: Estimated visit duration on AttractionDetails — type-based mapping (13 types), stat card, Things To Know, FAQ
+- Files changed: supabase/functions/check-broken-links/index.ts, supabase/functions/analyze-competitor/index.ts, supabase/functions/firecrawl-scraper/index.ts, src/pages/EventsPage.tsx, src/pages/Restaurants.tsx, src/pages/Attractions.tsx, src/pages/AttractionDetails.tsx, prd.json, progress.txt
+- **Build**: npx vite build passes (36s, no errors)
+- **Progress**: 120/147 stories complete (82%), 27 remaining
+- **Learnings for future iterations:**
+  - validateURLForSSRF already existed in _shared/validation.ts — just import and use
+  - Shuffle icon from lucide-react for random discovery UX
+  - Type-based visit duration estimates > per-record DB columns when data doesn't exist
+---
+
 ## 2026-03-10 — Ralph Loop 14: US-085, US-087, US-104, US-106, US-122, US-130
 - US-085: Search autocomplete with recent searches (safeStorage) and DB title suggestions (debounced ilike, 3+ chars), integrated into Events/Restaurants/Attractions
 - US-087: Context-aware loading states ("Searching for...", "Loading [cuisine]...") + labeled skeleton sections in RestaurantDetails + FavoriteButton loading spinner

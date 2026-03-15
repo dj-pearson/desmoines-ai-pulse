@@ -26,6 +26,7 @@ import {
   Ticket,
   ChevronDown,
   Star,
+  Shuffle,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
@@ -461,6 +462,12 @@ export default function EventsPage() {
     );
   };
 
+  const handleSurpriseMe = useCallback(() => {
+    if (!events || events.length === 0) return;
+    const randomEvent = events[Math.floor(Math.random() * events.length)];
+    navigate(`/events/${createEventSlugWithCentralTime(randomEvent.title, randomEvent as any)}`);
+  }, [events, navigate]);
+
   const { elementRef: pullToRefreshRef, isPulling, isRefreshing, pullDistance } = usePullToRefresh({
     onRefresh: async () => {
       await refetch();
@@ -745,6 +752,16 @@ export default function EventsPage() {
 
               {/* Action Row */}
               <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button
+                  onClick={handleSurpriseMe}
+                  variant="secondary"
+                  size="sm"
+                  className="rounded-full bg-white/10 hover:bg-white/20 text-white border-white/10"
+                  disabled={!events || events.length === 0}
+                >
+                  <Shuffle className="h-3.5 w-3.5 mr-1.5" />
+                  Surprise Me
+                </Button>
                 <Button
                   onClick={handleNearMe}
                   variant="secondary"
