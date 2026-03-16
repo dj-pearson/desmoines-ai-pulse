@@ -19,8 +19,9 @@ final class StoreKitService {
 
     // MARK: - Product IDs (must match App Store Connect exactly)
 
-    /// Product IDs from App Store Connect subscription group.
-    /// Reference names: prod_Insider_Monthly, prod_VIP_Monthly
+    /// Product IDs from App Store Connect → Subscriptions → "Des Moines Insider Premium" group.
+    /// Reference names: prod_Insider_Monthly (level 1), prod_VIP_Monthly (level 2).
+    /// These IDs are immutable — they must match App Store Connect exactly.
     static let insiderMonthlyID = "prod_U4oa7Cpn0bRnuo"
     static let vipMonthlyID = "prod_U4oaGFEy12auTx"
 

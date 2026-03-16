@@ -73,6 +73,8 @@ serve(async (req) => {
     }
 
     // Determine tier from product ID (App Store Connect "Des Moines Insider Premium" group)
+    // Product IDs: prod_U4oa7Cpn0bRnuo (Insider Monthly), prod_U4oaGFEy12auTx (VIP Monthly)
+    // Reference names: prod_Insider_Monthly (level 1), prod_VIP_Monthly (level 2)
     const INSIDER_PRODUCT_IDS = new Set(["prod_U4oa7Cpn0bRnuo"]);
     const VIP_PRODUCT_IDS = new Set(["prod_U4oaGFEy12auTx"]);
 

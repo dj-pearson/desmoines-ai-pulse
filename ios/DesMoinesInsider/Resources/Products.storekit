@@ -9,7 +9,7 @@
       }
     ]
   },
-  "identifier" : "D1A2B3C4-E5F6-7890-ABCD-EF1234567890",
+  "identifier" : "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
   "type" : "AutoRenewableSubscription",
   "version" : {
     "major" : 4,
