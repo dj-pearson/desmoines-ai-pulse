@@ -1,4 +1,5 @@
 import { Helmet } from "react-helmet-async";
+import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 
 interface LocalSEOProps {
   pageTitle?: string;
@@ -8,6 +9,7 @@ interface LocalSEOProps {
   eventData?: any;
   businessData?: any;
   breadcrumbs?: Array<{ name: string; url: string }>;
+  canonicalPath?: string;
 }
 
 export default function LocalSEO({
@@ -17,13 +19,21 @@ export default function LocalSEO({
   neighborhood,
   eventData,
   businessData,
-  breadcrumbs = []
+  breadcrumbs = [],
+  canonicalPath,
 }: LocalSEOProps) {
-  
+
   // Enhanced local title with neighborhood if provided
-  const enhancedTitle = neighborhood 
-    ? `${pageTitle} in ${neighborhood}, Des Moines | Des Moines Insider`
-    : `${pageTitle} | Des Moines, Iowa | Des Moines Insider`;
+  const enhancedTitle = neighborhood
+    ? `${pageTitle} in ${neighborhood}, Des Moines | ${BRAND.name}`
+    : `${pageTitle} | Des Moines, Iowa | ${BRAND.name}`;
+
+  // Canonical URL
+  const canonicalUrl = canonicalPath
+    ? getCanonicalUrl(canonicalPath)
+    : typeof window !== 'undefined'
+      ? `${BRAND.baseUrl}${window.location.pathname}`
+      : BRAND.baseUrl;
 
   // Local keywords for this page
   const localKeywords = [
@@ -42,10 +52,10 @@ export default function LocalSEO({
   const localBusinessSchema = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "@id": "https://desmoinessider.com/#business",
-    "name": "Des Moines Insider",
+    "@id": `${BRAND.baseUrl}/#business`,
+    "name": BRAND.name,
     "description": "Your comprehensive guide to Des Moines events, restaurants, attractions, and local activities",
-    "url": "https://desmoinessider.com",
+    "url": BRAND.baseUrl,
     "telephone": "+1-515-DES-MOIN",
     "priceRange": "Free",
     "address": {
@@ -157,8 +167,8 @@ export default function LocalSEO({
     },
     "organizer": {
       "@type": "Organization",
-      "name": "Des Moines Insider",
-      "url": "https://desmoinessider.com"
+      "name": BRAND.name,
+      "url": BRAND.baseUrl,
     }
   } : null;
 
@@ -170,7 +180,7 @@ export default function LocalSEO({
       "@type": "ListItem",
       "position": index + 1,
       "name": crumb.name,
-      "item": `https://desmoinessider.com${crumb.url}`
+      "item": `${BRAND.baseUrl}${crumb.url}`
     }))
   } : null;
 
@@ -180,6 +190,8 @@ export default function LocalSEO({
       <title>{enhancedTitle}</title>
       <meta name="description" content={pageDescription} />
       <meta name="keywords" content={localKeywords} />
+      <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+      <link rel="canonical" href={canonicalUrl} />
       
       {/* Enhanced Geographic Targeting */}
       <meta name="geo.region" content="US-IA" />
@@ -197,6 +209,7 @@ export default function LocalSEO({
       <meta property="og:title" content={enhancedTitle} />
       <meta property="og:description" content={pageDescription} />
       <meta property="og:type" content={pageType} />
+      <meta property="og:url" content={canonicalUrl} />
       <meta property="og:locale" content="en_US" />
       <meta property="og:region" content="IA" />
       <meta property="og:country-name" content="USA" />

@@ -539,11 +539,41 @@
   <body>
     <div id="root">
       <!-- Fallback content - replaced by React when app mounts successfully -->
-      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:hsl(0 0% 100%)">
-        <div style="text-align:center;color:#666;font-family:system-ui,sans-serif">
-          <div style="width:40px;height:40px;border:3px solid #ddd;border-top-color:#2563eb;border-radius:50%;margin:0 auto 16px;animation:spin 1s linear infinite"></div>
-          <p style="margin:0;font-size:14px">Loading...</p>
-          <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+      <!-- This content is visible to search engines and users without JavaScript -->
+      <div style="min-height:100vh;background:hsl(0 0% 100%);font-family:system-ui,sans-serif">
+        <noscript>
+          <div style="max-width:1024px;margin:0 auto;padding:2rem 1rem">
+            <h1 style="font-size:2rem;font-weight:700;color:#1e3a5f;margin-bottom:1rem">Des Moines AI Pulse</h1>
+            <p style="font-size:1.125rem;color:#444;margin-bottom:2rem">Your AI-powered guide to Des Moines events, restaurants, attractions, and local discoveries. Discover what's happening in Des Moines, Iowa.</p>
+            <nav style="margin-bottom:2rem">
+              <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:1rem;color:#333">Explore Des Moines</h2>
+              <ul style="list-style:none;padding:0;display:flex;flex-wrap:wrap;gap:0.75rem">
+                <li><a href="/events" style="color:#2563eb;text-decoration:underline">Events</a></li>
+                <li><a href="/events/today" style="color:#2563eb;text-decoration:underline">Today's Events</a></li>
+                <li><a href="/events/this-weekend" style="color:#2563eb;text-decoration:underline">This Weekend</a></li>
+                <li><a href="/restaurants" style="color:#2563eb;text-decoration:underline">Restaurants</a></li>
+                <li><a href="/restaurants/open-now" style="color:#2563eb;text-decoration:underline">Open Now</a></li>
+                <li><a href="/attractions" style="color:#2563eb;text-decoration:underline">Attractions</a></li>
+                <li><a href="/playgrounds" style="color:#2563eb;text-decoration:underline">Playgrounds</a></li>
+                <li><a href="/neighborhoods" style="color:#2563eb;text-decoration:underline">Neighborhoods</a></li>
+                <li><a href="/articles" style="color:#2563eb;text-decoration:underline">Articles</a></li>
+                <li><a href="/guides" style="color:#2563eb;text-decoration:underline">Guides</a></li>
+                <li><a href="/trip-planner" style="color:#2563eb;text-decoration:underline">AI Trip Planner</a></li>
+                <li><a href="/things-to-do" style="color:#2563eb;text-decoration:underline">Things to Do</a></li>
+              </ul>
+            </nav>
+            <section style="margin-bottom:2rem">
+              <h2 style="font-size:1.25rem;font-weight:600;margin-bottom:0.5rem;color:#333">About Des Moines AI Pulse</h2>
+              <p style="color:#555;line-height:1.6">Des Moines AI Pulse is the first conversational AI city guide for Des Moines, Iowa. We cover events, restaurants, attractions, and activities across the Greater Des Moines metro area including West Des Moines, Ankeny, Urbandale, Johnston, Clive, Waukee, and Altoona. Get personalized recommendations for things to do, places to eat, and local discoveries.</p>
+            </section>
+          </div>
+        </noscript>
+        <div class="js-loading" style="display:flex;align-items:center;justify-content:center;min-height:100vh">
+          <div style="text-align:center;color:#666">
+            <div style="width:40px;height:40px;border:3px solid #ddd;border-top-color:#2563eb;border-radius:50%;margin:0 auto 16px;animation:spin 1s linear infinite"></div>
+            <p style="margin:0;font-size:14px">Loading...</p>
+            <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+          </div>
         </div>
       </div>
     </div>

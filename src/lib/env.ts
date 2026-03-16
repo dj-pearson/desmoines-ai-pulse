@@ -44,7 +44,7 @@ function getOptional(key: string, defaultValue = ''): string {
 export const env: EnvConfig = {
   VITE_SUPABASE_URL: getRequired('VITE_SUPABASE_URL'),
   VITE_SUPABASE_ANON_KEY: getRequired('VITE_SUPABASE_ANON_KEY'),
-  VITE_SITE_URL: getOptional('VITE_SITE_URL', 'https://desmoinesinsider.com'),
+  VITE_SITE_URL: getOptional('VITE_SITE_URL', 'https://desmoinesaipulse.com'),
   VITE_SENTRY_DSN: getOptional('VITE_SENTRY_DSN'),
   VITE_STRIPE_PUBLISHABLE_KEY: getOptional('VITE_STRIPE_PUBLISHABLE_KEY'),
 };

@@ -9,10 +9,10 @@
   },
   "api": {
     "type": "openapi",
-    "url": "https://desmoinesinsider.com/openapi.yaml",
+    "url": "https://desmoinesaipulse.com/openapi.yaml",
     "is_user_authenticated": false
   },
-  "logo_url": "https://desmoinesinsider.com/DMI-Logo.png",
-  "contact_email": "info@desmoinesinsider.com",
-  "legal_info_url": "https://desmoinesinsider.com"
+  "logo_url": "https://desmoinesaipulse.com/DMI-Logo.png",
+  "contact_email": "info@desmoinesaipulse.com",
+  "legal_info_url": "https://desmoinesaipulse.com"
 }
