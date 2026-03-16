@@ -31,7 +31,14 @@
       "Bash(node:*)",
       "Bash(rm:*)",
       "WebSearch",
-      "Bash(source /c/Users/pears/Documents/Des-Moines-Pulse/desmoines-ai-pulse/.venv/Scripts/activate && python --version)"
+      "Bash(source /c/Users/pears/Documents/Des-Moines-Pulse/desmoines-ai-pulse/.venv/Scripts/activate && python --version)",
+      "Bash(for file:*)",
+      "Bash(do)",
+      "Bash(echo \"=== $file ===\")",
+      "Read(//c/Users/pears/Documents/Des-Moines-Pulse/desmoines-ai-pulse/**)",
+      "Bash(done)",
+      "Bash(/tmp/summary.txt:*)",
+      "Read(//tmp/**)"
     ],
     "deny": [],
     "ask": []
