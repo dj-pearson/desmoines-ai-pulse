@@ -14,6 +14,7 @@ import { BackToTop } from "@/components/BackToTop";
 import EnhancedPlaygroundSEO from "@/components/EnhancedPlaygroundSEO";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
+import { Helmet } from "react-helmet-async";
 import {
   MapPin,
   Star,
@@ -129,6 +130,10 @@ export default function PlaygroundDetails() {
   if (error || !playground) {
     return (
       <>
+        <Helmet>
+          <meta name="robots" content="noindex, follow" />
+          <meta name="googlebot" content="noindex, follow" />
+        </Helmet>
         <Header />
         <div className="min-h-screen bg-gray-50 flex items-center justify-center">
           <Card className="max-w-md mx-auto text-center shadow-lg rounded-2xl">

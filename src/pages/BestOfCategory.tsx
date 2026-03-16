@@ -38,7 +38,13 @@ export default function BestOfCategory() {
               <Skeleton className="h-64" />
             </div>
           ) : !category ? (
-            <p className="text-muted-foreground">Category not found.</p>
+            <>
+              <Helmet>
+                <meta name="robots" content="noindex, follow" />
+                <meta name="googlebot" content="noindex, follow" />
+              </Helmet>
+              <p className="text-muted-foreground">Category not found.</p>
+            </>
           ) : (
             <div className="space-y-8">
               {/* Header */}
