@@ -146,6 +146,22 @@ export default function Footer() {
                   <Instagram className="h-4 w-4" aria-hidden="true" />
                 </a>
               </div>
+
+              {/* App Store Badge */}
+              <a
+                href="https://apps.apple.com/us/app/des-moines-insider-events/id6759137729"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Download Des Moines Insider on the App Store (opens in new tab)"
+                className="inline-block mt-4 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-neutral-900 rounded-lg"
+              >
+                <img
+                  src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83&releaseDate=1700000000"
+                  alt="Download on the App Store"
+                  className="h-10 w-auto"
+                  loading="lazy"
+                />
+              </a>
             </div>
 
             {/* Explore */}
