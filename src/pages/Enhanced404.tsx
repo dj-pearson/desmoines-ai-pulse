@@ -75,7 +75,7 @@ export default function Enhanced404() {
   return (
     <div className="min-h-screen bg-background">
       <SEOHead
-        title="Page Not Found - Des Moines AI Pulse"
+        title="Page Not Found - Des Moines Insider"
         description="The page you're looking for doesn't exist. Find events, restaurants, attractions, and activities in Des Moines with our search and recommendations."
         keywords={["Des Moines", "page not found", "search", "events", "restaurants"]}
         type="website"

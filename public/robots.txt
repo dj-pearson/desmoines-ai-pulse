@@ -199,11 +199,11 @@ Disallow: /
 # Sitemap Locations
 # ============================================
 
-Sitemap: https://desmoinesaipulse.com/sitemap-index.xml
-Sitemap: https://desmoinesaipulse.com/sitemap-static.xml
-Sitemap: https://desmoinesaipulse.com/sitemap-events.xml
-Sitemap: https://desmoinesaipulse.com/sitemap-restaurants.xml
-Sitemap: https://desmoinesaipulse.com/sitemap-attractions.xml
-Sitemap: https://desmoinesaipulse.com/sitemap-playgrounds.xml
-Sitemap: https://desmoinesaipulse.com/sitemap-articles.xml
-Sitemap: https://desmoinesaipulse.com/sitemap-guides.xml
+Sitemap: https://desmoinesinsider.com/sitemap-index.xml
+Sitemap: https://desmoinesinsider.com/sitemap-static.xml
+Sitemap: https://desmoinesinsider.com/sitemap-events.xml
+Sitemap: https://desmoinesinsider.com/sitemap-restaurants.xml
+Sitemap: https://desmoinesinsider.com/sitemap-attractions.xml
+Sitemap: https://desmoinesinsider.com/sitemap-playgrounds.xml
+Sitemap: https://desmoinesinsider.com/sitemap-articles.xml
+Sitemap: https://desmoinesinsider.com/sitemap-guides.xml

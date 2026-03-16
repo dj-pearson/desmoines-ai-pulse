@@ -281,7 +281,7 @@ export default function AdvertiseSuccess() {
           </p>
           <div className="flex flex-col sm:flex-row gap-2">
             <Button variant="outline" size="sm" asChild>
-              <a href="mailto:support@desmoinesaipulse.com">Email Support</a>
+              <a href="mailto:support@desmoinesinsider.com">Email Support</a>
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate('/advertising-policies')}>
               View Ad Policies

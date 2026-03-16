@@ -72,7 +72,7 @@ serve(async (req) => {
   }
 
   try {
-    const baseUrl = "https://desmoinesaipulse.com";
+    const baseUrl = "https://desmoinesinsider.com";
     const currentDate = new Date().toISOString().split("T")[0];
 
     console.log("🗺️ Starting sitemap generation...");

@@ -3,7 +3,7 @@
  * Run before build to populate individual sitemap XML files.
  *
  * Requires: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY
- * Optional: VITE_SITE_URL (defaults to https://desmoinesaipulse.com)
+ * Optional: VITE_SITE_URL (defaults to https://desmoinesinsider.com)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -42,7 +42,7 @@ const CENTRAL_TIMEZONE = 'America/Chicago';
 // Support both VITE_* (frontend) and plain names (Infisical/server scripts)
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-const baseUrl = process.env.VITE_SITE_URL || process.env.SITE_URL || 'https://desmoinesaipulse.com';
+const baseUrl = process.env.VITE_SITE_URL || process.env.SITE_URL || 'https://desmoinesinsider.com';
 const currentDate = new Date().toISOString().split('T')[0];
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
