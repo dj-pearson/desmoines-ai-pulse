@@ -16,9 +16,11 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
     name: event.title,
     description: event.enhanced_description || event.original_description || event.title,
     startDate: event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString()),
-    endDate: event.event_start_utc 
-      ? new Date(new Date(event.event_start_utc).getTime() + 3 * 60 * 60 * 1000).toISOString()
-      : new Date(typeof event.date === 'string' ? new Date(event.date).getTime() : event.date.getTime() + 3 * 60 * 60 * 1000).toISOString(),
+    endDate: event.end_date
+      ? event.end_date
+      : event.event_start_utc
+        ? new Date(new Date(event.event_start_utc).getTime() + 3 * 60 * 60 * 1000).toISOString()
+        : new Date((typeof event.date === 'string' ? new Date(event.date).getTime() : event.date.getTime()) + 3 * 60 * 60 * 1000).toISOString(),
     location: {
       "@type": "Place",
       name: event.venue || event.location || "Des Moines, Iowa",
@@ -39,7 +41,7 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
       })
     },
     image: [
-      event.image_url || `${BRAND.baseUrl}/default-event-image.jpg`
+      event.image_url || `${BRAND.baseUrl}${BRAND.ogImage}`
     ],
     url: `${BRAND.baseUrl}/events/${createEventSlugWithCentralTime(event.title, event)}`,
     eventStatus: isUpcoming
@@ -115,7 +117,6 @@ export default function EventSchema({ event, isUpcoming = true }: EventSchemaPro
       "@type": "Audience",
       audienceType: "general public"
     },
-    inLanguage: "en-US"
   };
 
   // Remove undefined properties

@@ -108,13 +108,21 @@ export default function EnhancedEventSEO({
   // Primary Event Schema - Google Events compliant
   // Required: name, startDate, location
   // Recommended: endDate, eventStatus, eventAttendanceMode, image, description, offers, organizer, performer
+  const startDateISO = event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString());
+  // Estimate endDate as startDate + 3 hours if no explicit end_date
+  const startMs = new Date(startDateISO).getTime();
+  const endDateISO = event.end_date
+    ? event.end_date
+    : new Date(startMs + 3 * 60 * 60 * 1000).toISOString();
+
   const eventSchema = {
     "@context": "https://schema.org",
     "@type": "Event",
     "@id": eventUrl,
     "name": event.title,
     "description": schemaDescription,
-    "startDate": event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString()),
+    "startDate": startDateISO,
+    "endDate": endDateISO,
     "eventStatus": isUpcoming ? "https://schema.org/EventScheduled" : "https://schema.org/EventPostponed",
     "eventAttendanceMode": "https://schema.org/OfflineEventAttendanceMode",
     "location": {
@@ -142,7 +150,12 @@ export default function EnhancedEventSEO({
       "url": BRAND.baseUrl,
       "logo": `${BRAND.baseUrl}${BRAND.logo}`,
     },
-    ...(event.image_url && { "image": [event.image_url] }),
+    "performer": event.venue
+      ? { "@type": "Organization", "name": event.venue }
+      : { "@type": "Organization", "name": BRAND.name, "url": BRAND.baseUrl },
+    "image": event.image_url
+      ? [event.image_url]
+      : [`${BRAND.baseUrl}${BRAND.ogImage}`],
     "url": eventUrl,
     "offers": {
       "@type": "Offer",
@@ -150,7 +163,7 @@ export default function EnhancedEventSEO({
       "priceCurrency": "USD",
       "availability": "https://schema.org/InStock",
       "url": event.source_url || eventUrl,
-      "validFrom": new Date().toISOString(),
+      "validFrom": event.created_at || new Date().toISOString(),
     },
     "isAccessibleForFree": isFree,
     "inLanguage": "en-US",

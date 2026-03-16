@@ -35,6 +35,11 @@ export function EventListJsonLd({
     const eventSlug = createEventSlugWithCentralTime(event.title, event);
     const eventUrl = `${BRAND.baseUrl}/events/${eventSlug}`;
     const startDate = event.event_start_utc || (typeof event.date === 'string' ? event.date : event.date.toISOString());
+    // Estimate endDate as startDate + 3 hours if no explicit end_date
+    const startMs = new Date(startDate).getTime();
+    const endDate = event.end_date
+      ? event.end_date
+      : new Date(startMs + 3 * 60 * 60 * 1000).toISOString();
     const isFree = !event.price || event.price.toLowerCase().includes('free') || event.price === '$0' || event.price === '0';
 
     return {
@@ -43,6 +48,7 @@ export function EventListJsonLd({
       name: event.title,
       description: event.enhanced_description || event.original_description || `${event.title} in ${event.city || BRAND.city}, ${BRAND.state}`,
       startDate,
+      endDate,
       eventStatus: "https://schema.org/EventScheduled",
       eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
       location: {
@@ -63,7 +69,9 @@ export function EventListJsonLd({
           },
         }),
       },
-      ...(event.image_url && { image: [event.image_url] }),
+      image: event.image_url
+        ? [event.image_url]
+        : [`${BRAND.baseUrl}${BRAND.ogImage}`],
       url: eventUrl,
       offers: {
         "@type": "Offer",
@@ -71,6 +79,7 @@ export function EventListJsonLd({
         priceCurrency: "USD",
         availability: "https://schema.org/InStock",
         url: event.source_url || eventUrl,
+        validFrom: event.created_at || new Date().toISOString(),
       },
       isAccessibleForFree: isFree,
       organizer: {
@@ -78,6 +87,9 @@ export function EventListJsonLd({
         name: BRAND.name,
         url: BRAND.baseUrl,
       },
+      performer: event.venue
+        ? { "@type": "Organization", name: event.venue }
+        : { "@type": "Organization", name: BRAND.name, url: BRAND.baseUrl },
     };
   };
 

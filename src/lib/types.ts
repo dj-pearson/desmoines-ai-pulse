@@ -22,6 +22,7 @@ export interface Event {
   event_start_utc?: string;
   event_start_local?: string;
   event_timezone?: string;
+  end_date?: string | null;
   // Additional fields from database
   latitude?: number | null;
   longitude?: number | null;
