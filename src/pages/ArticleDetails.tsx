@@ -86,6 +86,10 @@ const ArticleDetails: React.FC = () => {
   if (!article) {
     return (
       <>
+        <Helmet>
+          <meta name="robots" content="noindex, follow" />
+          <meta name="googlebot" content="noindex, follow" />
+        </Helmet>
         <Header />
         <div className="min-h-screen bg-background">
           <div className="container mx-auto px-4 py-16 text-center">

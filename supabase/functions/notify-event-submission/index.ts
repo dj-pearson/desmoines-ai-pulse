@@ -57,9 +57,9 @@ serve(async (req) => {
 
     const resendApiKey = Deno.env.get("RESEND_API_KEY");
     const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-    const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesaipulse.com";
-    const adminEmail = Deno.env.get("ADMIN_NOTIFICATION_EMAIL") || "admin@desmoinesaipulse.com";
-    const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesaipulse.com";
+    const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com";
+    const adminEmail = Deno.env.get("ADMIN_NOTIFICATION_EMAIL") || "admin@desmoinesinsider.com";
+    const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
 
     let recipientEmail: string;
     let emailSubject: string;

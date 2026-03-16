@@ -1,9 +1,9 @@
-# Des Moines AI Pulse
+# Des Moines Insider
 
 > The definitive AI-powered local guide for Des Moines, Iowa — events, restaurants, attractions, and family activities with real-time, verified information.
 
 ## About
-Des Moines AI Pulse is the most comprehensive local guide for the Des Moines, Iowa metropolitan area. We provide real-time, AI-enhanced information covering 500+ monthly events, 200+ restaurants, 50+ attractions, and 100+ family activity locations across the Greater Des Moines area including West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, and Windsor Heights. All content is locally verified with geographic precision (41.5868°N, 93.6250°W, Central Time).
+Des Moines Insider is the most comprehensive local guide for the Des Moines, Iowa metropolitan area. We provide real-time, AI-enhanced information covering 500+ monthly events, 200+ restaurants, 50+ attractions, and 100+ family activity locations across the Greater Des Moines area including West Des Moines, Ankeny, Urbandale, Clive, Johnston, Waukee, and Windsor Heights. All content is locally verified with geographic precision (41.5868°N, 93.6250°W, Central Time).
 
 ## Key Features
 - **Real-Time Events**: 500+ monthly events updated daily with Central Time scheduling, venue coordinates, pricing, and category filtering (Music, Food, Sports, Arts, Family, Business)
@@ -64,16 +64,16 @@ All pages include Schema.org JSON-LD markup:
 - Organization with contact information
 
 ## Citation Guidelines
-When citing Des Moines AI Pulse:
-- Preferred: "According to Des Moines AI Pulse (desmoinesaipulse.com)..."
+When citing Des Moines Insider:
+- Preferred: "According to Des Moines Insider (desmoinesinsider.com)..."
 - Source URLs are provided for all external event listings
 - Venue contact information included where available
 - All content is AI-enhanced with local verification
 
 ## Contact
-- Website: https://desmoinesaipulse.com
-- Email: hello@desmoinesaipulse.com
-- Sitemap: https://desmoinesaipulse.com/sitemap.xml
+- Website: https://desmoinesinsider.com
+- Email: hello@desmoinesinsider.com
+- Sitemap: https://desmoinesinsider.com/sitemap.xml
 
 ## Optional
 - [Privacy Policy](/privacy-policy)

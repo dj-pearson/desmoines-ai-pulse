@@ -1,4 +1,5 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { useEvents } from "@/hooks/useEvents";
 import { RatingSystem } from "@/components/RatingSystem";
 import Header from "@/components/Header";
@@ -120,6 +121,9 @@ export default function EventDetails() {
           description="The event you're looking for could not be found. Browse all upcoming events in Des Moines, Iowa."
           type="website"
         />
+        <Helmet>
+          <meta name="robots" content="noindex, follow" />
+        </Helmet>
         <div className="min-h-screen bg-background">
           <Header />
           <div className="container mx-auto px-4 py-16">

@@ -96,6 +96,10 @@ export default function ItineraryDetail() {
   if (!itinerary) {
     return (
       <div className="min-h-screen bg-background">
+        <Helmet>
+          <meta name="robots" content="noindex, follow" />
+          <meta name="googlebot" content="noindex, follow" />
+        </Helmet>
         <Header />
         <div className="container mx-auto px-4 py-16 text-center">
           <h1 className="text-2xl font-bold mb-4">Itinerary Not Found</h1>
