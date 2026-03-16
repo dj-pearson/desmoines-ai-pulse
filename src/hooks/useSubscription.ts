@@ -40,9 +40,9 @@ export interface SubscriptionLimits {
 }
 
 const FREE_LIMITS: SubscriptionLimits = {
-  favorites: 5,
-  alerts: 1,
-  saved_searches: 1,
+  favorites: 3,
+  alerts: 0,
+  saved_searches: 0,
 };
 
 export function useSubscription() {
@@ -129,27 +129,25 @@ export function useSubscription() {
 
   // Feature access checks
   const hasFeature = (feature: string): boolean => {
+    const isInsiderOrHigher = tier === "insider" || tier === "vip";
     switch (feature) {
+      // Insider+ features
       case "unlimited_favorites":
-        return tier === "insider" || tier === "vip";
       case "early_access":
-        return tier === "insider" || tier === "vip";
       case "advanced_filters":
-        return tier === "insider" || tier === "vip";
       case "ad_free":
-        return tier === "insider" || tier === "vip";
       case "daily_digest":
-        return tier === "insider" || tier === "vip";
       case "priority_support":
-        return tier === "insider" || tier === "vip";
+      case "trip_planner":
+      case "write_reviews":
+      case "save_searches":
+      case "create_alerts":
+        return isInsiderOrHigher;
+      // VIP-only features
       case "vip_events":
-        return tier === "vip";
       case "reservation_assistance":
-        return tier === "vip";
       case "sms_alerts":
-        return tier === "vip";
       case "concierge":
-        return tier === "vip";
       case "local_perks":
         return tier === "vip";
       default:

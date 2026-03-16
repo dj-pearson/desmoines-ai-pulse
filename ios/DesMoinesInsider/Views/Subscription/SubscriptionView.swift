@@ -86,25 +86,29 @@ struct SubscriptionView: View {
 
     private var featuresList: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Insider")
+            Text("Insider — $4.99/mo")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.orange)
+            featureRow(icon: "map.fill", color: .orange, text: "AI Trip Planner (5 trips/month)")
             featureRow(icon: "heart.fill", color: .orange, text: "Unlimited favorites")
-            featureRow(icon: "eye.slash.fill", color: .orange, text: "Ad-free experience")
             featureRow(icon: "slider.horizontal.3", color: .orange, text: "Advanced filters (distance, price, rating)")
-            featureRow(icon: "calendar.badge.plus", color: .orange, text: "Calendar integration")
-            featureRow(icon: "star.circle.fill", color: .orange, text: "Insider tips on events & restaurants")
+            featureRow(icon: "pencil.line", color: .orange, text: "Write reviews & ratings")
+            featureRow(icon: "bell.badge.fill", color: .orange, text: "Saved searches & event alerts")
+            featureRow(icon: "eye.slash.fill", color: .orange, text: "Ad-free experience")
+            featureRow(icon: "bolt.fill", color: .orange, text: "Early access to events")
 
             Divider()
                 .padding(.vertical, 4)
 
-            Text("VIP")
+            Text("VIP — $12.99/mo")
                 .font(.caption.weight(.bold))
                 .foregroundStyle(.purple)
-            featureRow(icon: "map.fill", color: .purple, text: "AI Trip Planner")
-            featureRow(icon: "bolt.fill", color: .purple, text: "Early access to new features")
-            featureRow(icon: "star.fill", color: .purple, text: "Priority support")
-            featureRow(icon: "crown.fill", color: .purple, text: "VIP-exclusive content")
+            featureRow(icon: "map.fill", color: .purple, text: "Unlimited AI Trip Planner")
+            featureRow(icon: "crown.fill", color: .purple, text: "VIP-exclusive events")
+            featureRow(icon: "fork.knife", color: .purple, text: "Restaurant reservation help")
+            featureRow(icon: "message.fill", color: .purple, text: "SMS alerts for your interests")
+            featureRow(icon: "gift.fill", color: .purple, text: "Monthly local business perks")
+            featureRow(icon: "star.fill", color: .purple, text: "Concierge support")
         }
         .padding(.horizontal)
     }

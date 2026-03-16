@@ -24,6 +24,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { format, addDays, differenceInDays } from "date-fns";
 import { EmailCaptureModal } from "@/components/EmailCaptureModal";
 import { FAQSection } from "@/components/FAQSection";
+import { useSubscription } from "@/hooks/useSubscription";
+import { PremiumGate } from "@/components/PremiumGate";
 import {
   Calendar,
   MapPin,
@@ -197,6 +199,13 @@ export default function TripPlanner() {
             </p>
           </div>
 
+          <PremiumGate
+            feature="trip_planner"
+            requiredTier="insider"
+            mode="lock"
+            title="AI Trip Planner"
+            description="Plan your perfect Des Moines trip with AI-powered itineraries. Insider members get 5 trips/month, VIP gets unlimited."
+          >
           <Tabs defaultValue={selectedTrip ? "itinerary" : "plan"} className="space-y-6">
             <TabsList className="grid w-full grid-cols-3 max-w-md mx-auto">
               <TabsTrigger value="plan">Plan Trip</TabsTrigger>
@@ -748,6 +757,7 @@ export default function TripPlanner() {
               )}
             </TabsContent>
           </Tabs>
+          </PremiumGate>
         </div>
 
         {/* FAQ Section */}
@@ -763,7 +773,7 @@ export default function TripPlanner() {
                 },
                 {
                   question: "Is the AI Trip Planner free to use?",
-                  answer: "Yes! The AI Trip Planner is free for all users. You can generate unlimited itineraries, save your favorites, and share them with travel companions. Premium subscribers get additional features like detailed time-block scheduling and restaurant reservation suggestions."
+                  answer: "The AI Trip Planner is available to Insider subscribers ($4.99/month) with 5 trips per month, and VIP subscribers ($12.99/month) with unlimited trips. Start with a 7-day free trial to try it out! Premium subscribers also get detailed time-block scheduling and restaurant reservation suggestions."
                 },
                 {
                   question: "What is the best time to visit Des Moines?",

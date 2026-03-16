@@ -36,7 +36,7 @@ const featureDescriptions: Record<
 > = {
   unlimited_favorites: {
     title: "Unlimited Favorites",
-    description: "Save as many events and restaurants as you want",
+    description: "Save as many events and restaurants as you want — free accounts are limited to 3",
     tier: "insider",
   },
   early_access: {
@@ -46,7 +46,7 @@ const featureDescriptions: Record<
   },
   advanced_filters: {
     title: "Advanced Filters",
-    description: "Filter by specific cuisines, price ranges, and more",
+    description: "Filter by distance, price range, rating, time of day, and more",
     tier: "insider",
   },
   ad_free: {
@@ -57,6 +57,26 @@ const featureDescriptions: Record<
   daily_digest: {
     title: "Daily Personalized Digest",
     description: "Get daily recommendations tailored just for you",
+    tier: "insider",
+  },
+  trip_planner: {
+    title: "AI Trip Planner",
+    description: "Plan your perfect Des Moines trip with AI-powered itineraries. Insider members get 5 trips/month",
+    tier: "insider",
+  },
+  write_reviews: {
+    title: "Write Reviews",
+    description: "Share your experiences by writing reviews for events and restaurants",
+    tier: "insider",
+  },
+  save_searches: {
+    title: "Saved Searches",
+    description: "Save your search criteria and get notified when new matches appear",
+    tier: "insider",
+  },
+  create_alerts: {
+    title: "Event Alerts",
+    description: "Set up alerts to be notified when events match your interests",
     tier: "insider",
   },
   vip_events: {
@@ -83,10 +103,12 @@ const featureDescriptions: Record<
 
 const insiderFeatures = [
   { icon: Heart, text: "Unlimited favorites" },
-  { icon: Zap, text: "Early access to events" },
-  { icon: Filter, text: "Advanced filters" },
+  { icon: Zap, text: "AI Trip Planner (5/month)" },
+  { icon: Filter, text: "Advanced search filters" },
   { icon: Star, text: "Ad-free experience" },
-  { icon: Bell, text: "Daily personalized digest" },
+  { icon: Bell, text: "Alerts & saved searches" },
+  { icon: Zap, text: "Write reviews & ratings" },
+  { icon: Zap, text: "Early access to events" },
 ];
 
 const vipFeatures = [

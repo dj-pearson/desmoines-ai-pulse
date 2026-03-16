@@ -241,7 +241,7 @@ enum SubscriptionTier: String, Codable {
 
     var maxFavorites: Int {
         switch self {
-        case .free: return 50
+        case .free: return 3
         case .insider, .vip: return -1  // unlimited
         }
     }
@@ -252,26 +252,33 @@ enum SubscriptionTier: String, Codable {
         case .free:
             return [
                 "Browse events & restaurants",
-                "Save up to 50 favorites",
-                "Basic search & filters",
-                "Event reminders",
+                "Save up to 3 favorites",
+                "Basic text search",
+                "View ratings & reviews",
+                "Weekly email digest",
             ]
         case .insider:
             return [
                 "Everything in Free, plus:",
+                "AI Trip Planner (5 trips/month)",
                 "Unlimited favorites",
-                "Ad-free experience",
                 "Advanced filters (distance, price, rating)",
-                "Calendar integration",
-                "Insider tips on events & restaurants",
+                "Write reviews & ratings",
+                "Saved searches & event alerts",
+                "Ad-free experience",
+                "Early access to events",
+                "2x XP earning rate",
             ]
         case .vip:
             return [
                 "Everything in Insider, plus:",
-                "AI Trip Planner",
-                "Priority support",
-                "Early access to new features",
-                "VIP-exclusive content",
+                "Unlimited AI Trip Planner",
+                "VIP-exclusive events",
+                "Restaurant reservation help",
+                "SMS alerts",
+                "Monthly local business perks",
+                "Concierge support",
+                "3x XP earning rate",
             ]
         }
     }

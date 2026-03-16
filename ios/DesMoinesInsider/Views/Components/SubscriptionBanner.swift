@@ -57,7 +57,7 @@ struct SubscriptionBanner: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Free Plan")
                         .font(.headline)
-                    Text("Unlock unlimited favorites, ad-free experience, and more")
+                    Text("Unlock unlimited favorites, AI Trip Planner, advanced filters & more")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -137,7 +137,7 @@ struct SubscriptionBanner: View {
                     .font(.subheadline)
                     .foregroundStyle(.orange)
 
-                Text("Upgrade for unlimited favorites & more")
+                Text("Upgrade for unlimited favorites, Trip Planner & more")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.primary)
 

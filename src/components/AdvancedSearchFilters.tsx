@@ -37,6 +37,7 @@ import {
   Zap
 } from "lucide-react";
 import { createLogger } from '@/lib/logger';
+import { PremiumGate } from "@/components/PremiumGate";
 
 const log = createLogger('AdvancedSearchFilters');
 
@@ -230,6 +231,14 @@ export function AdvancedSearchFilters({
   ];
 
   return (
+    <PremiumGate
+      feature="advanced_filters"
+      requiredTier="insider"
+      mode="lock"
+      title="Advanced Search Filters"
+      description="Unlock distance, price range, rating, time of day, and accessibility filters with an Insider subscription."
+      className={className}
+    >
     <Card className={className}>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
@@ -513,5 +522,6 @@ export function AdvancedSearchFilters({
         </div>
       </CardContent>
     </Card>
+    </PremiumGate>
   );
 }

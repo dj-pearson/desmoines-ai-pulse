@@ -37,7 +37,7 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "Unlimited favorites, advanced search, event reminders, ad-free experience",
+              "description" : "AI Trip Planner (5/mo), unlimited favorites, advanced filters, write reviews, alerts, ad-free",
               "displayName" : "Insider Monthly",
               "locale" : "en_US"
             }
@@ -59,7 +59,7 @@
           "introductoryOffer" : null,
           "localizations" : [
             {
-              "description" : "Everything in Insider plus AI Trip Planner, priority support, early access to features",
+              "description" : "Unlimited AI Trip Planner, VIP events, restaurant reservations, SMS alerts, concierge, local perks",
               "displayName" : "VIP Monthly",
               "locale" : "en_US"
             }

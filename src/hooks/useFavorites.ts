@@ -150,7 +150,7 @@ export function useFavorites() {
     if (!canAddFavorite()) {
       toast({
         title: "Favorites Limit Reached",
-        description: `Free accounts can save up to ${limits.favorites} favorites. Upgrade to Insider for unlimited favorites!`,
+        description: `Free accounts can save up to ${limits.favorites} favorites. Upgrade to Insider for unlimited saves!`,
         variant: "destructive",
       });
       return { success: false, needsUpgrade: true };

@@ -22,7 +22,7 @@ struct AdBannerView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Enjoying Des Moines Insider?")
                         .font(.subheadline.weight(.semibold))
-                    Text("Go ad-free with Insider — plus advanced filters, unlimited saves, and more.")
+                    Text("Go ad-free with Insider — plus AI Trip Planner, advanced filters, unlimited saves & more.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)

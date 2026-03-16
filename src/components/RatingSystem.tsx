@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useRatings, useUserReputation } from "@/hooks/useRatings";
 import { useAuth } from "@/hooks/useAuth";
+import { PremiumGate } from "@/components/PremiumGate";
 import { Database } from "@/integrations/supabase/types";
 import { format } from "date-fns";
 
@@ -223,6 +224,13 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                   )}
                 </div>
               ) : (
+                <PremiumGate
+                  feature="write_reviews"
+                  requiredTier="insider"
+                  mode="inline"
+                  title="Write a Review"
+                  description="Share your experiences by writing reviews. Available with Insider."
+                >
                 <div>
                   {!showRatingForm ? (
                     <Button onClick={() => setShowRatingForm(true)}>
@@ -232,12 +240,12 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                     <div className="space-y-4">
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Your Rating</label>
-                        <StarRating 
-                          rating={Number(selectedRating)} 
-                          onRatingChange={setSelectedRating} 
+                        <StarRating
+                          rating={Number(selectedRating)}
+                          onRatingChange={setSelectedRating}
                         />
                       </div>
-                      
+
                       <div className="space-y-2">
                         <label className="text-sm font-medium">Review (Optional)</label>
                         <Textarea
@@ -247,16 +255,16 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                           rows={3}
                         />
                       </div>
-                      
+
                       <div className="flex gap-2">
-                        <Button 
-                          onClick={handleSubmitRating} 
+                        <Button
+                          onClick={handleSubmitRating}
                           disabled={isSubmitting}
                         >
                           {isSubmitting ? "Submitting..." : "Submit Rating"}
                         </Button>
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           onClick={() => {
                             setShowRatingForm(false);
                             setReviewText("");
@@ -270,6 +278,7 @@ export const RatingSystem: React.FC<RatingSystemProps> = ({
                     </div>
                   )}
                 </div>
+                </PremiumGate>
               )}
             </div>
           )}
