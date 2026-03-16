@@ -30,7 +30,8 @@
       "Bash(npm run test:unit:*)",
       "Bash(node:*)",
       "Bash(rm:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(source /c/Users/pears/Documents/Des-Moines-Pulse/desmoines-ai-pulse/.venv/Scripts/activate && python --version)"
     ],
     "deny": [],
     "ask": []
