@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
@@ -79,6 +80,11 @@ export default function Enhanced404() {
         keywords={["Des Moines", "page not found", "search", "events", "restaurants"]}
         type="website"
       />
+      {/* Signal to search engines this is a 404 page */}
+      <Helmet>
+        <meta name="robots" content="noindex, follow" />
+        <meta name="googlebot" content="noindex, follow" />
+      </Helmet>
 
       <Header />
 

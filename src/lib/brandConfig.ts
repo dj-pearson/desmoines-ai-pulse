@@ -8,17 +8,17 @@
 
 export const BRAND = {
   // Primary brand name - used in titles, meta tags, and content
-  name: 'Des Moines AI Pulse',
+  name: 'Des Moines Insider',
 
   // Short name - used where space is limited
-  shortName: 'DM AI Pulse',
+  shortName: 'DM Insider',
 
   // Production URL - used for canonical URLs, sitemaps, and structured data
   // Update this when deploying to a new domain
-  baseUrl: 'https://desmoinesaipulse.com',
+  baseUrl: 'https://desmoinesinsider.com',
 
   // Social media handles
-  twitter: '@desmoinespulse',
+  twitter: '@desmoinessider',
 
   // Geographic targeting
   city: 'Des Moines',
@@ -40,7 +40,7 @@ export const BRAND = {
   backgroundColor: '#ffffff',
 
   // Contact
-  email: 'hello@desmoinesaipulse.com',
+  email: 'hello@desmoinesinsider.com',
 } as const;
 
 // Helper functions for common SEO patterns

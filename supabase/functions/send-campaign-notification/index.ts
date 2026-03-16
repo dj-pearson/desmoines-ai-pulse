@@ -97,8 +97,8 @@ serve(async (req) => {
     if (emailAddress) {
       const resendApiKey = Deno.env.get("RESEND_API_KEY");
       const sendgridApiKey = Deno.env.get("SENDGRID_API_KEY");
-      const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesaipulse.com";
-      const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesaipulse.com";
+      const fromEmail = Deno.env.get("NOTIFICATION_FROM_EMAIL") || "noreply@desmoinesinsider.com";
+      const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
 
       const emailSubject = title || `Campaign Update: ${campaignName}`;
       const emailHtml = buildEmailHtml({
@@ -228,7 +228,7 @@ function buildEmailHtml(params: {
                   <p style="margin:0;color:#a1a1aa;font-size:12px;text-align:center;">
                     &copy; ${new Date().getFullYear()} Des Moines AI Pulse &bull;
                     <a href="${siteUrl}/campaigns" style="color:#6366f1;text-decoration:none;">My Campaigns</a> &bull;
-                    <a href="mailto:support@desmoinesaipulse.com" style="color:#6366f1;text-decoration:none;">Support</a>
+                    <a href="mailto:support@desmoinesinsider.com" style="color:#6366f1;text-decoration:none;">Support</a>
                   </p>
                 </td>
               </tr>

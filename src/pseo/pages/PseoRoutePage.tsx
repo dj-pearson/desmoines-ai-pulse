@@ -9,6 +9,7 @@ import { useLocation } from 'react-router-dom';
 import { PseoPage } from '../components/PseoPage';
 import { usePseoPage } from '../hooks/usePseoPage';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,10 @@ function PseoPageSkeleton() {
 function PseoPageNotFound() {
   return (
     <>
+      <Helmet>
+        <meta name="robots" content="noindex, follow" />
+        <meta name="googlebot" content="noindex, follow" />
+      </Helmet>
       <Header />
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="container mx-auto px-4 py-16 text-center max-w-lg">

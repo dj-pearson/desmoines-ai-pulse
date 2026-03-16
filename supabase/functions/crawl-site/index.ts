@@ -17,8 +17,8 @@ const corsHeaders = {
 
 // Allowed domains for SEO crawling (only crawl your own sites)
 const ALLOWED_CRAWL_DOMAINS = [
-  'desmoinesaipulse.com',
-  'www.desmoinesaipulse.com',
+  'desmoinesinsider.com',
+  'www.desmoinesinsider.com',
   'desmoinesinsider.com',
   'www.desmoinesinsider.com',
 ];
@@ -116,7 +116,7 @@ serve(async (req) => {
         const response = await fetch(url, {
           headers: {
             "User-Agent":
-              "Mozilla/5.0 (compatible; SEOBot/1.0; +https://desmoinesaipulse.com)",
+              "Mozilla/5.0 (compatible; SEOBot/1.0; +https://desmoinesinsider.com)",
           },
         });
 

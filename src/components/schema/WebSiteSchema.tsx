@@ -8,10 +8,10 @@ interface WebSiteSchemaProps {
 }
 
 export default function WebSiteSchema({
-  name = "Des Moines AI Pulse",
-  url = "https://desmoinesaipulse.com",
+  name = "Des Moines Insider",
+  url = "https://desmoinesinsider.com",
   description = "Discover the best events, restaurants, attractions, and playgrounds in Des Moines, Iowa. AI-powered recommendations and real-time updates.",
-  searchUrl = "https://desmoinesaipulse.com/search?q={search_term_string}",
+  searchUrl = "https://desmoinesinsider.com/search?q={search_term_string}",
 }: WebSiteSchemaProps) {
   const schema = {
     "@context": "https://schema.org",

@@ -72,6 +72,10 @@ export default function HotelDetails() {
   if (error || !hotel) {
     return (
       <div className="min-h-screen bg-background pb-24">
+        <Helmet>
+          <meta name="robots" content="noindex, follow" />
+          <meta name="googlebot" content="noindex, follow" />
+        </Helmet>
         <Header />
         <div className="flex items-center justify-center flex-1 py-24">
           <div className="text-center">
