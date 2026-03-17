@@ -196,10 +196,10 @@ User-agent: DotBot
 Disallow: /
 
 # ============================================
-# Sitemap Locations
+# Sitemap Locations (submit sitemap.xml index in GSC)
 # ============================================
 
-Sitemap: https://desmoinesinsider.com/sitemap-index.xml
+Sitemap: https://desmoinesinsider.com/sitemap.xml
 Sitemap: https://desmoinesinsider.com/sitemap-static.xml
 Sitemap: https://desmoinesinsider.com/sitemap-events.xml
 Sitemap: https://desmoinesinsider.com/sitemap-restaurants.xml

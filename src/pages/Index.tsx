@@ -425,7 +425,7 @@ export default function Index() {
       />
 
       {/* SEO and structured data for AI optimization */}
-      <SEOStructure />
+      <SEOStructure canonicalUrl={`${BRAND.baseUrl}/`} />
 
       {/* Main content wrapper with semantic HTML for AI parsing */}
       <div itemScope itemType="https://schema.org/WebPage">

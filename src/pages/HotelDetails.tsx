@@ -107,7 +107,7 @@ export default function HotelDetails() {
           name="description"
           content={hotel.short_description || `${hotel.name} in ${hotel.area || hotel.city}. ${hotel.price_range ? `Price range: ${hotel.price_range}.` : ""} Book your stay in Des Moines.`}
         />
-        <link rel="canonical" href={`/stay/${hotel.slug}`} />
+        <link rel="canonical" href={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta property="og:type" content="website" />
         <meta property="og:title" content={`${hotel.name} - Hotels in ${hotel.city}, ${hotel.state}`} />
         <meta property="og:description" content={hotel.short_description || `${hotel.name} in ${hotel.area || hotel.city}. Book your stay in Des Moines.`} />
@@ -115,7 +115,7 @@ export default function HotelDetails() {
         <meta property="og:image:width" content="1200" />
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content={`${hotel.name} - Hotel in ${hotel.city}, ${hotel.state}`} />
-        <meta property="og:url" content={`/stay/${hotel.slug}`} />
+        <meta property="og:url" content={getCanonicalUrl(`/stay/${hotel.slug}`)} />
         <meta name="twitter:card" content="summary_large_image" />
         <meta name="twitter:title" content={`${hotel.name} - Hotels in ${hotel.city}`} />
         <meta name="twitter:image" content={hotel.image_url || '/og-image.png'} />

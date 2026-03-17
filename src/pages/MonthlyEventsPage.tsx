@@ -18,7 +18,8 @@ import { BRAND } from "@/lib/brandConfig";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 export default function MonthlyEventsPage() {
-  const { monthYear } = useParams<{ monthYear: string }>();
+  const { slug } = useParams<{ slug: string }>();
+  const monthYear = slug;
   const navigate = useNavigate();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 

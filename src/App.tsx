@@ -96,6 +96,7 @@ const BusinessPartnership = lazyWithRetry(() => import("./pages/BusinessPartners
 const BusinessHub = lazyWithRetry(() => import("./pages/BusinessHub"));
 const GuidesPage = lazyWithRetry(() => import("./pages/GuidesPage"));
 const MonthlyEventsPage = lazyWithRetry(() => import("./pages/MonthlyEventsPage"));
+const EventsSegmentHandler = lazyWithRetry(() => import("./components/EventsSegmentHandler"));
 const AdvancedSearchPage = lazyWithRetry(() => import("./components/AdvancedSearchPage"));
 const RealTimePage = lazyWithRetry(() => import("./components/RealTimePage"));
 
@@ -307,7 +308,7 @@ const App = () => (
               path="/events/windsor-heights"
               element={<EventsByLocation />}
             />
-            <Route path="/events/:slug" element={<EventDetails />} />
+            <Route path="/events/:slug" element={<EventsSegmentHandler />} />
             <Route path="/articles" element={<Articles />} />
             <Route path="/articles/:slug" element={<ArticleDetails />} />
             <Route
@@ -359,7 +360,6 @@ const App = () => (
             <Route path="/business" element={<BusinessHub />} />
             <Route path="/search" element={<AdvancedSearchPage />} />
             <Route path="/guides" element={<GuidesPage />} />
-            <Route path="/events/:monthYear" element={<MonthlyEventsPage />} />
             <Route path="/real-time" element={<RealTimePage />} />
             {/* Lead magnet tools */}
             <Route path="/tools/event-promotion-planner" element={<EventPromotionPlanner />} />
