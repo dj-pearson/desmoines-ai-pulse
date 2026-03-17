@@ -515,7 +515,8 @@ export default function Restaurants() {
             ]}
             className="mb-4"
           />
-          <div className="space-y-8">
+          <div className="flex gap-8">
+          <div className="flex-1 min-w-0 space-y-8">
             {/* Cuisine Quick Filter Bar */}
             <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
               {cuisineQuickFilters.map((item) => {
@@ -1128,6 +1129,14 @@ export default function Restaurants() {
                 </div>
               </div>
             </section>
+          </div>
+
+          {/* Sidebar Ad - Desktop Only */}
+          <aside className="hidden lg:block w-[160px] flex-shrink-0" aria-label="Sidebar advertisement">
+            <div className="sticky top-24">
+              <AdBanner placement="sidebar" />
+            </div>
+          </aside>
           </div>
         </div>
 

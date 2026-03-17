@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Filter, Eye, DollarSign, Calendar, User, Settings, Megaphone, XCircle } from "lucide-react";
+import { Search, Filter, Eye, DollarSign, Calendar, User, Settings, Megaphone, XCircle, Hotel } from "lucide-react";
 import { AdRateManager } from "@/components/admin/AdRateManager";
+import { AffiliatePartnersManager } from "@/components/admin/AffiliatePartnersManager";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { SponsoredBadge } from "@/components/SponsoredBadge";
@@ -251,6 +252,10 @@ export default function AdminCampaigns() {
           <TabsTrigger value="rates">
             <Settings className="h-4 w-4 mr-1" />
             Rate Management
+          </TabsTrigger>
+          <TabsTrigger value="affiliates">
+            <Hotel className="h-4 w-4 mr-1" />
+            Affiliate Partners
           </TabsTrigger>
         </TabsList>
 
@@ -564,6 +569,10 @@ export default function AdminCampaigns() {
 
         <TabsContent value="rates">
           <AdRateManager />
+        </TabsContent>
+
+        <TabsContent value="affiliates">
+          <AffiliatePartnersManager />
         </TabsContent>
       </Tabs>
     </div>

@@ -442,6 +442,8 @@ export default function Attractions() {
             { label: "Attractions" },
           ]}
         />
+        <div className="flex gap-8">
+        <div className="flex-1 min-w-0">
 
         {/* Filters Section */}
         {showFilters && (
@@ -748,6 +750,15 @@ export default function Attractions() {
             )}
           </>
         )}
+      </div>
+
+      {/* Sidebar Ad - Desktop Only */}
+      <aside className="hidden lg:block w-[160px] flex-shrink-0" aria-label="Sidebar advertisement">
+        <div className="sticky top-24">
+          <AdBanner placement="sidebar" />
+        </div>
+      </aside>
+      </div>
       </div>
 
       {/* Featured Spot Ad */}

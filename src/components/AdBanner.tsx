@@ -1,13 +1,14 @@
 import { useActiveAds } from "@/hooks/useActiveAds";
 import { useAdTracking } from "@/hooks/useAdTracking";
 import { useSubscription } from "@/hooks/useSubscription";
+import { AffiliateAdBanner } from "@/components/AffiliateAdBanner";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink } from "lucide-react";
 import { openExternalUrl, isCapacitor } from "@/lib/capacitorUtils";
 
 interface AdBannerProps {
-  placement: 'top_banner' | 'featured_spot' | 'below_fold';
+  placement: 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar';
   className?: string;
   /** Optional fallback content when no ads are available */
   fallback?: React.ReactNode;
@@ -36,7 +37,7 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
   }
 
   if (!ad) {
-    return fallback ? <>{fallback}</> : null;
+    return fallback ? <>{fallback}</> : <AffiliateAdBanner placement={placement} className={className} />;
   }
 
   const handleAdClick = async () => {
@@ -58,6 +59,8 @@ export function AdBanner({ placement, className = "", fallback }: AdBannerProps)
         return "min-h-[220px] md:min-h-[250px]";
       case 'below_fold':
         return "h-20 md:h-28";
+      case 'sidebar':
+        return "w-[160px] min-h-[600px]";
       default:
         return "h-24 md:h-28";
     }

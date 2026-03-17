@@ -3,7 +3,7 @@
  * Used by both the Advertise page (informational) and CreativeUploader (validation).
  */
 
-export type PlacementType = 'top_banner' | 'featured_spot' | 'below_fold' | 'sponsored_listing';
+export type PlacementType = 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar' | 'sponsored_listing';
 
 export interface PlacementDimension {
   width: number;
@@ -94,6 +94,27 @@ export const PLACEMENT_SPECS: Record<PlacementType, PlacementSpec> = {
       'Blend with editorial content design',
       'Focus on value proposition',
       'Local Des Moines imagery encouraged',
+    ],
+  },
+  sidebar: {
+    type: 'sidebar',
+    name: 'Sidebar Skyscraper',
+    description: 'Vertical placement alongside content listings on desktop',
+    dailyCost: 5,
+    dimensions: [
+      { width: 160, height: 600, label: '160x600 (Wide Skyscraper)' },
+    ],
+    maxSize: 409600, // 400KB
+    maxSizeLabel: '400KB',
+    aspectRatio: '4:15',
+    formats: ['JPG', 'PNG', 'WebP'],
+    animationType: 'Static images only',
+    features: ['Desktop-only placement', 'Sticky positioning', 'High visibility alongside listings'],
+    specifications: [
+      'Vertical layout optimized for sidebar',
+      'Clear branding and call-to-action',
+      'High-resolution images (300 DPI recommended)',
+      'Visible only on large screens (1024px+)',
     ],
   },
   sponsored_listing: {

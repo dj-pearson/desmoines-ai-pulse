@@ -14,7 +14,7 @@ export interface ActiveAd {
   cta_text?: string;
 }
 
-export function useActiveAds(placementType: 'top_banner' | 'featured_spot' | 'below_fold') {
+export function useActiveAds(placementType: 'top_banner' | 'featured_spot' | 'below_fold' | 'sidebar') {
   const [ad, setAd] = useState<ActiveAd | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
