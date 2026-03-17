@@ -1,18 +1,27 @@
 import SwiftUI
 
 /// A promotional banner shown to free users in the feed.
+/// Shows an affiliate ad creative followed by a subscription upgrade prompt.
 /// Automatically hidden for Insider and VIP subscribers (ad-free experience).
 struct AdBannerView: View {
+    /// Controls which affiliate creative size to show.
+    var affiliatePlacement: AffiliateAdService.Placement = .banner
     @State private var storeKit = StoreKitService.shared
     @State private var showSubscription = false
 
     var body: some View {
         if storeKit.currentTier == .free {
-            banner
+            VStack(spacing: 12) {
+                // Affiliate display ad (hotel partner creative)
+                AffiliateAdBanner(placement: affiliatePlacement)
+
+                // Subscription upgrade prompt
+                upgradeBanner
+            }
         }
     }
 
-    private var banner: some View {
+    private var upgradeBanner: some View {
         VStack(spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: "sparkles")

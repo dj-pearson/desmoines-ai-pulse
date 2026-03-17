@@ -42,7 +42,7 @@ struct EventCardView: View {
                             .foregroundStyle(event.eventCategory.color.opacity(0.4))
                     }
                 }
-                .frame(height: 180)
+                .frame(maxWidth: .infinity, maxHeight: 180)
                 .clipped()
                 // Decorative — card label provides the full description; hide from VoiceOver
                 .accessibilityHidden(true)
