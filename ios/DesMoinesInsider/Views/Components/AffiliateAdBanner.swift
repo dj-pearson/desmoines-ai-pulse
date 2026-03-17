@@ -26,7 +26,7 @@ struct AffiliateAdBanner: View {
     ) -> some View {
         ZStack(alignment: .topLeading) {
             Link(destination: affiliateURL) {
-                CachedAsyncImage(url: imageURL) {
+                CachedAsyncImage(url: imageURL.absoluteString) {
                     // Placeholder while loading
                     RoundedRectangle(cornerRadius: 12)
                         .fill(Color(.systemGray6))
