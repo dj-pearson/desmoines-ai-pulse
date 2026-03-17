@@ -6,6 +6,7 @@
  */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAIConfig } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -120,17 +121,18 @@ async function extractMenuFromFile(
         },
       };
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
+
+  const response = await fetch(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'pdfs-2024-09-25',
+      'anthropic-version': aiConfig.anthropic_version,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 8192,
+      model: aiConfig.default_model,
+      max_tokens: aiConfig.max_tokens_large,
       messages: [
         {
           role: 'user',

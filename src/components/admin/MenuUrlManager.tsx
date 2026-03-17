@@ -159,7 +159,6 @@ export function MenuUrlManager({ restaurants }: MenuUrlManagerProps) {
               </TableRow>
             )}
             {filtered.map((r) => {
-              const isDirty = id in editUrls && editUrls[r.id] !== undefined;
               const currentEdit = editUrls[r.id];
               const isSaving = saving === r.id;
 

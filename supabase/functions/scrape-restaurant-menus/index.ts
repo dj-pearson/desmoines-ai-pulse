@@ -8,6 +8,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { scrapeUrl } from "../_shared/scraper.ts";
+import { getAIConfig } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -106,16 +107,18 @@ Return ONLY a JSON object with this exact structure:
 
 If no menu items can be found, return: {"sections": []}`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
+
+  const response = await fetch(aiConfig.api_endpoint, {
     method: 'POST',
     headers: {
       'x-api-key': claudeApiKey,
-      'anthropic-version': '2023-06-01',
+      'anthropic-version': aiConfig.anthropic_version,
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 8192,
+      model: aiConfig.default_model,
+      max_tokens: aiConfig.max_tokens_large,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
