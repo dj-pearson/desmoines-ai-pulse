@@ -16,6 +16,7 @@ import { useEvents } from "@/hooks/useEvents";
 import { useRestaurants } from "@/hooks/useRestaurants";
 import { useAttractions } from "@/hooks/useAttractions";
 import { usePlaygrounds } from "@/hooks/usePlaygrounds";
+import UserInsightsDashboard from "@/components/admin/UserInsightsDashboard";
 import {
   BarChart3,
   ScrollText,
@@ -24,9 +25,11 @@ import {
   TrendingUp,
   ClipboardList,
   Filter,
+  Users,
 } from "lucide-react";
 
 const ANALYTICS_TABS = [
+  { id: "users", label: "Users", icon: Users },
   { id: "analytics", label: "Advanced Analytics", icon: BarChart3 },
   { id: "search-traffic", label: "Search Traffic", icon: TrendingUp },
   { id: "funnel", label: "Conversion Funnel", icon: Filter },
@@ -39,7 +42,7 @@ const ANALYTICS_TABS = [
 export default function AdminAnalyticsPage() {
   const { userRole } = useAdminAuth();
   useDocumentTitle("Analytics Dashboard");
-  const [activeTab, setActiveTab] = useState("analytics");
+  const [activeTab, setActiveTab] = useState("users");
 
   // Data hooks needed for DataQualityDashboard
   const events = useEvents();
@@ -88,6 +91,8 @@ export default function AdminAnalyticsPage() {
         </div>
 
         {/* Tab Content */}
+        {activeTab === "users" && <UserInsightsDashboard />}
+
         {activeTab === "analytics" && <AdminAnalyticsDashboard />}
 
         {activeTab === "search-traffic" && <SearchTrafficDashboard />}
