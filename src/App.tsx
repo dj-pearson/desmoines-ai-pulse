@@ -165,6 +165,7 @@ const Contact = lazyWithRetry(() => import("./pages/Contact"));
 
 // Admin sub-pages
 const AdminContent = lazyWithRetry(() => import("./pages/AdminContent"));
+const AdminMenus = lazyWithRetry(() => import("./pages/AdminMenus"));
 const AdminAI = lazyWithRetry(() => import("./pages/AdminAI"));
 const AdminTools = lazyWithRetry(() => import("./pages/AdminTools"));
 const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
@@ -277,6 +278,7 @@ const App = () => (
             <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
             <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />
+            <Route path="/admin/menus" element={<ProtectedRoute requireAdmin><AdminMenus /></ProtectedRoute>} />
             <Route path="/restaurants" element={<Restaurants />} />
             {/* Restaurant SEO hub pages */}
             <Route path="/restaurants/open-now" element={<OpenNowRestaurants />} />

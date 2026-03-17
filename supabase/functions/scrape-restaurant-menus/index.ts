@@ -42,6 +42,13 @@ interface ScrapeRequest {
   force_update?: boolean;
 }
 
+interface RestaurantRow {
+  id: string;
+  name: string;
+  website: string;
+  menu_url: string | null;
+}
+
 /**
  * Extract structured menu data from raw content using Claude AI
  */
@@ -139,10 +146,12 @@ If no menu items can be found, return: {"sections": []}`;
 }
 
 /**
- * Scrape menu from a restaurant's website
+ * Scrape menu from a restaurant's website.
+ * If menu_url is set on the restaurant record, that URL is used exclusively.
+ * Otherwise, common menu path patterns are tried against the website field.
  */
 async function scrapeRestaurantMenu(
-  restaurant: { id: string; name: string; website: string },
+  restaurant: RestaurantRow,
   forceUpdate: boolean
 ): Promise<{ success: boolean; items_count: number; error?: string }> {
   // Check for existing current menu
@@ -162,18 +171,25 @@ async function scrapeRestaurantMenu(
     }
   }
 
-  // Try common menu URL patterns
-  const baseUrl = restaurant.website.replace(/\/$/, '');
-  const menuUrls = [
-    `${baseUrl}/menu`,
-    `${baseUrl}/menus`,
-    `${baseUrl}/food-menu`,
-    `${baseUrl}/our-menu`,
-    `${baseUrl}/food`,
-    `${baseUrl}/food-and-drink`,
-    `${baseUrl}/dining`,
-    baseUrl, // fallback to homepage
-  ];
+  // If a custom menu_url is stored, use it exclusively — no pattern guessing needed
+  let menuUrls: string[];
+  if (restaurant.menu_url) {
+    console.log(`  Using stored menu_url: ${restaurant.menu_url}`);
+    menuUrls = [restaurant.menu_url];
+  } else {
+    // Discover menu URL via common path patterns
+    const baseUrl = restaurant.website.replace(/\/$/, '');
+    menuUrls = [
+      `${baseUrl}/menu`,
+      `${baseUrl}/menus`,
+      `${baseUrl}/food-menu`,
+      `${baseUrl}/our-menu`,
+      `${baseUrl}/food`,
+      `${baseUrl}/food-and-drink`,
+      `${baseUrl}/dining`,
+      baseUrl, // fallback to homepage
+    ];
+  }
 
   let bestContent = '';
   let sourceUrl = '';
@@ -285,34 +301,32 @@ serve(async (req) => {
     const body: ScrapeRequest = await req.json().catch(() => ({}));
     const { restaurant_id, restaurant_ids, batch_size = 10, force_update = false } = body;
 
-    let restaurants: { id: string; name: string; website: string }[] = [];
+    let restaurants: RestaurantRow[] = [];
 
     if (restaurant_id) {
-      // Single restaurant
+      // Single restaurant — respects menu_scrape_enabled unless caller is explicit
       const { data } = await supabase
         .from('restaurants')
-        .select('id, name, website')
+        .select('id, name, website, menu_url')
         .eq('id', restaurant_id)
-        .not('website', 'is', null)
         .single();
 
-      if (data) restaurants = [data];
+      // Require at least one URL source
+      if (data && (data.website || data.menu_url)) restaurants = [data];
     } else if (restaurant_ids?.length) {
-      // Specific list
+      // Specific list of restaurant IDs
       const { data } = await supabase
         .from('restaurants')
-        .select('id, name, website')
-        .in('id', restaurant_ids)
-        .not('website', 'is', null);
+        .select('id, name, website, menu_url')
+        .in('id', restaurant_ids);
 
-      if (data) restaurants = data;
+      if (data) restaurants = data.filter((r) => r.website || r.menu_url);
     } else {
-      // Batch mode: find restaurants with websites that don't have current menus
+      // Batch mode: restaurants that have scraping enabled and at least one URL source
       let query = supabase
         .from('restaurants')
-        .select('id, name, website')
-        .not('website', 'is', null)
-        .neq('website', '')
+        .select('id, name, website, menu_url')
+        .eq('menu_scrape_enabled', true)
         .order('popularity_score', { ascending: false, nullsFirst: false })
         .limit(batch_size);
 
@@ -333,7 +347,7 @@ serve(async (req) => {
       }
 
       const { data } = await query;
-      if (data) restaurants = data;
+      if (data) restaurants = data.filter((r) => r.website || r.menu_url);
     }
 
     if (restaurants.length === 0) {

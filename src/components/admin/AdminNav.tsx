@@ -9,12 +9,14 @@ import {
   Settings,
   Image,
   ArrowLeft,
+  UtensilsCrossed,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const NAV_ITEMS = [
   { label: "Overview", href: "/admin", icon: BarChart3 },
   { label: "Content", href: "/admin/content", icon: FileText },
+  { label: "Menus", href: "/admin/menus", icon: UtensilsCrossed },
   { label: "Media", href: "/admin/media", icon: Image },
   { label: "AI Tools", href: "/admin/ai", icon: Bot },
   { label: "Site Tools", href: "/admin/tools", icon: Wrench },
