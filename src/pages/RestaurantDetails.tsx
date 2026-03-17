@@ -44,6 +44,7 @@ import { getRestaurantOpenStatus } from "@/lib/restaurantHours";
 import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
+import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -524,6 +525,12 @@ export default function RestaurantDetails() {
                   </Button>
                 </a>
               )}
+              <a href="#menu">
+                <Button variant="outline" className="rounded-xl">
+                  <Utensils className="h-4 w-4 mr-2" />
+                  Menu
+                </Button>
+              </a>
               <Button variant="outline" className="rounded-xl">
                 <MessageCircle className="h-4 w-4 mr-2" />
                 Write Review
@@ -710,6 +717,13 @@ export default function RestaurantDetails() {
                   </div>
                 </>
               )}
+
+              {/* Menu Section */}
+              <Separator className="my-8" />
+              <RestaurantMenuSection
+                restaurantId={restaurant.id}
+                restaurantName={restaurant.name}
+              />
 
               {/* AI Writeup Section */}
               {restaurant.ai_writeup && (
