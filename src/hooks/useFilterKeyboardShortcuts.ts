@@ -36,6 +36,16 @@ export function useFilterKeyboardShortcuts({
         }
       }
 
+      // Don't trigger when focus is on a button, link, or inside a dialog
+      // Prevents accidental filter activation when clicking buttons
+      if (
+        target.tagName === 'BUTTON' ||
+        target.tagName === 'A' ||
+        target.closest('button, a[href], [role="button"], [role="menuitem"], [role="dialog"]')
+      ) {
+        if (e.key !== 'Escape') return;
+      }
+
       // Check for modifier keys
       const isMod = e.ctrlKey || e.metaKey;
 

@@ -31,6 +31,19 @@ const isInputElement = (element: Element): boolean => {
   );
 };
 
+/** True when focus is on an interactive control (button, link, etc.) - shortcuts should not fire */
+const isInteractiveElement = (element: Element): boolean => {
+  if (isInputElement(element)) return true;
+  const tagName = element.tagName.toLowerCase();
+  if (tagName === "button" || tagName === "a") return true;
+  const role = element.getAttribute("role");
+  const interactiveRoles = ["button", "link", "menuitem", "option", "combobox", "listbox", "tab", "gridcell", "searchbox", "textbox"];
+  if (role && interactiveRoles.includes(role)) return true;
+  if (element.closest("button, a[href], [role='button'], [role='menuitem']")) return true;
+  if (element.closest("[role='dialog']")) return true;
+  return false;
+};
+
 export function useKeyboardShortcuts({
   enabled = true,
   shortcuts = [],
@@ -76,17 +89,21 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // Shortcuts that should not work when typing
+      // Shortcuts that should not work when typing in inputs
       if (isTyping) return;
 
-      // Show keyboard shortcuts help
+      // Don't trigger when focus is on a button, link, or inside a dialog - prevents
+      // accidental navigation when clicking filters, searching, or using modals
+      if (isInteractiveElement(target)) return;
+
+      // Show keyboard shortcuts help (? works from anywhere except when typing)
       if (event.key === "?" && !event.shiftKey) {
         event.preventDefault();
         onShowHelp?.();
         return;
       }
 
-      // Focus search
+      // Focus search (only when not in an interactive control)
       if (event.key === "/") {
         event.preventDefault();
         const searchInput = document.querySelector<HTMLInputElement>(
@@ -99,20 +116,21 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      // Navigation shortcuts
-      if (event.key === "h" && !event.ctrlKey && !event.metaKey) {
+      // Navigation shortcuts: require Alt to prevent accidental triggers when typing
+      // (e.g. typing "restaurant" or "home" no longer navigates away)
+      if (event.altKey && event.key === "h" && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         navigate("/");
         return;
       }
 
-      if (event.key === "e" && !event.ctrlKey && !event.metaKey) {
+      if (event.altKey && event.key === "e" && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         navigate("/events");
         return;
       }
 
-      if (event.key === "r" && !event.ctrlKey && !event.metaKey) {
+      if (event.altKey && event.key === "r" && !event.ctrlKey && !event.metaKey) {
         event.preventDefault();
         navigate("/restaurants");
         return;
@@ -158,25 +176,26 @@ export const defaultShortcuts: KeyboardShortcut[] = [
   },
   {
     key: "h",
-    description: "Go to home",
+    altKey: true,
+    description: "Go to home (Alt+H)",
     action: () => {
-      // Note: defaultShortcuts use window.location as a fallback since they
-      // are static config outside the hook. The actual hook handler above uses
-      // useNavigate() for these same keys, which takes precedence at runtime.
+      // Handled by the hook's navigate() — requires Alt to prevent accidental triggers
     },
   },
   {
     key: "e",
-    description: "Go to events",
+    altKey: true,
+    description: "Go to events (Alt+E)",
     action: () => {
-      // Handled by the hook's navigate() — see handleKeyDown above
+      // Handled by the hook's navigate() — requires Alt to prevent accidental triggers
     },
   },
   {
     key: "r",
-    description: "Go to restaurants",
+    altKey: true,
+    description: "Go to restaurants (Alt+R)",
     action: () => {
-      // Handled by the hook's navigate() — see handleKeyDown above
+      // Handled by the hook's navigate() — requires Alt to prevent accidental triggers
     },
   },
   {

@@ -633,9 +633,10 @@ export default function AccessibilityStatement() {
                     { key: "Enter / Space", action: "Activate button or link" },
                     { key: "Escape", action: "Close modal or dialog" },
                     { key: "?", action: "Open keyboard shortcuts help" },
-                    { key: "/", action: "Focus search box" },
-                    { key: "g then h", action: "Go to home page" },
-                    { key: "g then e", action: "Go to events page" },
+                    { key: "/", action: "Focus search box (when not in a form)" },
+                    { key: "Alt + H", action: "Go to home page" },
+                    { key: "Alt + E", action: "Go to events page" },
+                    { key: "Alt + R", action: "Go to restaurants page" },
                   ].map((shortcut, index) => (
                     <tr key={index} className="border-b">
                       <td className="py-2 pr-4">

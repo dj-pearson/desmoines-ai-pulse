@@ -16,14 +16,13 @@ interface KeyboardShortcut {
 }
 
 const shortcuts: KeyboardShortcut[] = [
-  // Navigation
-  { keys: ['G', 'H'], description: 'Go to home page', category: 'Navigation' },
-  { keys: ['G', 'E'], description: 'Go to events page', category: 'Navigation' },
-  { keys: ['G', 'R'], description: 'Go to restaurants page', category: 'Navigation' },
-  { keys: ['G', 'A'], description: 'Go to attractions page', category: 'Navigation' },
+  // Navigation (Alt required to prevent accidental triggers when typing or clicking)
+  { keys: ['Alt', 'H'], description: 'Go to home page', category: 'Navigation' },
+  { keys: ['Alt', 'E'], description: 'Go to events page', category: 'Navigation' },
+  { keys: ['Alt', 'R'], description: 'Go to restaurants page', category: 'Navigation' },
 
   // Search
-  { keys: ['/'], description: 'Focus search bar', category: 'Search' },
+  { keys: ['/'], description: 'Focus search bar (when not in a form)', category: 'Search' },
 
   // Accessibility
   { keys: ['Tab'], description: 'Move to next focusable element', category: 'Accessibility' },
@@ -60,6 +59,7 @@ export function KeyboardShortcutsModal({
 
   const formatKey = (key: string): string => {
     if (key === '⌘') return isMac ? '⌘' : 'Ctrl';
+    if (key === 'Alt') return isMac ? '⌥ Option' : 'Alt';
     return key;
   };
 
@@ -121,7 +121,7 @@ export function KeyboardShortcutsModal({
               <p className="font-medium mb-1">Pro Tip</p>
               <p>
                 Press <Badge variant="outline" className="mx-1 px-1.5 py-0.5 text-xs font-mono">?</Badge>
-                anytime to see this shortcuts guide. Most shortcuts work from anywhere on the site.
+                anytime to see this shortcuts guide. Navigation shortcuts use <Badge variant="outline" className="mx-1 px-1.5 py-0.5 text-xs font-mono">Alt</Badge> to avoid accidental triggers when typing or clicking.
               </p>
             </div>
           </div>
