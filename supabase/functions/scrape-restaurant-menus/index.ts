@@ -65,19 +65,35 @@ interface DiscoveredLink {
  * This tries to close open brackets/braces to salvage partial data.
  */
 function parseJsonWithRepair(text: string): { sections: MenuSection[] } | null {
-  // First try: parse as-is
+  // First try: parse as-is (look for outermost JSON object)
   try {
     const match = text.match(/\{[\s\S]*\}/);
     if (match) {
-      return JSON.parse(match[0]);
+      const parsed = JSON.parse(match[0]);
+      // Normalize: accept "sections", "menu_sections", "menu", or top-level array
+      if (parsed.sections) return parsed;
+      if (parsed.menu_sections) return { sections: parsed.menu_sections };
+      if (parsed.menu) return { sections: parsed.menu };
+      // If it's a valid object with items arrays, wrap it
+      return parsed;
     }
   } catch {
     // Fall through to repair
   }
 
   // Second try: find the JSON start and attempt repair
-  const jsonStart = text.indexOf('{"sections"');
-  if (jsonStart === -1) return null;
+  // Look for common patterns Claude might use
+  let jsonStart = text.indexOf('{"sections"');
+  if (jsonStart === -1) jsonStart = text.indexOf('{"menu_sections"');
+  if (jsonStart === -1) jsonStart = text.indexOf('{"menu"');
+  if (jsonStart === -1) {
+    // Last resort: find the first { that could be JSON
+    jsonStart = text.indexOf('{');
+  }
+  if (jsonStart === -1) {
+    console.error(`  ❌ No JSON found in response. First 300 chars: ${text.substring(0, 300)}`);
+    return null;
+  }
 
   let json = text.substring(jsonStart);
 
@@ -110,11 +126,11 @@ function parseJsonWithRepair(text: string): { sections: MenuSection[] } | null {
 
   try {
     const repaired = JSON.parse(json + suffix);
-    const sections = repaired.sections || [];
+    const sections = repaired.sections || repaired.menu_sections || repaired.menu || [];
     // Only accept if we got at least some valid data
     if (sections.length > 0 && sections.some((s: MenuSection) => s.items?.length > 0)) {
       console.log(`  🔧 Repaired truncated JSON: ${sections.length} sections recovered`);
-      return repaired;
+      return { sections };
     }
   } catch {
     // Try more aggressive repair: trim back to last complete object in items array
@@ -124,10 +140,10 @@ function parseJsonWithRepair(text: string): { sections: MenuSection[] } | null {
       const suffix2 = ']'.repeat(Math.max(0, openBrackets)) + '}'.repeat(Math.max(0, openBraces));
       try {
         const repaired2 = JSON.parse(trimmed + suffix2);
-        const sections = repaired2.sections || [];
+        const sections = repaired2.sections || repaired2.menu_sections || repaired2.menu || [];
         if (sections.length > 0 && sections.some((s: MenuSection) => s.items?.length > 0)) {
           console.log(`  🔧 Repaired truncated JSON (aggressive): ${sections.length} sections recovered`);
-          return repaired2;
+          return { sections };
         }
       } catch {
         // Give up
@@ -349,6 +365,13 @@ If no menu items can be found, return: {"sections": []}`;
 
   const data = await response.json();
   const extractedText = data.content?.[0]?.text || '{}';
+  const stopReason = data.stop_reason || '';
+
+  if (stopReason === 'max_tokens') {
+    console.warn(`  ⚠️ Claude text extraction truncated by max_tokens`);
+  }
+
+  console.log(`  Claude response: ${extractedText.length} chars, stop_reason=${stopReason}`);
 
   const parsed = parseJsonWithRepair(extractedText);
   if (parsed) {
@@ -358,7 +381,7 @@ If no menu items can be found, return: {"sections": []}`;
     };
   }
 
-  console.error('Failed to parse Claude response for text extraction');
+  console.error(`  ❌ Failed to parse Claude response. First 500 chars: ${extractedText.substring(0, 500)}`);
   return null;
 }
 
