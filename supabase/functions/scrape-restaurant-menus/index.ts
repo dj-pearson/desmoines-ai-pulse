@@ -134,6 +134,7 @@ function parseJsonWithRepair(text: string): { sections: MenuSection[] } | null {
     }
   }
 
+  console.error(`  ❌ JSON repair failed. First 500 chars: ${text.substring(0, 500)}`);
   return null;
 }
 
@@ -205,6 +206,10 @@ function discoverMenuLinks(html: string, pageUrl: string): DiscoveredLink[] {
     const linkText = (anchor.textContent || '').trim().toLowerCase();
     const hrefLower = resolved.toLowerCase();
     const isPdf = isPdfUrl(resolved);
+
+    // Skip obviously non-menu links
+    if (/\b(gift\s*card|login|sign.?in|account|cart|checkout|contact|careers|about|privacy|terms)\b/i.test(linkText)) continue;
+    if (/\/(gift-?card|login|signin|account|cart|checkout|contact|careers|about|privacy|terms)/i.test(hrefLower)) continue;
 
     let score = 0;
     let label = linkText.substring(0, 80) || href;
@@ -512,9 +517,9 @@ function scoreMenuContent(content: string): number {
 
 /**
  * Fetch a URL using a direct HTTP GET (no Browserless/Firecrawl fallback chain).
- * This avoids burning paid API credits on URLs that may 404.
+ * Returns page content on success, or { status } on HTTP error for caller to inspect.
  */
-async function fetchPage(url: string): Promise<{ html: string; text: string } | null> {
+async function fetchPage(url: string): Promise<{ html: string; text: string; status: number } | { status: number } | null> {
   try {
     console.log(`  🌐 fetch: ${url}`);
     const controller = new AbortController();
@@ -536,7 +541,7 @@ async function fetchPage(url: string): Promise<{ html: string; text: string } | 
 
     if (!response.ok) {
       console.log(`  ❌ ${url} → ${response.status}`);
-      return null;
+      return { status: response.status };
     }
 
     const html = await response.text();
@@ -550,10 +555,15 @@ async function fetchPage(url: string): Promise<{ html: string; text: string } | 
       .trim();
 
     console.log(`  ✅ ${url} → ${html.length} HTML, ${text.length} text`);
-    return { html, text };
+    return { html, text, status: 200 };
   } catch {
     return null;
   }
+}
+
+/** Type guard: check if fetchPage result has page content */
+function hasContent(result: { html: string; text: string; status: number } | { status: number } | null): result is { html: string; text: string; status: number } {
+  return result !== null && 'html' in result;
 }
 
 /**
@@ -600,10 +610,10 @@ async function scrapeRestaurantMenu(
       }
     } else {
       // HTML menu_url — fetch it and also discover links on the page
-      const page = await fetchPage(restaurant.menu_url);
-      if (page) {
+      const menuUrlResult = await fetchPage(restaurant.menu_url);
+      if (hasContent(menuUrlResult)) {
         // Check for PDF links on the menu_url page
-        const discovered = discoverMenuLinks(page.html, restaurant.menu_url);
+        const discovered = discoverMenuLinks(menuUrlResult.html, restaurant.menu_url);
         const pdfLinks = discovered.filter(l => l.isPdf);
         if (pdfLinks.length > 0) {
           console.log(`  Found ${pdfLinks.length} PDF link(s) on menu page`);
@@ -620,9 +630,9 @@ async function scrapeRestaurantMenu(
         }
 
         // Fall back to extracting from the HTML text content
-        const menuScore = scoreMenuContent(page.text);
+        const menuScore = scoreMenuContent(menuUrlResult.text);
         if (menuScore > 0) {
-          const extracted = await extractMenuFromContent(page.text, restaurant.name, restaurant.menu_url);
+          const extracted = await extractMenuFromContent(menuUrlResult.text, restaurant.name, restaurant.menu_url);
           if (extracted && extracted.sections.length > 0) {
             return saveMenuToDatabase(restaurant.id, restaurant.menu_url, extracted);
           }
@@ -652,14 +662,26 @@ async function scrapeRestaurantMenu(
   let bestSourceUrl = '';
   let bestScore = 0;
   const allDiscoveredLinks: DiscoveredLink[] = [];
+  let consecutiveFailures = 0;
 
   for (const url of patternUrls) {
     console.log(`  Trying: ${url}`);
-    const page = await fetchPage(url);
-    if (!page) continue;
+    const result = await fetchPage(url);
+
+    if (!hasContent(result)) {
+      consecutiveFailures++;
+      // If the first 2 URLs both return 403, the domain is blocking us — stop trying
+      if (consecutiveFailures >= 2 && result && 'status' in result && result.status === 403) {
+        console.log(`  ⛔ Domain appears to block scraping (403). Skipping remaining patterns.`);
+        break;
+      }
+      continue;
+    }
+
+    consecutiveFailures = 0;
 
     // Discover menu links from this page's HTML
-    const discovered = discoverMenuLinks(page.html, url);
+    const discovered = discoverMenuLinks(result.html, url);
     for (const link of discovered) {
       // Avoid duplicates across pages
       if (!allDiscoveredLinks.some(l => l.url === link.url)) {
@@ -668,10 +690,10 @@ async function scrapeRestaurantMenu(
     }
 
     // Score this page's own content
-    const score = scoreMenuContent(page.text);
+    const score = scoreMenuContent(result.text);
     if (score > bestScore) {
       bestScore = score;
-      bestContent = page.text;
+      bestContent = result.text;
       bestSourceUrl = url;
     }
   }
@@ -702,12 +724,12 @@ async function scrapeRestaurantMenu(
     } else {
       // HTML link — fetch and score
       console.log(`  Trying discovered link: ${link.url}`);
-      const page = await fetchPage(link.url);
-      if (page) {
-        const score = scoreMenuContent(page.text);
+      const linkResult = await fetchPage(link.url);
+      if (hasContent(linkResult)) {
+        const score = scoreMenuContent(linkResult.text);
         if (score > bestScore) {
           bestScore = score;
-          bestContent = page.text;
+          bestContent = linkResult.text;
           bestSourceUrl = link.url;
         }
       }
