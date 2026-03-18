@@ -39,7 +39,8 @@
       "Bash(done)",
       "Bash(/tmp/summary.txt:*)",
       "Read(//tmp/**)",
-      "Bash(find C:UsersdpearsonDocumentsDes-Moines-InsiderDes-Moines-Insiderdesmoines-ai-pulsesrc -type f \\\\\\(-name *menu* -o -name *scrape* \\\\\\))"
+      "Bash(find C:UsersdpearsonDocumentsDes-Moines-InsiderDes-Moines-Insiderdesmoines-ai-pulsesrc -type f \\\\\\(-name *menu* -o -name *scrape* \\\\\\))",
+      "Bash(npx supabase:*)"
     ],
     "deny": [],
     "ask": []

@@ -8,7 +8,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
-import { scrapeUrl, fetchPdfAsBase64 } from "../_shared/scraper.ts";
+import { fetchPdfAsBase64 } from "../_shared/scraper.ts";
 import { getAIConfig } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
@@ -434,25 +434,49 @@ function scoreMenuContent(content: string): number {
 }
 
 /**
- * Fetch a URL using the fetch backend (free, reliable) and return HTML + text.
+ * Fetch a URL using a direct HTTP GET (no Browserless/Firecrawl fallback chain).
+ * This avoids burning paid API credits on URLs that may 404.
  */
 async function fetchPage(url: string): Promise<{ html: string; text: string } | null> {
   try {
-    const result = await scrapeUrl(url, {
-      backend: 'fetch',
-      waitTime: 3000,
-      timeout: 15000,
+    console.log(`  🌐 fetch: ${url}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'DNT': '1',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+      },
+      signal: controller.signal,
     });
-    if (result.success) {
-      return {
-        html: result.html || '',
-        text: result.markdown || result.text || result.html || '',
-      };
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`  ❌ ${url} → ${response.status}`);
+      return null;
     }
+
+    const html = await response.text();
+
+    // Extract text content from HTML
+    const text = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    console.log(`  ✅ ${url} → ${html.length} HTML, ${text.length} text`);
+    return { html, text };
   } catch {
-    // ignore
+    return null;
   }
-  return null;
 }
 
 /**
