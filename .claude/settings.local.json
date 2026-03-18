@@ -38,7 +38,8 @@
       "Read(//c/Users/pears/Documents/Des-Moines-Pulse/desmoines-ai-pulse/**)",
       "Bash(done)",
       "Bash(/tmp/summary.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(find C:UsersdpearsonDocumentsDes-Moines-InsiderDes-Moines-Insiderdesmoines-ai-pulsesrc -type f \\\\\\(-name *menu* -o -name *scrape* \\\\\\))"
     ],
     "deny": [],
     "ask": []

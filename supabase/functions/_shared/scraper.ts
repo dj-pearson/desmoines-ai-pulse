@@ -500,23 +500,18 @@ export async function scrapeUrl(
       };
   }
   
-  // If primary backend fails, try fallbacks in order
-  if (!result.success) {
-    // Try Browserless if available and not already tried
-    if (config.backend !== 'browserless' && config.browserlessApiKey) {
-      console.log(`⚠️ Primary backend failed, falling back to Browserless...`);
-      result = await scrapeWithBrowserless(url, config);
-    }
-    // Try Firecrawl if available and not already tried
-    else if (config.backend !== 'firecrawl' && config.firecrawlApiKey) {
-      console.log(`⚠️ Primary backend failed, falling back to Firecrawl...`);
-      result = await scrapeWithFirecrawl(url, config);
-    }
-    // Try fetch as last resort if not already tried
-    else if (config.backend !== 'fetch') {
-      console.log(`⚠️ All backends failed, trying basic fetch as last resort...`);
-      result = await scrapeWithFetch(url, config);
-    }
+  // If primary backend fails, try fallbacks sequentially
+  if (!result.success && config.backend !== 'browserless' && config.browserlessApiKey) {
+    console.log(`⚠️ Primary backend failed, falling back to Browserless...`);
+    result = await scrapeWithBrowserless(url, config);
+  }
+  if (!result.success && config.backend !== 'firecrawl' && config.firecrawlApiKey) {
+    console.log(`⚠️ Browserless failed or unavailable, falling back to Firecrawl...`);
+    result = await scrapeWithFirecrawl(url, config);
+  }
+  if (!result.success && config.backend !== 'fetch') {
+    console.log(`⚠️ All backends failed, trying basic fetch as last resort...`);
+    result = await scrapeWithFetch(url, config);
   }
   
   return result;
@@ -550,4 +545,55 @@ export async function scrapeUrls(
   }
   
   return results;
+}
+
+/**
+ * Fetch a PDF from a URL and return it as base64 data.
+ * Returns null if the URL does not point to a PDF or the fetch fails.
+ */
+export async function fetchPdfAsBase64(
+  url: string,
+  timeout = 30000
+): Promise<string | null> {
+  try {
+    console.log(`📄 Fetching PDF: ${url}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/pdf,*/*',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.error(`❌ PDF fetch failed: ${response.status}`);
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('pdf') && !url.toLowerCase().endsWith('.pdf')) {
+      console.warn(`⚠️ URL does not appear to be a PDF (content-type: ${contentType})`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    // Encode to base64
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+
+    console.log(`✅ PDF fetched: ${(bytes.length / 1024).toFixed(1)}KB`);
+    return base64;
+  } catch (error) {
+    console.error(`❌ PDF fetch error:`, error);
+    return null;
+  }
 }
