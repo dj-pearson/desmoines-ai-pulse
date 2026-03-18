@@ -58,6 +58,85 @@ interface DiscoveredLink {
   label: string;
 }
 
+/**
+ * Attempt to parse JSON, repairing truncated responses from Claude.
+ * When max_tokens is hit, JSON gets cut off mid-array/object.
+ * This tries to close open brackets/braces to salvage partial data.
+ */
+function parseJsonWithRepair(text: string): { sections: MenuSection[] } | null {
+  // First try: parse as-is
+  try {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) {
+      return JSON.parse(match[0]);
+    }
+  } catch {
+    // Fall through to repair
+  }
+
+  // Second try: find the JSON start and attempt repair
+  const jsonStart = text.indexOf('{"sections"');
+  if (jsonStart === -1) return null;
+
+  let json = text.substring(jsonStart);
+
+  // Remove any trailing text after the last complete-ish structure
+  // Find the last complete item (ends with }) before truncation
+  const lastCompleteItem = json.lastIndexOf('}');
+  if (lastCompleteItem === -1) return null;
+
+  json = json.substring(0, lastCompleteItem + 1);
+
+  // Count open/close brackets and braces to figure out what needs closing
+  let openBraces = 0;
+  let openBrackets = 0;
+  let inString = false;
+  let escape = false;
+
+  for (const ch of json) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') openBraces++;
+    if (ch === '}') openBraces--;
+    if (ch === '[') openBrackets++;
+    if (ch === ']') openBrackets--;
+  }
+
+  // Close any open structures
+  const suffix = ']'.repeat(Math.max(0, openBrackets)) + '}'.repeat(Math.max(0, openBraces));
+
+  try {
+    const repaired = JSON.parse(json + suffix);
+    const sections = repaired.sections || [];
+    // Only accept if we got at least some valid data
+    if (sections.length > 0 && sections.some((s: MenuSection) => s.items?.length > 0)) {
+      console.log(`  🔧 Repaired truncated JSON: ${sections.length} sections recovered`);
+      return repaired;
+    }
+  } catch {
+    // Try more aggressive repair: trim back to last complete object in items array
+    const lastItemEnd = json.lastIndexOf('},');
+    if (lastItemEnd > 0) {
+      const trimmed = json.substring(0, lastItemEnd + 1);
+      const suffix2 = ']'.repeat(Math.max(0, openBrackets)) + '}'.repeat(Math.max(0, openBraces));
+      try {
+        const repaired2 = JSON.parse(trimmed + suffix2);
+        const sections = repaired2.sections || [];
+        if (sections.length > 0 && sections.some((s: MenuSection) => s.items?.length > 0)) {
+          console.log(`  🔧 Repaired truncated JSON (aggressive): ${sections.length} sections recovered`);
+          return repaired2;
+        }
+      } catch {
+        // Give up
+      }
+    }
+  }
+
+  return null;
+}
+
 // Known third-party ordering/menu platforms
 const THIRD_PARTY_PLATFORMS = [
   'eatfutiorders.com',
@@ -251,19 +330,15 @@ If no menu items can be found, return: {"sections": []}`;
   const data = await response.json();
   const extractedText = data.content?.[0]?.text || '{}';
 
-  try {
-    const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        sections: parsed.sections || [],
-        raw_text: content.substring(0, 50000),
-      };
-    }
-  } catch (parseError) {
-    console.error('Failed to parse Claude response:', parseError);
+  const parsed = parseJsonWithRepair(extractedText);
+  if (parsed) {
+    return {
+      sections: parsed.sections || [],
+      raw_text: content.substring(0, 50000),
+    };
   }
 
+  console.error('Failed to parse Claude response for text extraction');
   return null;
 }
 
@@ -310,16 +385,17 @@ Extract the COMPLETE menu with every item, organized by section.
 
 For each item extract:
 - item_name: The dish name (REQUIRED)
-- item_description: Description (null if unavailable)
+- item_description: Short description or null (keep brief, max 80 chars)
 - price: Price as displayed (e.g., "$12.99") or null
 - price_numeric: Numeric price (e.g., 12.99) or null
-- dietary_tags: Array from ["vegan", "vegetarian", "gluten-free", "dairy-free", "nut-free", "spicy", "raw", "organic", "halal", "kosher"]
-- is_popular: true if marked as popular/recommended/starred
+- dietary_tags: Array from ["vegan","vegetarian","gluten-free","dairy-free","nut-free","spicy","raw","organic","halal","kosher"] — empty array [] if none
+- is_popular: true if marked as popular/recommended/starred, otherwise omit this field
 
 Group items into sections with section_name and section_sort_order (0-based, natural menu order).
 
-Return ONLY a JSON object: {"sections": [{"section_name": "...", "section_sort_order": 0, "items": [...]}]}
-If no menu items found, return: {"sections": []}`,
+CRITICAL: Return compact JSON with no extra whitespace. Omit null fields and false values to save space.
+Return ONLY: {"sections":[{"section_name":"...","section_sort_order":0,"items":[...]}]}
+If no menu items found: {"sections":[]}`,
             },
           ],
         },
@@ -335,20 +411,21 @@ If no menu items found, return: {"sections": []}`,
 
   const data = await response.json();
   const extractedText = data.content?.[0]?.text || '{}';
+  const stopReason = data.stop_reason || '';
 
-  try {
-    const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return {
-        sections: parsed.sections || [],
-        raw_text: `[PDF menu from ${sourceUrl}]\n${extractedText.substring(0, 50000)}`,
-      };
-    }
-  } catch (parseError) {
-    console.error('Failed to parse Claude Vision response:', parseError);
+  if (stopReason === 'max_tokens') {
+    console.warn(`  ⚠️ Claude response truncated by max_tokens — attempting JSON repair`);
   }
 
+  const parsed = parseJsonWithRepair(extractedText);
+  if (parsed) {
+    return {
+      sections: parsed.sections || [],
+      raw_text: `[PDF menu from ${sourceUrl}]\n${extractedText.substring(0, 50000)}`,
+    };
+  }
+
+  console.error('Failed to parse Claude Vision response — no valid JSON recovered');
   return null;
 }
 
