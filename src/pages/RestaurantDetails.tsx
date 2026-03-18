@@ -37,6 +37,9 @@ import {
   Sparkles,
   Globe,
   Check,
+  BookOpen,
+  Info,
+  Map,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useContentTracking } from "@/hooks/useContentTracking";
@@ -45,6 +48,7 @@ import { StickyMobileCTA } from "@/components/StickyMobileCTA";
 import { LastUpdatedBadge } from "@/components/LastUpdatedBadge";
 import { NearbyContent } from "@/components/NearbyContent";
 import { RestaurantMenuSection } from "@/components/RestaurantMenuSection";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
 
 export default function RestaurantDetails() {
   const { slug } = useParams();
@@ -222,10 +226,14 @@ export default function RestaurantDetails() {
     restaurant.name,
     `${restaurant.name} Des Moines`,
     `${restaurant.name} menu`,
+    `${restaurant.name} menu with prices`,
+    `${restaurant.name} menu prices`,
+    `${restaurant.name} food menu`,
     `${restaurant.name} hours`,
     `${restaurant.name} reviews`,
     restaurant.cuisine ? `${restaurant.cuisine} restaurant Des Moines` : "",
     restaurant.cuisine ? `best ${restaurant.cuisine} food Des Moines` : "",
+    restaurant.cuisine ? `${restaurant.cuisine} menu Des Moines` : "",
     `restaurants in ${cityName}`,
     `${cityName} dining`,
     "Des Moines restaurants",
@@ -287,7 +295,12 @@ export default function RestaurantDetails() {
     })) : undefined,
     paymentAccepted: "Cash, Credit Card, Debit Card",
     currenciesAccepted: "USD",
-    ...(restaurant.website && { hasMenu: restaurant.website }),
+    hasMenu: {
+      "@type": "Menu",
+      "@id": `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
+      name: `${restaurant.name} Menu`,
+      url: `https://desmoinespulse.com/restaurants/${restaurant.slug || restaurant.id}#menu`,
+    },
     acceptsReservations: true,
     areaServed: {
       "@type": "City",
@@ -330,6 +343,10 @@ export default function RestaurantDetails() {
     {
       question: `Where is ${restaurant.name} located?`,
       answer: `${restaurant.name} is located at ${restaurant.location || cityName + ", Iowa"}. ${restaurant.latitude ? "You can find directions using the map on this page." : "Visit our restaurants page for a map of all Des Moines dining locations."}`,
+    },
+    {
+      question: `Does ${restaurant.name} have an online menu?`,
+      answer: `Yes, you can view the full ${restaurant.name} menu with prices on this page. Scroll down to the Menu section or click the "Menu" button to see all menu categories and items${restaurant.cuisine ? ` featuring ${restaurant.cuisine} cuisine` : ''}. The menu is regularly updated to reflect current offerings. ${restaurant.website ? `You can also visit ${restaurant.name}'s official website for their latest menu.` : ''}`,
     },
     ...(restaurant.rating ? [{
       question: `What is the rating for ${restaurant.name}?`,
@@ -537,6 +554,30 @@ export default function RestaurantDetails() {
               </Button>
             </div>
 
+            {/* On-page section navigation for quick jumping */}
+            <nav className="flex flex-wrap gap-2 px-4 md:px-6 py-3 bg-white border-b overflow-x-auto" aria-label="Page sections">
+              <a href="#about" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
+                About
+              </a>
+              <a href="#menu" className="text-xs px-3 py-1.5 bg-[#2D1B69]/10 text-[#2D1B69] hover:bg-[#2D1B69]/20 rounded-full transition-colors whitespace-nowrap font-medium">
+                <Utensils className="w-3 h-3 inline mr-1" />
+                Menu
+              </a>
+              {restaurant.ai_writeup && (
+                <a href="#writeup" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
+                  Review
+                </a>
+              )}
+              {(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0)) && (
+                <a href="#local-guide" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
+                  Local Guide
+                </a>
+              )}
+              <a href="#faq" className="text-xs px-3 py-1.5 bg-gray-100 hover:bg-[#2D1B69]/10 hover:text-[#2D1B69] rounded-full transition-colors whitespace-nowrap font-medium">
+                FAQ
+              </a>
+            </nav>
+
             <CardContent className="p-6 md:p-10">
               {/* Key Stats Grid */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -692,82 +733,104 @@ export default function RestaurantDetails() {
                 </div>
               </div>
 
-              {/* About Section */}
+              {/* About Section — collapsible */}
               {restaurant.description && (
                 <>
                   <Separator className="my-8" />
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">
-                      About {restaurant.name}
-                    </h2>
-                    <p className="text-gray-700 leading-relaxed text-lg">
-                      {restaurant.description}
-                    </p>
-                    {/* AI-friendly summary paragraph */}
-                    <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
-                      <p className="text-sm text-gray-700 leading-relaxed">
-                        <strong>{restaurant.name}</strong> is a {restaurant.cuisine || "local"} restaurant
-                        located {restaurant.location ? `at ${restaurant.location} in` : "in"} {cityName}, Iowa.
-                        {restaurant.rating ? ` Rated ${restaurant.rating.toFixed(1)} out of 5 stars by local diners.` : ""}
-                        {restaurant.price_range ? ` The price range is ${restaurant.price_range} (${getPriceDescription(restaurant.price_range)}).` : ""}
-                        {restaurant.phone ? ` Call ${restaurant.phone} for reservations.` : ""}
-                        {restaurant.is_featured ? " This restaurant is an editor's pick on Des Moines AI Pulse." : ""}
+                  <CollapsibleSection
+                    id="about"
+                    title={`About ${restaurant.name}`}
+                    icon={<Info className="h-5 w-5 text-[#2D1B69]" />}
+                    defaultOpen={true}
+                  >
+                    <div className="pt-2">
+                      <p className="text-gray-700 leading-relaxed text-lg">
+                        {restaurant.description}
                       </p>
+                      {/* AI-friendly summary paragraph */}
+                      <div className="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
+                        <p className="text-sm text-gray-700 leading-relaxed">
+                          <strong>{restaurant.name}</strong> is a {restaurant.cuisine || "local"} restaurant
+                          located {restaurant.location ? `at ${restaurant.location} in` : "in"} {cityName}, Iowa.
+                          {restaurant.rating ? ` Rated ${restaurant.rating.toFixed(1)} out of 5 stars by local diners.` : ""}
+                          {restaurant.price_range ? ` The price range is ${restaurant.price_range} (${getPriceDescription(restaurant.price_range)}).` : ""}
+                          {restaurant.phone ? ` Call ${restaurant.phone} for reservations.` : ""}
+                          {restaurant.is_featured ? " This restaurant is an editor's pick on Des Moines AI Pulse." : ""}
+                        </p>
+                      </div>
                     </div>
-                  </div>
+                  </CollapsibleSection>
                 </>
               )}
 
-              {/* Menu Section */}
+              {/* Menu Section — collapsible, with enhanced SEO props */}
               <Separator className="my-8" />
               <RestaurantMenuSection
                 restaurantId={restaurant.id}
                 restaurantName={restaurant.name}
+                restaurantSlug={restaurant.slug || restaurant.id}
+                restaurantDescription={restaurant.description}
+                city={cityName}
+                cuisine={restaurant.cuisine}
               />
 
-              {/* AI Writeup Section */}
+              {/* AI Writeup Section — collapsible */}
               {restaurant.ai_writeup && (
                 <>
                   <Separator className="my-8" />
-                  <AIWriteup
-                    writeup={restaurant.ai_writeup}
-                    generatedAt={restaurant.writeup_generated_at}
-                    prompt={restaurant.writeup_prompt_used}
-                  />
+                  <CollapsibleSection
+                    id="writeup"
+                    title={`${restaurant.name} Review & Insights`}
+                    icon={<BookOpen className="h-5 w-5 text-[#2D1B69]" />}
+                    defaultOpen={true}
+                  >
+                    <div className="pt-2">
+                      <AIWriteup
+                        writeup={restaurant.ai_writeup}
+                        generatedAt={restaurant.writeup_generated_at}
+                        prompt={restaurant.writeup_prompt_used}
+                      />
+                    </div>
+                  </CollapsibleSection>
                 </>
               )}
 
-              {/* Geo Summary / Key Facts */}
-              {restaurant.geo_summary && (
+              {/* Geo Summary / Key Facts — collapsible */}
+              {(restaurant.geo_summary || (restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0)) && (
                 <>
                   <Separator className="my-8" />
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-4">
-                      {restaurant.name} - Local Dining Guide
-                    </h2>
-                    <p className="text-gray-700 leading-relaxed">{restaurant.geo_summary}</p>
-                  </div>
+                  <CollapsibleSection
+                    id="local-guide"
+                    title={`${restaurant.name} - Local Dining Guide`}
+                    icon={<Map className="h-5 w-5 text-[#2D1B69]" />}
+                    defaultOpen={true}
+                  >
+                    <div className="pt-2">
+                      {restaurant.geo_summary && (
+                        <p className="text-gray-700 leading-relaxed">{restaurant.geo_summary}</p>
+                      )}
+                      {restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0 && (
+                        <div className="mt-4">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-3">Key Facts</h3>
+                          <ul className="space-y-2">
+                            {restaurant.geo_key_facts.map((fact, index) => (
+                              <li key={index} className="flex items-start gap-2 text-gray-700">
+                                <Check className="h-4 w-4 text-emerald-500 mt-1 shrink-0" />
+                                <span>{fact}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </CollapsibleSection>
                 </>
-              )}
-
-              {restaurant.geo_key_facts && restaurant.geo_key_facts.length > 0 && (
-                <div className="mt-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Key Facts</h3>
-                  <ul className="space-y-2">
-                    {restaurant.geo_key_facts.map((fact, index) => (
-                      <li key={index} className="flex items-start gap-2 text-gray-700">
-                        <Check className="h-4 w-4 text-emerald-500 mt-1 shrink-0" />
-                        <span>{fact}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
               )}
             </CardContent>
           </Card>
 
           {/* Restaurant-Specific FAQ */}
-          <Card className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">
+          <Card id="faq" className="shadow-lg rounded-2xl border-0 mb-8 overflow-hidden">
             <FAQSection
               title={`Frequently Asked Questions About ${restaurant.name}`}
               description={`Common questions about ${restaurant.name} in ${cityName}, Iowa.`}
