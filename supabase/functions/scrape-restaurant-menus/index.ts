@@ -7,7 +7,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { scrapeUrl } from "../_shared/scraper.ts";
+import { DOMParser } from "https://deno.land/x/deno_dom@v0.1.38/deno-dom-wasm.ts";
+import { scrapeUrl, fetchPdfAsBase64 } from "../_shared/scraper.ts";
 import { getAIConfig } from "../_shared/aiConfig.ts";
 
 const corsHeaders = {
@@ -50,8 +51,126 @@ interface RestaurantRow {
   menu_url: string | null;
 }
 
+interface DiscoveredLink {
+  url: string;
+  score: number;
+  isPdf: boolean;
+  label: string;
+}
+
+// Known third-party ordering/menu platforms
+const THIRD_PARTY_PLATFORMS = [
+  'eatfutiorders.com',
+  'toasttab.com',
+  'order.toasttab.com',
+  'clover.com',
+  'doordash.com',
+  'grubhub.com',
+  'ubereats.com',
+  'chownow.com',
+  'square.site',
+  'squareup.com',
+  'olo.com',
+  'bframenum.com',
+  'popmenu.com',
+  'getbento.com',
+  'slicelife.com',
+];
+
 /**
- * Extract structured menu data from raw content using Claude AI
+ * Check if a URL points to a PDF
+ */
+function isPdfUrl(url: string): boolean {
+  const lower = url.toLowerCase();
+  return lower.endsWith('.pdf') || lower.includes('.pdf?') || lower.includes('/pdf/');
+}
+
+/**
+ * Resolve a potentially relative URL against a base URL
+ */
+function resolveUrl(href: string, baseUrl: string): string | null {
+  try {
+    return new URL(href, baseUrl).href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Discover menu-related links from an HTML page.
+ * Parses the HTML to find anchor tags with menu-related text, PDF links,
+ * and third-party platform URLs. Returns scored and ranked results.
+ */
+function discoverMenuLinks(html: string, pageUrl: string): DiscoveredLink[] {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  if (!doc) return [];
+
+  const links: DiscoveredLink[] = [];
+  const seen = new Set<string>();
+
+  const anchors = doc.querySelectorAll('a[href]');
+  for (let i = 0; i < anchors.length; i++) {
+    const anchor = anchors[i];
+    const href = anchor.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) continue;
+
+    const resolved = resolveUrl(href, pageUrl);
+    if (!resolved) continue;
+
+    // Deduplicate
+    const normalized = resolved.replace(/\/$/, '').toLowerCase();
+    if (seen.has(normalized)) continue;
+    seen.add(normalized);
+
+    const linkText = (anchor.textContent || '').trim().toLowerCase();
+    const hrefLower = resolved.toLowerCase();
+    const isPdf = isPdfUrl(resolved);
+
+    let score = 0;
+    let label = linkText.substring(0, 80) || href;
+
+    // Score based on link text
+    if (/\bmenu\b/i.test(linkText)) score += 10;
+    if (/\bfood\b/i.test(linkText)) score += 5;
+    if (/\bdining\b/i.test(linkText)) score += 4;
+    if (/\border\s*(online|now)?\b/i.test(linkText)) score += 3;
+    if (/\bsee\s+(the\s+)?menu\b/i.test(linkText)) score += 15;
+    if (/\bview\s+(our\s+)?menu\b/i.test(linkText)) score += 15;
+    if (/\bdownload\w*\s+menu\b/i.test(linkText)) score += 12;
+    if (/\bfull\s+menu\b/i.test(linkText)) score += 12;
+    if (/\bour\s+menu\b/i.test(linkText)) score += 10;
+    if (/\bfood\s*(and|&)\s*drink/i.test(linkText)) score += 8;
+
+    // Score based on URL path
+    if (/\/menu(s)?\b/i.test(hrefLower)) score += 8;
+    if (/\/food(-|_)?menu/i.test(hrefLower)) score += 7;
+    if (/\/our-menu/i.test(hrefLower)) score += 7;
+    if (/\/dining/i.test(hrefLower)) score += 4;
+
+    // PDF links are valuable if they have menu-related context
+    if (isPdf) {
+      score += 6;
+      if (/menu/i.test(hrefLower) || /menu/i.test(linkText)) score += 8;
+    }
+
+    // Third-party platform links
+    const isThirdParty = THIRD_PARTY_PLATFORMS.some(p => hrefLower.includes(p));
+    if (isThirdParty) score += 7;
+
+    // Only keep links with some menu relevance
+    if (score > 0) {
+      links.push({ url: resolved, score, isPdf, label });
+    }
+  }
+
+  // Sort by score descending, limit to top 5
+  links.sort((a, b) => b.score - a.score);
+  return links.slice(0, 5);
+}
+
+/**
+ * Extract structured menu data from raw text content using Claude AI
  */
 async function extractMenuFromContent(
   content: string,
@@ -149,94 +268,99 @@ If no menu items can be found, return: {"sections": []}`;
 }
 
 /**
- * Scrape menu from a restaurant's website.
- * If menu_url is set on the restaurant record, that URL is used exclusively.
- * Otherwise, common menu path patterns are tried against the website field.
+ * Extract structured menu data from a PDF using Claude Vision (document block).
+ * Follows the same pattern as parse-menu-upload/index.ts.
  */
-async function scrapeRestaurantMenu(
-  restaurant: RestaurantRow,
-  forceUpdate: boolean
+async function extractMenuFromPdf(
+  pdfBase64: string,
+  restaurantName: string,
+  sourceUrl: string
+): Promise<{ sections: MenuSection[]; raw_text: string } | null> {
+  console.log(`  🤖 Sending PDF to Claude Vision for extraction...`);
+
+  const aiConfig = await getAIConfig(supabaseUrl, supabaseKey);
+
+  const response = await fetch(aiConfig.api_endpoint, {
+    method: 'POST',
+    headers: {
+      'x-api-key': claudeApiKey,
+      'anthropic-version': aiConfig.anthropic_version,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: aiConfig.default_model,
+      max_tokens: aiConfig.max_tokens_large,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: pdfBase64,
+              },
+            },
+            {
+              type: 'text',
+              text: `You are an expert at extracting restaurant menu data. This is a PDF menu from "${restaurantName}" (source: ${sourceUrl}).
+
+Extract the COMPLETE menu with every item, organized by section.
+
+For each item extract:
+- item_name: The dish name (REQUIRED)
+- item_description: Description (null if unavailable)
+- price: Price as displayed (e.g., "$12.99") or null
+- price_numeric: Numeric price (e.g., 12.99) or null
+- dietary_tags: Array from ["vegan", "vegetarian", "gluten-free", "dairy-free", "nut-free", "spicy", "raw", "organic", "halal", "kosher"]
+- is_popular: true if marked as popular/recommended/starred
+
+Group items into sections with section_name and section_sort_order (0-based, natural menu order).
+
+Return ONLY a JSON object: {"sections": [{"section_name": "...", "section_sort_order": 0, "items": [...]}]}
+If no menu items found, return: {"sections": []}`,
+            },
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`Claude Vision API error: ${response.status} - ${errorText}`);
+    return null;
+  }
+
+  const data = await response.json();
+  const extractedText = data.content?.[0]?.text || '{}';
+
+  try {
+    const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        sections: parsed.sections || [],
+        raw_text: `[PDF menu from ${sourceUrl}]\n${extractedText.substring(0, 50000)}`,
+      };
+    }
+  } catch (parseError) {
+    console.error('Failed to parse Claude Vision response:', parseError);
+  }
+
+  return null;
+}
+
+/**
+ * Save extracted menu data to the database.
+ * Returns the number of items saved, or an error.
+ */
+async function saveMenuToDatabase(
+  restaurantId: string,
+  sourceUrl: string,
+  extracted: { sections: MenuSection[]; raw_text: string }
 ): Promise<{ success: boolean; items_count: number; error?: string }> {
-  // Check for existing current menu
-  if (!forceUpdate) {
-    const { data: existingMenu } = await supabase
-      .from('restaurant_menus')
-      .select('id, captured_at')
-      .eq('restaurant_id', restaurant.id)
-      .eq('is_current', true)
-      .single();
-
-    if (existingMenu) {
-      const daysSince = (Date.now() - new Date(existingMenu.captured_at).getTime()) / (1000 * 60 * 60 * 24);
-      if (daysSince < 30) {
-        return { success: true, items_count: 0, error: `Menu already current (${Math.round(daysSince)}d old)` };
-      }
-    }
-  }
-
-  // If a custom menu_url is stored, use it exclusively — no pattern guessing needed
-  let menuUrls: string[];
-  if (restaurant.menu_url) {
-    console.log(`  Using stored menu_url: ${restaurant.menu_url}`);
-    menuUrls = [restaurant.menu_url];
-  } else {
-    // Discover menu URL via common path patterns
-    const baseUrl = restaurant.website.replace(/\/$/, '');
-    menuUrls = [
-      `${baseUrl}/menu`,
-      `${baseUrl}/menus`,
-      `${baseUrl}/food-menu`,
-      `${baseUrl}/our-menu`,
-      `${baseUrl}/food`,
-      `${baseUrl}/food-and-drink`,
-      `${baseUrl}/dining`,
-      baseUrl, // fallback to homepage
-    ];
-  }
-
-  let bestContent = '';
-  let sourceUrl = '';
-
-  for (const url of menuUrls) {
-    console.log(`  Trying: ${url}`);
-    try {
-      const result = await scrapeUrl(url, {
-        waitTime: 3000,
-        timeout: 15000,
-      });
-
-      if (result.success) {
-        const content = result.markdown || result.text || result.html || '';
-        // Check if this page likely has menu content
-        const menuSignals = (content.match(/\$\d+/g) || []).length;
-        const hasMenuKeywords = /menu|appetizer|entree|dessert|drink|sandwich|salad|soup|burger/i.test(content);
-
-        if (content.length > 200 && (menuSignals >= 3 || hasMenuKeywords)) {
-          if (content.length > bestContent.length || menuSignals > (bestContent.match(/\$\d+/g) || []).length) {
-            bestContent = content;
-            sourceUrl = url;
-          }
-        }
-      }
-    } catch {
-      // Try next URL
-    }
-  }
-
-  if (!bestContent) {
-    return { success: false, items_count: 0, error: 'No menu content found at any URL' };
-  }
-
-  console.log(`  Best menu source: ${sourceUrl} (${bestContent.length} chars)`);
-
-  // Extract structured menu using AI
-  const extracted = await extractMenuFromContent(bestContent, restaurant.name, sourceUrl);
-
-  if (!extracted || extracted.sections.length === 0) {
-    return { success: false, items_count: 0, error: 'AI could not extract menu items' };
-  }
-
-  // Count total items
   const totalItems = extracted.sections.reduce((sum, s) => sum + s.items.length, 0);
 
   if (totalItems < 2) {
@@ -247,7 +371,7 @@ async function scrapeRestaurantMenu(
   const { data: newMenu, error: menuError } = await supabase
     .from('restaurant_menus')
     .insert({
-      restaurant_id: restaurant.id,
+      restaurant_id: restaurantId,
       is_current: true,
       source_type: 'scraped',
       source_url: sourceUrl,
@@ -293,6 +417,216 @@ async function scrapeRestaurantMenu(
   }
 
   return { success: true, items_count: totalItems };
+}
+
+/**
+ * Evaluate HTML content for menu signals.
+ * Returns a score indicating how likely the content contains a menu.
+ */
+function scoreMenuContent(content: string): number {
+  const priceMatches = (content.match(/\$\d+/g) || []).length;
+  const hasMenuKeywords = /menu|appetizer|entree|dessert|drink|sandwich|salad|soup|burger/i.test(content);
+  if (content.length < 200) return 0;
+  let score = 0;
+  if (priceMatches >= 3) score += priceMatches;
+  if (hasMenuKeywords) score += 5;
+  return score;
+}
+
+/**
+ * Fetch a URL using the fetch backend (free, reliable) and return HTML + text.
+ */
+async function fetchPage(url: string): Promise<{ html: string; text: string } | null> {
+  try {
+    const result = await scrapeUrl(url, {
+      backend: 'fetch',
+      waitTime: 3000,
+      timeout: 15000,
+    });
+    if (result.success) {
+      return {
+        html: result.html || '',
+        text: result.markdown || result.text || result.html || '',
+      };
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+/**
+ * Scrape menu from a restaurant's website.
+ * Strategy:
+ *   1. If menu_url set, use it (handle PDF or HTML, also discover PDF links on the page)
+ *   2. Fetch homepage + pattern URLs with fetch backend
+ *   3. Parse HTML for menu links (anchors with menu text, PDF hrefs, third-party platforms)
+ *   4. Try discovered links (PDFs via Claude Vision, HTML via text extraction)
+ *   5. Extract from best content found
+ */
+async function scrapeRestaurantMenu(
+  restaurant: RestaurantRow,
+  forceUpdate: boolean
+): Promise<{ success: boolean; items_count: number; error?: string }> {
+  // Check for existing current menu
+  if (!forceUpdate) {
+    const { data: existingMenu } = await supabase
+      .from('restaurant_menus')
+      .select('id, captured_at')
+      .eq('restaurant_id', restaurant.id)
+      .eq('is_current', true)
+      .single();
+
+    if (existingMenu) {
+      const daysSince = (Date.now() - new Date(existingMenu.captured_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSince < 30) {
+        return { success: true, items_count: 0, error: `Menu already current (${Math.round(daysSince)}d old)` };
+      }
+    }
+  }
+
+  // ---- Phase 1: Try explicit menu_url first (may be PDF or HTML) ----
+  if (restaurant.menu_url) {
+    console.log(`  Using stored menu_url: ${restaurant.menu_url}`);
+
+    if (isPdfUrl(restaurant.menu_url)) {
+      const pdfBase64 = await fetchPdfAsBase64(restaurant.menu_url);
+      if (pdfBase64) {
+        const extracted = await extractMenuFromPdf(pdfBase64, restaurant.name, restaurant.menu_url);
+        if (extracted && extracted.sections.length > 0) {
+          return saveMenuToDatabase(restaurant.id, restaurant.menu_url, extracted);
+        }
+      }
+    } else {
+      // HTML menu_url — fetch it and also discover links on the page
+      const page = await fetchPage(restaurant.menu_url);
+      if (page) {
+        // Check for PDF links on the menu_url page
+        const discovered = discoverMenuLinks(page.html, restaurant.menu_url);
+        const pdfLinks = discovered.filter(l => l.isPdf);
+        if (pdfLinks.length > 0) {
+          console.log(`  Found ${pdfLinks.length} PDF link(s) on menu page`);
+          for (const pdfLink of pdfLinks.slice(0, 2)) {
+            console.log(`  Trying PDF: ${pdfLink.url} (score: ${pdfLink.score})`);
+            const pdfBase64 = await fetchPdfAsBase64(pdfLink.url);
+            if (pdfBase64) {
+              const extracted = await extractMenuFromPdf(pdfBase64, restaurant.name, pdfLink.url);
+              if (extracted && extracted.sections.length > 0) {
+                return saveMenuToDatabase(restaurant.id, pdfLink.url, extracted);
+              }
+            }
+          }
+        }
+
+        // Fall back to extracting from the HTML text content
+        const menuScore = scoreMenuContent(page.text);
+        if (menuScore > 0) {
+          const extracted = await extractMenuFromContent(page.text, restaurant.name, restaurant.menu_url);
+          if (extracted && extracted.sections.length > 0) {
+            return saveMenuToDatabase(restaurant.id, restaurant.menu_url, extracted);
+          }
+        }
+      }
+    }
+  }
+
+  // ---- Phase 2: Try common URL patterns with fetch backend ----
+  const baseUrl = (restaurant.website || '').replace(/\/$/, '');
+  if (!baseUrl) {
+    return { success: false, items_count: 0, error: 'No website URL available' };
+  }
+
+  const patternUrls = [
+    `${baseUrl}/menu`,
+    `${baseUrl}/menus`,
+    `${baseUrl}/food-menu`,
+    `${baseUrl}/our-menu`,
+    `${baseUrl}/food`,
+    `${baseUrl}/food-and-drink`,
+    `${baseUrl}/dining`,
+    baseUrl, // homepage as fallback
+  ];
+
+  let bestContent = '';
+  let bestSourceUrl = '';
+  let bestScore = 0;
+  const allDiscoveredLinks: DiscoveredLink[] = [];
+
+  for (const url of patternUrls) {
+    console.log(`  Trying: ${url}`);
+    const page = await fetchPage(url);
+    if (!page) continue;
+
+    // Discover menu links from this page's HTML
+    const discovered = discoverMenuLinks(page.html, url);
+    for (const link of discovered) {
+      // Avoid duplicates across pages
+      if (!allDiscoveredLinks.some(l => l.url === link.url)) {
+        allDiscoveredLinks.push(link);
+      }
+    }
+
+    // Score this page's own content
+    const score = scoreMenuContent(page.text);
+    if (score > bestScore) {
+      bestScore = score;
+      bestContent = page.text;
+      bestSourceUrl = url;
+    }
+  }
+
+  // ---- Phase 3: Try discovered links (PDFs and third-party platforms) ----
+  // Re-sort all discovered links and try the top ones
+  allDiscoveredLinks.sort((a, b) => b.score - a.score);
+  const topLinks = allDiscoveredLinks.slice(0, 5);
+
+  if (topLinks.length > 0) {
+    console.log(`  Discovered ${allDiscoveredLinks.length} menu link(s), trying top ${topLinks.length}:`);
+    for (const link of topLinks) {
+      console.log(`    - [${link.score}] ${link.isPdf ? '📄' : '🔗'} ${link.label} → ${link.url}`);
+    }
+  }
+
+  for (const link of topLinks) {
+    if (link.isPdf) {
+      // PDF link — fetch and send to Claude Vision
+      console.log(`  Trying PDF link: ${link.url}`);
+      const pdfBase64 = await fetchPdfAsBase64(link.url);
+      if (pdfBase64) {
+        const extracted = await extractMenuFromPdf(pdfBase64, restaurant.name, link.url);
+        if (extracted && extracted.sections.length > 0) {
+          return saveMenuToDatabase(restaurant.id, link.url, extracted);
+        }
+      }
+    } else {
+      // HTML link — fetch and score
+      console.log(`  Trying discovered link: ${link.url}`);
+      const page = await fetchPage(link.url);
+      if (page) {
+        const score = scoreMenuContent(page.text);
+        if (score > bestScore) {
+          bestScore = score;
+          bestContent = page.text;
+          bestSourceUrl = link.url;
+        }
+      }
+    }
+  }
+
+  // ---- Phase 4: Extract from the best HTML content we found ----
+  if (!bestContent) {
+    return { success: false, items_count: 0, error: 'No menu content found at any URL' };
+  }
+
+  console.log(`  Best menu source: ${bestSourceUrl} (${bestContent.length} chars, score: ${bestScore})`);
+
+  const extracted = await extractMenuFromContent(bestContent, restaurant.name, bestSourceUrl);
+
+  if (!extracted || extracted.sections.length === 0) {
+    return { success: false, items_count: 0, error: 'AI could not extract menu items' };
+  }
+
+  return saveMenuToDatabase(restaurant.id, bestSourceUrl, extracted);
 }
 
 serve(async (req) => {
