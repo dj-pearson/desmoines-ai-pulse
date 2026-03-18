@@ -55,6 +55,7 @@ interface DiscoveredLink {
   url: string;
   score: number;
   isPdf: boolean;
+  isMenuSection: boolean;
   label: string;
 }
 
@@ -212,6 +213,7 @@ function discoverMenuLinks(html: string, pageUrl: string): DiscoveredLink[] {
     if (/\/(gift-?card|login|signin|account|cart|checkout|contact|careers|about|privacy|terms)/i.test(hrefLower)) continue;
 
     let score = 0;
+    let isMenuSection = false;
     let label = linkText.substring(0, 80) || href;
 
     // Score based on link text
@@ -225,6 +227,19 @@ function discoverMenuLinks(html: string, pageUrl: string): DiscoveredLink[] {
     if (/\bfull\s+menu\b/i.test(linkText)) score += 12;
     if (/\bour\s+menu\b/i.test(linkText)) score += 10;
     if (/\bfood\s*(and|&)\s*drink/i.test(linkText)) score += 8;
+
+    // Food category keywords — these indicate individual menu section pages
+    // (e.g., /appetizers, /salads, /pasta-dinners, /seafood, /pizza)
+    const foodCategoryPattern = /\b(appetizer|starter|salad|soup|entr[eé]e|pasta|seafood|steak|pizza|sandwich|burger|wrap|taco|sushi|wing|rib|bbq|barbecue|dessert|sweet|breakfast|brunch|lunch|dinner|drink|cocktail|beer|wine|beverage|side|kid'?s?\s*menu|happy\s*hour|special|combo|platter|shareabl|small\s*plate|large\s*plate|main|noodle|rice|curry|ramen|pho|dim\s*sum|sashimi|roll|grill|frie[ds]|chicken|pork|beef|lamb|vegan|vegetarian|gluten.?free|house\s*specialt)/i;
+
+    if (foodCategoryPattern.test(linkText)) {
+      score += 6;
+      isMenuSection = true;
+    }
+    if (foodCategoryPattern.test(hrefLower.split('/').pop() || '')) {
+      score += 4;
+      isMenuSection = true;
+    }
 
     // Score based on URL path
     if (/\/menu(s)?\b/i.test(hrefLower)) score += 8;
@@ -244,13 +259,13 @@ function discoverMenuLinks(html: string, pageUrl: string): DiscoveredLink[] {
 
     // Only keep links with some menu relevance
     if (score > 0) {
-      links.push({ url: resolved, score, isPdf, label });
+      links.push({ url: resolved, score, isPdf, isMenuSection, label });
     }
   }
 
-  // Sort by score descending, limit to top 5
+  // Sort by score descending, limit to top 15 (generous limit for multi-page menus)
   links.sort((a, b) => b.score - a.score);
-  return links.slice(0, 5);
+  return links.slice(0, 15);
 }
 
 /**
@@ -698,45 +713,83 @@ async function scrapeRestaurantMenu(
     }
   }
 
-  // ---- Phase 3: Try discovered links (PDFs and third-party platforms) ----
-  // Re-sort all discovered links and try the top ones
+  // ---- Phase 3: Try discovered links ----
   allDiscoveredLinks.sort((a, b) => b.score - a.score);
-  const topLinks = allDiscoveredLinks.slice(0, 5);
 
-  if (topLinks.length > 0) {
-    console.log(`  Discovered ${allDiscoveredLinks.length} menu link(s), trying top ${topLinks.length}:`);
-    for (const link of topLinks) {
-      console.log(`    - [${link.score}] ${link.isPdf ? '📄' : '🔗'} ${link.label} → ${link.url}`);
+  // Separate PDFs, menu section pages, and other links
+  const pdfLinks = allDiscoveredLinks.filter(l => l.isPdf).slice(0, 3);
+  const sectionLinks = allDiscoveredLinks.filter(l => l.isMenuSection && !l.isPdf);
+  const otherLinks = allDiscoveredLinks.filter(l => !l.isPdf && !l.isMenuSection).slice(0, 5);
+
+  if (allDiscoveredLinks.length > 0) {
+    console.log(`  Discovered ${allDiscoveredLinks.length} link(s): ${pdfLinks.length} PDF, ${sectionLinks.length} section, ${otherLinks.length} other`);
+    for (const link of allDiscoveredLinks.slice(0, 10)) {
+      const tag = link.isPdf ? '📄' : link.isMenuSection ? '📋' : '🔗';
+      console.log(`    - [${link.score}] ${tag} ${link.label} → ${link.url}`);
     }
   }
 
-  for (const link of topLinks) {
-    if (link.isPdf) {
-      // PDF link — fetch and send to Claude Vision
-      console.log(`  Trying PDF link: ${link.url}`);
-      const pdfBase64 = await fetchPdfAsBase64(link.url);
-      if (pdfBase64) {
-        const extracted = await extractMenuFromPdf(pdfBase64, restaurant.name, link.url);
+  // 3a: Try PDFs first (they're usually the most complete)
+  for (const link of pdfLinks) {
+    console.log(`  Trying PDF link: ${link.url}`);
+    const pdfBase64 = await fetchPdfAsBase64(link.url);
+    if (pdfBase64) {
+      const extracted = await extractMenuFromPdf(pdfBase64, restaurant.name, link.url);
+      if (extracted && extracted.sections.length > 0) {
+        return saveMenuToDatabase(restaurant.id, link.url, extracted);
+      }
+    }
+  }
+
+  // 3b: Multi-page menu — if we found 2+ menu section links on the same domain,
+  // fetch all of them and concatenate the text for a single combined extraction.
+  // (e.g., /appetizers + /salads + /pasta-dinners + /seafood + /pizza + ...)
+  if (sectionLinks.length >= 2) {
+    const baseDomain = new URL(baseUrl).hostname;
+    const sameDomainSections = sectionLinks.filter(l => {
+      try { return new URL(l.url).hostname === baseDomain; } catch { return false; }
+    }).slice(0, 12); // cap at 12 section pages
+
+    if (sameDomainSections.length >= 2) {
+      console.log(`  📚 Multi-page menu detected: ${sameDomainSections.length} section pages`);
+      const sectionTexts: string[] = [];
+      const fetchedUrls: string[] = [];
+
+      for (const link of sameDomainSections) {
+        console.log(`  Fetching section: ${link.label} → ${link.url}`);
+        const sectionResult = await fetchPage(link.url);
+        if (hasContent(sectionResult) && sectionResult.text.length > 100) {
+          sectionTexts.push(`=== ${link.label.toUpperCase()} ===\n${sectionResult.text}`);
+          fetchedUrls.push(link.url);
+        }
+      }
+
+      if (sectionTexts.length >= 2) {
+        const combinedText = sectionTexts.join('\n\n');
+        console.log(`  Combined ${sectionTexts.length} section pages: ${combinedText.length} chars total`);
+        const extracted = await extractMenuFromContent(combinedText, restaurant.name, baseUrl);
         if (extracted && extracted.sections.length > 0) {
-          return saveMenuToDatabase(restaurant.id, link.url, extracted);
-        }
-      }
-    } else {
-      // HTML link — fetch and score
-      console.log(`  Trying discovered link: ${link.url}`);
-      const linkResult = await fetchPage(link.url);
-      if (hasContent(linkResult)) {
-        const score = scoreMenuContent(linkResult.text);
-        if (score > bestScore) {
-          bestScore = score;
-          bestContent = linkResult.text;
-          bestSourceUrl = link.url;
+          return saveMenuToDatabase(restaurant.id, baseUrl, extracted);
         }
       }
     }
   }
 
-  // ---- Phase 4: Extract from the best HTML content we found ----
+  // 3c: Try other discovered HTML links (single-page menu links, third-party platforms)
+  for (const link of otherLinks) {
+    console.log(`  Trying discovered link: ${link.url}`);
+    const linkResult = await fetchPage(link.url);
+    if (hasContent(linkResult)) {
+      const score = scoreMenuContent(linkResult.text);
+      if (score > bestScore) {
+        bestScore = score;
+        bestContent = linkResult.text;
+        bestSourceUrl = link.url;
+      }
+    }
+  }
+
+  // ---- Phase 4: Extract from the best single-page HTML content we found ----
   if (!bestContent) {
     return { success: false, items_count: 0, error: 'No menu content found at any URL' };
   }
