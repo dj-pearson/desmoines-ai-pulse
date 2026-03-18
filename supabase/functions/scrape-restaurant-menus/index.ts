@@ -65,6 +65,9 @@ interface DiscoveredLink {
  * This tries to close open brackets/braces to salvage partial data.
  */
 function parseJsonWithRepair(text: string): { sections: MenuSection[] } | null {
+  // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+  text = text.replace(/^```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/i, '');
+
   // First try: parse as-is (look for outermost JSON object)
   try {
     const match = text.match(/\{[\s\S]*\}/);
@@ -352,7 +355,7 @@ If no menu items can be found, return: {"sections": []}`;
     },
     body: JSON.stringify({
       model: aiConfig.default_model,
-      max_tokens: aiConfig.max_tokens_large,
+      max_tokens: parseInt(String(aiConfig.max_tokens_large), 10) || 8000,
       messages: [{ role: 'user', content: prompt }],
     }),
   });
@@ -407,7 +410,7 @@ async function extractMenuFromPdf(
     },
     body: JSON.stringify({
       model: aiConfig.default_model,
-      max_tokens: aiConfig.max_tokens_large,
+      max_tokens: parseInt(String(aiConfig.max_tokens_large), 10) || 8000,
       messages: [
         {
           role: 'user',
