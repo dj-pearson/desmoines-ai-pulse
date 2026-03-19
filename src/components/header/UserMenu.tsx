@@ -47,8 +47,6 @@ export function UserMenu({
   return (
     <div className="hidden lg:flex items-center gap-2 flex-shrink-0">
       <ThemeToggle />
-      <SubmitEventButton />
-      <AdvertiseButton />
       {isAuthenticated ? (
         <>
           {/* Upgrade CTA for logged-in users */}
@@ -113,6 +111,14 @@ export function UserMenu({
               <MenuLink href="/dashboard" icon={Settings} label="Dashboard" />
               <MenuLink href="/gamification" icon={Trophy} label="Level Up" />
               <MenuLink href="/social" icon={Users} label="Social" />
+              <DropdownMenuSeparator />
+              {/* Submit Event and Advertise with Us now in dropdown */}
+              <DropdownMenuItem asChild role="none">
+                <SubmitEventButton />
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild role="none">
+                <AdvertiseButton />
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild role="none">
                 <Link
