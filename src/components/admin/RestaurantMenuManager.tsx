@@ -45,6 +45,7 @@ import {
 } from "lucide-react";
 import { MenuScrapePanel } from "./MenuScrapePanel";
 import { MenuUploadPanel } from "./MenuUploadPanel";
+import { MenuUploadDialog } from "./MenuUploadDialog";
 import { MenuUrlManager, type RestaurantMenuRow } from "./MenuUrlManager";
 import { MenuItemsViewer } from "./MenuItemsViewer";
 import { useRestaurantMenu } from "@/hooks/useRestaurantMenu";
@@ -163,6 +164,11 @@ interface ViewerState {
   restaurantName: string;
 }
 
+interface UploadDialogState {
+  restaurantId: string;
+  restaurantName: string;
+}
+
 function RestaurantTable({
   restaurants,
   onUpload,
@@ -180,6 +186,7 @@ function RestaurantTable({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editUrls, setEditUrls] = useState<Record<string, string>>({});
   const [savingUrlId, setSavingUrlId] = useState<string | null>(null);
+  const [uploadDialog, setUploadDialog] = useState<UploadDialogState | null>(null);
   const queryClient = useQueryClient();
 
   const now = Date.now();
@@ -408,7 +415,7 @@ function RestaurantTable({
                             size="icon"
                             className="h-7 w-7"
                             title="Upload menu"
-                            onClick={() => onUpload(r.id)}
+                            onClick={() => setUploadDialog({ restaurantId: r.id, restaurantName: r.name })}
                             aria-label="Upload menu"
                           >
                             <Upload className="h-3.5 w-3.5" />
@@ -510,6 +517,16 @@ function RestaurantTable({
           </Table>
         </ScrollArea>
       </div>
+
+      {/* Upload menu dialog */}
+      {uploadDialog && (
+        <MenuUploadDialog
+          open={!!uploadDialog}
+          onOpenChange={(open) => { if (!open) setUploadDialog(null); }}
+          restaurantId={uploadDialog.restaurantId}
+          restaurantName={uploadDialog.restaurantName}
+        />
+      )}
     </div>
   );
 }

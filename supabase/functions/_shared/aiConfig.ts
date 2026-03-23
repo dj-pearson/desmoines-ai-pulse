@@ -67,8 +67,18 @@ export async function getAIConfig(
       config[setting.setting_key] = setting.setting_value;
     }
 
-    // Cache the config
-    configCache = config as AIConfig;
+    // Cache the config — DB stores all values as strings, so parse numerics
+    configCache = {
+      default_model: String(config.default_model || "claude-sonnet-4-5-20250929"),
+      lightweight_model: String(config.lightweight_model || "claude-haiku-4-5-20251001"),
+      api_endpoint: String(config.api_endpoint || "https://api.anthropic.com/v1/messages"),
+      max_tokens_standard: parseInt(String(config.max_tokens_standard), 10) || 2000,
+      max_tokens_large: parseInt(String(config.max_tokens_large), 10) || 8000,
+      max_tokens_lightweight: parseInt(String(config.max_tokens_lightweight), 10) || 1000,
+      temperature_precise: parseFloat(String(config.temperature_precise)) || 0.1,
+      temperature_creative: parseFloat(String(config.temperature_creative)) || 0.7,
+      anthropic_version: String(config.anthropic_version || "2023-06-01"),
+    };
     cacheTimestamp = now;
 
     console.log("AI Config loaded from database:", {

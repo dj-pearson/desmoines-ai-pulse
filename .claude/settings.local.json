@@ -42,7 +42,8 @@
       "Bash(find C:UsersdpearsonDocumentsDes-Moines-InsiderDes-Moines-Insiderdesmoines-ai-pulsesrc -type f \\\\\\(-name *menu* -o -name *scrape* \\\\\\))",
       "Bash(npx supabase:*)",
       "WebFetch(domain:www.simonsdsm.com)",
-      "Bash(supabase db:*)"
+      "Bash(supabase db:*)",
+      "Bash(supabase functions:*)"
     ],
     "deny": [],
     "ask": []
