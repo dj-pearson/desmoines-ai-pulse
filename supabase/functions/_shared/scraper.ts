@@ -598,16 +598,7 @@ export async function fetchPdfAsBase64(
   }
 }
 
-/** Claude Vision supported media types */
-const VISION_SUPPORTED_TYPES: Record<string, string> = {
-  'image/jpeg': 'image/jpeg',
-  'image/jpg': 'image/jpeg',
-  'image/png': 'image/png',
-  'image/gif': 'image/gif',
-  'image/webp': 'image/webp',
-};
-
-/** Map file extensions to media types */
+/** Map file extensions to media types (for URL-based hints only) */
 const EXT_TO_MEDIA: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -617,8 +608,52 @@ const EXT_TO_MEDIA: Record<string, string> = {
 };
 
 /**
- * Detect the media type from a URL and Content-Type header.
+ * Detect the ACTUAL image format from the first bytes (magic bytes).
+ * This is the only reliable way — URLs, extensions, and even Content-Type
+ * headers can lie (e.g., CDNs with auto=format serve AVIF from .jpg URLs).
+ *
  * Returns a Claude-Vision-compatible media type, or null if unsupported.
+ */
+function detectMediaTypeFromBytes(bytes: Uint8Array): string | null {
+  if (bytes.length < 12) return null;
+
+  // JPEG: FF D8 FF
+  if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+    return 'image/jpeg';
+  }
+
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+    return 'image/png';
+  }
+
+  // GIF: 47 49 46 38 (GIF8)
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x38) {
+    return 'image/gif';
+  }
+
+  // WebP: RIFF....WEBP
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return 'image/webp';
+  }
+
+  // AVIF / HEIC: starts with a size box then "ftyp" at offset 4
+  // followed by brand "avif", "avis", "mif1", or "heic"
+  if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    // This is an ftyp box — AVIF/HEIC, NOT supported by Claude Vision
+    return null;
+  }
+
+  return null;
+}
+
+/**
+ * Detect the media type from a URL and Content-Type header.
+ * Used as a HINT for pre-filtering (e.g., in discoverMenuImages).
+ * The actual format is verified via magic bytes after fetching.
  */
 export function detectImageMediaType(
   url: string,
@@ -627,7 +662,11 @@ export function detectImageMediaType(
   // Try Content-Type header first
   if (contentType) {
     const ct = contentType.split(';')[0].trim().toLowerCase();
-    if (VISION_SUPPORTED_TYPES[ct]) return VISION_SUPPORTED_TYPES[ct];
+    if (ct === 'image/jpeg' || ct === 'image/jpg') return 'image/jpeg';
+    if (ct === 'image/png') return 'image/png';
+    if (ct === 'image/gif') return 'image/gif';
+    if (ct === 'image/webp') return 'image/webp';
+    // AVIF/HEIC — not supported, but don't reject yet (caller decides)
   }
 
   // Fall back to file extension
@@ -643,10 +682,71 @@ export interface FetchedImage {
 }
 
 /**
+ * Rewrite a CDN URL to force a Claude-Vision-compatible format.
+ * Many image CDNs (GetBento/BentoBox, Cloudinary, imgix, Contentful, etc.)
+ * have `auto=format` or similar params that serve AVIF to modern browsers.
+ * We need to force JPEG/WebP/PNG instead.
+ */
+function forceSupportedFormat(url: string): string {
+  try {
+    const u = new URL(url);
+    const params = u.searchParams;
+    const host = u.hostname.toLowerCase();
+
+    // GetBento / BentoBox: images.getbento.com
+    // Has `auto=compress,format` — remove "format" from auto, add fm=jpg
+    if (host.includes('getbento.com')) {
+      const auto = params.get('auto') || '';
+      if (auto.includes('format')) {
+        params.set('auto', auto.replace(/,?\s*format/, '').replace(/format,?\s*/, '') || 'compress');
+        params.set('fm', 'jpg');
+      }
+      return u.toString();
+    }
+
+    // Cloudinary: res.cloudinary.com
+    // URL path contains /f_auto/ — replace with /f_jpg/
+    if (host.includes('cloudinary.com')) {
+      u.pathname = u.pathname.replace(/\/f_auto\b/, '/f_jpg');
+      return u.toString();
+    }
+
+    // imgix: *.imgix.net or custom domains with ?auto=format
+    if (host.includes('imgix.net') || params.get('auto')?.includes('format')) {
+      const auto = params.get('auto') || '';
+      if (auto.includes('format')) {
+        params.set('auto', auto.replace(/,?\s*format/, '').replace(/format,?\s*/, '') || 'compress');
+        params.set('fm', 'jpg');
+      }
+      return u.toString();
+    }
+
+    // Contentful: images.ctfassets.net
+    if (host.includes('ctfassets.net')) {
+      params.set('fm', 'jpg');
+      return u.toString();
+    }
+
+    // Squarespace CDN: images.squarespace-cdn.com — add ?format=1500w (JPEG)
+    if (host.includes('squarespace-cdn.com') && !params.has('format')) {
+      params.set('format', 'original');
+      return u.toString();
+    }
+
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+/**
  * Fetch an image from a URL and return it as base64 + media type.
  * Only returns images in Claude Vision-supported formats (JPEG, PNG, GIF, WebP).
- * Returns null for unsupported formats (AVIF, SVG, etc.) or on fetch failure.
- * Rejects images smaller than minBytes (default 5KB) to skip icons/spacers.
+ *
+ * Key behavior:
+ * - Detects actual format via magic bytes (not URL extension or Content-Type)
+ * - If CDN serves AVIF despite .jpg URL, rewrites URL to force JPEG and retries
+ * - Rejects images smaller than minBytes (default 5KB) to skip icons/spacers
  */
 export async function fetchImageAsBase64(
   url: string,
@@ -654,58 +754,69 @@ export async function fetchImageAsBase64(
   maxBytes = 20 * 1024 * 1024,
   minBytes = 5 * 1024
 ): Promise<FetchedImage | null> {
-  try {
-    console.log(`🖼️ Fetching image: ${url}`);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+  // Try the original URL first, then a CDN-rewritten URL if format is unsupported
+  const urls = [url];
+  const rewritten = forceSupportedFormat(url);
+  if (rewritten !== url) urls.push(rewritten);
 
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'image/webp,image/png,image/jpeg,image/gif,*/*',
-      },
-      signal: controller.signal,
-    });
+  for (const tryUrl of urls) {
+    try {
+      console.log(`🖼️ Fetching image: ${tryUrl}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-    clearTimeout(timeoutId);
+      const response = await fetch(tryUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          // Request supported formats explicitly — avoid AVIF
+          'Accept': 'image/jpeg,image/png,image/webp,image/gif,*/*;q=0.1',
+        },
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      console.log(`  ❌ Image fetch failed: ${response.status}`);
-      return null;
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        console.log(`  ❌ Image fetch failed: ${response.status}`);
+        continue;
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+
+      if (bytes.length < minBytes) {
+        console.log(`  ⏭️ Image too small (${(bytes.length / 1024).toFixed(1)}KB), likely an icon`);
+        return null;
+      }
+
+      if (bytes.length > maxBytes) {
+        console.log(`  ⏭️ Image too large (${(bytes.length / 1024 / 1024).toFixed(1)}MB)`);
+        return null;
+      }
+
+      // Detect ACTUAL format from magic bytes
+      const mediaType = detectMediaTypeFromBytes(bytes);
+
+      if (!mediaType) {
+        const contentType = response.headers.get('content-type') || 'unknown';
+        console.log(`  ⏭️ Unsupported image format (actual bytes). Content-Type: ${contentType}, URL: ${tryUrl}`);
+        // If this was the original URL and we have a rewritten URL, try that next
+        continue;
+      }
+
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const base64 = btoa(binary);
+      const sizeKB = Math.round(bytes.length / 1024);
+
+      console.log(`  ✅ Image fetched: ${sizeKB}KB ${mediaType} (verified by magic bytes)`);
+      return { base64, mediaType, sizeKB };
+    } catch (error) {
+      console.error(`  ❌ Image fetch error:`, error);
     }
-
-    const contentType = response.headers.get('content-type');
-    const mediaType = detectImageMediaType(url, contentType);
-
-    if (!mediaType) {
-      console.log(`  ⏭️ Unsupported image format: ${contentType || 'unknown'} (${url})`);
-      return null;
-    }
-
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-
-    if (bytes.length < minBytes) {
-      console.log(`  ⏭️ Image too small (${(bytes.length / 1024).toFixed(1)}KB), likely an icon`);
-      return null;
-    }
-
-    if (bytes.length > maxBytes) {
-      console.log(`  ⏭️ Image too large (${(bytes.length / 1024 / 1024).toFixed(1)}MB)`);
-      return null;
-    }
-
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    const base64 = btoa(binary);
-    const sizeKB = Math.round(bytes.length / 1024);
-
-    console.log(`  ✅ Image fetched: ${sizeKB}KB ${mediaType}`);
-    return { base64, mediaType, sizeKB };
-  } catch (error) {
-    console.error(`  ❌ Image fetch error:`, error);
-    return null;
   }
+
+  return null;
 }
