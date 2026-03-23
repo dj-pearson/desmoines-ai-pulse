@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -325,8 +325,8 @@ function RestaurantTable({
                 const isSavingUrl = savingUrlId === r.id;
 
                 return (
-                  <>
-                    <TableRow key={r.id}>
+                  <Fragment key={r.id}>
+                    <TableRow>
                       <TableCell className="min-w-[200px]">
                         <div className="flex flex-col gap-0.5">
                           <span className="font-medium text-sm leading-tight">{r.name}</span>
@@ -503,7 +503,7 @@ function RestaurantTable({
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>

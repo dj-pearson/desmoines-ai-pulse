@@ -35,14 +35,15 @@ CREATE TABLE IF NOT EXISTS restaurant_menu_items (
 );
 
 -- Indexes for common queries
-CREATE INDEX idx_restaurant_menus_restaurant_id ON restaurant_menus(restaurant_id);
-CREATE INDEX idx_restaurant_menus_is_current ON restaurant_menus(restaurant_id, is_current) WHERE is_current = true;
-CREATE INDEX idx_menu_items_menu_id ON restaurant_menu_items(menu_id);
-CREATE INDEX idx_menu_items_dietary ON restaurant_menu_items USING GIN(dietary_tags);
-CREATE INDEX idx_menu_items_price ON restaurant_menu_items(price_numeric) WHERE price_numeric IS NOT NULL;
-CREATE INDEX idx_menu_items_section ON restaurant_menu_items(menu_id, section_sort_order, sort_order);
+CREATE INDEX IF NOT EXISTS idx_restaurant_menus_restaurant_id ON restaurant_menus(restaurant_id);
+CREATE INDEX IF NOT EXISTS idx_restaurant_menus_is_current ON restaurant_menus(restaurant_id, is_current) WHERE is_current = true;
+CREATE INDEX IF NOT EXISTS idx_menu_items_menu_id ON restaurant_menu_items(menu_id);
+CREATE INDEX IF NOT EXISTS idx_menu_items_dietary ON restaurant_menu_items USING GIN(dietary_tags);
+CREATE INDEX IF NOT EXISTS idx_menu_items_price ON restaurant_menu_items(price_numeric) WHERE price_numeric IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_menu_items_section ON restaurant_menu_items(menu_id, section_sort_order, sort_order);
 
 -- Trigger: auto-update updated_at on restaurant_menus
+DROP TRIGGER IF EXISTS update_restaurant_menus_updated_at ON restaurant_menus;
 CREATE TRIGGER update_restaurant_menus_updated_at
   BEFORE UPDATE ON restaurant_menus
   FOR EACH ROW
@@ -63,6 +64,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_unmark_previous_menu_versions ON restaurant_menus;
 CREATE TRIGGER trigger_unmark_previous_menu_versions
   AFTER INSERT OR UPDATE OF is_current ON restaurant_menus
   FOR EACH ROW
@@ -83,6 +85,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trigger_set_menu_version ON restaurant_menus;
 CREATE TRIGGER trigger_set_menu_version
   BEFORE INSERT ON restaurant_menus
   FOR EACH ROW
@@ -93,34 +96,42 @@ ALTER TABLE restaurant_menus ENABLE ROW LEVEL SECURITY;
 ALTER TABLE restaurant_menu_items ENABLE ROW LEVEL SECURITY;
 
 -- Public read access
+DROP POLICY IF EXISTS "Public read access on restaurant_menus" ON restaurant_menus;
 CREATE POLICY "Public read access on restaurant_menus"
   ON restaurant_menus FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Public read access on restaurant_menu_items" ON restaurant_menu_items;
 CREATE POLICY "Public read access on restaurant_menu_items"
   ON restaurant_menu_items FOR SELECT USING (true);
 
 -- Authenticated users can insert (for manual/upload submissions)
+DROP POLICY IF EXISTS "Authenticated users can insert menus" ON restaurant_menus;
 CREATE POLICY "Authenticated users can insert menus"
   ON restaurant_menus FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Authenticated users can insert menu items" ON restaurant_menu_items;
 CREATE POLICY "Authenticated users can insert menu items"
   ON restaurant_menu_items FOR INSERT
   WITH CHECK (auth.role() = 'authenticated');
 
 -- Admin update/delete
+DROP POLICY IF EXISTS "Admins can update menus" ON restaurant_menus;
 CREATE POLICY "Admins can update menus"
   ON restaurant_menus FOR UPDATE
   USING (auth.jwt() ->> 'role' = 'admin');
 
+DROP POLICY IF EXISTS "Admins can delete menus" ON restaurant_menus;
 CREATE POLICY "Admins can delete menus"
   ON restaurant_menus FOR DELETE
   USING (auth.jwt() ->> 'role' = 'admin');
 
+DROP POLICY IF EXISTS "Admins can update menu items" ON restaurant_menu_items;
 CREATE POLICY "Admins can update menu items"
   ON restaurant_menu_items FOR UPDATE
   USING (auth.jwt() ->> 'role' = 'admin');
 
+DROP POLICY IF EXISTS "Admins can delete menu items" ON restaurant_menu_items;
 CREATE POLICY "Admins can delete menu items"
   ON restaurant_menu_items FOR DELETE
   USING (auth.jwt() ->> 'role' = 'admin');
