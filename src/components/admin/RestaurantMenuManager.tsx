@@ -28,6 +28,7 @@ import {
   UtensilsCrossed,
   Upload,
   Link2,
+  Link2Off,
   RefreshCw,
   Eye,
   Play,
@@ -37,6 +38,10 @@ import {
   Clock,
   Loader2,
   BarChart3,
+  Save,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { MenuScrapePanel } from "./MenuScrapePanel";
 import { MenuUploadPanel } from "./MenuUploadPanel";
@@ -172,6 +177,9 @@ function RestaurantTable({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"all" | "no_menu" | "stale" | "has_menu">("all");
   const [scrapingId, setScrapingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editUrls, setEditUrls] = useState<Record<string, string>>({});
+  const [savingUrlId, setSavingUrlId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const now = Date.now();
@@ -188,6 +196,51 @@ function RestaurantTable({
       (filter === "has_menu" && r.has_menu);
     return matchSearch && matchFilter;
   });
+
+  const handleSaveUrl = async (r: RestaurantMenuRow) => {
+    const url = editUrls[r.id]?.trim() || null;
+    setSavingUrlId(r.id);
+    try {
+      const { error } = await supabase
+        .from("restaurants")
+        .update({ menu_url: url })
+        .eq("id", r.id);
+      if (error) throw error;
+      toast.success(url ? "Menu URL saved" : "Menu URL cleared");
+      setEditUrls((prev) => {
+        const next = { ...prev };
+        delete next[r.id];
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin-menu-restaurants"] });
+    } catch (err) {
+      toast.error(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingUrlId(null);
+    }
+  };
+
+  const handleClearUrl = async (r: RestaurantMenuRow) => {
+    setSavingUrlId(r.id);
+    try {
+      const { error } = await supabase
+        .from("restaurants")
+        .update({ menu_url: null })
+        .eq("id", r.id);
+      if (error) throw error;
+      toast.success("Menu URL cleared");
+      setEditUrls((prev) => {
+        const next = { ...prev };
+        delete next[r.id];
+        return next;
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin-menu-restaurants"] });
+    } catch (err) {
+      toast.error(`Clear failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setSavingUrlId(null);
+    }
+  };
 
   const handleScrapeOne = async (r: RestaurantMenuRow) => {
     setScrapingId(r.id);
@@ -265,94 +318,192 @@ function RestaurantTable({
                   r.last_captured &&
                   now - new Date(r.last_captured).getTime() > thirtyDaysMs;
                 const isScraping = scrapingId === r.id;
+                const isExpanded = expandedId === r.id;
+                const currentEditUrl = editUrls[r.id];
+                const displayUrl = currentEditUrl ?? r.menu_url ?? "";
+                const hasUnsavedUrl = currentEditUrl !== undefined;
+                const isSavingUrl = savingUrlId === r.id;
 
                 return (
-                  <TableRow key={r.id}>
-                    <TableCell className="min-w-[200px]">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="font-medium text-sm leading-tight">{r.name}</span>
-                        {!r.menu_scrape_enabled && (
-                          <Badge variant="outline" className="w-fit text-xs text-muted-foreground">
-                            Scrape off
+                  <>
+                    <TableRow key={r.id}>
+                      <TableCell className="min-w-[200px]">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-medium text-sm leading-tight">{r.name}</span>
+                          {!r.menu_scrape_enabled && (
+                            <Badge variant="outline" className="w-fit text-xs text-muted-foreground">
+                              Scrape off
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        {r.has_menu ? (
+                          <Badge
+                            variant="secondary"
+                            className={stale ? "bg-yellow-100 text-yellow-800 border-yellow-200" : "bg-green-100 text-green-800 border-green-200"}
+                          >
+                            {stale ? "Stale" : "Current"}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-orange-600 border-orange-300">
+                            None
                           </Badge>
                         )}
-                      </div>
-                    </TableCell>
+                      </TableCell>
 
-                    <TableCell>
-                      {r.has_menu ? (
-                        <Badge
-                          variant="secondary"
-                          className={stale ? "bg-yellow-100 text-yellow-800 border-yellow-200" : "bg-green-100 text-green-800 border-green-200"}
-                        >
-                          {stale ? "Stale" : "Current"}
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-orange-600 border-orange-300">
-                          None
-                        </Badge>
-                      )}
-                    </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {r.has_menu ? r.items_count : "—"}
+                      </TableCell>
 
-                    <TableCell className="text-right text-sm text-muted-foreground">
-                      {r.has_menu ? r.items_count : "—"}
-                    </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {r.last_captured
+                          ? new Date(r.last_captured).toLocaleDateString()
+                          : "—"}
+                      </TableCell>
 
-                    <TableCell className="text-xs text-muted-foreground">
-                      {r.last_captured
-                        ? new Date(r.last_captured).toLocaleDateString()
-                        : "—"}
-                    </TableCell>
-
-                    <TableCell>
-                      {r.menu_url ? (
-                        <Badge variant="outline" className="text-xs text-blue-600 border-blue-300">
-                          Custom
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Pattern</span>
-                      )}
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex items-center gap-1">
+                      <TableCell>
                         <Button
                           variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Scrape now"
-                          disabled={isScraping || !r.website && !r.menu_url}
-                          onClick={() => handleScrapeOne(r)}
+                          size="sm"
+                          className="h-6 px-2 gap-1 text-xs"
+                          onClick={() => setExpandedId(isExpanded ? null : r.id)}
+                          aria-label={isExpanded ? "Collapse menu URL" : "Edit menu URL"}
                         >
-                          {isScraping ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          {r.menu_url ? (
+                            <Badge variant="outline" className="text-xs text-blue-600 border-blue-300 pointer-events-none">
+                              Custom
+                            </Badge>
                           ) : (
-                            <RefreshCw className="h-3.5 w-3.5" />
+                            <span className="text-muted-foreground">Pattern</span>
+                          )}
+                          {isExpanded ? (
+                            <ChevronUp className="h-3 w-3" />
+                          ) : (
+                            <ChevronDown className="h-3 w-3" />
                           )}
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Upload menu"
-                          onClick={() => onUpload(r.id)}
-                        >
-                          <Upload className="h-3.5 w-3.5" />
-                        </Button>
-                        {r.has_menu && (
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="flex items-center gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
-                            title="View menu items"
-                            onClick={() => onView(r.id, r.name)}
+                            title="Scrape now"
+                            disabled={isScraping || (!r.website && !r.menu_url)}
+                            onClick={() => handleScrapeOne(r)}
+                            aria-label="Scrape now"
                           >
-                            <Eye className="h-3.5 w-3.5" />
+                            {isScraping ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            )}
                           </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title="Upload menu"
+                            onClick={() => onUpload(r.id)}
+                            aria-label="Upload menu"
+                          >
+                            <Upload className="h-3.5 w-3.5" />
+                          </Button>
+                          {r.has_menu && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="View menu items"
+                              onClick={() => onView(r.id, r.name)}
+                              aria-label="View menu items"
+                            >
+                              <Eye className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Inline custom menu URL editor */}
+                    {isExpanded && (
+                      <TableRow key={`${r.id}-url`} className="bg-muted/30 hover:bg-muted/40">
+                        <TableCell colSpan={6} className="py-2 px-4">
+                          <div className="flex items-center gap-2">
+                            <Link2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <Input
+                              placeholder="https://restaurant.com/menu or direct PDF link…"
+                              value={displayUrl}
+                              onChange={(e) =>
+                                setEditUrls((prev) => ({ ...prev, [r.id]: e.target.value }))
+                              }
+                              className="h-8 text-sm flex-1"
+                            />
+                            {displayUrl && (
+                              <a
+                                href={displayUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-muted-foreground hover:text-primary shrink-0"
+                                title="Open URL"
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-8 gap-1 shrink-0"
+                              disabled={isSavingUrl || !hasUnsavedUrl}
+                              onClick={() => handleSaveUrl(r)}
+                            >
+                              <Save className="h-3.5 w-3.5" />
+                              Save
+                            </Button>
+                            {r.menu_url && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 gap-1 shrink-0 text-destructive hover:text-destructive"
+                                disabled={isSavingUrl}
+                                onClick={() => handleClearUrl(r)}
+                              >
+                                <Link2Off className="h-3.5 w-3.5" />
+                                Clear
+                              </Button>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="default"
+                              className="h-8 gap-1 shrink-0"
+                              disabled={isScraping || isSavingUrl || (!r.website && !r.menu_url && !displayUrl)}
+                              onClick={async () => {
+                                // Save URL first if changed, then scrape
+                                if (hasUnsavedUrl) {
+                                  await handleSaveUrl(r);
+                                }
+                                handleScrapeOne({
+                                  ...r,
+                                  menu_url: hasUnsavedUrl ? (editUrls[r.id]?.trim() || null) : r.menu_url,
+                                });
+                              }}
+                            >
+                              {isScraping ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-3.5 w-3.5" />
+                              )}
+                              Scrape Now
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
                 );
               })}
             </TableBody>
