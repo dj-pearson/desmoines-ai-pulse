@@ -597,3 +597,115 @@ export async function fetchPdfAsBase64(
     return null;
   }
 }
+
+/** Claude Vision supported media types */
+const VISION_SUPPORTED_TYPES: Record<string, string> = {
+  'image/jpeg': 'image/jpeg',
+  'image/jpg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/gif': 'image/gif',
+  'image/webp': 'image/webp',
+};
+
+/** Map file extensions to media types */
+const EXT_TO_MEDIA: Record<string, string> = {
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};
+
+/**
+ * Detect the media type from a URL and Content-Type header.
+ * Returns a Claude-Vision-compatible media type, or null if unsupported.
+ */
+export function detectImageMediaType(
+  url: string,
+  contentType?: string | null
+): string | null {
+  // Try Content-Type header first
+  if (contentType) {
+    const ct = contentType.split(';')[0].trim().toLowerCase();
+    if (VISION_SUPPORTED_TYPES[ct]) return VISION_SUPPORTED_TYPES[ct];
+  }
+
+  // Fall back to file extension
+  const pathname = new URL(url, 'https://x').pathname.toLowerCase();
+  const ext = pathname.split('.').pop()?.split('?')[0] || '';
+  return EXT_TO_MEDIA[ext] || null;
+}
+
+export interface FetchedImage {
+  base64: string;
+  mediaType: string;   // e.g. "image/jpeg"
+  sizeKB: number;
+}
+
+/**
+ * Fetch an image from a URL and return it as base64 + media type.
+ * Only returns images in Claude Vision-supported formats (JPEG, PNG, GIF, WebP).
+ * Returns null for unsupported formats (AVIF, SVG, etc.) or on fetch failure.
+ * Rejects images smaller than minBytes (default 5KB) to skip icons/spacers.
+ */
+export async function fetchImageAsBase64(
+  url: string,
+  timeout = 20000,
+  maxBytes = 20 * 1024 * 1024,
+  minBytes = 5 * 1024
+): Promise<FetchedImage | null> {
+  try {
+    console.log(`🖼️ Fetching image: ${url}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/webp,image/png,image/jpeg,image/gif,*/*',
+      },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.log(`  ❌ Image fetch failed: ${response.status}`);
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type');
+    const mediaType = detectImageMediaType(url, contentType);
+
+    if (!mediaType) {
+      console.log(`  ⏭️ Unsupported image format: ${contentType || 'unknown'} (${url})`);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const bytes = new Uint8Array(arrayBuffer);
+
+    if (bytes.length < minBytes) {
+      console.log(`  ⏭️ Image too small (${(bytes.length / 1024).toFixed(1)}KB), likely an icon`);
+      return null;
+    }
+
+    if (bytes.length > maxBytes) {
+      console.log(`  ⏭️ Image too large (${(bytes.length / 1024 / 1024).toFixed(1)}MB)`);
+      return null;
+    }
+
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = btoa(binary);
+    const sizeKB = Math.round(bytes.length / 1024);
+
+    console.log(`  ✅ Image fetched: ${sizeKB}KB ${mediaType}`);
+    return { base64, mediaType, sizeKB };
+  } catch (error) {
+    console.error(`  ❌ Image fetch error:`, error);
+    return null;
+  }
+}
