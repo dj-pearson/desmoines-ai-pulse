@@ -71,7 +71,7 @@ final class StoreKitService {
 
     // MARK: - Private
 
-    nonisolated(unsafe) private var transactionListener: Task<Void, Never>?
+    nonisolated private var transactionListener: Task<Void, Never>?
     private let supabase = SupabaseService.shared.client
 
     // MARK: - Init
@@ -282,13 +282,10 @@ final class StoreKitService {
 
         for attempt in 0..<Self.maxRetries {
             do {
-                let response = try await client.functions.invoke(
+                let decoded: ValidationResponse = try await client.functions.invoke(
                     "validate-ios-receipt",
                     options: .init(method: .post, body: payload)
                 )
-
-                // Attempt to decode the response
-                let decoded = try JSONDecoder().decode(ValidationResponse.self, from: response.data)
 
                 if decoded.valid {
                     #if DEBUG
