@@ -30,7 +30,7 @@ actor QueryCache {
 
     /// Returns cached data if within TTL. When `allowStale` is true (e.g. offline),
     /// returns data regardless of expiration.
-    func get<T: Decodable>(_ key: String, allowStale: Bool = false) -> T? {
+    func get<T: Codable>(_ key: String, allowStale: Bool = false) -> T? {
         let fileURL = fileURL(for: key)
         guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
 
@@ -52,7 +52,7 @@ actor QueryCache {
     }
 
     /// Stores a value in the cache with the default TTL.
-    func set<T: Encodable>(_ key: String, value: T, ttl: TimeInterval? = nil) {
+    func set<T: Codable>(_ key: String, value: T, ttl: TimeInterval? = nil) {
         let entry = CacheEntry(value: value, expiresAt: Date().addingTimeInterval(ttl ?? defaultTTL))
         let fileURL = fileURL(for: key)
 
