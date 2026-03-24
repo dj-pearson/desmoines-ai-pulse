@@ -71,7 +71,7 @@ final class StoreKitService {
 
     // MARK: - Private
 
-    nonisolated private var transactionListener: Task<Void, Never>?
+    @ObservationIgnored private var transactionListener: Task<Void, Never>?
     private let supabase = SupabaseService.shared.client
 
     // MARK: - Init
