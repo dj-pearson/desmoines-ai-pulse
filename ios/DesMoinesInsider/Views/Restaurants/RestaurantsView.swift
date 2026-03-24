@@ -81,6 +81,11 @@ struct RestaurantsView: View {
             }
             .refreshable {
                 await viewModel.refresh()
+                if viewModel.errorMessage == nil {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                } else {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                }
             }
             .navigationTitle("Restaurants")
             .toolbar {
@@ -122,8 +127,31 @@ struct RestaurantsView: View {
     private var sortPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                // Open Now toggle
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    viewModel.showOpenNowOnly.toggle()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "clock.fill")
+                            .font(.caption2)
+                        Text("Open Now")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(viewModel.showOpenNowOnly ? Color.green : Color(.systemGray6))
+                    .foregroundStyle(viewModel.showOpenNowOnly ? .white : .primary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Open Now filter")
+                .accessibilitySelected(viewModel.showOpenNowOnly)
+                .accessibilityHint(viewModel.showOpenNowOnly ? "Tap to show all restaurants" : "Tap to show only open restaurants")
+
                 ForEach(RestaurantSortOption.allCases) { option in
                     Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         viewModel.sortBy = option
                     } label: {
                         Text(option.rawValue)

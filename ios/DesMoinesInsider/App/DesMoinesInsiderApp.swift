@@ -35,6 +35,9 @@ struct DesMoinesInsiderApp: App {
             .task {
                 launchCount += 1
 
+                // Prune expired cache entries on launch
+                await QueryCache.shared.pruneExpired()
+
                 if authService.isAuthenticated {
                     await favoritesService.loadFavorites()
 

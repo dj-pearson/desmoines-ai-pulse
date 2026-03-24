@@ -1,6 +1,11 @@
 import SwiftUI
+import os
 
-/// Async image with in-memory cache and placeholder support.
+/// Async image with two-tier cache: NSCache (memory) + FileManager (disk).
+///
+/// - Memory cache: 50 MB, instant (< 1 frame)
+/// - Disk cache: 200 MB, fast (1-2 frames)
+/// - Network: placeholder shown while loading
 struct CachedAsyncImage<Placeholder: View>: View {
     let url: String?
     @ViewBuilder let placeholder: () -> Placeholder
@@ -14,9 +19,6 @@ struct CachedAsyncImage<Placeholder: View>: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    // clipped() here prevents the fill-scaled image from overflowing
-                    // whatever frame the call site provides, which would otherwise
-                    // widen the layout beyond the screen bounds.
                     .clipped()
             } else if isLoading {
                 placeholder()
@@ -41,48 +43,191 @@ struct CachedAsyncImage<Placeholder: View>: View {
             return
         }
 
-        // Check cache
-        if let cached = ImageCache.shared.get(urlString) {
+        // 1. Memory cache (instant)
+        if let cached = ImageCache.shared.getFromMemory(urlString) {
             image = cached
             isLoading = false
             return
         }
 
+        // 2. Disk cache (fast)
+        if let diskCached = await ImageCache.shared.getFromDisk(urlString) {
+            ImageCache.shared.setMemory(diskCached, for: urlString)
+            image = diskCached
+            isLoading = false
+            return
+        }
+
+        // 3. Network
         isLoading = true
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, response) = try await URLSession.shared.data(from: url)
             if let uiImage = UIImage(data: data) {
-                ImageCache.shared.set(uiImage, for: urlString)
+                ImageCache.shared.setMemory(uiImage, for: urlString)
+                // Extract cache TTL from response headers, default 7 days
+                let ttl = Self.cacheTTL(from: response)
+                await ImageCache.shared.setDisk(data, for: urlString, ttl: ttl)
                 image = uiImage
             }
         } catch {
-            // Silently fail — placeholder will be shown
+            // Silently fail — placeholder shown
         }
 
         isLoading = false
     }
+
+    /// Extract max-age from Cache-Control header, default to 7 days.
+    private static func cacheTTL(from response: URLResponse) -> TimeInterval {
+        guard let httpResponse = response as? HTTPURLResponse,
+              let cacheControl = httpResponse.value(forHTTPHeaderField: "Cache-Control"),
+              let maxAgeRange = cacheControl.range(of: #"max-age=(\d+)"#, options: .regularExpression),
+              let seconds = Int(cacheControl[maxAgeRange].split(separator: "=").last ?? "") else {
+            return 7 * 24 * 60 * 60 // 7 days default
+        }
+        return TimeInterval(seconds)
+    }
 }
 
-// MARK: - Image Cache
+// MARK: - Two-Tier Image Cache
 
 final class ImageCache: @unchecked Sendable {
     static let shared = ImageCache()
 
-    private let cache = NSCache<NSString, UIImage>()
+    // Memory tier
+    private let memoryCache = NSCache<NSString, UIImage>()
+
+    // Disk tier
+    private let diskCacheDir: URL
+    private let maxDiskBytes: Int = 200 * 1024 * 1024 // 200 MB
+    private let diskQueue = DispatchQueue(label: "com.desmoines.aipulse.imagecache", qos: .utility)
 
     private init() {
-        cache.countLimit = 200
-        cache.totalCostLimit = 100 * 1024 * 1024 // 100 MB
+        memoryCache.countLimit = 200
+        memoryCache.totalCostLimit = 50 * 1024 * 1024 // 50 MB
+
+        let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        diskCacheDir = caches.appendingPathComponent("ImageDiskCache", isDirectory: true)
+        try? FileManager.default.createDirectory(at: diskCacheDir, withIntermediateDirectories: true)
+
+        // Prune on init (background)
+        diskQueue.async { [weak self] in
+            self?.pruneDiskIfNeeded()
+        }
     }
 
-    func get(_ key: String) -> UIImage? {
-        cache.object(forKey: key as NSString)
+    // MARK: - Memory
+
+    func getFromMemory(_ key: String) -> UIImage? {
+        memoryCache.object(forKey: key as NSString)
     }
 
-    func set(_ image: UIImage, for key: String) {
-        cache.setObject(image, forKey: key as NSString)
+    func setMemory(_ image: UIImage, for key: String) {
+        memoryCache.setObject(image, forKey: key as NSString)
     }
+
+    // MARK: - Disk
+
+    func getFromDisk(_ key: String) async -> UIImage? {
+        let fileURL = diskFileURL(for: key)
+        let metaURL = diskMetaURL(for: key)
+
+        return await withCheckedContinuation { continuation in
+            diskQueue.async {
+                guard FileManager.default.fileExists(atPath: fileURL.path),
+                      let metaData = try? Data(contentsOf: metaURL),
+                      let meta = try? JSONDecoder().decode(DiskCacheMeta.self, from: metaData) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                // Check expiry
+                if Date() > meta.expiresAt {
+                    try? FileManager.default.removeItem(at: fileURL)
+                    try? FileManager.default.removeItem(at: metaURL)
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                guard let data = try? Data(contentsOf: fileURL),
+                      let image = UIImage(data: data) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
+    func setDisk(_ data: Data, for key: String, ttl: TimeInterval) async {
+        let fileURL = diskFileURL(for: key)
+        let metaURL = diskMetaURL(for: key)
+        let meta = DiskCacheMeta(expiresAt: Date().addingTimeInterval(ttl))
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            diskQueue.async {
+                try? data.write(to: fileURL, options: .atomic)
+                if let metaData = try? JSONEncoder().encode(meta) {
+                    try? metaData.write(to: metaURL, options: .atomic)
+                }
+                continuation.resume()
+            }
+        }
+    }
+
+    // MARK: - Pruning
+
+    private func pruneDiskIfNeeded() {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(at: diskCacheDir, includingPropertiesForKeys: [.fileSizeKey, .contentModificationDateKey]) else { return }
+
+        // Calculate total size
+        var entries: [(url: URL, size: Int, modified: Date)] = []
+        var totalSize = 0
+
+        for file in files where file.pathExtension != "meta" {
+            guard let attrs = try? file.resourceValues(forKeys: [.fileSizeKey, .contentModificationDateKey]),
+                  let size = attrs.fileSize,
+                  let modified = attrs.contentModificationDate else { continue }
+            entries.append((file, size, modified))
+            totalSize += size
+        }
+
+        // If under limit, nothing to do
+        guard totalSize > maxDiskBytes else { return }
+
+        // LRU eviction: sort by oldest first, remove until under limit
+        entries.sort { $0.modified < $1.modified }
+
+        for entry in entries {
+            guard totalSize > maxDiskBytes else { break }
+            try? fm.removeItem(at: entry.url)
+            let metaURL = entry.url.appendingPathExtension("meta")
+            try? fm.removeItem(at: metaURL)
+            totalSize -= entry.size
+        }
+
+        AppLogger.cache.info("Image cache pruned to \(totalSize / 1024 / 1024) MB")
+    }
+
+    // MARK: - Helpers
+
+    private func diskFileURL(for key: String) -> URL {
+        let hash = key.data(using: .utf8)!.map { String(format: "%02x", $0) }.joined()
+        let safeName = String(hash.prefix(64))
+        return diskCacheDir.appendingPathComponent(safeName)
+    }
+
+    private func diskMetaURL(for key: String) -> URL {
+        diskFileURL(for: key).appendingPathExtension("meta")
+    }
+}
+
+// MARK: - Disk Cache Metadata
+
+private struct DiskCacheMeta: Codable {
+    let expiresAt: Date
 }
 
 // MARK: - Convenience init without placeholder

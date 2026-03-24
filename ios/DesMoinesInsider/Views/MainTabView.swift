@@ -2,7 +2,13 @@ import SwiftUI
 
 /// Root tab navigation. 6 tabs: Home, Dining, Search, Map (Explore), Saved, Profile.
 struct MainTabView: View {
-    @State private var selectedTab = Tab.home
+    @State private var selectedTab = Tab.home {
+        didSet {
+            if oldValue != selectedTab {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+        }
+    }
 
     enum Tab: String, CaseIterable {
         case home, restaurants, search, map, favorites, profile

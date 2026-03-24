@@ -41,6 +41,11 @@ struct SearchView: View {
             }
             .refreshable {
                 await viewModel.refresh()
+                if viewModel.isEmpty {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                } else {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                }
             }
             .searchable(text: $viewModel.searchText, prompt: "Search events, restaurants, attractions...")
             .navigationTitle("Search")

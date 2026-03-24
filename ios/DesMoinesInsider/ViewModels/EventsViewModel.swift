@@ -48,16 +48,35 @@ final class EventsViewModel {
     private var fetchTask: Task<Void, Never>?
 
     private let service = EventsService.shared
+    private let cache = QueryCache.shared
 
     // MARK: - Initial Load
 
     func loadInitialData() async {
         guard events.isEmpty else { return }
+
+        // Serve cached data immediately for instant cold start
+        let cacheKey = eventsCacheKey()
+        let isOffline = !NetworkMonitor.shared.isConnected
+
+        if let cached: [Event] = await cache.get(cacheKey, allowStale: isOffline) {
+            events = applyPremiumFilters(cached)
+            isLoading = false
+        }
+
+        if let cachedFeatured: [Event] = await cache.get("featured-events", allowStale: isOffline) {
+            featuredEvents = cachedFeatured
+        }
+
+        // Then fetch fresh data in the background (skip if offline and we have cache)
+        if isOffline && !events.isEmpty { return }
+
         await fetchEvents(reset: true)
         await fetchFeaturedEvents()
     }
 
     func refresh() async {
+        // Pull-to-refresh always bypasses cache
         await fetchEvents(reset: true)
         await fetchFeaturedEvents()
     }
@@ -67,7 +86,8 @@ final class EventsViewModel {
     func fetchEvents(reset: Bool = false) async {
         if reset {
             currentOffset = 0
-            isLoading = true
+            // Only show spinner if we have no cached data
+            if events.isEmpty { isLoading = true }
         } else {
             isLoadingMore = true
         }
@@ -94,6 +114,9 @@ final class EventsViewModel {
 
             if reset {
                 events = filtered
+                // Cache the first page for offline/cold-start use
+                let cacheKey = eventsCacheKey()
+                await cache.set(cacheKey, value: response.events)
             } else {
                 events.append(contentsOf: filtered)
             }
@@ -102,7 +125,10 @@ final class EventsViewModel {
             hasMore = response.hasMore
             currentOffset = events.count
         } catch {
-            errorMessage = error.localizedDescription
+            // If offline and we have cached data, don't overwrite with an error
+            if events.isEmpty {
+                errorMessage = error.localizedDescription
+            }
         }
 
         isLoading = false
@@ -125,10 +151,26 @@ final class EventsViewModel {
 
     private func fetchFeaturedEvents() async {
         do {
-            featuredEvents = try await service.fetchFeaturedEvents()
+            let featured = try await service.fetchFeaturedEvents()
+            featuredEvents = featured
+            await cache.set("featured-events", value: featured)
         } catch {
-            featuredEvents = []
+            // Keep existing cached featured events on failure
+            if featuredEvents.isEmpty {
+                featuredEvents = []
+            }
         }
+    }
+
+    // MARK: - Cache Key
+
+    private func eventsCacheKey() -> String {
+        var parts = ["events"]
+        if let cat = selectedCategory { parts.append("cat-\(cat.rawValue)") }
+        if let preset = selectedDatePreset { parts.append("date-\(preset.rawValue)") }
+        if showFeaturedOnly { parts.append("featured") }
+        if !searchText.isEmpty { parts.append("q-\(searchText)") }
+        return parts.joined(separator: "-")
     }
 
     // MARK: - Filter Management

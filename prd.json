@@ -2425,6 +2425,504 @@
       "priority": 147,
       "passes": false,
       "notes": "TOOLING: The existing check-core-web-vitals function only fetches performance category. This new function fetches all 4 categories and structures results for easy consumption by admin dashboards or CI pipelines. Can be called via: supabase functions invoke pagespeed-report --body '{\"url\":\"https://desmoinesinsider.com\"}'"
+    },
+
+    {
+      "id": "US-148",
+      "title": "iOS: Implement persistent query cache with SwiftData",
+      "description": "As a user, I need previously loaded events and restaurants to be available instantly on app launch and when offline, so that the app feels fast and works without connectivity.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Persistence/QueryCache.swift using SwiftData @Model for CachedQuery (key, data, fetchedAt, expiresAt)",
+        "EventsService and RestaurantsService check cache before network calls; return cached data if within TTL (Config.cacheExpirationMinutes)",
+        "On successful network fetch, write results to cache asynchronously",
+        "When offline (NetworkMonitor.isConnected == false), serve stale cache regardless of TTL with a 'Showing cached data' banner",
+        "Cache auto-prunes entries older than 24 hours on app launch",
+        "HomeView shows cached events immediately on cold start without a loading spinner",
+        "Existing pull-to-refresh bypasses cache and fetches fresh data",
+        "Xcode build succeeds with no warnings in the new files"
+      ],
+      "priority": 148,
+      "passes": false,
+      "notes": "iOS PERFORMANCE/UX: Currently every screen transition triggers a fresh API call. Cold starts show a spinner even for data the user saw 30 seconds ago. SwiftData is the right choice since the app already targets iOS 17+. This is the single highest-impact iOS improvement — it makes the app feel instant and usable offline."
+    },
+    {
+      "id": "US-149",
+      "title": "iOS: Add Keychain storage for Supabase tokens and sensitive data",
+      "description": "As a security-conscious user, I need my auth tokens and sensitive data stored in the iOS Keychain instead of UserDefaults, so that credentials are encrypted at rest and protected by the Secure Enclave.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Services/KeychainService.swift with save, load, delete methods using Security framework (kSecClassGenericPassword)",
+        "Migrate Supabase session/token storage from UserDefaults to Keychain (verify Supabase Swift SDK supports custom storage adapter, or wrap post-auth)",
+        "FavoritesService stops using UserDefaults for restaurant favorite IDs — uses Keychain for user-specific data or migrates to SwiftData cache",
+        "Any existing UserDefaults keys containing tokens or user IDs are deleted on first launch after update",
+        "KeychainService uses kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly for appropriate security level",
+        "Add error handling for Keychain access failures (device locked, Keychain full) with graceful degradation",
+        "Xcode build succeeds with no warnings in the new files"
+      ],
+      "priority": 149,
+      "passes": false,
+      "notes": "iOS SECURITY: Auth tokens in UserDefaults are stored as plain plist XML — readable by any process with file-system access on a jailbroken device. Keychain encrypts at rest using the Secure Enclave. This is a hard requirement for App Store security reviews and enterprise deployments."
+    },
+    {
+      "id": "US-150",
+      "title": "iOS: Break down EventDetailView into composable sections",
+      "description": "As a developer, I need EventDetailView (509 lines) broken into focused sub-views so that the code is maintainable, testable, and avoids SwiftUI body complexity warnings.",
+      "acceptanceCriteria": [
+        "Extract EventDetailHeader (image, category badge, title, date/time) into its own file",
+        "Extract EventDetailActions (favorite, share, calendar, reminder buttons) into its own file",
+        "Extract EventDetailInfo (location, price, description, venue details) into its own file",
+        "Extract EventDetailInsiderTips into its own file",
+        "Extract EventDetailRelated (related events carousel) into its own file",
+        "EventDetailView.swift is reduced to <100 lines composing the sub-views",
+        "All existing accessibility labels, VoiceOver hints, and Dynamic Type support preserved",
+        "No visual or behavioral changes — pixel-identical output",
+        "Xcode build succeeds with no warnings"
+      ],
+      "priority": 150,
+      "passes": false,
+      "notes": "iOS UX/CODE QUALITY: SwiftUI performance degrades with large body expressions. 509 lines in one view also makes it hard to iterate on individual sections. Breaking it down enables independent animations, previews, and testing per section."
+    },
+    {
+      "id": "US-151",
+      "title": "iOS: Break down RestaurantDetailView into composable sections",
+      "description": "As a developer, I need RestaurantDetailView (446 lines) broken into focused sub-views matching the EventDetailView refactor pattern.",
+      "acceptanceCriteria": [
+        "Extract RestaurantDetailHeader (image, name, cuisine, rating, price) into its own file",
+        "Extract RestaurantDetailActions (favorite, share, call, website, directions buttons) into its own file",
+        "Extract RestaurantDetailInfo (hours, location, dietary options, description) into its own file",
+        "Extract RestaurantDetailDiningTips into its own file",
+        "RestaurantDetailView.swift is reduced to <100 lines composing the sub-views",
+        "All existing accessibility labels and Dynamic Type support preserved",
+        "No visual or behavioral changes",
+        "Xcode build succeeds with no warnings"
+      ],
+      "priority": 151,
+      "passes": false,
+      "notes": "iOS CODE QUALITY: Same rationale as US-150. RestaurantDetailView has the same size problem. The Dining Tips section (lines 379-416) has hardcoded tips that should later be replaced by API content (separate story)."
+    },
+    {
+      "id": "US-152",
+      "title": "iOS: Move hardcoded Insider Tips and Dining Tips to Supabase",
+      "description": "As a content manager, I need tips on event and restaurant detail pages to come from the database so I can update them without an app release.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for a content_tips table: id (UUID PK), content_type ('event' | 'restaurant'), category (text, nullable), tips (text[]), priority (int), active (boolean), created_at, updated_at",
+        "Seed the table with the currently hardcoded tips from EventDetailView and RestaurantDetailView",
+        "Create ios/DesMoinesInsider/Services/ContentTipsService.swift that fetches tips by content_type with local cache (24h TTL)",
+        "Update EventDetailInsiderTips and RestaurantDetailDiningTips to fetch tips from the service",
+        "Fallback to hardcoded tips array if network fetch fails (graceful degradation)",
+        "Tips load without blocking the detail view render (show placeholder, then swap in)",
+        "Xcode build succeeds"
+      ],
+      "priority": 152,
+      "passes": false,
+      "notes": "iOS UX: Currently both detail views have hardcoded tip arrays that require an app update to change. Moving them to the database enables A/B testing, seasonal tips, and category-specific tips. Depends on US-150/US-151 for the extracted tip components."
+    },
+    {
+      "id": "US-153",
+      "title": "iOS: Implement proper NSURLCache + disk image caching for CachedAsyncImage",
+      "description": "As a user scrolling through events and restaurants, I need images to load instantly from disk cache on repeat views so that scrolling is smooth and data usage is minimized.",
+      "acceptanceCriteria": [
+        "Update CachedAsyncImage.swift to use a shared NSCache<NSURL, UIImage> (memory) + FileManager disk cache",
+        "Memory cache limited to 50MB, disk cache limited to 200MB in the app's caches directory",
+        "Images served from memory cache appear in <1 frame (no flicker)",
+        "Images served from disk cache appear within 1-2 frames",
+        "Cache respects HTTP cache headers when present; defaults to 7-day TTL otherwise",
+        "Old cache entries auto-evicted when disk limit exceeded (LRU)",
+        "Placeholder shown during first-ever load, not on cache hits",
+        "FeaturedEventCard and CompactRestaurantCard horizontal scrolls are smooth (no jank from image loading)",
+        "Xcode build succeeds"
+      ],
+      "priority": 153,
+      "passes": false,
+      "notes": "iOS PERFORMANCE: The current CachedAsyncImage wraps AsyncImage but relies on URLSession's default cache which is small and memory-only. Users see placeholder flickers every time they scroll back to previously viewed content. Proper disk caching eliminates this and reduces bandwidth."
+    },
+    {
+      "id": "US-154",
+      "title": "iOS: Add Face ID / Touch ID biometric authentication",
+      "description": "As a user, I want to unlock the app with Face ID or Touch ID so that I can access my account quickly without typing my password every time.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Services/BiometricService.swift using LocalAuthentication framework",
+        "Add 'Use Face ID' toggle in SettingsView (only shown when device supports biometrics)",
+        "When enabled, prompt biometric auth on app launch if user has an existing session",
+        "On biometric success, proceed to MainTabView; on failure, fall back to email/password login",
+        "Store biometric preference in Keychain (not UserDefaults) so it's device-specific",
+        "Add NSFaceIDUsageDescription to Info.plist with appropriate description",
+        "Respect 3-failure lockout (after 3 failed biometric attempts, require password)",
+        "Xcode build succeeds"
+      ],
+      "priority": 154,
+      "passes": false,
+      "notes": "iOS UX/SECURITY: Biometric auth is expected by users on any app with login. It improves both UX (faster access) and security (reduces password fatigue leading to weak passwords). Depends on US-149 for Keychain storage."
+    },
+    {
+      "id": "US-155",
+      "title": "iOS: Add StoreKit server-side receipt validation",
+      "description": "As a business, I need subscription receipts validated server-side so that users cannot bypass the paywall with modified receipts or jailbroken devices.",
+      "acceptanceCriteria": [
+        "Create a Supabase edge function validate-ios-receipt that accepts a JWS transaction token and verifies it against Apple's App Store Server API (v2)",
+        "Edge function validates the signed transaction, checks bundle ID matches, checks product ID is valid, and returns entitlement status",
+        "Update StoreKitService.swift syncEntitlementToBackend() to send the JWS transaction to the edge function instead of trusting client-side verification alone",
+        "If server validation fails, revoke local entitlement and show 'Subscription verification failed' toast",
+        "Edge function uses APPLE_ISSUER_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY Supabase secrets for App Store Server API auth",
+        "Add retry with exponential backoff (3 attempts) for transient server errors",
+        "Xcode build succeeds"
+      ],
+      "priority": 155,
+      "passes": false,
+      "notes": "iOS SECURITY CRITICAL: Currently the app trusts StoreKit's client-side Transaction.currentEntitlements without server validation. On jailbroken devices, this can be spoofed. Server-side validation using Apple's App Store Server API v2 is the industry standard. This protects revenue."
+    },
+    {
+      "id": "US-156",
+      "title": "iOS: Implement request deduplication and retry with backoff",
+      "description": "As a user rapidly switching between tabs and filters, I need the app to not fire duplicate API calls and to gracefully retry failed requests, so the app feels responsive and doesn't waste bandwidth.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Services/RequestManager.swift as a singleton that tracks in-flight requests by cache key",
+        "If a request with the same key is already in-flight, return the existing publisher/async result instead of firing a new request",
+        "On network error (not 4xx), automatically retry up to 3 times with exponential backoff (1s, 2s, 4s)",
+        "On 429 (rate limited), respect Retry-After header before retrying",
+        "EventsService, RestaurantsService, and AttractionsService route fetches through RequestManager",
+        "Rapid filter changes in HomeView no longer produce overlapping requests",
+        "Add Task cancellation support — when a new request supersedes an old one, cancel the old Task",
+        "Xcode build succeeds"
+      ],
+      "priority": 156,
+      "passes": false,
+      "notes": "iOS PERFORMANCE: Currently each filter change, tab switch, or pull-to-refresh fires an independent network call. Rapid tapping can produce 5+ simultaneous requests for the same data. This wastes bandwidth and can cause race conditions where stale results overwrite fresh ones."
+    },
+    {
+      "id": "US-157",
+      "title": "iOS: Add search history and recent searches",
+      "description": "As a user, I want to see my recent searches when I tap the search bar so I can quickly re-run common queries without retyping them.",
+      "acceptanceCriteria": [
+        "Store last 20 search queries in UserDefaults (non-sensitive, just search terms)",
+        "Show recent searches below the search bar when the text field is focused and empty",
+        "Tapping a recent search fills the search field and triggers the search",
+        "Add 'Clear Recent Searches' button at the bottom of the list",
+        "Recent searches appear as horizontally scrollable chips or a simple vertical list",
+        "Duplicate searches update the timestamp instead of creating a new entry",
+        "VoiceOver announces 'Recent search: [term]. Double-tap to search again'",
+        "Xcode build succeeds"
+      ],
+      "priority": 157,
+      "passes": false,
+      "notes": "iOS UX: Search is one of the most-used features. Users repeatedly search for the same terms (weekend events, specific cuisines, venue names). Showing recent searches reduces friction and makes the search flow feel polished. This is a standard iOS pattern users expect."
+    },
+    {
+      "id": "US-158",
+      "title": "iOS: Add haptic feedback throughout the app",
+      "description": "As a user, I want subtle haptic feedback on key interactions so the app feels responsive and premium.",
+      "acceptanceCriteria": [
+        "Add UIImpactFeedbackGenerator(.light) to all tab bar taps in MainTabView",
+        "Add UIImpactFeedbackGenerator(.medium) to favorite toggle (both add and remove)",
+        "Add UINotificationFeedbackGenerator(.success) to successful share, calendar add, and reminder set actions",
+        "Add UINotificationFeedbackGenerator(.error) to error states (network failure, limit reached)",
+        "Add UISelectionFeedbackGenerator to filter chip selections (already exists in HomeView — verify consistency across SearchView and FilterSheet)",
+        "Respect system 'Reduce Haptics' accessibility setting (check UIAccessibility.isReduceMotionEnabled or system haptic setting)",
+        "No haptics fire during VoiceOver navigation (let the system handle that)",
+        "Xcode build succeeds"
+      ],
+      "priority": 158,
+      "passes": false,
+      "notes": "iOS UX: Haptics are a key differentiator between 'good' and 'great' iOS apps. HomeView already uses UIImpactFeedbackGenerator for date/category chips, but the rest of the app is inconsistent. Consistent haptics across all interactions make the app feel cohesive and native."
+    },
+    {
+      "id": "US-159",
+      "title": "iOS: Fetch affiliate ad partners from Supabase instead of hardcoding",
+      "description": "As a business operations manager, I need ad partner configuration to come from the database so I can add, remove, or update partners and creatives without shipping an app update.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for ad_partners table: id, name, affiliate_base_url, tracking_param, tag, is_active, priority, created_at, updated_at",
+        "Create ad_creatives table: id, partner_id (FK), size ('728x90'|'300x250'|'160x600'), image_url, alt_text, cta_text, is_active, created_at",
+        "Seed with current hardcoded partners (Hyatt, IHG, Marriott) and their creatives",
+        "Update AffiliateAdService.swift to fetch active partners from Supabase with 1-hour cache TTL",
+        "Fallback to hardcoded partners if network fetch fails",
+        "Add RLS: public read for active partners, admin-only write",
+        "Xcode build succeeds"
+      ],
+      "priority": 159,
+      "passes": false,
+      "notes": "iOS UX/BUSINESS: The current hardcoded partner list in AffiliateAdService.swift means every partner change requires an App Store review cycle (1-7 days). Moving to database enables same-day partner onboarding and A/B testing of creatives."
+    },
+    {
+      "id": "US-160",
+      "title": "iOS: Add ad impression and click tracking",
+      "description": "As a business operations manager, I need impression and click data for affiliate ads so I can report ROI to partners and optimize placements.",
+      "acceptanceCriteria": [
+        "Create a Supabase migration for ad_impressions table: id, creative_id (FK), user_id (nullable), device_type ('ios'), impression_at, clicked_at (nullable), session_id",
+        "AffiliateAdBanner fires an impression event when the ad becomes visible (use .onAppear with a 1-second delay to filter scroll-throughs)",
+        "AffiliateAdBanner fires a click event when the user taps the ad",
+        "Events are batched and sent every 30 seconds or on app background (whichever comes first) to reduce API calls",
+        "Add RLS: authenticated users can insert their own impressions, admins can read all",
+        "No PII stored — user_id is the Supabase auth UUID, not email/name",
+        "Xcode build succeeds"
+      ],
+      "priority": 160,
+      "passes": false,
+      "notes": "iOS BUSINESS: Currently there is zero tracking on ad performance. Partners will ask for impression/click data before renewing contracts. Batching prevents excessive API calls. The 1-second visibility threshold filters out impressions from fast scrolling."
+    },
+    {
+      "id": "US-161",
+      "title": "iOS: Add 'Open Now' filter for restaurants",
+      "description": "As a user looking for a place to eat right now, I need an 'Open Now' filter on the restaurants list so I only see restaurants that are currently serving.",
+      "acceptanceCriteria": [
+        "Add 'Open Now' toggle chip to RestaurantsView filter bar (next to cuisine/price filters)",
+        "Restaurant model already has `hours: JSONB` — parse the hours field to determine open/closed status for current day and time",
+        "Create a Restaurant extension method `isOpenNow(at date: Date = .now) -> Bool` that parses the hours JSONB",
+        "Filter is applied client-side (hours data already fetched) for instant response",
+        "Show 'Open' or 'Closed' badge on RestaurantCardView with green/red color",
+        "VoiceOver announces open/closed status as part of the card label",
+        "Handle edge cases: missing hours data shows 'Hours unknown', 24-hour restaurants always show 'Open'",
+        "Xcode build succeeds"
+      ],
+      "priority": 161,
+      "passes": false,
+      "notes": "iOS UX: This exists on the web app but is missing from iOS. 'Open Now' is the #1 requested restaurant filter in competitive apps (Yelp, Google Maps). Since hours data is already in the Restaurant model as JSONB, this is purely a client-side parsing and filtering task."
+    },
+    {
+      "id": "US-162",
+      "title": "iOS: Implement skeleton loading states for all list views",
+      "description": "As a user, I want to see content-shaped placeholders while data loads so the app feels faster and I understand what's coming.",
+      "acceptanceCriteria": [
+        "HomeView already has EventCardSkeleton — verify it matches the actual EventCardView layout",
+        "Create RestaurantCardSkeleton matching RestaurantCardView layout",
+        "Create AttractionCardSkeleton matching attraction card layout",
+        "Add skeleton states to RestaurantsView, FavoritesView, and SearchView",
+        "Skeletons use .redacted(reason: .placeholder) with the existing .shimmer() modifier",
+        "Show 4-6 skeleton cards during initial load (not on pagination loads — those use a ProgressView spinner)",
+        "Skeletons animate with a subtle shimmer that respects Reduce Motion accessibility setting",
+        "Xcode build succeeds"
+      ],
+      "priority": 162,
+      "passes": false,
+      "notes": "iOS UX: HomeView has excellent skeleton loading, but RestaurantsView and SearchView show a plain ProgressView spinner. Skeleton loading is perceived as 40% faster than spinners (Google research). The shimmer modifier already exists in View+Extensions.swift."
+    },
+    {
+      "id": "US-163",
+      "title": "iOS: Add pull-to-refresh with success haptic across all list views",
+      "description": "As a user, I want pull-to-refresh to work consistently on every list screen with tactile confirmation when data updates.",
+      "acceptanceCriteria": [
+        "HomeView already has .refreshable — verify it provides success haptic on completion",
+        "Add .refreshable to RestaurantsView with parallel restaurant data refresh",
+        "Add .refreshable to FavoritesView that re-fetches favorite IDs and their associated data",
+        "Add .refreshable to SearchView that re-executes the current search query",
+        "On successful refresh, fire UINotificationFeedbackGenerator(.success)",
+        "On refresh failure, fire UINotificationFeedbackGenerator(.error) and show error toast",
+        "Refresh clears any stale error banners",
+        "Xcode build succeeds"
+      ],
+      "priority": 163,
+      "passes": false,
+      "notes": "iOS UX: Pull-to-refresh is an iOS muscle memory pattern. HomeView has it, but other views may be missing it. The haptic on completion gives users confidence that something actually happened — without it, users pull-to-refresh repeatedly because they're unsure if it worked."
+    },
+    {
+      "id": "US-164",
+      "title": "iOS: Add structured logging with OSLog",
+      "description": "As a developer debugging user-reported issues, I need structured logging via OSLog so that logs are categorized, leveled, and viewable in Console.app without rebuilding the app.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Services/AppLogger.swift using os.Logger with subsystem = Config.appBundleId",
+        "Define log categories: auth, network, cache, storekit, ui, navigation",
+        "Replace all print() and debugPrint() calls across the codebase with AppLogger calls at appropriate levels (.debug, .info, .error, .fault)",
+        "Network errors log at .error level with URL, status code, and response body preview",
+        "StoreKit events log at .info level with transaction ID and product ID (no receipt data)",
+        "Auth events log at .info level with event type (no tokens or credentials)",
+        "Logs are viewable in Console.app by filtering on the app's subsystem",
+        "Xcode build succeeds"
+      ],
+      "priority": 164,
+      "passes": false,
+      "notes": "iOS CODE QUALITY: The app currently uses print() for debug output which is invisible in production. OSLog persists to the unified log system, is viewable in Console.app even on customer devices (via sysdiagnose), and supports log levels and categories. Essential for debugging production issues."
+    },
+    {
+      "id": "US-165",
+      "title": "iOS: Add analytics tracking for key user flows",
+      "description": "As a product manager, I need analytics on key user actions so I can understand usage patterns, identify drop-off points, and prioritize features based on data.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Services/AnalyticsService.swift with a simple protocol-based design (easy to swap backend later)",
+        "Track events: app_launch, screen_view(name), event_viewed(id), restaurant_viewed(id), search_performed(query, results_count), filter_applied(type, value), favorite_toggled(content_type, action), share_tapped(content_type), subscription_view_shown, purchase_started(product_id), purchase_completed(product_id)",
+        "Store events in a local buffer and batch-send to a Supabase analytics_events table every 60 seconds or on app background",
+        "Create the analytics_events Supabase migration: id, event_name, properties (JSONB), user_id (nullable), device_id, platform ('ios'), created_at",
+        "No PII in properties — use IDs, not names/emails",
+        "Add .onAppear tracking to HomeView, EventDetailView, RestaurantDetailView, SearchView, SubscriptionView",
+        "Xcode build succeeds"
+      ],
+      "priority": 165,
+      "passes": false,
+      "notes": "iOS BUSINESS: Currently there is zero visibility into how users interact with the iOS app. Without analytics, feature prioritization is guesswork. The protocol-based design allows swapping to Firebase/Mixpanel later. Batching reduces API load."
+    },
+    {
+      "id": "US-166",
+      "title": "iOS: Improve onboarding with interest selection and location permission",
+      "description": "As a new user, I want to select my interests during onboarding so the app can personalize my home feed from the first moment.",
+      "acceptanceCriteria": [
+        "Add a new onboarding page (after the current pages, before completion) showing a grid of interest categories (Music, Food, Art, Sports, Family, Nightlife, etc.) matching EventCategory",
+        "User can select 1-5 interests by tapping category chips (with haptic feedback)",
+        "Selected interests are saved to UserDefaults immediately and synced to profile on login/signup",
+        "Add a location permission page explaining why location improves recommendations ('Find events near you')",
+        "Location page has 'Enable Location' and 'Maybe Later' buttons (never force location)",
+        "If user selects interests, HomeView pre-filters to those categories on first load",
+        "Skip button available on both new pages",
+        "VoiceOver fully supports the interest grid (announces category name and selected state)",
+        "Xcode build succeeds"
+      ],
+      "priority": 166,
+      "passes": false,
+      "notes": "iOS UX: The current onboarding shows feature highlights but doesn't collect any preferences. Interest selection during onboarding reduces the 'cold start' problem where new users see generic content. This is a proven retention driver — personalized first sessions have 2x Day-7 retention."
+    },
+    {
+      "id": "US-167",
+      "title": "iOS: Add EventKit integration for native calendar export",
+      "description": "As a user, I want to add events to my iOS Calendar app with one tap so I get native reminders and don't miss events I'm interested in.",
+      "acceptanceCriteria": [
+        "Add 'Add to Calendar' button in EventDetailView actions row",
+        "Use EventKit to create an EKEvent with title, start date, end date (or +2 hours default), location, URL, and notes from the event",
+        "Request calendar permission with NSCalendarsFullAccessUsageDescription in Info.plist",
+        "Show success toast 'Added to Calendar' with UINotificationFeedbackGenerator(.success)",
+        "If event already exists in calendar (check by title + date), show 'Already in Calendar' instead of duplicating",
+        "Handle permission denied gracefully with a message explaining how to enable in Settings",
+        "Xcode build succeeds"
+      ],
+      "priority": 167,
+      "passes": false,
+      "notes": "iOS UX: The current EventDetailView generates a Google Calendar URL and opens Safari. Native EventKit integration is dramatically better UX — one tap, no context switch, works with any calendar app the user prefers (Apple Calendar, Outlook, Fantastical, etc.)."
+    },
+    {
+      "id": "US-168",
+      "title": "iOS: Add share sheet with rich preview for events and restaurants",
+      "description": "As a user, I want to share events and restaurants with friends via a native share sheet that includes a rich preview image and formatted text.",
+      "acceptanceCriteria": [
+        "Create a ShareableContent struct conforming to Transferable for events and restaurants",
+        "Share sheet includes: title, formatted date/location, deep link URL (desmoinesinsider.com/events/:id), and image (if available)",
+        "Use ShareLink or UIActivityViewController with custom ActivityItemSource for rich previews",
+        "Deep link URL uses universal link format so recipients with the app open it natively",
+        "Share action is available in both EventDetailView and RestaurantDetailView action rows",
+        "Add UTType export for .desmoinesEvent custom content type (enables richer previews in Messages)",
+        "Track share events in analytics (US-165)",
+        "Xcode build succeeds"
+      ],
+      "priority": 168,
+      "passes": false,
+      "notes": "iOS UX: Sharing is a core growth mechanism. A rich share preview (with image and formatted text) gets significantly more engagement than a plain URL. Universal links ensure recipients with the app get a native experience."
+    },
+    {
+      "id": "US-169",
+      "title": "iOS: Add customizable event reminder times",
+      "description": "As a user, I want to choose when I get reminded about events (15 min, 1 hour, 1 day before) instead of always getting reminded 1 hour before.",
+      "acceptanceCriteria": [
+        "Update LocalNotificationService to accept a ReminderInterval enum: fifteenMinutes, oneHour, threeHours, oneDay",
+        "EventDetailView reminder button shows a context menu with interval options on long-press",
+        "Default reminder (single tap) uses the user's preferred default interval (stored in UserDefaults, defaults to 1 hour)",
+        "Add 'Default Reminder Time' picker in SettingsView",
+        "Notification content includes the chosen interval ('Starting in 1 hour', 'Starting tomorrow')",
+        "If event is less than the chosen interval away, schedule reminder for 'now + 5 minutes' with a note",
+        "Xcode build succeeds"
+      ],
+      "priority": 169,
+      "passes": false,
+      "notes": "iOS UX: The hardcoded 1-hour reminder doesn't work for everyone. Users traveling to an event need a day's notice. Users already nearby want 15 minutes. A context menu on long-press keeps the simple single-tap default while exposing options for power users."
+    },
+    {
+      "id": "US-170",
+      "title": "iOS: Implement certificate pinning for Supabase API calls",
+      "description": "As a security engineer, I need TLS certificate pinning on API calls to Supabase so that man-in-the-middle attacks on public WiFi cannot intercept user data.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Services/CertificatePinningDelegate.swift implementing URLSessionDelegate",
+        "Pin the Supabase API domain's TLS certificate public key (SPKI hash)",
+        "Include backup pins for certificate rotation (at least 2 pins: current + backup CA)",
+        "If pin validation fails, reject the connection and show a security warning to the user",
+        "Add a Config flag (enableCertificatePinning, default true) to disable during development/testing",
+        "Document the pin rotation procedure in a code comment (how to update when Supabase rotates certs)",
+        "Xcode build succeeds"
+      ],
+      "priority": 170,
+      "passes": false,
+      "notes": "iOS SECURITY: Without certificate pinning, any attacker on the same WiFi network can use a proxy like mitmproxy to intercept API calls, including auth tokens. This is especially relevant for a local city app where users are often on coffee shop and venue WiFi. Standard for any app handling auth tokens."
+    },
+    {
+      "id": "US-171",
+      "title": "iOS: Add input validation and rate limiting on auth forms",
+      "description": "As a security engineer, I need client-side input validation and rate limiting on login/signup forms so that brute-force attacks are mitigated and users get instant feedback on invalid input.",
+      "acceptanceCriteria": [
+        "Email field validates format on blur (show inline error for invalid emails)",
+        "Password field enforces minimum 8 characters, at least one uppercase, one lowercase, one number",
+        "Show real-time password strength indicator (weak/medium/strong) as user types",
+        "Rate limit login attempts: after 5 failures in 5 minutes, disable the login button for 60 seconds with countdown",
+        "Store failure count in memory (not persisted — resets on app restart)",
+        "Show 'Too many attempts. Try again in X seconds.' message during lockout",
+        "Sign-up validates password match for confirm field",
+        "All validation error messages are announced to VoiceOver",
+        "Xcode build succeeds"
+      ],
+      "priority": 171,
+      "passes": false,
+      "notes": "iOS SECURITY/UX: The current AuthView has no client-side validation — invalid emails and weak passwords hit the server and return generic errors. Client-side validation provides instant feedback. Rate limiting on the client reduces server load from automated attacks (server-side rate limiting in Supabase is the real defense, but client-side adds defense in depth)."
+    },
+    {
+      "id": "US-172",
+      "title": "iOS: Add Spotlight search indexing for recently viewed content",
+      "description": "As a user, I want to find events and restaurants I recently viewed via iOS Spotlight search so I can quickly return to them without opening the app.",
+      "acceptanceCriteria": [
+        "Update SpotlightService to index events and restaurants when the user views them (on detail page .onAppear)",
+        "Recently viewed items have higher ranking weight than bulk-indexed items",
+        "Index includes: title, location, date (events), cuisine (restaurants), thumbnail image",
+        "Tapping a Spotlight result deep-links to the correct detail page in the app",
+        "Expired events are automatically de-indexed (check on app launch)",
+        "Limit Spotlight index to 200 most recent items to avoid excessive storage",
+        "Index updates are batched (not fired on every .onAppear — deduplicate within 1 hour)",
+        "Xcode build succeeds"
+      ],
+      "priority": 172,
+      "passes": false,
+      "notes": "iOS UX: SpotlightService already exists and indexes bulk content, but doesn't prioritize recently viewed items. Spotlight search is how iOS power users find things — appearing in Spotlight results increases re-engagement. The deep link integration via DeepLinkHandler already supports the URL scheme."
+    },
+    {
+      "id": "US-173",
+      "title": "iOS: Create a generic ListDataService to reduce service code duplication",
+      "description": "As a developer, I need a generic data service base to reduce the ~80% code duplication between EventsService, RestaurantsService, and AttractionsService.",
+      "acceptanceCriteria": [
+        "Create ios/DesMoinesInsider/Services/ListDataService.swift as a generic class ListDataService<T: Decodable & Identifiable>",
+        "Generic service handles: pagination (offset/limit), text search, location-based queries, sort ordering, error handling with ServiceError",
+        "EventsService, RestaurantsService, and AttractionsService inherit from or compose ListDataService, only defining table-specific query builders",
+        "All existing functionality preserved — no behavioral changes",
+        "Reduce total lines of code across the three services by at least 40%",
+        "Xcode build succeeds"
+      ],
+      "priority": 173,
+      "passes": false,
+      "notes": "iOS CODE QUALITY: EventsService (213 lines) and RestaurantsService (239 lines) share nearly identical patterns for pagination, search, location queries, and error handling. A generic base eliminates this duplication and ensures consistency (e.g., if we improve error handling, it improves everywhere)."
+    },
+    {
+      "id": "US-174",
+      "title": "iOS: Add Widget Extension for upcoming events on home screen",
+      "description": "As a user, I want a home screen widget showing my upcoming favorited events or today's featured events so I can stay informed without opening the app.",
+      "acceptanceCriteria": [
+        "Create a new WidgetKit extension target: DesMoinesInsiderWidget",
+        "Support small (1 upcoming event), medium (3 upcoming events), and large (5 upcoming events) widget sizes",
+        "Widget shows event title, date, location, and category color indicator",
+        "Data fetched via shared Supabase client using App Groups for credential sharing",
+        "Timeline provider refreshes every 30 minutes (WidgetKit minimum)",
+        "If user has favorites, show upcoming favorited events; otherwise show featured events",
+        "Tapping a widget item deep-links to the event detail page",
+        "Widget uses the app's accent color and design language",
+        "Xcode build succeeds for both main app and widget extension"
+      ],
+      "priority": 174,
+      "passes": false,
+      "notes": "iOS UX: Widgets are the #1 passive engagement driver on iOS. A widget showing upcoming events keeps users connected to the app without any effort. This is a significant competitive differentiator — most local event apps don't have widgets. Requires App Groups for shared data access between app and widget."
+    },
+    {
+      "id": "US-175",
+      "title": "iOS: Add App Clip for instant event previews without install",
+      "description": "As a potential user who scans a QR code or taps an NFC tag at a Des Moines venue, I want to instantly preview nearby events without installing the full app.",
+      "acceptanceCriteria": [
+        "The existing DesMoinesInsiderClip target builds and runs successfully",
+        "App Clip shows 3-5 nearby or featured events with basic detail (title, date, location, image)",
+        "Tapping an event shows a detail view with 'Get the Full App' banner at the bottom",
+        "App Clip size is under 15MB (Apple requirement)",
+        "App Clip handles the associated domain URL pattern: desmoinesinsider.com/clip/*",
+        "Add Smart App Banner meta tag to the web app for Safari users: <meta name='apple-itunes-app' content='app-clip-bundle-id=...'>",
+        "Xcode build succeeds for the Clip target"
+      ],
+      "priority": 175,
+      "passes": false,
+      "notes": "iOS UX/GROWTH: The App Clip infrastructure already exists (DesMoinesInsiderClip target with ClipRootView, ClipEventsViewModel, ClipEventCard). This story verifies it works end-to-end and connects it to the web app via Smart App Banners. App Clips at venue NFC tags could be a powerful partnership tool."
     }
   ]
 }

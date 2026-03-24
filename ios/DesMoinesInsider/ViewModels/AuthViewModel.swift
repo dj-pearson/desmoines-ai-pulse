@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import AuthenticationServices
 
 /// ViewModel for authentication views (sign in, sign up).
@@ -7,6 +8,7 @@ import AuthenticationServices
 final class AuthViewModel {
     var email = ""
     var password = ""
+    var confirmPassword = ""
     var firstName = ""
     var lastName = ""
     var selectedInterests: Set<String> = []
@@ -17,10 +19,66 @@ final class AuthViewModel {
     var showError = false
     var showVerificationAlert = false
 
+    // MARK: - Rate Limiting
+
+    /// Seconds remaining until login is re-enabled (0 = not locked out).
+    private(set) var lockoutSecondsRemaining = 0
+    private var failedAttemptTimestamps: [Date] = []
+    private var lockoutTimer: Task<Void, Never>?
+    private static let maxAttempts = 5
+    private static let attemptWindow: TimeInterval = 300 // 5 minutes
+    private static let lockoutDuration = 60 // seconds
+
+    var isLockedOut: Bool { lockoutSecondsRemaining > 0 }
+
     private let auth = AuthService.shared
 
     var isAuthenticated: Bool { auth.isAuthenticated }
     var currentUser: UserProfile? { auth.currentProfile }
+
+    // MARK: - Validation
+
+    /// Returns true if the email has a valid format.
+    var isEmailValid: Bool {
+        guard !email.isEmpty else { return true } // don't show error on empty
+        let pattern = #"^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
+        return email.range(of: pattern, options: .regularExpression) != nil
+    }
+
+    /// Password strength: .none (empty), .weak, .medium, .strong
+    var passwordStrength: PasswordStrength {
+        guard !password.isEmpty else { return .none }
+        var score = 0
+        if password.count >= 8 { score += 1 }
+        if password.count >= 12 { score += 1 }
+        if password.range(of: "[A-Z]", options: .regularExpression) != nil { score += 1 }
+        if password.range(of: "[a-z]", options: .regularExpression) != nil { score += 1 }
+        if password.range(of: "[0-9]", options: .regularExpression) != nil { score += 1 }
+        if password.range(of: "[^A-Za-z0-9]", options: .regularExpression) != nil { score += 1 }
+
+        switch score {
+        case 0...2: return .weak
+        case 3...4: return .medium
+        default: return .strong
+        }
+    }
+
+    var passwordsMatch: Bool {
+        confirmPassword.isEmpty || password == confirmPassword
+    }
+
+    enum PasswordStrength: String {
+        case none, weak, medium, strong
+
+        var color: String {
+            switch self {
+            case .none: return "gray"
+            case .weak: return "red"
+            case .medium: return "orange"
+            case .strong: return "green"
+            }
+        }
+    }
 
     // MARK: - Available Interests
 
@@ -36,14 +94,24 @@ final class AuthViewModel {
             setError("Please enter your email and password.")
             return
         }
+        guard isEmailValid else {
+            setError("Please enter a valid email address.")
+            return
+        }
+        guard !isLockedOut else {
+            setError("Too many attempts. Try again in \(lockoutSecondsRemaining) seconds.")
+            return
+        }
 
         isSigningIn = true
         errorMessage = nil
 
         do {
             try await auth.signIn(email: email, password: password)
+            failedAttemptTimestamps = []
             clearForm()
         } catch {
+            recordFailedAttempt()
             setError(error.localizedDescription)
         }
 
@@ -57,8 +125,20 @@ final class AuthViewModel {
             setError("Please enter your email and password.")
             return
         }
+        guard isEmailValid else {
+            setError("Please enter a valid email address.")
+            return
+        }
         guard password.count >= 8 else {
             setError("Password must be at least 8 characters.")
+            return
+        }
+        guard passwordStrength != .weak else {
+            setError("Password is too weak. Include uppercase, lowercase, and numbers.")
+            return
+        }
+        guard passwordsMatch else {
+            setError("Passwords do not match.")
             return
         }
 
@@ -133,6 +213,7 @@ final class AuthViewModel {
     private func clearForm() {
         email = ""
         password = ""
+        confirmPassword = ""
         firstName = ""
         lastName = ""
         selectedInterests = []
@@ -141,5 +222,35 @@ final class AuthViewModel {
     private func setError(_ message: String) {
         errorMessage = message
         showError = true
+        UINotificationFeedbackGenerator().notificationOccurred(.error)
+    }
+
+    // MARK: - Rate Limiting
+
+    private func recordFailedAttempt() {
+        let now = Date()
+        failedAttemptTimestamps.append(now)
+
+        // Remove attempts outside the window
+        failedAttemptTimestamps = failedAttemptTimestamps.filter {
+            now.timeIntervalSince($0) < Self.attemptWindow
+        }
+
+        if failedAttemptTimestamps.count >= Self.maxAttempts {
+            startLockout()
+        }
+    }
+
+    private func startLockout() {
+        lockoutSecondsRemaining = Self.lockoutDuration
+        lockoutTimer?.cancel()
+        lockoutTimer = Task {
+            while lockoutSecondsRemaining > 0 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                lockoutSecondsRemaining -= 1
+            }
+            failedAttemptTimestamps = []
+        }
     }
 }

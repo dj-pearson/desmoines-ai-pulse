@@ -20,6 +20,8 @@ struct Restaurant: Identifiable, Codable, Hashable {
     var status: String?
     var slug: String?
     var aiWriteup: String?
+    var businessHours: BusinessHours?
+    var dietaryOptions: [String]?
     var createdAt: String?
     var updatedAt: String?
 
@@ -31,8 +33,74 @@ struct Restaurant: Identifiable, Codable, Hashable {
         case latitude, longitude
         case popularityScore = "popularity_score"
         case aiWriteup = "ai_writeup"
+        case businessHours = "business_hours"
+        case dietaryOptions = "dietary_options"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+
+    // MARK: - Open/Closed Status
+
+    /// Determines if the restaurant is currently open based on business_hours.
+    /// Returns nil if hours data is unavailable.
+    func isOpenNow(at date: Date = .now) -> Bool? {
+        guard let hours = businessHours else { return nil }
+
+        let calendar = Calendar.current
+        let weekday = calendar.component(.weekday, from: date) // 1=Sun, 2=Mon...
+        let dayName = Self.dayNames[weekday - 1]
+
+        guard let dayHours = hours.hours(for: dayName) else { return nil }
+        if dayHours.isEmpty || dayHours.lowercased() == "closed" { return false }
+
+        // Parse "HH:mm - HH:mm" or "11:00 AM - 10:00 PM" format
+        let components = dayHours.components(separatedBy: " - ")
+        guard components.count == 2,
+              let open = Self.parseTime(components[0].trimmingCharacters(in: .whitespaces)),
+              let close = Self.parseTime(components[1].trimmingCharacters(in: .whitespaces)) else {
+            // Can't parse → unknown
+            return nil
+        }
+
+        let hour = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let currentMinutes = hour * 60 + minute
+
+        // Handle overnight hours (close < open means past midnight)
+        if close < open {
+            return currentMinutes >= open || currentMinutes < close
+        }
+
+        return currentMinutes >= open && currentMinutes < close
+    }
+
+    var openStatusText: String {
+        switch isOpenNow() {
+        case true: return "Open"
+        case false: return "Closed"
+        case nil: return "Hours unknown"
+        }
+    }
+
+    private static let dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+
+    /// Parse time string like "11:00", "11:00 AM", "9:30 PM" to minutes since midnight.
+    private static func parseTime(_ string: String) -> Int? {
+        let trimmed = string.trimmingCharacters(in: .whitespaces)
+
+        // Try "HH:mm" (24-hour)
+        let parts = trimmed.components(separatedBy: ":")
+        guard parts.count >= 2, let hour = Int(parts[0]) else { return nil }
+
+        let minutePart = parts[1].trimmingCharacters(in: .letters).trimmingCharacters(in: .whitespaces)
+        guard let minute = Int(minutePart) else { return nil }
+
+        var h = hour
+        let upper = trimmed.uppercased()
+        if upper.hasSuffix("PM") && h != 12 { h += 12 }
+        if upper.hasSuffix("AM") && h == 12 { h = 0 }
+
+        return h * 60 + minute
     }
 
     // MARK: - Computed Properties
@@ -89,6 +157,39 @@ struct Restaurant: Identifiable, Codable, Hashable {
         if let priceRange, !priceRange.isEmpty { parts.append(priceRange) }
         if rating != nil { parts.append("Rated \(ratingText)") }
         return parts.joined(separator: ". ")
+    }
+}
+
+// MARK: - Business Hours
+
+/// Flexible decoder for the business_hours JSONB column.
+/// Supports both `{ "monday": "11:00 - 22:00", ... }` and
+/// `{ "hours": { "monday": "..." } }` shapes.
+struct BusinessHours: Codable, Hashable {
+    private let store: [String: String]
+
+    init(from decoder: Decoder) throws {
+        // Try flat { "monday": "...", "tuesday": "..." }
+        if let flat = try? decoder.singleValueContainer().decode([String: String].self) {
+            store = flat.reduce(into: [:]) { $0[$1.key.lowercased()] = $1.value }
+            return
+        }
+        // Try nested { "hours": { "monday": "..." } }
+        if let nested = try? decoder.singleValueContainer().decode([String: [String: String]].self),
+           let inner = nested["hours"] {
+            store = inner.reduce(into: [:]) { $0[$1.key.lowercased()] = $1.value }
+            return
+        }
+        store = [:]
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(store)
+    }
+
+    func hours(for day: String) -> String? {
+        store[day.lowercased()]
     }
 }
 

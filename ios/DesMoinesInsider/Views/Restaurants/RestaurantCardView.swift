@@ -86,16 +86,33 @@ struct RestaurantCardView: View {
                     }
                 }
 
-                // Location
-                if !restaurant.displayLocation.isEmpty {
-                    HStack(spacing: 4) {
-                        Image(systemName: "mappin")
-                            .font(.system(size: 9))
-                        Text(restaurant.displayLocation)
-                            .font(.caption2)
+                // Location + Open Status
+                HStack(spacing: 8) {
+                    if !restaurant.displayLocation.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin")
+                                .font(.system(size: 9))
+                            Text(restaurant.displayLocation)
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                     }
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+
+                    Spacer()
+
+                    if let isOpen = restaurant.isOpenNow() {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(isOpen ? Color.green : Color.red)
+                                .frame(width: 6, height: 6)
+                            Text(isOpen ? "Open" : "Closed")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(isOpen ? .green : .red)
+                        }
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(isOpen ? "Currently open" : "Currently closed")
+                    }
                 }
             }
         }

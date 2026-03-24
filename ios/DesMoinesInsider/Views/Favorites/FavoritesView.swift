@@ -40,6 +40,7 @@ struct FavoritesView: View {
             .navigationTitle("Saved")
             .refreshable {
                 await viewModel.refresh()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)

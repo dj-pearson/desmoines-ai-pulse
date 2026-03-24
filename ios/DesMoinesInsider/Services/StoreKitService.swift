@@ -215,6 +215,12 @@ final class StoreKitService {
 
     // MARK: - Sync Entitlements to Backend
 
+    /// Maximum number of retry attempts for transient server errors.
+    private static let maxRetries = 3
+
+    /// Base delay in seconds for exponential backoff (1s, 2s, 4s).
+    private static let baseRetryDelay: TimeInterval = 1.0
+
     /// Syncs all current subscription entitlements to the backend.
     /// Called after restore so user_subscriptions stays in sync across devices and web.
     private func syncAllEntitlementsToBackend() async {
@@ -226,31 +232,120 @@ final class StoreKitService {
         }
     }
 
+    /// Sends the transaction to the server-side `validate-ios-receipt` edge function for
+    /// verification with Apple's App Store Server API v2. Retries up to 3 times with
+    /// exponential backoff (1s, 2s, 4s) on transient errors (5xx, network failures).
+    /// On validation failure, logs a warning but does NOT revoke local entitlements
+    /// (grace period approach).
     private func syncEntitlementToBackend(transaction: Transaction, productId: String) async {
         guard let client = supabase else { return }
+        if Config.isUITesting { return }
 
+        // Resolve the current user ID from the Supabase session
+        let userId: String
         do {
-            struct ReceiptPayload: Encodable {
-                let transactionId: String
-                let productId: String
-                let originalTransactionId: String
-            }
-
-            let payload = ReceiptPayload(
-                transactionId: String(transaction.id),
-                productId: productId,
-                originalTransactionId: String(transaction.originalID)
-            )
-
-            _ = try await client.functions.invoke(
-                "verify-apple-receipt",
-                options: .init(method: .post, body: payload)
-            )
+            let session = try await client.auth.session
+            userId = session.user.id.uuidString
         } catch {
-            // Log but don't surface to user - entitlement is already granted locally
-            if Config.isUITesting { return }
-            print("Failed to sync entitlement to backend: \(error.localizedDescription)")
+            #if DEBUG
+            print("[StoreKit] Cannot sync entitlement - no authenticated session: \(error.localizedDescription)")
+            #endif
+            return
         }
+
+        struct ValidationPayload: Encodable {
+            let transactionId: String
+            let originalTransactionId: String
+            let productId: String
+            let userId: String
+        }
+
+        struct ValidationResponse: Decodable {
+            let valid: Bool
+            let reason: String?
+            let entitlement: Entitlement?
+
+            struct Entitlement: Decodable {
+                let tier: String?
+                let expiresAt: String?
+            }
+        }
+
+        let payload = ValidationPayload(
+            transactionId: String(transaction.id),
+            originalTransactionId: String(transaction.originalID),
+            productId: productId,
+            userId: userId
+        )
+
+        var lastError: Error?
+
+        for attempt in 0..<Self.maxRetries {
+            do {
+                let response = try await client.functions.invoke(
+                    "validate-ios-receipt",
+                    options: .init(method: .post, body: payload)
+                )
+
+                // Attempt to decode the response
+                let decoded = try JSONDecoder().decode(ValidationResponse.self, from: response.data)
+
+                if decoded.valid {
+                    #if DEBUG
+                    print("[StoreKit] Server validation succeeded: tier=\(decoded.entitlement?.tier ?? "unknown"), expires=\(decoded.entitlement?.expiresAt ?? "none")")
+                    #endif
+                    return
+                } else {
+                    // Server explicitly said the receipt is invalid.
+                    // Log a warning but do NOT revoke local access (grace period).
+                    let reason = decoded.reason ?? "unknown"
+                    print("[StoreKit] Server validation returned invalid (grace period): reason=\(reason), product=\(productId), user=\(userId)")
+                    return
+                }
+            } catch {
+                lastError = error
+                let isTransient = isTransientError(error)
+
+                if isTransient && attempt < Self.maxRetries - 1 {
+                    let delay = Self.baseRetryDelay * pow(2.0, Double(attempt))
+                    #if DEBUG
+                    print("[StoreKit] Transient error on attempt \(attempt + 1)/\(Self.maxRetries), retrying in \(delay)s: \(error.localizedDescription)")
+                    #endif
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    continue
+                }
+
+                // Non-transient error or final retry exhausted
+                break
+            }
+        }
+
+        // All retries exhausted or non-transient error.
+        // Log but do NOT revoke local entitlement (grace period).
+        print("[StoreKit] Server validation failed after \(Self.maxRetries) attempts (grace period): \(lastError?.localizedDescription ?? "unknown error"), product=\(productId), user=\(userId)")
+    }
+
+    /// Determines whether an error is transient (5xx / network) and worth retrying.
+    private func isTransientError(_ error: Error) -> Bool {
+        let description = error.localizedDescription.lowercased()
+
+        // Network-level errors
+        if (error as NSError).domain == NSURLErrorDomain {
+            return true
+        }
+
+        // Supabase FunctionsError with 5xx status or timeout keywords
+        if description.contains("500")
+            || description.contains("502")
+            || description.contains("503")
+            || description.contains("504")
+            || description.contains("timeout")
+            || description.contains("network")
+            || description.contains("connection") {
+            return true
+        }
+
+        return false
     }
 
     // MARK: - Errors

@@ -45,19 +45,60 @@ struct AuthView: View {
                         }
                     }
 
-                    TextField("Email", text: $viewModel.email)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .autocapitalization(.none)
-                        .textFieldStyle(.roundedInput)
+                    VStack(alignment: .leading, spacing: 4) {
+                        TextField("Email", text: $viewModel.email)
+                            .textContentType(.emailAddress)
+                            .keyboardType(.emailAddress)
+                            .autocapitalization(.none)
+                            .textFieldStyle(.roundedInput)
 
-                    SecureField("Password", text: $viewModel.password)
-                        .textContentType(isSignUpMode ? .newPassword : .password)
-                        .textFieldStyle(.roundedInput)
-                        .accessibilityHint(isSignUpMode ? "Must be at least 6 characters" : "")
+                        if !viewModel.email.isEmpty && !viewModel.isEmailValid {
+                            Text("Please enter a valid email address")
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .accessibilityLabel("Email validation error: invalid email format")
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        SecureField("Password", text: $viewModel.password)
+                            .textContentType(isSignUpMode ? .newPassword : .password)
+                            .textFieldStyle(.roundedInput)
+                            .accessibilityHint(isSignUpMode ? "Must be at least 8 characters with uppercase, lowercase, and a number" : "")
+
+                        if isSignUpMode && !viewModel.password.isEmpty {
+                            PasswordStrengthBar(strength: viewModel.passwordStrength)
+                        }
+                    }
 
                     if isSignUpMode {
+                        VStack(alignment: .leading, spacing: 4) {
+                            SecureField("Confirm Password", text: $viewModel.confirmPassword)
+                                .textContentType(.newPassword)
+                                .textFieldStyle(.roundedInput)
+
+                            if !viewModel.confirmPassword.isEmpty && !viewModel.passwordsMatch {
+                                Text("Passwords do not match")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                                    .accessibilityLabel("Password validation error: passwords do not match")
+                            }
+                        }
+
                         interestsSection
+                    }
+
+                    // Lockout warning
+                    if viewModel.isLockedOut {
+                        HStack(spacing: 6) {
+                            Image(systemName: "lock.fill")
+                                .foregroundStyle(.red)
+                            Text("Too many attempts. Try again in \(viewModel.lockoutSecondsRemaining)s")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.red)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityElement(children: .combine)
                     }
                 }
                 .padding(.horizontal)
@@ -88,7 +129,7 @@ struct AuthView: View {
                     .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
                     .foregroundStyle(.white)
                 }
-                .disabled(viewModel.isSigningIn || viewModel.isSigningUp)
+                .disabled(viewModel.isSigningIn || viewModel.isSigningUp || viewModel.isLockedOut)
                 .padding(.horizontal)
 
                 // Forgot password
@@ -115,6 +156,10 @@ struct AuthView: View {
                 // Apple Sign-In
                 SignInWithAppleButton(.signIn) { request in
                     request.requestedScopes = [.fullName, .email]
+                    // Generate nonce and set its SHA-256 hash on the request.
+                    // Supabase requires the raw nonce + hashed nonce in id_token to match.
+                    let nonce = AuthService.shared.generateNonce()
+                    request.nonce = AuthService.sha256(nonce)
                 } onCompletion: { result in
                     Task {
                         await viewModel.handleAppleSignIn(result: result)
@@ -199,6 +244,54 @@ struct RoundedInputStyle: TextFieldStyle {
 
 extension TextFieldStyle where Self == RoundedInputStyle {
     static var roundedInput: RoundedInputStyle { RoundedInputStyle() }
+}
+
+// MARK: - Password Strength Bar
+
+private struct PasswordStrengthBar: View {
+    let strength: AuthViewModel.PasswordStrength
+
+    private var progress: Double {
+        switch strength {
+        case .none: return 0
+        case .weak: return 0.33
+        case .medium: return 0.66
+        case .strong: return 1.0
+        }
+    }
+
+    private var color: Color {
+        switch strength {
+        case .none: return .gray
+        case .weak: return .red
+        case .medium: return .orange
+        case .strong: return .green
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color(.systemGray5))
+                        .frame(height: 4)
+
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(color)
+                        .frame(width: geometry.size.width * progress, height: 4)
+                        .animation(.easeInOut(duration: 0.2), value: progress)
+                }
+            }
+            .frame(height: 4)
+
+            Text(strength == .none ? "" : strength.rawValue.capitalized)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(color)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Password strength: \(strength.rawValue)")
+    }
 }
 
 #Preview {

@@ -24,17 +24,34 @@ final class RestaurantsViewModel {
     var sortBy: RestaurantSortOption = .popularity {
         didSet { resetAndFetch() }
     }
+    var showOpenNowOnly = false {
+        didSet { if oldValue != showOpenNowOnly { applyOpenNowFilter() } }
+    }
 
     private var currentOffset = 0
     private let pageSize = Config.defaultPageSize
     private var fetchTask: Task<Void, Never>?
 
     private let service = RestaurantsService.shared
+    private let cache = QueryCache.shared
 
     // MARK: - Load
 
     func loadInitialData() async {
         guard restaurants.isEmpty else { return }
+
+        // Serve cached data immediately for instant cold start
+        let cacheKey = restaurantsCacheKey()
+        let isOffline = !NetworkMonitor.shared.isConnected
+
+        if let cached: [Restaurant] = await cache.get(cacheKey, allowStale: isOffline) {
+            allRestaurants = cached
+            restaurants = showOpenNowOnly ? cached.filter { $0.isOpenNow() == true } : cached
+            isLoading = false
+        }
+
+        if isOffline && !restaurants.isEmpty { return }
+
         async let restaurantsTask: () = fetchRestaurants(reset: true)
         async let cuisinesTask: () = loadCuisines()
         _ = await (restaurantsTask, cuisinesTask)
@@ -49,7 +66,7 @@ final class RestaurantsViewModel {
     func fetchRestaurants(reset: Bool = false) async {
         if reset {
             currentOffset = 0
-            isLoading = true
+            if restaurants.isEmpty { isLoading = true }
         } else {
             isLoadingMore = true
         }
@@ -67,16 +84,25 @@ final class RestaurantsViewModel {
             let response = try await service.fetchRestaurants(query: query)
 
             if reset {
-                restaurants = response.restaurants
+                allRestaurants = response.restaurants
+                await cache.set(restaurantsCacheKey(), value: response.restaurants)
             } else {
-                restaurants.append(contentsOf: response.restaurants)
+                allRestaurants.append(contentsOf: response.restaurants)
+            }
+            // Apply open now filter if active
+            if showOpenNowOnly {
+                restaurants = allRestaurants.filter { $0.isOpenNow() == true }
+            } else {
+                restaurants = allRestaurants
             }
 
             totalCount = response.totalCount
             hasMore = response.hasMore
             currentOffset = restaurants.count
         } catch {
-            errorMessage = error.localizedDescription
+            if restaurants.isEmpty {
+                errorMessage = error.localizedDescription
+            }
         }
 
         isLoading = false
@@ -103,6 +129,19 @@ final class RestaurantsViewModel {
         }
     }
 
+    // MARK: - Open Now Filter (client-side)
+
+    /// All fetched restaurants before the Open Now filter is applied.
+    private var allRestaurants: [Restaurant] = []
+
+    private func applyOpenNowFilter() {
+        if showOpenNowOnly {
+            restaurants = allRestaurants.filter { $0.isOpenNow() == true }
+        } else {
+            restaurants = allRestaurants
+        }
+    }
+
     // MARK: - Filters
 
     var activeFilterCount: Int {
@@ -110,6 +149,7 @@ final class RestaurantsViewModel {
         if !selectedCuisines.isEmpty { count += 1 }
         if !selectedPriceRanges.isEmpty { count += 1 }
         if !searchText.isEmpty { count += 1 }
+        if showOpenNowOnly { count += 1 }
         return count
     }
 
@@ -118,6 +158,7 @@ final class RestaurantsViewModel {
         selectedPriceRanges = []
         searchText = ""
         sortBy = .popularity
+        showOpenNowOnly = false
     }
 
     private func resetAndFetch() {
@@ -127,5 +168,16 @@ final class RestaurantsViewModel {
             guard !Task.isCancelled else { return }
             await fetchRestaurants(reset: true)
         }
+    }
+
+    // MARK: - Cache Key
+
+    private func restaurantsCacheKey() -> String {
+        var parts = ["restaurants"]
+        if !selectedCuisines.isEmpty { parts.append("c-\(selectedCuisines.sorted().joined(separator: ","))") }
+        if !selectedPriceRanges.isEmpty { parts.append("p-\(selectedPriceRanges.sorted().joined(separator: ","))") }
+        if !searchText.isEmpty { parts.append("q-\(searchText)") }
+        parts.append("s-\(sortBy.rawValue)")
+        return parts.joined(separator: "-")
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Supabase
 import AuthenticationServices
 
@@ -8,6 +9,11 @@ import AuthenticationServices
 @Observable
 final class AuthService {
     static let shared = AuthService()
+
+    /// The raw nonce generated for the current Apple Sign-In attempt.
+    /// Must be set before presenting the ASAuthorizationController and sent
+    /// alongside the id_token so Supabase can verify them together.
+    private(set) var currentNonce: String?
 
     private(set) var currentUser: User?
     private(set) var currentProfile: UserProfile?
@@ -113,6 +119,34 @@ final class AuthService {
         try await supabase.auth.resetPasswordForEmail(email)
     }
 
+    // MARK: - Apple Sign-In Nonce
+
+    /// Generates a cryptographically-random nonce for Apple Sign-In.
+    /// Call this before presenting the ASAuthorizationController and set
+    /// the SHA-256 hash on the request via `request.nonce`.
+    func generateNonce() -> String {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        return nonce
+    }
+
+    /// Returns the SHA-256 hash of the given string, hex-encoded.
+    /// Used to set `request.nonce` on the Apple Sign-In request.
+    static func sha256(_ input: String) -> String {
+        let data = Data(input.utf8)
+        let hash = SHA256.hash(data: data)
+        return hash.compactMap { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Generates a random 32-byte nonce string (URL-safe base64).
+    private func randomNonceString(length: Int = 32) -> String {
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let status = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        precondition(status == errSecSuccess, "Failed to generate random bytes")
+        let charset: [Character] = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+        return String(randomBytes.map { charset[Int($0) % charset.count] })
+    }
+
     // MARK: - Apple Sign-In
 
     func signInWithApple(credential: ASAuthorizationAppleIDCredential) async throws {
@@ -121,9 +155,15 @@ final class AuthService {
               let tokenString = String(data: identityToken, encoding: .utf8) else {
             throw AuthError.invalidToken
         }
+        guard let nonce = currentNonce else {
+            throw AuthError.missingNonce
+        }
+
+        // Clear nonce immediately so it cannot be reused
+        currentNonce = nil
 
         let session = try await supabase.auth.signInWithIdToken(
-            credentials: .init(provider: .apple, idToken: tokenString)
+            credentials: .init(provider: .apple, idToken: tokenString, nonce: nonce)
         )
         currentUser = session.user
         isAuthenticated = true
@@ -238,12 +278,14 @@ final class AuthService {
 
     enum AuthError: LocalizedError {
         case invalidToken
+        case missingNonce
         case noUser
         case notConfigured
 
         var errorDescription: String? {
             switch self {
             case .invalidToken: return "Invalid authentication token."
+            case .missingNonce: return "Apple Sign-In failed. Please try again."
             case .noUser: return "No user session found."
             case .notConfigured: return "Supabase is not configured. Please contact support."
             }

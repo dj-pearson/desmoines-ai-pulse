@@ -44,6 +44,11 @@ struct HomeView: View {
                 async let eventsRefresh: () = viewModel.refresh()
                 async let restaurantsRefresh: () = restaurantsVM.refresh()
                 _ = await (eventsRefresh, restaurantsRefresh)
+                if viewModel.errorMessage == nil {
+                    UINotificationFeedbackGenerator().notificationOccurred(.success)
+                } else {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                }
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
