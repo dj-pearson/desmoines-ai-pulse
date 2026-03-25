@@ -116,7 +116,7 @@ Privacy Policy: https://desmoinesinsider.com/privacy-policy
 > **Note:** Promotional text is NOT indexed for search. Its job is conversion — convincing
 > users who land on your page to tap Install. Update seasonally for relevance.
 
-Discover what's happening in Des Moines! Browse events, find top restaurants, explore attractions, and plan your weekend — all in one free app.
+NEW: See which restaurants are open right now! Plus faster loading, offline support, and a smoother experience throughout. Discover Des Moines events, restaurants & more.
 
 ---
 
@@ -190,6 +190,18 @@ Iowa,dining,food,attraction,DSM,nightlife,tonight,weekend,local,guide,live music
 > "Des Moines" (10), "events" (6), "restaurants" (11), "local guide" (11)
 
 ---
+
+## What's New (Release Notes — for version 1.2.0)
+
+- **Open Now filter** — see which restaurants are currently open at a glance with live status badges
+- **Blazing fast load times** — events and restaurants now load instantly from cache on repeat visits and work offline
+- **Better images** — photos load faster and stay cached so you never see placeholder flickers when scrolling back
+- **Apple Sign-In fix** — resolved an issue that could prevent Sign in with Apple from completing
+- **Haptic feedback** — subtle vibrations on tab switches, pull-to-refresh, favorites, and filters make the app feel more responsive
+- **Stronger security** — auth tokens secured with iOS Keychain, subscription receipts validated server-side, and login forms now validate input in real-time with rate limiting
+- **Password strength meter** — see real-time feedback on password strength when creating your account
+- **Smoother detail pages** — event and restaurant detail views rebuilt for faster rendering
+- Performance and stability improvements
 
 ## What's New (Release Notes — for version 1.1.1)
 
