@@ -580,7 +580,7 @@
         "Handle edge cases: expired subscriptions, cancelled subscriptions, grace period"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "New edge function — iOS has validate-ios-receipt, Android needs its own. Uses Google Play Developer API for server-side verification. Service account key stored as Supabase secret."
     },
     {
