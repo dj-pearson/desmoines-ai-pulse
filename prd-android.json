@@ -918,7 +918,7 @@
         "@Preview for both normal and featured states"
       ],
       "priority": 46,
-      "passes": false,
+      "passes": true,
       "notes": "Core reusable component used across Home, Search results, Favorites, and Related events. Must match iOS EventCardView.swift layout and info density."
     },
     {
@@ -937,7 +937,7 @@
         "@Preview composables"
       ],
       "priority": 47,
-      "passes": false,
+      "passes": true,
       "notes": "Core reusable component. Open/Closed detection uses Restaurant.isOpenNow() computed from business_hours JSON."
     },
     {
@@ -952,7 +952,7 @@
         "Error state cleared on successful refresh"
       ],
       "priority": 48,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS pull-to-refresh behavior. Use Compose Material 3 pullToRefresh modifier (experimental API)."
     },
     {
@@ -969,7 +969,7 @@
         "Share sheet opens with proper chooser title"
       ],
       "priority": 49,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS ShareSheet usage. Android uses Intent.ACTION_SEND instead of UIActivityViewController."
     },
     {
@@ -997,7 +997,7 @@
         "Release build assembles and runs correctly with ProGuard"
       ],
       "priority": 50,
-      "passes": false,
+      "passes": true,
       "notes": "Final quality gate before Play Store submission. Run through every feature manually. Profile with Android Studio tools. Test on multiple device sizes (phone + tablet)."
     }
   ]
