@@ -916,3 +916,43 @@ Started: 2026-03-27T14:05:42.010Z
   - Deep link data comes from RemoteMessage.data map (not notification payload) — server controls the navigate_to and content_id keys
   - Same backend edge function (register-device-token) used for both iOS and Android — platform field distinguishes them
 ---
+
+## 2026-03-27 - AND-032 (Android)
+- Created DeepLinkHandler.kt as @Singleton matching iOS DeepLinkHandler.swift:
+  - Destination sealed class: Event(id), Restaurant(id), Attraction(id), Tab(tab) — matches iOS Destination enum
+  - TabDestination enum: HOME, DINING, SEARCH, MAP, SAVED, PROFILE
+  - handle(Uri): parses universal links (desmoinesinsider.com) and custom scheme (com.desmoines.aipulse://) URLs
+  - handleIntent(Intent): handles notification tap extras (navigate_to + event_id/content_id) and URI deep links
+  - consumeDestination(): returns and clears pending destination (same pattern as iOS)
+  - parseUniversalLink(): handles desmoinesinsider.com/events/:id, /restaurants/:id, /attractions/:id + root paths to tabs
+  - parseCustomScheme(): handles com.desmoines.aipulse://event/:id, restaurant/:id, attraction/:id + tab names (home, search, favorites, profile, dining, map)
+  - Auth callback URLs (auth-callback) return false to let Supabase handle them
+  - Invalid/malformed URLs return null gracefully
+  - pendingDestination exposed as StateFlow for reactive consumption
+- Updated AndroidManifest.xml with 3 intent filters:
+  - Custom scheme: com.desmoines.aipulse:// (catches all custom scheme URLs)
+  - Universal links: android:autoVerify="true" for https://desmoinesinsider.com with /events, /restaurants, /attractions pathPrefixes
+  - Auth callback filter already existed from AND-003
+- Updated MainActivity.kt:
+  - Injects DeepLinkHandler via Hilt
+  - Handles deep links in onCreate() from launch intent
+  - Overrides onNewIntent() for deep links while app is running (singleTop/singleTask scenarios)
+  - Passes DeepLinkHandler to MainScreen
+- Updated MainScreen.kt:
+  - Accepts DeepLinkHandler parameter
+  - Observes pendingDestination as StateFlow
+  - LaunchedEffect consumes destination and navigates: detail routes with launchSingleTop, tab routes with popUpTo + saveState/restoreState
+- assetlinks.json already existed at public/.well-known/assetlinks.json (created in prior web setup) — no changes needed
+- Files created: DeepLinkHandler.kt
+- Files modified: AndroidManifest.xml, MainActivity.kt, MainScreen.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - DeepLinkHandler uses @Singleton + @Inject constructor — auto-provided by Hilt, shared between MainActivity and MainScreen
+  - onNewIntent() is called when activity has singleTop/singleTask launch mode and a new intent arrives — essential for deep links while app is already running
+  - Intent extras must be cleared after handling to prevent re-processing on configuration changes (screen rotation)
+  - Android App Links require android:autoVerify="true" on the intent-filter — triggers assetlinks.json verification on install
+  - Universal link intent-filter uses pathPrefix (not pathPattern) for cleaner matching — pathPrefix="/events" matches /events, /events/123, etc.
+  - LaunchedEffect(pendingDestination) reacts to StateFlow changes — consumes the destination immediately when set
+  - Tab navigation uses same popUpTo + saveState + restoreState pattern as bottom bar taps for consistency
+  - Detail navigation uses launchSingleTop to prevent duplicate detail screens on rapid taps
+---
