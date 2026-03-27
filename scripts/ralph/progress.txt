@@ -852,3 +852,34 @@ Started: 2026-03-27T14:05:42.010Z
   - Location("default") creates a Location with provider name "default" — used for the Des Moines center fallback
   - Haversine formula uses earth radius in miles (3958.8) directly to avoid meters→miles conversion
 ---
+
+## 2026-03-27 - AND-030 (Android)
+- Built LocalNotificationService.kt as @Singleton matching iOS LocalNotificationService.swift:
+  - scheduleReminder(eventId, title, venue, eventTimeMillis): schedules AlarmManager alarm 1 hour before event
+  - cancelReminder(eventId): cancels pending alarm and removes from persisted set
+  - toggleReminder(): convenience toggle matching iOS exactly
+  - isReminderSet(eventId): checks SharedPreferences persisted set
+  - getScheduledEventIds(): returns full set of scheduled IDs (matching iOS scheduledEventIds)
+  - pruneExpiredReminders(): cleans up IDs where PendingIntent no longer exists (called on app launch)
+  - Creates "event_reminders" notification channel (IMPORTANCE_HIGH) on init
+  - Handles Android 12+ exact alarm permission check (canScheduleExactAlarms) with inexact fallback
+- Built NotificationReceiver.kt BroadcastReceiver:
+  - Displays notification matching iOS content: title="Event Reminder", body="[title] starts in 1 hour at [venue]"
+  - Tap intent opens MainActivity with navigate_to=event_detail + event_id extras for deep navigation
+  - Checks POST_NOTIFICATIONS permission on Android 13+ before posting
+  - Cleans up scheduled ID from SharedPreferences after notification fires
+- Updated AndroidManifest.xml: added POST_NOTIFICATIONS, SCHEDULE_EXACT_ALARM, USE_EXACT_ALARM, VIBRATE permissions; registered NotificationReceiver
+- Updated DesMoinesInsiderApp.kt: injects LocalNotificationService, calls pruneExpiredReminders() on launch
+- Files created: LocalNotificationService.kt, NotificationReceiver.kt
+- Files modified: AndroidManifest.xml, DesMoinesInsiderApp.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - AlarmManager.setExactAndAllowWhileIdle() is the Android equivalent of iOS UNCalendarNotificationTrigger — fires precisely even in Doze mode
+  - Android 12+ (SDK 31) requires SCHEDULE_EXACT_ALARM permission and runtime canScheduleExactAlarms() check
+  - PendingIntent.FLAG_IMMUTABLE required on Android 12+ for security — always combine with FLAG_UPDATE_CURRENT
+  - PendingIntent uses eventId.hashCode() as requestCode for unique identification — same hashCode = same alarm
+  - NotificationReceiver is a manifest-registered receiver (not Hilt-injected) — uses direct SharedPreferences access for cleanup
+  - POST_NOTIFICATIONS permission (Android 13+) must be requested at runtime before scheduling (handled in UI layer)
+  - Notification tap uses FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TOP to bring existing MainActivity to front
+  - SharedPreferences.getStringSet returns a reference to the internal set — always copy to mutableSet before modifying
+---

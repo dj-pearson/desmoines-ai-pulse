@@ -621,7 +621,7 @@
         "Persist scheduled event IDs in SharedPreferences for state tracking"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS LocalNotificationService.swift. Same 1-hour-before timing, same notification content. Android uses AlarmManager + BroadcastReceiver instead of UNUserNotificationCenter."
     },
     {
