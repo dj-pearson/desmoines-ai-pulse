@@ -641,7 +641,7 @@
         "Handle notification tap → deep link to relevant screen"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS PushNotificationService.swift. FCM replaces APNs. Same backend endpoint (register-device-token) with platform='android'. Same default disabled state."
     },
     {

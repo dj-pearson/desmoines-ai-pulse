@@ -82,5 +82,6 @@ android/app/build/
 android/build/
 android/captures/
 android/.cxx/
+android/app/google-services.json
 *.apk
 *.aab

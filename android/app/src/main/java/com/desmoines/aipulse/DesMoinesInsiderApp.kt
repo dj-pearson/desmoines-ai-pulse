@@ -3,6 +3,7 @@ package com.desmoines.aipulse
 import android.app.Application
 import com.desmoines.aipulse.data.local.CacheManager
 import com.desmoines.aipulse.util.LocalNotificationService
+import com.desmoines.aipulse.util.PushNotificationService
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,5 +24,8 @@ class DesMoinesInsiderApp : Application() {
         appScope.launch { cacheManager.pruneExpired() }
         // Clean up reminder IDs for alarms that have already fired
         localNotificationService.pruneExpiredReminders()
+
+        // Initialize Firebase Cloud Messaging push notifications
+        PushNotificationService.initialize(this)
     }
 }
