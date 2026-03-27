@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.di
 
 import android.content.Context
+import android.content.SharedPreferences
 import com.desmoines.aipulse.data.remote.SupabaseClientProvider
 import dagger.Module
 import dagger.Provides
@@ -27,6 +28,11 @@ object AppModule {
     @Provides
     @Singleton
     fun provideApplicationContext(@ApplicationContext context: Context): Context = context
+
+    @Provides
+    @Singleton
+    fun provideSharedPreferences(@ApplicationContext context: Context): SharedPreferences =
+        context.getSharedPreferences("desmoines_insider_prefs", Context.MODE_PRIVATE)
 
     @Provides
     @Singleton
