@@ -91,6 +91,7 @@ play-billing = { group = "com.android.billingclient", name = "billing-ktx", vers
 # Firebase
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
+firebase-appindexing = { group = "com.google.firebase", name = "firebase-appindexing" }
 
 # Ktor (HTTP engine for Supabase)
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }

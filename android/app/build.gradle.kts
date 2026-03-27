@@ -134,6 +134,7 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.firebase.appindexing)
 
     // Testing
     testImplementation(libs.junit)
