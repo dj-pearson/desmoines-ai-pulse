@@ -808,7 +808,7 @@
         "All event/restaurant/attraction images use CachedAsyncImage"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS CachedAsyncImage.swift two-tier cache. Same limits: 50MB memory, 200MB disk. Coil is the standard image loading library for Compose."
     },
     {
