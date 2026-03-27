@@ -167,7 +167,7 @@
         "Queries match iOS AttractionsService.swift"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": "Simpler than events/restaurants. Uses ILIKE instead of full-text search (matching iOS). Limit 50 for nearby attractions."
     },
     {

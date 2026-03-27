@@ -148,3 +148,22 @@ Started: 2026-03-27T14:05:42.010Z
   - fetchAvailableCuisines uses Columns.list("cuisine") for column selection and client-side distinct() + sorted()
   - Reused EventsRemoteDataSource.haversineDistance() companion for table fallback distance filtering
 ---
+
+## 2026-03-27 - AND-009 (Android)
+- Created AttractionsRemoteDataSource.kt with all 3 methods matching iOS AttractionsService.swift:
+  - fetchAttractions(query) with multi-field ILIKE search on name/type/location via or{} filter, type eq, minRating gte, isFeatured eq, order by created_at desc, pagination with count
+  - fetchAttraction(id) single attraction by ID
+  - fetchNearbyAttractions(lat, lng, limit) with client-side Haversine distance filtering (no PostGIS RPC for attractions)
+- Created AttractionsRepository interface with Result<T> return types for all methods
+- Created AttractionsRepositoryImpl wrapping remote data source with runCatching error handling
+- Updated RepositoryModule.kt with @Binds binding for AttractionsRepository → AttractionsRepositoryImpl
+- Files created: AttractionsRemoteDataSource.kt, AttractionsRepository.kt, AttractionsRepositoryImpl.kt
+- Files modified: RepositoryModule.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Attractions use ILIKE search (not full-text search like events/restaurants) — simpler pattern with or{} block containing 3 ilike() calls
+  - No PostGIS RPC for attractions yet — fetchNearbyAttractions uses purely client-side distance filtering with haversineDistance()
+  - Reused EventsRemoteDataSource.haversineDistance() companion for consistency across all data sources
+  - Default limit for nearby attractions is 50 (matching iOS), vs default page size 30 for paginated list
+  - AttractionsQuery is simpler than Events/Restaurants: no date range, no sort options, no multi-select filters
+---
