@@ -356,7 +356,7 @@
         "Slider values display current value prominently for accessibility"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS FilterSheet.swift. Same basic/advanced split. Premium filters locked behind PremiumGate exactly as iOS does."
     },
     {

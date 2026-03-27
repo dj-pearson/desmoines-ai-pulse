@@ -421,3 +421,33 @@ Started: 2026-03-27T14:05:42.010Z
   - LaunchedEffect(Unit) in composable destination is the right place for initial data loading (fires once per navigation)
   - ViewModel's hasLoadedInitialData flag prevents duplicate loads even if LaunchedEffect re-fires
 ---
+
+## 2026-03-27 - AND-018 (Android)
+- Created FilterSheet.kt as ModalBottomSheet matching iOS FilterSheet.swift:
+  - Header with "Filters" title, Clear button, and Close (X) button
+  - Category section: 2-column LazyVerticalGrid with all 12 EventCategory entries, each showing icon + displayName + checkmark when selected, color-coded borders and backgrounds
+  - Date section: 2-column LazyVerticalGrid with all 6 DateFilterPreset entries, primary color when selected with checkmark
+  - Options section: "Featured Events Only" toggle (Switch)
+  - Advanced Filters section wrapped in PremiumGate(requiredTier=INSIDER):
+    - "Free Events Only" toggle with ticket icon
+    - "Max Distance" slider (1-50 miles, 1-mile steps) with clear/set toggle and prominent value display
+    - "Min Rating" slider (1.0-5.0, half-star steps=7) with clear/set toggle and prominent value display
+  - Done button at bottom
+  - All filters have proper accessibility semantics (contentDescription with selected state, slider values)
+- Updated MainNavHost.kt to wire FilterSheet into Home tab:
+  - Added showFilterSheet local state (remember { mutableStateOf(false) })
+  - Collected showFreeOnly, maxDistance, minRating from ViewModel as additional StateFlows
+  - Connected all FilterSheet callbacks to ViewModel setter methods
+  - Upgrade button dismisses sheet and navigates to Subscription screen
+- Files created: FilterSheet.kt
+- Files modified: MainNavHost.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - ModalBottomSheet with skipPartiallyExpanded=true shows the full sheet (matching iOS .presentationDetents(.large))
+  - Slider local state (remember) avoids constant ViewModel updates during drag — only commit via onValueChangeFinished
+  - LazyVerticalGrid inside ModalBottomSheet needs fixed height and userScrollEnabled=false to avoid nested scroll conflicts
+  - Min rating slider uses steps=7 for half-star increments (1.0, 1.5, 2.0, ..., 5.0 = 9 values, 7 intermediate steps)
+  - FilterSheet is rendered as a sibling of HomeScreen (not inside it) in the composable destination — ModalBottomSheet manages its own overlay
+  - Category/DatePreset grids use Surface(onClick) for the entire row clickable area (cleaner than Row + clickable modifier)
+  - WindowInsets.navigationBars on ModalBottomSheet prevents content from being hidden behind gesture bar
+---
