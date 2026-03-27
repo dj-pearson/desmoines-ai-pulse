@@ -440,7 +440,7 @@
         "Create simple AttractionDetailViewModel"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AttractionDetailView.swift. Simpler than events/restaurants — no favorites, no premium gating. Same layout."
     },
     {

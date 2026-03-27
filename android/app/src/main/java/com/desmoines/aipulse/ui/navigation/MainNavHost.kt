@@ -17,6 +17,8 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
+import com.desmoines.aipulse.ui.screens.attractiondetail.AttractionDetailScreen
+import com.desmoines.aipulse.ui.screens.attractiondetail.AttractionDetailViewModel
 import com.desmoines.aipulse.ui.screens.restaurantdetail.RestaurantDetailScreen
 import com.desmoines.aipulse.ui.screens.restaurantdetail.RestaurantDetailViewModel
 import com.desmoines.aipulse.ui.screens.favorites.FavoritesScreen
@@ -342,7 +344,46 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
     composable(
         route = Route.AttractionDetail.route,
         arguments = Route.AttractionDetail.arguments
-    ) { /* AttractionDetailScreen placeholder — implemented in AND-022 */ }
+    ) { backStackEntry ->
+        val attractionId = backStackEntry.arguments?.getString("attractionId") ?: return@composable
+        val viewModel: AttractionDetailViewModel = hiltViewModel()
+        val attraction by viewModel.attraction.collectAsState()
+        val isLoading by viewModel.isLoading.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        androidx.compose.runtime.LaunchedEffect(attractionId) {
+            viewModel.loadAttraction(attractionId)
+        }
+
+        AttractionDetailScreen(
+            attraction = attraction,
+            isLoading = isLoading,
+            onNavigateBack = { navController.popBackStack() },
+            onShare = {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, viewModel.shareText)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Share Attraction"))
+            },
+            onOpenWebsite = {
+                viewModel.createWebsiteIntent()?.let { intent ->
+                    context.startActivity(intent)
+                }
+            },
+            onOpenDirections = {
+                viewModel.createDirectionsIntent()?.let { intent ->
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
+                            context.startActivity(fallback)
+                        }
+                    }
+                }
+            },
+        )
+    }
 }
 
 private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController) {

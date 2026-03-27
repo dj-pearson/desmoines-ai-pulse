@@ -548,3 +548,30 @@ Started: 2026-03-27T14:05:42.010Z
   - RestaurantDetailActions conditionally shows buttons only when data is available (callUri, websiteUri, coordinate) — matches iOS conditional Links
   - Star rating uses Icons.Filled.StarHalf for proper half-star display (better than alpha trick used in list cards)
 ---
+
+## 2026-03-27 - AND-022 (Android)
+- Built Attraction Detail screen matching iOS AttractionDetailView.swift with all sections:
+  - AttractionDetailHeader: 300dp hero image with gradient overlay, type badge (frosted capsule), attraction name (up to 3 lines), teal gradient placeholder with Place icon when no image, tap-to-view full-screen image
+  - AttractionDetailInfo: Star rating display (1-5 with half-stars + numeric), Featured badge in orange, Location row with Get Directions icon button, Distance placeholder row, Website "Visit Website" link row with dividers between groups
+  - AttractionDetailActions: HStack of up to 2 equal-width buttons — Website (primary), Directions (blue), conditionally shown based on data availability
+  - AttractionDescriptionSection: "About" title + description text in secondary color
+  - No premium gating, no favorites — attractions fully accessible to all users (matching iOS)
+- Created AttractionDetailViewModel.kt as @HiltViewModel:
+  - loadAttraction(id): fetches from AttractionsRepository
+  - createWebsiteIntent(): ACTION_VIEW with websiteUri
+  - createDirectionsIntent(): Google Maps navigation with package targeting
+  - createDirectionsFallbackIntent(): generic geo: URI fallback
+  - shareText: formatted matching iOS exactly (name + type + location + rating + "Found on Des Moines Insider")
+- Updated MainNavHost.kt: wired AttractionDetailScreen with ViewModel, share intent, website intent, directions with Google Maps + geo fallback
+- Top app bar with Share button, back navigation
+- Full-screen image viewer integration via FullScreenImageViewer component
+- Files created: AttractionDetailScreen.kt, AttractionDetailViewModel.kt
+- Files modified: MainNavHost.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - AttractionDetail is simpler than Event/Restaurant detail: no favorites toggle, no premium gating, no dining/insider tips section
+  - iOS AttractionDetailView has no separate ViewModel — all logic is inline. Android version creates a simple ViewModel for consistency with other detail screens
+  - Distance row uses "Des Moines area" placeholder — real distance from LocationService will be wired in AND-029
+  - Teal (0xFF009688) matches iOS .teal color for the image placeholder gradient
+  - Attraction type badge uses Place icon as generic fallback — could map AttractionType.iconName to Material Icons in future
+---
