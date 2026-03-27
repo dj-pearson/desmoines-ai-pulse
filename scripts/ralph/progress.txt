@@ -1132,3 +1132,22 @@ Started: 2026-03-27T14:05:42.010Z
   - `snap()` from `androidx.compose.animation.core` is the zero-duration animation spec for accessibility compliance
   - Material 3 shared element transitions require Compose Navigation 2.8+ with `SharedTransitionLayout` — not yet adopted in this codebase's navigation setup, deferred to future navigation upgrade
 ---
+
+## 2026-03-27 - AND-040 (Android)
+- Configured custom ImageLoader in DesMoinesInsiderApp via SingletonImageLoader.Factory interface:
+  - Memory cache: 50MB (MemoryCache.Builder.maxSizeBytes) matching iOS CachedAsyncImage memory limit
+  - Disk cache: 200MB in app cacheDir/image_cache (DiskCache.Builder.directory + maxSizeBytes) matching iOS disk limit
+  - Crossfade enabled globally
+  - OkHttp network interceptor applies 7-day Cache-Control header when server doesn't provide one (enables TTL-based disk expiry)
+  - LRU eviction handled natively by Coil's MemoryCache and DiskCache implementations
+- CachedAsyncImage composable (already created in AND-015) automatically uses the singleton ImageLoader — no changes needed
+- All event/restaurant/attraction screens already use CachedAsyncImage (wired in AND-015 through AND-025) — no additional changes needed
+- Files modified: DesMoinesInsiderApp.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Coil 3 singleton setup: implement SingletonImageLoader.Factory on Application class and override newImageLoader()
+  - Coil 3 OkHttp integration: use OkHttpNetworkFetcherFactory in ImageLoader.Builder.components {} block
+  - DiskCache uses OkHttp's Cache-Control headers for TTL — add a network interceptor to inject default headers when servers omit them
+  - MemoryCache and DiskCache both use LRU eviction by default — no additional configuration needed
+  - SubcomposeAsyncImage automatically picks up the singleton ImageLoader — no explicit ImageLoader parameter needed in composables
+---
