@@ -1075,3 +1075,34 @@ Started: 2026-03-27T14:05:42.010Z
   - Android's Compose animation APIs respect ANIMATOR_DURATION_SCALE=0 natively — animateDpAsState, spring() etc. automatically disabled
   - NavigationBarItem accepts a `modifier` parameter for adding custom semantics
 ---
+
+## 2026-03-27 - AND-038 (Android)
+- Created util/HapticHelper.kt with centralized haptic feedback management:
+  - HapticHelper @Singleton: wraps Android Vibrator/VibrationEffect with lightImpact() (10ms, amplitude 50) and mediumImpact() (20ms, amplitude 128)
+  - Checks system HAPTIC_FEEDBACK_ENABLED setting — all calls are no-ops when disabled
+  - Handles amplitude control detection: uses specific amplitudes when supported, DEFAULT_AMPLITUDE fallback
+  - Uses VibratorManager on Android 12+ (SDK 31), falls back to legacy Vibrator service
+  - HapticPerformer composable class: wraps LocalHapticFeedback with accessibility gate (light/medium methods)
+  - rememberHapticPerformer(): composable factory that checks system haptic setting via rememberIsHapticFeedbackEnabled()
+- Updated all screens to use rememberHapticPerformer() instead of raw LocalHapticFeedback.current:
+  - MainScreen.kt: tab selection → haptic.light()
+  - HomeScreen.kt: filter button, date preset, category chip, clear filters → haptic.light(); pull-to-refresh completion → haptic.medium()
+  - SearchScreen.kt: tab selection, category selection, search suggestion → haptics.light()
+  - RestaurantsScreen.kt: cuisine chip, sort option, price filter, clear filters → haptic.light()
+  - FavoritesScreen.kt: remove from favorites → haptic.medium()
+  - EventDetailScreen.kt: share, favorite toggle, calendar add, locked calendar, reminder → haptic.medium()
+  - RestaurantDetailScreen.kt: share, favorite toggle, directions, call, website, menu → haptic.medium()
+  - AttractionDetailScreen.kt: favorite toggle, share, directions, website, call → haptic.medium()
+- Added pull-to-refresh completion haptic to HomeScreen using LaunchedEffect watching isRefreshing transition (true→false)
+- Removed all direct HapticFeedbackType.LongPress imports — all haptic calls now go through accessibility-gated HapticPerformer
+- Files created: HapticHelper.kt
+- Files modified: HomeScreen.kt, MainScreen.kt, SearchScreen.kt, RestaurantsScreen.kt, FavoritesScreen.kt, EventDetailScreen.kt, RestaurantDetailScreen.kt, AttractionDetailScreen.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - HapticPerformer wraps LocalHapticFeedback (Compose API) while HapticHelper wraps Vibrator (system API) — both check system setting
+  - VibratorManager (SDK 31+) replaces deprecated context.getSystemService(VIBRATOR_SERVICE) — use conditional initialization
+  - VibrationEffect.createOneShot(duration, amplitude) where amplitude 1-255 or DEFAULT_AMPLITUDE — amplitude control not available on all devices
+  - rememberHapticPerformer() is the standard pattern for composables — HapticHelper @Singleton is for non-composable code (ViewModels, services)
+  - Pull-to-refresh completion detected via LaunchedEffect(isRefreshing) with wasRefreshing tracker — fires medium impact when transitioning from refreshing to not-refreshing
+  - Light haptic (selections, filter changes) vs medium haptic (primary actions, favorites, calendar) mirrors iOS .light/.medium distinction
+---

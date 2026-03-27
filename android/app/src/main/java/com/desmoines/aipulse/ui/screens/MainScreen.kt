@@ -15,8 +15,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -45,7 +44,7 @@ fun MainScreen(
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
 
     // Observe pending deep link destinations
     val pendingDestination by deepLinkHandler.pendingDestination.collectAsState()
@@ -117,7 +116,7 @@ fun MainScreen(
                             },
                             onClick = {
                                 if (!isSelected) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    haptic.light()
                                     navController.navigate(tab.route) {
                                         // Pop up to the start destination to avoid building
                                         // up a large stack of destinations on the back stack

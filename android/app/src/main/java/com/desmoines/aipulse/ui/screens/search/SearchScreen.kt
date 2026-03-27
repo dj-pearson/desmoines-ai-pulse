@@ -59,8 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -92,7 +91,7 @@ fun SearchScreen(
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToAttractionDetail: (String) -> Unit = {},
 ) {
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberHapticPerformer()
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Search bar
@@ -108,7 +107,7 @@ fun SearchScreen(
                 selectedTab = state.selectedTab,
                 state = state,
                 onTabSelected = { tab ->
-                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptics.light()
                     onTabSelected(tab)
                 },
             )
@@ -300,7 +299,7 @@ private fun tabIcon(tab: SearchTab): ImageVector = when (tab) {
 private fun SearchSuggestions(
     onSuggestionSelected: (String) -> Unit,
 ) {
-    val haptics = LocalHapticFeedback.current
+    val haptics = rememberHapticPerformer()
     val categories = remember { EventCategory.entries.take(8) }
     val suggestions = remember {
         listOf(
@@ -340,7 +339,7 @@ private fun SearchSuggestions(
                 items(categories) { category ->
                     Surface(
                         onClick = {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptics.light()
                             onSuggestionSelected(category.displayName)
                         },
                         shape = RoundedCornerShape(12.dp),
@@ -391,7 +390,7 @@ private fun SearchSuggestions(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable {
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptics.light()
                         onSuggestionSelected(suggestion)
                     }
                     .padding(horizontal = Dimens.SpacingMd, vertical = 10.dp),

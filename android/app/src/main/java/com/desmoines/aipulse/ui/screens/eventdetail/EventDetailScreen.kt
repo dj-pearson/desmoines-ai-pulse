@@ -62,9 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -83,6 +81,7 @@ import com.desmoines.aipulse.ui.components.PremiumBadge
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import java.time.format.DateTimeFormatter
 
 /**
@@ -109,7 +108,7 @@ fun EventDetailScreen(
     onOpenSourceUrl: (String) -> Unit,
 ) {
     var showImageViewer by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
 
     if (isLoading && event == null) {
         LoadingView(message = "Loading event...")
@@ -137,7 +136,7 @@ fun EventDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptic.medium()
                         onShare()
                     }) {
                         Icon(
@@ -146,7 +145,7 @@ fun EventDetailScreen(
                         )
                     }
                     IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptic.medium()
                         onToggleFavorite()
                     }) {
                         Icon(
@@ -561,7 +560,7 @@ private fun EventDetailActions(
     onShowSubscription: () -> Unit,
     onOpenSourceUrl: (String) -> Unit,
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
 
     Column(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -576,7 +575,7 @@ private fun EventDetailActions(
                 if (hasPremiumAccess) {
                     Button(
                         onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.medium()
                             onAddToCalendar()
                         },
                         modifier = Modifier.weight(1f),
@@ -603,7 +602,7 @@ private fun EventDetailActions(
                     // Locked calendar button for free users
                     Button(
                         onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.medium()
                             onShowSubscription()
                         },
                         modifier = Modifier.weight(1f),
@@ -663,7 +662,7 @@ private fun EventDetailActions(
             val isReminderSet = false
             Button(
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     // Reminder toggle implemented in later story
                 },
                 modifier = Modifier.fillMaxWidth(),

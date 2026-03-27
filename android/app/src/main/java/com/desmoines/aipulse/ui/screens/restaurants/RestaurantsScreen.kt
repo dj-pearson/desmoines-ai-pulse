@@ -66,9 +66,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalHapticFeedback
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -105,7 +104,7 @@ fun RestaurantsScreen(
     onFavoriteClick: ((String) -> Unit)? = null,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
     val listState = rememberLazyListState()
 
     // Load more detection
@@ -127,7 +126,7 @@ fun RestaurantsScreen(
                 actions = {
                     IconButton(
                         onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.light()
                             onShowFilters()
                         }
                     ) {
@@ -170,11 +169,11 @@ fun RestaurantsScreen(
                         selectedSort = state.sortBy,
                         showOpenNowOnly = state.showOpenNowOnly,
                         onSortSelected = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.light()
                             onSortBySelected(it)
                         },
                         onToggleOpenNow = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.light()
                             onToggleOpenNow()
                         },
                     )
@@ -194,7 +193,7 @@ fun RestaurantsScreen(
                         ActiveFiltersBar(
                             count = state.activeFilterCount,
                             onClearAll = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                haptic.light()
                                 onClearFilters()
                             },
                         )

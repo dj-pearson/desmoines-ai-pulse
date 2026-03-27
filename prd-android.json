@@ -771,7 +771,7 @@
         "No haptic feedback when accessibility 'touch feedback' is disabled"
       ],
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS haptic feedback (UIImpactFeedbackGenerator). Same trigger points throughout the app."
     },
     {

@@ -58,9 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
@@ -79,6 +77,7 @@ import com.desmoines.aipulse.ui.components.EmptyStateView
 import com.desmoines.aipulse.ui.components.InlineLoadingView
 import com.desmoines.aipulse.ui.components.icon
 import com.desmoines.aipulse.ui.theme.BrandOrange
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
 
@@ -136,7 +135,7 @@ fun HomeScreen(
     onLoadMore: () -> Unit = {},
     onFavoriteClick: ((String) -> Unit)? = null,
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
 
@@ -163,7 +162,7 @@ fun HomeScreen(
                     FilterButton(
                         activeFilterCount = state.activeFilterCount,
                         onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.light()
                             onShowFilters()
                         }
                     )
@@ -178,6 +177,15 @@ fun HomeScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
     ) { padding ->
         val pullToRefreshState = rememberPullToRefreshState()
+
+        // Haptic feedback on pull-to-refresh completion
+        var wasRefreshing by remember { mutableStateOf(false) }
+        LaunchedEffect(state.isRefreshing) {
+            if (wasRefreshing && !state.isRefreshing) {
+                haptic.medium()
+            }
+            wasRefreshing = state.isRefreshing
+        }
 
         PullToRefreshBox(
             isRefreshing = state.isRefreshing,
@@ -201,7 +209,7 @@ fun HomeScreen(
                     DatePresetsRow(
                         selected = state.selectedDatePreset,
                         onSelect = { preset ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.light()
                             onSelectDatePreset(
                                 if (state.selectedDatePreset == preset) null else preset
                             )
@@ -214,7 +222,7 @@ fun HomeScreen(
                     CategoryChipsRow(
                         selected = state.selectedCategory,
                         onSelect = { category ->
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.light()
                             onSelectCategory(
                                 if (state.selectedCategory == category) null else category
                             )
@@ -269,7 +277,7 @@ fun HomeScreen(
                         ActiveFiltersBar(
                             count = state.activeFilterCount,
                             onClear = {
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                haptic.light()
                                 onClearFilters()
                             }
                         )

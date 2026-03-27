@@ -45,9 +45,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -64,6 +62,7 @@ import com.desmoines.aipulse.ui.components.FavoritesLimitBanner
 import com.desmoines.aipulse.ui.components.SubscriptionBanner
 import com.desmoines.aipulse.ui.components.BannerStyle
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 
@@ -286,7 +285,7 @@ private fun FavoriteEventRow(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
     val opacity = if (isPast) 0.6f else 1f
 
     Card(
@@ -381,7 +380,7 @@ private fun FavoriteEventRow(
             // Remove button
             IconButton(
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onRemove()
                 },
                 modifier = Modifier.semantics { contentDescription = "Remove from saved" },
@@ -407,7 +406,7 @@ private fun FavoriteRestaurantRow(
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
 
     Card(
         modifier = modifier
@@ -512,7 +511,7 @@ private fun FavoriteRestaurantRow(
             // Remove button
             IconButton(
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onRemove()
                 },
                 modifier = Modifier.semantics { contentDescription = "Remove from saved" },

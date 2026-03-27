@@ -49,8 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -80,7 +79,7 @@ fun AttractionDetailScreen(
     onOpenDirections: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
     var showFullScreenImage by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -98,7 +97,7 @@ fun AttractionDetailScreen(
                 actions = {
                     if (attraction != null) {
                         IconButton(onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.medium()
                             onShare()
                         }) {
                             Icon(Icons.Filled.Share, contentDescription = "Share attraction")
@@ -133,11 +132,11 @@ fun AttractionDetailScreen(
             AttractionDetailInfo(
                 attraction = attraction,
                 onOpenDirections = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onOpenDirections()
                 },
                 onOpenWebsite = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onOpenWebsite()
                 },
             )
@@ -146,11 +145,11 @@ fun AttractionDetailScreen(
             AttractionDetailActions(
                 attraction = attraction,
                 onOpenWebsite = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onOpenWebsite()
                 },
                 onOpenDirections = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onOpenDirections()
                 },
             )

@@ -56,8 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
+import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -97,7 +96,7 @@ fun RestaurantDetailScreen(
     onShowSubscription: () -> Unit,
 ) {
     var showImageViewer by remember { mutableStateOf(false) }
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
 
     if (isLoading && restaurant == null) {
         LoadingView(message = "Loading restaurant...")
@@ -125,7 +124,7 @@ fun RestaurantDetailScreen(
                 },
                 actions = {
                     IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptic.medium()
                         onShare()
                     }) {
                         Icon(
@@ -134,7 +133,7 @@ fun RestaurantDetailScreen(
                         )
                     }
                     IconButton(onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        haptic.medium()
                         onToggleFavorite()
                     }) {
                         Icon(
@@ -308,7 +307,7 @@ private fun RestaurantDetailInfo(
     restaurant: Restaurant,
     onOpenDirections: () -> Unit
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
 
     Column(
         modifier = Modifier.padding(16.dp),
@@ -414,7 +413,7 @@ private fun RestaurantDetailInfo(
                 if (restaurant.coordinate != null) {
                     IconButton(
                         onClick = {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            haptic.medium()
                             onOpenDirections()
                         },
                         modifier = Modifier.semantics {
@@ -543,7 +542,7 @@ private fun RestaurantDetailActions(
     onOpenWebsite: () -> Unit,
     onOpenDirections: () -> Unit
 ) {
-    val haptic = LocalHapticFeedback.current
+    val haptic = rememberHapticPerformer()
     val hasAnyAction = restaurant.callUri != null || restaurant.websiteUri != null || restaurant.coordinate != null
 
     if (!hasAnyAction) return
@@ -559,7 +558,7 @@ private fun RestaurantDetailActions(
         if (restaurant.callUri != null) {
             Button(
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onCall()
                 },
                 modifier = Modifier
@@ -586,7 +585,7 @@ private fun RestaurantDetailActions(
         if (restaurant.websiteUri != null) {
             Button(
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onOpenWebsite()
                 },
                 modifier = Modifier
@@ -617,7 +616,7 @@ private fun RestaurantDetailActions(
         if (restaurant.coordinate != null) {
             Button(
                 onClick = {
-                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    haptic.medium()
                     onOpenDirections()
                 },
                 modifier = Modifier
