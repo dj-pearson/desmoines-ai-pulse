@@ -1001,3 +1001,24 @@ Started: 2026-03-27T14:05:42.010Z
   - setKeywords() takes varargs, so use spread operator on toTypedArray()
   - Metadata.Builder().setWorksOffline(true) ensures indexed content appears even when offline
 ---
+
+## 2026-03-27 - AND-035 (Android)
+- Created util/SecureStorage.kt using EncryptedSharedPreferences matching iOS KeychainService.swift:
+  - MasterKey with AES256_GCM key scheme for encryption
+  - PrefKeyEncryptionScheme.AES256_SIV + PrefValueEncryptionScheme.AES256_GCM
+  - Methods: save(key, value), load(key): String?, delete(key), deleteAll()
+  - Fallback to regular SharedPreferences if Android Keystore fails (with Log.w warning)
+  - @Singleton with @Inject constructor — Hilt auto-provides, no manual @Provides needed
+  - Lazy initialization of SharedPreferences via `by lazy` delegate
+- Added androidx.security:security-crypto 1.1.0-alpha06 to version catalog and build.gradle.kts
+- Files created: SecureStorage.kt
+- Files modified: libs.versions.toml, build.gradle.kts (app), prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - security-crypto 1.1.0-alpha06 is the latest stable-ish version compatible with Android 23+ (our minSdk is 26, so fully supported)
+  - MasterKey.Builder replaces deprecated MasterKeys.getOrCreate() — uses KeyScheme enum instead of key spec string
+  - EncryptedSharedPreferences.create() can throw on Keystore corruption or rooted devices — always wrap in try-catch with fallback
+  - SecureStorage uses @ApplicationContext (not raw Context) for Hilt injection — ensures application-scoped context
+  - `by lazy` prevents initialization failures from crashing app startup — defers to first actual use
+  - iOS KeychainService has both Data and String APIs — Android version exposes only String (sufficient for tokens/credentials)
+---
