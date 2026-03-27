@@ -600,7 +600,7 @@
         "Handle Google Play Services unavailable"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS LocationService.swift. Same 5-minute cache, same distance formatting, same fallback to Des Moines center. Use FusedLocationProviderClient for best accuracy with minimal battery."
     },
     {

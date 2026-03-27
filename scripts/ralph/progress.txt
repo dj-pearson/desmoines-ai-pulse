@@ -823,3 +823,32 @@ Started: 2026-03-27T14:05:42.010Z
   - Migration adds columns for both iOS and Android to formalize what validate-ios-receipt was already writing
   - Platform column defaults to 'web' for existing Stripe-based subscriptions
 ---
+
+## 2026-03-27 - AND-029 (Android)
+- Built LocationService.kt as @Singleton with @Inject constructor matching iOS LocationService.swift:
+  - FusedLocationProviderClient with PRIORITY_BALANCED_POWER_ACCURACY (matches iOS 100m accuracy)
+  - getCurrentLocation(): returns cached location if < 5 minutes old, requests fresh via LocationCallback + suspendCancellableCoroutine
+  - getCurrentLocationOrDefault(): convenience method that falls back to Des Moines center on any error
+  - hasLocationPermission(): checks ACCESS_FINE_LOCATION or ACCESS_COARSE_LOCATION
+  - isGooglePlayServicesAvailable(): checks GoogleApiAvailability for Play Services
+  - distance(lat, lng): calculates Haversine distance in miles from userLocation (returns null if no location)
+  - haversineDistanceMiles(): static Haversine formula for use without user location
+  - formattedDistance(): "Nearby" (<0.1 mi), "X ft away" (<1 mi), "X.X mi" (else) — exact iOS format match
+  - Exposes userLocation as StateFlow<Location?>
+  - LocationException sealed class: PermissionDenied, Unavailable (matching iOS LocationError enum)
+  - defaultLocation() companion method creates Location with Des Moines center coordinates
+  - formatMiles() companion method for standalone distance formatting
+- No dependency/manifest changes needed — play-services-location and location permissions were already added in AND-025
+- Hilt auto-provides via @Singleton + @Inject constructor (same pattern as NetworkMonitor, OnboardingPreferences)
+- Files created: LocationService.kt
+- Files modified: prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - LocationRequest.Builder replaces deprecated LocationRequest.create() in Play Services Location 21.x
+  - setMaxUpdates(1) ensures only one location update is delivered — no need to manually removeLocationUpdates (but we do for safety on cancellation)
+  - suspendCancellableCoroutine with invokeOnCancellation removes the LocationCallback — prevents memory leaks if coroutine is cancelled
+  - FusedLocationProviderClient.requestLocationUpdates needs Looper — use Looper.getMainLooper() for simplicity
+  - @Suppress("MissingPermission") is safe on the private requestFreshLocation() because the public getCurrentLocation() checks permission first
+  - Location("default") creates a Location with provider name "default" — used for the Des Moines center fallback
+  - Haversine formula uses earth radius in miles (3958.8) directly to avoid meters→miles conversion
+---
