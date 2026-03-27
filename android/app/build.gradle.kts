@@ -113,6 +113,10 @@ dependencies {
     // DataStore (preferences persistence)
     implementation(libs.datastore.preferences)
 
+    // Coil (Image loading)
+    implementation(libs.coil.compose)
+    implementation(libs.coil.network.okhttp)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
