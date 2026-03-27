@@ -81,7 +81,7 @@ import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
 
 /**
- * Home screen state holder. Will be replaced by EventsViewModel in AND-017.
+ * Home screen UI state. Produced by [EventsViewModel.uiState].
  */
 data class HomeScreenState(
     val events: List<Event> = emptyList(),
@@ -107,7 +107,7 @@ data class HomeScreenState(
  * popular restaurants carousel, active filters bar, vertical events list,
  * pull-to-refresh, skeleton loaders, error/empty states.
  *
- * @param state The current screen state (provided by ViewModel in AND-017)
+ * @param state The current screen state (provided by [EventsViewModel])
  * @param onNavigateToEventDetail Navigate to event detail
  * @param onNavigateToRestaurantDetail Navigate to restaurant detail
  * @param onNavigateToSubscription Navigate to subscription screen

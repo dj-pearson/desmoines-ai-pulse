@@ -1,13 +1,17 @@
 package com.desmoines.aipulse.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.favorites.FavoritesScreen
+import com.desmoines.aipulse.ui.screens.home.EventsViewModel
 import com.desmoines.aipulse.ui.screens.home.HomeScreen
 import com.desmoines.aipulse.ui.screens.map.MapScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
@@ -43,7 +47,16 @@ fun MainNavHost(
 
 private fun NavGraphBuilder.addTabDestinations(navController: NavHostController) {
     composable(Route.Home.route) {
+        val viewModel: EventsViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        // Load initial data on first composition
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            viewModel.loadInitialData()
+        }
+
         HomeScreen(
+            state = state,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },
@@ -52,7 +65,14 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             },
             onNavigateToSubscription = {
                 navController.navigate(Route.Subscription.route)
-            }
+            },
+            onSelectCategory = { category -> viewModel.setSelectedCategory(category) },
+            onSelectDatePreset = { preset -> viewModel.setSelectedDatePreset(preset) },
+            onShowFilters = { /* FilterSheet implemented in AND-018 */ },
+            onClearFilters = { viewModel.clearFilters() },
+            onRefresh = { viewModel.refresh() },
+            onLoadMore = { viewModel.loadMoreIfNeeded(state.events.size - 1) },
+            onFavoriteClick = null, // Favorites implemented in AND-024
         )
     }
 
