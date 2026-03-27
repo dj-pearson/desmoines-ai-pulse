@@ -55,7 +55,9 @@
     "screenshots:google": "playwright test --config=playwright.screenshots.config.ts --project=chromium-desktop --grep=Google",
     "ralph": "node scripts/ralph/ralph.mjs --tool claude",
     "ralph:amp": "node scripts/ralph/ralph.mjs --tool amp",
-    "ralph:resume": "node scripts/ralph/ralph.mjs --tool claude --resume"
+    "ralph:resume": "node scripts/ralph/ralph.mjs --tool claude --resume",
+    "ralph:android": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md",
+    "ralph:android:resume": "node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md --resume"
   },
   "dependencies": {
     "@fullcalendar/daygrid": "^6.1.19",
