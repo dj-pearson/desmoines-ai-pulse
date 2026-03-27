@@ -291,7 +291,7 @@
         "All components have @Preview composables for design verification"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors all 11 iOS Components. Use Coil for image loading (replaces iOS CachedAsyncImage with its memory+disk cache). PremiumGate must check SubscriptionTier the same way iOS does. Add Accompanist for gesture handling where needed."
     },
     {

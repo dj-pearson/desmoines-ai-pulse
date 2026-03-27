@@ -322,3 +322,31 @@ Started: 2026-03-27T14:05:42.010Z
   - Page indicator uses semantics { contentDescription = "Page X of 3" } for TalkBack accessibility
   - OnboardingScreen is rendered directly in MainActivity (not via NavHost) for first-launch — avoids navigation complexity with conditional start destinations
 ---
+
+## 2026-03-27 - AND-015 (Android)
+- Built complete reusable UI components library (9 new files, 2 already existed from prior stories):
+  - LoadingView.kt: LoadingView (full-screen with CircularProgressIndicator + message), InlineLoadingView (compact for list "load more"), DetailHeroSkeleton (shimmer animation with infiniteRepeatable + linearGradient brush)
+  - ToastOverlay.kt: ToastMessage data class with SUCCESS/INFO/ERROR styles and companion factory methods, ToastOverlay composable with AnimatedVisibility slide+fade, 2-second LaunchedEffect auto-dismiss
+  - CachedAsyncImage.kt: Coil 3 SubcomposeAsyncImage with loading spinner, error fallback (BrokenImage icon), crossfade transition; Coil handles memory+disk cache automatically
+  - PremiumGate.kt: Tier access check (FREE always, INSIDER checks insider||vip, VIP checks vip only), locked overlay with Lock icon + tier name + feature description + unlock Button
+  - PremiumBadge.kt: Capsule badge with Lock icon + tier name, orange for Insider, purple for VIP
+  - SubscriptionBanner.kt: FULL style (free=sparkles card with upgrade button, subscribed=tier card with manage chevron) and COMPACT style (inline upgrade prompt for free users only); FavoritesLimitBanner with progress bar (LinearProgressIndicator), limit/near-limit/at-limit color states
+  - AdBannerView.kt: Upgrade prompt card for free users with "Remove Ads" CTA, hidden for subscribers
+  - FullScreenImageViewer.kt: Pinch-to-zoom (detectTransformGestures, 0.5x-5x), double-tap toggle (1x↔2.5x via detectTapGestures.onDoubleTap), swipe-down-to-dismiss (detectVerticalDragGestures, 150dp threshold), pan when zoomed, close button overlay
+  - WebViewScreen.kt: AndroidView hosting WebView with TopAppBar + back button, LinearProgressIndicator while loading, JavaScript enabled
+  - CategoryBadge.kt and EmptyStateView.kt already existed from prior story work
+- Wired WebViewScreen into MainNavHost.kt with URL decoding from route arguments
+- All components include @Preview composables for design verification
+- Files created: LoadingView.kt, ToastOverlay.kt, CachedAsyncImage.kt, PremiumGate.kt, PremiumBadge.kt, SubscriptionBanner.kt, AdBannerView.kt, FullScreenImageViewer.kt, WebViewScreen.kt
+- Files modified: MainNavHost.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Coil 3 uses SubcomposeAsyncImage (not AsyncImage) for custom loading/error composables — simpler than iOS's custom two-tier ImageCache
+  - Shimmer animation: rememberInfiniteTransition + Brush.linearGradient with animated offset creates shimmer effect without third-party library
+  - PremiumGate takes currentTier as parameter (not injected) for testability — caller provides subscription state
+  - SubscriptionBanner and AdBannerView both early-return for non-free tiers — consistent pattern for subscription-gated UI
+  - FavoritesLimitBanner: maxFavorites is 3 for free tier, so isNearLimit triggers at 2 (maxFavorites - 1)
+  - FullScreenImageViewer uses three separate pointerInput modifiers for transform, tap, and vertical drag gestures — Compose doesn't combine these in a single modifier easily
+  - WebViewScreen uses AndroidView interop — the WebView is a platform view, not a Compose composable
+  - ToastOverlay uses inverseOnSurface/inverseSurface Material 3 colors for contrast (like iOS .ultraThickMaterial)
+---
