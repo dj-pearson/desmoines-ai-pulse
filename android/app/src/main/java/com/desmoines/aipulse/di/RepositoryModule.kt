@@ -1,13 +1,19 @@
 package com.desmoines.aipulse.di
 
+import com.desmoines.aipulse.data.repository.EventsRepository
+import com.desmoines.aipulse.data.repository.EventsRepositoryImpl
+import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 
 /**
  * Hilt module for binding repository interfaces to their implementations.
- * Repository bindings will be added as data layers are built (AND-007+).
  */
 @Module
 @InstallIn(SingletonComponent::class)
-abstract class RepositoryModule
+abstract class RepositoryModule {
+
+    @Binds
+    abstract fun bindEventsRepository(impl: EventsRepositoryImpl): EventsRepository
+}
