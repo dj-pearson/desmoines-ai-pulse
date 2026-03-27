@@ -883,3 +883,36 @@ Started: 2026-03-27T14:05:42.010Z
   - Notification tap uses FLAG_ACTIVITY_NEW_TASK | FLAG_ACTIVITY_CLEAR_TOP to bring existing MainActivity to front
   - SharedPreferences.getStringSet returns a reference to the internal set — always copy to mutableSet before modifying
 ---
+
+## 2026-03-27 - AND-031 (Android)
+- Built PushNotificationService.kt extending FirebaseMessagingService matching iOS PushNotificationService.swift:
+  - onNewToken(): persists FCM token to SharedPreferences, syncs to backend via 'register-device-token' edge function with platform='android'
+  - onMessageReceived(): extracts title/body from notification or data payload, displays notification with deep link tap intent
+  - Creates 'general' notification channel (IMPORTANCE_DEFAULT) with vibration
+  - Notification tap builds Intent with navigate_to + content_id extras for deep link navigation to detail screens
+  - POST_NOTIFICATIONS permission check on Android 13+ before displaying
+  - Companion object exposes isRegistered and deviceToken as StateFlow for access from UI layer
+  - initialize(): creates channel, restores persisted token, requests fresh FCM token — called from DesMoinesInsiderApp.onCreate()
+  - syncTokenToBackend(): calls supabase-kt Functions.invoke("register-device-token") with deviceToken + platform='android'
+  - hasNotificationPermission() helper for runtime permission checking
+  - Feature flag: Config.ENABLE_PUSH_NOTIFICATIONS (already false from AND-003) gates initialization
+- Added Firebase dependencies: firebase-bom 33.7.0, firebase-messaging-ktx, google-services plugin 4.4.2
+- Added google-services plugin to root build.gradle.kts and app build.gradle.kts
+- Created google-services.json.example with placeholder structure for Firebase project setup
+- Added google-services.json to .gitignore (sensitive Firebase config)
+- Registered PushNotificationService in AndroidManifest.xml with MESSAGING_EVENT intent filter
+- Updated DesMoinesInsiderApp.kt to call PushNotificationService.initialize(this) on app launch
+- Files created: PushNotificationService.kt, google-services.json.example
+- Files modified: libs.versions.toml, build.gradle.kts (root), build.gradle.kts (app), AndroidManifest.xml, DesMoinesInsiderApp.kt, .gitignore, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - FirebaseMessagingService is NOT Hilt-injectable — it's instantiated by the Firebase SDK, so use companion object for shared state and direct SupabaseClientProvider access
+  - FCM token is obtained via FirebaseMessaging.getInstance().token (Task-based API) — convert with addOnSuccessListener/addOnFailureListener
+  - onNewToken() is called on first app launch AND on token refresh — must handle both cases (persist + sync)
+  - google-services.json must be at android/app/ level (not android/) — contains Firebase project config including API keys
+  - Firebase BOM manages firebase-messaging-ktx version — no explicit version needed in library declaration
+  - Notification channel must be created BEFORE posting notifications — initialize() creates it at app startup
+  - PushNotificationService uses companion StateFlows (not instance fields) because FirebaseMessagingService lifecycle is managed by the system
+  - Deep link data comes from RemoteMessage.data map (not notification payload) — server controls the navigate_to and content_id keys
+  - Same backend edge function (register-device-token) used for both iOS and Android — platform field distinguishes them
+---
