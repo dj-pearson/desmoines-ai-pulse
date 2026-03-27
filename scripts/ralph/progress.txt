@@ -575,3 +575,39 @@ Started: 2026-03-27T14:05:42.010Z
   - Teal (0xFF009688) matches iOS .teal color for the image placeholder gradient
   - Attraction type badge uses Place icon as generic fallback — could map AttractionType.iconName to Material Icons in future
 ---
+
+## 2026-03-27 - AND-023 (Android)
+- Built unified Search screen matching iOS SearchView.swift + SearchViewModel.swift:
+  - SearchViewModel.kt as @HiltViewModel with full state management:
+    - SearchTab enum (EVENTS, RESTAURANTS, ATTRACTIONS) with displayName
+    - SearchScreenState data class with eventResults, restaurantResults, attractionResults, isSearching, hasSearched, totalResults, isEmpty, countFor(tab)
+    - Debounced search (300ms) via Job cancellation — same pattern as EventsViewModel
+    - Parallel search across all 3 content types using coroutine launch + join
+    - Fuzzy search fallback for events and restaurants when full-text search returns empty (matching iOS exactly)
+    - Attractions use standard query only (no fuzzy RPC — matching iOS)
+    - clearSearch() and refresh() matching iOS SearchViewModel
+    - Combined uiState StateFlow using combine() with SharingStarted.WhileSubscribed(5_000)
+  - SearchScreen.kt with full UI matching iOS SearchView.swift:
+    - Search bar with OutlinedTextField, search icon, clear (X) button, rounded shape
+    - Tab picker with animated indicator: icon + tab name + count badge (primary color when selected, capsule background)
+    - Search suggestions (pre-search state): Popular Categories grid (8 EventCategory entries with icon + name) and Try Searching list (5 quick suggestions with search icon + arrow)
+    - Results list with tab switching: EventCardView (reused from HomeScreen), RestaurantSearchCard (new, horizontal layout with image/name/cuisine/rating/location/chevron), AttractionCardView (new, matching iOS AttractionCardView exactly)
+    - Loading view with CircularProgressIndicator + "Searching..." text
+    - Empty states: offline (WifiOff icon) and no results (SearchOff icon) with action buttons
+    - Haptic feedback on tab selection and category/suggestion taps
+    - Full accessibility: tab announces "X results", cards have combined semantics
+  - AttractionCardView: Horizontal card with 80dp image (teal placeholder when no image), name, type with icon, rating with star, location, chevron — exact iOS match
+  - RestaurantSearchCard: Horizontal card with 80dp image, name, cuisine + price, star rating, location, chevron
+- Updated MainNavHost.kt: wired SearchViewModel via hiltViewModel(), connected all callbacks (searchTextChanged, tabSelected, clearSearch, navigation)
+- Files created: SearchViewModel.kt
+- Files modified: SearchScreen.kt (full rewrite), MainNavHost.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - SearchScreen is stateless composable receiving SearchScreenState — same pattern as HomeScreen/RestaurantsScreen
+  - EventCardView has no onClick param — use Modifier.clickable on the caller side (same as HomeScreen)
+  - LazyVerticalGrid inside LazyColumn needs fixed height + userScrollEnabled=false to avoid nested scroll conflicts
+  - AttractionCardView is defined in SearchScreen (matching iOS where it's defined in SearchView.swift, not a separate file)
+  - Parallel search uses launch + join (not async/await) since results are written to individual StateFlows, not returned
+  - Fuzzy fallback: events and restaurants have fuzzySearch RPCs, attractions do not (ILIKE search only)
+  - Category icon mapping duplicated from CategoryBadge — could be extracted to shared util in future
+---

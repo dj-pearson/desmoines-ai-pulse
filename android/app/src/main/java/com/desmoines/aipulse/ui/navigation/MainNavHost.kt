@@ -33,6 +33,7 @@ import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsScreen
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsViewModel
 import com.desmoines.aipulse.ui.components.WebViewScreen
 import com.desmoines.aipulse.ui.screens.search.SearchScreen
+import com.desmoines.aipulse.ui.screens.search.SearchViewModel
 
 /**
  * Main navigation host containing all route destinations.
@@ -160,7 +161,14 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
     }
 
     composable(Route.Search.route) {
+        val viewModel: SearchViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
         SearchScreen(
+            state = state,
+            onSearchTextChanged = viewModel::onSearchTextChanged,
+            onTabSelected = viewModel::onTabSelected,
+            onClearSearch = viewModel::clearSearch,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },
@@ -169,7 +177,7 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             },
             onNavigateToAttractionDetail = { id ->
                 navController.navigate(Route.AttractionDetail.createRoute(id))
-            }
+            },
         )
     }
 
