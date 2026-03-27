@@ -861,7 +861,7 @@
         "All tests pass with ./gradlew connectedAndroidTest (on emulator)"
       ],
       "priority": 43,
-      "passes": false,
+      "passes": true,
       "notes": "Compose testing library provides semantics-based testing. Use test tags for finding composables. Similar coverage to iOS's implicit UI testing."
     },
     {
