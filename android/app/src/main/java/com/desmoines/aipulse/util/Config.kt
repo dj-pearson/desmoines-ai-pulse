@@ -34,6 +34,10 @@ object Config {
     const val AUTH_LOCKOUT_SECONDS = 60
     const val AUTH_WINDOW_MINUTES = 5
 
+    // Google Sign-In web client ID (from local.properties via BuildConfig)
+    val GOOGLE_WEB_CLIENT_ID: String
+        get() = com.desmoines.aipulse.BuildConfig.GOOGLE_WEB_CLIENT_ID
+
     // Search
     const val SEARCH_DEBOUNCE_MS = 300L
 

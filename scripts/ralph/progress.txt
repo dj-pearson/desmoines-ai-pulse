@@ -197,3 +197,128 @@ Started: 2026-03-27T14:05:42.010Z
   - DatabaseModule is separate @Module from AppModule — keeps DB concerns isolated
   - Room fallbackToDestructiveMigration used since cache is expendable data
 ---
+
+## 2026-03-27 - AND-011 (Android)
+- Created NetworkMonitor.kt using ConnectivityManager.NetworkCallback matching iOS NetworkMonitor.swift:
+  - Exposes isConnected as StateFlow<Boolean> (default true)
+  - Exposes showReconnected as StateFlow<Boolean> that is true for 5 seconds after regaining connection
+  - Tracks wasOffline state to detect offline→online transitions
+  - Uses NetworkCapabilities.NET_CAPABILITY_INTERNET + NET_CAPABILITY_VALIDATED for accurate connectivity check
+  - Registered as @Singleton via Hilt constructor injection (no separate DI module entry needed)
+- Created OfflineBanner.kt composable:
+  - Orange banner with CloudOff icon when offline ("No internet connection")
+  - Green banner with CloudDone icon for 5 seconds after reconnecting ("Back online")
+  - AnimatedVisibility with expandVertically + fadeIn/fadeOut for smooth transitions
+  - LiveRegion.Polite semantics for TalkBack accessibility announcements
+- Updated MainScreen.kt to accept NetworkMonitor param and display OfflineBanner at top of content (below status bar, above NavHost)
+- Updated MainActivity.kt to @Inject NetworkMonitor and pass it to MainScreen
+- Files created: NetworkMonitor.kt, OfflineBanner.kt
+- Files modified: MainScreen.kt, MainActivity.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - NetworkMonitor uses constructor injection (@Inject constructor) so Hilt auto-provides it as @Singleton — no AppModule @Provides needed
+  - ConnectivityManager.NetworkCallback fires onCapabilitiesChanged for quality changes, not just connect/disconnect — check NET_CAPABILITY_VALIDATED to avoid false positives
+  - OfflineBanner uses LiveRegion.Polite so TalkBack announces connectivity changes without interrupting current speech
+  - MainScreen now uses Column with weight(1f) on MainNavHost to accommodate banner at top
+  - NetworkMonitor's scope uses SupervisorJob + Dispatchers.Main to safely handle coroutines without lifecycle owner
+---
+
+## 2026-03-27 - AND-012 (Android)
+- Created AuthRemoteDataSource.kt with all methods matching iOS AuthService.swift:
+  - signIn(email, password) using Supabase Auth Email provider
+  - signUp(email, password, firstName, lastName, interests) with profile creation after signup
+  - signOut() clearing session
+  - resetPassword(email) sending reset email
+  - signInWithGoogle(idToken) using Supabase Auth Google provider (replaces iOS Apple Sign-In)
+  - fetchProfile(userId) from profiles table with eq filter on user_id
+  - createProfile(userId, email, firstName, lastName, interests) inserting into profiles table
+  - updateProfile(userId, ...) updating profiles table with eq filter
+  - checkAdminRole(userId) checking user_roles table first, falling back to profiles.user_role
+  - sessionStatus Flow exposed for auth state listening
+- Created AuthRepository interface with Result<T> return types for all methods
+- Created AuthRepositoryImpl wrapping data source with runCatching error handling
+- Created AuthViewModel.kt with full state management:
+  - Auth state: currentProfile, isAuthenticated, isAdmin, isLoading as StateFlow
+  - Form state: isSigningIn, isSigningUp, errorMessage, showVerificationAlert
+  - Email validation with same regex as iOS
+  - Password strength scoring matching iOS exactly (6 criteria, weak/medium/strong thresholds)
+  - Rate limiting: 5 failed attempts in 5 min window triggers 60-second lockout countdown
+  - signIn/signUp/signOut/resetPassword/signInWithGoogle/updateProfile methods
+  - Auth state listener collecting SessionStatus flow (Authenticated/NotAuthenticated/Initializing)
+  - availableInterests companion matching iOS: Food, Music, Sports, Arts, Nightlife, Outdoor, Family, Business
+- Added Google Credential Manager dependencies (credentials 1.3.0, googleid 1.1.1) to version catalog and build.gradle.kts
+- Added GOOGLE_WEB_CLIENT_ID BuildConfig field from local.properties
+- Updated Config.kt with GOOGLE_WEB_CLIENT_ID property
+- Updated RepositoryModule.kt with @Binds binding for AuthRepository → AuthRepositoryImpl
+- Files created: AuthRemoteDataSource.kt, AuthRepository.kt, AuthRepositoryImpl.kt, AuthViewModel.kt
+- Files modified: RepositoryModule.kt, Config.kt, build.gradle.kts, libs.versions.toml
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - supabase-kt 3.x auth: signInWith(Email) { email=; password= } and signUpWith(Email) { ... data = buildJsonObject {} }
+  - supabase-kt 3.x auth: Google Sign-In uses signInWith(Google) { idToken = token } — differs from iOS Apple Sign-In which uses signInWithIdToken
+  - SessionStatus is a sealed class: Authenticated(session), NotAuthenticated, Initializing — collect it from auth.sessionStatus Flow
+  - User ID from session: status.session.user?.id (String, not UUID like iOS)
+  - AuthException is a sealed class (not enum like iOS AuthError) — data objects for NotConfigured, InvalidToken, NoUser
+  - Rate limiting uses System.currentTimeMillis() instead of iOS Date() — same 5 attempts / 5 min window / 60 sec lockout
+  - Google Credential Manager (androidx.credentials 1.3.0) replaces deprecated Google Sign-In SDK — configured via GOOGLE_WEB_CLIENT_ID in local.properties
+  - AuthViewModel uses @HiltViewModel + viewModelScope.launch for all async operations (maps to iOS @MainActor + Task)
+---
+
+## 2026-03-27 - AND-013 (Android)
+- Created AuthScreen.kt matching iOS AuthView.swift with full sign in / sign up UI:
+  - TabRow with Sign In / Sign Up tabs (mirrors iOS segmented Picker)
+  - Sign In form: Email field, Password field with visibility toggle, Forgot Password link, Sign In button with loading spinner
+  - Sign Up form: First Name + Last Name row, Email, Password with strength indicator bar, Confirm Password, Interests grid (8 options via FlowRow + FilterChip)
+  - Password strength bar (Weak=red, Medium=orange, Strong=green) with animated LinearProgressIndicator
+  - Inline validation: email format error, password mismatch error
+  - Lockout warning with Lock icon and countdown when rate limited
+  - "or" divider between primary action and social sign-in
+  - Google Sign-In button using Credential Manager API (replaces iOS Apple Sign-In)
+  - Verification email AlertDialog after successful sign up
+  - Error messages shown via Snackbar
+  - Auto-navigate back on successful authentication via LaunchedEffect
+  - All form fields have proper keyboard types (Email, Password) and IME actions (Next, Done)
+- Wired AuthScreen into MainNavHost.kt replacing placeholder comment
+- Files created: AuthScreen.kt
+- Files modified: MainNavHost.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Google Sign-In uses CredentialManager + GetGoogleIdOption (not deprecated GoogleSignInClient)
+  - CredentialManager.getCredential() is a suspend function — use rememberCoroutineScope() in Compose, not MainScope()
+  - Set<String> is not natively saveable with rememberSaveable — use remember for non-primitive collections in form state
+  - OutlinedTextField with supportingText replaces iOS's separate error Text below field — cleaner integration with Material 3
+  - FilterChip with selectedContainerColor/selectedLabelColor maps well to iOS's capsule interest buttons
+  - TabRow is the Material 3 equivalent of iOS segmented Picker for auth mode switching
+  - AlertDialog in Compose is a standalone composable (not a modifier like iOS .alert)
+---
+
+## 2026-03-27 - AND-014 (Android)
+- Created OnboardingScreen.kt with 3-page HorizontalPager matching iOS OnboardingView.swift:
+  - Page 1: LocationCity icon, "Welcome to Des Moines Insider", 3 discovery highlights
+  - Page 2: Favorite (heart) icon in red, "Save Your Favorites", 3 favorites highlights
+  - Page 3: Map icon in blue, "Explore What's Nearby", 3 map highlights
+  - Animated page indicator with wider capsule for active page (spring animation)
+  - Back button on pages 2-3, Next/Get Started buttons, Skip button on pages 1-2
+  - CheckCircle icons for highlight items colored per page
+- Created OnboardingPreferences.kt using Jetpack DataStore (replaces iOS UserDefaults):
+  - hasCompletedOnboarding Flow<Boolean> for reactive state
+  - setOnboardingCompleted() and resetOnboarding() suspend functions
+  - Singleton via Hilt @Inject constructor
+- Updated MainActivity.kt with first-launch onboarding logic:
+  - Reads DataStore on launch, shows OnboardingScreen if not completed
+  - On complete: persists to DataStore and transitions to MainScreen
+  - Uses initial=true default to avoid flash of onboarding on subsequent launches
+- Wired OnboardingScreen into MainNavHost.kt (replacing placeholder comment)
+- Added DataStore Preferences dependency (1.1.1) to version catalog and build.gradle.kts
+- Files created: OnboardingScreen.kt, OnboardingPreferences.kt
+- Files modified: MainActivity.kt, MainNavHost.kt, build.gradle.kts, libs.versions.toml
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - HorizontalPager (foundation) replaces iOS TabView(.page) for swipeable pages
+  - DataStore preferencesDataStore delegate is a Context extension — defined at file level, not inside a class
+  - collectAsState(initial = true) prevents flash: defaults to "completed" so onboarding doesn't briefly show on subsequent launches
+  - OnboardingPreferences uses @Singleton + @Inject constructor so Hilt auto-provides — no manual @Provides needed
+  - animateDpAsState with spring animation replicates iOS capsule page indicator width animation
+  - Page indicator uses semantics { contentDescription = "Page X of 3" } for TalkBack accessibility
+  - OnboardingScreen is rendered directly in MainActivity (not via NavHost) for first-launch — avoids navigation complexity with conditional start destinations
+---
