@@ -49,6 +49,9 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             },
             onNavigateToRestaurantDetail = { id ->
                 navController.navigate(Route.RestaurantDetail.createRoute(id))
+            },
+            onNavigateToSubscription = {
+                navController.navigate(Route.Subscription.route)
             }
         )
     }
