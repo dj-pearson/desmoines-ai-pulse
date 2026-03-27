@@ -100,6 +100,7 @@ fun EventDetailScreen(
     isFavorited: Boolean,
     calendarAdded: Boolean,
     currentTier: SubscriptionTier,
+    distanceText: String? = null,
     onNavigateBack: () -> Unit,
     onShare: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -182,6 +183,7 @@ fun EventDetailScreen(
             // Info Section (location, price, distance, description)
             EventDetailInfo(
                 event = event,
+                distanceText = distanceText,
                 onOpenDirections = onOpenDirections,
                 onOpenDirectionsFallback = onOpenDirectionsFallback
             )
@@ -374,6 +376,7 @@ private fun EventDetailDateTime(event: Event) {
 @Composable
 private fun EventDetailInfo(
     event: Event,
+    distanceText: String? = null,
     onOpenDirections: () -> Unit,
     onOpenDirectionsFallback: () -> Unit
 ) {
@@ -505,8 +508,8 @@ private fun EventDetailInfo(
             }
         }
 
-        // Distance row (if coordinates available)
-        if (event.coordinate != null) {
+        // Distance row (from user's location)
+        if (event.coordinate != null && distanceText != null) {
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -518,7 +521,7 @@ private fun EventDetailInfo(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Directions available",
+                    text = distanceText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

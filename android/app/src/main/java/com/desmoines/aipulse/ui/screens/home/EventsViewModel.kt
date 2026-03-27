@@ -9,12 +9,12 @@ import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.remote.EventsQuery
-import com.desmoines.aipulse.data.remote.EventsRemoteDataSource
 import com.desmoines.aipulse.data.model.RestaurantSortOption
 import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.util.Config
+import com.desmoines.aipulse.util.LocationService
 import com.desmoines.aipulse.util.NetworkMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -41,6 +41,7 @@ class EventsViewModel @Inject constructor(
     private val eventsRepository: EventsRepository,
     private val restaurantsRepository: RestaurantsRepository,
     private val networkMonitor: NetworkMonitor,
+    private val locationService: LocationService,
 ) : ViewModel() {
 
     // region State
@@ -371,16 +372,14 @@ class EventsViewModel @Inject constructor(
 
         val maxDist = _maxDistance.value
         if (maxDist != null) {
-            // TODO: When LocationService is implemented (AND-029), use user location
-            // For now, use Des Moines center as fallback
-            val userLat = Config.DEFAULT_LATITUDE
-            val userLng = Config.DEFAULT_LONGITUDE
+            val userLoc = locationService.userLocation.value
+            val userLat = userLoc?.latitude ?: Config.DEFAULT_LATITUDE
+            val userLng = userLoc?.longitude ?: Config.DEFAULT_LONGITUDE
             result = result.filter { event ->
                 val coord = event.coordinate ?: return@filter true
-                val distanceMeters = EventsRemoteDataSource.haversineDistance(
+                val distanceMiles = locationService.haversineDistanceMiles(
                     userLat, userLng, coord.latitude, coord.longitude
                 )
-                val distanceMiles = distanceMeters / 1609.34
                 distanceMiles <= maxDist
             }
         }

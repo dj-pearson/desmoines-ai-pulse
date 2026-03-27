@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +20,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class RestaurantDetailViewModel @Inject constructor(
-    private val restaurantsRepository: RestaurantsRepository
+    private val restaurantsRepository: RestaurantsRepository,
+    private val locationService: LocationService,
 ) : ViewModel() {
 
     private val _restaurant = MutableStateFlow<Restaurant?>(null)
@@ -51,6 +53,15 @@ class RestaurantDetailViewModel @Inject constructor(
     fun toggleFavorite() {
         // Placeholder — will connect to FavoritesRepository in AND-024
         _isFavorited.value = !_isFavorited.value
+    }
+
+    /**
+     * Formatted distance from user's location to this restaurant.
+     * Returns null if location unavailable or restaurant has no coordinates.
+     */
+    fun formattedDistance(): String? {
+        val coord = _restaurant.value?.coordinate ?: return null
+        return locationService.formattedDistance(coord.latitude, coord.longitude)
     }
 
     // MARK: - Intents

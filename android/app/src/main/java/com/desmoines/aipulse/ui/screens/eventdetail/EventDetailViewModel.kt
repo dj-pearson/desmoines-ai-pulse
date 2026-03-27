@@ -11,6 +11,7 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.data.repository.EventsRepository
+import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +27,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class EventDetailViewModel @Inject constructor(
-    private val eventsRepository: EventsRepository
+    private val eventsRepository: EventsRepository,
+    private val locationService: LocationService,
 ) : ViewModel() {
 
     private val _event = MutableStateFlow<Event?>(null)
@@ -83,6 +85,15 @@ class EventDetailViewModel @Inject constructor(
     fun toggleFavorite() {
         // Placeholder — will connect to FavoritesRepository in AND-024
         _isFavorited.value = !_isFavorited.value
+    }
+
+    /**
+     * Formatted distance from user's location to this event.
+     * Returns null if location unavailable or event has no coordinates.
+     */
+    fun formattedDistance(): String? {
+        val coord = _event.value?.coordinate ?: return null
+        return locationService.formattedDistance(coord.latitude, coord.longitude)
     }
 
     // MARK: - Calendar Integration

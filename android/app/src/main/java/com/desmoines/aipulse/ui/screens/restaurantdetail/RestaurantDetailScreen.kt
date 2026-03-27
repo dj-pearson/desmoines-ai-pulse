@@ -90,6 +90,7 @@ fun RestaurantDetailScreen(
     isLoading: Boolean,
     isFavorited: Boolean,
     currentTier: SubscriptionTier,
+    distanceText: String? = null,
     onNavigateBack: () -> Unit,
     onShare: () -> Unit,
     onToggleFavorite: () -> Unit,
@@ -167,6 +168,7 @@ fun RestaurantDetailScreen(
             // Info Section
             RestaurantDetailInfo(
                 restaurant = restaurant,
+                distanceText = distanceText,
                 onOpenDirections = onOpenDirections
             )
 
@@ -308,6 +310,7 @@ private fun RestaurantDetailHeader(
 @Composable
 private fun RestaurantDetailInfo(
     restaurant: Restaurant,
+    distanceText: String? = null,
     onOpenDirections: () -> Unit
 ) {
     val haptic = rememberHapticPerformer()
@@ -434,8 +437,8 @@ private fun RestaurantDetailInfo(
             }
         }
 
-        // Distance row
-        if (restaurant.coordinate != null) {
+        // Distance row (from user's location)
+        if (restaurant.coordinate != null && distanceText != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Filled.MyLocation,
@@ -445,7 +448,7 @@ private fun RestaurantDetailInfo(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Directions available",
+                    text = distanceText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

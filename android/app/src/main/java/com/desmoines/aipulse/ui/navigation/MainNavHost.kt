@@ -338,6 +338,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             isFavorited = isFavorited,
             calendarAdded = calendarAdded,
             currentTier = eventSubState.currentTier,
+            distanceText = viewModel.formattedDistance(),
             onNavigateBack = { navController.popBackStack() },
             onShare = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -404,6 +405,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             isLoading = isLoading,
             isFavorited = isFavorited,
             currentTier = restSubState.currentTier,
+            distanceText = viewModel.formattedDistance(),
             onNavigateBack = { navController.popBackStack() },
             onShare = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -457,6 +459,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
         AttractionDetailScreen(
             attraction = attraction,
             isLoading = isLoading,
+            distanceText = viewModel.formattedDistance(),
             onNavigateBack = { navController.popBackStack() },
             onShare = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.Attraction
 import com.desmoines.aipulse.data.repository.AttractionsRepository
+import com.desmoines.aipulse.util.LocationService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +21,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AttractionDetailViewModel @Inject constructor(
-    private val attractionsRepository: AttractionsRepository
+    private val attractionsRepository: AttractionsRepository,
+    private val locationService: LocationService,
 ) : ViewModel() {
 
     private val _attraction = MutableStateFlow<Attraction?>(null)
@@ -43,6 +45,15 @@ class AttractionDetailViewModel @Inject constructor(
 
             _isLoading.value = false
         }
+    }
+
+    /**
+     * Formatted distance from user's location to this attraction.
+     * Returns null if location unavailable or attraction has no coordinates.
+     */
+    fun formattedDistance(): String? {
+        val coord = _attraction.value?.coordinate ?: return null
+        return locationService.formattedDistance(coord.latitude, coord.longitude)
     }
 
     // MARK: - Intents

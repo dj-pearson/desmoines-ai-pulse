@@ -76,6 +76,7 @@ import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 fun AttractionDetailScreen(
     attraction: Attraction?,
     isLoading: Boolean,
+    distanceText: String? = null,
     onNavigateBack: () -> Unit,
     onShare: () -> Unit,
     onOpenWebsite: () -> Unit,
@@ -134,6 +135,7 @@ fun AttractionDetailScreen(
             // Info Section
             AttractionDetailInfo(
                 attraction = attraction,
+                distanceText = distanceText,
                 onOpenDirections = {
                     haptic.medium()
                     onOpenDirections()
@@ -276,6 +278,7 @@ private fun AttractionDetailHeader(
 @Composable
 private fun AttractionDetailInfo(
     attraction: Attraction,
+    distanceText: String?,
     onOpenDirections: () -> Unit,
     onOpenWebsite: () -> Unit,
 ) {
@@ -380,8 +383,8 @@ private fun AttractionDetailInfo(
             }
         }
 
-        // Distance (placeholder — will use LocationService when AND-029 wires it)
-        if (attraction.coordinate != null) {
+        // Distance from user
+        if (distanceText != null) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -393,7 +396,7 @@ private fun AttractionDetailInfo(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Des Moines area",
+                    text = distanceText,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
