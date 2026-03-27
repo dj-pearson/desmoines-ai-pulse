@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -43,13 +45,16 @@ fun PremiumBadge(
         modifier = modifier
             .clip(CircleShape)
             .background(backgroundColor)
-            .padding(horizontal = 7.dp, vertical = 3.dp),
+            .padding(horizontal = 7.dp, vertical = 3.dp)
+            .semantics {
+                contentDescription = "${tier.displayName} premium feature"
+            },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Icon(
             imageVector = Icons.Filled.Lock,
-            contentDescription = null,
+            contentDescription = null, // Described by container semantics
             modifier = Modifier.size(9.dp),
             tint = Color.White
         )

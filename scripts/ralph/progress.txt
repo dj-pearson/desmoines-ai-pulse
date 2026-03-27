@@ -1043,3 +1043,35 @@ Started: 2026-03-27T14:05:42.010Z
   - Log.v() also stripped since it's even noisier than debug — only Log.w() and Log.e() survive release
   - CategoryLogger is a regular class (not data class) — no need for equals/hashCode/copy
 ---
+
+## 2026-03-27 - AND-037 (Android)
+- Added comprehensive accessibility support (TalkBack, content descriptions) across the entire Android app:
+  - **AccessibilityHelper.kt** (new): Created centralized accessibility utility with:
+    - isScreenReaderEnabled, shouldReduceAnimations, isHapticFeedbackEnabled checks
+    - ratingAccessibilityLabel(), priceRangeAccessibilityLabel(), filterCountAccessibilityLabel(), tabPositionAccessibilityLabel()
+    - headingSemantics(), selectedSemantics() Modifier extensions
+    - politeLiveRegion(), assertiveLiveRegion(), sectionHeading() semantics extensions
+    - rememberShouldReduceAnimations(), rememberIsScreenReaderEnabled(), rememberIsHapticFeedbackEnabled() composables
+  - **FeaturedEventCard.kt**: Replaced `clearAndSetSemantics { }` with proper `semantics { contentDescription = event.featuredCardAccessibilityLabel }` — carousel items now readable by TalkBack
+  - **CompactRestaurantCard.kt**: Same fix — replaced `clearAndSetSemantics { }` with proper content description using `restaurant.compactCardAccessibilityLabel`
+  - **PremiumBadge.kt**: Added `semantics { contentDescription = "${tier.displayName} premium feature" }` to container
+  - **ToastOverlay.kt**: Added `semantics { contentDescription = "$styleLabel: ${msg.text}"; liveRegion = LiveRegionMode.Polite }` — toast messages now announced by TalkBack
+  - **Heading semantics** added to section titles in: HomeScreen (HeaderSection, Featured, Popular Restaurants), FilterSheet (SectionHeader), FavoritesScreen (SectionHeader with count), EventDetailScreen (About), RestaurantDetailScreen (About + Filters), AttractionDetailScreen (About), OnboardingScreen (page titles)
+  - **MainScreen.kt**: NavigationBar items now announce "tab X of 6, selected" with `semantics { contentDescription; selected }` 
+  - **HomeScreen.kt**: Date presets and category chips now expose `selected = isSelected` semantic property; ActiveFiltersBar announces filter count
+  - **Rating displays**: Added "X.Y out of 5 stars" content descriptions to star rating rows in RestaurantsScreen, RestaurantDetailScreen, AttractionDetailScreen
+  - **FavoritesLimitBanner**: Added container-level `semantics { contentDescription = "X of 3 saves used" }`
+  - **Attraction.kt**: Added `cardAccessibilityLabel` computed property matching Event/Restaurant pattern
+  - **Reduce animations**: AccessibilityHelper.shouldReduceAnimations checks ANIMATOR_DURATION_SCALE; DetailHeroSkeleton already uses rememberShouldReduceAnimations() for shimmer
+- Files created: AccessibilityHelper.kt
+- Files modified: FeaturedEventCard.kt, CompactRestaurantCard.kt, PremiumBadge.kt, ToastOverlay.kt, HomeScreen.kt, FilterSheet.kt, FavoritesScreen.kt, EventDetailScreen.kt, RestaurantDetailScreen.kt, AttractionDetailScreen.kt, OnboardingScreen.kt, RestaurantsScreen.kt, MainScreen.kt, SubscriptionBanner.kt, Attraction.kt, LoadingView.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - `clearAndSetSemantics { }` removes ALL TalkBack access — only use for truly redundant decorative containers, never for interactive items
+  - LiveRegionMode.Polite is preferred for toast messages (doesn't interrupt current reading)
+  - `semantics { heading() }` enables TalkBack heading navigation gesture (swipe up+down) — add to all section titles
+  - `semantics { selected = isSelected }` is better than text-only "selected" suffix because TalkBack has built-in announcement
+  - Star rating rows should have a single container semantics description — individual star icons should have contentDescription = null
+  - Android's Compose animation APIs respect ANIMATOR_DURATION_SCALE=0 natively — animateDpAsState, spring() etc. automatically disabled
+  - NavigationBarItem accepts a `modifier` parameter for adding custom semantics
+---

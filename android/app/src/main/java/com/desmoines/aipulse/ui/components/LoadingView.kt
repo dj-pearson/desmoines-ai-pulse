@@ -30,10 +30,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
+import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 
 /**
  * Full-screen loading indicator with optional message.
@@ -45,7 +50,12 @@ fun LoadingView(
     message: String = "Loading..."
 ) {
     Column(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier
+            .fillMaxSize()
+            .semantics {
+                contentDescription = message
+                liveRegion = LiveRegionMode.Polite
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -73,7 +83,11 @@ fun InlineLoadingView(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(Dimens.SpacingLg),
+            .padding(Dimens.SpacingLg)
+            .semantics {
+                contentDescription = "Loading more content"
+                liveRegion = LiveRegionMode.Polite
+            },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -93,36 +107,48 @@ fun InlineLoadingView(
 
 /**
  * Skeleton placeholder for detail page hero sections with shimmer animation.
+ * Respects 'reduce animations' system setting (ANIMATOR_DURATION_SCALE).
  * Mirrors iOS DetailHeroSkeleton.
  */
 @Composable
 fun DetailHeroSkeleton(
     modifier: Modifier = Modifier
 ) {
+    val reduceAnimations = rememberShouldReduceAnimations()
+    val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+
     val shimmerColors = listOf(
-        MaterialTheme.colorScheme.surfaceVariant,
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        MaterialTheme.colorScheme.surfaceVariant
+        surfaceVariant,
+        surfaceVariant.copy(alpha = 0.5f),
+        surfaceVariant
     )
 
-    val transition = rememberInfiniteTransition(label = "shimmer")
-    val translateAnim by transition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1000f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1200, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "shimmerTranslate"
-    )
+    val brush = if (reduceAnimations) {
+        // Static background when animations are disabled
+        Brush.linearGradient(colors = listOf(surfaceVariant, surfaceVariant))
+    } else {
+        val transition = rememberInfiniteTransition(label = "shimmer")
+        val translateAnim by transition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1000f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "shimmerTranslate"
+        )
+        Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(translateAnim - 500f, 0f),
+            end = Offset(translateAnim, 0f)
+        )
+    }
 
-    val brush = Brush.linearGradient(
-        colors = shimmerColors,
-        start = Offset(translateAnim - 500f, 0f),
-        end = Offset(translateAnim, 0f)
-    )
-
-    Column(modifier = modifier) {
+    Column(
+        modifier = modifier.semantics {
+            contentDescription = "Loading content"
+        }
+    ) {
         // Hero image area
         Box(
             modifier = Modifier

@@ -62,6 +62,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -354,7 +356,8 @@ private fun HeaderSection(totalCount: Int) {
         Text(
             text = "What's happening in Des Moines",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.semantics { heading() }
         )
         if (totalCount > 0) {
             Text(
@@ -394,6 +397,7 @@ private fun DatePresetsRow(
                     .semantics {
                         contentDescription = "Filter by ${preset.displayName}" +
                                 if (isSelected) ", selected" else ""
+                        selected = isSelected
                     }
             )
         }
@@ -433,6 +437,7 @@ private fun CategoryChipsRow(
                     .semantics {
                         contentDescription = "Filter by ${category.displayName}" +
                                 if (isSelected) ", selected" else ""
+                        selected = isSelected
                     }
             ) {
                 Icon(
@@ -462,7 +467,9 @@ private fun FeaturedEventsSection(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = Dimens.SpacingLg)
+            modifier = Modifier
+                .padding(horizontal = Dimens.SpacingLg)
+                .semantics { heading() }
         ) {
             Icon(
                 imageVector = Icons.Filled.Star,
@@ -509,7 +516,9 @@ private fun RestaurantsSection(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = Dimens.SpacingLg)
+            modifier = Modifier
+                .padding(horizontal = Dimens.SpacingLg)
+                .semantics { heading() }
         ) {
             Icon(
                 imageVector = Icons.Filled.Restaurant,
@@ -594,7 +603,10 @@ private fun ActiveFiltersBar(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = Dimens.SpacingLg, vertical = 6.dp),
+            .padding(horizontal = Dimens.SpacingLg, vertical = 6.dp)
+            .semantics {
+                contentDescription = "$count ${if (count == 1) "filter" else "filters"} active"
+            },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {

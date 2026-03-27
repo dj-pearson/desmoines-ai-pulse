@@ -26,6 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
@@ -84,8 +88,18 @@ fun ToastOverlay(
             exit = slideOutVertically(targetOffsetY = { it }) + fadeOut()
         ) {
             message?.let { msg ->
+                val styleLabel = when (msg.style) {
+                    ToastMessage.Style.SUCCESS -> "Success"
+                    ToastMessage.Style.INFO -> "Info"
+                    ToastMessage.Style.ERROR -> "Error"
+                }
                 Surface(
-                    modifier = Modifier.padding(bottom = 24.dp, start = 16.dp, end = 16.dp),
+                    modifier = Modifier
+                        .padding(bottom = 24.dp, start = 16.dp, end = 16.dp)
+                        .semantics {
+                            contentDescription = "$styleLabel: ${msg.text}"
+                            liveRegion = LiveRegionMode.Polite
+                        },
                     shape = RoundedCornerShape(24.dp),
                     tonalElevation = 6.dp,
                     shadowElevation = 8.dp,
@@ -97,7 +111,7 @@ fun ToastOverlay(
                     ) {
                         Icon(
                             imageVector = msg.icon,
-                            contentDescription = null,
+                            contentDescription = null, // Described by container live region
                             tint = when (msg.style) {
                                 ToastMessage.Style.SUCCESS -> StatusSuccess
                                 ToastMessage.Style.INFO -> Color(0xFF2196F3)

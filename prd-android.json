@@ -754,7 +754,7 @@
         "Respect 'reduce animations' system setting (Settings.Global.ANIMATOR_DURATION_SCALE)"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS VoiceOver support. Android equivalent is TalkBack. Same principle: all interactive elements accessible, color not sole indicator, motion respects system preferences. WCAG 2.1 Level AA target."
     },
     {

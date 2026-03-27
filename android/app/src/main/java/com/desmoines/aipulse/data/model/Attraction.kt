@@ -48,6 +48,17 @@ data class Attraction(
     val ratingText: String
         get() = rating?.let { String.format(Locale.US, "%.1f", it) } ?: "No rating"
 
+    /** Accessibility label for card display, matching Event/Restaurant pattern. */
+    val cardAccessibilityLabel: String
+        get() {
+            val parts = mutableListOf(name)
+            parts.add(type)
+            location?.let { parts.add(it) }
+            rating?.let { parts.add("${String.format(Locale.US, "%.1f", it)} out of 5 stars") }
+            if (isFeatured == true) parts.add("Featured")
+            return parts.joinToString(", ")
+        }
+
     companion object {
         val preview = Attraction(
             id = "preview-1",

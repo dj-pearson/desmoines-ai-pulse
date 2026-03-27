@@ -59,6 +59,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -322,7 +323,10 @@ private fun RestaurantDetailInfo(
             restaurant.rating?.let { rating ->
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.semantics {
+                        contentDescription = "${String.format("%.1f", rating)} out of 5 stars"
+                    }
                 ) {
                     // Star icons
                     Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -514,7 +518,8 @@ private fun RestaurantDetailInfo(
             Text(
                 text = "About",
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.semantics { heading() }
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(

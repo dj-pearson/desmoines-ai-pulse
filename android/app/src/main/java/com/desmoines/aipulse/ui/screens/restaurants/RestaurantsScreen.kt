@@ -70,6 +70,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -467,6 +468,9 @@ fun RestaurantCard(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                         verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.semantics {
+                            contentDescription = "${String.format("%.1f", rating)} out of 5 stars"
+                        }
                     ) {
                         for (star in 1..5) {
                             val starVal = star.toDouble()
@@ -702,6 +706,7 @@ fun RestaurantFilterSheet(
                 Text(
                     "Filters",
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    modifier = Modifier.semantics { heading() }
                 )
                 TextButton(onClick = onDismiss) {
                     Text("Done", fontWeight = FontWeight.SemiBold)

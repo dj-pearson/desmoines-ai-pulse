@@ -301,8 +301,16 @@ fun FavoritesLimitBanner(
         else -> MaterialTheme.colorScheme.surfaceVariant
     }
 
+    val limitLabel = if (isAtLimit) {
+        "$currentCount of $maxFavorites saves used. You've reached the free plan limit."
+    } else {
+        "$currentCount of $maxFavorites saves used"
+    }
+
     Surface(
-        modifier = modifier.animateContentSize(),
+        modifier = modifier
+            .animateContentSize()
+            .semantics { contentDescription = limitLabel },
         shape = RoundedCornerShape(12.dp),
         color = backgroundColor
     ) {

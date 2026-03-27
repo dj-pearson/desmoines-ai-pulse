@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -284,7 +285,11 @@ private fun AttractionDetailInfo(
         if (attraction.rating != null) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics {
+                        contentDescription = "${String.format("%.1f", attraction.rating)} out of 5 stars"
+                    }
             ) {
                 // Star rating
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -491,6 +496,7 @@ private fun AttractionDescriptionSection(attraction: Attraction) {
             text = "About",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
+            modifier = Modifier.semantics { heading() }
         )
         Text(
             text = attraction.description,

@@ -17,6 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -99,13 +102,19 @@ fun MainScreen(
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.onSurface
                 ) {
-                    BottomNavTab.entries.forEach { tab ->
+                    val tabs = BottomNavTab.entries
+                    tabs.forEachIndexed { index, tab ->
                         val isSelected = currentDestination?.hierarchy?.any {
                             it.route == tab.route
                         } == true
 
                         NavigationBarItem(
                             selected = isSelected,
+                            modifier = Modifier.semantics {
+                                contentDescription = "${tab.label}, tab ${index + 1} of ${tabs.size}" +
+                                        if (isSelected) ", selected" else ""
+                                selected = isSelected
+                            },
                             onClick = {
                                 if (!isSelected) {
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
