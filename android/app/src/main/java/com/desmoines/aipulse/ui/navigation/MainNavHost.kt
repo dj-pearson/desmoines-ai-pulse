@@ -13,6 +13,7 @@ import com.desmoines.aipulse.ui.screens.map.MapScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.screens.profile.ProfileScreen
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsScreen
+import com.desmoines.aipulse.ui.components.WebViewScreen
 import com.desmoines.aipulse.ui.screens.search.SearchScreen
 
 /**
@@ -160,5 +161,12 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     composable(
         route = Route.WebView.route,
         arguments = Route.WebView.arguments
-    ) { /* WebViewScreen placeholder — implemented in AND-015 */ }
+    ) { backStackEntry ->
+        val encodedUrl = backStackEntry.arguments?.getString("url") ?: ""
+        val url = java.net.URLDecoder.decode(encodedUrl, "UTF-8")
+        WebViewScreen(
+            url = url,
+            onNavigateBack = { navController.popBackStack() }
+        )
+    }
 }
