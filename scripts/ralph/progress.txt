@@ -127,3 +127,24 @@ Started: 2026-03-27T14:05:42.010Z
   - Repository pattern: interface returns Result<T>, impl uses runCatching + onFailure for logging
   - EventsQuery is a plain data class (not @Serializable) — it's only used client-side to build Supabase queries
 ---
+
+## 2026-03-27 - AND-008 (Android)
+- Created RestaurantsRemoteDataSource.kt with all 5 methods matching iOS RestaurantsService.swift:
+  - fetchRestaurants(query) with full-text search, cuisine/priceRange/location in-filters, minRating gte, featured eq, 6 sort options with exact ordering chains matching iOS
+  - fetchRestaurant(id) single restaurant by ID
+  - fuzzySearchRestaurants(query, limit) via RPC 'fuzzy_search_restaurants'
+  - fetchNearbyRestaurants(lat, lng, radiusMiles, limit) via RPC 'restaurants_within_radius' with client-side Haversine fallback
+  - fetchAvailableCuisines() returning distinct sorted cuisine strings
+- Created RestaurantsRepository interface with Result<T> return types
+- Created RestaurantsRepositoryImpl wrapping remote data source with runCatching error handling
+- Updated RepositoryModule.kt with @Binds binding for RestaurantsRepository → RestaurantsRepositoryImpl
+- Files created: RestaurantsRemoteDataSource.kt, RestaurantsRepository.kt, RestaurantsRepositoryImpl.kt
+- Files modified: RepositoryModule.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - RestaurantsQuery uses List<String> for cuisines/priceRanges/locations (vs single String for EventsQuery.category) — isIn() filter for multi-select
+  - Sort options apply multiple order() calls in when-block inside the select DSL (not separate execute calls like iOS switch)
+  - Nearby restaurants RPC uses different param names than events: center_lat/center_lng/radius_miles/limit_count (vs user_lat/user_lon/radius_meters/search_limit)
+  - fetchAvailableCuisines uses Columns.list("cuisine") for column selection and client-side distinct() + sorted()
+  - Reused EventsRemoteDataSource.haversineDistance() companion for table fallback distance filtering
+---

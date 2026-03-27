@@ -152,7 +152,7 @@
         "All queries match iOS RestaurantsService.swift exactly"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "6 sort options must match iOS exactly. Client-side open/closed filtering via Restaurant.isOpenNow(). Same RPC functions as iOS."
     },
     {
