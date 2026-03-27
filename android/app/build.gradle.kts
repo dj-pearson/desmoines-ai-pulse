@@ -87,6 +87,15 @@ android {
         compose = true
         buildConfig = true
     }
+
+    @Suppress("UnstableApiUsage")
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }
 
 dependencies {
@@ -161,8 +170,17 @@ dependencies {
     implementation(libs.firebase.messaging)
     implementation(libs.firebase.appindexing)
 
-    // Testing
+    // Testing - JUnit 5
+    testImplementation(libs.junit5.api)
+    testRuntimeOnly(libs.junit5.engine)
+    testImplementation(libs.junit5.params)
+    testImplementation(libs.mockk)
+    testImplementation(libs.turbine)
+    testImplementation(libs.kotlinx.coroutines.test)
+    // JUnit 4 kept for backward compatibility with existing tests
     testImplementation(libs.junit)
+
+    // Android instrumentation tests
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.compose.bom))
