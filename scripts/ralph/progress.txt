@@ -792,3 +792,34 @@ Started: 2026-03-27T14:05:42.010Z
   - supabase-kt functions.invoke returns HttpResponse — parse body as String for simple validation response checking
   - Product IDs (insider_monthly, vip_monthly) differ from iOS (prod_U4oa7Cpn0bRnuo, prod_U4oaGFEy12auTx) — configured per platform in respective stores
 ---
+
+## 2026-03-27 - AND-028 (Android)
+- Created validate-android-receipt Supabase edge function at supabase/functions/validate-android-receipt/index.ts
+  - Mirrors validate-ios-receipt structure: auth check → input validation → Google Play API verification → tier resolution → DB upsert → response
+  - Accepts POST with: purchaseToken, productId, userId, packageName
+  - Uses Google Play Developer API (androidpublisher v3) for server-side subscription verification
+  - Service account JWT generation (RS256) → OAuth2 token exchange → API call with access token
+  - Validates purchase token via GET /applications/{pkg}/purchases/subscriptions/{productId}/tokens/{token}
+  - Resolves subscription status from Google response: active, expired, canceled, past_due, trialing
+  - Maps product IDs to tiers: insider_monthly→insider, vip_monthly→vip (with contains() fallback)
+  - Upserts subscription record with platform='android', google_purchase_token, google_product_id, google_order_id
+  - CORS headers from _shared/cors.ts, rate limiting (30 req/15min) from _shared/rateLimit.ts
+  - Auth: verifies Bearer token and userId match (prevents spoofing)
+  - Package name validation against EXPECTED_PACKAGE_NAME
+- Created migration supabase/migrations/20260327000001_add_mobile_subscription_columns.sql:
+  - Adds platform, apple_transaction_id, apple_original_transaction_id, apple_product_id columns (for iOS)
+  - Adds google_purchase_token, google_product_id, google_order_id columns (for Android)
+  - All columns use IF NOT EXISTS for idempotent migration
+  - Index on platform column for filtering
+- Files created: supabase/functions/validate-android-receipt/index.ts, supabase/migrations/20260327000001_add_mobile_subscription_columns.sql
+- Files modified: prd-android.json
+- **Learnings for future iterations:**
+  - Google Play Developer API uses OAuth2 service account flow (JWT→token exchange→bearer), not direct JWT auth like Apple
+  - Service account key is a JSON blob with client_email + private_key (RSA PKCS#8) — stored as single GOOGLE_PLAY_SERVICE_ACCOUNT_KEY secret
+  - Google subscription API returns expiryTimeMillis/startTimeMillis as strings (not numbers) — must parseInt
+  - paymentState: 0=pending, 1=received, 2=free_trial, 3=pending_deferred — maps to subscription status
+  - cancelReason present but expiryTimeMillis in future = cancelled but still active (cancel_at_period_end=true)
+  - acknowledgementState: 0=not_acknowledged, 1=acknowledged — Google auto-acknowledges server-verified purchases
+  - Migration adds columns for both iOS and Android to formalize what validate-ios-receipt was already writing
+  - Platform column defaults to 'web' for existing Stripe-based subscriptions
+---
