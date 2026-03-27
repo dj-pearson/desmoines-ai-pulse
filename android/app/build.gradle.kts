@@ -131,6 +131,9 @@ dependencies {
     // Google Play Billing
     implementation(libs.play.billing)
 
+    // Security (Encrypted SharedPreferences)
+    implementation(libs.security.crypto)
+
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)

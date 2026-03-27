@@ -27,6 +27,7 @@ playServicesLocation = "21.3.0"
 playServicesMaps = "19.0.0"
 playBilling = "7.1.1"
 firebaseBom = "33.7.0"
+securityCrypto = "1.1.0-alpha06"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -92,6 +93,9 @@ play-billing = { group = "com.android.billingclient", name = "billing-ktx", vers
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
 firebase-appindexing = { group = "com.google.firebase", name = "firebase-appindexing" }
+
+# Security (Encrypted SharedPreferences)
+security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 
 # Ktor (HTTP engine for Supabase)
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }

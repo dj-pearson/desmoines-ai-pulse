@@ -714,7 +714,7 @@
         "Inject as singleton via Hilt"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS KeychainService.swift. Android uses EncryptedSharedPreferences instead of Keychain. Same API surface."
     },
     {
