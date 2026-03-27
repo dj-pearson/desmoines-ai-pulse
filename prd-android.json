@@ -377,7 +377,7 @@
         "Accessibility: all buttons labeled, urgency not conveyed by color alone"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS EventDetailView.swift + all sub-views. Calendar uses Android CalendarContract (replaces iOS EventKit). Directions open Google Maps instead of Apple Maps. Same premium gating for calendar and insider tips."
     },
     {

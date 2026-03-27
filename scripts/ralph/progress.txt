@@ -451,3 +451,34 @@ Started: 2026-03-27T14:05:42.010Z
   - Category/DatePreset grids use Surface(onClick) for the entire row clickable area (cleaner than Row + clickable modifier)
   - WindowInsets.navigationBars on ModalBottomSheet prevents content from being hidden behind gesture bar
 ---
+
+## 2026-03-27 - AND-019 (Android)
+- Created Event Detail screen matching iOS EventDetailView.swift with all 5 sub-sections:
+  - EventDetailHeader: 300dp hero image with gradient overlay, category badge, title text, tap-to-view full-screen image
+  - EventDetailDateTime: Calendar icon, formatted date/time, urgency label badge (Today/Tomorrow/In X days) with icon+text (not color alone)
+  - EventDetailInfo: Location row with venue/address/city + Get Directions button (Google Maps with generic geo fallback), Price row (Free with checkmark / paid / not listed), Distance row, About description section
+  - EventDetailActions: Add to Calendar button (Insider+ gated with lock icon + PremiumBadge for free users, opens CalendarContract intent with 2h duration), More Info external link button, Remind Me toggle button (placeholder for notification service)
+  - EventDetailInsiderTips: Premium content card (orange, star icon, tip text generated per category/venue/free status matching iOS exactly) for subscribers, locked teaser card with lock icon + upgrade CTA for free users
+  - EventDetailRelated: Horizontal LazyRow of RelatedEventCard (180dp width, image, title, date) with navigation to other event details
+- Created EventDetailViewModel.kt as @HiltViewModel:
+  - loadEvent(id): fetches event + related events from repository
+  - toggleFavorite(): placeholder (wired in AND-024)
+  - createCalendarIntent(): CalendarContract.Events insert intent with title, location, description, 2h duration
+  - createDirectionsIntent(): Google Maps navigation intent with generic geo fallback
+  - getInsiderTipText(): contextual tips matching iOS logic (free/downtown/category-based)
+  - shareText: formatted share string with title, date, location
+- Updated MainNavHost.kt: wired EventDetailScreen with ViewModel, share intent, calendar intent, directions, subscription navigation
+- Top app bar with Share and Favorite buttons (heart toggles red), back navigation
+- Full-screen image viewer integration via FullScreenImageViewer component
+- Files created: EventDetailScreen.kt, EventDetailViewModel.kt
+- Files modified: MainNavHost.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Calendar integration uses Intent(ACTION_INSERT) with CalendarContract — no WRITE_CALENDAR permission needed for insert intent (system calendar app handles it)
+  - Directions: try Google Maps package first (com.google.android.apps.maps), fall back to generic geo: URI if not installed
+  - EventDetailScreen is a stateless composable — all state comes from ViewModel via MainNavHost, matching the pattern established in HomeScreen
+  - generateInsiderTip is a private function (not in ViewModel) since it's pure UI text generation — also duplicated in ViewModel for potential non-UI use
+  - RelatedEventCard reuses Event.featuredCardAccessibilityLabel for semantics — same as FeaturedEventCard in HomeScreen
+  - FullScreenImageViewer is shown as an overlay (not navigation) matching iOS .fullScreenCover behavior
+  - PremiumBadge() used inline in the locked calendar button — same pattern as iOS EventDetailActions
+---

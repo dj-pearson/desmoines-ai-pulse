@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.navigation
 
+import android.content.Intent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -12,7 +13,10 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
+import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
+import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
 import com.desmoines.aipulse.ui.screens.favorites.FavoritesScreen
 import com.desmoines.aipulse.ui.screens.home.EventsViewModel
 import com.desmoines.aipulse.ui.screens.home.FilterSheet
@@ -179,7 +183,70 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
     composable(
         route = Route.EventDetail.route,
         arguments = Route.EventDetail.arguments
-    ) { /* EventDetailScreen placeholder — implemented in AND-019 */ }
+    ) { backStackEntry ->
+        val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
+        val viewModel: EventDetailViewModel = hiltViewModel()
+        val event by viewModel.event.collectAsState()
+        val relatedEvents by viewModel.relatedEvents.collectAsState()
+        val isLoading by viewModel.isLoading.collectAsState()
+        val isFavorited by viewModel.isFavorited.collectAsState()
+        val calendarAdded by viewModel.calendarAdded.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        androidx.compose.runtime.LaunchedEffect(eventId) {
+            viewModel.loadEvent(eventId)
+        }
+
+        EventDetailScreen(
+            event = event,
+            relatedEvents = relatedEvents,
+            isLoading = isLoading,
+            isFavorited = isFavorited,
+            calendarAdded = calendarAdded,
+            currentTier = SubscriptionTier.FREE, // Will be wired to subscription service
+            onNavigateBack = { navController.popBackStack() },
+            onShare = {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, viewModel.shareText)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Share Event"))
+            },
+            onToggleFavorite = { viewModel.toggleFavorite() },
+            onAddToCalendar = {
+                viewModel.createCalendarIntent()?.let { intent ->
+                    context.startActivity(intent)
+                    viewModel.setCalendarAdded()
+                }
+            },
+            onOpenDirections = {
+                viewModel.createDirectionsIntent()?.let { intent ->
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
+                            context.startActivity(fallback)
+                        }
+                    }
+                }
+            },
+            onOpenDirectionsFallback = {
+                viewModel.createDirectionsFallbackIntent()?.let { intent ->
+                    context.startActivity(intent)
+                }
+            },
+            onShowSubscription = {
+                navController.navigate(Route.Subscription.route)
+            },
+            onNavigateToEventDetail = { id ->
+                navController.navigate(Route.EventDetail.createRoute(id))
+            },
+            onOpenSourceUrl = { url ->
+                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                context.startActivity(intent)
+            },
+        )
+    }
 
     composable(
         route = Route.RestaurantDetail.route,
