@@ -222,3 +222,44 @@ Started: 2026-03-27T14:05:42.010Z
   - MainScreen now uses Column with weight(1f) on MainNavHost to accommodate banner at top
   - NetworkMonitor's scope uses SupervisorJob + Dispatchers.Main to safely handle coroutines without lifecycle owner
 ---
+
+## 2026-03-27 - AND-012 (Android)
+- Created AuthRemoteDataSource.kt with all methods matching iOS AuthService.swift:
+  - signIn(email, password) using Supabase Auth Email provider
+  - signUp(email, password, firstName, lastName, interests) with profile creation after signup
+  - signOut() clearing session
+  - resetPassword(email) sending reset email
+  - signInWithGoogle(idToken) using Supabase Auth Google provider (replaces iOS Apple Sign-In)
+  - fetchProfile(userId) from profiles table with eq filter on user_id
+  - createProfile(userId, email, firstName, lastName, interests) inserting into profiles table
+  - updateProfile(userId, ...) updating profiles table with eq filter
+  - checkAdminRole(userId) checking user_roles table first, falling back to profiles.user_role
+  - sessionStatus Flow exposed for auth state listening
+- Created AuthRepository interface with Result<T> return types for all methods
+- Created AuthRepositoryImpl wrapping data source with runCatching error handling
+- Created AuthViewModel.kt with full state management:
+  - Auth state: currentProfile, isAuthenticated, isAdmin, isLoading as StateFlow
+  - Form state: isSigningIn, isSigningUp, errorMessage, showVerificationAlert
+  - Email validation with same regex as iOS
+  - Password strength scoring matching iOS exactly (6 criteria, weak/medium/strong thresholds)
+  - Rate limiting: 5 failed attempts in 5 min window triggers 60-second lockout countdown
+  - signIn/signUp/signOut/resetPassword/signInWithGoogle/updateProfile methods
+  - Auth state listener collecting SessionStatus flow (Authenticated/NotAuthenticated/Initializing)
+  - availableInterests companion matching iOS: Food, Music, Sports, Arts, Nightlife, Outdoor, Family, Business
+- Added Google Credential Manager dependencies (credentials 1.3.0, googleid 1.1.1) to version catalog and build.gradle.kts
+- Added GOOGLE_WEB_CLIENT_ID BuildConfig field from local.properties
+- Updated Config.kt with GOOGLE_WEB_CLIENT_ID property
+- Updated RepositoryModule.kt with @Binds binding for AuthRepository → AuthRepositoryImpl
+- Files created: AuthRemoteDataSource.kt, AuthRepository.kt, AuthRepositoryImpl.kt, AuthViewModel.kt
+- Files modified: RepositoryModule.kt, Config.kt, build.gradle.kts, libs.versions.toml
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - supabase-kt 3.x auth: signInWith(Email) { email=; password= } and signUpWith(Email) { ... data = buildJsonObject {} }
+  - supabase-kt 3.x auth: Google Sign-In uses signInWith(Google) { idToken = token } — differs from iOS Apple Sign-In which uses signInWithIdToken
+  - SessionStatus is a sealed class: Authenticated(session), NotAuthenticated, Initializing — collect it from auth.sessionStatus Flow
+  - User ID from session: status.session.user?.id (String, not UUID like iOS)
+  - AuthException is a sealed class (not enum like iOS AuthError) — data objects for NotConfigured, InvalidToken, NoUser
+  - Rate limiting uses System.currentTimeMillis() instead of iOS Date() — same 5 attempts / 5 min window / 60 sec lockout
+  - Google Credential Manager (androidx.credentials 1.3.0) replaces deprecated Google Sign-In SDK — configured via GOOGLE_WEB_CLIENT_ID in local.properties
+  - AuthViewModel uses @HiltViewModel + viewModelScope.launch for all async operations (maps to iOS @MainActor + Task)
+---

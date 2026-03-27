@@ -225,7 +225,7 @@
         "Auth state persists across app restarts via Supabase session"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AuthService.swift + AuthViewModel.swift. Google Sign-In replaces Apple Sign-In. Same rate limiting logic: 5 failed attempts in 5 min = 60 second lockout. Same password strength algorithm. Same admin check pattern (user_roles table → profiles fallback)."
     },
     {
