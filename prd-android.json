@@ -825,7 +825,7 @@
         "APK/AAB size is reasonable (<30MB)"
       ],
       "priority": 41,
-      "passes": false,
+      "passes": true,
       "notes": "Critical for Play Store release. ProGuard rules must preserve serializable model classes and reflection-based libraries. Test release build thoroughly."
     },
     {
