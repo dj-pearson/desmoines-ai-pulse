@@ -24,7 +24,9 @@ import com.desmoines.aipulse.ui.screens.home.HomeScreen
 import com.desmoines.aipulse.ui.screens.map.MapScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.screens.profile.ProfileScreen
+import com.desmoines.aipulse.ui.screens.restaurants.RestaurantFilterSheet
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsScreen
+import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsViewModel
 import com.desmoines.aipulse.ui.components.WebViewScreen
 import com.desmoines.aipulse.ui.screens.search.SearchScreen
 
@@ -115,11 +117,42 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
     }
 
     composable(Route.Dining.route) {
+        val viewModel: RestaurantsViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+        var showFilterSheet by remember { mutableStateOf(false) }
+
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            viewModel.loadInitialData()
+        }
+
         RestaurantsScreen(
+            state = state,
             onNavigateToRestaurantDetail = { id ->
                 navController.navigate(Route.RestaurantDetail.createRoute(id))
-            }
+            },
+            onNavigateToSubscription = {
+                navController.navigate(Route.Subscription.route)
+            },
+            onShowFilters = { showFilterSheet = true },
+            onSortBySelected = { viewModel.setSortBy(it) },
+            onToggleOpenNow = { viewModel.toggleOpenNowOnly() },
+            onClearFilters = { viewModel.clearFilters() },
+            onRefresh = { viewModel.refresh() },
+            onLoadMore = { viewModel.loadMoreIfNeeded(state.restaurants.size - 1) },
+            onFavoriteClick = null, // Favorites wired in AND-024
         )
+
+        if (showFilterSheet) {
+            RestaurantFilterSheet(
+                availableCuisines = state.availableCuisines,
+                selectedCuisines = state.selectedCuisines,
+                selectedPriceRanges = state.selectedPriceRanges,
+                onToggleCuisine = { viewModel.toggleCuisine(it) },
+                onTogglePriceRange = { viewModel.togglePriceRange(it) },
+                onClearFilters = { viewModel.clearFilters() },
+                onDismiss = { showFilterSheet = false },
+            )
+        }
     }
 
     composable(Route.Search.route) {
