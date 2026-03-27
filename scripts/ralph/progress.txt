@@ -1106,3 +1106,29 @@ Started: 2026-03-27T14:05:42.010Z
   - Pull-to-refresh completion detected via LaunchedEffect(isRefreshing) with wasRefreshing tracker — fires medium impact when transitioning from refreshing to not-refreshing
   - Light haptic (selections, filter changes) vs medium haptic (primary actions, favorites, calendar) mirrors iOS .light/.medium distinction
 ---
+
+## 2026-03-27 - AND-039 (Android)
+- Added animations: shimmer skeletons, transitions, and gestures across the app:
+  - **ShimmerEffect.kt** (new): Created reusable `rememberShimmerBrush()` composable that centralizes the shimmer pattern and respects ANIMATOR_DURATION_SCALE (returns static gradient when animations disabled)
+  - **EventCardSkeleton.kt**: Refactored to use `rememberShimmerBrush()` — now respects reduce-animations setting. Added `contentDescription = "Loading event"` for TalkBack.
+  - **RestaurantCardSkeleton**: Replaced static Brush.linearGradient with animated `rememberShimmerBrush()` — skeleton now shimmer-animates matching EventCardSkeleton and DetailHeroSkeleton
+  - **DetailHeroSkeleton**: Refactored to use `rememberShimmerBrush()` — removed duplicated shimmer animation code, same behavior preserved
+  - **HomeScreen.kt**: Wrapped active filters bar in `AnimatedVisibility` with `expandVertically() + fadeIn()` enter and `shrinkVertically() + fadeOut()` exit — smooth filter bar transitions
+  - **RestaurantsScreen.kt**: Same AnimatedVisibility treatment for restaurant filter bar
+  - **EventDetailScreen.kt**: Added `animateContentSize(spring(stiffness = StiffnessLow))` to description section
+  - **RestaurantDetailScreen.kt**: Same animateContentSize treatment for About section
+  - **AttractionDetailScreen.kt**: Same animateContentSize treatment for About section
+  - **MapScreen.kt**: All 3 map pin composables (EventMapPin, RestaurantMapPin, AttractionMapPin) now check `rememberShouldReduceAnimations()` and use `snap()` instead of `spring()` when animations disabled
+  - **OnboardingScreen.kt**: Page indicator capsule width animation now checks reduce-animations and uses `snap()` fallback
+  - **FullScreenImageViewer.kt**: Scale animation now uses `snap()` when reduce-animations enabled
+  - Pre-existing animations verified as complete: Toast slide+fade (ToastOverlay.kt), Map popup slide+fade (MapScreen.kt), Pin spring-scale (MapScreen.kt), Image viewer pinch-to-zoom/double-tap/swipe-dismiss (FullScreenImageViewer.kt), Page indicator capsule (OnboardingScreen.kt)
+- Files created: ShimmerEffect.kt
+- Files modified: EventCardSkeleton.kt, RestaurantsScreen.kt, LoadingView.kt, HomeScreen.kt, EventDetailScreen.kt, RestaurantDetailScreen.kt, AttractionDetailScreen.kt, MapScreen.kt, OnboardingScreen.kt, FullScreenImageViewer.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - `rememberShimmerBrush()` is the canonical way to create shimmer in this project — use it instead of inline `rememberInfiniteTransition` + `animateFloat`
+  - Compose's built-in AnimatedVisibility/animateContentSize already respect ANIMATOR_DURATION_SCALE natively — only explicit `animateDpAsState` with `spring()` needs manual `snap()` fallback
+  - For filter bars inside LazyColumn, always render the `item {}` and put `AnimatedVisibility` inside — conditional `item {}` blocks cause list recomposition jarring
+  - `snap()` from `androidx.compose.animation.core` is the zero-duration animation spec for accessibility compliance
+  - Material 3 shared element transitions require Compose Navigation 2.8+ with `SharedTransitionLayout` — not yet adopted in this codebase's navigation setup, deferred to future navigation upgrade
+---

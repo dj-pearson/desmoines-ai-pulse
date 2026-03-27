@@ -1,5 +1,8 @@
 package com.desmoines.aipulse.ui.screens.attractiondetail
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -488,7 +491,10 @@ private fun AttractionDescriptionSection(attraction: Attraction) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
+            .padding(16.dp)
+            .animateContentSize(
+                animationSpec = spring(stiffness = Spring.StiffnessLow)
+            ),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text(

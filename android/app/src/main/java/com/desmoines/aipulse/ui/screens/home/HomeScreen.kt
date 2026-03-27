@@ -271,9 +271,13 @@ fun HomeScreen(
                     }
                 }
 
-                // Active filters bar
-                if (state.activeFilterCount > 0) {
-                    item(key = "activeFilters") {
+                // Active filters bar with animated entrance/exit
+                item(key = "activeFilters") {
+                    AnimatedVisibility(
+                        visible = state.activeFilterCount > 0,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
                         ActiveFiltersBar(
                             count = state.activeFilterCount,
                             onClear = {

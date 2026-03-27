@@ -1,5 +1,8 @@
 package com.desmoines.aipulse.ui.screens.restaurantdetail
 
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -513,6 +516,9 @@ private fun RestaurantDetailInfo(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
+                .animateContentSize(
+                    animationSpec = spring(stiffness = Spring.StiffnessLow)
+                )
         ) {
             Text(
                 text = "About",

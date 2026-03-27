@@ -1,6 +1,11 @@
 package com.desmoines.aipulse.ui.screens.restaurants
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -64,7 +69,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.desmoines.aipulse.util.rememberHapticPerformer
@@ -83,6 +87,7 @@ import com.desmoines.aipulse.ui.components.AdBannerView
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.EmptyStateView
 import com.desmoines.aipulse.ui.components.InlineLoadingView
+import com.desmoines.aipulse.ui.components.rememberShimmerBrush
 
 // region Main Screen
 
@@ -187,9 +192,13 @@ fun RestaurantsScreen(
                     )
                 }
 
-                // Active filters bar
-                if (state.activeFilterCount > 0) {
-                    item {
+                // Active filters bar with animated entrance/exit
+                item {
+                    AnimatedVisibility(
+                        visible = state.activeFilterCount > 0,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut(),
+                    ) {
                         ActiveFiltersBar(
                             count = state.activeFilterCount,
                             onClearAll = {
@@ -553,13 +562,7 @@ fun RestaurantCard(
 
 @Composable
 fun RestaurantCardSkeleton() {
-    val shimmerBrush = Brush.linearGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-        ),
-    )
+    val shimmerBrush = rememberShimmerBrush()
 
     Card(
         shape = RoundedCornerShape(14.dp),

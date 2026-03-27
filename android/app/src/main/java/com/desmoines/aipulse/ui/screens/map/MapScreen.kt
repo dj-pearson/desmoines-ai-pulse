@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -78,6 +79,7 @@ import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
+import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import android.Manifest
@@ -878,14 +880,16 @@ private fun EventMapPin(
     urgencyColor: PinColor,
     isSelected: Boolean,
 ) {
+    val reduceAnimations = rememberShouldReduceAnimations()
+    val pinAnimSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     val size by animateDpAsState(
         targetValue = if (isSelected) 40.dp else 32.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = pinAnimSpec,
         label = "pinSize",
     )
     val iconSize by animateDpAsState(
         targetValue = if (isSelected) 16.dp else 12.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = pinAnimSpec,
         label = "iconSize",
     )
     val pinColor = category.color
@@ -912,14 +916,16 @@ private fun EventMapPin(
 
 @Composable
 private fun RestaurantMapPin(isSelected: Boolean) {
+    val reduceAnimations = rememberShouldReduceAnimations()
+    val pinAnimSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     val size by animateDpAsState(
         targetValue = if (isSelected) 38.dp else 30.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = pinAnimSpec,
         label = "pinSize",
     )
     val iconSize by animateDpAsState(
         targetValue = if (isSelected) 14.dp else 11.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = pinAnimSpec,
         label = "iconSize",
     )
 
@@ -945,14 +951,16 @@ private fun RestaurantMapPin(isSelected: Boolean) {
 
 @Composable
 private fun AttractionMapPin(isSelected: Boolean) {
+    val reduceAnimations = rememberShouldReduceAnimations()
+    val pinAnimSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     val size by animateDpAsState(
         targetValue = if (isSelected) 38.dp else 30.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = pinAnimSpec,
         label = "pinSize",
     )
     val iconSize by animateDpAsState(
         targetValue = if (isSelected) 14.dp else 11.dp,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = pinAnimSpec,
         label = "iconSize",
     )
 

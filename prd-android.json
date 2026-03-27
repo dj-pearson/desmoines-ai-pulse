@@ -791,7 +791,7 @@
         "Use Compose animation APIs: animateContentSize, AnimatedVisibility, Animatable, spring()"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS animations. Same spring-based pin scaling, same zoom thresholds, same dismiss threshold. Respect ANIMATOR_DURATION_SCALE for accessibility."
     },
     {

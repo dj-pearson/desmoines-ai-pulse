@@ -1,6 +1,9 @@
 package com.desmoines.aipulse.ui.screens.eventdetail
 
 import android.content.Intent
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -529,6 +532,9 @@ private fun EventDetailInfo(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
+                .animateContentSize(
+                    animationSpec = spring(stiffness = Spring.StiffnessLow)
+                )
         ) {
             Text(
                 text = "About",

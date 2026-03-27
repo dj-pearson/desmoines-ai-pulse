@@ -3,6 +3,7 @@ package com.desmoines.aipulse.ui.screens.onboarding
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -50,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.ui.theme.BrandBlue
+import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 import kotlinx.coroutines.launch
 
 /**
@@ -139,11 +141,12 @@ fun OnboardingScreen(
                         contentDescription = "Page ${pagerState.currentPage + 1} of ${pages.size}"
                     }
             ) {
+                val reduceAnimations = rememberShouldReduceAnimations()
                 pages.indices.forEach { index ->
                     val isActive = index == pagerState.currentPage
                     val width by animateDpAsState(
                         targetValue = if (isActive) 24.dp else 8.dp,
-                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+                        animationSpec = if (reduceAnimations) snap() else spring(stiffness = Spring.StiffnessMediumLow),
                         label = "indicator_width"
                     )
                     Box(

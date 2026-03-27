@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 
 /**
  * Full-screen image viewer with pinch-to-zoom, double-tap zoom, and swipe-down-to-dismiss.
@@ -64,10 +66,12 @@ fun FullScreenImageViewer(
     val density = LocalDensity.current
     val dismissThresholdPx = with(density) { dismissThreshold.dp.toPx() }
 
+    val reduceAnimations = rememberShouldReduceAnimations()
+
     // Animated scale for double-tap and snap-back
     val animatedScale by animateFloatAsState(
         targetValue = scale,
-        animationSpec = spring(dampingRatio = 0.8f),
+        animationSpec = if (reduceAnimations) snap() else spring(dampingRatio = 0.8f),
         label = "scale"
     )
 
