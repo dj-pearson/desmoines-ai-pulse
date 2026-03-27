@@ -15,13 +15,13 @@ enum class EventCategory(val displayName: String, val iconName: String, val colo
     FOOD("Food & Drink", "restaurant", Color(0xFFFF9800)),       // orange
     ART("Art & Culture", "palette", Color(0xFFE91E63)),          // pink
     OUTDOOR("Outdoor", "eco", Color(0xFF4CAF50)),                // green
-    FAMILY("Family", "family_restroom", Color(0xFF00BCD4)),      // cyan
-    SPORTS("Sports", "sports_tennis", Color(0xFF4DB6AC)),        // mint
+    FAMILY("Family", "family_restroom", Color(0xFF2196F3)),      // blue (PRD spec)
+    SPORTS("Sports", "sports_tennis", Color(0xFFF44336)),        // red (PRD spec)
     NIGHTLIFE("Nightlife", "nightlife", Color(0xFF3F51B5)),      // indigo
     BUSINESS("Business", "business_center", Color(0xFF9E9E9E)),  // gray
     EDUCATION("Education", "school", Color(0xFF009688)),         // teal
-    CHARITY("Charity", "favorite", Color(0xFFF44336)),           // red
-    HOLIDAY("Holiday", "card_giftcard", Color(0xFFFFEB3B));      // yellow
+    CHARITY("Charity", "favorite", Color(0xFFE91E63)),           // rose (PRD spec)
+    HOLIDAY("Holiday", "card_giftcard", Color(0xFFFFB300));      // amber (PRD spec)
 
     companion object {
         /**
