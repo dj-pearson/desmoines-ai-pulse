@@ -536,7 +536,7 @@
         "App version from BuildConfig.VERSION_NAME + VERSION_CODE"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS ProfileView.swift + SettingsView.swift. Same layout, same sections. Rate app opens Play Store instead of App Store. Notification settings opens Android system settings."
     },
     {

@@ -700,3 +700,42 @@ Started: 2026-03-27T14:05:42.010Z
   - Google Maps API key flows: local.properties → manifestPlaceholders in build.gradle.kts → AndroidManifest meta-data
   - LatLng in this story uses com.google.android.gms.maps.model.LatLng (not data/model/LatLng) — they'll coexist until model LatLng is deprecated
 ---
+
+## 2026-03-27 - AND-026 (Android)
+- Built complete Profile screen and Settings screen matching iOS ProfileView.swift + SettingsView.swift + ProfileViewModel.swift:
+  - ProfileViewModel.kt as @HiltViewModel:
+    - Auth state listener collecting SessionStatus flow (same pattern as AuthViewModel)
+    - loadProfile(): fetches profile and populates editable field StateFlows (firstName, lastName, phone, location, selectedInterests)
+    - saveProfile(): updates profile via AuthRepository, refreshes on success, shows success dialog
+    - deleteAccount(): calls delete-user-account edge function via supabase-kt Functions plugin, then signs out
+    - signOut(): clears auth state
+    - resetOnboarding(): delegates to OnboardingPreferences (for debug settings)
+    - All dialog state managed via StateFlows (showSaveSuccess, showDeleteConfirmation, errorMessage)
+  - ProfileScreen.kt with full UI matching iOS ProfileView.swift:
+    - Authenticated view: Avatar circle with initials + display name + email, SubscriptionBanner (FULL), Personal Info section (4 OutlinedTextFields), Interests FlowRow with FilterChips (8 options), Save Changes button with loading spinner, Settings/Website/SignOut/Delete Account buttons
+    - Guest view: Person icon, welcome message, Sign In CTA button, SubscriptionBanner (COMPACT), Settings button
+    - AlertDialogs: save success, delete confirmation (destructive), error
+  - SettingsScreen.kt matching iOS SettingsView.swift:
+    - Account section (authenticated only): Subscription row with tier name + chevron, Restore Purchases
+    - General: Version display from BuildConfig.VERSION_NAME + VERSION_CODE
+    - Notifications: opens Android notification settings (ACTION_APP_NOTIFICATION_SETTINGS)
+    - About: Website (ACTION_VIEW), Contact Support (mailto:), Privacy Policy (WebView), Terms of Service (WebView), Rate App (Play Store with market:// + https fallback)
+    - Data & Privacy (authenticated only): Delete Account with confirmation dialog
+    - Debug section (BuildConfig.DEBUG only): Reset Onboarding via OnboardingPreferences
+    - TopAppBar with back navigation
+  - Added supabase-functions-kt dependency to version catalog and build.gradle.kts
+  - Installed Functions plugin in SupabaseClientProvider for edge function calls
+  - Updated MainNavHost.kt: wired ProfileScreen with ProfileViewModel (14 StateFlow collectors), wired SettingsScreen with ProfileViewModel for shared auth/delete state, connected all navigation callbacks
+- Files created: ProfileViewModel.kt, SettingsScreen.kt
+- Files modified: ProfileScreen.kt (full rewrite), MainNavHost.kt, SupabaseClient.kt, libs.versions.toml, build.gradle.kts, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - supabase-kt Functions plugin: install(Functions) in client config, access via client.functions.invoke("fn-name")
+  - ProfileViewModel shares auth state listener pattern with AuthViewModel — could extract to shared base class in future
+  - SubscriptionBanner uses BannerStyle enum (not SubscriptionBannerStyle) and onUpgradeClick param (not onUpgrade)
+  - Settings notification intent: ACTION_APP_NOTIFICATION_SETTINGS + EXTRA_APP_PACKAGE for Android O+ system notification settings
+  - Play Store intent: market://details?id=pkg first, fallback to HTTPS URL if Play Store app not installed
+  - ProfileViewModel and SettingsScreen share delete account logic — ViewModel manages the state, both screens can trigger/display it
+  - OnboardingPreferences injected into ProfileViewModel via Hilt for debug reset — clean DI, no manual Context access needed
+  - BuildConfig.DEBUG used for conditional debug section (matches iOS #if DEBUG)
+---

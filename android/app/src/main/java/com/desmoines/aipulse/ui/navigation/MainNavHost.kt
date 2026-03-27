@@ -30,6 +30,8 @@ import com.desmoines.aipulse.ui.screens.map.MapScreen
 import com.desmoines.aipulse.ui.screens.map.MapViewModel
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.screens.profile.ProfileScreen
+import com.desmoines.aipulse.ui.screens.profile.ProfileViewModel
+import com.desmoines.aipulse.ui.screens.profile.SettingsScreen
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantFilterSheet
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsScreen
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsViewModel
@@ -244,7 +246,49 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
     }
 
     composable(Route.Profile.route) {
+        val viewModel: ProfileViewModel = hiltViewModel()
+        val isAuthenticated by viewModel.isAuthenticated.collectAsState()
+        val profile by viewModel.profile.collectAsState()
+        val firstName by viewModel.firstName.collectAsState()
+        val lastName by viewModel.lastName.collectAsState()
+        val phone by viewModel.phone.collectAsState()
+        val location by viewModel.location.collectAsState()
+        val selectedInterests by viewModel.selectedInterests.collectAsState()
+        val isSaving by viewModel.isSaving.collectAsState()
+        val isDeleting by viewModel.isDeleting.collectAsState()
+        val showSaveSuccess by viewModel.showSaveSuccess.collectAsState()
+        val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsState()
+        val errorMessage by viewModel.errorMessage.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
         ProfileScreen(
+            isAuthenticated = isAuthenticated,
+            displayName = viewModel.displayName,
+            initials = viewModel.initials,
+            email = profile?.email ?: "",
+            firstName = firstName,
+            lastName = lastName,
+            phone = phone,
+            location = location,
+            selectedInterests = selectedInterests,
+            currentTier = SubscriptionTier.FREE, // Will be wired to billing in AND-027
+            isSaving = isSaving,
+            isDeleting = isDeleting,
+            showSaveSuccess = showSaveSuccess,
+            showDeleteConfirmation = showDeleteConfirmation,
+            errorMessage = errorMessage,
+            onFirstNameChanged = { viewModel.setFirstName(it) },
+            onLastNameChanged = { viewModel.setLastName(it) },
+            onPhoneChanged = { viewModel.setPhone(it) },
+            onLocationChanged = { viewModel.setLocation(it) },
+            onToggleInterest = { viewModel.toggleInterest(it) },
+            onSaveProfile = { viewModel.saveProfile() },
+            onSignOut = { viewModel.signOut() },
+            onRequestDelete = { viewModel.requestDeleteConfirmation() },
+            onConfirmDelete = { viewModel.deleteAccount() },
+            onDismissDelete = { viewModel.dismissDeleteConfirmation() },
+            onDismissSaveSuccess = { viewModel.dismissSaveSuccess() },
+            onClearError = { viewModel.clearError() },
             onNavigateToAuth = {
                 navController.navigate(Route.Auth.route)
             },
@@ -253,7 +297,11 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             },
             onNavigateToSubscription = {
                 navController.navigate(Route.Subscription.route)
-            }
+            },
+            onVisitWebsite = {
+                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(com.desmoines.aipulse.util.Config.SITE_URL))
+                context.startActivity(intent)
+            },
         )
     }
 }
@@ -448,7 +496,35 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     }
 
     composable(Route.Settings.route) {
-        /* SettingsScreen placeholder — implemented in AND-026 */
+        val profileViewModel: ProfileViewModel = hiltViewModel()
+        val isAuthenticated by profileViewModel.isAuthenticated.collectAsState()
+        val isDeleting by profileViewModel.isDeleting.collectAsState()
+        val showDeleteConfirmation by profileViewModel.showDeleteConfirmation.collectAsState()
+        val errorMessage by profileViewModel.errorMessage.collectAsState()
+
+        SettingsScreen(
+            isAuthenticated = isAuthenticated,
+            currentTier = SubscriptionTier.FREE, // Will be wired to billing in AND-027
+            isDeleting = isDeleting,
+            showDeleteConfirmation = showDeleteConfirmation,
+            errorMessage = errorMessage,
+            onNavigateBack = { navController.popBackStack() },
+            onNavigateToSubscription = {
+                navController.navigate(Route.Subscription.route)
+            },
+            onNavigateToWebView = { url ->
+                navController.navigate(Route.WebView.createRoute(url))
+            },
+            onRestorePurchases = { /* Will be wired in AND-027 */ },
+            onRequestDelete = { profileViewModel.requestDeleteConfirmation() },
+            onConfirmDelete = { profileViewModel.deleteAccount() },
+            onDismissDelete = { profileViewModel.dismissDeleteConfirmation() },
+            onClearError = { profileViewModel.clearError() },
+            onResetOnboarding = {
+                profileViewModel.resetOnboarding()
+                navController.popBackStack()
+            },
+        )
     }
 
     composable(
