@@ -482,3 +482,39 @@ Started: 2026-03-27T14:05:42.010Z
   - FullScreenImageViewer is shown as an overlay (not navigation) matching iOS .fullScreenCover behavior
   - PremiumBadge() used inline in the locked calendar button — same pattern as iOS EventDetailActions
 ---
+
+## 2026-03-27 - AND-020 (Android)
+- Built complete Restaurants list screen (Dining tab) matching iOS RestaurantsView.swift + RestaurantsViewModel.swift:
+  - RestaurantsViewModel.kt: @HiltViewModel with full state management:
+    - Filter state: selectedCuisines (Set), selectedPriceRanges (Set), sortBy (6 options), showOpenNowOnly, searchText
+    - allRestaurants vs restaurants separation for client-side Open Now filtering (same pattern as iOS)
+    - loadInitialData(): cache-first with parallel restaurant + cuisine fetch
+    - refresh(): bypass cache pull-to-refresh
+    - loadMoreIfNeeded(currentIndex): triggers at count-5 with isLoadingMore guard
+    - resetAndFetch(): 300ms debounce via Job cancellation
+    - clearFilters(): resets all filter state and sort to defaults
+    - activeFilterCount: computed from cuisines, priceRanges, searchText, openNowOnly
+    - Combined uiState StateFlow using chained combine() producing RestaurantsScreenState
+  - RestaurantsScreen.kt with full UI:
+    - SortPicker: horizontal LazyRow with Open Now toggle (green FilterChip) + 6 sort option chips
+    - ActiveFiltersBar: filter count + Clear All button
+    - ErrorBanner: warning icon + message + retry button
+    - RestaurantCard: HStack matching iOS RestaurantCardView — 100dp image, name+favorite, cuisine+price, star rating (1-5 with half-star), location+open/closed status dot
+    - RestaurantCardSkeleton: shimmer placeholder matching iOS skeleton layout
+    - RestaurantFilterSheet: ModalBottomSheet with cuisine horizontal LazyRow multi-select + price range row ($/$$/$$$/$$$$) + Clear/Done buttons
+    - Pull-to-refresh, skeleton loaders (4), empty state, load-more, AdBannerView for free users
+    - LargeTopAppBar with filter button + badge count
+    - Haptic feedback on filter/sort interactions
+  - Updated MainNavHost.kt: wired RestaurantsViewModel via hiltViewModel(), connected all callbacks, LaunchedEffect for loadInitialData, filter sheet state management
+- Files created: RestaurantsViewModel.kt
+- Files modified: RestaurantsScreen.kt (full rewrite), MainNavHost.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - allRestaurants / restaurants split pattern from iOS is essential for client-side Open Now filter — must filter displayed list without losing server data
+  - RestaurantFilterSheet uses ModalBottomSheet without skipPartiallyExpanded (iOS uses .medium detent) — shows at medium height by default
+  - PriceRange.entries provides all 4 values ($/$$/$$$/$$$) — use range.symbol for filter matching (same strings stored in DB)
+  - FilterChip with custom selectedContainerColor=green for Open Now matches iOS green background toggle
+  - RestaurantCard uses Row(image | Column(content)) layout, not Card with vertical stacking — matches iOS HStack pattern
+  - Star rating uses tint alpha trick: full=yellow, half=yellow@0.5f, empty=gray@0.3f (approximation of iOS half-star icons)
+  - activeFilterCount counts each filter category as 1 (not individual items) — matches iOS exactly
+---

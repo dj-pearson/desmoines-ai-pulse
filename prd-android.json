@@ -399,7 +399,7 @@
         "Available cuisines fetched and displayed in filter sheet"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS RestaurantsView.swift + RestaurantsViewModel.swift. Same 6 sort options. Open Now is client-side filter using Restaurant.isOpenNow(). Same filter sheet layout."
     },
     {
