@@ -17,6 +17,8 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailViewModel
+import com.desmoines.aipulse.ui.screens.restaurantdetail.RestaurantDetailScreen
+import com.desmoines.aipulse.ui.screens.restaurantdetail.RestaurantDetailViewModel
 import com.desmoines.aipulse.ui.screens.favorites.FavoritesScreen
 import com.desmoines.aipulse.ui.screens.home.EventsViewModel
 import com.desmoines.aipulse.ui.screens.home.FilterSheet
@@ -284,7 +286,58 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
     composable(
         route = Route.RestaurantDetail.route,
         arguments = Route.RestaurantDetail.arguments
-    ) { /* RestaurantDetailScreen placeholder — implemented in AND-021 */ }
+    ) { backStackEntry ->
+        val restaurantId = backStackEntry.arguments?.getString("restaurantId") ?: return@composable
+        val viewModel: RestaurantDetailViewModel = hiltViewModel()
+        val restaurant by viewModel.restaurant.collectAsState()
+        val isLoading by viewModel.isLoading.collectAsState()
+        val isFavorited by viewModel.isFavorited.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        androidx.compose.runtime.LaunchedEffect(restaurantId) {
+            viewModel.loadRestaurant(restaurantId)
+        }
+
+        RestaurantDetailScreen(
+            restaurant = restaurant,
+            isLoading = isLoading,
+            isFavorited = isFavorited,
+            currentTier = SubscriptionTier.FREE, // Will be wired to subscription service
+            onNavigateBack = { navController.popBackStack() },
+            onShare = {
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, viewModel.shareText)
+                }
+                context.startActivity(Intent.createChooser(shareIntent, "Share Restaurant"))
+            },
+            onToggleFavorite = { viewModel.toggleFavorite() },
+            onCall = {
+                viewModel.createCallIntent()?.let { intent ->
+                    context.startActivity(intent)
+                }
+            },
+            onOpenWebsite = {
+                viewModel.createWebsiteIntent()?.let { intent ->
+                    context.startActivity(intent)
+                }
+            },
+            onOpenDirections = {
+                viewModel.createDirectionsIntent()?.let { intent ->
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        viewModel.createDirectionsFallbackIntent()?.let { fallback ->
+                            context.startActivity(fallback)
+                        }
+                    }
+                }
+            },
+            onShowSubscription = {
+                navController.navigate(Route.Subscription.route)
+            },
+        )
+    }
 
     composable(
         route = Route.AttractionDetail.route,

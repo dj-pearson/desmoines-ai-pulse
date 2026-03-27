@@ -518,3 +518,33 @@ Started: 2026-03-27T14:05:42.010Z
   - Star rating uses tint alpha trick: full=yellow, half=yellow@0.5f, empty=gray@0.3f (approximation of iOS half-star icons)
   - activeFilterCount counts each filter category as 1 (not individual items) — matches iOS exactly
 ---
+
+## 2026-03-27 - AND-021 (Android)
+- Built complete Restaurant Detail screen matching iOS RestaurantDetailView.swift with all 4 sub-sections:
+  - RestaurantDetailHeader: 300dp hero image with gradient overlay, cuisine capsule badge (ultraThinMaterial style), restaurant name (up to 3 lines), tap-to-view full-screen image, fork.knife icon placeholder when no image
+  - RestaurantDetailInfo: Star rating display (1-5 with half-stars using Star/StarHalf/StarOutline icons + numeric), price range in green, Featured badge (star+text in orange), Location with Get Directions icon button, Distance row, Phone row, Website row, Open/Closed status with CheckCircle/Info icons, About description section with dividers between groups
+  - RestaurantDetailActions: HStack of up to 3 equal-width buttons — Call (green, ACTION_DIAL), Website (surfaceVariant, ACTION_VIEW), Directions (primary/blue, Google Maps with geo fallback), all with haptic feedback and accessibility labels
+  - RestaurantDetailDiningTips: Premium content card (orange, star icon, contextual tip text based on price + cuisine matching iOS exactly) for Insider+ users, locked upgrade prompt card with lock icon + chevron + subscription CTA for free users
+  - AdBannerView at bottom for free users
+- Created RestaurantDetailViewModel.kt as @HiltViewModel:
+  - loadRestaurant(id): fetches restaurant from repository
+  - toggleFavorite(): placeholder for AND-024
+  - createCallIntent(): ACTION_DIAL with cleaned phone URI
+  - createWebsiteIntent(): ACTION_VIEW with website URI
+  - createDirectionsIntent(): Google Maps navigation intent with fallback
+  - shareText: formatted share string matching iOS (name + cuisine + location + rating)
+  - getDiningTipText(): contextual tips matching iOS logic exactly (price-based + cuisine-based)
+- Updated MainNavHost.kt: wired RestaurantDetailScreen with ViewModel, share intent, call intent, website intent, directions with Google Maps + geo fallback, subscription navigation
+- Top app bar with Share and Favorite buttons (heart toggles red), back navigation
+- Full-screen image viewer integration via FullScreenImageViewer component
+- Files created: RestaurantDetailScreen.kt, RestaurantDetailViewModel.kt
+- Files modified: MainNavHost.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Restaurant detail follows same pattern as EventDetail: stateless Screen composable + ViewModel + NavHost wiring
+  - Phone intent uses ACTION_DIAL (not ACTION_CALL) to avoid CALL_PHONE permission — opens dialer pre-filled
+  - Dining tips use the same generateDiningTip() logic in both ViewModel and Screen (private fun) — Screen version used for remember{} caching
+  - Cuisine badge uses Surface with RoundedCornerShape(50) + White@0.2f alpha for frosted glass effect (iOS .ultraThinMaterial equivalent)
+  - RestaurantDetailActions conditionally shows buttons only when data is available (callUri, websiteUri, coordinate) — matches iOS conditional Links
+  - Star rating uses Icons.Filled.StarHalf for proper half-star display (better than alpha trick used in list cards)
+---

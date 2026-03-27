@@ -419,7 +419,7 @@
         "Ratings display uses Material icons (star, star_half, star_outline)"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS RestaurantDetailView.swift + all sub-views. Use Android intents for phone (ACTION_DIAL), website (ACTION_VIEW), directions (geo: URI or Google Maps). Same premium gating for dining tips."
     },
     {
