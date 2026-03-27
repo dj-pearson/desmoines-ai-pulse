@@ -338,7 +338,7 @@
         "Page size: 30 (matching iOS)"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS EventsViewModel.swift exactly. Same caching strategy (serve cached immediately, refresh in background). Same pagination (offset-based, trigger at count-5). Same debounce (300ms on search)."
     },
     {

@@ -391,3 +391,33 @@ Started: 2026-03-27T14:05:42.010Z
   - EventCardView accepts onFavoriteClick as nullable — null means hide the favorite button entirely
   - All carousel items use .clickable + .semantics { contentDescription = ... } for accessibility (child elements use clearAndSetSemantics)
 ---
+
+## 2026-03-27 - AND-017 (Android)
+- Created EventsViewModel.kt as @HiltViewModel with full state management matching iOS EventsViewModel.swift:
+  - State: events, featuredEvents, restaurants, isLoading, isLoadingMore, isRefreshing, hasMore, totalCount, errorMessage as StateFlow
+  - Filters as StateFlow: searchText (debounced 300ms), selectedCategory, selectedDatePreset, showFeaturedOnly, showFreeOnly (premium), maxDistance (premium), minRating (premium), currentTier
+  - loadInitialData(): parallel fetch of events, featured events, and popular restaurants; guard prevents duplicate initial loads
+  - refresh(): parallel re-fetch of all data with isRefreshing state for pull-to-refresh
+  - fetchEvents(reset): builds EventsQuery from current filter state, applies premium filters client-side, manages pagination offset
+  - loadMoreIfNeeded(currentIndex): triggers at count-5, guarded by isLoadingMore to prevent duplicates
+  - applyPremiumFilters(): filters by isFree, filters by maxDistance using Haversine distance (meters→miles conversion)
+  - clearFilters(): resets all filter properties and triggers debounced refetch
+  - activeFilterCount: computed from all 7 filter dimensions
+  - resetAndFetch(): 300ms debounce via coroutine Job cancellation (matches iOS Task.sleep pattern)
+  - Combined uiState StateFlow using kotlinx.coroutines.flow.combine (two 9-parameter combines chained) producing HomeScreenState
+  - fetchPopularRestaurants(): fetches featured restaurants sorted by popularity for home carousel
+- Updated HomeScreen.kt: changed HomeScreenState comment from "will be replaced" to reference EventsViewModel
+- Updated MainNavHost.kt: wired EventsViewModel via hiltViewModel(), connected all HomeScreen callbacks (category, date preset, clear filters, refresh, load more), added LaunchedEffect for loadInitialData()
+- Files created: EventsViewModel.kt
+- Files modified: MainNavHost.kt, HomeScreen.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - kotlinx.coroutines.flow.combine supports up to 5 typed overloads; for 6+ flows use the array transform variant (Array<*>) → cast elements
+  - Two chained combine() calls work well for separating "data state" (9 flows) from "filter state" (9 flows) into a single uiState
+  - SharingStarted.WhileSubscribed(5_000) keeps the combined flow active 5s after last subscriber — prevents re-computation on config changes
+  - EventsRemoteDataSource.haversineDistance returns meters — must divide by 1609.34 for miles comparison
+  - RestaurantsQuery.sortBy takes RestaurantSortOption enum, not String
+  - hiltViewModel() in NavHost composable scopes ViewModel to the backstack entry — correct for tab-level ViewModels
+  - LaunchedEffect(Unit) in composable destination is the right place for initial data loading (fires once per navigation)
+  - ViewModel's hasLoadedInitialData flag prevents duplicate loads even if LaunchedEffect re-fires
+---
