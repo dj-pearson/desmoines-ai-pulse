@@ -17,6 +17,13 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
+# Strip debug and info logs in release builds
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int i(...);
+    public static int v(...);
+}
+
 # Ktor / OkHttp
 -dontwarn io.ktor.**
 -keep class io.ktor.** { *; }

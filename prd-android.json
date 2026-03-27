@@ -730,7 +730,7 @@
         "Usage: AppLogger.auth.info('User signed in')"
       ],
       "priority": 36,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AppLogger.swift. Uses Android Log instead of OSLog. Same category-based logging pattern."
     },
     {

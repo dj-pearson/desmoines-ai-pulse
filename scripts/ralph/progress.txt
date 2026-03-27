@@ -1022,3 +1022,24 @@ Started: 2026-03-27T14:05:42.010Z
   - `by lazy` prevents initialization failures from crashing app startup — defers to first actual use
   - iOS KeychainService has both Data and String APIs — Android version exposes only String (sufficient for tokens/credentials)
 ---
+
+## 2026-03-27 - AND-036 (Android)
+- Created util/AppLogger.kt matching iOS AppLogger.swift:
+  - Object with 7 category loggers: auth, network, cache, billing, ui, nav, general
+  - CategoryLogger inner class with tag format "DMI/{category}" (e.g., DMI/auth, DMI/network)
+  - Methods: debug(message), info(message), warning(message), error(message, throwable?)
+  - Uses Android Log class (Log.d, Log.i, Log.w, Log.e) instead of iOS OSLog
+  - Usage: AppLogger.auth.info("User signed in"), AppLogger.network.error("Failed", ex)
+- Added ProGuard rules to strip debug/info/verbose logs in release builds:
+  - -assumenosideeffects on Log.d(), Log.i(), Log.v() — removed at bytecode level by R8
+  - Warning and error logs preserved in release for crash reporting
+- Files created: util/AppLogger.kt
+- Files modified: proguard-rules.pro, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - iOS uses `enum AppLogger` with `Logger` instances — Android equivalent is `object AppLogger` with `CategoryLogger` instances
+  - iOS categories: storekit → Android: billing (platform-appropriate naming)
+  - ProGuard -assumenosideeffects removes Log calls entirely from bytecode — more reliable than BuildConfig.DEBUG checks
+  - Log.v() also stripped since it's even noisier than debug — only Log.w() and Log.e() survive release
+  - CategoryLogger is a regular class (not data class) — no need for equals/hashCode/copy
+---
