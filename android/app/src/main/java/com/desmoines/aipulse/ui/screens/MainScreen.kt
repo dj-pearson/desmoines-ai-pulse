@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -18,9 +19,11 @@ import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.desmoines.aipulse.ui.components.OfflineBanner
 import com.desmoines.aipulse.ui.navigation.BottomNavTab
 import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
+import com.desmoines.aipulse.util.NetworkMonitor
 
 /**
  * Main screen with bottom navigation bar matching iOS MainTabView.swift.
@@ -28,7 +31,7 @@ import com.desmoines.aipulse.ui.navigation.Route
  * Bottom bar hides on detail screens.
  */
 @Composable
-fun MainScreen() {
+fun MainScreen(networkMonitor: NetworkMonitor) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
@@ -94,9 +97,12 @@ fun MainScreen() {
             }
         }
     ) { innerPadding ->
-        MainNavHost(
-            navController = navController,
-            modifier = Modifier.padding(innerPadding)
-        )
+        Column(modifier = Modifier.padding(innerPadding)) {
+            OfflineBanner(networkMonitor = networkMonitor)
+            MainNavHost(
+                navController = navController,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }

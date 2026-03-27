@@ -204,7 +204,7 @@
         "Banner animates in/out smoothly"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS NetworkMonitor.swift. Use ConnectivityManager.NetworkCallback for real-time updates. The 5-second reconnected banner matches iOS behavior."
     },
     {

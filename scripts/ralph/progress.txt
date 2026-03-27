@@ -197,3 +197,28 @@ Started: 2026-03-27T14:05:42.010Z
   - DatabaseModule is separate @Module from AppModule — keeps DB concerns isolated
   - Room fallbackToDestructiveMigration used since cache is expendable data
 ---
+
+## 2026-03-27 - AND-011 (Android)
+- Created NetworkMonitor.kt using ConnectivityManager.NetworkCallback matching iOS NetworkMonitor.swift:
+  - Exposes isConnected as StateFlow<Boolean> (default true)
+  - Exposes showReconnected as StateFlow<Boolean> that is true for 5 seconds after regaining connection
+  - Tracks wasOffline state to detect offline→online transitions
+  - Uses NetworkCapabilities.NET_CAPABILITY_INTERNET + NET_CAPABILITY_VALIDATED for accurate connectivity check
+  - Registered as @Singleton via Hilt constructor injection (no separate DI module entry needed)
+- Created OfflineBanner.kt composable:
+  - Orange banner with CloudOff icon when offline ("No internet connection")
+  - Green banner with CloudDone icon for 5 seconds after reconnecting ("Back online")
+  - AnimatedVisibility with expandVertically + fadeIn/fadeOut for smooth transitions
+  - LiveRegion.Polite semantics for TalkBack accessibility announcements
+- Updated MainScreen.kt to accept NetworkMonitor param and display OfflineBanner at top of content (below status bar, above NavHost)
+- Updated MainActivity.kt to @Inject NetworkMonitor and pass it to MainScreen
+- Files created: NetworkMonitor.kt, OfflineBanner.kt
+- Files modified: MainScreen.kt, MainActivity.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - NetworkMonitor uses constructor injection (@Inject constructor) so Hilt auto-provides it as @Singleton — no AppModule @Provides needed
+  - ConnectivityManager.NetworkCallback fires onCapabilitiesChanged for quality changes, not just connect/disconnect — check NET_CAPABILITY_VALIDATED to avoid false positives
+  - OfflineBanner uses LiveRegion.Polite so TalkBack announces connectivity changes without interrupting current speech
+  - MainScreen now uses Column with weight(1f) on MainNavHost to accommodate banner at top
+  - NetworkMonitor's scope uses SupervisorJob + Dispatchers.Main to safely handle coroutines without lifecycle owner
+---
