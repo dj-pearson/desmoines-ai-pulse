@@ -983,3 +983,21 @@ Started: 2026-03-27T14:05:42.010Z
   - Aspect ratio for BANNER placement is 1.2f (300/250), for COMPACT is 728f/90f (~8.09:1)
   - FTC "Ad" label uses Color.Black.copy(alpha=0.6f) background with RoundedCornerShape(4.dp) — small but visible
 ---
+
+## 2026-03-27 - AND-034 (Android)
+- Implemented Firebase App Indexing service mirroring iOS SpotlightService.swift
+- Created util/AppSearchService.kt with indexEvents(), indexRestaurants(), and removeAllItems() methods
+- Added firebase-appindexing dependency to version catalog and build.gradle.kts
+- Events indexed with title, displayDescription, keywords (category, venue, city), URL, and image
+- Restaurants indexed with name, description, keywords (cuisine, city, priceRange), URL, and image
+- Uses FirebaseAppIndex.update() for batch indexing and removeAll() for clearing
+- Files created: util/AppSearchService.kt
+- Files modified: gradle/libs.versions.toml, app/build.gradle.kts
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Firebase App Indexing replaces iOS CoreSpotlight — uses Indexables.digitalDocumentBuilder() for generic content
+  - AppSearchService is @Singleton with @Inject constructor — Hilt auto-provides, can be injected into repositories to index on data load
+  - firebase-appindexing is managed by firebase-bom — no explicit version needed in version catalog
+  - setKeywords() takes varargs, so use spread operator on toTypedArray()
+  - Metadata.Builder().setWorksOffline(true) ensures indexed content appears even when offline
+---

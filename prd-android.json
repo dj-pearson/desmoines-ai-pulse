@@ -697,7 +697,7 @@
         "Use FirebaseAppIndex.update() for batch indexing"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS SpotlightService.swift. Firebase App Indexing replaces CoreSpotlight. Same indexed fields. Makes content discoverable via Google app and Android system search."
     },
     {
