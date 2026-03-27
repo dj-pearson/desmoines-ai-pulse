@@ -17,3 +17,16 @@ Started: 2026-03-27T14:05:42.010Z
   - Package: com.desmoines.aipulse matching iOS bundle ID
   - Theme uses dynamic colors on Android 12+ with brand color fallback
 ---
+
+## 2026-03-27 - AND-002 (Android)
+- Created full package structure: data/model, data/remote, data/local, data/repository, di, ui/components, ui/screens, ui/navigation, util
+- Created di/AppModule.kt providing singleton Json instance and ApplicationContext
+- Created di/RepositoryModule.kt (abstract module, bindings added in future stories)
+- Added package-info.kt files in each package for documentation and to ensure directories are tracked by git
+- **Note**: No JDK on this machine — build cannot be verified locally. Structure follows standard Android/Hilt conventions.
+- **Learnings for future iterations:**
+  - AppModule provides Json with ignoreUnknownKeys=true (needed for Supabase responses with extra fields)
+  - RepositoryModule is abstract class (uses @Binds), AppModule is object (uses @Provides)
+  - Package-info.kt files serve dual purpose: git tracking + IDE documentation
+  - Supabase client provision will be added in AND-003 when supabase-kt dependencies are added
+---

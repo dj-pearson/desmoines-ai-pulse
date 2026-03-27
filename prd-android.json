@@ -41,7 +41,7 @@
         "No Hilt component processing errors"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Use KSP over KAPT if possible for faster builds. The package structure mirrors iOS: Models→data/model, Services→data/remote+repository, ViewModels→ui/screens/*/ViewModel, Views→ui/screens/*."
     },
     {
