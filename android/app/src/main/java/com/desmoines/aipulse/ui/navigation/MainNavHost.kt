@@ -27,6 +27,7 @@ import com.desmoines.aipulse.ui.screens.home.EventsViewModel
 import com.desmoines.aipulse.ui.screens.home.FilterSheet
 import com.desmoines.aipulse.ui.screens.home.HomeScreen
 import com.desmoines.aipulse.ui.screens.map.MapScreen
+import com.desmoines.aipulse.ui.screens.map.MapViewModel
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.screens.profile.ProfileScreen
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantFilterSheet
@@ -183,7 +184,25 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
     }
 
     composable(Route.Map.route) {
+        val viewModel: MapViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            viewModel.loadNearbyContent()
+        }
+
         MapScreen(
+            state = state,
+            onSearchTextChanged = viewModel::setSearchText,
+            onSearch = viewModel::search,
+            onToggleEvents = viewModel::toggleShowEvents,
+            onToggleRestaurants = viewModel::toggleShowRestaurants,
+            onToggleAttractions = viewModel::toggleShowAttractions,
+            onSelectEvent = viewModel::selectEvent,
+            onSelectRestaurant = viewModel::selectRestaurant,
+            onSelectAttraction = viewModel::selectAttraction,
+            onClearSelection = viewModel::clearSelection,
+            onRetry = viewModel::retry,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },
@@ -192,7 +211,7 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             },
             onNavigateToAttractionDetail = { id ->
                 navController.navigate(Route.AttractionDetail.createRoute(id))
-            }
+            },
         )
     }
 

@@ -654,3 +654,49 @@ Started: 2026-03-27T14:05:42.010Z
   - Event upcoming/past split uses OffsetDateTime.now() comparison, with null dates defaulting to "upcoming" for events and "not past" (matching iOS behavior)
   - FavoritesLimitBanner and SubscriptionBanner already exist from AND-015 — just wire them with correct params
 ---
+
+## 2026-03-27 - AND-025 (Android)
+- Built complete Map/Explore screen with Google Maps matching iOS EventMapView.swift + MapViewModel.swift:
+  - Added Google Maps Compose 6.2.1, Play Services Location 21.3.0, Play Services Maps 19.0.0 dependencies
+  - Added ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION permissions to AndroidManifest.xml
+  - Added Google Maps API key as manifest placeholder from local.properties + BuildConfig field
+  - MapViewModel.kt as @HiltViewModel with full state management:
+    - loadNearbyContent(): tries FusedLocationProviderClient for user location, falls back to Des Moines default
+    - fetchAllContent(): independent parallel fetch of nearby events, restaurants, attractions (one failure doesn't block others)
+    - search(): fuzzy search events + restaurants, ILIKE search attractions, fits map region to results
+    - Toggle visibility: showEvents, showRestaurants, showAttractions
+    - Selection state: selectedEvent/Restaurant/Attraction with clearSelection()
+    - EventAnnotation with urgencyColor (red=today, orange=≤7 days, blue=future) matching iOS exactly
+    - regionFitting(): calculates optimal camera position from coordinate bounds with 30% padding
+    - Combined uiState StateFlow using chained combine() producing MapScreenState
+  - MapScreen.kt with full UI matching iOS EventMapView.swift:
+    - GoogleMap with custom MarkerComposable for each content type
+    - Event pins: color-coded by category with category-specific Material Icons, spring animation on selection
+    - Restaurant pins: orange with fork/knife icon, selection animation
+    - Attraction pins: green with place icon, selection animation
+    - Search bar overlay with frosted surface, clear button, search-on-submit
+    - Toggle controls (top-right): Events/Dining/Places with active color indicators
+    - Pin count badge (bottom center) showing total visible pins
+    - Error overlay with Map icon, message, Try Again button
+    - Loading pill with "Finding nearby places..." text
+    - Popup cards at bottom with slide-in animation: image, title, subtitle, action button (navigate/call/website), close
+    - EventPopup: category-colored placeholder, date, location, chevron to detail
+    - RestaurantPopup: cuisine, rating star, location, call button (if phone) or navigate chevron
+    - AttractionPopup: type name, rating, website button (if available) or navigate chevron
+    - User location blue dot shown only when location permission granted
+    - Handles offline gracefully (shows cached pins via repository layer)
+  - Updated MainNavHost.kt: wired MapViewModel via hiltViewModel(), connected all callbacks
+- Files created: MapViewModel.kt
+- Files modified: MapScreen.kt (full rewrite), MainNavHost.kt, libs.versions.toml, build.gradle.kts, AndroidManifest.xml, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Google Maps Compose uses MarkerComposable (not Marker) for custom pin composables — keys array triggers recomposition on state changes
+  - FusedLocationProviderClient.getCurrentLocation requires suspendCancellableCoroutine bridge — Priority.PRIORITY_BALANCED_POWER_ACCURACY is good enough for city-level maps
+  - MapProperties.isMyLocationEnabled requires location permission at runtime — check with ContextCompat.checkSelfPermission before enabling
+  - CameraPosition.fromLatLngZoom is the Google Maps equivalent of iOS MapCameraPosition.region — zoom level ~12-13 covers a city area
+  - regionFitting uses zoom heuristic from lat/lng span (Google Maps doesn't use MKCoordinateSpan directly)
+  - MapUiSettings.mapToolbarEnabled=false removes the "open in Google Maps" toolbar that appears on marker tap — cleaner for custom popups
+  - AnimatedVisibility with slideInVertically + fadeIn creates the iOS .transition(.move(edge: .bottom).combined(with: .opacity)) effect
+  - Google Maps API key flows: local.properties → manifestPlaceholders in build.gradle.kts → AndroidManifest meta-data
+  - LatLng in this story uses com.google.android.gms.maps.model.LatLng (not data/model/LatLng) — they'll coexist until model LatLng is deprecated
+---

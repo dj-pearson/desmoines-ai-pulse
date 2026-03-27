@@ -516,7 +516,7 @@
         "Custom marker composables for each content type"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS EventMapView.swift + MapViewModel.swift. Google Maps replaces Apple MapKit. Same pin color logic, same popup behavior, same search functionality. Need Google Maps API key in local.properties."
     },
     {
