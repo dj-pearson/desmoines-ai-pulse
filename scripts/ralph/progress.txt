@@ -1,123 +1,19 @@
 # Ralph Progress Log
-Started: 2026-02-28T03:00:00Z
+Started: 2026-03-27T14:05:42.010Z
 ---
 
-## Codebase Patterns
-- Stack: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Supabase + React Router v6
-- Mobile app lives in mobile-app/ using Capacitor
-- Always use import.meta.env.VITE_* for environment variables (not process.env)
-- Always use @/lib/safeStorage instead of localStorage directly
-- Use @/lib/errorHandler for error handling
-- Use @/lib/capacitorUtils for platform detection and external link handling
-- Database types are in src/integrations/supabase/types.ts
-- Auth is accessed via useAuth() from @/contexts/AuthContext
-- Icons: Lucide React only
-- Quality checks: npm run type-check && npm run lint
-- Supabase tables not in generated types need `as unknown as T` cast
-- Use lazyWithRetry() for lazy-loaded routes in App.tsx
-- Leaflet components must be lazy-loaded (heavy dependency)
-- Print CSS: use `print:hidden` Tailwind class + `@media print` for print-friendly pages
-
----
-
-## 2026-02-28 — US-029, US-042, US-043, US-044
-- US-029: Created docs/API_REFERENCE.md — all 85 edge functions documented with auth, rate limits, schemas
-- US-042: Built /itineraries with 6 seeded itineraries, print checklist, ICS export, TouristTrip schema
-- US-043: Built /deals with category filters, DealCard with claim flow, expiry badges
-- US-044: Built /map with full-screen Leaflet, toggleable layers, marker popups, geolocation
-- Files changed: docs/API_REFERENCE.md, supabase/migrations/20260228000000_create_curated_itineraries.sql, supabase/migrations/20260228000001_create_deals.sql, src/hooks/useItineraries.ts, src/hooks/useDeals.ts, src/components/DealCard.tsx, src/components/schema/TouristTripSchema.tsx, src/pages/Itineraries.tsx, src/pages/ItineraryDetail.tsx, src/pages/Deals.tsx, src/pages/DiscoverMap.tsx, src/App.tsx, prd.json, progress.txt
+## 2026-03-27 - AND-001 (Android)
+- Initialized complete Android project scaffold with Kotlin 2.1.0, AGP 8.7.3, Jetpack Compose BOM 2024.12.01
+- Created version catalog (libs.versions.toml) with all dependencies
+- Set up Hilt DI (@HiltAndroidApp + @AndroidEntryPoint from the start)
+- Created Material 3 theme with light/dark/dynamic color support
+- MainActivity displays "Hello Des Moines" placeholder screen
+- Added Android gitignore entries
+- Files created: android/ directory with 18 files (build configs, manifest, theme, app class, activity)
+- **Note**: No Android SDK/Java on this machine — build cannot be verified locally. Structure follows standard Android project conventions and should compile on first try with SDK present.
 - **Learnings for future iterations:**
-  - PUPPETEER_SKIP_DOWNLOAD=true needed when running npm install in sandbox
-  - Supabase tables added via migration but not in generated types — cast with `as unknown as T`
-  - Leaflet lazy loading pattern: `lazy(() => import('react-leaflet').then(m => ({ default: m.Component })))`
----
-
-## 2026-03-04 — US-077, US-078, US-084, US-091, US-098, US-099, US-107, US-109
-- US-077: Fixed heading hierarchy — demoted duplicate h1s in Gamification and EventPromotionPlanner; strengthened a11y test to enforce (not just warn)
-- US-078: Created useAnnounce hook (src/hooks/use-announce.ts) for screen reader aria-live announcements; wired to EventsPage, Restaurants, Attractions listing pages
-- US-084: Attractions page upgraded from plain text empty state to proper EmptyState component with contextual actions (clear filters, browse all); Events and Restaurants already had EmptyState
-- US-091: Added BreadcrumbListSchema to RestaurantDetails and HotelDetails pages; all detail pages now have consistent breadcrumb structured data
-- US-098: Verified prefers-reduced-motion already fully implemented in index.css (two media queries disabling all animations/transitions)
-- US-099: Created src/lib/categoryColors.ts shared category color map with CATEGORY_COLORS, getCategoryColor(), getCategoryHex(); wired into InteractiveMap
-- US-107: Verified all three listing pages (Events, Restaurants, Attractions) already have sort functionality
-- US-109: Added active filter badge display to Attractions page with individual dismiss buttons and clear-all action
-- **Build**: npm run build passes (55s, no errors)
-- Files changed: src/hooks/use-announce.ts, src/lib/categoryColors.ts, src/pages/Attractions.tsx, src/pages/EventPromotionPlanner.tsx, src/pages/EventsPage.tsx, src/pages/Gamification.tsx, src/pages/Restaurants.tsx, src/pages/RestaurantDetails.tsx, src/pages/HotelDetails.tsx, src/components/InteractiveMap.tsx, tests/accessibility.spec.ts, prd.json
-- **Progress**: 76/140 stories complete (54%), 64 remaining
-- **Learnings for future iterations:**
-  - useAnnounce pattern: clear then setTimeout(100ms) to ensure re-announcement of same message
-  - EmptyState component already exists at src/components/ui/empty-state.tsx — reuse it
-  - SortDropdown exports shared option arrays (EVENT_SORT_OPTIONS, RESTAURANT_SORT_OPTIONS, ATTRACTION_SORT_OPTIONS)
----
-
-## 2026-03-05 — US-079, US-080, US-081, US-082, US-083, US-090, US-092, US-095
-- US-079: Improved form accessibility in EventSubmissionForm — added FormErrorSummary with focusField, wrapped sections in fieldsets/legends, added aria-invalid + aria-describedby to error fields, added autoComplete to email/tel/address/url
-- US-080: Split AuthContext into AuthStateContext + AuthActionsContext — useAuthState() for read-only state, useAuthActions() for dispatch-only; useAuth() remains backward-compatible; actions memoized via useMemo
-- US-081: Created src/lib/queryKeys.ts — centralized query key factory (events, restaurants, attractions, favorites, ratings, search, admin, user) + CACHE_TIERS (static 10m, standard 2m, frequent 30s, realtime 15s)
-- US-082: Verified HeroCityLite already lazy-loaded via React.lazy+Suspense; added React.memo wrapper to prevent re-renders; mobile builds skip Three.js via __MOBILE_APP__ dead code elimination
-- US-083: Added React.memo to RestaurantCard and SocialEventCard; added useCallback for handleViewEventDetails in EventsPage; EventCard already had memo wrapper
-- US-090: Added focus-visible:ring-2 styles to SocialEventCard Link and focus-within:ring-2 to EventCard; RestaurantCard already had focus-visible styling; global focus-visible styles exist in index.css
-- US-092: FAQSection with showSchema=true already on EventsPage, Restaurants, Attractions; added FAQ section with 5 questions to TripPlanner page targeting long-tail search queries
-- US-095: Added toast feedback to FavoriteButton (Added/Removed from favorites with dedup IDs); moved Sonner position to top-center to avoid BottomNav overlap on mobile
-- **Build**: npm run build passes (56s, no errors)
-- Files changed: src/components/EventSubmissionForm.tsx, src/contexts/AuthContext.tsx, src/lib/queryKeys.ts, src/components/HeroCityLite.tsx, src/components/RestaurantCard.tsx, src/components/SocialEventCard.tsx, src/components/EventCard.tsx, src/pages/EventsPage.tsx, src/pages/TripPlanner.tsx, src/components/FavoriteButton.tsx, src/components/ui/sonner.tsx, prd.json
-- **Progress**: 84/140 stories complete (60%), 56 remaining
-- **Learnings for future iterations:**
-  - FormErrorSummary + useFormErrors already exist at src/components/ui/form-error-summary.tsx — reuse them
-  - AuthContext split pattern: keep combined useAuth() for backward compat, add useAuthState()/useAuthActions() for granular consumption
-  - queryKeys factory pattern: use `as const` for type-safe keys, nest by domain
-  - FAQSection already embeds FAQSchema via showSchema prop — no need to import FAQSchema separately
-  - Sonner position="top-center" avoids mobile BottomNav overlap
----
-
-## 2026-03-05 — Ralph Loop 11: US-096, US-101, US-103, US-105, US-108, US-114, US-117, US-118, US-119
-- US-096: Login attempt throttling — in-memory Map tracking failed attempts per email (max 5 per 15min), integrated into AuthContext login flow with reset on success
-- US-101: Optimistic updates for useFavorites — added onMutate/onError/onSettled to both add/remove mutations with cache snapshot rollback
-- US-103: Replace 'any' types in useAnalytics (5 instances), useAIConfiguration (3), useAdminCampaigns (1) with proper interfaces
-- US-105: Verified already complete — StickyMobileCTA exists on all 3 detail pages
-- US-108: Featured events section on EventsPage — filters is_featured events, shows up to 3 with Star icon, only when no filters active
-- US-114: Created LastUpdatedBadge component with relative time + verification checkmark for recent updates; added to EventDetails, RestaurantDetails, AttractionDetails
-- US-117: Verified already complete — EmptyState with contextual icons/messages on Attractions page
-- US-118: Added group-focus-within:translate-y-0 to RestaurantCard CTA strip for keyboard accessibility
-- US-119: New Restaurant badge — SocialProofBadge type="new" shown for restaurants created within 14 days, hidden when Featured takes priority
-- **Build**: npx vite build passes (59s, no errors)
-- Files changed: src/contexts/AuthContext.tsx, src/hooks/useFavorites.ts, src/hooks/useAnalytics.ts, src/hooks/useAIConfiguration.ts, src/hooks/useAdminCampaigns.ts, src/components/RestaurantCard.tsx, src/components/LastUpdatedBadge.tsx (new), src/pages/EventDetails.tsx, src/pages/RestaurantDetails.tsx, src/pages/AttractionDetails.tsx, src/pages/EventsPage.tsx, prd.json
-- **Progress**: 93/140 stories complete (66%), 47 remaining
-- **Learnings for future iterations:**
-  - SocialProofBadge supports type="new" — reuse for any "new" badge instead of custom Badge
-  - RestaurantCard props interface needs created_at added when using time-based badges
-  - LastUpdatedBadge is a reusable component for any detail page showing freshness
-  - group-focus-within: is the keyboard equivalent of group-hover: for nested focusable elements
-  - Login throttling uses in-memory Map (resets on page reload) — suitable for client-side rate limiting
----
-
-## 2026-03-15 — Ralph Loop 16: US-135, US-136, US-126, US-115
-- US-135: SSRF validation on check-broken-links (initial URL + each extracted link); crawl-site already had it
-- US-136: SSRF validation on analyze-competitor (competitor.website_url) and firecrawl-scraper (user-provided URL)
-- US-126: "Surprise Me" Shuffle button on EventsPage, Restaurants, Attractions — random item from filtered results
-- US-115: Estimated visit duration on AttractionDetails — type-based mapping (13 types), stat card, Things To Know, FAQ
-- Files changed: supabase/functions/check-broken-links/index.ts, supabase/functions/analyze-competitor/index.ts, supabase/functions/firecrawl-scraper/index.ts, src/pages/EventsPage.tsx, src/pages/Restaurants.tsx, src/pages/Attractions.tsx, src/pages/AttractionDetails.tsx, prd.json, progress.txt
-- **Build**: npx vite build passes (36s, no errors)
-- **Progress**: 120/147 stories complete (82%), 27 remaining
-- **Learnings for future iterations:**
-  - validateURLForSSRF already existed in _shared/validation.ts — just import and use
-  - Shuffle icon from lucide-react for random discovery UX
-  - Type-based visit duration estimates > per-record DB columns when data doesn't exist
----
-
-## 2026-03-10 — Ralph Loop 14: US-085, US-087, US-104, US-106, US-122, US-130
-- US-085: Search autocomplete with recent searches (safeStorage) and DB title suggestions (debounced ilike, 3+ chars), integrated into Events/Restaurants/Attractions
-- US-087: Context-aware loading states ("Searching for...", "Loading [cuisine]...") + labeled skeleton sections in RestaurantDetails + FavoriteButton loading spinner
-- US-104: Detail page data prefetching on card hover via usePrefetchRestaurant/usePrefetchAttraction hooks with requestIdleCallback + once-per-item guard
-- US-106: Verified already complete (NearbyContent on all detail pages)
-- US-122: Footer newsletter improved with benefit copy, "Subscribe Free" CTA, social proof ("Join 15,000+ locals")
-- US-130: Verified already complete (Breadcrumbs + BreadcrumbListSchema on all detail pages)
-- Files changed: src/components/SearchAutocomplete.tsx (new), src/hooks/usePrefetchDetail.ts (new), src/pages/EventsPage.tsx, src/pages/Restaurants.tsx, src/pages/Attractions.tsx, src/pages/RestaurantDetails.tsx, src/components/RestaurantCard.tsx, src/components/FavoriteButton.tsx, src/components/Footer.tsx, prd.json, progress.txt, scripts/ralph/progress.txt
-- **Build**: npx vite build passes (50s, no errors)
-- **Progress**: 112/147 stories complete (76%), 35 remaining
-- **Learnings for future iterations:**
-  - SearchAutocomplete uses useDebouncedValue internally — no need for external debounce
-  - requestIdleCallback not available in all browsers — provide setTimeout fallback
-  - CardsGridSkeleton already accepts a `label` prop for context-aware loading text
-  - Footer newsletter social proof should use subscriber count for trust signals
+  - Version catalog at gradle/libs.versions.toml is the canonical place for dependency versions
+  - KSP (2.1.0-1.0.29) used instead of KAPT for Hilt compiler — faster builds
+  - Package: com.desmoines.aipulse matching iOS bundle ID
+  - Theme uses dynamic colors on Android 12+ with brand color fallback
 ---
