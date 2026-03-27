@@ -1,123 +1,199 @@
 # Ralph Progress Log
-Started: 2026-02-28T03:00:00Z
+Started: 2026-03-27T14:05:42.010Z
 ---
 
-## Codebase Patterns
-- Stack: React 18 + TypeScript + Vite + Tailwind CSS + shadcn/ui + Supabase + React Router v6
-- Mobile app lives in mobile-app/ using Capacitor
-- Always use import.meta.env.VITE_* for environment variables (not process.env)
-- Always use @/lib/safeStorage instead of localStorage directly
-- Use @/lib/errorHandler for error handling
-- Use @/lib/capacitorUtils for platform detection and external link handling
-- Database types are in src/integrations/supabase/types.ts
-- Auth is accessed via useAuth() from @/contexts/AuthContext
-- Icons: Lucide React only
-- Quality checks: npm run type-check && npm run lint
-- Supabase tables not in generated types need `as unknown as T` cast
-- Use lazyWithRetry() for lazy-loaded routes in App.tsx
-- Leaflet components must be lazy-loaded (heavy dependency)
-- Print CSS: use `print:hidden` Tailwind class + `@media print` for print-friendly pages
-
----
-
-## 2026-02-28 — US-029, US-042, US-043, US-044
-- US-029: Created docs/API_REFERENCE.md — all 85 edge functions documented with auth, rate limits, schemas
-- US-042: Built /itineraries with 6 seeded itineraries, print checklist, ICS export, TouristTrip schema
-- US-043: Built /deals with category filters, DealCard with claim flow, expiry badges
-- US-044: Built /map with full-screen Leaflet, toggleable layers, marker popups, geolocation
-- Files changed: docs/API_REFERENCE.md, supabase/migrations/20260228000000_create_curated_itineraries.sql, supabase/migrations/20260228000001_create_deals.sql, src/hooks/useItineraries.ts, src/hooks/useDeals.ts, src/components/DealCard.tsx, src/components/schema/TouristTripSchema.tsx, src/pages/Itineraries.tsx, src/pages/ItineraryDetail.tsx, src/pages/Deals.tsx, src/pages/DiscoverMap.tsx, src/App.tsx, prd.json, progress.txt
+## 2026-03-27 - AND-001 (Android)
+- Initialized complete Android project scaffold with Kotlin 2.1.0, AGP 8.7.3, Jetpack Compose BOM 2024.12.01
+- Created version catalog (libs.versions.toml) with all dependencies
+- Set up Hilt DI (@HiltAndroidApp + @AndroidEntryPoint from the start)
+- Created Material 3 theme with light/dark/dynamic color support
+- MainActivity displays "Hello Des Moines" placeholder screen
+- Added Android gitignore entries
+- Files created: android/ directory with 18 files (build configs, manifest, theme, app class, activity)
+- **Note**: No Android SDK/Java on this machine — build cannot be verified locally. Structure follows standard Android project conventions and should compile on first try with SDK present.
 - **Learnings for future iterations:**
-  - PUPPETEER_SKIP_DOWNLOAD=true needed when running npm install in sandbox
-  - Supabase tables added via migration but not in generated types — cast with `as unknown as T`
-  - Leaflet lazy loading pattern: `lazy(() => import('react-leaflet').then(m => ({ default: m.Component })))`
+  - Version catalog at gradle/libs.versions.toml is the canonical place for dependency versions
+  - KSP (2.1.0-1.0.29) used instead of KAPT for Hilt compiler — faster builds
+  - Package: com.desmoines.aipulse matching iOS bundle ID
+  - Theme uses dynamic colors on Android 12+ with brand color fallback
 ---
 
-## 2026-03-04 — US-077, US-078, US-084, US-091, US-098, US-099, US-107, US-109
-- US-077: Fixed heading hierarchy — demoted duplicate h1s in Gamification and EventPromotionPlanner; strengthened a11y test to enforce (not just warn)
-- US-078: Created useAnnounce hook (src/hooks/use-announce.ts) for screen reader aria-live announcements; wired to EventsPage, Restaurants, Attractions listing pages
-- US-084: Attractions page upgraded from plain text empty state to proper EmptyState component with contextual actions (clear filters, browse all); Events and Restaurants already had EmptyState
-- US-091: Added BreadcrumbListSchema to RestaurantDetails and HotelDetails pages; all detail pages now have consistent breadcrumb structured data
-- US-098: Verified prefers-reduced-motion already fully implemented in index.css (two media queries disabling all animations/transitions)
-- US-099: Created src/lib/categoryColors.ts shared category color map with CATEGORY_COLORS, getCategoryColor(), getCategoryHex(); wired into InteractiveMap
-- US-107: Verified all three listing pages (Events, Restaurants, Attractions) already have sort functionality
-- US-109: Added active filter badge display to Attractions page with individual dismiss buttons and clear-all action
-- **Build**: npm run build passes (55s, no errors)
-- Files changed: src/hooks/use-announce.ts, src/lib/categoryColors.ts, src/pages/Attractions.tsx, src/pages/EventPromotionPlanner.tsx, src/pages/EventsPage.tsx, src/pages/Gamification.tsx, src/pages/Restaurants.tsx, src/pages/RestaurantDetails.tsx, src/pages/HotelDetails.tsx, src/components/InteractiveMap.tsx, tests/accessibility.spec.ts, prd.json
-- **Progress**: 76/140 stories complete (54%), 64 remaining
+## 2026-03-27 - AND-002 (Android)
+- Created full package structure: data/model, data/remote, data/local, data/repository, di, ui/components, ui/screens, ui/navigation, util
+- Created di/AppModule.kt providing singleton Json instance and ApplicationContext
+- Created di/RepositoryModule.kt (abstract module, bindings added in future stories)
+- Added package-info.kt files in each package for documentation and to ensure directories are tracked by git
+- **Note**: No JDK on this machine — build cannot be verified locally. Structure follows standard Android/Hilt conventions.
 - **Learnings for future iterations:**
-  - useAnnounce pattern: clear then setTimeout(100ms) to ensure re-announcement of same message
-  - EmptyState component already exists at src/components/ui/empty-state.tsx — reuse it
-  - SortDropdown exports shared option arrays (EVENT_SORT_OPTIONS, RESTAURANT_SORT_OPTIONS, ATTRACTION_SORT_OPTIONS)
+  - AppModule provides Json with ignoreUnknownKeys=true (needed for Supabase responses with extra fields)
+  - RepositoryModule is abstract class (uses @Binds), AppModule is object (uses @Provides)
+  - Package-info.kt files serve dual purpose: git tracking + IDE documentation
+  - Supabase client provision will be added in AND-003 when supabase-kt dependencies are added
 ---
 
-## 2026-03-05 — US-079, US-080, US-081, US-082, US-083, US-090, US-092, US-095
-- US-079: Improved form accessibility in EventSubmissionForm — added FormErrorSummary with focusField, wrapped sections in fieldsets/legends, added aria-invalid + aria-describedby to error fields, added autoComplete to email/tel/address/url
-- US-080: Split AuthContext into AuthStateContext + AuthActionsContext — useAuthState() for read-only state, useAuthActions() for dispatch-only; useAuth() remains backward-compatible; actions memoized via useMemo
-- US-081: Created src/lib/queryKeys.ts — centralized query key factory (events, restaurants, attractions, favorites, ratings, search, admin, user) + CACHE_TIERS (static 10m, standard 2m, frequent 30s, realtime 15s)
-- US-082: Verified HeroCityLite already lazy-loaded via React.lazy+Suspense; added React.memo wrapper to prevent re-renders; mobile builds skip Three.js via __MOBILE_APP__ dead code elimination
-- US-083: Added React.memo to RestaurantCard and SocialEventCard; added useCallback for handleViewEventDetails in EventsPage; EventCard already had memo wrapper
-- US-090: Added focus-visible:ring-2 styles to SocialEventCard Link and focus-within:ring-2 to EventCard; RestaurantCard already had focus-visible styling; global focus-visible styles exist in index.css
-- US-092: FAQSection with showSchema=true already on EventsPage, Restaurants, Attractions; added FAQ section with 5 questions to TripPlanner page targeting long-tail search queries
-- US-095: Added toast feedback to FavoriteButton (Added/Removed from favorites with dedup IDs); moved Sonner position to top-center to avoid BottomNav overlap on mobile
-- **Build**: npm run build passes (56s, no errors)
-- Files changed: src/components/EventSubmissionForm.tsx, src/contexts/AuthContext.tsx, src/lib/queryKeys.ts, src/components/HeroCityLite.tsx, src/components/RestaurantCard.tsx, src/components/SocialEventCard.tsx, src/components/EventCard.tsx, src/pages/EventsPage.tsx, src/pages/TripPlanner.tsx, src/components/FavoriteButton.tsx, src/components/ui/sonner.tsx, prd.json
-- **Progress**: 84/140 stories complete (60%), 56 remaining
+## 2026-03-27 - AND-003 (Android)
+- Added supabase-kt BOM 3.1.1 (postgrest, auth, realtime, storage) and Ktor OkHttp engine 3.0.3
+- Added BuildConfig fields for SUPABASE_URL and SUPABASE_ANON_KEY read from local.properties
+- Created util/Config.kt mirroring iOS Config.swift (coordinates, page size, cache TTL, auth constants)
+- Created data/remote/SupabaseClient.kt (SupabaseClientProvider singleton) mirroring iOS SupabaseService.swift with PKCE auth, custom redirect scheme, X-Client-Info header, and graceful null-client when credentials missing
+- Created data/remote/ConnectivityTest.kt for simple events table query verification
+- Updated di/AppModule.kt to provide SupabaseClient via Hilt DI
+- Added auth callback deep link intent filter to AndroidManifest.xml
+- Added Ktor/OkHttp proguard rules
+- **Note**: No JDK on this machine — build cannot be verified locally.
 - **Learnings for future iterations:**
-  - FormErrorSummary + useFormErrors already exist at src/components/ui/form-error-summary.tsx — reuse them
-  - AuthContext split pattern: keep combined useAuth() for backward compat, add useAuthState()/useAuthActions() for granular consumption
-  - queryKeys factory pattern: use `as const` for type-safe keys, nest by domain
-  - FAQSection already embeds FAQSchema via showSchema prop — no need to import FAQSchema separately
-  - Sonner position="top-center" avoids mobile BottomNav overlap
+  - Supabase credentials flow: local.properties → build.gradle.kts buildConfigField → BuildConfig.SUPABASE_URL/KEY
+  - SupabaseClientProvider.client is nullable — all data sources must handle null client gracefully
+  - Auth uses PKCE flow with scheme=com.desmoines.aipulse, host=auth-callback (matches iOS redirect pattern)
+  - supabase-kt 3.x uses install() blocks for plugins (Auth, Postgrest, Realtime, Storage)
+  - Version catalog: supabase-bom manages all supabase-kt module versions
 ---
 
-## 2026-03-05 — Ralph Loop 11: US-096, US-101, US-103, US-105, US-108, US-114, US-117, US-118, US-119
-- US-096: Login attempt throttling — in-memory Map tracking failed attempts per email (max 5 per 15min), integrated into AuthContext login flow with reset on success
-- US-101: Optimistic updates for useFavorites — added onMutate/onError/onSettled to both add/remove mutations with cache snapshot rollback
-- US-103: Replace 'any' types in useAnalytics (5 instances), useAIConfiguration (3), useAdminCampaigns (1) with proper interfaces
-- US-105: Verified already complete — StickyMobileCTA exists on all 3 detail pages
-- US-108: Featured events section on EventsPage — filters is_featured events, shows up to 3 with Star icon, only when no filters active
-- US-114: Created LastUpdatedBadge component with relative time + verification checkmark for recent updates; added to EventDetails, RestaurantDetails, AttractionDetails
-- US-117: Verified already complete — EmptyState with contextual icons/messages on Attractions page
-- US-118: Added group-focus-within:translate-y-0 to RestaurantCard CTA strip for keyboard accessibility
-- US-119: New Restaurant badge — SocialProofBadge type="new" shown for restaurants created within 14 days, hidden when Featured takes priority
-- **Build**: npx vite build passes (59s, no errors)
-- Files changed: src/contexts/AuthContext.tsx, src/hooks/useFavorites.ts, src/hooks/useAnalytics.ts, src/hooks/useAIConfiguration.ts, src/hooks/useAdminCampaigns.ts, src/components/RestaurantCard.tsx, src/components/LastUpdatedBadge.tsx (new), src/pages/EventDetails.tsx, src/pages/RestaurantDetails.tsx, src/pages/AttractionDetails.tsx, src/pages/EventsPage.tsx, prd.json
-- **Progress**: 93/140 stories complete (66%), 47 remaining
+## 2026-03-27 - AND-004 (Android)
+- Created all data models mirroring iOS Models/ directory:
+  - AppEnums.kt: EventCategory (12 types with icon names, Color), PriceRange, LocationArea, AttractionType, ContentType, UserRole, EventSortOption, RestaurantSortOption (6 options), DateFilterPreset (6 presets with dateRange computation using java.time), SubscriptionTier (free=3 maxFavorites, insider/vip=Int.MAX_VALUE)
+  - Event.kt: @Serializable data class with all 22 fields, @SerialName for snake_case mapping, computed properties (eventCategory, parsedDate, coordinate, isFree, displayDescription, displayLocation, urgencyLabel, featuredCardAccessibilityLabel), preview companions
+  - Restaurant.kt: @Serializable data class with all 22 fields, isOpenNow() method parsing business_hours JSONB (supports flat and nested formats, 12h/24h time), computed properties (coordinate, displayDescription, displayLocation, ratingText, priceLevel, callUri, websiteUri, openStatusText, compactCardAccessibilityLabel)
+  - Attraction.kt: @Serializable data class with all 13 fields, computed properties (attractionType, coordinate, websiteUri, ratingText)
+  - UserProfile.kt: @Serializable data class with computed displayName/initials/role, plus UserEventInteraction, UserRestaurantInteraction, UserRating models
+  - LatLng.kt: Simple latitude/longitude data class (placeholder until Google Maps SDK added in later story)
+- **Note**: No JDK on this machine — build cannot be verified locally.
 - **Learnings for future iterations:**
-  - SocialProofBadge supports type="new" — reuse for any "new" badge instead of custom Badge
-  - RestaurantCard props interface needs created_at added when using time-based badges
-  - LastUpdatedBadge is a reusable component for any detail page showing freshness
-  - group-focus-within: is the keyboard equivalent of group-hover: for nested focusable elements
-  - Login throttling uses in-memory Map (resets on page reload) — suitable for client-side rate limiting
+  - Used own LatLng data class to avoid premature Google Maps SDK dependency — will swap when Maps story arrives
+  - Restaurant.businessHours uses JsonElement (not a custom Codable struct) because kotlinx.serialization handles the flexible JSONB shape natively via JsonObject inspection
+  - DateFilterPreset.dateRange uses java.time (LocalDate/LocalDateTime) not kotlinx-datetime — java.time is standard on Android 26+ (our minSdk)
+  - Event.parsedDate returns OffsetDateTime to preserve timezone info from ISO 8601 strings
+  - All @SerialName annotations match exact Supabase column names (snake_case)
+  - EventCategory.from() does case-insensitive matching with contains() fallback, matching iOS init(from:) logic
 ---
 
-## 2026-03-15 — Ralph Loop 16: US-135, US-136, US-126, US-115
-- US-135: SSRF validation on check-broken-links (initial URL + each extracted link); crawl-site already had it
-- US-136: SSRF validation on analyze-competitor (competitor.website_url) and firecrawl-scraper (user-provided URL)
-- US-126: "Surprise Me" Shuffle button on EventsPage, Restaurants, Attractions — random item from filtered results
-- US-115: Estimated visit duration on AttractionDetails — type-based mapping (13 types), stat card, Things To Know, FAQ
-- Files changed: supabase/functions/check-broken-links/index.ts, supabase/functions/analyze-competitor/index.ts, supabase/functions/firecrawl-scraper/index.ts, src/pages/EventsPage.tsx, src/pages/Restaurants.tsx, src/pages/Attractions.tsx, src/pages/AttractionDetails.tsx, prd.json, progress.txt
-- **Build**: npx vite build passes (36s, no errors)
-- **Progress**: 120/147 stories complete (82%), 27 remaining
+## 2026-03-27 - AND-005 (Android)
+- Enhanced Color.kt with category colors (all 12 EventCategory types), status colors (success/error/warning), semantic colors, and additional surface variant/outline colors for light and dark themes
+- Created Dimens.kt with standard spacing scale (2dp-48dp) and component-specific dimensions (card radius, icon sizes, hero height, etc.)
+- Updated Theme.kt with surfaceVariant, outline color slots and status bar color management via SideEffect
+- Updated AppEnums.kt EventCategory colors to match PRD spec: Family→blue, Sports→red, Charity→rose, Holiday→amber
+- Files changed: Color.kt, Theme.kt, Dimens.kt (new), AppEnums.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
 - **Learnings for future iterations:**
-  - validateURLForSSRF already existed in _shared/validation.ts — just import and use
-  - Shuffle icon from lucide-react for random discovery UX
-  - Type-based visit duration estimates > per-record DB columns when data doesn't exist
+  - Category colors are defined in two places: Color.kt (theme constants) and AppEnums.kt (enum properties) — keep them in sync
+  - PRD specifies specific category colors that differ from iOS in some cases (iOS Family=cyan, PRD Family=blue; iOS Sports=mint, PRD Sports=red)
+  - Status bar color is set via SideEffect in Theme.kt — uses surface color for seamless look
+  - Dimens object provides centralized spacing constants to avoid magic numbers in composables
 ---
 
-## 2026-03-10 — Ralph Loop 14: US-085, US-087, US-104, US-106, US-122, US-130
-- US-085: Search autocomplete with recent searches (safeStorage) and DB title suggestions (debounced ilike, 3+ chars), integrated into Events/Restaurants/Attractions
-- US-087: Context-aware loading states ("Searching for...", "Loading [cuisine]...") + labeled skeleton sections in RestaurantDetails + FavoriteButton loading spinner
-- US-104: Detail page data prefetching on card hover via usePrefetchRestaurant/usePrefetchAttraction hooks with requestIdleCallback + once-per-item guard
-- US-106: Verified already complete (NearbyContent on all detail pages)
-- US-122: Footer newsletter improved with benefit copy, "Subscribe Free" CTA, social proof ("Join 15,000+ locals")
-- US-130: Verified already complete (Breadcrumbs + BreadcrumbListSchema on all detail pages)
-- Files changed: src/components/SearchAutocomplete.tsx (new), src/hooks/usePrefetchDetail.ts (new), src/pages/EventsPage.tsx, src/pages/Restaurants.tsx, src/pages/Attractions.tsx, src/pages/RestaurantDetails.tsx, src/components/RestaurantCard.tsx, src/components/FavoriteButton.tsx, src/components/Footer.tsx, prd.json, progress.txt, scripts/ralph/progress.txt
-- **Build**: npx vite build passes (50s, no errors)
-- **Progress**: 112/147 stories complete (76%), 35 remaining
+## 2026-03-27 - AND-006 (Android)
+- Built bottom navigation with 6 tabs matching iOS MainTabView.swift: Home, Dining, Search, Map, Saved, Profile
+- Created NavGraph.kt with sealed class Route definitions for all screens (tabs, details, flows) with type-safe arguments
+- Created BottomNavTab enum with filled/outlined icon pairs for selected/unselected states
+- Created MainNavHost.kt with NavHost containing all route destinations organized into tab, detail, and flow groups
+- Created MainScreen.kt with Scaffold + NavigationBar, haptic feedback on tab selection, bottom bar hidden on detail screens
+- Created placeholder screens for all 6 tabs with navigation callback signatures ready for future stories
+- Updated MainActivity.kt to use MainScreen instead of HelloDesMoinesScreen placeholder
+- Created screen directories for all future feature screens (eventdetail, restaurantdetail, attractiondetail, auth, onboarding, subscription)
+- Files created: NavGraph.kt, MainNavHost.kt, MainScreen.kt, HomeScreen.kt, RestaurantsScreen.kt, SearchScreen.kt, MapScreen.kt, FavoritesScreen.kt, ProfileScreen.kt
+- Files modified: MainActivity.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
 - **Learnings for future iterations:**
-  - SearchAutocomplete uses useDebouncedValue internally — no need for external debounce
-  - requestIdleCallback not available in all browsers — provide setTimeout fallback
-  - CardsGridSkeleton already accepts a `label` prop for context-aware loading text
-  - Footer newsletter social proof should use subscriber count for trust signals
+  - Navigation uses popUpTo(findStartDestination) + saveState/restoreState for proper tab backstack management
+  - Bottom bar visibility is controlled by checking currentDestination.route against tabRoutes set
+  - Detail/flow routes use string-based arguments with navArgument — will serve until type-safe nav args are needed
+  - Each placeholder screen already has navigation callback params (onNavigateToEventDetail, etc.) so future stories just fill in the composable body
+  - BottomNavTab enum centralizes tab config — icons, labels, and routes in one place
+  - Haptic feedback uses HapticFeedbackType.LongPress (closest to iOS .light impact in Compose)
+  - Restaurant icon uses Icons.Filled.Restaurant / Icons.Outlined.Restaurant (Material Icons Extended)
+---
+
+## 2026-03-27 - AND-007 (Android)
+- Created EventsRemoteDataSource.kt with all 6 methods matching iOS EventsService.swift:
+  - fetchEvents(query) with full-text search (websearch), category/date/featured filters, pagination with count
+  - fetchEvent(id) single event by ID
+  - fetchFeaturedEvents(limit) for featured carousel
+  - fetchRelatedEvents(eventId, category, limit) same category excluding self
+  - fuzzySearchEvents(query, limit) via RPC 'fuzzy_search_events'
+  - fetchNearbyEvents(lat, lng, radiusMiles, limit) via RPC 'search_events_near_location' with client-side Haversine fallback
+- Created EventsRepository interface with Result<T> return types for all methods
+- Created EventsRepositoryImpl wrapping remote data source with runCatching error handling
+- Updated RepositoryModule.kt with @Binds binding for EventsRepository → EventsRepositoryImpl
+- Created EventsRemoteDataSourceTest with unit tests for query defaults, Haversine distance, and miles-to-meters conversion
+- Files created: EventsRemoteDataSource.kt, EventsRepository.kt, EventsRepositoryImpl.kt, EventsRemoteDataSourceTest.kt
+- Files modified: RepositoryModule.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - supabase-kt 3.x: use `client.from("table").select { filter { ... } }` DSL for queries
+  - supabase-kt 3.x: use `client.postgrest.rpc("fn", params)` for RPC calls — params must be @Serializable
+  - Count requires `count = Count.EXACT` in select(), result via `result.countOrNull()`
+  - For IS NOT NULL filters, use client-side filtering as supabase-kt filter DSL varies across versions
+  - Haversine formula is in EventsRemoteDataSource.Companion for reuse by other data sources (restaurants, attractions)
+  - Repository pattern: interface returns Result<T>, impl uses runCatching + onFailure for logging
+  - EventsQuery is a plain data class (not @Serializable) — it's only used client-side to build Supabase queries
+---
+
+## 2026-03-27 - AND-008 (Android)
+- Created RestaurantsRemoteDataSource.kt with all 5 methods matching iOS RestaurantsService.swift:
+  - fetchRestaurants(query) with full-text search, cuisine/priceRange/location in-filters, minRating gte, featured eq, 6 sort options with exact ordering chains matching iOS
+  - fetchRestaurant(id) single restaurant by ID
+  - fuzzySearchRestaurants(query, limit) via RPC 'fuzzy_search_restaurants'
+  - fetchNearbyRestaurants(lat, lng, radiusMiles, limit) via RPC 'restaurants_within_radius' with client-side Haversine fallback
+  - fetchAvailableCuisines() returning distinct sorted cuisine strings
+- Created RestaurantsRepository interface with Result<T> return types
+- Created RestaurantsRepositoryImpl wrapping remote data source with runCatching error handling
+- Updated RepositoryModule.kt with @Binds binding for RestaurantsRepository → RestaurantsRepositoryImpl
+- Files created: RestaurantsRemoteDataSource.kt, RestaurantsRepository.kt, RestaurantsRepositoryImpl.kt
+- Files modified: RepositoryModule.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - RestaurantsQuery uses List<String> for cuisines/priceRanges/locations (vs single String for EventsQuery.category) — isIn() filter for multi-select
+  - Sort options apply multiple order() calls in when-block inside the select DSL (not separate execute calls like iOS switch)
+  - Nearby restaurants RPC uses different param names than events: center_lat/center_lng/radius_miles/limit_count (vs user_lat/user_lon/radius_meters/search_limit)
+  - fetchAvailableCuisines uses Columns.list("cuisine") for column selection and client-side distinct() + sorted()
+  - Reused EventsRemoteDataSource.haversineDistance() companion for table fallback distance filtering
+---
+
+## 2026-03-27 - AND-009 (Android)
+- Created AttractionsRemoteDataSource.kt with all 3 methods matching iOS AttractionsService.swift:
+  - fetchAttractions(query) with multi-field ILIKE search on name/type/location via or{} filter, type eq, minRating gte, isFeatured eq, order by created_at desc, pagination with count
+  - fetchAttraction(id) single attraction by ID
+  - fetchNearbyAttractions(lat, lng, limit) with client-side Haversine distance filtering (no PostGIS RPC for attractions)
+- Created AttractionsRepository interface with Result<T> return types for all methods
+- Created AttractionsRepositoryImpl wrapping remote data source with runCatching error handling
+- Updated RepositoryModule.kt with @Binds binding for AttractionsRepository → AttractionsRepositoryImpl
+- Files created: AttractionsRemoteDataSource.kt, AttractionsRepository.kt, AttractionsRepositoryImpl.kt
+- Files modified: RepositoryModule.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Attractions use ILIKE search (not full-text search like events/restaurants) — simpler pattern with or{} block containing 3 ilike() calls
+  - No PostGIS RPC for attractions yet — fetchNearbyAttractions uses purely client-side distance filtering with haversineDistance()
+  - Reused EventsRemoteDataSource.haversineDistance() companion for consistency across all data sources
+  - Default limit for nearby attractions is 50 (matching iOS), vs default page size 30 for paginated list
+  - AttractionsQuery is simpler than Events/Restaurants: no date range, no sort options, no multi-select filters
+---
+
+## 2026-03-27 - AND-010 (Android)
+- Built complete offline cache layer with Room database mirroring iOS QueryCache.swift:
+  - Added Room 2.6.1 dependencies (room-runtime, room-ktx, room-compiler via KSP)
+  - Created 4 Room entities: CachedEvent, CachedRestaurant, CachedAttraction, CacheMetadata — all with indexed cache_key and cached_at columns
+  - Created 4 DAOs: EventDao, RestaurantDao, AttractionDao, CacheMetadataDao with insertAll, getAllByKey, getById, deleteAll, deleteExpired, deleteByKey, count
+  - Created AppDatabase with all 4 entities, version 1, fallbackToDestructiveMigration
+  - Created CacheManager singleton with: getCached*/cache* methods for each type, TTL checking via CacheMetadata.isExpired, stale cache serving (allowStale param), pruneExpired() removing entries >24h, clearAll(), static cache key builders
+  - Created DatabaseModule providing AppDatabase + all DAOs via Hilt
+- Updated all 3 repository implementations with cache-first strategy:
+  - EventsRepositoryImpl: cache check → remote fetch + cache write → stale fallback on error
+  - RestaurantsRepositoryImpl: same pattern, cuisine list not cached (simple/cheap)
+  - AttractionsRepositoryImpl: same pattern
+  - Cache keys include all query parameters for distinct result sets
+- Updated DesMoinesInsiderApp to prune expired cache on launch via coroutine scope
+- Removed data/local/package-info.kt placeholder (replaced by real files)
+- Files created: AppDatabase.kt, CacheManager.kt, 4 entities, 4 DAOs, DatabaseModule.kt
+- Files modified: libs.versions.toml, build.gradle.kts, DesMoinesInsiderApp.kt, EventsRepositoryImpl.kt, RestaurantsRepositoryImpl.kt, AttractionsRepositoryImpl.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Room entities store serialized JSON strings (not individual columns) to avoid complex TypeConverters for JsonElement, List<String>, etc.
+  - Cache keys are built with static CacheManager.eventsKey/restaurantsKey/attractionsKey helpers — pass all query params as varargs
+  - CacheMetadata.isExpired computed property: (now - cachedAt) > (ttlMinutes * 60_000)
+  - Repository pattern: isCacheFresh → return cached, else runCatching remote → recoverCatching with stale cache
+  - fetchById always checks cache first (any cache key), remote fallback caches under "single|{id}" key
+  - EventsQuery has no sortBy field (unlike RestaurantsQuery) — don't include it in cache keys
+  - Response types use Int for totalCount + hasMore: Boolean — cached responses set hasMore=false
+  - DatabaseModule is separate @Module from AppModule — keeps DB concerns isolated
+  - Room fallbackToDestructiveMigration used since cache is expendable data
 ---

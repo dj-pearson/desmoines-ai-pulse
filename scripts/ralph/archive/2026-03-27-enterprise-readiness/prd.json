@@ -1,0 +1,1004 @@
+{
+  "project": "Des Moines AI Pulse - Android",
+  "branchName": "ralph/android-app-v1",
+  "description": "Complete native Android app build-out for Des Moines Insider, mirroring the existing iOS SwiftUI app feature-for-feature. Built with Kotlin, Jetpack Compose, Material 3, and MVVM architecture. Integrates with the existing Supabase backend, Google Play Billing for subscriptions, Google Maps for map features, and Firebase for push notifications. The app includes: 6-tab navigation (Home, Dining, Search, Map, Saved, Profile), event/restaurant/attraction discovery with full-text search, premium subscription tiers (Free/Insider/VIP), offline caching, onboarding, authentication (email + Google Sign-In), deep linking, and accessibility compliance.",
+  "userStories": [
+    {
+      "id": "AND-001",
+      "title": "Initialize Android project with Kotlin, Jetpack Compose, and Gradle",
+      "description": "As a developer, I need a properly configured Android project scaffold so that all subsequent stories have a solid foundation to build on.",
+      "acceptanceCriteria": [
+        "Create android/ directory at project root with standard Android project structure",
+        "Configure build.gradle.kts (project-level) with Kotlin 2.0+, AGP 8.5+, Compose compiler plugin",
+        "Configure app/build.gradle.kts with: minSdk 26 (Android 8.0), targetSdk 35, compileSdk 35",
+        "Set applicationId to 'com.desmoines.aipulse'",
+        "Set versionCode 1, versionName '1.0.0'",
+        "Enable Jetpack Compose with BOM 2024.12+",
+        "Add core dependencies: compose-ui, compose-material3, compose-navigation, lifecycle-viewmodel-compose, hilt-android, kotlinx-coroutines, kotlinx-serialization",
+        "Create AndroidManifest.xml with INTERNET permission and app theme",
+        "Create MainActivity.kt extending ComponentActivity with setContent { } using Compose",
+        "Create res/values/themes.xml with Material 3 dynamic color theme",
+        "Create res/values/strings.xml with app_name = 'Des Moines Insider'",
+        "Project builds successfully with ./gradlew assembleDebug",
+        "App launches and displays a placeholder 'Hello Des Moines' screen"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "This is the foundation. Use version catalog (libs.versions.toml) for dependency management. Match iOS bundle ID: com.desmoines.aipulse. Use Hilt for DI from the start."
+    },
+    {
+      "id": "AND-002",
+      "title": "Set up dependency injection with Hilt and project module structure",
+      "description": "As a developer, I need a clean DI setup and module structure so that services, repositories, and ViewModels are properly scoped and testable.",
+      "acceptanceCriteria": [
+        "Add Hilt dependencies: hilt-android, hilt-compiler (kapt/ksp), hilt-navigation-compose",
+        "Create @HiltAndroidApp Application class (DesMoinesInsiderApp)",
+        "Annotate MainActivity with @AndroidEntryPoint",
+        "Create package structure: data/model, data/remote, data/local, data/repository, di, ui/theme, ui/components, ui/screens, ui/navigation, util",
+        "Create di/AppModule.kt providing singleton dependencies (Supabase client, OkHttpClient, etc.)",
+        "Create di/RepositoryModule.kt for binding repository interfaces",
+        "Project builds and runs with Hilt initialized",
+        "No Hilt component processing errors"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use KSP over KAPT if possible for faster builds. The package structure mirrors iOS: Models→data/model, Services→data/remote+repository, ViewModels→ui/screens/*/ViewModel, Views→ui/screens/*."
+    },
+    {
+      "id": "AND-003",
+      "title": "Configure Supabase Kotlin client and environment management",
+      "description": "As a developer, I need the Supabase SDK configured so that the app can communicate with the existing backend database and auth system.",
+      "acceptanceCriteria": [
+        "Add supabase-kt dependencies: postgrest-kt, auth-kt, realtime-kt, storage-kt (BOM version 3.0+)",
+        "Add Ktor client engine dependency (ktor-client-okhttp)",
+        "Create local.properties entries for SUPABASE_URL and SUPABASE_ANON_KEY (gitignored)",
+        "Create BuildConfig fields via build.gradle.kts buildConfigField for SUPABASE_URL and SUPABASE_ANON_KEY",
+        "Create data/remote/SupabaseClient.kt singleton providing configured SupabaseClient with Auth, Postgrest, Realtime plugins",
+        "Configure auth with PKCE flow and custom redirect scheme 'com.desmoines.aipulse://auth-callback'",
+        "Add custom header X-Client-Info = 'desmoines-insider-android'",
+        "Create util/Config.kt with app constants: defaultLatitude (41.5868), defaultLongitude (-93.625), defaultSearchRadiusMiles (30.0), defaultPageSize (30), cacheExpirationMinutes (5)",
+        "Create a simple connectivity test that queries the events table and logs success",
+        "App builds and successfully connects to Supabase"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Mirrors iOS Config.swift and SupabaseService.swift. Use the same Supabase project — the backend is shared between web, iOS, and Android. Never hardcode credentials."
+    },
+    {
+      "id": "AND-004",
+      "title": "Create data models matching iOS and Supabase schema",
+      "description": "As a developer, I need Kotlin data models that match the existing database schema so that API responses deserialize correctly.",
+      "acceptanceCriteria": [
+        "Create data/model/Event.kt as @Serializable data class with all fields: id, title, date, location, venue, city, category, price, description, enhancedDescription, originalDescription, imageUrl, sourceUrl, isFeatured, isEnhanced, latitude, longitude, aiWriteup, eventStartUtc, eventStartLocal, eventTimezone, isRecurring, seoTitle, seoDescription, seoKeywords, createdAt, updatedAt",
+        "Use @SerialName for snake_case mapping (e.g., @SerialName(\"image_url\") val imageUrl: String?)",
+        "Add computed properties: eventCategory, parsedDate, coordinate (LatLng), isFree, displayDescription, displayLocation, urgencyLabel",
+        "Create data/model/Restaurant.kt with all fields: id, name, cuisine, location, city, rating, priceRange, description, phone, website, imageUrl, isFeatured, latitude, longitude, popularityScore, status, slug, aiWriteup, businessHours, dietaryOptions, createdAt, updatedAt",
+        "Add Restaurant.isOpenNow() method parsing business hours JSON (same logic as iOS)",
+        "Create data/model/Attraction.kt with fields: id, name, type, location, description, rating, website, imageUrl, isFeatured, latitude, longitude, createdAt, updatedAt",
+        "Create data/model/UserProfile.kt with: id, userId, firstName, lastName, email, phone, location, interests, userRole, createdAt, updatedAt",
+        "Create data/model/UserEventInteraction.kt and UserRestaurantInteraction.kt for favorites",
+        "Create data/model/AppEnums.kt with all enums: EventCategory (12 types with icon/color/displayName), PriceRange, LocationArea, AttractionType, ContentType, UserRole, EventSortOption, RestaurantSortOption (6 options), DateFilterPreset (6 presets with dateRange computation), SubscriptionTier (free/insider/vip with maxFavorites and features)",
+        "All models compile and serialize/deserialize correctly with kotlinx.serialization"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Exact mirror of iOS models. EventCategory must have the same 12 cases with matching icons (use Material Icons equivalents) and colors. DateFilterPreset.dateRange must compute the same date ranges as iOS. SubscriptionTier.maxFavorites: free=3, insider/vip=Int.MAX_VALUE."
+    },
+    {
+      "id": "AND-005",
+      "title": "Create Material 3 theme, color system, and typography",
+      "description": "As a developer, I need a consistent theme system so that the app matches the iOS design language with Android Material 3 conventions.",
+      "acceptanceCriteria": [
+        "Create ui/theme/Color.kt with brand colors matching iOS: primary blue, accent orange, category colors for all 12 EventCategory types, status colors (success green, error red, warning orange)",
+        "Create ui/theme/Type.kt with Material 3 typography scale",
+        "Create ui/theme/Theme.kt with DesMoinesInsiderTheme composable supporting light and dark mode with dynamic colors",
+        "Create ui/theme/Dimens.kt with standard spacing values (4dp, 8dp, 12dp, 16dp, 24dp, 32dp)",
+        "Wrap MainActivity content in DesMoinesInsiderTheme",
+        "App displays correctly in both light and dark mode",
+        "Category colors match iOS: Music=purple, Food=orange, Art=pink, Outdoor=green, Family=blue, Sports=red, Nightlife=indigo, Business=gray, Education=teal, Charity=rose, Holiday=amber"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Use Material 3 dynamic color for Android 12+ with fallback to brand colors. Match iOS Color+Theme.swift color palette."
+    },
+    {
+      "id": "AND-006",
+      "title": "Build bottom navigation with 6 tabs and navigation graph",
+      "description": "As a developer, I need the main navigation structure so that users can move between the 6 primary sections of the app.",
+      "acceptanceCriteria": [
+        "Create ui/navigation/NavGraph.kt with sealed class/object route definitions for all screens: Home, Dining, Search, Map, Saved, Profile, EventDetail(id), RestaurantDetail(id), AttractionDetail(id), Auth, Onboarding, Subscription, Settings, WebView(url)",
+        "Create ui/navigation/MainNavHost.kt with NavHost composable containing all route destinations",
+        "Create ui/screens/MainScreen.kt with Scaffold containing NavigationBar (bottom bar) with 6 tabs: Home (house icon), Dining (utensils icon), Search (search icon), Map (map icon), Saved (heart icon), Profile (person icon)",
+        "Bottom bar highlights current tab with Material 3 indicator",
+        "Tab selection triggers haptic feedback (HapticFeedbackType.LightImpact)",
+        "Bottom bar hides on detail screens (EventDetail, RestaurantDetail, etc.)",
+        "Back navigation works correctly with backstack management",
+        "Each tab maintains its own back stack",
+        "App builds and all 6 tabs are tappable with placeholder content"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Mirrors iOS MainTabView.swift with 6 tabs. Use Compose Navigation with type-safe arguments. Each tab should use its own nested NavHost for independent backstacks."
+    },
+    {
+      "id": "AND-007",
+      "title": "Build Events repository and service layer",
+      "description": "As a developer, I need the events data layer so that the app can fetch, search, filter, and paginate events from Supabase.",
+      "acceptanceCriteria": [
+        "Create data/remote/EventsRemoteDataSource.kt with methods: fetchEvents(query), fetchEvent(id), fetchFeaturedEvents(limit), fetchRelatedEvents(eventId, category, limit), fuzzySearchEvents(query, limit), fetchNearbyEvents(lat, lng, radiusMiles, limit)",
+        "fetchEvents builds Supabase postgrest query with: textSearch on search_vector (websearch config), eq filter for category, gte/lt for date range, eq for is_featured, order by date asc, range for pagination, count exact",
+        "fuzzySearchEvents calls RPC 'fuzzy_search_events' with search_query and search_limit params",
+        "fetchNearbyEvents calls RPC 'search_events_near_location' with user_lat, user_lon, radius_meters, search_limit, with client-side distance fallback",
+        "Create data/repository/EventsRepository.kt interface and EventsRepositoryImpl binding",
+        "Repository wraps remote data source with error handling and returns Result<T> types",
+        "All queries match the exact Supabase queries used in iOS EventsService.swift",
+        "Unit test for EventsQuery builder logic"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Must match iOS EventsService.swift exactly. Same RPC function names, same filter logic, same pagination (offset-based with limit 30). Use Kotlin Result or custom sealed class for error handling."
+    },
+    {
+      "id": "AND-008",
+      "title": "Build Restaurants repository and service layer",
+      "description": "As a developer, I need the restaurants data layer so that the app can fetch, search, filter, sort, and paginate restaurants.",
+      "acceptanceCriteria": [
+        "Create data/remote/RestaurantsRemoteDataSource.kt with methods: fetchRestaurants(query), fetchRestaurant(id), fuzzySearchRestaurants(query, limit), fetchNearbyRestaurants(lat, lng, radiusMiles, limit), fetchAvailableCuisines()",
+        "fetchRestaurants supports: textSearch on search_vector, in filter for cuisines, in filter for priceRanges, in filter for locations, gte for minRating, eq for isFeatured",
+        "Sort options match iOS: popularity (popularity_score desc, is_featured desc, created_at desc), rating (rating desc), newest (created_at desc), alphabetical (name asc), priceLow (price_range asc), priceHigh (price_range desc)",
+        "fetchNearbyRestaurants calls RPC 'restaurants_within_radius' with center_lat, center_lng, radius_miles, limit_count, with client-side fallback",
+        "fetchAvailableCuisines returns distinct cuisine values",
+        "Create data/repository/RestaurantsRepository.kt interface and impl",
+        "All queries match iOS RestaurantsService.swift exactly"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "6 sort options must match iOS exactly. Client-side open/closed filtering via Restaurant.isOpenNow(). Same RPC functions as iOS."
+    },
+    {
+      "id": "AND-009",
+      "title": "Build Attractions repository and service layer",
+      "description": "As a developer, I need the attractions data layer so that the app can fetch, search, and filter attractions.",
+      "acceptanceCriteria": [
+        "Create data/remote/AttractionsRemoteDataSource.kt with methods: fetchAttractions(query), fetchAttraction(id), fetchNearbyAttractions(lat, lng, limit)",
+        "fetchAttractions supports: ILIKE search on name, type, and location fields (or filter), type filter, minRating filter, isFeatured filter, order by created_at desc, pagination",
+        "fetchNearbyAttractions queries attractions with non-null lat/lng and filters client-side by distance (using Config.defaultSearchRadiusMiles)",
+        "Create data/repository/AttractionsRepository.kt interface and impl",
+        "Queries match iOS AttractionsService.swift"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Simpler than events/restaurants. Uses ILIKE instead of full-text search (matching iOS). Limit 50 for nearby attractions."
+    },
+    {
+      "id": "AND-010",
+      "title": "Build offline cache layer with Room database",
+      "description": "As a developer, I need a local cache so that the app works offline and loads instantly from cached data.",
+      "acceptanceCriteria": [
+        "Add Room dependencies: room-runtime, room-ktx, room-compiler (KSP)",
+        "Create data/local/AppDatabase.kt with Room database containing tables: cached_events, cached_restaurants, cached_attractions, cache_metadata",
+        "Create data/local/dao/EventDao.kt with: insertAll, getAll, getById, deleteAll, deleteExpired",
+        "Create data/local/dao/RestaurantDao.kt with same pattern",
+        "Create data/local/dao/AttractionDao.kt with same pattern",
+        "Create data/local/CacheManager.kt that manages cache TTL (5 min default from Config), max disk usage tracking, stale cache serving when offline, pruning of entries older than 24 hours",
+        "CacheManager.pruneExpired() called on app launch",
+        "Repository layer checks cache first, returns cached data immediately, fetches fresh data in background",
+        "When offline (no network), stale cache is returned instead of error",
+        "Cache key strategy includes query parameters (category, date, search text, sort) for distinct cached result sets"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Mirrors iOS QueryCache.swift behavior. iOS uses file-based JSON cache with 5 min TTL and 50MB limit. Android should use Room for better query support. Same stale-while-revalidate pattern."
+    },
+    {
+      "id": "AND-011",
+      "title": "Build network connectivity monitor",
+      "description": "As a developer, I need real-time network status so that the app can show offline banners and serve cached data when disconnected.",
+      "acceptanceCriteria": [
+        "Create util/NetworkMonitor.kt using ConnectivityManager and NetworkCallback",
+        "Expose isConnected as StateFlow<Boolean>",
+        "Expose showReconnected as StateFlow<Boolean> that is true for 5 seconds after regaining connection",
+        "Inject as singleton via Hilt",
+        "Create ui/components/OfflineBanner.kt composable showing orange banner 'No internet connection' when offline and green 'Back online' banner when reconnecting",
+        "OfflineBanner displayed at top of MainScreen (below status bar)",
+        "Banner animates in/out smoothly"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Mirrors iOS NetworkMonitor.swift. Use ConnectivityManager.NetworkCallback for real-time updates. The 5-second reconnected banner matches iOS behavior."
+    },
+    {
+      "id": "AND-012",
+      "title": "Build authentication service with email/password and Google Sign-In",
+      "description": "As a developer, I need authentication so that users can sign in, sign up, and manage their accounts.",
+      "acceptanceCriteria": [
+        "Create data/remote/AuthRemoteDataSource.kt with methods: signIn(email, password), signUp(email, password, firstName, lastName, interests), signOut(), resetPassword(email), signInWithGoogle(idToken), fetchProfile(userId), createProfile(...), updateProfile(...), checkAdminRole(userId)",
+        "signIn/signUp use Supabase Auth with email provider",
+        "signInWithGoogle uses Supabase Auth with Google ID token (replaces iOS Apple Sign-In)",
+        "Add Google Sign-In dependency (credentials-play-services-auth) and configure with web client ID",
+        "Session management via Supabase auth state listener (sessionStatus flow)",
+        "Profile operations use 'profiles' table matching iOS queries",
+        "Admin check queries 'user_roles' table first, falls back to profiles.user_role",
+        "Create data/repository/AuthRepository.kt wrapping data source",
+        "Create ui/screens/auth/AuthViewModel.kt with: email validation (regex), password strength scoring (weak/medium/strong matching iOS algorithm), rate limiting (5 attempts in 5 min, 60 second lockout), sign in/up/out methods",
+        "AuthViewModel exposes: currentUser, isAuthenticated, isAdmin, currentProfile as StateFlow",
+        "Auth state persists across app restarts via Supabase session"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Mirrors iOS AuthService.swift + AuthViewModel.swift. Google Sign-In replaces Apple Sign-In. Same rate limiting logic: 5 failed attempts in 5 min = 60 second lockout. Same password strength algorithm. Same admin check pattern (user_roles table → profiles fallback)."
+    },
+    {
+      "id": "AND-013",
+      "title": "Build Auth screen with sign in, sign up, and Google Sign-In",
+      "description": "As a user, I need an authentication screen so that I can create an account or sign in to access premium features.",
+      "acceptanceCriteria": [
+        "Create ui/screens/auth/AuthScreen.kt with segmented tab picker (Sign In / Sign Up)",
+        "Sign In form: Email field, Password field, 'Forgot Password?' link, Sign In button",
+        "Sign Up form: First Name, Last Name, Email, Password (with strength indicator), Confirm Password, Interests grid (8 options: Food, Music, Sports, Arts, Nightlife, Outdoor, Family, Business), Create Account button",
+        "Password strength bar shows weak (red), medium (yellow), strong (green) matching iOS scoring",
+        "Divider with 'or' text",
+        "Google Sign-In button below divider (styled per Google branding guidelines)",
+        "Lockout warning message when rate limited ('Too many attempts. Try again in X seconds.')",
+        "Email validation error shown inline",
+        "Password mismatch error shown inline",
+        "Success: navigates to previous screen or Home",
+        "Error: shows Snackbar with error message",
+        "Forgot Password: sends reset email and shows confirmation dialog",
+        "All form fields have proper keyboard types and IME actions"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Mirrors iOS AuthView.swift. Replace Apple Sign-In button with Google Sign-In button. Same interest selection grid. Same validation logic."
+    },
+    {
+      "id": "AND-014",
+      "title": "Build onboarding flow (3-page intro)",
+      "description": "As a new user, I need an onboarding flow so that I understand the app's core features on first launch.",
+      "acceptanceCriteria": [
+        "Create ui/screens/onboarding/OnboardingScreen.kt with HorizontalPager (3 pages)",
+        "Page 1: App icon, 'Welcome to Des Moines Insider', subtitle, 3 bullet points (Discover events, Find restaurants, Explore attractions)",
+        "Page 2: Heart icon, 'Save Your Favorites', subtitle, 3 bullet points (Tap heart to save, Build collection, Get reminded)",
+        "Page 3: Map icon, 'Explore What\\'s Nearby', subtitle, 3 bullet points (See events on map, Filter by category/date, Get directions)",
+        "Animated page indicator (active page is wider capsule)",
+        "Back button on pages 2-3, Next button on pages 1-2, 'Get Started' on page 3",
+        "Skip button on pages 1-2",
+        "Onboarding completion saved to DataStore (hasCompletedOnboarding)",
+        "Shown only on first launch, skipped on subsequent launches",
+        "Respects reduce motion accessibility setting for animations",
+        "Page indicator announces 'Page X of 3' for TalkBack"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Mirrors iOS OnboardingView.swift exactly. Same 3 pages, same content, same flow. Use Jetpack DataStore for persistence (replaces iOS UserDefaults)."
+    },
+    {
+      "id": "AND-015",
+      "title": "Build reusable UI components library",
+      "description": "As a developer, I need reusable composables so that screens share consistent UI elements.",
+      "acceptanceCriteria": [
+        "Create ui/components/CategoryBadge.kt: Pill-shaped badge with icon + text + background color for EventCategory, supports small/regular sizes",
+        "Create ui/components/EmptyStateView.kt: Centered icon, title, message, optional action button",
+        "Create ui/components/LoadingView.kt: Full-screen loading with message, InlineLoadingView for 'load more', DetailHeroSkeleton with shimmer animation",
+        "Create ui/components/ToastOverlay.kt: Transient notification with success/info/error types, 2-second auto-dismiss, icon + text in capsule shape",
+        "Create ui/components/CachedAsyncImage.kt: Image loading with Coil, placeholder while loading, error fallback image, memory + disk cache",
+        "Create ui/components/PremiumGate.kt: Blurred overlay with lock icon, feature name, tier badge ('Insider Feature' / 'VIP Feature'), 'Unlock' button opening SubscriptionScreen",
+        "Create ui/components/PremiumBadge.kt: Inline label showing required tier",
+        "Create ui/components/SubscriptionBanner.kt: Full-style card with upgrade CTA (free users) and compact inline variant, FavoritesLimitBanner with progress bar",
+        "Create ui/components/AdBannerView.kt: Affiliate ad display for free users, hidden for subscribers, includes 'Remove Ads' upgrade prompt",
+        "Create ui/components/FullScreenImageViewer.kt: Full-screen image with pinch-to-zoom (0.5x-5x), double-tap toggle (1x↔2.5x), swipe-down-to-dismiss (150dp threshold), pan when zoomed",
+        "Create ui/components/WebViewScreen.kt: In-app WebView for Privacy Policy, Terms, etc. using AndroidView with WebView",
+        "All components have @Preview composables for design verification"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Mirrors all 11 iOS Components. Use Coil for image loading (replaces iOS CachedAsyncImage with its memory+disk cache). PremiumGate must check SubscriptionTier the same way iOS does. Add Accompanist for gesture handling where needed."
+    },
+    {
+      "id": "AND-016",
+      "title": "Build Home screen with featured events and restaurant carousels",
+      "description": "As a user, I need a Home screen so that I can discover featured events and popular restaurants at a glance.",
+      "acceptanceCriteria": [
+        "Create ui/screens/home/HomeScreen.kt matching iOS HomeView.swift layout",
+        "Header: 'What\\'s happening' subtitle with total upcoming event count",
+        "Horizontal scrolling date presets row (Today, This Week, This Month, This Weekend) — toggle behavior",
+        "Horizontal scrolling category chips row (Music, Food, Outdoor, Family, Art, Sports, Entertainment, Other) with icons — toggle behavior",
+        "Featured Events section: horizontal LazyRow carousel with FeaturedEventCard composable (260dp width, event image, title, date, category badge, free/paid status)",
+        "Popular Restaurants section: horizontal LazyRow with CompactRestaurantCard composable (180dp width, image, name, cuisine, price, rating)",
+        "Active filters bar showing applied filters with 'Clear All' button",
+        "Filter button (funnel icon) with active filter count badge, opens FilterSheet",
+        "Vertical scrolling event list with lazy loading and 'load more' trigger at 5 items from end",
+        "Pull-to-refresh on the entire screen",
+        "AdBannerView shown to free users only",
+        "Skeleton shimmer loaders during initial load",
+        "Error banner with retry button on fetch failure",
+        "Haptic feedback on filter/category selections",
+        "Empty state when no events match filters"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Mirrors iOS HomeView.swift. Critical screen — must match the layout and behavior. FeaturedEventCard and CompactRestaurantCard are sub-composables. Date preset and category chip selection should trigger debounced data refresh."
+    },
+    {
+      "id": "AND-017",
+      "title": "Build Events ViewModel with filtering, pagination, and caching",
+      "description": "As a developer, I need the Events ViewModel so that the Home screen and event list have proper state management.",
+      "acceptanceCriteria": [
+        "Create ui/screens/home/EventsViewModel.kt as @HiltViewModel",
+        "State: events (list), featuredEvents (list), isLoading, isLoadingMore, hasMore, totalCount, errorMessage",
+        "Filters as StateFlow: searchText (debounced 300ms), selectedCategory, selectedDatePreset, showFeaturedOnly, showFreeOnly (premium), maxDistance (premium), minRating (premium)",
+        "loadInitialData(): serve cached events immediately, fetch fresh in background, skip network if offline with cache hit",
+        "refresh(): bypass cache, always fetch fresh",
+        "fetchEvents(reset): build query from filters, apply premium filters client-side (free, distance), cache first page, update pagination state",
+        "loadMoreIfNeeded(currentIndex): trigger at count-5, prevent duplicates with isLoadingMore guard",
+        "applyPremiumFilters(): filter by isFree, filter by maxDistance using user location",
+        "clearFilters(): reset all filter properties",
+        "activeFilterCount: computed count of non-default filters",
+        "Cache key includes: category, datePreset, featured, search text",
+        "Page size: 30 (matching iOS)"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Mirrors iOS EventsViewModel.swift exactly. Same caching strategy (serve cached immediately, refresh in background). Same pagination (offset-based, trigger at count-5). Same debounce (300ms on search)."
+    },
+    {
+      "id": "AND-018",
+      "title": "Build Event Filter sheet with basic and premium filters",
+      "description": "As a user, I need a filter sheet so that I can narrow down events by category, date, and advanced criteria.",
+      "acceptanceCriteria": [
+        "Create ui/screens/home/FilterSheet.kt as ModalBottomSheet composable",
+        "Basic Filters (all users): Category picker (12 EventCategory options with checkmark indicator), Date picker (6 DateFilterPreset options), Featured Events Only toggle",
+        "Advanced Filters section (Insider+ only): Free Events Only toggle, Max Distance slider (1-50 miles with label), Min Rating slider (1.0-5.0 with half-star increments)",
+        "Advanced filters wrapped in PremiumGate(requiredTier=insider) showing blurred overlay with 'Unlock with Insider' for free users",
+        "Done button applies filters and dismisses sheet",
+        "Clear button resets all filters",
+        "Active filter count shown on filter button in parent screen",
+        "Slider values display current value prominently for accessibility"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Mirrors iOS FilterSheet.swift. Same basic/advanced split. Premium filters locked behind PremiumGate exactly as iOS does."
+    },
+    {
+      "id": "AND-019",
+      "title": "Build Event Detail screen with all sections",
+      "description": "As a user, I need an Event Detail screen so that I can see full event information, add to calendar, and save favorites.",
+      "acceptanceCriteria": [
+        "Create ui/screens/eventdetail/EventDetailScreen.kt matching iOS EventDetailView.swift",
+        "EventDetailHeader: Hero image (300dp) with gradient overlay, category badge, title overlay, date/time section, tap image for full-screen viewer",
+        "EventDetailInfo: Location row (venue, address, city) with 'Get Directions' button (opens Google Maps intent), Price row (Free/Paid with icons), Distance row (if coordinates available), Description section ('About')",
+        "EventDetailActions: 'Add to Calendar' button (Insider+ locked with lock icon for free users, opens Google Calendar intent or creates calendar event), 'More Info' link (opens browser if sourceUrl exists), 'Remind Me' toggle button",
+        "EventDetailInsiderTips: Locked card for free users ('Unlock Insider Tips'), orange card with contextual tips for Insider+ (based on category, venue, free/paid)",
+        "EventDetailRelated: Horizontal carousel of related events (same category/nearby dates)",
+        "Top app bar with: Share button (Android share sheet), Favorite button (heart icon, toggles red)",
+        "Create ui/screens/eventdetail/EventDetailViewModel.kt with: loadEvent(id), loadRelatedEvents(), toggleFavorite(), addToCalendar(), share text generation",
+        "Calendar integration: Request WRITE_CALENDAR permission, create CalendarContract event with 2-hour default duration",
+        "Back navigation works correctly",
+        "Accessibility: all buttons labeled, urgency not conveyed by color alone"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Mirrors iOS EventDetailView.swift + all sub-views. Calendar uses Android CalendarContract (replaces iOS EventKit). Directions open Google Maps instead of Apple Maps. Same premium gating for calendar and insider tips."
+    },
+    {
+      "id": "AND-020",
+      "title": "Build Restaurants list screen (Dining tab)",
+      "description": "As a user, I need a Dining tab so that I can browse, filter, and sort restaurants.",
+      "acceptanceCriteria": [
+        "Create ui/screens/restaurants/RestaurantsScreen.kt matching iOS RestaurantsView.swift",
+        "Horizontal sort picker: Open Now toggle + Sort options (Rating, Distance, Name, Newest)",
+        "AdBannerView for free users",
+        "Active filters bar showing applied filters",
+        "Error banner with retry",
+        "RestaurantCard composable: Image, name, cuisine, price range, rating stars, open/closed status badge, distance",
+        "Vertical scrolling restaurant list with lazy loading and 'load more' at 5 from end",
+        "RestaurantFilterSheet (ModalBottomSheet): Cuisine horizontal scroll multi-select, Price range grid ($, $$, $$$, $$$$), Done/Clear buttons",
+        "Pull-to-refresh",
+        "Skeleton loaders during initial load",
+        "Create ui/screens/restaurants/RestaurantsViewModel.kt matching iOS: filters (searchText, cuisines, priceRanges, sortBy), pagination, caching, open-now client-side filter, clearFilters()",
+        "Available cuisines fetched and displayed in filter sheet"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Mirrors iOS RestaurantsView.swift + RestaurantsViewModel.swift. Same 6 sort options. Open Now is client-side filter using Restaurant.isOpenNow(). Same filter sheet layout."
+    },
+    {
+      "id": "AND-021",
+      "title": "Build Restaurant Detail screen with all sections",
+      "description": "As a user, I need a Restaurant Detail screen so that I can see full restaurant info, call, get directions, and view dining tips.",
+      "acceptanceCriteria": [
+        "Create ui/screens/restaurantdetail/RestaurantDetailScreen.kt matching iOS RestaurantDetailView.swift",
+        "RestaurantDetailHeader: Hero image (300dp) with overlay, cuisine badge, restaurant name",
+        "RestaurantDetailInfo: Star rating display (1-5 with half-stars + numeric), Featured badge, Location + 'Get Directions', Distance, Phone (clickable tel: intent), Website (clickable browser intent), Open/Closed status with icon, Description",
+        "RestaurantDetailActions: 'Call' button (green, tel: intent), 'Website' button (gray, browser intent), 'Directions' button (blue, Google Maps intent)",
+        "RestaurantDetailDiningTips: Orange card with contextual tips for Insider+ (based on price, cuisine), locked card for free users",
+        "Top app bar: Share button, Favorite button (heart toggle)",
+        "AdBannerView at bottom for free users",
+        "Create ui/screens/restaurantdetail/RestaurantDetailViewModel.kt",
+        "Phone/Website/Directions all use proper Android intents",
+        "Ratings display uses Material icons (star, star_half, star_outline)"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Mirrors iOS RestaurantDetailView.swift + all sub-views. Use Android intents for phone (ACTION_DIAL), website (ACTION_VIEW), directions (geo: URI or Google Maps). Same premium gating for dining tips."
+    },
+    {
+      "id": "AND-022",
+      "title": "Build Attraction Detail screen",
+      "description": "As a user, I need an Attraction Detail screen so that I can view attraction information and get directions.",
+      "acceptanceCriteria": [
+        "Create ui/screens/attractiondetail/AttractionDetailScreen.kt matching iOS AttractionDetailView.swift",
+        "Hero image (300dp) with gradient, attraction type badge, name",
+        "Rating + Featured badge",
+        "Location with 'Get Directions'",
+        "Distance from user",
+        "Website link",
+        "Action buttons: Website, Directions",
+        "Description ('About')",
+        "Top app bar: Share button",
+        "No premium gating (attractions fully accessible to all users)",
+        "Create simple AttractionDetailViewModel"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Mirrors iOS AttractionDetailView.swift. Simpler than events/restaurants — no favorites, no premium gating. Same layout."
+    },
+    {
+      "id": "AND-023",
+      "title": "Build unified Search screen with tabbed results",
+      "description": "As a user, I need a Search screen so that I can find events, restaurants, and attractions from a single search bar.",
+      "acceptanceCriteria": [
+        "Create ui/screens/search/SearchScreen.kt matching iOS SearchView.swift",
+        "Search bar at top with search icon and placeholder text",
+        "Tab row showing Events/Restaurants/Attractions with result counts per tab",
+        "Before searching: Show popular categories grid (8 categories) and quick search suggestions list (5 pre-loaded: 'Live music tonight', 'Family friendly', 'Free events', 'Downtown restaurants', 'Outdoor activities')",
+        "Tapping category suggestion fills search with category name",
+        "Tapping quick suggestion fills search with phrase",
+        "Results list varies by selected tab: EventCard, RestaurantCard, or AttractionCard",
+        "Search debounced at 300ms",
+        "Parallel search across all content types",
+        "Fallback to fuzzy search when full-text returns empty",
+        "Empty state when no results found",
+        "Haptic feedback on tab selection",
+        "Create ui/screens/search/SearchViewModel.kt matching iOS: searchText, eventResults, restaurantResults, attractionResults, selectedTab, isSearching, hasSearched, totalResults, clearSearch()"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Mirrors iOS SearchView.swift + SearchViewModel.swift. Same debounce, same fuzzy fallback, same parallel search pattern. AttractionCard inline component in search results."
+    },
+    {
+      "id": "AND-024",
+      "title": "Build Favorites/Saved screen",
+      "description": "As a user, I need a Saved screen so that I can view and manage my favorited events and restaurants.",
+      "acceptanceCriteria": [
+        "Create ui/screens/favorites/FavoritesScreen.kt matching iOS FavoritesView.swift",
+        "Unauthenticated state: Sign-in prompt with button navigating to AuthScreen",
+        "Authenticated state: Total saved item counter",
+        "FavoritesLimitBanner for free users: progress bar showing X/3 saves used (warning at 2+)",
+        "Three collapsible sections: Upcoming Events (with count), Restaurants (with count), Past Events (with count, grayed out)",
+        "FavoriteEventRow: Event title, date/time, location, remove heart button",
+        "FavoriteRestaurantRow: Name, cuisine, rating, price, remove heart button",
+        "Swipe-to-delete or tap heart to remove with confirmation toast",
+        "Pull-to-refresh",
+        "SubscriptionBanner shown at bottom when no favorites",
+        "Past events shown with orange badge indicating they've passed",
+        "Create data/repository/FavoritesRepository.kt: loadEventFavorites(), loadRestaurantFavorites(), toggleEventFavorite(id), toggleRestaurantFavorite(id), fetchFavoriteEvents(), fetchFavoriteRestaurants()",
+        "Favorites stored in user_event_interactions (interaction_type='favorite') and user_restaurant_interactions tables",
+        "Free tier: max 3 favorites (throws error at limit), Insider+: unlimited",
+        "Local storage fallback for restaurant favorites (SharedPreferences when table unavailable)",
+        "Create ui/screens/favorites/FavoritesViewModel.kt matching iOS"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Mirrors iOS FavoritesView.swift + FavoritesViewModel.swift + FavoritesService.swift. Same favorite limit (free=3). Same database tables and queries. Same local fallback for restaurant favorites."
+    },
+    {
+      "id": "AND-025",
+      "title": "Build Map/Explore screen with Google Maps",
+      "description": "As a user, I need a Map screen so that I can see events, restaurants, and attractions on an interactive map.",
+      "acceptanceCriteria": [
+        "Add Google Maps Compose dependency (maps-compose)",
+        "Create ui/screens/map/MapScreen.kt matching iOS EventMapView.swift",
+        "Google Map fills screen with standard terrain view",
+        "Search bar overlay at top",
+        "Toggle controls (top-right): Events, Dining, Places — each toggles pin visibility",
+        "Pin count badge (bottom center) showing total visible pins",
+        "Event pins: color-coded by urgency — red (today), orange (≤7 days), blue (future) with category icon",
+        "Restaurant pins: orange with fork/knife icon",
+        "Attraction pins: green with type-specific icon",
+        "User location shown with default blue dot (requires ACCESS_FINE_LOCATION permission)",
+        "Tap pin → shows popup card at bottom with: image, title, subtitle info, action button (navigate/call), close button",
+        "Tap popup action → navigates to detail screen or external intent",
+        "Search on map: queries fuzzy search, fits map region to results with 30% padding",
+        "Default center: Des Moines (41.5868, -93.625)",
+        "Create ui/screens/map/MapViewModel.kt matching iOS: events/restaurants/attractions state, toggle visibility, selectedEvent/Restaurant/Attraction, loadNearbyContent(), search(), clearSelection(), regionFitting()",
+        "Handle offline gracefully (show cached pins or empty state)",
+        "Custom marker composables for each content type"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Mirrors iOS EventMapView.swift + MapViewModel.swift. Google Maps replaces Apple MapKit. Same pin color logic, same popup behavior, same search functionality. Need Google Maps API key in local.properties."
+    },
+    {
+      "id": "AND-026",
+      "title": "Build Profile screen with edit and settings",
+      "description": "As a user, I need a Profile screen so that I can view/edit my profile and access app settings.",
+      "acceptanceCriteria": [
+        "Create ui/screens/profile/ProfileScreen.kt matching iOS ProfileView.swift",
+        "Authenticated view: Avatar circle with initials, display name, email, SubscriptionBanner (full style), Personal Info section (First Name, Last Name, Phone, Location text fields), Interests multi-select grid, Save Changes button, App section (Settings, Visit Website, Sign Out, Delete Account)",
+        "Guest view: Large icon, welcome message, Sign In CTA button, SubscriptionBanner (compact), Settings button",
+        "Save changes calls updateProfile with loading state",
+        "Delete Account with confirmation AlertDialog (destructive action)",
+        "Sign Out clears auth state and navigates to Home",
+        "Create ui/screens/profile/ProfileViewModel.kt matching iOS",
+        "Create ui/screens/profile/SettingsScreen.kt matching iOS SettingsView.swift: Account section (Subscription row → SubscriptionScreen, Restore Purchases), General (version display), Notifications (opens Android notification settings), About (Website, Contact Support mailto, Privacy Policy WebView, Terms WebView, Rate app → Play Store), Data & Privacy (Delete Account)",
+        "Debug section only in debug builds: Reset Onboarding",
+        "App version from BuildConfig.VERSION_NAME + VERSION_CODE"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Mirrors iOS ProfileView.swift + SettingsView.swift. Same layout, same sections. Rate app opens Play Store instead of App Store. Notification settings opens Android system settings."
+    },
+    {
+      "id": "AND-027",
+      "title": "Build Subscription screen and Google Play Billing integration",
+      "description": "As a user, I need a subscription screen so that I can view premium tiers and purchase Insider or VIP subscriptions.",
+      "acceptanceCriteria": [
+        "Add Google Play Billing Library dependency (billing-ktx 7.0+)",
+        "Create data/remote/BillingService.kt as singleton managing BillingClient lifecycle",
+        "Connect BillingClient on app start, handle connection retries",
+        "Query subscription products matching: Insider Monthly, VIP Monthly (product IDs configured in Play Console)",
+        "Create purchase flow: launchBillingFlow() → handle PurchaseResult → verify purchase → acknowledge → sync entitlement to backend",
+        "Backend sync: call 'validate-android-receipt' edge function (to be created) with purchaseToken, productId, userId",
+        "Retry logic: 3 attempts with exponential backoff (1s, 2s, 4s) on transient errors",
+        "Grace period: validation failures don't revoke local entitlements",
+        "Restore purchases: queryPurchasesAsync() for active subscriptions",
+        "Listen for purchase updates via PurchasesUpdatedListener",
+        "Expose currentTier as StateFlow<SubscriptionTier>",
+        "Create ui/screens/subscription/SubscriptionScreen.kt matching iOS SubscriptionView.swift: Sparkles icon, 'Unlock Premium' title, current tier badge, Insider features list (7 items), VIP features list (6 items), tier selection cards with pricing, Purchase button, Restore Purchases button, Terms/Privacy links",
+        "Handle billing errors gracefully with user-friendly messages",
+        "Handle pending purchases (PENDING state)"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Google Play Billing replaces iOS StoreKit. Same tier structure, same features per tier, same retry logic. Product IDs will differ from iOS — configure in Play Console. Backend edge function needs to be created to validate Android purchases (separate from iOS validate-ios-receipt). Same grace period approach as iOS."
+    },
+    {
+      "id": "AND-028",
+      "title": "Create validate-android-receipt Supabase edge function",
+      "description": "As a developer, I need a backend edge function to validate Android purchase tokens so that subscription entitlements are securely verified.",
+      "acceptanceCriteria": [
+        "Create supabase/functions/validate-android-receipt/index.ts",
+        "Accept POST with: purchaseToken, productId, userId, packageName",
+        "Use Google Play Developer API (androidpublisher v3) to verify subscription purchase",
+        "Validate purchase token against Google's servers",
+        "On success: upsert subscription record in database with tier, expiry date, platform='android'",
+        "On failure: return 400 with error details",
+        "Add CORS headers from _shared/cors.ts",
+        "Add rate limiting from _shared/rateLimit.ts",
+        "Requires GOOGLE_PLAY_SERVICE_ACCOUNT_KEY secret",
+        "Handle edge cases: expired subscriptions, cancelled subscriptions, grace period"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "New edge function — iOS has validate-ios-receipt, Android needs its own. Uses Google Play Developer API for server-side verification. Service account key stored as Supabase secret."
+    },
+    {
+      "id": "AND-029",
+      "title": "Build location services with Google Play Services",
+      "description": "As a developer, I need location services so that the app can show nearby content and calculate distances.",
+      "acceptanceCriteria": [
+        "Add Google Play Services Location dependency (play-services-location)",
+        "Create util/LocationService.kt as Hilt singleton",
+        "requestPermission(): request ACCESS_FINE_LOCATION using ActivityResultContracts",
+        "getCurrentLocation(): FusedLocationProviderClient with PRIORITY_BALANCED_POWER_ACCURACY (matches iOS 100m accuracy)",
+        "Cache location for 5 minutes (skip re-fetch if cached location is recent)",
+        "distance(from lat/lng): Haversine calculation returning miles",
+        "formattedDistance(): 'Nearby' (<0.1 mi), 'X ft away' (<1 mi), 'X.X mi' (else) — matching iOS format",
+        "Expose userLocation as StateFlow<Location?>",
+        "Handle permission denied gracefully (fall back to Des Moines center coordinates)",
+        "Handle Google Play Services unavailable"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Mirrors iOS LocationService.swift. Same 5-minute cache, same distance formatting, same fallback to Des Moines center. Use FusedLocationProviderClient for best accuracy with minimal battery."
+    },
+    {
+      "id": "AND-030",
+      "title": "Build local notification service for event reminders",
+      "description": "As a user, I need event reminders so that I get notified before events I'm interested in.",
+      "acceptanceCriteria": [
+        "Create util/LocalNotificationService.kt using Android NotificationManager + AlarmManager",
+        "Create notification channel 'event_reminders' with name 'Event Reminders'",
+        "scheduleReminder(event): schedule notification 1 hour before event, content 'Event Reminder - [title] starts in 1 hour at [venue]'",
+        "cancelReminder(eventId): cancel scheduled notification",
+        "toggleReminder(event): toggle schedule/cancel",
+        "isReminderSet(eventId): check if reminder exists",
+        "Request POST_NOTIFICATIONS permission (Android 13+)",
+        "Use AlarmManager.setExactAndAllowWhileIdle() for precise timing",
+        "Create NotificationReceiver BroadcastReceiver for handling alarm triggers",
+        "Notification tap opens EventDetailScreen for that event",
+        "Persist scheduled event IDs in SharedPreferences for state tracking"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Mirrors iOS LocalNotificationService.swift. Same 1-hour-before timing, same notification content. Android uses AlarmManager + BroadcastReceiver instead of UNUserNotificationCenter."
+    },
+    {
+      "id": "AND-031",
+      "title": "Build push notification service with Firebase Cloud Messaging",
+      "description": "As a developer, I need push notification infrastructure so that the backend can send notifications to Android users.",
+      "acceptanceCriteria": [
+        "Add Firebase dependencies: firebase-messaging-ktx, google-services plugin",
+        "Create google-services.json placeholder (gitignored) with setup instructions",
+        "Create util/PushNotificationService.kt extending FirebaseMessagingService",
+        "onNewToken(): sync device token to backend via 'register-device-token' edge function with platform='android'",
+        "onMessageReceived(): display notification using NotificationManager with proper channel",
+        "Create notification channel 'general' with name 'General Notifications'",
+        "Request POST_NOTIFICATIONS permission on Android 13+",
+        "Expose isRegistered and deviceToken as state",
+        "Feature flag in Config: enablePushNotifications = false (matching iOS default)",
+        "Handle notification tap → deep link to relevant screen"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "Mirrors iOS PushNotificationService.swift. FCM replaces APNs. Same backend endpoint (register-device-token) with platform='android'. Same default disabled state."
+    },
+    {
+      "id": "AND-032",
+      "title": "Build deep link handler and intent filters",
+      "description": "As a developer, I need deep linking so that the app can handle URLs from external sources and navigate to the correct screen.",
+      "acceptanceCriteria": [
+        "Add intent-filter in AndroidManifest.xml for custom scheme: com.desmoines.aipulse://",
+        "Add intent-filter for universal links: desmoinesinsider.com/events/*, /restaurants/*, /attractions/*",
+        "Create util/DeepLinkHandler.kt matching iOS DeepLinkHandler.swift",
+        "Supported patterns: events/:id, restaurants/:id, attractions/:id, home, search, favorites, profile",
+        "Auth callback URLs (auth-callback) forwarded to Supabase client",
+        "Tab navigation URLs navigate to correct tab",
+        "Content URLs navigate to detail screens",
+        "Create assetlinks.json for Android App Links verification",
+        "Pending destination consumed on navigation",
+        "Handle invalid/malformed URLs gracefully"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "Mirrors iOS DeepLinkHandler.swift. Same URL patterns. Android uses intent-filter + App Links instead of iOS Associated Domains. Auth callback handled by Supabase."
+    },
+    {
+      "id": "AND-033",
+      "title": "Build affiliate ad service with session management",
+      "description": "As a developer, I need the affiliate ad system so that free users see rotating partner ads.",
+      "acceptanceCriteria": [
+        "Create data/remote/AffiliateAdService.kt matching iOS AffiliateAdService.swift",
+        "3 active partners: Hyatt, IHG, Marriott — each with 3 asset sizes (728x90, 300x250, 160x600) and CDN image URLs",
+        "Affiliate tracking URLs for each partner",
+        "Session management: 30-minute brand rotation, persisted in SharedPreferences",
+        "currentPartner computed property with session logic",
+        "imageURL(placement): returns correct size for banner (300x250, 1.2:1 ratio) or compact (728x90, ~8:1 ratio)",
+        "FTC compliance: 'Ad' label in top-left corner of all ad creatives",
+        "Ads shown only to free users (hidden for Insider+/VIP)",
+        "Same brand shown for 30 min during session for consistency"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "Mirrors iOS AffiliateAdService.swift exactly. Same partners, same URLs, same 30-minute rotation. Same FTC compliance 'Ad' label."
+    },
+    {
+      "id": "AND-034",
+      "title": "Build Spotlight/App Search indexing for on-device search",
+      "description": "As a developer, I need on-device search indexing so that events and restaurants appear in Android system search.",
+      "acceptanceCriteria": [
+        "Add Firebase App Indexing dependency (firebase-appindexing)",
+        "Create util/AppSearchService.kt matching iOS SpotlightService.swift",
+        "indexEvents(events): create Indexable objects with title, description, keywords (category, venue, city), URL, image",
+        "indexRestaurants(restaurants): create Indexable objects with name, cuisine, price range, location, URL",
+        "removeAllItems(): clear all indexed items",
+        "Index on initial data load and after refresh",
+        "Use FirebaseAppIndex.update() for batch indexing"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "Mirrors iOS SpotlightService.swift. Firebase App Indexing replaces CoreSpotlight. Same indexed fields. Makes content discoverable via Google app and Android system search."
+    },
+    {
+      "id": "AND-035",
+      "title": "Build secure storage with Android Keystore",
+      "description": "As a developer, I need secure storage so that sensitive data like tokens are stored safely.",
+      "acceptanceCriteria": [
+        "Create util/SecureStorage.kt using EncryptedSharedPreferences (AndroidX Security)",
+        "Add androidx.security:security-crypto dependency",
+        "Methods: save(key, value), load(key): String?, delete(key), deleteAll()",
+        "Uses MasterKey with AES256_GCM for encryption",
+        "Fallback to regular SharedPreferences if Keystore fails (with logged warning)",
+        "Used for storing auth tokens, sensitive user data",
+        "Inject as singleton via Hilt"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": "Mirrors iOS KeychainService.swift. Android uses EncryptedSharedPreferences instead of Keychain. Same API surface."
+    },
+    {
+      "id": "AND-036",
+      "title": "Build structured logging utility",
+      "description": "As a developer, I need a logging utility so that debug output is structured and useful during development.",
+      "acceptanceCriteria": [
+        "Create util/AppLogger.kt matching iOS AppLogger.swift",
+        "Categories: auth, network, cache, billing, ui, nav, general",
+        "Use Android Log class with tag format: 'DMI/{category}'",
+        "Methods: debug(message), info(message), warning(message), error(message, throwable?)",
+        "Release builds: strip debug/info logs via ProGuard rules",
+        "Usage: AppLogger.auth.info('User signed in')"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": "Mirrors iOS AppLogger.swift. Uses Android Log instead of OSLog. Same category-based logging pattern."
+    },
+    {
+      "id": "AND-037",
+      "title": "Add comprehensive accessibility support (TalkBack, content descriptions)",
+      "description": "As a user with accessibility needs, I need the app to work with TalkBack and other accessibility services.",
+      "acceptanceCriteria": [
+        "All clickable elements have contentDescription",
+        "All images have contentDescription or are marked decorative (semantics { contentDescription = null })",
+        "Filter buttons announce 'X filters active'",
+        "Event cards have full accessibility label (title, date, location, category, free/paid)",
+        "Rating displays use text descriptions ('4.5 out of 5 stars')",
+        "Tab indicators announce current tab and position",
+        "Page indicators in onboarding announce 'Page X of 3'",
+        "Toast notifications announced via LiveRegion",
+        "Interactive elements have accessibility hints ('Tap to view event details')",
+        "Selected state communicated via semantics { selected = true }",
+        "Color is never the only differentiator (icons always paired with text/labels)",
+        "Form fields have proper labels and error announcements",
+        "Heading hierarchy (semantics { heading() }) on section titles",
+        "Respect 'reduce animations' system setting (Settings.Global.ANIMATOR_DURATION_SCALE)"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": "Mirrors iOS VoiceOver support. Android equivalent is TalkBack. Same principle: all interactive elements accessible, color not sole indicator, motion respects system preferences. WCAG 2.1 Level AA target."
+    },
+    {
+      "id": "AND-038",
+      "title": "Add haptic feedback throughout the app",
+      "description": "As a user, I need tactile feedback so that interactions feel responsive and polished.",
+      "acceptanceCriteria": [
+        "Create util/HapticHelper.kt wrapping Android Vibrator/VibrationEffect",
+        "lightImpact(): 10ms vibration at low amplitude",
+        "mediumImpact(): 20ms at medium amplitude",
+        "Add haptic feedback on: tab selection, filter changes, category chip selection, favorite toggle, date preset selection, pull-to-refresh completion",
+        "Use HapticFeedbackType.LongPress where Compose supports it natively",
+        "Respects system haptic settings (check if vibrator has amplitude control)",
+        "No haptic feedback when accessibility 'touch feedback' is disabled"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": "Mirrors iOS haptic feedback (UIImpactFeedbackGenerator). Same trigger points throughout the app."
+    },
+    {
+      "id": "AND-039",
+      "title": "Add animations: shimmer skeletons, transitions, and gestures",
+      "description": "As a user, I need smooth animations so that the app feels polished and responsive.",
+      "acceptanceCriteria": [
+        "Shimmer skeleton effect for loading states (event cards, restaurant cards, detail hero images)",
+        "Smooth filter bar transitions (AnimatedVisibility) when filters are applied/cleared",
+        "Toast entrance/exit animations (slide up + fade)",
+        "Popup card entrance/exit on map (slide up + fade)",
+        "Pin scale animation on selection (spring-based) on map",
+        "Full-screen image viewer: pinch-to-zoom (0.5x-5x), double-tap toggle (1x↔2.5x), swipe-down-to-dismiss (150dp threshold), pan when zoomed",
+        "Page indicator capsule width animation in onboarding",
+        "Material 3 shared element transitions between list → detail where possible",
+        "All animations respect 'reduce animations' system setting",
+        "Use Compose animation APIs: animateContentSize, AnimatedVisibility, Animatable, spring()"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": "Mirrors iOS animations. Same spring-based pin scaling, same zoom thresholds, same dismiss threshold. Respect ANIMATOR_DURATION_SCALE for accessibility."
+    },
+    {
+      "id": "AND-040",
+      "title": "Add image caching with Coil",
+      "description": "As a developer, I need efficient image caching so that images load fast and don't re-download unnecessarily.",
+      "acceptanceCriteria": [
+        "Add Coil dependency (coil-compose 3.0+)",
+        "Configure ImageLoader in Application class with: memory cache (50MB), disk cache (200MB), crossfade enabled",
+        "CachedAsyncImage composable uses SubcomposeAsyncImage with placeholder and error states",
+        "Disk cache stored in app cache directory",
+        "TTL-based expiry from Cache-Control headers (default 7 days)",
+        "LRU eviction when max size exceeded",
+        "All event/restaurant/attraction images use CachedAsyncImage"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": "Mirrors iOS CachedAsyncImage.swift two-tier cache. Same limits: 50MB memory, 200MB disk. Coil is the standard image loading library for Compose."
+    },
+    {
+      "id": "AND-041",
+      "title": "Configure ProGuard rules and release build optimizations",
+      "description": "As a developer, I need proper ProGuard/R8 configuration so that release builds are optimized and don't crash.",
+      "acceptanceCriteria": [
+        "Enable minification and resource shrinking in release buildType",
+        "Create proguard-rules.pro with keep rules for: Supabase models (@Serializable classes), Google Play Billing, Firebase, Ktor, kotlinx.serialization",
+        "Strip debug/info log statements in release builds",
+        "Enable R8 full mode",
+        "Release build assembles without ProGuard errors",
+        "Release build runs correctly (no ClassNotFoundException or serialization issues)",
+        "APK/AAB size is reasonable (<30MB)"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "Critical for Play Store release. ProGuard rules must preserve serializable model classes and reflection-based libraries. Test release build thoroughly."
+    },
+    {
+      "id": "AND-042",
+      "title": "Set up unit tests with JUnit5, MockK, and Turbine",
+      "description": "As a developer, I need a testing framework so that ViewModels, repositories, and utilities can be tested.",
+      "acceptanceCriteria": [
+        "Add test dependencies: junit5, mockk, turbine (Flow testing), kotlinx-coroutines-test",
+        "Create test for EventsViewModel: verifies initial load, filter changes trigger refresh, pagination works, cache-first behavior",
+        "Create test for RestaurantsViewModel: verifies sort options, filter application",
+        "Create test for SearchViewModel: verifies debounce, parallel search, fuzzy fallback",
+        "Create test for AuthViewModel: verifies email validation, password strength scoring, rate limiting",
+        "Create test for LocationService: verifies distance calculation, formatted distance output",
+        "Create test for DateFilterPreset: verifies dateRange computation for all 6 presets",
+        "All tests pass with ./gradlew test"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": "Start with ViewModel and utility tests. Use MockK for mocking repositories. Use Turbine for testing StateFlow emissions. Match the iOS test patterns."
+    },
+    {
+      "id": "AND-043",
+      "title": "Set up instrumentation tests with Compose UI testing",
+      "description": "As a developer, I need UI tests so that critical user flows are verified on real devices.",
+      "acceptanceCriteria": [
+        "Add androidTest dependencies: compose-ui-test-junit4, hilt-android-testing",
+        "Create test for OnboardingFlow: verify 3 pages, skip, get started",
+        "Create test for AuthFlow: verify sign in form, validation errors, tab switching",
+        "Create test for HomeScreen: verify featured carousel renders, category chips work, filter sheet opens",
+        "Create test for SearchScreen: verify search input, tab switching, results display",
+        "Create test for FavoritesScreen: verify unauthenticated prompt, favorite list rendering",
+        "Create test for Navigation: verify all 6 tabs navigate correctly",
+        "All tests pass with ./gradlew connectedAndroidTest (on emulator)"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "Compose testing library provides semantics-based testing. Use test tags for finding composables. Similar coverage to iOS's implicit UI testing."
+    },
+    {
+      "id": "AND-044",
+      "title": "Set up GitHub Actions CI for Android",
+      "description": "As a developer, I need CI so that Android builds and tests are validated on every PR.",
+      "acceptanceCriteria": [
+        "Create .github/workflows/android-ci.yml triggered on pull_request for android/** paths",
+        "Steps: checkout, setup JDK 17, setup Gradle with caching, lint check, unit tests, assembleDebug",
+        "Cache Gradle wrapper and dependencies for speed",
+        "Provide dummy local.properties with placeholder Supabase credentials for build",
+        "Workflow fails if lint, tests, or build fail",
+        "Add status badge to README"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": "Separate workflow from web CI. Only triggers on android/ path changes. Uses JDK 17 (required for AGP 8.5+)."
+    },
+    {
+      "id": "AND-045",
+      "title": "Prepare Google Play Store listing and signing configuration",
+      "description": "As a developer, I need the app prepared for Play Store submission so that it can be published.",
+      "acceptanceCriteria": [
+        "Create signing config in build.gradle.kts using keystore properties from local.properties (gitignored)",
+        "Create keystore generation instructions in android/README.md",
+        "Configure release signing config",
+        "Set up Play Store listing metadata: app title ('Des Moines Insider'), short description, full description, category (Travel & Local), content rating questionnaire answers",
+        "Create feature graphic (1024x500) placeholder",
+        "Create app icon following Material Design guidelines (adaptive icon with foreground/background layers)",
+        "Create res/mipmap-* launcher icons for all densities (mdpi through xxxhdpi)",
+        "Create screenshots placeholder directory for Phone (16:9) and 7-inch tablet",
+        "Set up AAB (Android App Bundle) as release format",
+        "Privacy policy URL: https://desmoinesinsider.com/privacy-policy",
+        "Build signed release AAB successfully"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": "Final step before Play Store submission. Keystore must never be committed to git. AAB is required by Play Store (not APK). App category: Travel & Local."
+    },
+    {
+      "id": "AND-046",
+      "title": "Add EventCard composable for event list items",
+      "description": "As a developer, I need a reusable EventCard composable so that events display consistently across Home, Search, and Favorites screens.",
+      "acceptanceCriteria": [
+        "Create ui/components/EventCard.kt matching iOS EventCardView.swift",
+        "Layout: Image (rounded corners) on left, content on right",
+        "Content: Title (max 2 lines), Date/time formatted, Location, CategoryBadge, Free/Paid indicator",
+        "Urgency label shown for events within 7 days (Today, Tomorrow, In X days)",
+        "Featured events have subtle highlight or badge",
+        "Favorite heart button (if user authenticated)",
+        "Tap navigates to EventDetailScreen",
+        "Skeleton variant for loading state",
+        "Full accessibility label matching iOS: title, date, location, category, free/paid",
+        "@Preview for both normal and featured states"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "Core reusable component used across Home, Search results, Favorites, and Related events. Must match iOS EventCardView.swift layout and info density."
+    },
+    {
+      "id": "AND-047",
+      "title": "Add RestaurantCard composable for restaurant list items",
+      "description": "As a developer, I need a reusable RestaurantCard so that restaurants display consistently across Dining, Search, and Favorites.",
+      "acceptanceCriteria": [
+        "Create ui/components/RestaurantCard.kt matching iOS RestaurantCardView.swift",
+        "Layout: Image on left, content on right",
+        "Content: Name, Cuisine type, Price range, Star rating (visual stars + numeric), Open/Closed status badge, Distance (if available)",
+        "Featured indicator if applicable",
+        "Favorite heart button (if authenticated)",
+        "Tap navigates to RestaurantDetailScreen",
+        "Skeleton variant for loading",
+        "Accessibility label with name, cuisine, rating, price, status",
+        "@Preview composables"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": "Core reusable component. Open/Closed detection uses Restaurant.isOpenNow() computed from business_hours JSON."
+    },
+    {
+      "id": "AND-048",
+      "title": "Add pull-to-refresh across all list screens",
+      "description": "As a user, I need pull-to-refresh so that I can manually refresh content on any screen.",
+      "acceptanceCriteria": [
+        "Add Material 3 pullToRefresh modifier to: HomeScreen, RestaurantsScreen, SearchScreen, FavoritesScreen",
+        "Pull-to-refresh triggers full data refresh (bypasses cache)",
+        "Loading indicator shown during refresh",
+        "Haptic feedback on refresh completion",
+        "Error state cleared on successful refresh"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": "Mirrors iOS pull-to-refresh behavior. Use Compose Material 3 pullToRefresh modifier (experimental API)."
+    },
+    {
+      "id": "AND-049",
+      "title": "Add share functionality across detail screens",
+      "description": "As a user, I need to share events, restaurants, and attractions via Android's share sheet.",
+      "acceptanceCriteria": [
+        "Add share button to top app bar on EventDetailScreen, RestaurantDetailScreen, AttractionDetailScreen",
+        "Share intent includes: title, description snippet, deep link URL",
+        "Event share: 'Check out [title] on [date] at [venue]! [url]'",
+        "Restaurant share: 'Check out [name] - [cuisine] in Des Moines! [url]'",
+        "Attraction share: 'Check out [name] in Des Moines! [url]'",
+        "Uses Intent.ACTION_SEND with text/plain MIME type",
+        "Share sheet opens with proper chooser title"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "Mirrors iOS ShareSheet usage. Android uses Intent.ACTION_SEND instead of UIActivityViewController."
+    },
+    {
+      "id": "AND-050",
+      "title": "Final integration testing, polish, and Play Store readiness",
+      "description": "As a developer, I need a final quality pass so that the app is ready for Play Store submission.",
+      "acceptanceCriteria": [
+        "All 6 tabs function correctly with data loading",
+        "Authentication flow works end-to-end (email + Google Sign-In)",
+        "Subscription purchase flow works in Play Store sandbox",
+        "Favorites sync between sessions and across cache clears",
+        "Map loads with correct pins and popup interactions",
+        "Search returns results across all content types",
+        "Offline mode shows cached data and offline banner",
+        "Deep links navigate to correct screens",
+        "Push notification token registers with backend",
+        "All animations smooth at 60fps",
+        "No memory leaks (verify with Android Profiler)",
+        "No crash on rotation/configuration change",
+        "App passes Android Vitals: no ANRs, crash rate <1%",
+        "Accessibility: full TalkBack walkthrough of all screens passes",
+        "Dark mode works correctly on all screens",
+        "APK/AAB size under 30MB",
+        "All unit and UI tests pass",
+        "Release build assembles and runs correctly with ProGuard"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": "Final quality gate before Play Store submission. Run through every feature manually. Profile with Android Studio tools. Test on multiple device sizes (phone + tablet)."
+    }
+  ]
+}

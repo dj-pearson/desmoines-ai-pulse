@@ -6,12 +6,13 @@
  * or opening an interactive terminal window.
  *
  * Usage:
- *   node scripts/ralph/ralph.mjs [--tool claude|amp] [--max <n>] [--resume]
+ *   node scripts/ralph/ralph.mjs [--tool claude|amp] [--max <n>] [--resume] [--prd <file>] [--instructions <file>]
  *
  * Examples:
  *   node scripts/ralph/ralph.mjs --tool claude
  *   node scripts/ralph/ralph.mjs --tool claude --max 20
  *   node scripts/ralph/ralph.mjs --tool claude --resume
+ *   node scripts/ralph/ralph.mjs --tool claude --prd prd-android.json --instructions scripts/ralph/CLAUDE-android.md
  *
  * Prerequisites:
  *   - Claude Code installed:  npm install -g @anthropic-ai/claude-code
@@ -31,6 +32,8 @@ const args = process.argv.slice(2);
 let TOOL = 'claude';
 let MAX_ITERATIONS = 10;
 let RESUME = false;
+let PRD_OVERRIDE = null;
+let INSTRUCTIONS_OVERRIDE = null;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--tool' && args[i + 1]) { TOOL = args[++i]; }
@@ -38,6 +41,10 @@ for (let i = 0; i < args.length; i++) {
   else if (args[i] === '--max' && args[i + 1]) { MAX_ITERATIONS = parseInt(args[++i], 10); }
   else if (args[i].startsWith('--max=')) { MAX_ITERATIONS = parseInt(args[i].split('=')[1], 10); }
   else if (args[i] === '--resume') { RESUME = true; }
+  else if (args[i] === '--prd' && args[i + 1]) { PRD_OVERRIDE = args[++i]; }
+  else if (args[i].startsWith('--prd=')) { PRD_OVERRIDE = args[i].split('=')[1]; }
+  else if (args[i] === '--instructions' && args[i + 1]) { INSTRUCTIONS_OVERRIDE = args[++i]; }
+  else if (args[i].startsWith('--instructions=')) { INSTRUCTIONS_OVERRIDE = args[i].split('=')[1]; }
   else if (/^\d+$/.test(args[i])) { MAX_ITERATIONS = parseInt(args[i], 10); }
 }
 
@@ -50,16 +57,20 @@ if (TOOL !== 'claude' && TOOL !== 'amp') {
 // Project root = two levels up from scripts/ralph/
 const PROJECT_ROOT = join(__dirname, '..', '..');
 
-// prd.json: prefer project root (where you'd naturally keep it),
-// fall back to scripts/ralph/prd.json for backwards-compat.
-const PRD_FILE = existsSync(join(PROJECT_ROOT, 'prd.json'))
-  ? join(PROJECT_ROOT, 'prd.json')
-  : join(__dirname, 'prd.json');
+// prd.json: --prd flag > project root > scripts/ralph/prd.json
+const PRD_FILE = PRD_OVERRIDE
+  ? (existsSync(join(PROJECT_ROOT, PRD_OVERRIDE)) ? join(PROJECT_ROOT, PRD_OVERRIDE) : PRD_OVERRIDE)
+  : (existsSync(join(PROJECT_ROOT, 'prd.json'))
+      ? join(PROJECT_ROOT, 'prd.json')
+      : join(__dirname, 'prd.json'));
 
 const PROGRESS_FILE = join(__dirname, 'progress.txt');
 const ARCHIVE_DIR   = join(__dirname, 'archive');
 const LAST_BRANCH   = join(__dirname, '.last-branch');
-const CLAUDE_MD     = join(__dirname, 'CLAUDE.md');
+// --instructions flag > scripts/ralph/CLAUDE.md
+const CLAUDE_MD     = INSTRUCTIONS_OVERRIDE
+  ? (existsSync(join(PROJECT_ROOT, INSTRUCTIONS_OVERRIDE)) ? join(PROJECT_ROOT, INSTRUCTIONS_OVERRIDE) : INSTRUCTIONS_OVERRIDE)
+  : join(__dirname, 'CLAUDE.md');
 const PROMPT_MD     = join(__dirname, 'prompt.md');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
