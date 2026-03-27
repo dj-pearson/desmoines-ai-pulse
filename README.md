@@ -1,5 +1,7 @@
 # Des Moines AI Pulse
 
+[![Android CI](https://github.com/desmoines-ai-pulse/desmoines-ai-pulse/actions/workflows/android-ci.yml/badge.svg)](https://github.com/desmoines-ai-pulse/desmoines-ai-pulse/actions/workflows/android-ci.yml)
+
 A modern web platform showcasing Des Moines events, restaurants, and local insights powered by AI.
 
 ## Project Info

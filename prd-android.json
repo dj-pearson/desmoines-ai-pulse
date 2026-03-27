@@ -877,7 +877,7 @@
         "Add status badge to README"
       ],
       "priority": 44,
-      "passes": false,
+      "passes": true,
       "notes": "Separate workflow from web CI. Only triggers on android/ path changes. Uses JDK 17 (required for AGP 8.5+)."
     },
     {
