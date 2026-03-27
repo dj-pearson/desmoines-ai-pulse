@@ -16,3 +16,9 @@
 -keepclasseswithmembers class com.desmoines.aipulse.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
+
+# Ktor / OkHttp
+-dontwarn io.ktor.**
+-keep class io.ktor.** { *; }
+-dontwarn okhttp3.**
+-dontwarn okio.**

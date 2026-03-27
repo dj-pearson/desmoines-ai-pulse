@@ -61,7 +61,7 @@
         "App builds and successfully connects to Supabase"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS Config.swift and SupabaseService.swift. Use the same Supabase project — the backend is shared between web, iOS, and Android. Never hardcode credentials."
     },
     {

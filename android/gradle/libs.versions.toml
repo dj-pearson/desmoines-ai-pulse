@@ -11,6 +11,8 @@ hiltNavigationCompose = "1.2.0"
 kotlinxCoroutines = "1.9.0"
 kotlinxSerialization = "1.7.3"
 kotlinxDatetime = "0.6.1"
+supabaseKt = "3.1.1"
+ktor = "3.0.3"
 junit = "4.13.2"
 junitExt = "1.2.1"
 espressoCore = "3.6.1"
@@ -42,6 +44,16 @@ kotlinx-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime",
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitExt" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+
+# Supabase Kotlin SDK
+supabase-bom = { group = "io.github.jan-tennert.supabase", name = "bom", version.ref = "supabaseKt" }
+supabase-postgrest = { group = "io.github.jan-tennert.supabase", name = "postgrest-kt" }
+supabase-auth = { group = "io.github.jan-tennert.supabase", name = "auth-kt" }
+supabase-realtime = { group = "io.github.jan-tennert.supabase", name = "realtime-kt" }
+supabase-storage = { group = "io.github.jan-tennert.supabase", name = "storage-kt" }
+
+# Ktor (HTTP engine for Supabase)
+ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

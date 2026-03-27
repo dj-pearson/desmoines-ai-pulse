@@ -30,3 +30,21 @@ Started: 2026-03-27T14:05:42.010Z
   - Package-info.kt files serve dual purpose: git tracking + IDE documentation
   - Supabase client provision will be added in AND-003 when supabase-kt dependencies are added
 ---
+
+## 2026-03-27 - AND-003 (Android)
+- Added supabase-kt BOM 3.1.1 (postgrest, auth, realtime, storage) and Ktor OkHttp engine 3.0.3
+- Added BuildConfig fields for SUPABASE_URL and SUPABASE_ANON_KEY read from local.properties
+- Created util/Config.kt mirroring iOS Config.swift (coordinates, page size, cache TTL, auth constants)
+- Created data/remote/SupabaseClient.kt (SupabaseClientProvider singleton) mirroring iOS SupabaseService.swift with PKCE auth, custom redirect scheme, X-Client-Info header, and graceful null-client when credentials missing
+- Created data/remote/ConnectivityTest.kt for simple events table query verification
+- Updated di/AppModule.kt to provide SupabaseClient via Hilt DI
+- Added auth callback deep link intent filter to AndroidManifest.xml
+- Added Ktor/OkHttp proguard rules
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Supabase credentials flow: local.properties → build.gradle.kts buildConfigField → BuildConfig.SUPABASE_URL/KEY
+  - SupabaseClientProvider.client is nullable — all data sources must handle null client gracefully
+  - Auth uses PKCE flow with scheme=com.desmoines.aipulse, host=auth-callback (matches iOS redirect pattern)
+  - supabase-kt 3.x uses install() blocks for plugins (Auth, Postgrest, Realtime, Storage)
+  - Version catalog: supabase-bom manages all supabase-kt module versions
+---
