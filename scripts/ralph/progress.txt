@@ -48,3 +48,57 @@ Started: 2026-03-27T14:05:42.010Z
   - supabase-kt 3.x uses install() blocks for plugins (Auth, Postgrest, Realtime, Storage)
   - Version catalog: supabase-bom manages all supabase-kt module versions
 ---
+
+## 2026-03-27 - AND-004 (Android)
+- Created all data models mirroring iOS Models/ directory:
+  - AppEnums.kt: EventCategory (12 types with icon names, Color), PriceRange, LocationArea, AttractionType, ContentType, UserRole, EventSortOption, RestaurantSortOption (6 options), DateFilterPreset (6 presets with dateRange computation using java.time), SubscriptionTier (free=3 maxFavorites, insider/vip=Int.MAX_VALUE)
+  - Event.kt: @Serializable data class with all 22 fields, @SerialName for snake_case mapping, computed properties (eventCategory, parsedDate, coordinate, isFree, displayDescription, displayLocation, urgencyLabel, featuredCardAccessibilityLabel), preview companions
+  - Restaurant.kt: @Serializable data class with all 22 fields, isOpenNow() method parsing business_hours JSONB (supports flat and nested formats, 12h/24h time), computed properties (coordinate, displayDescription, displayLocation, ratingText, priceLevel, callUri, websiteUri, openStatusText, compactCardAccessibilityLabel)
+  - Attraction.kt: @Serializable data class with all 13 fields, computed properties (attractionType, coordinate, websiteUri, ratingText)
+  - UserProfile.kt: @Serializable data class with computed displayName/initials/role, plus UserEventInteraction, UserRestaurantInteraction, UserRating models
+  - LatLng.kt: Simple latitude/longitude data class (placeholder until Google Maps SDK added in later story)
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Used own LatLng data class to avoid premature Google Maps SDK dependency — will swap when Maps story arrives
+  - Restaurant.businessHours uses JsonElement (not a custom Codable struct) because kotlinx.serialization handles the flexible JSONB shape natively via JsonObject inspection
+  - DateFilterPreset.dateRange uses java.time (LocalDate/LocalDateTime) not kotlinx-datetime — java.time is standard on Android 26+ (our minSdk)
+  - Event.parsedDate returns OffsetDateTime to preserve timezone info from ISO 8601 strings
+  - All @SerialName annotations match exact Supabase column names (snake_case)
+  - EventCategory.from() does case-insensitive matching with contains() fallback, matching iOS init(from:) logic
+---
+
+## 2026-03-27 - AND-005 (Android)
+- Enhanced Color.kt with category colors (all 12 EventCategory types), status colors (success/error/warning), semantic colors, and additional surface variant/outline colors for light and dark themes
+- Created Dimens.kt with standard spacing scale (2dp-48dp) and component-specific dimensions (card radius, icon sizes, hero height, etc.)
+- Updated Theme.kt with surfaceVariant, outline color slots and status bar color management via SideEffect
+- Updated AppEnums.kt EventCategory colors to match PRD spec: Family→blue, Sports→red, Charity→rose, Holiday→amber
+- Files changed: Color.kt, Theme.kt, Dimens.kt (new), AppEnums.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Category colors are defined in two places: Color.kt (theme constants) and AppEnums.kt (enum properties) — keep them in sync
+  - PRD specifies specific category colors that differ from iOS in some cases (iOS Family=cyan, PRD Family=blue; iOS Sports=mint, PRD Sports=red)
+  - Status bar color is set via SideEffect in Theme.kt — uses surface color for seamless look
+  - Dimens object provides centralized spacing constants to avoid magic numbers in composables
+---
+
+## 2026-03-27 - AND-006 (Android)
+- Built bottom navigation with 6 tabs matching iOS MainTabView.swift: Home, Dining, Search, Map, Saved, Profile
+- Created NavGraph.kt with sealed class Route definitions for all screens (tabs, details, flows) with type-safe arguments
+- Created BottomNavTab enum with filled/outlined icon pairs for selected/unselected states
+- Created MainNavHost.kt with NavHost containing all route destinations organized into tab, detail, and flow groups
+- Created MainScreen.kt with Scaffold + NavigationBar, haptic feedback on tab selection, bottom bar hidden on detail screens
+- Created placeholder screens for all 6 tabs with navigation callback signatures ready for future stories
+- Updated MainActivity.kt to use MainScreen instead of HelloDesMoinesScreen placeholder
+- Created screen directories for all future feature screens (eventdetail, restaurantdetail, attractiondetail, auth, onboarding, subscription)
+- Files created: NavGraph.kt, MainNavHost.kt, MainScreen.kt, HomeScreen.kt, RestaurantsScreen.kt, SearchScreen.kt, MapScreen.kt, FavoritesScreen.kt, ProfileScreen.kt
+- Files modified: MainActivity.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Navigation uses popUpTo(findStartDestination) + saveState/restoreState for proper tab backstack management
+  - Bottom bar visibility is controlled by checking currentDestination.route against tabRoutes set
+  - Detail/flow routes use string-based arguments with navArgument — will serve until type-safe nav args are needed
+  - Each placeholder screen already has navigation callback params (onNavigateToEventDetail, etc.) so future stories just fill in the composable body
+  - BottomNavTab enum centralizes tab config — icons, labels, and routes in one place
+  - Haptic feedback uses HapticFeedbackType.LongPress (closest to iOS .light impact in Compose)
+  - Restaurant icon uses Icons.Filled.Restaurant / Icons.Outlined.Restaurant (Material Icons Extended)
+---

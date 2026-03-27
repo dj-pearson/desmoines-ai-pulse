@@ -117,7 +117,7 @@
         "App builds and all 6 tabs are tappable with placeholder content"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS MainTabView.swift with 6 tabs. Use Compose Navigation with type-safe arguments. Each tab should use its own nested NavHost for independent backstacks."
     },
     {
