@@ -291,3 +291,34 @@ Started: 2026-03-27T14:05:42.010Z
   - TabRow is the Material 3 equivalent of iOS segmented Picker for auth mode switching
   - AlertDialog in Compose is a standalone composable (not a modifier like iOS .alert)
 ---
+
+## 2026-03-27 - AND-014 (Android)
+- Created OnboardingScreen.kt with 3-page HorizontalPager matching iOS OnboardingView.swift:
+  - Page 1: LocationCity icon, "Welcome to Des Moines Insider", 3 discovery highlights
+  - Page 2: Favorite (heart) icon in red, "Save Your Favorites", 3 favorites highlights
+  - Page 3: Map icon in blue, "Explore What's Nearby", 3 map highlights
+  - Animated page indicator with wider capsule for active page (spring animation)
+  - Back button on pages 2-3, Next/Get Started buttons, Skip button on pages 1-2
+  - CheckCircle icons for highlight items colored per page
+- Created OnboardingPreferences.kt using Jetpack DataStore (replaces iOS UserDefaults):
+  - hasCompletedOnboarding Flow<Boolean> for reactive state
+  - setOnboardingCompleted() and resetOnboarding() suspend functions
+  - Singleton via Hilt @Inject constructor
+- Updated MainActivity.kt with first-launch onboarding logic:
+  - Reads DataStore on launch, shows OnboardingScreen if not completed
+  - On complete: persists to DataStore and transitions to MainScreen
+  - Uses initial=true default to avoid flash of onboarding on subsequent launches
+- Wired OnboardingScreen into MainNavHost.kt (replacing placeholder comment)
+- Added DataStore Preferences dependency (1.1.1) to version catalog and build.gradle.kts
+- Files created: OnboardingScreen.kt, OnboardingPreferences.kt
+- Files modified: MainActivity.kt, MainNavHost.kt, build.gradle.kts, libs.versions.toml
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - HorizontalPager (foundation) replaces iOS TabView(.page) for swipeable pages
+  - DataStore preferencesDataStore delegate is a Context extension — defined at file level, not inside a class
+  - collectAsState(initial = true) prevents flash: defaults to "completed" so onboarding doesn't briefly show on subsequent launches
+  - OnboardingPreferences uses @Singleton + @Inject constructor so Hilt auto-provides — no manual @Provides needed
+  - animateDpAsState with spring animation replicates iOS capsule page indicator width animation
+  - Page indicator uses semantics { contentDescription = "Page X of 3" } for TalkBack accessibility
+  - OnboardingScreen is rendered directly in MainActivity (not via NavHost) for first-launch — avoids navigation complexity with conditional start destinations
+---

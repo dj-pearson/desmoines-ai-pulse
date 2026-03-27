@@ -269,7 +269,7 @@
         "Page indicator announces 'Page X of 3' for TalkBack"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS OnboardingView.swift exactly. Same 3 pages, same content, same flow. Use Jetpack DataStore for persistence (replaces iOS UserDefaults)."
     },
     {
