@@ -956,3 +956,30 @@ Started: 2026-03-27T14:05:42.010Z
   - Tab navigation uses same popUpTo + saveState + restoreState pattern as bottom bar taps for consistency
   - Detail navigation uses launchSingleTop to prevent duplicate detail screens on rapid taps
 ---
+
+## 2026-03-27 - AND-033 (Android)
+- Created AffiliateAdService.kt matching iOS AffiliateAdService.swift exactly:
+  - 3 partners: Hyatt, IHG, Marriott with identical affiliate URLs and CDN asset URLs (728x90, 300x250, 160x600)
+  - 30-minute brand session rotation persisted in SharedPreferences via kotlinx.serialization
+  - currentPartner computed property with session logic: returns same partner within session, rotates to next on expiry
+  - imageUrl(placement) maps BANNER→"300x250", COMPACT→"728x90"
+  - affiliateUrl property returns current partner's tracking URL
+  - BrandSession data class (index + timestamp) serialized to JSON in SharedPreferences
+- Created AffiliateAdBanner.kt composable for displaying ad creatives:
+  - FTC-compliant "Ad" label in top-left corner (black semi-transparent background, white bold text)
+  - Loads partner image via Coil SubcomposeAsyncImage with correct aspect ratio per placement
+  - Tap opens affiliate URL in browser via Intent.ACTION_VIEW
+  - Hidden for Insider/VIP users (only shown to FREE tier)
+  - Accessibility: contentDescription with partner name, Role.Button semantics
+- Updated AppModule.kt: added SharedPreferences provider (desmoines_insider_prefs)
+- Files created: AffiliateAdService.kt, AffiliateAdBanner.kt
+- Files modified: AppModule.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - AffiliateAdService uses @Singleton + @Inject constructor — Hilt auto-provides it, can be injected into ViewModels or composables
+  - SharedPreferences provided as singleton from AppModule — shared across AffiliateAdService, LocalNotificationService, etc.
+  - Session rotation uses modular arithmetic: (previousIndex + 1) % activeCount — same as iOS
+  - AffiliateAdBanner is separate from AdBannerView — AdBannerView is the "upgrade to remove ads" promo, AffiliateAdBanner shows actual partner ad creatives
+  - Aspect ratio for BANNER placement is 1.2f (300/250), for COMPACT is 728f/90f (~8.09:1)
+  - FTC "Ad" label uses Color.Black.copy(alpha=0.6f) background with RoundedCornerShape(4.dp) — small but visible
+---

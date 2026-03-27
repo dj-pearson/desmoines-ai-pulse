@@ -680,7 +680,7 @@
         "Same brand shown for 30 min during session for consistency"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AffiliateAdService.swift exactly. Same partners, same URLs, same 30-minute rotation. Same FTC compliance 'Ad' label."
     },
     {
