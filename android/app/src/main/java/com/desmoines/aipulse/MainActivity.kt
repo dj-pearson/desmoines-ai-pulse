@@ -1,5 +1,6 @@
 package com.desmoines.aipulse
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -14,6 +15,7 @@ import androidx.lifecycle.lifecycleScope
 import com.desmoines.aipulse.ui.screens.MainScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 import com.desmoines.aipulse.util.OnboardingPreferences
 import dagger.hilt.android.AndroidEntryPoint
@@ -30,9 +32,16 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var onboardingPreferences: OnboardingPreferences
 
+    @Inject
+    lateinit var deepLinkHandler: DeepLinkHandler
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Handle deep link from the launch intent
+        handleDeepLinkIntent(intent)
+
         setContent {
             DesMoinesInsiderTheme {
                 val hasCompletedOnboarding by onboardingPreferences.hasCompletedOnboarding
@@ -58,8 +67,29 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
-                        MainScreen(networkMonitor = networkMonitor)
+                        MainScreen(
+                            networkMonitor = networkMonitor,
+                            deepLinkHandler = deepLinkHandler
+                        )
                     }
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDeepLinkIntent(intent)
+    }
+
+    private fun handleDeepLinkIntent(intent: Intent) {
+        // Try notification tap extras first, then URI deep link
+        if (!deepLinkHandler.handleIntent(intent)) {
+            // If not handled as deep link, let Supabase handle auth callbacks
+            intent.data?.let { uri ->
+                if (uri.toString().contains("auth-callback")) {
+                    // Auth callback - Supabase client handles this via its own intent filter
+                    // No additional handling needed here
                 }
             }
         }

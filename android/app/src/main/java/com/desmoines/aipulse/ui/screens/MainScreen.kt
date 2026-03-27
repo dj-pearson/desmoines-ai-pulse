@@ -11,6 +11,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -23,19 +25,67 @@ import com.desmoines.aipulse.ui.components.OfflineBanner
 import com.desmoines.aipulse.ui.navigation.BottomNavTab
 import com.desmoines.aipulse.ui.navigation.MainNavHost
 import com.desmoines.aipulse.ui.navigation.Route
+import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
 
 /**
  * Main screen with bottom navigation bar matching iOS MainTabView.swift.
  * 6 tabs: Home, Dining, Search, Map, Saved, Profile.
  * Bottom bar hides on detail screens.
+ * Handles deep link navigation via DeepLinkHandler.
  */
 @Composable
-fun MainScreen(networkMonitor: NetworkMonitor) {
+fun MainScreen(
+    networkMonitor: NetworkMonitor,
+    deepLinkHandler: DeepLinkHandler
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val haptic = LocalHapticFeedback.current
+
+    // Observe pending deep link destinations
+    val pendingDestination by deepLinkHandler.pendingDestination.collectAsState()
+
+    // Consume and navigate to pending deep link destination
+    LaunchedEffect(pendingDestination) {
+        val destination = deepLinkHandler.consumeDestination() ?: return@LaunchedEffect
+
+        when (destination) {
+            is DeepLinkHandler.Destination.Event -> {
+                navController.navigate(Route.EventDetail.createRoute(destination.id)) {
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Restaurant -> {
+                navController.navigate(Route.RestaurantDetail.createRoute(destination.id)) {
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Attraction -> {
+                navController.navigate(Route.AttractionDetail.createRoute(destination.id)) {
+                    launchSingleTop = true
+                }
+            }
+            is DeepLinkHandler.Destination.Tab -> {
+                val tabRoute = when (destination.tab) {
+                    DeepLinkHandler.TabDestination.HOME -> Route.Home.route
+                    DeepLinkHandler.TabDestination.DINING -> Route.Dining.route
+                    DeepLinkHandler.TabDestination.SEARCH -> Route.Search.route
+                    DeepLinkHandler.TabDestination.MAP -> Route.Map.route
+                    DeepLinkHandler.TabDestination.SAVED -> Route.Saved.route
+                    DeepLinkHandler.TabDestination.PROFILE -> Route.Profile.route
+                }
+                navController.navigate(tabRoute) {
+                    popUpTo(navController.graph.findStartDestination().id) {
+                        saveState = true
+                    }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        }
+    }
 
     // Routes where the bottom bar should be visible (tab routes only)
     val tabRoutes = BottomNavTab.entries.map { it.route }.toSet()

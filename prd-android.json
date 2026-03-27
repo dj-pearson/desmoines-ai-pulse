@@ -661,7 +661,7 @@
         "Handle invalid/malformed URLs gracefully"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS DeepLinkHandler.swift. Same URL patterns. Android uses intent-filter + App Links instead of iOS Associated Domains. Auth callback handled by Supabase."
     },
     {

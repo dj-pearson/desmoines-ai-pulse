@@ -55,6 +55,33 @@
                     android:scheme="com.desmoines.aipulse"
                     android:host="auth-callback" />
             </intent-filter>
+
+            <!-- Custom scheme deep links for in-app navigation -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="com.desmoines.aipulse" />
+            </intent-filter>
+
+            <!-- Universal links / Android App Links for desmoinesinsider.com -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="desmoinesinsider.com"
+                    android:pathPrefix="/events" />
+                <data
+                    android:scheme="https"
+                    android:host="desmoinesinsider.com"
+                    android:pathPrefix="/restaurants" />
+                <data
+                    android:scheme="https"
+                    android:host="desmoinesinsider.com"
+                    android:pathPrefix="/attractions" />
+            </intent-filter>
         </activity>
     </application>
 
