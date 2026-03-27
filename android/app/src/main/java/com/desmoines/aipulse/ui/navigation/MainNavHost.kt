@@ -10,6 +10,7 @@ import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.favorites.FavoritesScreen
 import com.desmoines.aipulse.ui.screens.home.HomeScreen
 import com.desmoines.aipulse.ui.screens.map.MapScreen
+import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.screens.profile.ProfileScreen
 import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsScreen
 import com.desmoines.aipulse.ui.screens.search.SearchScreen
@@ -141,7 +142,11 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     }
 
     composable(Route.Onboarding.route) {
-        /* OnboardingScreen placeholder — implemented in AND-014 */
+        OnboardingScreen(
+            onComplete = {
+                navController.popBackStack()
+            }
+        )
     }
 
     composable(Route.Subscription.route) {
