@@ -81,7 +81,7 @@
         "All models compile and serialize/deserialize correctly with kotlinx.serialization"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Exact mirror of iOS models. EventCategory must have the same 12 cases with matching icons (use Material Icons equivalents) and colors. DateFilterPreset.dateRange must compute the same date ranges as iOS. SubscriptionTier.maxFavorites: free=3, insider/vip=Int.MAX_VALUE."
     },
     {
