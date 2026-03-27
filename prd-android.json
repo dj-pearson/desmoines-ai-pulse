@@ -187,7 +187,7 @@
         "Cache key strategy includes query parameters (category, date, search text, sort) for distinct cached result sets"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS QueryCache.swift behavior. iOS uses file-based JSON cache with 5 min TTL and 50MB limit. Android should use Room for better query support. Same stale-while-revalidate pattern."
     },
     {

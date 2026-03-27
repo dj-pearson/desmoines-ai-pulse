@@ -167,3 +167,33 @@ Started: 2026-03-27T14:05:42.010Z
   - Default limit for nearby attractions is 50 (matching iOS), vs default page size 30 for paginated list
   - AttractionsQuery is simpler than Events/Restaurants: no date range, no sort options, no multi-select filters
 ---
+
+## 2026-03-27 - AND-010 (Android)
+- Built complete offline cache layer with Room database mirroring iOS QueryCache.swift:
+  - Added Room 2.6.1 dependencies (room-runtime, room-ktx, room-compiler via KSP)
+  - Created 4 Room entities: CachedEvent, CachedRestaurant, CachedAttraction, CacheMetadata — all with indexed cache_key and cached_at columns
+  - Created 4 DAOs: EventDao, RestaurantDao, AttractionDao, CacheMetadataDao with insertAll, getAllByKey, getById, deleteAll, deleteExpired, deleteByKey, count
+  - Created AppDatabase with all 4 entities, version 1, fallbackToDestructiveMigration
+  - Created CacheManager singleton with: getCached*/cache* methods for each type, TTL checking via CacheMetadata.isExpired, stale cache serving (allowStale param), pruneExpired() removing entries >24h, clearAll(), static cache key builders
+  - Created DatabaseModule providing AppDatabase + all DAOs via Hilt
+- Updated all 3 repository implementations with cache-first strategy:
+  - EventsRepositoryImpl: cache check → remote fetch + cache write → stale fallback on error
+  - RestaurantsRepositoryImpl: same pattern, cuisine list not cached (simple/cheap)
+  - AttractionsRepositoryImpl: same pattern
+  - Cache keys include all query parameters for distinct result sets
+- Updated DesMoinesInsiderApp to prune expired cache on launch via coroutine scope
+- Removed data/local/package-info.kt placeholder (replaced by real files)
+- Files created: AppDatabase.kt, CacheManager.kt, 4 entities, 4 DAOs, DatabaseModule.kt
+- Files modified: libs.versions.toml, build.gradle.kts, DesMoinesInsiderApp.kt, EventsRepositoryImpl.kt, RestaurantsRepositoryImpl.kt, AttractionsRepositoryImpl.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Room entities store serialized JSON strings (not individual columns) to avoid complex TypeConverters for JsonElement, List<String>, etc.
+  - Cache keys are built with static CacheManager.eventsKey/restaurantsKey/attractionsKey helpers — pass all query params as varargs
+  - CacheMetadata.isExpired computed property: (now - cachedAt) > (ttlMinutes * 60_000)
+  - Repository pattern: isCacheFresh → return cached, else runCatching remote → recoverCatching with stale cache
+  - fetchById always checks cache first (any cache key), remote fallback caches under "single|{id}" key
+  - EventsQuery has no sortBy field (unlike RestaurantsQuery) — don't include it in cache keys
+  - Response types use Int for totalCount + hasMore: Boolean — cached responses set hasMore=false
+  - DatabaseModule is separate @Module from AppModule — keeps DB concerns isolated
+  - Room fallbackToDestructiveMigration used since cache is expendable data
+---
