@@ -898,7 +898,7 @@
         "Build signed release AAB successfully"
       ],
       "priority": 45,
-      "passes": false,
+      "passes": true,
       "notes": "Final step before Play Store submission. Keystore must never be committed to git. AAB is required by Play Store (not APK). App category: Travel & Local."
     },
     {
