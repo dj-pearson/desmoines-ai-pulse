@@ -248,7 +248,7 @@
         "All form fields have proper keyboard types and IME actions"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AuthView.swift. Replace Apple Sign-In button with Google Sign-In button. Same interest selection grid. Same validation logic."
     },
     {

@@ -6,6 +6,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.favorites.FavoritesScreen
 import com.desmoines.aipulse.ui.screens.home.HomeScreen
 import com.desmoines.aipulse.ui.screens.map.MapScreen
@@ -134,7 +135,9 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
 
 private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController) {
     composable(Route.Auth.route) {
-        /* AuthScreen placeholder — implemented in AND-013 */
+        AuthScreen(
+            onNavigateBack = { navController.popBackStack() },
+        )
     }
 
     composable(Route.Onboarding.route) {
