@@ -22,6 +22,7 @@ import com.desmoines.aipulse.ui.screens.attractiondetail.AttractionDetailViewMod
 import com.desmoines.aipulse.ui.screens.restaurantdetail.RestaurantDetailScreen
 import com.desmoines.aipulse.ui.screens.restaurantdetail.RestaurantDetailViewModel
 import com.desmoines.aipulse.ui.screens.favorites.FavoritesScreen
+import com.desmoines.aipulse.ui.screens.favorites.FavoritesViewModel
 import com.desmoines.aipulse.ui.screens.home.EventsViewModel
 import com.desmoines.aipulse.ui.screens.home.FilterSheet
 import com.desmoines.aipulse.ui.screens.home.HomeScreen
@@ -196,7 +197,15 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
     }
 
     composable(Route.Saved.route) {
+        val viewModel: FavoritesViewModel = hiltViewModel()
+        val state by viewModel.uiState.collectAsState()
+
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            viewModel.loadFavorites()
+        }
+
         FavoritesScreen(
+            state = state,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },
@@ -205,7 +214,13 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             },
             onNavigateToAuth = {
                 navController.navigate(Route.Auth.route)
-            }
+            },
+            onNavigateToSubscription = {
+                navController.navigate(Route.Subscription.route)
+            },
+            onRemoveEventFavorite = { eventId -> viewModel.removeEventFavorite(eventId) },
+            onRemoveRestaurantFavorite = { restaurantId -> viewModel.removeRestaurantFavorite(restaurantId) },
+            onRefresh = { viewModel.refresh() },
         )
     }
 

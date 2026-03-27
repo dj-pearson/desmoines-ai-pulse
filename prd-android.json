@@ -489,7 +489,7 @@
         "Create ui/screens/favorites/FavoritesViewModel.kt matching iOS"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS FavoritesView.swift + FavoritesViewModel.swift + FavoritesService.swift. Same favorite limit (free=3). Same database tables and queries. Same local fallback for restaurant favorites."
     },
     {

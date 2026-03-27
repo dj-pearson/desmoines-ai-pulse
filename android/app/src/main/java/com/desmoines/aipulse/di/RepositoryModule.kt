@@ -6,6 +6,8 @@ import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.data.repository.AuthRepositoryImpl
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.EventsRepositoryImpl
+import com.desmoines.aipulse.data.repository.FavoritesRepository
+import com.desmoines.aipulse.data.repository.FavoritesRepositoryImpl
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepositoryImpl
 import dagger.Binds
@@ -31,4 +33,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
+
+    @Binds
+    abstract fun bindFavoritesRepository(impl: FavoritesRepositoryImpl): FavoritesRepository
 }
