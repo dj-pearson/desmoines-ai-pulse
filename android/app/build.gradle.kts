@@ -99,6 +99,11 @@ dependencies {
     // Ktor (HTTP engine for Supabase)
     implementation(libs.ktor.client.okhttp)
 
+    // Room (offline cache)
+    implementation(libs.room.runtime)
+    implementation(libs.room.ktx)
+    ksp(libs.room.compiler)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
