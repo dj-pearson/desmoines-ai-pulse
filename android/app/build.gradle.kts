@@ -127,6 +127,9 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.play.services.maps)
 
+    // Google Play Billing
+    implementation(libs.play.billing)
+
     // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

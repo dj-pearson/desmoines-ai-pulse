@@ -25,6 +25,7 @@ coil = "3.0.4"
 mapsCompose = "6.2.1"
 playServicesLocation = "21.3.0"
 playServicesMaps = "19.0.0"
+playBilling = "7.1.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -82,6 +83,9 @@ coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp"
 maps-compose = { group = "com.google.maps.android", name = "maps-compose", version.ref = "mapsCompose" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+
+# Google Play Billing
+play-billing = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "playBilling" }
 
 # Ktor (HTTP engine for Supabase)
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }

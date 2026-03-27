@@ -560,7 +560,7 @@
         "Handle pending purchases (PENDING state)"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "Google Play Billing replaces iOS StoreKit. Same tier structure, same features per tier, same retry logic. Product IDs will differ from iOS — configure in Play Console. Backend edge function needs to be created to validate Android purchases (separate from iOS validate-ios-receipt). Same grace period approach as iOS."
     },
     {

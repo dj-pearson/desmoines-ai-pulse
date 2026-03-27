@@ -739,3 +739,56 @@ Started: 2026-03-27T14:05:42.010Z
   - OnboardingPreferences injected into ProfileViewModel via Hilt for debug reset — clean DI, no manual Context access needed
   - BuildConfig.DEBUG used for conditional debug section (matches iOS #if DEBUG)
 ---
+
+## 2026-03-27 - AND-027 (Android)
+- Built complete Subscription screen and Google Play Billing integration matching iOS StoreKitService.swift + SubscriptionView.swift:
+  - Added Google Play Billing Library 7.1.1 (billing-ktx) dependency to version catalog and build.gradle.kts
+  - Created BillingService.kt as @Singleton with full BillingClient lifecycle management:
+    - PurchasesUpdatedListener implementation for purchase callbacks
+    - connect() with BillingClientStateListener + ensureConnected() suspend retry
+    - loadProducts(): queries SUBS product details, sorts by price, exposes via StateFlow
+    - launchPurchaseFlow(activity, productDetails): launches Google Play purchase UI with offer token
+    - handlePurchase(): acknowledges purchase, updates purchased products, syncs to backend
+    - Handles PURCHASED, PENDING, USER_CANCELED, ITEM_ALREADY_OWNED states
+    - updatePurchasedProducts(): queries active subscriptions and resolves tier
+    - resolveTier(): VIP first, then INSIDER, with legacy product ID fallback (matching iOS currentTier logic exactly)
+    - restorePurchases(): queries all active subs and syncs all to backend
+    - syncEntitlementToBackend(): calls validate-android-receipt edge function with purchaseToken, productId, userId, packageName
+    - Retry logic: 3 attempts with exponential backoff (1s, 2s, 4s) matching iOS exactly
+    - Grace period: validation failures logged but do NOT revoke local entitlements
+    - isTransientError(): detects 5xx, timeout, network, connection errors
+    - Exposes currentTier, products, isLoading, errorMessage as StateFlow
+    - Helper methods: getInsiderProduct(), getVipProduct(), getFormattedPrice()
+  - Created SubscriptionViewModel.kt as @HiltViewModel:
+    - Combined uiState StateFlow from BillingService flows + local selectedTier
+    - selectTier(), purchase(activity), restorePurchases(), clearError()
+  - Created SubscriptionScreen.kt matching iOS SubscriptionView.swift:
+    - Sparkles (AutoAwesome) icon, "Unlock Premium" title, subtitle
+    - CurrentTierBadge with icon (Person/Star/AutoAwesome) and color (gray/orange/purple)
+    - Two TierSelectionCards with pricing, selection state, current plan indicator
+    - Purchase button with loading spinner, disabled when no selection or same as current tier
+    - Restore Purchases button
+    - Insider features list (7 items) with orange icons matching iOS exactly
+    - VIP features list (6 items) with purple icons matching iOS exactly
+    - Terms of Service / Privacy Policy links navigating to WebView
+    - Error message display
+  - Updated Config.kt with INSIDER_MONTHLY_PRODUCT_ID and VIP_MONTHLY_PRODUCT_ID
+  - Updated MainNavHost.kt:
+    - Wired SubscriptionScreen with SubscriptionViewModel, purchase flow (Activity cast), terms/privacy navigation
+    - Replaced all hardcoded SubscriptionTier.FREE with live BillingService state via SubscriptionViewModel in: ProfileScreen, EventDetailScreen, RestaurantDetailScreen, SettingsScreen
+    - Wired onRestorePurchases in SettingsScreen to SubscriptionViewModel.restorePurchases()
+- Files created: BillingService.kt, SubscriptionScreen.kt, SubscriptionViewModel.kt
+- Files modified: libs.versions.toml, build.gradle.kts, Config.kt, MainNavHost.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Google Play Billing 7.x: PurchasesUpdatedListener is set on BillingClient.Builder, not as a separate registration
+  - enablePendingPurchases() is REQUIRED since billing 3.x — builder will throw without it
+  - ProductDetails.subscriptionOfferDetails is a list — first entry contains the base offer with offerToken needed for BillingFlowParams
+  - formattedPrice comes from subscriptionOfferDetails[0].pricingPhases.pricingPhaseList[0].formattedPrice (deep nesting)
+  - acknowledgePurchase is required within 3 days or Google refunds the purchase — handle it immediately in handlePurchase()
+  - BillingService is @Singleton so all SubscriptionViewModels (profile, detail screens, settings) share same billing state
+  - Activity reference for launchBillingFlow obtained via context cast in composable — safe since Compose is always hosted in an Activity
+  - Backend sync uses buildJsonObject{} (kotlinx.serialization) not @Serializable data class — simpler for one-off payloads
+  - supabase-kt functions.invoke returns HttpResponse — parse body as String for simple validation response checking
+  - Product IDs (insider_monthly, vip_monthly) differ from iOS (prod_U4oa7Cpn0bRnuo, prod_U4oaGFEy12auTx) — configured per platform in respective stores
+---

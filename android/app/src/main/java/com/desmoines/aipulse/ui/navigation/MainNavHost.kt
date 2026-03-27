@@ -38,6 +38,9 @@ import com.desmoines.aipulse.ui.screens.restaurants.RestaurantsViewModel
 import com.desmoines.aipulse.ui.components.WebViewScreen
 import com.desmoines.aipulse.ui.screens.search.SearchScreen
 import com.desmoines.aipulse.ui.screens.search.SearchViewModel
+import com.desmoines.aipulse.ui.screens.subscription.SubscriptionScreen
+import com.desmoines.aipulse.ui.screens.subscription.SubscriptionViewModel
+import com.desmoines.aipulse.data.remote.BillingService
 
 /**
  * Main navigation host containing all route destinations.
@@ -247,6 +250,7 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
 
     composable(Route.Profile.route) {
         val viewModel: ProfileViewModel = hiltViewModel()
+        val profileSubscriptionViewModel: SubscriptionViewModel = hiltViewModel()
         val isAuthenticated by viewModel.isAuthenticated.collectAsState()
         val profile by viewModel.profile.collectAsState()
         val firstName by viewModel.firstName.collectAsState()
@@ -259,6 +263,7 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
         val showSaveSuccess by viewModel.showSaveSuccess.collectAsState()
         val showDeleteConfirmation by viewModel.showDeleteConfirmation.collectAsState()
         val errorMessage by viewModel.errorMessage.collectAsState()
+        val profileSubState by profileSubscriptionViewModel.uiState.collectAsState()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         ProfileScreen(
@@ -271,7 +276,7 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             phone = phone,
             location = location,
             selectedInterests = selectedInterests,
-            currentTier = SubscriptionTier.FREE, // Will be wired to billing in AND-027
+            currentTier = profileSubState.currentTier,
             isSaving = isSaving,
             isDeleting = isDeleting,
             showSaveSuccess = showSaveSuccess,
@@ -313,11 +318,13 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
     ) { backStackEntry ->
         val eventId = backStackEntry.arguments?.getString("eventId") ?: return@composable
         val viewModel: EventDetailViewModel = hiltViewModel()
+        val eventSubViewModel: SubscriptionViewModel = hiltViewModel()
         val event by viewModel.event.collectAsState()
         val relatedEvents by viewModel.relatedEvents.collectAsState()
         val isLoading by viewModel.isLoading.collectAsState()
         val isFavorited by viewModel.isFavorited.collectAsState()
         val calendarAdded by viewModel.calendarAdded.collectAsState()
+        val eventSubState by eventSubViewModel.uiState.collectAsState()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(eventId) {
@@ -330,7 +337,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             isLoading = isLoading,
             isFavorited = isFavorited,
             calendarAdded = calendarAdded,
-            currentTier = SubscriptionTier.FREE, // Will be wired to subscription service
+            currentTier = eventSubState.currentTier,
             onNavigateBack = { navController.popBackStack() },
             onShare = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -381,9 +388,11 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
     ) { backStackEntry ->
         val restaurantId = backStackEntry.arguments?.getString("restaurantId") ?: return@composable
         val viewModel: RestaurantDetailViewModel = hiltViewModel()
+        val restSubViewModel: SubscriptionViewModel = hiltViewModel()
         val restaurant by viewModel.restaurant.collectAsState()
         val isLoading by viewModel.isLoading.collectAsState()
         val isFavorited by viewModel.isFavorited.collectAsState()
+        val restSubState by restSubViewModel.uiState.collectAsState()
         val context = androidx.compose.ui.platform.LocalContext.current
 
         androidx.compose.runtime.LaunchedEffect(restaurantId) {
@@ -394,7 +403,7 @@ private fun NavGraphBuilder.addDetailDestinations(navController: NavHostControll
             restaurant = restaurant,
             isLoading = isLoading,
             isFavorited = isFavorited,
-            currentTier = SubscriptionTier.FREE, // Will be wired to subscription service
+            currentTier = restSubState.currentTier,
             onNavigateBack = { navController.popBackStack() },
             onShare = {
                 val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -492,19 +501,47 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
     }
 
     composable(Route.Subscription.route) {
-        /* SubscriptionScreen placeholder — implemented in AND-027 */
+        val subscriptionViewModel: SubscriptionViewModel = hiltViewModel()
+        val state by subscriptionViewModel.uiState.collectAsState()
+        val context = androidx.compose.ui.platform.LocalContext.current
+
+        SubscriptionScreen(
+            currentTier = state.currentTier,
+            isLoading = state.isLoading,
+            errorMessage = state.errorMessage,
+            insiderPrice = state.insiderPrice,
+            vipPrice = state.vipPrice,
+            hasProducts = state.hasProducts,
+            selectedTier = state.selectedTier,
+            onSelectTier = { subscriptionViewModel.selectTier(it) },
+            onPurchase = {
+                (context as? android.app.Activity)?.let { activity ->
+                    subscriptionViewModel.purchase(activity)
+                }
+            },
+            onRestorePurchases = { subscriptionViewModel.restorePurchases() },
+            onNavigateBack = { navController.popBackStack() },
+            onNavigateToTerms = {
+                navController.navigate(Route.WebView.createRoute("${com.desmoines.aipulse.util.Config.SITE_URL}/terms"))
+            },
+            onNavigateToPrivacy = {
+                navController.navigate(Route.WebView.createRoute("${com.desmoines.aipulse.util.Config.SITE_URL}/privacy-policy"))
+            },
+        )
     }
 
     composable(Route.Settings.route) {
         val profileViewModel: ProfileViewModel = hiltViewModel()
+        val settingsSubscriptionViewModel: SubscriptionViewModel = hiltViewModel()
         val isAuthenticated by profileViewModel.isAuthenticated.collectAsState()
         val isDeleting by profileViewModel.isDeleting.collectAsState()
         val showDeleteConfirmation by profileViewModel.showDeleteConfirmation.collectAsState()
         val errorMessage by profileViewModel.errorMessage.collectAsState()
+        val subscriptionState by settingsSubscriptionViewModel.uiState.collectAsState()
 
         SettingsScreen(
             isAuthenticated = isAuthenticated,
-            currentTier = SubscriptionTier.FREE, // Will be wired to billing in AND-027
+            currentTier = subscriptionState.currentTier,
             isDeleting = isDeleting,
             showDeleteConfirmation = showDeleteConfirmation,
             errorMessage = errorMessage,
@@ -515,7 +552,7 @@ private fun NavGraphBuilder.addFlowDestinations(navController: NavHostController
             onNavigateToWebView = { url ->
                 navController.navigate(Route.WebView.createRoute(url))
             },
-            onRestorePurchases = { /* Will be wired in AND-027 */ },
+            onRestorePurchases = { settingsSubscriptionViewModel.restorePurchases() },
             onRequestDelete = { profileViewModel.requestDeleteConfirmation() },
             onConfirmDelete = { profileViewModel.deleteAccount() },
             onDismissDelete = { profileViewModel.dismissDeleteConfirmation() },
