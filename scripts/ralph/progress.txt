@@ -611,3 +611,46 @@ Started: 2026-03-27T14:05:42.010Z
   - Fuzzy fallback: events and restaurants have fuzzySearch RPCs, attractions do not (ILIKE search only)
   - Category icon mapping duplicated from CategoryBadge — could be extracted to shared util in future
 ---
+
+## 2026-03-27 - AND-024 (Android)
+- Built complete Favorites/Saved screen matching iOS FavoritesView.swift + FavoritesViewModel.swift + FavoritesService.swift:
+  - FavoritesRemoteDataSource.kt: loadEventFavoriteIds, addEventFavorite, removeEventFavorite, fetchFavoriteEvents, loadRestaurantFavoriteIds, addRestaurantFavorite, removeRestaurantFavorite, fetchFavoriteRestaurants — all matching iOS Supabase queries exactly (user_event_interactions + user_restaurant_interactions tables, interaction_type='favorite')
+  - FavoritesException sealed class: NotConfigured, NotAuthenticated, LimitReached(max) — matches iOS FavoritesError enum
+  - FavoritesRepository interface + FavoritesRepositoryImpl with:
+    - In-memory cache of favorite IDs (_favoriteEventIds, _favoriteRestaurantIds)
+    - Free tier limit enforcement (3 total favorites max, matching iOS SubscriptionTier.free.maxFavorites)
+    - Local SharedPreferences fallback for restaurant favorites when table unavailable (matching iOS UserDefaults fallback)
+    - runCatching error handling matching other repositories
+  - FavoritesViewModel.kt as @HiltViewModel:
+    - loadFavorites() with guard for duplicate loads
+    - refresh() for pull-to-refresh
+    - Fetches favorite IDs, then full Event/Restaurant objects
+    - Splits events into upcoming/past using OffsetDateTime comparison (matching iOS Date() comparison)
+    - removeEventFavorite/removeRestaurantFavorite with optimistic UI update
+    - Uses AuthRepository.currentUserId for user identification
+    - Combined uiState StateFlow using chained combine() producing FavoritesScreenState
+  - FavoritesScreen.kt with full UI matching iOS FavoritesView.swift:
+    - Unauthenticated state: FavoriteBorder icon + "Sign In to Save Items" + Sign In button
+    - Loading state: CircularProgressIndicator + "Loading saved items..."
+    - No favorites: EmptyStateView + SubscriptionBanner (compact)
+    - Saved content: FavoritesLimitBanner for free users, total count header, 3 collapsible sections (Upcoming Events, Restaurants, Past Events) with section headers (icon + title + count)
+    - FavoriteEventRow: 80dp image + title + date/time + location + past event badge (orange) + red heart remove button with haptic feedback
+    - FavoriteRestaurantRow: 80dp image + name + cuisine/price + star rating + location + red heart remove button with haptic feedback
+    - LargeTopAppBar with "Saved" title, pull-to-refresh
+    - All cards use RoundedCornerShape(14dp) with shadow elevation matching iOS
+    - Past events dimmed with 0.6 alpha (matching iOS)
+    - Accessibility: semantics contentDescription on cards and remove buttons
+  - Updated RepositoryModule.kt with @Binds binding for FavoritesRepository → FavoritesRepositoryImpl
+  - Updated MainNavHost.kt: wired FavoritesViewModel via hiltViewModel(), connected all callbacks (navigation, remove favorites, refresh), LaunchedEffect for loadFavorites()
+- Files created: FavoritesRemoteDataSource.kt, FavoritesRepository.kt, FavoritesRepositoryImpl.kt, FavoritesViewModel.kt
+- Files modified: FavoritesScreen.kt (full rewrite), RepositoryModule.kt, MainNavHost.kt, prd-android.json
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - AuthRepository.currentUserId provides synchronous user ID access — no need to access SupabaseClientProvider directly from ViewModels
+  - FavoritesRepository acts as both data access layer AND in-memory state store for favorite IDs — matches iOS FavoritesService.shared singleton pattern
+  - Free tier limit counts total favorites (events + restaurants combined) — must check both sets before adding
+  - Restaurant favorites have two-level fallback: remote Supabase → local SharedPreferences (table may not exist)
+  - FavoritesScreenState.totalFavoriteCount uses favoriteEventIds.size + favoriteRestaurantIds.size (matching iOS FavoritesService.favoriteEventIds.count + favoriteRestaurantIds.count)
+  - Event upcoming/past split uses OffsetDateTime.now() comparison, with null dates defaulting to "upcoming" for events and "not past" (matching iOS behavior)
+  - FavoritesLimitBanner and SubscriptionBanner already exist from AND-015 — just wire them with correct params
+---
