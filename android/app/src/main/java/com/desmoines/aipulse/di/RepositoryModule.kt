@@ -2,6 +2,8 @@ package com.desmoines.aipulse.di
 
 import com.desmoines.aipulse.data.repository.AttractionsRepository
 import com.desmoines.aipulse.data.repository.AttractionsRepositoryImpl
+import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.data.repository.AuthRepositoryImpl
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.EventsRepositoryImpl
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
@@ -26,4 +28,7 @@ abstract class RepositoryModule {
 
     @Binds
     abstract fun bindAttractionsRepository(impl: AttractionsRepositoryImpl): AttractionsRepository
+
+    @Binds
+    abstract fun bindAuthRepository(impl: AuthRepositoryImpl): AuthRepository
 }
