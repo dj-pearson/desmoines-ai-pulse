@@ -135,7 +135,7 @@
         "Unit test for EventsQuery builder logic"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Must match iOS EventsService.swift exactly. Same RPC function names, same filter logic, same pagination (offset-based with limit 30). Use Kotlin Result or custom sealed class for error handling."
     },
     {

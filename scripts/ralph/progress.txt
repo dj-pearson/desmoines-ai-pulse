@@ -102,3 +102,28 @@ Started: 2026-03-27T14:05:42.010Z
   - Haptic feedback uses HapticFeedbackType.LongPress (closest to iOS .light impact in Compose)
   - Restaurant icon uses Icons.Filled.Restaurant / Icons.Outlined.Restaurant (Material Icons Extended)
 ---
+
+## 2026-03-27 - AND-007 (Android)
+- Created EventsRemoteDataSource.kt with all 6 methods matching iOS EventsService.swift:
+  - fetchEvents(query) with full-text search (websearch), category/date/featured filters, pagination with count
+  - fetchEvent(id) single event by ID
+  - fetchFeaturedEvents(limit) for featured carousel
+  - fetchRelatedEvents(eventId, category, limit) same category excluding self
+  - fuzzySearchEvents(query, limit) via RPC 'fuzzy_search_events'
+  - fetchNearbyEvents(lat, lng, radiusMiles, limit) via RPC 'search_events_near_location' with client-side Haversine fallback
+- Created EventsRepository interface with Result<T> return types for all methods
+- Created EventsRepositoryImpl wrapping remote data source with runCatching error handling
+- Updated RepositoryModule.kt with @Binds binding for EventsRepository → EventsRepositoryImpl
+- Created EventsRemoteDataSourceTest with unit tests for query defaults, Haversine distance, and miles-to-meters conversion
+- Files created: EventsRemoteDataSource.kt, EventsRepository.kt, EventsRepositoryImpl.kt, EventsRemoteDataSourceTest.kt
+- Files modified: RepositoryModule.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - supabase-kt 3.x: use `client.from("table").select { filter { ... } }` DSL for queries
+  - supabase-kt 3.x: use `client.postgrest.rpc("fn", params)` for RPC calls — params must be @Serializable
+  - Count requires `count = Count.EXACT` in select(), result via `result.countOrNull()`
+  - For IS NOT NULL filters, use client-side filtering as supabase-kt filter DSL varies across versions
+  - Haversine formula is in EventsRemoteDataSource.Companion for reuse by other data sources (restaurants, attractions)
+  - Repository pattern: interface returns Result<T>, impl uses runCatching + onFailure for logging
+  - EventsQuery is a plain data class (not @Serializable) — it's only used client-side to build Supabase queries
+---
