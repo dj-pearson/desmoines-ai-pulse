@@ -350,3 +350,44 @@ Started: 2026-03-27T14:05:42.010Z
   - WebViewScreen uses AndroidView interop — the WebView is a platform view, not a Compose composable
   - ToastOverlay uses inverseOnSurface/inverseSurface Material 3 colors for contrast (like iOS .ultraThickMaterial)
 ---
+
+## 2026-03-27 - AND-016 (Android)
+- Built complete Home screen matching iOS HomeView.swift with all UI sections:
+  - HomeScreen.kt: Main composable with LargeTopAppBar (collapsing), pull-to-refresh (PullToRefreshBox), LazyColumn with all sections, filter button with active count badge
+  - HeaderSection: "What's happening in Des Moines" subtitle with total event count
+  - DatePresetsRow: Horizontal LazyRow with all 6 DateFilterPreset entries as toggle chips
+  - CategoryChipsRow: Horizontal LazyRow with first 8 EventCategory entries, icon + label, colored selection state
+  - FeaturedEventsSection: Star icon header + horizontal LazyRow of FeaturedEventCard composables
+  - RestaurantsSection: Fork icon header + horizontal LazyRow of CompactRestaurantCard composables (max 10)
+  - ActiveFiltersBar: Filter count text + "Clear All" button
+  - ErrorBanner: Warning icon + message + Retry button
+  - Events list with skeleton loaders (6 skeletons), offline/empty states, load-more at 5 items from end
+  - AdBannerView for free users, haptic feedback on interactions
+- Created EventCardView.kt matching iOS EventCardView.swift:
+  - Card with hero image (180dp), category badge overlay, favorite button, date badge
+  - Content area with title, date/time row, location row, price badge (FREE/paid), urgency label, featured badge
+  - Full accessibility label combining all visible info
+- Created FeaturedEventCard.kt matching iOS FeaturedEventCard:
+  - 260dp width, 150dp image with category badge at bottom-left, title, date, FREE badge
+- Created CompactRestaurantCard.kt matching iOS CompactRestaurantCard:
+  - 180dp width, 110dp image, name, cuisine + price + rating row with star icon
+- Created EventCardSkeleton.kt matching iOS EventCardSkeleton:
+  - Shimmer animation with infiniteRepeatable linearGradient brush
+  - Placeholder layout matching EventCardView structure (image area, category badge, favorite button, date badge, title, time, location, price)
+- Created DateBadge composable matching iOS DateBadge:
+  - Day of week (short uppercase), day number, month (abbreviated uppercase) in frosted surface background
+- Updated MainNavHost.kt to pass onNavigateToSubscription callback to HomeScreen
+- HomeScreenState data class holds all UI state — will be replaced by ViewModel StateFlow in AND-017
+- Files created: HomeScreen.kt (rewritten), EventCardView.kt, FeaturedEventCard.kt, CompactRestaurantCard.kt, EventCardSkeleton.kt
+- Files modified: MainNavHost.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - HomeScreen uses HomeScreenState data class as state holder — ViewModel in AND-017 will expose this as StateFlow
+  - PullToRefreshBox (Material 3 experimental) replaces deprecated SwipeRefresh — simpler API
+  - LargeTopAppBar with exitUntilCollapsedScrollBehavior + nestedScroll creates the iOS-like large title collapsing effect
+  - LazyColumn with snapshotFlow on listState for load-more detection — watches lastVisibleIndex vs totalItemsCount
+  - Category chips show first 8 entries (matching iOS .prefix(8)) — EventCategory.entries.take(8)
+  - DateBadge is a separate composable in EventCardView.kt (shared between EventCardView and potentially detail screens)
+  - EventCardView accepts onFavoriteClick as nullable — null means hide the favorite button entirely
+  - All carousel items use .clickable + .semantics { contentDescription = ... } for accessibility (child elements use clearAndSetSemantics)
+---

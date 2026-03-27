@@ -316,7 +316,7 @@
         "Empty state when no events match filters"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS HomeView.swift. Critical screen — must match the layout and behavior. FeaturedEventCard and CompactRestaurantCard are sub-composables. Date preset and category chip selection should trigger debounced data refresh."
     },
     {
