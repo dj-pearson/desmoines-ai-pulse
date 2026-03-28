@@ -145,6 +145,10 @@ serve(async (req) => {
       apiVersion: "2023-10-16",
     });
 
+    // Generate idempotency key to prevent duplicate refunds (SEC-027)
+    const idempotencyKey = `refund_${campaign.stripe_payment_intent_id}_${Date.now()}`;
+    console.log(`Processing refund with idempotency key: ${idempotencyKey}`);
+
     // Create refund in Stripe
     const refund = await stripe.refunds.create({
       payment_intent: campaign.stripe_payment_intent_id,
@@ -155,7 +159,10 @@ serve(async (req) => {
         adminUserId: user.id,
         reason,
         policyViolation: policyViolation || "none",
+        idempotencyKey,
       },
+    }, {
+      idempotencyKey,
     });
 
     // Create refund record in database
@@ -207,7 +214,7 @@ serve(async (req) => {
     if (error.type === "StripeCardError" || error.type === "StripeInvalidRequestError") {
       return new Response(
         JSON.stringify({
-          error: error.message || "Payment processor error",
+          error: "Payment processor error",
         }),
         {
           status: 400,
@@ -218,7 +225,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        error: error.message || "Failed to process refund",
+        error: "Failed to process refund",
       }),
       {
         status: 500,

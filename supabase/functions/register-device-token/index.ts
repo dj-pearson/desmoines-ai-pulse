@@ -1,24 +1,23 @@
 /**
  * Register Device Token Edge Function
  *
- * Stores an iOS/Android push notification device token for the authenticated user.
+ * Stores an iOS/Android/Web push notification device token for the authenticated user.
  * Upserts into `device_tokens` table keyed by (user_id, device_token).
  */
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+const VALID_PLATFORMS = ['ios', 'android', 'web'];
+const MAX_TOKEN_LENGTH = 500;
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
   try {
     const supabase = createClient(
@@ -48,9 +47,24 @@ serve(async (req) => {
     const body = await req.json();
     const { deviceToken, platform } = body;
 
-    if (!deviceToken || !platform) {
+    // Input validation (SEC-026)
+    if (!deviceToken || typeof deviceToken !== 'string' || deviceToken.trim().length === 0) {
       return new Response(
-        JSON.stringify({ error: "deviceToken and platform are required" }),
+        JSON.stringify({ error: "deviceToken is required and must be a non-empty string" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (deviceToken.length > MAX_TOKEN_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: `deviceToken must be ${MAX_TOKEN_LENGTH} characters or less` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!platform || !VALID_PLATFORMS.includes(platform)) {
+      return new Response(
+        JSON.stringify({ error: `platform must be one of: ${VALID_PLATFORMS.join(', ')}` }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -83,7 +97,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Register device token error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: "Internal server error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

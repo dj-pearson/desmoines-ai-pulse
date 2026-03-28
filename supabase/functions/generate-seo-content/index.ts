@@ -9,16 +9,19 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { getAIConfig, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { requireApiKey } from "../_shared/apiKeyAuth.ts";
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // Require API key or admin auth (SEC-029)
+  const authResponse = requireApiKey(req, corsHeaders);
+  if (authResponse) return authResponse;
 
   // Rate limit: 10 AI requests per 15 minutes per client
   const rateLimit = checkRateLimit(req, { max: 10, message: 'AI SEO content rate limit exceeded. Please try again later.' });
@@ -28,8 +31,17 @@ serve(async (req) => {
 
   try {
     console.log('SEO generation request received');
-    
-    const { contentType, batchSize = 10 } = await req.json();
+
+    const { contentType, batchSize: rawBatchSize = 10 } = await req.json();
+
+    // Validate batchSize bounds (SEC-029)
+    const batchSize = Math.min(Math.max(Number(rawBatchSize) || 10, 1), 20);
+    if (rawBatchSize !== undefined && (rawBatchSize < 1 || rawBatchSize > 20)) {
+      return new Response(
+        JSON.stringify({ error: 'batchSize must be between 1 and 20' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
     console.log('Parsed request body successfully:', { contentType, batchSize });
     
@@ -193,7 +205,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('SEO generation error:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: 'SEO content generation failed' }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

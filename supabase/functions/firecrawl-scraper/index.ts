@@ -12,6 +12,7 @@ import { fromZonedTime } from "https://esm.sh/date-fns-tz@3.2.0";
 import { scrapeUrl, scrapeUrls } from "../_shared/scraper.ts";
 import { getAIConfig, buildClaudeRequest, buildLightweightClaudeRequest, getClaudeHeaders } from "../_shared/aiConfig.ts";
 import { validateURLForSSRF } from "../_shared/validation.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 // Marker time for events without specific times (7:31:58 PM Central)
 const NO_TIME_MARKER = "19:31:58";
@@ -152,13 +153,15 @@ function findEventDetailUrl(
   }
 
   // Method 2: Search for the event title directly in the HTML and find nearby URLs
+  // Limit HTML size for regex to prevent ReDoS (SEC-022)
+  const htmlForRegex = allRawHtml.length > 500000 ? allRawHtml.substring(0, 500000) : allRawHtml;
   // Create a regex that searches for the title near an event URL
   const escapedTitle = eventTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const nearbyPattern = new RegExp(
     `href=["']([^"']*\\/event\\/[^"']+)["'][^>]*>[^<]*${escapedTitle.substring(0, 20)}`,
     'i'
   );
-  const nearbyMatch = allRawHtml.match(nearbyPattern);
+  const nearbyMatch = htmlForRegex.match(nearbyPattern);
   if (nearbyMatch && isValidEventDetailUrl(nearbyMatch[1])) {
     console.log(`✅ Found URL near title in HTML: "${eventTitle}" -> ${nearbyMatch[1]}`);
     return nearbyMatch[1];
@@ -654,6 +657,12 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Rate limiting: 10 requests per 15 minutes (SEC-022)
+  const rateLimit = checkRateLimit(req, { max: 10, message: 'Scraper rate limit exceeded.' });
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response;
   }
 
   try {

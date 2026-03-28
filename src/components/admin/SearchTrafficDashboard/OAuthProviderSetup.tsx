@@ -91,9 +91,15 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
 
       // Build OAuth URL
       const redirectUri = `${window.location.origin}/admin/oauth/callback`;
+      // Generate cryptographic nonce for CSRF protection (SEC-024)
+      const nonceArray = new Uint8Array(16);
+      crypto.getRandomValues(nonceArray);
+      const nonce = Array.from(nonceArray).map(b => b.toString(16).padStart(2, '0')).join('');
+
       const state = btoa(JSON.stringify({
         provider: providerName,
         timestamp: Date.now(),
+        nonce,
       }));
 
       let authUrl = providerData.authorization_url;
