@@ -1,10 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 interface GooglePlaceDetails {
   id: string;
@@ -44,8 +42,23 @@ interface RestaurantUpdate {
 
 serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // Require API key authentication (SEC-013)
+  const authResponse = requireApiKey(req, corsHeaders);
+  if (authResponse) return authResponse;
+
+  // Rate limiting: 5 requests per 15 minutes (SEC-013)
+  const rateLimit = checkRateLimit(req, {
+    max: 5,
+    message: "Too many bulk update requests. Please try again later.",
+  });
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response;
   }
 
   try {
@@ -324,11 +337,11 @@ serve(async (req) => {
             update.google_place_id = placeId
           }
 
-          // Get the main photo URL
+          // Get the main photo URL (proxy through server to avoid leaking API key)
           if (placeDetails.photos && placeDetails.photos.length > 0) {
             const photo = placeDetails.photos[0]
-            // Use the Google Places Photo API to get the actual image URL
-            update.image_url = `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=1200&maxHeightPx=800&key=${googleApiKey}`
+            // Store the photo reference name instead of the full URL with API key
+            update.image_url = `https://places.googleapis.com/v1/${photo.name}/media?maxWidthPx=1200&maxHeightPx=800`
           }
           
           console.log(`Update object for ${restaurant.name}:`, update)
@@ -402,9 +415,9 @@ serve(async (req) => {
   } catch (error) {
     console.error('Bulk restaurant update error:', error)
     return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: error.message 
+      JSON.stringify({
+        success: false,
+        error: 'Bulk update failed'
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

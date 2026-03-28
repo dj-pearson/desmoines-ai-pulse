@@ -258,7 +258,7 @@ serve(async (req) => {
     console.error("Checkout error:", error);
     return new Response(
       JSON.stringify({
-        error: error.message || "Failed to create checkout session",
+        error: "Failed to create checkout session",
       }),
       {
         status: 500,

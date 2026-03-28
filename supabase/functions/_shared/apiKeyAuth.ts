@@ -26,10 +26,15 @@ export interface ApiKeyAuthResult {
 export function validateApiKey(req: Request): ApiKeyAuthResult {
   const expectedKey = Deno.env.get('EDGE_FUNCTION_API_KEY');
 
-  // If no API key is configured, allow the request (backwards compatibility)
-  // Once the key is set via `supabase secrets set EDGE_FUNCTION_API_KEY=<key>`,
-  // all requests without a valid key will be rejected.
+  // Fail closed in production: reject all requests when API key is not configured.
+  // In development, allow with a warning for ease of testing.
   if (!expectedKey) {
+    const env = Deno.env.get('ENVIRONMENT') || 'development';
+    if (env === 'production') {
+      console.error('EDGE_FUNCTION_API_KEY is not configured in production — rejecting request');
+      return { success: false, error: 'API key authentication is not configured' };
+    }
+    console.warn('WARNING: EDGE_FUNCTION_API_KEY is not set. Allowing request in non-production environment.');
     return { success: true };
   }
 

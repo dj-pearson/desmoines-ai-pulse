@@ -35,7 +35,7 @@ serve(async (req) => {
       // Validate query parameters
       const validationResult = validateQueryParams(url, {
         limit: { type: 'number', min: 1, max: 100, default: 20 },
-        offset: { type: 'number', min: 0, default: 0 },
+        offset: { type: 'number', min: 0, max: 10000, default: 0 },
         cuisine: { type: 'string', max: 50 },
         city: { type: 'string', max: 100 },
         location: { type: 'string', max: 100 },

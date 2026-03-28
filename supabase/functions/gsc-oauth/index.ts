@@ -7,16 +7,23 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // Rate limiting: 10 requests per 15 minutes per client (SEC-015)
+  const rateLimit = checkRateLimit(req, {
+    max: 10,
+    message: "Too many OAuth requests. Please try again later.",
+  });
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response;
   }
 
   try {
@@ -86,8 +93,9 @@ serve(async (req) => {
       });
 
       if (!tokenResponse.ok) {
-        const error = await tokenResponse.text();
-        throw new Error(`Token exchange failed: ${error}`);
+        const errorText = await tokenResponse.text();
+        console.error("Token exchange failed:", errorText);
+        throw new Error("Token exchange failed");
       }
 
       const tokenData = await tokenResponse.json();
@@ -185,19 +193,20 @@ serve(async (req) => {
       });
 
       if (!tokenResponse.ok) {
-        const error = await tokenResponse.text();
+        const errorText = await tokenResponse.text();
+        console.error("Token refresh failed:", errorText);
 
         // If refresh token is invalid, mark credential as inactive
         await supabase
           .from("gsc_oauth_credentials")
           .update({
             is_active: false,
-            last_error: `Refresh failed: ${error}`,
+            last_error: `Refresh failed`,
             last_error_at: new Date().toISOString(),
           })
           .eq("id", credentialId);
 
-        throw new Error(`Token refresh failed: ${error}`);
+        throw new Error("Token refresh failed");
       }
 
       const tokenData = await tokenResponse.json();
@@ -247,8 +256,7 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({
-        error: error.message,
-        details: error.stack,
+        error: "An internal error occurred during OAuth processing",
       }),
       {
         status: 500,
