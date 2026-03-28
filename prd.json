@@ -312,7 +312,7 @@
       ],
       "priority": 21,
       "passes": true,
-      "notes": "DEFERRED: CSP nonce support requires per-request nonce generation which is incompatible with static hosting on Cloudflare Pages. Would need Cloudflare Workers middleware or SSR to inject nonces into HTML. Current inline scripts are static and trusted. Documented limitation for future migration."
+      "notes": "FIXED: Used CSP SHA-256 hashes instead of nonces (compatible with static hosting). Computed hashes for all 3 inline scripts in index.html: early error handler, service worker cache clearer, GA deferred loader. Replaced 'unsafe-inline' in script-src with 'sha256-...' hashes in public/_headers. Documented hash regeneration process in _headers comments. style-src retains 'unsafe-inline' (required by Tailwind CSS)."
     },
     {
       "id": "SEC-022",
@@ -372,7 +372,7 @@
       ],
       "priority": 25,
       "passes": true,
-      "notes": "DEFERRED: Confirmation token flow requires new database table (deletion_confirmations), email sending integration, and frontend confirmation UI. Current endpoint already requires JWT authentication. CORS hardened in SEC-011 to prevent cross-origin attacks. Recommended for future sprint with full email infrastructure."
+      "notes": "FIXED: Implemented two-step deletion flow in delete-user-account edge function. Step 1 (action: 'request'): generates 32-byte crypto token, stores in account_deletion_tokens table with 15-min expiry. Step 2 (action: 'confirm' + confirmation_token): validates token against DB, checks expiry, proceeds with deletion. Created migration 20260328000001_create_account_deletion_tokens.sql with RLS (service-role only), indexes on (user_id, token) and expires_at."
     },
     {
       "id": "SEC-026",
