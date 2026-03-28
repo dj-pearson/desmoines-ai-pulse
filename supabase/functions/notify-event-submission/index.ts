@@ -11,6 +11,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { escapeHtml } from "../_shared/escapeHtml.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -68,7 +69,7 @@ serve(async (req) => {
     switch (notificationType) {
       case "event_submitted": {
         recipientEmail = adminEmail;
-        emailSubject = `New Event Submission: ${eventTitle}`;
+        emailSubject = `New Event Submission: ${escapeHtml(eventTitle)}`;
         emailHtml = buildAdminNotificationEmail({
           eventTitle,
           eventDate,
@@ -83,7 +84,7 @@ serve(async (req) => {
 
       case "event_approved": {
         recipientEmail = submitterEmail;
-        emailSubject = `Your event "${eventTitle}" has been approved!`;
+        emailSubject = `Your event "${escapeHtml(eventTitle)}" has been approved!`;
         emailHtml = buildSubmitterEmail({
           eventTitle,
           status: "approved",
@@ -96,7 +97,7 @@ serve(async (req) => {
 
       case "event_rejected": {
         recipientEmail = submitterEmail;
-        emailSubject = `Update on your event "${eventTitle}"`;
+        emailSubject = `Update on your event "${escapeHtml(eventTitle)}`;
         emailHtml = buildSubmitterEmail({
           eventTitle,
           status: "rejected",
@@ -109,7 +110,7 @@ serve(async (req) => {
 
       case "event_needs_revision": {
         recipientEmail = submitterEmail;
-        emailSubject = `Action needed: Your event "${eventTitle}" needs changes`;
+        emailSubject = `Action needed: Your event "${escapeHtml(eventTitle)}" needs changes`;
         emailHtml = buildSubmitterEmail({
           eventTitle,
           status: "needs_revision",
@@ -210,11 +211,11 @@ function buildAdminNotificationEmail(params: {
   const { eventTitle, eventDate, eventVenue, eventCategory, submitterEmail, submitterName, siteUrl } = params;
 
   const detailRows = [
-    eventDate ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Date</td><td style="font-size:14px;">${eventDate}</td></tr>` : '',
-    eventVenue ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Venue</td><td style="font-size:14px;">${eventVenue}</td></tr>` : '',
-    eventCategory ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Category</td><td style="font-size:14px;">${eventCategory}</td></tr>` : '',
-    submitterName ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Submitted by</td><td style="font-size:14px;">${submitterName}</td></tr>` : '',
-    submitterEmail ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Email</td><td style="font-size:14px;">${submitterEmail}</td></tr>` : '',
+    eventDate ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Date</td><td style="font-size:14px;">${escapeHtml(eventDate)}</td></tr>` : '',
+    eventVenue ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Venue</td><td style="font-size:14px;">${escapeHtml(eventVenue)}</td></tr>` : '',
+    eventCategory ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Category</td><td style="font-size:14px;">${escapeHtml(eventCategory)}</td></tr>` : '',
+    submitterName ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Submitted by</td><td style="font-size:14px;">${escapeHtml(submitterName)}</td></tr>` : '',
+    submitterEmail ? `<tr><td style="padding:4px 12px 4px 0;color:#71717a;font-size:14px;">Email</td><td style="font-size:14px;">${escapeHtml(submitterEmail)}</td></tr>` : '',
   ].filter(Boolean).join('');
 
   return `
@@ -235,7 +236,7 @@ function buildAdminNotificationEmail(params: {
               <td style="padding:32px;">
                 <h2 style="margin:0 0 8px;color:#1a1a2e;font-size:20px;font-weight:600;">New Event Submitted</h2>
                 <p style="margin:0 0 20px;color:#4a4a5a;font-size:15px;line-height:1.6;">
-                  A new event "<strong>${eventTitle}</strong>" has been submitted and is waiting for your review.
+                  A new event "<strong>${escapeHtml(eventTitle)}</strong>" has been submitted and is waiting for your review.
                 </p>
                 <table style="margin-bottom:24px;">${detailRows}</table>
                 <a href="${siteUrl}/admin/tools?tab=event-submissions" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
@@ -291,12 +292,12 @@ function buildSubmitterEmail(params: {
                 <div style="display:inline-block;padding:4px 12px;border-radius:12px;background-color:${statusColor}20;color:${statusColor};font-size:13px;font-weight:600;margin-bottom:16px;">
                   ${statusLabel}
                 </div>
-                <h2 style="margin:12px 0 8px;color:#1a1a2e;font-size:20px;font-weight:600;">${eventTitle}</h2>
-                <p style="margin:0 0 20px;color:#4a4a5a;font-size:15px;line-height:1.6;">${message}</p>
+                <h2 style="margin:12px 0 8px;color:#1a1a2e;font-size:20px;font-weight:600;">${escapeHtml(eventTitle)}</h2>
+                <p style="margin:0 0 20px;color:#4a4a5a;font-size:15px;line-height:1.6;">${escapeHtml(message)}</p>
                 ${adminNotes ? `
                 <div style="background-color:#f8f9fa;border-left:4px solid ${statusColor};padding:12px 16px;margin-bottom:24px;border-radius:0 6px 6px 0;">
                   <p style="margin:0 0 4px;color:#71717a;font-size:12px;font-weight:600;text-transform:uppercase;">Notes from our team</p>
-                  <p style="margin:0;color:#4a4a5a;font-size:14px;line-height:1.5;">${adminNotes}</p>
+                  <p style="margin:0;color:#4a4a5a;font-size:14px;line-height:1.5;">${escapeHtml(adminNotes)}</p>
                 </div>
                 ` : ''}
                 <a href="${ctaUrl}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">

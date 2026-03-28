@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, addCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { validateQueryParams, sanitizeString } from "../_shared/validation.ts";
+import { validateQueryParams, sanitizeLikeInput } from "../_shared/validation.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -83,14 +83,14 @@ serve(async (req) => {
       }
 
       if (location) {
-        const safeLocation = sanitizeString(location);
+        const safeLocation = sanitizeLikeInput(location);
         query = query.or(
           `location.ilike.%${safeLocation}%,city.ilike.%${safeLocation}%,venue.ilike.%${safeLocation}%`
         );
       }
 
       if (params.search) {
-        const safeSearch = sanitizeString(params.search);
+        const safeSearch = sanitizeLikeInput(params.search);
         query = query.or(
           `title.ilike.%${safeSearch}%,enhanced_description.ilike.%${safeSearch}%,venue.ilike.%${safeSearch}%`
         );

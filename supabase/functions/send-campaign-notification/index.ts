@@ -21,6 +21,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { escapeHtml } from "../_shared/escapeHtml.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -211,15 +212,15 @@ function buildEmailHtml(params: {
               <!-- Content -->
               <tr>
                 <td style="padding:32px;">
-                  <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${title}</h2>
-                  <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${message}</p>
+                  <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${escapeHtml(title)}</h2>
+                  <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${escapeHtml(message)}</p>
                   ${ctaUrl ? `
-                  <a href="${ctaUrl}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
-                    ${ctaLabel}
+                  <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
+                    ${escapeHtml(ctaLabel)}
                   </a>
                   ` : ''}
                   <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7;">
-                  <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${campaignName}</strong></p>
+                  <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${escapeHtml(campaignName)}</strong></p>
                 </td>
               </tr>
               <!-- Footer -->
