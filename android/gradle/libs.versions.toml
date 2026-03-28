@@ -1,5 +1,5 @@
 [versions]
-agp = "8.7.3"
+agp = "8.13.2"
 kotlin = "2.1.0"
 coreKtx = "1.15.0"
 lifecycleRuntimeKtx = "2.8.7"
@@ -32,6 +32,7 @@ playServicesLocation = "21.3.0"
 playServicesMaps = "19.0.0"
 playBilling = "7.1.1"
 firebaseBom = "33.7.0"
+firebaseAppIndexing = "20.0.0"
 securityCrypto = "1.1.0-alpha06"
 
 [libraries]
@@ -103,8 +104,8 @@ play-billing = { group = "com.android.billingclient", name = "billing-ktx", vers
 
 # Firebase
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
-firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
-firebase-appindexing = { group = "com.google.firebase", name = "firebase-appindexing" }
+firebase-messaging = { group = "com.google.firebase", name = "firebase-messaging" }
+firebase-appindexing = { group = "com.google.firebase", name = "firebase-appindexing", version.ref = "firebaseAppIndexing" }
 
 # Security (Encrypted SharedPreferences)
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
