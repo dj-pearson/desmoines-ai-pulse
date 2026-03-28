@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.200.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { handleCors, addCorsHeaders } from "../_shared/cors.ts";
 import { checkRateLimit, addRateLimitHeaders } from "../_shared/rateLimit.ts";
-import { validateQueryParams } from "../_shared/validation.ts";
+import { validateQueryParams, sanitizeLikeInput } from "../_shared/validation.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -74,16 +74,18 @@ serve(async (req) => {
 
       // Apply filters
       if (params.cuisine) {
-        query = query.ilike("cuisine", `%${params.cuisine}%`);
+        query = query.ilike("cuisine", `%${sanitizeLikeInput(params.cuisine)}%`);
       }
 
       if (city) {
-        query = query.or(`city.ilike.%${city}%,location.ilike.%${city}%`);
+        const safeCity = sanitizeLikeInput(city);
+        query = query.or(`city.ilike.%${safeCity}%,location.ilike.%${safeCity}%`);
       }
 
       if (search) {
+        const safeSearch = sanitizeLikeInput(search);
         query = query.or(
-          `name.ilike.%${search}%,description.ilike.%${search}%,cuisine.ilike.%${search}%`
+          `name.ilike.%${safeSearch}%,description.ilike.%${safeSearch}%,cuisine.ilike.%${safeSearch}%`
         );
       }
 

@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { escapeHtml } from "../_shared/escapeHtml.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -314,12 +315,12 @@ function buildUpcomingRSVPsSection(events: any[]): string {
       <p style="margin-bottom: 15px;">Events you're attending this week:</p>
       ${events.map(event => `
         <div class="event-card">
-          <div class="event-title">${event.title}</div>
+          <div class="event-title">${escapeHtml(event.title)}</div>
           <div class="event-details">
-            📍 ${event.location}<br>
-            📆 ${formatDate(event.date)}<br>
+            📍 ${escapeHtml(event.location)}<br>
+            📆 ${escapeHtml(formatDate(event.date))}<br>
             ${event.status === 'going' ? '<span class="event-badge">✓ Going</span>' : '<span class="event-badge">Interested</span>'}
-            <span class="event-badge">${event.category}</span>
+            <span class="event-badge">${escapeHtml(event.category)}</span>
           </div>
           <a href="${SITE_URL}/events/${createSlug(event.title)}" class="cta-button" style="margin-top: 10px; padding: 8px 16px; font-size: 14px;">View Details</a>
         </div>
@@ -337,11 +338,11 @@ function buildSavedEventsSection(events: any[]): string {
       <p style="margin-bottom: 15px;">Events you favorited that are happening soon:</p>
       ${events.map(event => `
         <div class="event-card">
-          <div class="event-title">${event.title}</div>
+          <div class="event-title">${escapeHtml(event.title)}</div>
           <div class="event-details">
-            📍 ${event.location}<br>
-            📆 ${formatDate(event.date)}<br>
-            <span class="event-badge">${event.category}</span>
+            📍 ${escapeHtml(event.location)}<br>
+            📆 ${escapeHtml(formatDate(event.date))}<br>
+            <span class="event-badge">${escapeHtml(event.category)}</span>
           </div>
           <a href="${SITE_URL}/events/${createSlug(event.title)}" class="cta-button" style="margin-top: 10px; padding: 8px 16px; font-size: 14px;">View Details</a>
         </div>
@@ -359,12 +360,12 @@ function buildRecommendationsSection(events: any[]): string {
       <p style="margin-bottom: 15px;">Events we think you'll love based on your interests:</p>
       ${events.map(event => `
         <div class="event-card">
-          <div class="event-title">${event.title}</div>
+          <div class="event-title">${escapeHtml(event.title)}</div>
           <div class="event-details">
-            📍 ${event.location}<br>
-            📆 ${formatDate(event.date)}<br>
-            <span class="event-badge">${event.category}</span>
-            ${event.recommendation_reason ? `<br><small style="color: #888;">💡 ${event.recommendation_reason}</small>` : ''}
+            📍 ${escapeHtml(event.location)}<br>
+            📆 ${escapeHtml(formatDate(event.date))}<br>
+            <span class="event-badge">${escapeHtml(event.category)}</span>
+            ${event.recommendation_reason ? `<br><small style="color: #888;">💡 ${escapeHtml(event.recommendation_reason)}</small>` : ''}
           </div>
           <a href="${SITE_URL}/events/${createSlug(event.title)}" class="cta-button" style="margin-top: 10px; padding: 8px 16px; font-size: 14px;">View Details</a>
         </div>
@@ -383,11 +384,11 @@ function buildTrendingSection(events: any[]): string {
       <p style="margin-bottom: 15px;">Popular events in Des Moines:</p>
       ${events.slice(0, 3).map(event => `
         <div class="event-card">
-          <div class="event-title">${event.title}</div>
+          <div class="event-title">${escapeHtml(event.title)}</div>
           <div class="event-details">
-            📍 ${event.location}<br>
-            📆 ${formatDate(event.date)}<br>
-            <span class="event-badge">${event.category}</span>
+            📍 ${escapeHtml(event.location)}<br>
+            📆 ${escapeHtml(formatDate(event.date))}<br>
+            <span class="event-badge">${escapeHtml(event.category)}</span>
           </div>
           <a href="${SITE_URL}/events/${createSlug(event.title)}" class="cta-button" style="margin-top: 10px; padding: 8px 16px; font-size: 14px;">View Details</a>
         </div>

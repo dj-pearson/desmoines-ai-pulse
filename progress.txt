@@ -612,3 +612,51 @@
 - US-119: New Restaurant badge via SocialProofBadge for restaurants < 14 days old
 - **Build**: passes (59s)
 - **Progress**: 93/140 stories complete (66%), 47 remaining
+
+## 2026-03-28 — Security Audit & Hardening (SEC-001 through SEC-007)
+
+### Comprehensive Security Audit
+- Audited entire codebase for XSS, injection, input validation, CORS, auth, rate limiting issues
+- Created new prd.json with 30 security-focused Ralph stories (SEC-001 through SEC-030)
+- Identified CRITICAL issues in 4 email-generating edge functions, CORS wildcard on 7+ endpoints, missing auth on bulk-update-restaurants, and SQL LIKE wildcard injection
+
+### Fixes Implemented
+
+- **SEC-001**: Created `supabase/functions/_shared/escapeHtml.ts` — shared HTML escaping utility with `escapeHtml()` and `escapeHtmlAttr()` functions. Handles null/undefined, escapes &, <, >, ", ' characters.
+
+- **SEC-002**: Fixed XSS in `send-event-reminders/index.ts` — escaped event_title, event_venue, event_location in HTML template and subject line. Both HTML and plain text email variants secured.
+
+- **SEC-003**: Fixed XSS in `send-weekly-digest/index.ts` — escaped all user data (title, location, category, recommendation_reason) in all 4 email section builders: buildUpcomingRSVPsSection, buildSavedEventsSection, buildRecommendationsSection, buildTrendingSection.
+
+- **SEC-004**: Fixed XSS in `notify-event-submission/index.ts` — escaped eventTitle, eventDate, eventVenue, eventCategory, submitterName, submitterEmail in admin notification, and eventTitle, message, adminNotes in submitter notification. Subject lines also escaped.
+
+- **SEC-005**: Fixed XSS in `send-campaign-notification/index.ts` — escaped title, message, ctaLabel, ctaUrl, campaignName in campaign email template.
+
+- **SEC-006**: Added input validation and bounds checking to `EventSubmissionForm.tsx` — maxLength on title(200), description(5000), venue(200), location(200), address(500), price(100), website_url(2000), contact_email(254), contact_phone(20). Added URL/email/phone format patterns. Tags limited to 50 chars each, 10 max.
+
+- **SEC-007**: Hardened `_shared/validation.ts` — added `sanitizeLikeInput()` function that escapes SQL LIKE wildcards (%, _, \). Added maxLength bounds (500 chars default). Updated `api-events/index.ts` and `api-restaurants/index.ts` to use sanitizeLikeInput for all ilike queries.
+
+### Files Changed
+- `supabase/functions/_shared/escapeHtml.ts` (NEW)
+- `supabase/functions/_shared/validation.ts` (MODIFIED — added sanitizeLikeInput)
+- `supabase/functions/send-event-reminders/index.ts` (MODIFIED — XSS fix)
+- `supabase/functions/send-weekly-digest/index.ts` (MODIFIED — XSS fix)
+- `supabase/functions/notify-event-submission/index.ts` (MODIFIED — XSS fix)
+- `supabase/functions/send-campaign-notification/index.ts` (MODIFIED — XSS fix)
+- `supabase/functions/api-events/index.ts` (MODIFIED — LIKE injection fix)
+- `supabase/functions/api-restaurants/index.ts` (MODIFIED — LIKE injection fix)
+- `src/components/EventSubmissionForm.tsx` (MODIFIED — input validation)
+- `prd.json` (NEW — 30 security stories)
+
+### Learnings for future iterations
+- Edge functions that generate HTML emails are the primary XSS attack surface — React auto-escapes JSX but template literals in Deno do not
+- Supabase client ilike() still interpolates values into the filter string — always use sanitizeLikeInput for user-provided search terms
+- CORS wildcard (*) is used in at least 7 edge functions — each needs migration to getCorsHeaders/handleCors from _shared/cors.ts
+- In-memory rate limiting in serverless resets on cold starts — document this and plan for Redis/DB-backed alternative
+- apiKeyAuth.ts fails open when key is not configured — needs environment-aware fail-closed behavior
+
+### Remaining Work
+- 23 security stories (SEC-008 through SEC-030) remain with `passes: false`
+- Highest remaining priorities: CORS wildcard fixes (SEC-008 through SEC-012), auth gaps (SEC-013, SEC-014), rate limiting (SEC-015)
+- **Progress**: 7/30 security stories complete (23%)
+---

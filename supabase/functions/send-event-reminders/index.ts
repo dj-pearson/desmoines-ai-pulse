@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { escapeHtml } from "../_shared/escapeHtml.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -96,7 +97,7 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
     const timeUntil = formatTimeUntil(reminder.reminder_type);
 
     // Build email content
-    const subject = `Reminder: ${reminder.event_title} ${timeUntil}`;
+    const subject = `Reminder: ${escapeHtml(reminder.event_title)} ${timeUntil}`;
     const eventUrl = `${SUPABASE_URL.replace('/v1', '')}/events/${createSlug(reminder.event_title)}`;
 
     const htmlContent = `
@@ -119,20 +120,20 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
 
     <div style="background: white; padding: 20px; border-radius: 8px; border-left: 4px solid #DC143C; margin: 20px 0;">
       <h2 style="margin: 0 0 15px 0; color: #2D1B69; font-size: 22px;">
-        ${reminder.event_title}
+        ${escapeHtml(reminder.event_title)}
       </h2>
 
       <p style="margin: 8px 0; font-size: 16px;">
-        <strong>📅 When:</strong> ${eventTime}
+        <strong>📅 When:</strong> ${escapeHtml(eventTime)}
       </p>
 
       <p style="margin: 8px 0; font-size: 16px;">
-        <strong>📍 Where:</strong> ${reminder.event_venue || reminder.event_location}
+        <strong>📍 Where:</strong> ${escapeHtml(reminder.event_venue || reminder.event_location)}
       </p>
 
       ${reminder.event_location ? `
         <p style="margin: 8px 0; font-size: 14px; color: #666;">
-          ${reminder.event_location}
+          ${escapeHtml(reminder.event_location)}
         </p>
       ` : ''}
     </div>
@@ -159,12 +160,12 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
     `;
 
     const textContent = `
-Event Reminder: ${reminder.event_title}
+Event Reminder: ${escapeHtml(reminder.event_title)}
 
 You have an upcoming event ${timeUntil}!
 
 When: ${eventTime}
-Where: ${reminder.event_venue || reminder.event_location}
+Where: ${escapeHtml(reminder.event_venue || reminder.event_location)}
 
 View event details: ${eventUrl}
 
