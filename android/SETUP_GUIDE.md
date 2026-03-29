@@ -366,6 +366,14 @@ PREMIUM TIERS:
 Download now and never miss what's happening in Des Moines!
 ```
 
+Device Manager:
+For Play Store quality:
+
+- Use a Pixel 7/8 emulator (1080x2400, 9:16) for phone screenshots
+- Use a Pixel Tablet emulator for 10-inch tablet screenshots
+- Use a Nexus 7 emulator for 7-inch tablet screenshots
+- Navigate to each key screen (Events, Restaurants, Map, Profile, etc.) and capture
+
 ### Step 4: Content Rating
 
 Go to **Policy > App content > Content rating**:
