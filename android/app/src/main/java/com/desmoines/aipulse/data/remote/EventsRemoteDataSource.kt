@@ -8,7 +8,7 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.postgrest.query.TextSearchType
+import io.github.jan.supabase.postgrest.query.filter.TextSearchType
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
@@ -71,14 +71,15 @@ class EventsRemoteDataSource @Inject constructor(
         val client = db()
         val today = todayIso()
 
-        val result = client.from("events").select(count = Count.EXACT) {
+        val result = client.from("events").select {
+            count(Count.EXACT)
             // Only future events
             filter {
                 gte("date", today)
 
                 // Full-text search
                 if (!query.searchText.isNullOrBlank()) {
-                    textSearch("search_vector", query.searchText, config = "english", textSearchType = TextSearchType.WEBSEARCH)
+                    textSearch("search_vector", query.searchText, textSearchType = TextSearchType.WEBSEARCH, config = "english")
                 }
 
                 // Category filter

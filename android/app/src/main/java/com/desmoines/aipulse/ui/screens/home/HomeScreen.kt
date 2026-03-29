@@ -61,7 +61,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.selected as semanticSelected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -409,7 +409,7 @@ private fun DatePresetsRow(
                     .semantics {
                         contentDescription = "Filter by ${preset.displayName}" +
                                 if (isSelected) ", selected" else ""
-                        selected = isSelected
+                        semanticSelected = isSelected
                     }
             )
         }
@@ -449,7 +449,7 @@ private fun CategoryChipsRow(
                     .semantics {
                         contentDescription = "Filter by ${category.displayName}" +
                                 if (isSelected) ", selected" else ""
-                        selected = isSelected
+                        semanticSelected = isSelected
                     }
             ) {
                 Icon(

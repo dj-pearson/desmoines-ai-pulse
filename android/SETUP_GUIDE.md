@@ -22,19 +22,20 @@
 
 Install the following before starting:
 
-| Tool | Version | Download |
-|------|---------|----------|
-| Android Studio | Ladybug (2024.2+) | https://developer.android.com/studio |
-| JDK | 17 | Bundled with Android Studio |
-| Android SDK | API 35 (Android 15) | Via Android Studio SDK Manager |
-| Android Build Tools | 35.0.0 | Via Android Studio SDK Manager |
-| Git | Latest | https://git-scm.com |
-| Node.js | 20+ | For Supabase CLI |
-| Supabase CLI | Latest | `npm install -g supabase` |
+| Tool                | Version             | Download                             |
+| ------------------- | ------------------- | ------------------------------------ |
+| Android Studio      | Ladybug (2024.2+)   | https://developer.android.com/studio |
+| JDK                 | 17                  | Bundled with Android Studio          |
+| Android SDK         | API 35 (Android 15) | Via Android Studio SDK Manager       |
+| Android Build Tools | 35.0.0              | Via Android Studio SDK Manager       |
+| Git                 | Latest              | https://git-scm.com                  |
+| Node.js             | 20+                 | For Supabase CLI                     |
+| Supabase CLI        | Latest              | `npm install -g supabase`            |
 
 ### Android Studio SDK Manager Checklist
 
 Open Android Studio > Settings > SDK Manager and install:
+
 - [x] Android SDK Platform 35
 - [x] Android SDK Build-Tools 35.0.0
 - [x] Google Play services
@@ -164,11 +165,11 @@ If you already have a Google Cloud project for the iOS app or web app, use the s
 
 Go to **APIs & Services > Library** and enable:
 
-| API | Purpose |
-|-----|---------|
-| Maps SDK for Android | Map tab |
+| API                               | Purpose                 |
+| --------------------------------- | ----------------------- |
+| Maps SDK for Android              | Map tab                 |
 | Google Play Android Developer API | Subscription validation |
-| Identity Toolkit API | Google Sign-In |
+| Identity Toolkit API              | Google Sign-In          |
 
 ### Step 3: Create OAuth 2.0 Credentials
 
@@ -193,6 +194,7 @@ Go to **APIs & Services > Credentials**:
 3. Name: `Des Moines Insider Android`
 4. Package name: `com.desmoines.aipulse`
 5. SHA-1 certificate fingerprint:
+
    ```bash
    # For debug keystore:
    keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android | grep SHA1
@@ -200,6 +202,7 @@ Go to **APIs & Services > Credentials**:
    # For release keystore:
    keytool -list -v -keystore path/to/release.jks -alias desmoines-insider | grep SHA1
    ```
+
 6. Click **Create**
 
 **Important**: You need BOTH a debug SHA-1 (for development) and release SHA-1 (for production). Add both as separate Android OAuth clients.
@@ -261,6 +264,7 @@ URL: https://console.firebase.google.com
 ### Step 4: Add Release SHA-1
 
 Once you have your release keystore:
+
 1. Go to **Project Settings > General > Your Apps > Android app**
 2. Click **Add fingerprint**
 3. Add the release SHA-1 fingerprint
@@ -304,6 +308,7 @@ URL: https://play.google.com/console
 ### Step 1: Create Developer Account
 
 If you don't have one:
+
 1. Go to https://play.google.com/console/signup
 2. Pay the one-time $25 registration fee
 3. Complete identity verification (can take 1-3 days)
@@ -323,21 +328,22 @@ If you don't have one:
 
 Go to **Grow > Store presence > Main store listing**:
 
-| Field | Value |
-|-------|-------|
-| App name | Des Moines Insider |
-| Short description | Discover Des Moines events, restaurants & attractions powered by AI |
-| Full description | See below |
-| App icon | 512x512 PNG (no transparency) |
-| Feature graphic | 1024x500 PNG |
-| Phone screenshots | Minimum 2, recommended 8 (16:9 or 9:16) |
-| 7-inch tablet screenshots | Minimum 1, recommended 4 |
-| App category | Travel & Local |
-| Tags | Events, Restaurants, Travel, Local Guide, Des Moines |
-| Contact email | support@desmoinesinsider.com |
-| Privacy policy URL | https://desmoinesinsider.com/privacy-policy |
+| Field                     | Value                                                               |
+| ------------------------- | ------------------------------------------------------------------- |
+| App name                  | Des Moines Insider                                                  |
+| Short description         | Discover Des Moines events, restaurants & attractions powered by AI |
+| Full description          | See below                                                           |
+| App icon                  | 512x512 PNG (no transparency)                                       |
+| Feature graphic           | 1024x500 PNG                                                        |
+| Phone screenshots         | Minimum 2, recommended 8 (16:9 or 9:16)                             |
+| 7-inch tablet screenshots | Minimum 1, recommended 4                                            |
+| App category              | Travel & Local                                                      |
+| Tags                      | Events, Restaurants, Travel, Local Guide, Des Moines                |
+| Contact email             | support@desmoinesinsider.com                                        |
+| Privacy policy URL        | https://desmoinesinsider.com/privacy-policy                         |
 
 **Full description template:**
+
 ```
 Discover the best of Des Moines with your AI-powered local insider guide!
 
@@ -380,17 +386,18 @@ Go to **Policy > App content > Target audience**:
 
 Go to **Policy > App content > Data safety**:
 
-| Data type | Collected | Shared | Purpose |
-|-----------|-----------|--------|---------|
-| Email address | Yes | No | Account management |
-| Name | Yes | No | App functionality |
-| Phone number | Optional | No | App functionality |
-| Approximate location | Yes | No | App functionality (nearby content) |
-| Precise location | Yes | No | App functionality (map, distance) |
-| App interactions | Yes | No | Analytics |
-| Purchase history | Yes | No | Subscription management |
+| Data type            | Collected | Shared | Purpose                            |
+| -------------------- | --------- | ------ | ---------------------------------- |
+| Email address        | Yes       | No     | Account management                 |
+| Name                 | Yes       | No     | App functionality                  |
+| Phone number         | Optional  | No     | App functionality                  |
+| Approximate location | Yes       | No     | App functionality (nearby content) |
+| Precise location     | Yes       | No     | App functionality (map, distance)  |
+| App interactions     | Yes       | No     | Analytics                          |
+| Purchase history     | Yes       | No     | Subscription management            |
 
 Security practices:
+
 - [x] Data is encrypted in transit
 - [x] Users can request data deletion
 - Privacy policy URL: `https://desmoinesinsider.com/privacy-policy`
@@ -398,6 +405,7 @@ Security practices:
 ### Step 7: App Access
 
 If the app has features requiring login:
+
 1. Go to **Policy > App content > App access**
 2. Select **All or some functionality is restricted**
 3. Add instructions: "Tap Profile tab > Sign In. Use test account: test@desmoinesinsider.com / TestPass123!"
@@ -426,6 +434,7 @@ keytool -genkeypair \
 ```
 
 **CRITICAL**:
+
 - Back up `release.jks` securely (e.g., password manager, encrypted cloud storage)
 - If you lose this keystore, you can NEVER update the app on Play Store
 - NEVER commit the keystore to git
@@ -476,10 +485,10 @@ Go to **Monetize > Products > Subscriptions**:
 
 Click **Create subscription**:
 
-| Field | Value |
-|-------|-------|
-| Product ID | `insider_monthly` |
-| Name | Des Moines Insider - Insider |
+| Field       | Value                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| Product ID  | `insider_monthly`                                                                        |
+| Name        | Des Moines Insider - Insider                                                             |
 | Description | Unlimited favorites, advanced filters, AI trip planner, insider tips, ad-free experience |
 
 Add a base plan:
@@ -496,10 +505,10 @@ Add a base plan:
 
 Click **Create subscription**:
 
-| Field | Value |
-|-------|-------|
-| Product ID | `vip_monthly` |
-| Name | Des Moines Insider - VIP |
+| Field       | Value                                                                                         |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| Product ID  | `vip_monthly`                                                                                 |
+| Name        | Des Moines Insider - VIP                                                                      |
 | Description | Everything in Insider plus VIP events, concierge support, unlimited AI trips, and local perks |
 
 Add a base plan:
@@ -583,6 +592,7 @@ supabase functions deploy validate-android-receipt
 ### Step 5: Verify
 
 Test with a license tester purchase. Check Supabase logs:
+
 ```bash
 supabase functions logs validate-android-receipt
 ```
@@ -696,6 +706,7 @@ Start with internal testing to verify everything works end-to-end, then progress
 ### Update Subscriptions
 
 If you change pricing:
+
 1. Update in Play Console > Monetize > Subscriptions
 2. Existing subscribers keep their price until renewal
 3. New subscribers get the new price
@@ -720,53 +731,60 @@ If you change pricing:
 
 ## Environment Variables Quick Reference
 
-| Variable | Where Used | How to Get |
-|----------|-----------|------------|
-| `SUPABASE_URL` | local.properties | Supabase Dashboard > Settings > API |
-| `SUPABASE_ANON_KEY` | local.properties | Supabase Dashboard > Settings > API |
-| `GOOGLE_WEB_CLIENT_ID` | local.properties | Google Cloud Console > Credentials > OAuth Web Client |
-| `GOOGLE_MAPS_API_KEY` | local.properties | Google Cloud Console > Credentials > API Key |
-| `RELEASE_KEYSTORE_FILE` | local.properties | You generate this (keytool) |
-| `RELEASE_KEYSTORE_PASSWORD` | local.properties | You set this during keytool |
-| `RELEASE_KEY_ALIAS` | local.properties | You set this during keytool |
-| `RELEASE_KEY_PASSWORD` | local.properties | You set this during keytool |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_KEY` | Supabase secret | Google Cloud Console > IAM > Service Accounts |
-| `google-services.json` | android/app/ | Firebase Console > Project Settings > Android app |
+| Variable                          | Where Used       | How to Get                                            |
+| --------------------------------- | ---------------- | ----------------------------------------------------- |
+| `SUPABASE_URL`                    | local.properties | Supabase Dashboard > Settings > API                   |
+| `SUPABASE_ANON_KEY`               | local.properties | Supabase Dashboard > Settings > API                   |
+| `GOOGLE_WEB_CLIENT_ID`            | local.properties | Google Cloud Console > Credentials > OAuth Web Client |
+| `GOOGLE_MAPS_API_KEY`             | local.properties | Google Cloud Console > Credentials > API Key          |
+| `RELEASE_KEYSTORE_FILE`           | local.properties | You generate this (keytool)                           |
+| `RELEASE_KEYSTORE_PASSWORD`       | local.properties | You set this during keytool                           |
+| `RELEASE_KEY_ALIAS`               | local.properties | You set this during keytool                           |
+| `RELEASE_KEY_PASSWORD`            | local.properties | You set this during keytool                           |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_KEY` | Supabase secret  | Google Cloud Console > IAM > Service Accounts         |
+| `google-services.json`            | android/app/     | Firebase Console > Project Settings > Android app     |
 
 ---
 
 ## Troubleshooting
 
 ### "Supabase client not configured"
+
 - Verify `SUPABASE_URL` and `SUPABASE_ANON_KEY` in local.properties
 - Run `./gradlew clean assembleDebug` to rebuild with new values
 
 ### Google Sign-In returns error
+
 - Verify `GOOGLE_WEB_CLIENT_ID` matches the Web Client (not Android Client)
 - Verify SHA-1 fingerprint matches your debug/release keystore
 - Verify redirect URI in Supabase matches Google Cloud Console
 
 ### Map shows blank/gray
+
 - Verify `GOOGLE_MAPS_API_KEY` in local.properties
 - Verify Maps SDK for Android is enabled in Cloud Console
 - Verify API key has Android app restriction with correct SHA-1
 
 ### Subscription purchase fails
+
 - Verify app is uploaded to Play Console (even as internal test)
 - Verify subscription products are active in Play Console
 - Verify tester email is in License testing list
 - Verify product IDs in BillingService.kt match Play Console
 
 ### Release build crashes but debug works
+
 - Check ProGuard rules in `proguard-rules.pro`
 - Run `./gradlew assembleRelease` and check for R8 warnings
 - Test with `minifyEnabled = false` temporarily to isolate
 
 ### Edge function returns 401
+
 - Verify user is authenticated (has valid Supabase session)
 - Check Supabase function logs: `supabase functions logs validate-android-receipt`
 
 ### Edge function returns 500
+
 - Verify `GOOGLE_PLAY_SERVICE_ACCOUNT_KEY` secret is set correctly
 - Verify service account has Play Console permissions (can take 24h)
 - Check function logs for detailed error message

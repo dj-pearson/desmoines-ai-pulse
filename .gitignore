@@ -85,3 +85,6 @@ android/.cxx/
 android/app/google-services.json
 *.apk
 *.aab
+
+# Added by ggshield
+.cache_ggshield

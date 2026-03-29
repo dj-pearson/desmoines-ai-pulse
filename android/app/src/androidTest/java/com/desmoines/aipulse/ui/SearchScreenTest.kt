@@ -34,11 +34,9 @@ class SearchScreenTest {
                     onSearchTextChanged = {},
                     onTabSelected = {},
                     onClearSearch = {},
-                    onEventClick = {},
-                    onRestaurantClick = {},
-                    onAttractionClick = {},
-                    onCategoryClick = {},
-                    onSuggestionClick = {},
+                    onNavigateToEventDetail = {},
+                    onNavigateToRestaurantDetail = {},
+                    onNavigateToAttractionDetail = {},
                 )
             }
         }
@@ -47,7 +45,7 @@ class SearchScreenTest {
     @Test
     fun search_searchBarDisplayed() {
         setSearchScreen()
-        composeTestRule.onNodeWithText("Search events, restaurants...", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Search events, restaurants", substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -58,8 +56,8 @@ class SearchScreenTest {
     }
 
     @Test
-    fun search_tabsDisplayed() {
-        setSearchScreen()
+    fun search_tabsDisplayedAfterSearch() {
+        setSearchScreen(defaultState.copy(hasSearched = true, searchText = "test"))
         composeTestRule.onNodeWithText("Events").assertIsDisplayed()
         composeTestRule.onNodeWithText("Restaurants").assertIsDisplayed()
         composeTestRule.onNodeWithText("Attractions").assertIsDisplayed()
@@ -79,7 +77,7 @@ class SearchScreenTest {
                 searchText = "xyznonexistent",
             )
         )
-        composeTestRule.onNodeWithText("No results", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("No Results", substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -92,11 +90,9 @@ class SearchScreenTest {
                     onSearchTextChanged = {},
                     onTabSelected = { selectedTab = it },
                     onClearSearch = {},
-                    onEventClick = {},
-                    onRestaurantClick = {},
-                    onAttractionClick = {},
-                    onCategoryClick = {},
-                    onSuggestionClick = {},
+                    onNavigateToEventDetail = {},
+                    onNavigateToRestaurantDetail = {},
+                    onNavigateToAttractionDetail = {},
                 )
             }
         }

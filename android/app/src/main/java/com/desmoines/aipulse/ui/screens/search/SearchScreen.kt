@@ -320,7 +320,9 @@ private fun SearchSuggestions(
                 text = "Popular Categories",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = Dimens.SpacingMd, bottom = Dimens.SpacingSm),
+                modifier = Modifier
+                    .padding(horizontal = Dimens.SpacingMd)
+                    .padding(bottom = Dimens.SpacingSm),
             )
         }
 
@@ -380,7 +382,9 @@ private fun SearchSuggestions(
                 text = "Try Searching",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = Dimens.SpacingMd, bottom = Dimens.SpacingSm),
+                modifier = Modifier
+                    .padding(horizontal = Dimens.SpacingMd)
+                    .padding(bottom = Dimens.SpacingSm),
             )
         }
 

@@ -1,6 +1,5 @@
 package com.desmoines.aipulse.ui.screens.home
 
-import app.cash.turbine.test
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.EventCategory
 import com.desmoines.aipulse.data.model.Restaurant
@@ -10,6 +9,7 @@ import com.desmoines.aipulse.data.remote.RestaurantsQuery
 import com.desmoines.aipulse.data.remote.RestaurantsResponse
 import com.desmoines.aipulse.data.repository.EventsRepository
 import com.desmoines.aipulse.data.repository.RestaurantsRepository
+import com.desmoines.aipulse.util.LocationService
 import com.desmoines.aipulse.util.NetworkMonitor
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -38,9 +38,10 @@ class EventsViewModelTest {
     private lateinit var eventsRepository: EventsRepository
     private lateinit var restaurantsRepository: RestaurantsRepository
     private lateinit var networkMonitor: NetworkMonitor
+    private lateinit var locationService: LocationService
     private lateinit var viewModel: EventsViewModel
 
-    private val sampleEvent = Event.preview()
+    private val sampleEvent = Event.preview
     private val sampleEventsResponse = EventsResponse(
         events = listOf(sampleEvent),
         totalCount = 1,
@@ -63,7 +64,9 @@ class EventsViewModelTest {
         eventsRepository = mockk(relaxed = true)
         restaurantsRepository = mockk(relaxed = true)
         networkMonitor = mockk()
+        locationService = mockk(relaxed = true)
         every { networkMonitor.isConnected } returns MutableStateFlow(true)
+        every { locationService.userLocation } returns MutableStateFlow(null)
 
         coEvery { eventsRepository.fetchEvents(any()) } returns Result.success(sampleEventsResponse)
         coEvery { eventsRepository.fetchFeaturedEvents(any()) } returns Result.success(listOf(sampleEvent))
@@ -76,7 +79,7 @@ class EventsViewModelTest {
     }
 
     private fun createViewModel(): EventsViewModel {
-        return EventsViewModel(eventsRepository, restaurantsRepository, networkMonitor)
+        return EventsViewModel(eventsRepository, restaurantsRepository, networkMonitor, locationService)
     }
 
     @Test

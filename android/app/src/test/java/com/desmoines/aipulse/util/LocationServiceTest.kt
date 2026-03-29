@@ -1,18 +1,46 @@
 package com.desmoines.aipulse.util
 
+import android.content.Context
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 
 /**
  * Tests for LocationService distance calculation and formatting.
- * Tests the static Haversine and formatMiles methods directly.
+ * Tests the Haversine instance method and the static formatMiles method.
  */
 class LocationServiceTest {
 
+    private lateinit var locationService: LocationService
+
+    @BeforeEach
+    fun setup() {
+        // Mock LocationServices.getFusedLocationProviderClient so LocationService
+        // can be constructed in a pure JVM test environment.
+        mockkStatic(LocationServices::class)
+        val mockFusedClient = mockk<FusedLocationProviderClient>(relaxed = true)
+        every { LocationServices.getFusedLocationProviderClient(any<Context>()) } returns mockFusedClient
+
+        val context: Context = mockk(relaxed = true)
+        locationService = LocationService(context)
+    }
+
+    @AfterEach
+    fun tearDown() {
+        unmockkStatic(LocationServices::class)
+    }
+
     @Test
     fun `haversineDistanceMiles same point is zero`() {
-        val distance = LocationService.haversineDistanceMiles(
+        val distance = locationService.haversineDistanceMiles(
             41.5868, -93.625,
             41.5868, -93.625,
         )
@@ -21,7 +49,7 @@ class LocationServiceTest {
 
     @Test
     fun `haversineDistanceMiles Des Moines to Ames is approximately 30 miles`() {
-        val distance = LocationService.haversineDistanceMiles(
+        val distance = locationService.haversineDistanceMiles(
             41.5868, -93.625,
             42.0347, -93.6199,
         )
@@ -31,15 +59,15 @@ class LocationServiceTest {
 
     @Test
     fun `haversineDistanceMiles is symmetric`() {
-        val d1 = LocationService.haversineDistanceMiles(41.5868, -93.625, 42.0347, -93.6199)
-        val d2 = LocationService.haversineDistanceMiles(42.0347, -93.6199, 41.5868, -93.625)
+        val d1 = locationService.haversineDistanceMiles(41.5868, -93.625, 42.0347, -93.6199)
+        val d2 = locationService.haversineDistanceMiles(42.0347, -93.6199, 41.5868, -93.625)
         assertEquals(d1, d2, 0.001)
     }
 
     @Test
     fun `haversineDistanceMiles cross-country is reasonable`() {
         // Des Moines to New York City (~1050 miles)
-        val distance = LocationService.haversineDistanceMiles(
+        val distance = locationService.haversineDistanceMiles(
             41.5868, -93.625,
             40.7128, -74.0060,
         )

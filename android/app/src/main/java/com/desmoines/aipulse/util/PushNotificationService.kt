@@ -14,8 +14,7 @@ import com.google.firebase.messaging.FirebaseMessaging
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import io.github.jan.supabase.SupabaseClient
-import io.github.jan.supabase.functions.Functions
-import io.github.jan.supabase.functions.invoke
+import io.github.jan.supabase.functions.functions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -231,12 +230,10 @@ class PushNotificationService : FirebaseMessagingService() {
                     return
                 }
 
-                client.functions.invoke("register-device-token") {
-                    body = buildJsonObject {
-                        put("deviceToken", tokenToSync)
-                        put("platform", "android")
-                    }
-                }
+                client.functions("register-device-token", body = buildJsonObject {
+                    put("deviceToken", tokenToSync)
+                    put("platform", "android")
+                })
 
                 Log.d(TAG, "Device token synced to backend")
             } catch (e: Exception) {

@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sms
-import androidx.compose.material.icons.filled.TuneOutlined
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.CardGiftcard
 import androidx.compose.material3.Button
@@ -360,7 +360,7 @@ private fun InsiderFeaturesList(price: String) {
         Spacer(Modifier.height(8.dp))
         FeatureRow(icon = Icons.Filled.Map, color = InsiderColor, text = "AI Trip Planner (5 trips/month)")
         FeatureRow(icon = Icons.Filled.FavoriteBorder, color = InsiderColor, text = "Unlimited favorites")
-        FeatureRow(icon = Icons.Filled.TuneOutlined, color = InsiderColor, text = "Advanced filters (distance, price, rating)")
+        FeatureRow(icon = Icons.Outlined.Tune, color = InsiderColor, text = "Advanced filters (distance, price, rating)")
         FeatureRow(icon = Icons.Filled.RateReview, color = InsiderColor, text = "Write reviews & ratings")
         FeatureRow(icon = Icons.Filled.Notifications, color = InsiderColor, text = "Saved searches & event alerts")
         FeatureRow(icon = Icons.Filled.VisibilityOff, color = InsiderColor, text = "Ad-free experience")

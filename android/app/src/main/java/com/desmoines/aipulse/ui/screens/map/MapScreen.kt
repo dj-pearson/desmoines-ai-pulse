@@ -58,6 +58,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +72,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.desmoines.aipulse.data.model.Attraction
@@ -881,7 +883,7 @@ private fun EventMapPin(
     isSelected: Boolean,
 ) {
     val reduceAnimations = rememberShouldReduceAnimations()
-    val pinAnimSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+    val pinAnimSpec = if (reduceAnimations) snap<Dp>() else spring<Dp>(dampingRatio = Spring.DampingRatioMediumBouncy)
     val size by animateDpAsState(
         targetValue = if (isSelected) 40.dp else 32.dp,
         animationSpec = pinAnimSpec,
@@ -917,7 +919,7 @@ private fun EventMapPin(
 @Composable
 private fun RestaurantMapPin(isSelected: Boolean) {
     val reduceAnimations = rememberShouldReduceAnimations()
-    val pinAnimSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+    val pinAnimSpec = if (reduceAnimations) snap<Dp>() else spring<Dp>(dampingRatio = Spring.DampingRatioMediumBouncy)
     val size by animateDpAsState(
         targetValue = if (isSelected) 38.dp else 30.dp,
         animationSpec = pinAnimSpec,
@@ -952,7 +954,7 @@ private fun RestaurantMapPin(isSelected: Boolean) {
 @Composable
 private fun AttractionMapPin(isSelected: Boolean) {
     val reduceAnimations = rememberShouldReduceAnimations()
-    val pinAnimSpec = if (reduceAnimations) snap() else spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+    val pinAnimSpec = if (reduceAnimations) snap<Dp>() else spring<Dp>(dampingRatio = Spring.DampingRatioMediumBouncy)
     val size by animateDpAsState(
         targetValue = if (isSelected) 38.dp else 30.dp,
         animationSpec = pinAnimSpec,

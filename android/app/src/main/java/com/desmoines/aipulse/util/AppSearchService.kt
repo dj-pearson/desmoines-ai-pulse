@@ -1,11 +1,13 @@
 package com.desmoines.aipulse.util
 
+import android.content.Context
 import android.net.Uri
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.data.model.Restaurant
 import com.google.firebase.appindexing.FirebaseAppIndex
 import com.google.firebase.appindexing.Indexable
 import com.google.firebase.appindexing.builders.Indexables
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,10 +18,12 @@ import javax.inject.Singleton
  * Mirrors iOS SpotlightService.swift.
  */
 @Singleton
-class AppSearchService @Inject constructor() {
+class AppSearchService @Inject constructor(
+    @ApplicationContext private val context: Context,
+) {
 
     private val appIndex: FirebaseAppIndex by lazy {
-        FirebaseAppIndex.getInstance()
+        FirebaseAppIndex.getInstance(context)
     }
 
     /**

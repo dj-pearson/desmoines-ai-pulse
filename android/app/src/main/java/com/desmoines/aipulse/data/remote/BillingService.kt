@@ -21,6 +21,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
+import io.ktor.client.statement.bodyAsText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -378,11 +379,9 @@ class BillingService @Inject constructor(
 
         for (attempt in 0 until MAX_RETRIES) {
             try {
-                val response = client.functions.invoke("validate-android-receipt") {
-                    body = payload
-                }
+                val response = client.functions("validate-android-receipt", body = payload)
 
-                val bodyString = response.body?.let { String(it) } ?: ""
+                val bodyString = response.bodyAsText()
 
                 if (bodyString.contains("\"valid\":true") || bodyString.contains("\"valid\": true")) {
                     Log.i(TAG, "Server validation succeeded for product=$productId")

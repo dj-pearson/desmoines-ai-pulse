@@ -42,57 +42,6 @@ data class Restaurant(
     @SerialName("updated_at") val updatedAt: String? = null,
 ) {
 
-    // region Open/Closed Status
-
-    private companion object {
-        val DAY_NAMES = listOf("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
-
-        /**
-         * Parse time string like "11:00", "11:00 AM", "9:30 PM" to minutes since midnight.
-         * Mirrors iOS Restaurant.parseTime(_:)
-         */
-        fun parseTime(string: String): Int? {
-            val trimmed = string.trim()
-            val parts = trimmed.split(":")
-            if (parts.size < 2) return null
-            val hour = parts[0].trim().toIntOrNull() ?: return null
-            val minuteStr = parts[1].replace(Regex("[A-Za-z]"), "").trim()
-            val minute = minuteStr.toIntOrNull() ?: return null
-
-            var h = hour
-            val upper = trimmed.uppercase(Locale.US)
-            if (upper.endsWith("PM") && h != 12) h += 12
-            if (upper.endsWith("AM") && h == 12) h = 0
-
-            return h * 60 + minute
-        }
-
-        /**
-         * Get hours string for a given day from the business_hours JSON.
-         * Supports both flat {"monday": "11:00 - 22:00"} and nested {"hours": {"monday": "..."}} shapes.
-         */
-        fun getHoursForDay(businessHours: JsonElement?, day: String): String? {
-            if (businessHours == null || businessHours !is JsonObject) return null
-            val obj = businessHours.jsonObject
-
-            // Try flat format
-            obj[day]?.let {
-                if (it is JsonPrimitive) return it.jsonPrimitive.content
-            }
-
-            // Try nested format { "hours": { "monday": "..." } }
-            obj["hours"]?.let { hoursEl ->
-                if (hoursEl is JsonObject) {
-                    hoursEl.jsonObject[day]?.let {
-                        if (it is JsonPrimitive) return it.jsonPrimitive.content
-                    }
-                }
-            }
-
-            return null
-        }
-    }
-
     /**
      * Determines if the restaurant is currently open based on business_hours.
      * Returns null if hours data is unavailable.
@@ -139,8 +88,6 @@ data class Restaurant(
             false -> "Closed"
             null -> "Hours unknown"
         }
-
-    // endregion
 
     // region Computed Properties
 
@@ -192,6 +139,53 @@ data class Restaurant(
     // endregion
 
     companion object {
+        private val DAY_NAMES = listOf("sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday")
+
+        /**
+         * Parse time string like "11:00", "11:00 AM", "9:30 PM" to minutes since midnight.
+         * Mirrors iOS Restaurant.parseTime(_:)
+         */
+        private fun parseTime(string: String): Int? {
+            val trimmed = string.trim()
+            val parts = trimmed.split(":")
+            if (parts.size < 2) return null
+            val hour = parts[0].trim().toIntOrNull() ?: return null
+            val minuteStr = parts[1].replace(Regex("[A-Za-z]"), "").trim()
+            val minute = minuteStr.toIntOrNull() ?: return null
+
+            var h = hour
+            val upper = trimmed.uppercase(Locale.US)
+            if (upper.endsWith("PM") && h != 12) h += 12
+            if (upper.endsWith("AM") && h == 12) h = 0
+
+            return h * 60 + minute
+        }
+
+        /**
+         * Get hours string for a given day from the business_hours JSON.
+         * Supports both flat {"monday": "11:00 - 22:00"} and nested {"hours": {"monday": "..."}} shapes.
+         */
+        private fun getHoursForDay(businessHours: JsonElement?, day: String): String? {
+            if (businessHours == null || businessHours !is JsonObject) return null
+            val obj = businessHours.jsonObject
+
+            // Try flat format
+            obj[day]?.let {
+                if (it is JsonPrimitive) return it.jsonPrimitive.content
+            }
+
+            // Try nested format { "hours": { "monday": "..." } }
+            obj["hours"]?.let { hoursEl ->
+                if (hoursEl is JsonObject) {
+                    hoursEl.jsonObject[day]?.let {
+                        if (it is JsonPrimitive) return it.jsonPrimitive.content
+                    }
+                }
+            }
+
+            return null
+        }
+
         val preview = Restaurant(
             id = "preview-1",
             name = "Zombie Burger + Drink Lab",

@@ -1,5 +1,8 @@
 package com.desmoines.aipulse.ui
 
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Text
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -22,13 +25,11 @@ class NavigationTest {
     fun navigation_allSixTabsDisplayed() {
         composeTestRule.setContent {
             DesMoinesInsiderTheme {
-                // NavigationBar with 6 tabs is rendered inside MainScreen
-                // For isolated testing, we verify the tab labels exist
-                androidx.compose.material3.NavigationBar {
+                NavigationBar {
                     listOf("Home", "Dining", "Search", "Map", "Saved", "Profile").forEachIndexed { index, label ->
-                        androidx.compose.material3.NavigationBarItem(
+                        NavigationBarItem(
                             icon = { },
-                            label = { androidx.compose.material3.Text(label) },
+                            label = { Text(label) },
                             selected = index == 0,
                             onClick = { },
                         )
@@ -50,11 +51,11 @@ class NavigationTest {
         var selectedIndex = 0
         composeTestRule.setContent {
             DesMoinesInsiderTheme {
-                androidx.compose.material3.NavigationBar {
+                NavigationBar {
                     listOf("Home", "Dining", "Search", "Map", "Saved", "Profile").forEachIndexed { index, label ->
-                        androidx.compose.material3.NavigationBarItem(
+                        NavigationBarItem(
                             icon = { },
-                            label = { androidx.compose.material3.Text(label) },
+                            label = { Text(label) },
                             selected = selectedIndex == index,
                             onClick = { selectedIndex = index },
                         )

@@ -120,7 +120,7 @@ class SearchViewModelTest {
     fun `fuzzy fallback triggers when full-text returns empty`() = runTest {
         // Full-text returns empty, fuzzy returns results
         coEvery { eventsRepository.fetchEvents(any()) } returns Result.success(emptyEventsResponse)
-        coEvery { eventsRepository.fuzzySearchEvents(any(), any()) } returns Result.success(listOf(Event.preview()))
+        coEvery { eventsRepository.fuzzySearchEvents(any(), any()) } returns Result.success(listOf(Event.preview))
 
         viewModel = createViewModel()
         viewModel.onSearchTextChanged("jazz")

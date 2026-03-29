@@ -22,25 +22,21 @@ class HomeScreenTest {
     val composeTestRule = createComposeRule()
 
     private val defaultState = HomeScreenState(
-        events = listOf(Event.preview()),
-        featuredEvents = listOf(Event.preview()),
-        restaurants = listOf(Restaurant.preview()),
+        events = listOf(Event.preview),
+        featuredEvents = listOf(Event.preview),
+        restaurants = listOf(Restaurant.preview),
         isLoading = false,
         isLoadingMore = false,
         isRefreshing = false,
         hasMore = false,
         totalCount = 1,
         errorMessage = null,
-        searchText = "",
         selectedCategory = null,
         selectedDatePreset = null,
         showFeaturedOnly = false,
-        showFreeOnly = false,
-        maxDistance = null,
-        minRating = null,
         activeFilterCount = 0,
         currentTier = SubscriptionTier.FREE,
-        isOffline = false,
+        isConnected = true,
     )
 
     private fun setHomeScreen(state: HomeScreenState = defaultState) {
@@ -48,14 +44,14 @@ class HomeScreenTest {
             DesMoinesInsiderTheme {
                 HomeScreen(
                     state = state,
-                    onEventClick = {},
-                    onRestaurantClick = {},
-                    onCategorySelected = {},
-                    onDatePresetSelected = {},
+                    onNavigateToEventDetail = {},
+                    onNavigateToRestaurantDetail = {},
+                    onSelectCategory = {},
+                    onSelectDatePreset = {},
                     onClearFilters = {},
                     onRefresh = {},
                     onLoadMore = {},
-                    onFilterClick = {},
+                    onShowFilters = {},
                     onFavoriteClick = {},
                     onNavigateToSubscription = {},
                 )
@@ -79,7 +75,7 @@ class HomeScreenTest {
     @Test
     fun home_featuredSectionDisplayed() {
         setHomeScreen()
-        composeTestRule.onNodeWithText("Featured Events", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("Featured", substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -112,7 +108,7 @@ class HomeScreenTest {
             )
         )
 
-        composeTestRule.onNodeWithText("No events found", substring = true).assertIsDisplayed()
+        composeTestRule.onNodeWithText("No Events Found", substring = true).assertIsDisplayed()
     }
 
     @Test
