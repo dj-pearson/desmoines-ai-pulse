@@ -105,6 +105,7 @@ export function EnhancedHero({
         {/* Main headline - Dynamic based on time */}
         <div className="text-center mb-8 animate-slide-in">
           <h1 className="text-4xl md:text-6xl font-bold text-white mb-4 md:drop-shadow-lg">
+            <span className="block text-lg md:text-2xl font-semibold text-[#FFD700] mb-2">Des Moines Insider</span>
             {greeting}
           </h1>
           <p className="text-xl md:text-2xl text-white/90 mb-4 max-w-3xl mx-auto md:drop-shadow-md">
