@@ -16,8 +16,8 @@
         "App still compiles and runs correctly in Simulator"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "CRITICAL SECURITY: No certificate pinning exists. App is vulnerable to MITM attacks on compromised networks. Must implement before production launch."
+      "passes": true,
+      "notes": "FIXED: Created CertificatePinningService.swift with URLSessionDelegate that validates Supabase domain certificates via SPKI SHA-256 hash pinning. Pins Let's Encrypt R3, ISRG Root X1, and DigiCert Global Root G2. Debug mode uses report-only (logs but allows), production blocks mismatches."
     },
     {
       "id": "IOS-002",
@@ -31,8 +31,8 @@
         "Add a cache version marker so old unencrypted caches are purged on upgrade"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "HIGH: QueryCache stores API responses (events, restaurants, user data) in the caches directory without encryption. Files are accessible if device is compromised."
+      "passes": true,
+      "notes": "FIXED: Set NSFileProtectionComplete on cache directory and .completeFileProtection on all cache writes. Added cache version marker (v2) that purges old unencrypted caches on upgrade."
     },
     {
       "id": "IOS-003",
@@ -46,8 +46,8 @@
         "Detection does not trigger false positives on Simulator"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "CRITICAL: No jailbreak detection despite handling sensitive auth data. Keychain may be accessible on compromised devices."
+      "passes": true,
+      "notes": "FIXED: Created JailbreakDetector.swift with 4 checks (suspicious paths, URL schemes, writable system paths, dynamic libraries). Shows non-blocking alert on launch. Skipped on Simulator to avoid false positives. Integrated into DesMoinesInsiderApp.swift."
     },
     {
       "id": "IOS-004",
@@ -63,8 +63,8 @@
         "Handle all LAError cases gracefully (biometryNotAvailable, biometryNotEnrolled, userCancel, etc.)"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "CRITICAL: Only email/password and Apple Sign-In available. Biometric auth improves both security and UX."
+      "passes": true,
+      "notes": "FIXED: Created BiometricAuthService.swift with Face ID/Touch ID/Optic ID support via LocalAuthentication. Enable/disable toggle in SettingsView (Security section). Preference stored in Keychain. Biometric lock screen on app launch with Skip fallback. NSFaceIDUsageDescription added to Info.plist. All LAError cases handled. Reset on sign out."
     },
     {
       "id": "IOS-005",

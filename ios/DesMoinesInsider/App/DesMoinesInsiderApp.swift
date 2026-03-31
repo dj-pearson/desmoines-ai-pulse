@@ -6,9 +6,12 @@ struct DesMoinesInsiderApp: App {
     @State private var authService = AuthService.shared
     @State private var favoritesService = FavoritesService.shared
     @State private var locationService = LocationService.shared
+    @State private var biometricService = BiometricAuthService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("appLaunchCount") private var launchCount = 0
+    @State private var showJailbreakWarning = false
+    @State private var awaitingBiometric = false
 
     var body: some Scene {
         WindowGroup {
@@ -24,9 +27,18 @@ struct DesMoinesInsiderApp: App {
                     LaunchScreenView()
                 } else if !hasCompletedOnboarding {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                } else if awaitingBiometric {
+                    BiometricLockView {
+                        awaitingBiometric = false
+                    }
                 } else {
                     MainTabView()
                 }
+            }
+            .alert("Security Warning", isPresented: $showJailbreakWarning) {
+                Button("I Understand", role: .cancel) {}
+            } message: {
+                Text("This device may have been modified. Your data could be at risk. We recommend using an unmodified device for the best security.")
             }
             .onOpenURL { url in
                 // Handle auth callbacks (email verification, OAuth redirects, etc.)
@@ -37,6 +49,21 @@ struct DesMoinesInsiderApp: App {
 
                 // Prune expired cache entries on launch
                 await QueryCache.shared.pruneExpired()
+
+                // Jailbreak check (soft warning, non-blocking)
+                if JailbreakDetector.isJailbroken {
+                    showJailbreakWarning = true
+                }
+
+                // Biometric auth on launch (if enabled and user has a session)
+                if biometricService.isEnabled && authService.isAuthenticated {
+                    awaitingBiometric = true
+                    let success = await biometricService.authenticate()
+                    if success {
+                        awaitingBiometric = false
+                    }
+                    // If biometric fails, user stays on lock screen with retry button
+                }
 
                 if authService.isAuthenticated {
                     await favoritesService.loadFavorites()
@@ -88,6 +115,67 @@ private struct LaunchScreenView: View {
                 ProgressView()
                     .tint(Color.accentColor)
                     .accessibilityLabel("Loading")
+            }
+        }
+    }
+}
+
+// MARK: - Biometric Lock Screen
+
+/// Shown when biometric auth is enabled and the user needs to verify their identity.
+private struct BiometricLockView: View {
+    let onUnlock: () -> Void
+
+    @State private var biometric = BiometricAuthService.shared
+    @State private var isAuthenticating = false
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 32) {
+                Image(systemName: biometric.biometricIcon)
+                    .font(.system(size: 64))
+                    .foregroundStyle(Color.accentColor)
+                    .accessibilityHidden(true)
+
+                Text("Locked")
+                    .font(.title.bold())
+                    .foregroundStyle(.white)
+
+                Text("Authenticate with \(biometric.biometricName) to continue")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    Task {
+                        isAuthenticating = true
+                        let success = await biometric.authenticate()
+                        if success {
+                            onUnlock()
+                        }
+                        isAuthenticating = false
+                    }
+                } label: {
+                    Label("Try Again", systemImage: biometric.biometricIcon)
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.accentColor)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(isAuthenticating)
+                .padding(.horizontal, 48)
+                .accessibilityLabel("Authenticate with \(biometric.biometricName)")
+
+                Button("Skip") {
+                    onUnlock()
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Skip biometric authentication")
             }
         }
     }

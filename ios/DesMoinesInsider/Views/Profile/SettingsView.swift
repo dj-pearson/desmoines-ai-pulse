@@ -8,6 +8,7 @@ struct SettingsView: View {
 
     @State private var auth = AuthService.shared
     @State private var storeKit = StoreKitService.shared
+    @State private var biometric = BiometricAuthService.shared
     @State private var showSubscription = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
@@ -40,6 +41,27 @@ struct SettingsView: View {
                             }
                         } label: {
                             Label("Restore Purchases", systemImage: "arrow.clockwise")
+                        }
+                    }
+
+                    if biometric.isAvailable {
+                        Section("Security") {
+                            Toggle(isOn: Binding(
+                                get: { biometric.isEnabled },
+                                set: { newValue in
+                                    Task {
+                                        if newValue {
+                                            _ = await biometric.enable()
+                                        } else {
+                                            biometric.disable()
+                                        }
+                                    }
+                                }
+                            )) {
+                                Label(biometric.biometricName, systemImage: biometric.biometricIcon)
+                            }
+                            .accessibilityLabel("Sign in with \(biometric.biometricName)")
+                            .accessibilityHint(biometric.isEnabled ? "Currently enabled" : "Currently disabled")
                         }
                     }
                 }

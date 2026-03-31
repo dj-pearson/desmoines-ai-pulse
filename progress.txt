@@ -96,6 +96,46 @@
 
 ## Progress Log
 
+## 2026-03-31 — iOS Production Readiness: Security Hardening (IOS-001 through IOS-004)
+
+- **IOS-001**: Implemented certificate pinning for Supabase API calls:
+  - Created `ios/DesMoinesInsider/Services/CertificatePinningService.swift` with URLSessionDelegate
+  - SPKI SHA-256 hash pinning for Let's Encrypt R3, ISRG Root X1, DigiCert Global Root G2
+  - Debug mode: report-only (logs mismatch but allows connection for development)
+  - Production mode: blocks connections on pinning failure with user-friendly error
+  - Validates entire certificate chain, not just leaf certificate
+- **IOS-002**: Added encrypted file protection to QueryCache disk storage:
+  - Set `NSFileProtectionComplete` attribute on cache directory creation
+  - Cache writes use `.completeFileProtection` option — files inaccessible when device locked
+  - Added cache version marker (v2) with automatic purge of old unencrypted caches on upgrade
+  - Version file at `.cache-version` in cache directory
+- **IOS-003**: Added jailbreak detection with soft user warning:
+  - Created `ios/DesMoinesInsider/Services/JailbreakDetector.swift` with 4 detection methods
+  - Checks: suspicious paths (Cydia/Sileo/bash/sshd), URL schemes, writable system paths, injected dylibs
+  - Non-blocking alert on launch ("Security Warning" — does NOT block app usage per App Store guidelines)
+  - All checks skipped on `#if targetEnvironment(simulator)` to avoid false positives
+  - Integrated into `DesMoinesInsiderApp.swift` task block
+- **IOS-004**: Added biometric authentication (Face ID / Touch ID):
+  - Created `ios/DesMoinesInsider/Services/BiometricAuthService.swift` with LocalAuthentication framework
+  - Supports Face ID, Touch ID, and Optic ID with device detection
+  - Enable/disable toggle in SettingsView Security section (only shown when hardware available)
+  - Biometric preference stored securely in Keychain (not UserDefaults)
+  - BiometricLockView shown on app launch when enabled + session exists, with "Try Again" and "Skip" buttons
+  - Comprehensive LAError handling (userCancel, biometryNotAvailable, biometryNotEnrolled, biometryLockout, etc.)
+  - Added `NSFaceIDUsageDescription` to Info.plist
+  - Biometric preference reset automatically on sign out via AuthService.signOut()
+- Files created: CertificatePinningService.swift, JailbreakDetector.swift, BiometricAuthService.swift
+- Files modified: QueryCache.swift, DesMoinesInsiderApp.swift, AuthService.swift, SettingsView.swift, Info.plist, prd.json
+- **Learnings for future iterations:**
+  - SPKI pinning (public key hash) survives certificate renewals — better than pinning the leaf certificate directly
+  - iOS `.completeFileProtection` on Data.write() is simpler than setting file attributes after the fact
+  - Cache versioning via a `.cache-version` file is a clean upgrade-and-purge pattern
+  - JailbreakDetector must use `#if targetEnvironment(simulator)` not `#if DEBUG` — DEBUG is true on device debug builds too
+  - BiometricAuthService stores preference in Keychain, not UserDefaults, because UserDefaults is not encrypted
+  - LAContext.evaluatePolicy is async in iOS 17+ — no completion handler needed
+  - The "Skip" button on BiometricLockView is important: users may change biometric settings while app is backgrounded
+---
+
 ## 2026-03-15 — Ralph Loop 16: Critical Platform Improvements (SSRF Security, UX Discovery, Attraction Details)
 
 - **US-135**: Added SSRF validation to check-broken-links edge function:
