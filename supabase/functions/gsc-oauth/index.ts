@@ -148,39 +148,55 @@ serve(async (req) => {
       console.log(`Saving credentials for user_id: ${userId ?? "anonymous"}`);
       console.log(`Token fields received: access_token=${!!tokenData.access_token}, refresh_token=${!!tokenData.refresh_token}, expires_in=${tokenData.expires_in}`);
 
-      // Save credentials to database
-      const { data: credential, error: insertError } = await supabase
-        .from("gsc_oauth_credentials")
-        .insert({
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token ?? null,
-          token_type: tokenData.token_type ?? "Bearer",
-          expires_at: expiresAt.toISOString(),
-          scope: tokenData.scope ?? null,
-          user_id: userId,
-          is_active: true,
-        })
-        .select()
-        .single();
+      // Save credentials via raw REST fetch to get exact PostgREST response
+      const insertPayload = {
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token ?? null,
+        token_type: tokenData.token_type ?? "Bearer",
+        expires_at: expiresAt.toISOString(),
+        scope: tokenData.scope ?? null,
+        user_id: userId,
+        is_active: true,
+      };
 
-      if (insertError) {
-        // Log the full error object to Supabase function logs for diagnosis
-        console.error("Insert error (full):", JSON.stringify(insertError));
-        const errMsg =
-          (insertError as any).message ||
-          (insertError as any).details ||
-          (insertError as any).code ||
-          JSON.stringify(insertError);
-        throw new Error(`Failed to save credentials: ${errMsg}`);
+      const insertResponse = await fetch(
+        `${supabaseUrl}/rest/v1/gsc_oauth_credentials`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+            apikey: supabaseServiceKey,
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify(insertPayload),
+        }
+      );
+
+      const insertBodyText = await insertResponse.text();
+      console.log(`Insert HTTP status: ${insertResponse.status}`);
+      console.log(`Insert response body: ${insertBodyText}`);
+
+      if (!insertResponse.ok) {
+        throw new Error(
+          `Failed to save credentials (HTTP ${insertResponse.status}): ${insertBodyText}`
+        );
       }
 
-      if (!credential) {
-        // Insert succeeded but returned no row — likely an RLS edge case
-        console.error("Insert returned no credential row despite no error");
-        throw new Error("Credential was not saved. Check RLS policies on gsc_oauth_credentials.");
+      let credential: { id: string } | null = null;
+      try {
+        const parsed = JSON.parse(insertBodyText);
+        credential = Array.isArray(parsed) ? parsed[0] : parsed;
+      } catch {
+        console.warn("Could not parse insert response as JSON:", insertBodyText);
       }
 
-      console.log("OAuth credentials saved successfully");
+      if (!credential?.id) {
+        console.error("Insert succeeded but returned no row");
+        throw new Error("Credential was not saved — no row returned. Check RLS policies.");
+      }
+
+      console.log("OAuth credentials saved successfully, id:", credential.id);
 
       return new Response(
         JSON.stringify({
