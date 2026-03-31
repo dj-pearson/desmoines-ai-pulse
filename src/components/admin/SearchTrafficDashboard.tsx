@@ -230,13 +230,15 @@ export function SearchTrafficDashboard() {
         return;
       }
 
-      // Determine which real properties to sync
+      // Determine which real properties to sync.
+      // Allow "expired" status too — gsc-sync-data auto-refreshes the token.
+      // Only exclude "error" status (no credential at all).
       const propertiesToSync = selectedPropertyId === "all"
-        ? connectedProviders.filter(p => p.status === "connected" && p.property_url !== "pending").map(p => p.id)
-        : connectedProviders.filter(p => p.id === selectedPropertyId && p.status === "connected" && p.property_url !== "pending").map(p => p.id);
+        ? connectedProviders.filter(p => p.status !== "error" && p.property_url !== "pending").map(p => p.id)
+        : connectedProviders.filter(p => p.id === selectedPropertyId && p.status !== "error" && p.property_url !== "pending").map(p => p.id);
 
       if (propertiesToSync.length === 0) {
-        toast.warning("No connected properties to sync. Check your Search Console connection.");
+        toast.warning("No properties to sync. Please reconnect Google Search Console.");
         return;
       }
 
@@ -495,7 +497,7 @@ export function SearchTrafficDashboard() {
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleSyncData}
-            disabled={syncing || connectedProviders.filter(p => p.status === "connected").length === 0}
+            disabled={syncing || connectedProviders.filter(p => p.status !== "error" && p.property_url !== "pending").length === 0}
             className="gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
