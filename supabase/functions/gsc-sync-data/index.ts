@@ -24,12 +24,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let propertyId: string | undefined;
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { propertyId, dateRange = 28 }: SyncRequest = await req.json();
+    const body: SyncRequest = await req.json();
+    propertyId = body.propertyId;
+    const dateRange = body.dateRange ?? 28;
 
     if (!propertyId) {
       return new Response(
@@ -326,15 +330,13 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in gsc-sync-data function:", error);
 
-    // Update property sync status on error
-    try {
-      const { propertyId } = await req.json();
-      if (propertyId) {
+    // Update property sync status on error (use already-parsed propertyId from outer scope)
+    if (propertyId) {
+      try {
         const supabase = createClient(
           Deno.env.get("SUPABASE_URL")!,
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
-
         await supabase
           .from("gsc_properties")
           .update({
@@ -343,8 +345,8 @@ serve(async (req) => {
             error_message: error.message,
           })
           .eq("id", propertyId);
-      }
-    } catch {}
+      } catch { /* best-effort cleanup */ }
+    }
 
     return new Response(
       JSON.stringify({

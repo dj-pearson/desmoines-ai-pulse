@@ -42,10 +42,12 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('SearchTrafficDashboard');
 
 interface ConnectedProvider {
+  id: string;           // gsc_properties.id UUID — used as propertyId for child components
+  property_url: string;
+  property_name: string;
   provider_name: string;
-  property_id?: string;
-  property_name?: string;
   connected_at: string;
+  last_sync_at: string | null;
   status: "connected" | "expired" | "error";
 }
 
@@ -57,7 +59,7 @@ interface DateRange {
 export function SearchTrafficDashboard() {
   const [loading, setLoading] = useState(true);
   const [connectedProviders, setConnectedProviders] = useState<ConnectedProvider[]>([]);
-  const [selectedProvider, setSelectedProvider] = useState<string>("all");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange>({
     from: addDays(new Date(), -30),
     to: new Date(),
@@ -72,53 +74,45 @@ export function SearchTrafficDashboard() {
   const loadConnectedProviders = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
 
-      if (!user) {
-        toast.error("Please log in to view analytics");
+      // Load GSC properties with their credential status
+      const { data: properties, error } = await supabase
+        .from("gsc_properties" as any)
+        .select("id, property_url, property_type, status, last_sync_at, created_at, oauth_credential_id, gsc_oauth_credentials(is_active, expires_at)")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        log.debug('loadProviders', 'gsc_properties not available yet', { data: error });
+        setConnectedProviders([]);
         return;
       }
 
-      // Get all connected OAuth providers - these tables may not exist yet
-      try {
-        const { data: tokens, error } = await supabase
-          .from("user_oauth_tokens" as any)
-          .select("provider_name, property_id, expires_at, created_at")
-          .eq("user_id", user.id);
+      const providers: ConnectedProvider[] = (properties || []).map((prop: any) => {
+        const cred = prop.gsc_oauth_credentials;
+        const isExpired = cred?.expires_at ? new Date(cred.expires_at) < new Date() : false;
+        const isActive = cred?.is_active === true;
 
-        if (error) {
-          log.debug('loadProviders', 'OAuth tokens table not available yet');
-          setConnectedProviders([]);
-          return;
-        }
+        let connStatus: ConnectedProvider["status"] = "error";
+        if (isActive && !isExpired) connStatus = "connected";
+        else if (isExpired) connStatus = "expired";
 
-        // Get property details
-        const { data: properties } = await supabase
-          .from("analytics_properties" as any)
-          .select("*")
-          .eq("user_id", user.id);
+        // Derive a readable name from the property URL
+        const displayName = prop.property_url.startsWith("sc-domain:")
+          ? prop.property_url.replace("sc-domain:", "")
+          : prop.property_url;
 
-        const providers: ConnectedProvider[] = (tokens || []).map((token: any) => {
-          const property = properties?.find(
-            (p: any) => p.provider_name === token.provider_name && p.property_id === token.property_id
-          );
+        return {
+          id: prop.id,
+          property_url: prop.property_url,
+          property_name: displayName,
+          provider_name: "google_search_console",
+          connected_at: prop.created_at,
+          last_sync_at: prop.last_sync_at || null,
+          status: connStatus,
+        };
+      });
 
-          const isExpired = token.expires_at ? new Date(token.expires_at) < new Date() : false;
-
-          return {
-            provider_name: token.provider_name,
-            property_id: token.property_id || undefined,
-            property_name: property?.property_name || token.property_id || "Default",
-            connected_at: token.created_at,
-            status: isExpired ? "expired" : "connected",
-          };
-        });
-
-        setConnectedProviders(providers);
-      } catch (err) {
-        log.debug('loadProviders', 'Analytics tables not available yet');
-        setConnectedProviders([]);
-      }
+      setConnectedProviders(providers);
     } catch (error) {
       log.error('loadProviders', 'Error loading connected providers', { data: error });
       toast.error("Failed to load connected providers");
@@ -130,32 +124,42 @@ export function SearchTrafficDashboard() {
   const handleSyncData = async () => {
     try {
       setSyncing(true);
-      toast.info("Starting data synchronization...");
+      toast.info("Starting data synchronization…");
 
-      // Call edge function to sync data from all providers
-      const { data, error } = await supabase.functions.invoke("sync-analytics-data", {
-        body: {
-          providers: selectedProvider === "all"
-            ? connectedProviders.map(p => p.provider_name)
-            : [selectedProvider],
-          start_date: format(dateRange.from, "yyyy-MM-dd"),
-          end_date: format(dateRange.to, "yyyy-MM-dd"),
-        },
+      // Determine which properties to sync
+      const propertiesToSync = selectedPropertyId === "all"
+        ? connectedProviders.filter(p => p.status === "connected").map(p => p.id)
+        : connectedProviders.filter(p => p.id === selectedPropertyId && p.status === "connected").map(p => p.id);
+
+      if (propertiesToSync.length === 0) {
+        toast.warning("No connected properties to sync. Check your Search Console connection.");
+        return;
+      }
+
+      let totalKeywords = 0;
+      let totalPages = 0;
+
+      for (const propertyId of propertiesToSync) {
+        const { data, error } = await supabase.functions.invoke("gsc-sync-data", {
+          body: { propertyId, dateRange: 28 },
+        });
+
+        if (error) {
+          log.error('syncData', 'Sync error for property', { data: { propertyId, error } });
+        } else {
+          totalKeywords += data?.summary?.keywordsSynced ?? 0;
+          totalPages += data?.summary?.pagesSynced ?? 0;
+        }
+      }
+
+      toast.success("Sync complete!", {
+        description: `${totalKeywords} keywords and ${totalPages} pages updated.`,
       });
 
-      if (error) throw error;
-
-      toast.success("Data synchronized successfully!", {
-        description: `Synced ${data.records_synced} records from ${data.providers_synced} providers`,
-      });
-
-      // Refresh the dashboard
       loadConnectedProviders();
     } catch (error: any) {
       log.error('syncData', 'Sync error', { data: error });
-      toast.error("Failed to sync data", {
-        description: error.message || "Please try again later",
-      });
+      toast.error("Failed to sync data", { description: error.message || "Please try again later" });
     } finally {
       setSyncing(false);
     }
@@ -247,7 +251,7 @@ export function SearchTrafficDashboard() {
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={handleSyncData}
-            disabled={syncing || connectedProviders.length === 0}
+            disabled={syncing || connectedProviders.filter(p => p.status === "connected").length === 0}
             className="gap-2"
           >
             <RefreshCw className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`} />
@@ -286,8 +290,8 @@ export function SearchTrafficDashboard() {
             </Alert>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {connectedProviders.map((provider, index) => (
-                <Card key={index} className={provider.status === "expired" ? "border-orange-500" : "border-green-500"}>
+              {connectedProviders.map((provider) => (
+                <Card key={provider.id} className={provider.status === "expired" ? "border-orange-500" : provider.status === "connected" ? "border-green-500" : "border-destructive"}>
                   <CardContent className="pt-6">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
@@ -296,9 +300,14 @@ export function SearchTrafficDashboard() {
                           <p className="font-medium text-sm">
                             {getProviderLabel(provider.provider_name)}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground truncate max-w-[180px]">
                             {provider.property_name}
                           </p>
+                          {provider.last_sync_at && (
+                            <p className="text-xs text-muted-foreground">
+                              Synced {format(new Date(provider.last_sync_at), "MMM d, h:mm a")}
+                            </p>
+                          )}
                         </div>
                       </div>
                       {provider.status === "connected" ? (
@@ -322,15 +331,15 @@ export function SearchTrafficDashboard() {
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-4">
               <div className="flex items-center gap-2">
                 <label className="text-sm font-medium">Platform:</label>
-                <Select value={selectedProvider} onValueChange={setSelectedProvider}>
-                  <SelectTrigger className="w-[200px]">
+                <Select value={selectedPropertyId} onValueChange={setSelectedPropertyId}>
+                  <SelectTrigger className="w-[240px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Platforms</SelectItem>
+                    <SelectItem value="all">All Properties</SelectItem>
                     {connectedProviders.map((provider) => (
-                      <SelectItem key={provider.provider_name} value={provider.provider_name}>
-                        {getProviderLabel(provider.provider_name)}
+                      <SelectItem key={provider.id} value={provider.id}>
+                        {provider.property_name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -363,42 +372,48 @@ export function SearchTrafficDashboard() {
         <TabsContent value="overview" className="space-y-4">
           <TrafficOverview
             dateRange={dateRange}
-            selectedProvider={selectedProvider}
+            propertyId={selectedPropertyId}
+            connectedProviders={connectedProviders}
           />
         </TabsContent>
 
         <TabsContent value="traffic" className="space-y-4">
           <SearchPerformance
             dateRange={dateRange}
-            selectedProvider={selectedProvider}
+            propertyId={selectedPropertyId}
+            connectedProviders={connectedProviders}
           />
         </TabsContent>
 
         <TabsContent value="search" className="space-y-4">
           <SearchPerformance
             dateRange={dateRange}
-            selectedProvider={selectedProvider}
+            propertyId={selectedPropertyId}
+            connectedProviders={connectedProviders}
           />
         </TabsContent>
 
         <TabsContent value="keywords" className="space-y-4">
           <KeywordAnalytics
             dateRange={dateRange}
-            selectedProvider={selectedProvider}
+            propertyId={selectedPropertyId}
+            connectedProviders={connectedProviders}
           />
         </TabsContent>
 
         <TabsContent value="seo" className="space-y-4">
           <SEOOpportunities
             dateRange={dateRange}
-            selectedProvider={selectedProvider}
+            propertyId={selectedPropertyId}
+            connectedProviders={connectedProviders}
           />
         </TabsContent>
 
         <TabsContent value="health" className="space-y-4">
           <SiteHealth
             dateRange={dateRange}
-            selectedProvider={selectedProvider}
+            propertyId={selectedPropertyId}
+            connectedProviders={connectedProviders}
           />
         </TabsContent>
 

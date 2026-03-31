@@ -80,41 +80,67 @@ export function OAuthProviderSetup({ onComplete }: OAuthProviderSetupProps) {
     try {
       setLoading(true);
 
-      // Get OAuth configuration
+      // Google Search Console uses the dedicated gsc-oauth edge function.
+      // The edge function reads `action` from URL query params, so we call it
+      // directly via fetch (GET) rather than supabase.functions.invoke (POST).
+      if (providerName === "google_search_console") {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("You must be logged in.");
+
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
+
+        const authorizeUrl = new URL(`${supabaseUrl}/functions/v1/gsc-oauth`);
+        authorizeUrl.searchParams.set("action", "authorize");
+
+        const res = await fetch(authorizeUrl.toString(), {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: anonKey,
+          },
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(err.error || "Failed to start OAuth flow.");
+        }
+
+        const { authorizationUrl } = await res.json();
+        if (!authorizationUrl) throw new Error("No authorization URL returned.");
+
+        // Save provider state for callback identification
+        storage.setString("oauth_connecting_provider", providerName);
+
+        window.location.href = authorizationUrl;
+        return;
+      }
+
+      // Generic OAuth flow for other providers (reads from oauth_providers table)
       const { data: providerData, error: providerError } = await supabase
-        .from("oauth_providers")
+        .from("oauth_providers" as any)
         .select("*")
         .eq("provider_name", providerName)
         .single();
 
       if (providerError) throw providerError;
 
-      // Build OAuth URL
       const redirectUri = `${window.location.origin}/admin/oauth/callback`;
-      // Generate cryptographic nonce for CSRF protection (SEC-024)
       const nonceArray = new Uint8Array(16);
       crypto.getRandomValues(nonceArray);
       const nonce = Array.from(nonceArray).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      const state = btoa(JSON.stringify({
-        provider: providerName,
-        timestamp: Date.now(),
-        nonce,
-      }));
+      const state = btoa(JSON.stringify({ provider: providerName, timestamp: Date.now(), nonce }));
 
-      let authUrl = providerData.authorization_url;
-      authUrl += `?client_id=${encodeURIComponent(providerData.client_id || clientId)}`;
+      let authUrl = (providerData as any).authorization_url;
+      authUrl += `?client_id=${encodeURIComponent((providerData as any).client_id || clientId)}`;
       authUrl += `&redirect_uri=${encodeURIComponent(redirectUri)}`;
       authUrl += `&response_type=code`;
-      authUrl += `&scope=${encodeURIComponent(providerData.scopes.join(" "))}`;
+      authUrl += `&scope=${encodeURIComponent(((providerData as any).scopes || []).join(" "))}`;
       authUrl += `&state=${encodeURIComponent(state)}`;
-      authUrl += `&access_type=offline`; // Request refresh token
-      authUrl += `&prompt=consent`; // Force consent screen
+      authUrl += `&access_type=offline`;
+      authUrl += `&prompt=consent`;
 
-      // Save state to secure storage for verification
       storage.setString("oauth_state", state);
-
-      // Redirect to OAuth provider
       window.location.href = authUrl;
     } catch (error: any) {
       log.error('oauthConnect', 'OAuth connection error', { data: error });

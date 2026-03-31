@@ -44,7 +44,10 @@
       "WebFetch(domain:www.simonsdsm.com)",
       "Bash(supabase db:*)",
       "Bash(supabase functions:*)",
-      "Bash(find /c/Users/pears/Documents/Des-Moines-Pulse/desmoines-ai-pulse -type f \\\\\\(-name *.json -o -name *.js -o -name *.ts -o -name *.md -o -name *.sh \\\\\\))"
+      "Bash(find /c/Users/pears/Documents/Des-Moines-Pulse/desmoines-ai-pulse -type f \\\\\\(-name *.json -o -name *.js -o -name *.ts -o -name *.md -o -name *.sh \\\\\\))",
+      "WebFetch(domain:desmoinesinsider.com)",
+      "Bash(curl -sL https://desmoinesinsider.com)",
+      "Bash(curl:*)"
     ],
     "deny": [],
     "ask": []

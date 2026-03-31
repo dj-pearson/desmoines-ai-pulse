@@ -169,6 +169,7 @@ const AdminMenus = lazyWithRetry(() => import("./pages/AdminMenus"));
 const AdminAI = lazyWithRetry(() => import("./pages/AdminAI"));
 const AdminTools = lazyWithRetry(() => import("./pages/AdminTools"));
 const AdminAnalyticsPage = lazyWithRetry(() => import("./pages/AdminAnalyticsPage"));
+const AdminGscCallback = lazyWithRetry(() => import("./pages/AdminGscCallback"));
 const AdminSecurity = lazyWithRetry(() => import("./pages/AdminSecurity"));
 const AdminSystem = lazyWithRetry(() => import("./pages/AdminSystem"));
 const AdminMedia = lazyWithRetry(() => import("./pages/AdminMedia"));
@@ -275,6 +276,7 @@ const App = () => (
             <Route path="/admin/ai" element={<ProtectedRoute requireAdmin><AdminAI /></ProtectedRoute>} />
             <Route path="/admin/tools" element={<ProtectedRoute requireAdmin><AdminTools /></ProtectedRoute>} />
             <Route path="/admin/analytics-dashboard" element={<ProtectedRoute requireAdmin><AdminAnalyticsPage /></ProtectedRoute>} />
+            <Route path="/admin/oauth/callback" element={<ProtectedRoute requireAdmin><AdminGscCallback /></ProtectedRoute>} />
             <Route path="/admin/security" element={<ProtectedRoute requireAdmin><AdminSecurity /></ProtectedRoute>} />
             <Route path="/admin/system" element={<ProtectedRoute requireAdmin><AdminSystem /></ProtectedRoute>} />
             <Route path="/admin/media" element={<ProtectedRoute requireAdmin><AdminMedia /></ProtectedRoute>} />

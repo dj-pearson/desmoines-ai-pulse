@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  BarChart,
-  Bar,
   LineChart,
   Line,
   XAxis,
@@ -12,10 +10,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { Search, Eye, MousePointer, ArrowUpRight } from "lucide-react";
+import { Search, Eye, MousePointer, ArrowUpRight, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Table,
   TableBody,
@@ -24,16 +23,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { createLogger } from '@/lib/logger';
+import { createLogger } from "@/lib/logger";
 
-const log = createLogger('SearchPerformance');
+const log = createLogger("SearchPerformance");
 
 interface SearchPerformanceProps {
   dateRange: { from: Date; to: Date };
-  selectedProvider: string;
+  propertyId: string;
+  connectedProviders: { id: string }[];
 }
 
-export function SearchPerformance({ dateRange, selectedProvider }: SearchPerformanceProps) {
+export function SearchPerformance({ dateRange, propertyId, connectedProviders }: SearchPerformanceProps) {
   const [loading, setLoading] = useState(true);
   const [chartData, setChartData] = useState<any[]>([]);
   const [topPages, setTopPages] = useState<any[]>([]);
@@ -46,114 +46,99 @@ export function SearchPerformance({ dateRange, selectedProvider }: SearchPerform
 
   useEffect(() => {
     loadSearchData();
-  }, [dateRange, selectedProvider]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, propertyId]);
 
   const loadSearchData = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
 
-      // Get search performance data
-      const query = supabase
-        .from("search_performance")
-        .select("*")
-        .eq("user_id", user.id)
-        .gte("metric_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("metric_date", format(dateRange.to, "yyyy-MM-dd"));
+      // Build base query against gsc_page_performance
+      let query = supabase
+        .from("gsc_page_performance" as any)
+        .select("page_url, date, impressions, clicks, ctr, position")
+        .gte("date", format(dateRange.from, "yyyy-MM-dd"))
+        .lte("date", format(dateRange.to, "yyyy-MM-dd"))
+        .order("date", { ascending: true });
 
-      if (selectedProvider !== "all") {
-        query.eq("provider_name", selectedProvider);
+      if (propertyId !== "all") {
+        query = query.eq("property_id", propertyId);
+      } else if (connectedProviders.length > 0) {
+        query = query.in("property_id", connectedProviders.map((p) => p.id));
       }
 
-      const { data: searchData, error } = await query;
-
+      const { data: pageData, error } = await query;
       if (error) throw error;
 
-      // Aggregate by date
-      const dateAgg = (searchData || []).reduce((acc: any, item: any) => {
-        const date = format(new Date(item.metric_date), "MMM dd");
-        if (!acc[date]) {
-          acc[date] = {
-            date,
-            impressions: 0,
-            clicks: 0,
-            ctr: 0,
-            position: 0,
-            count: 0,
-          };
-        }
-        acc[date].impressions += item.impressions || 0;
-        acc[date].clicks += item.clicks || 0;
-        acc[date].ctr += item.ctr || 0;
-        acc[date].position += item.position || 0;
-        acc[date].count += 1;
-        return acc;
-      }, {});
+      const rows = (pageData || []) as any[];
 
-      const chartData = Object.values(dateAgg).map((item: any) => ({
-        ...item,
-        avgCTR: (item.ctr / item.count).toFixed(2),
-        avgPosition: (item.position / item.count).toFixed(1),
+      // Aggregate by date for chart
+      const dateAgg: Record<string, { date: string; impressions: number; clicks: number; ctr: number; position: number; count: number }> = {};
+
+      for (const row of rows) {
+        const dateKey = format(new Date(row.date), "MMM dd");
+        if (!dateAgg[dateKey]) {
+          dateAgg[dateKey] = { date: dateKey, impressions: 0, clicks: 0, ctr: 0, position: 0, count: 0 };
+        }
+        dateAgg[dateKey].impressions += row.impressions ?? 0;
+        dateAgg[dateKey].clicks += row.clicks ?? 0;
+        dateAgg[dateKey].ctr += row.ctr ?? 0;
+        dateAgg[dateKey].position += row.position ?? 0;
+        dateAgg[dateKey].count += 1;
+      }
+
+      const chart = Object.values(dateAgg).map((d) => ({
+        ...d,
+        avgCTR: d.count > 0 ? Number((d.ctr / d.count).toFixed(2)) : 0,
+        avgPosition: d.count > 0 ? Number((d.position / d.count).toFixed(1)) : 0,
       }));
 
-      setChartData(chartData);
+      setChartData(chart);
 
-      // Calculate stats
-      const totalImpressions = (searchData || []).reduce((sum, item) => sum + (item.impressions || 0), 0);
-      const totalClicks = (searchData || []).reduce((sum, item) => sum + (item.clicks || 0), 0);
+      // Overall stats
+      const totalImpressions = rows.reduce((s, r) => s + (r.impressions ?? 0), 0);
+      const totalClicks = rows.reduce((s, r) => s + (r.clicks ?? 0), 0);
       const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
-      const avgPosition =
-        (searchData || []).reduce((sum, item) => sum + (item.position || 0), 0) / (searchData?.length || 1);
+      const avgPosition = rows.length > 0
+        ? rows.reduce((s, r) => s + (r.position ?? 0), 0) / rows.length
+        : 0;
 
-      setStats({
-        totalImpressions,
-        totalClicks,
-        avgCTR,
-        avgPosition,
-      });
+      setStats({ totalImpressions, totalClicks, avgCTR, avgPosition });
 
-      // Get top performing pages
-      const pageAgg = (searchData || []).reduce((acc: any, item: any) => {
-        const page = item.page || "Unknown";
-        if (!acc[page]) {
-          acc[page] = {
-            page,
-            impressions: 0,
-            clicks: 0,
-            ctr: 0,
-            position: 0,
-            count: 0,
-          };
+      // Top pages aggregated by page_url
+      const pageAgg: Record<string, any> = {};
+      for (const row of rows) {
+        const key = row.page_url;
+        if (!pageAgg[key]) {
+          pageAgg[key] = { page: key, impressions: 0, clicks: 0, ctr: 0, position: 0, count: 0 };
         }
-        acc[page].impressions += item.impressions || 0;
-        acc[page].clicks += item.clicks || 0;
-        acc[page].ctr += item.ctr || 0;
-        acc[page].position += item.position || 0;
-        acc[page].count += 1;
-        return acc;
-      }, {});
+        pageAgg[key].impressions += row.impressions ?? 0;
+        pageAgg[key].clicks += row.clicks ?? 0;
+        pageAgg[key].ctr += row.ctr ?? 0;
+        pageAgg[key].position += row.position ?? 0;
+        pageAgg[key].count += 1;
+      }
 
-      const topPages = Object.values(pageAgg)
-        .map((item: any) => ({
-          ...item,
-          avgCTR: (item.ctr / item.count).toFixed(2),
-          avgPosition: (item.position / item.count).toFixed(1),
+      const pages = Object.values(pageAgg)
+        .map((p: any) => ({
+          ...p,
+          avgCTR: p.count > 0 ? (p.ctr / p.count).toFixed(2) : "0.00",
+          avgPosition: p.count > 0 ? (p.position / p.count).toFixed(1) : "0.0",
         }))
         .sort((a: any, b: any) => b.clicks - a.clicks)
         .slice(0, 10);
 
-      setTopPages(topPages);
+      setTopPages(pages);
     } catch (error) {
-      log.error('loadData', 'Error loading search data', { data: error });
+      log.error("loadData", "Error loading search performance data", { data: error });
     } finally {
       setLoading(false);
     }
   };
 
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
     return num.toLocaleString();
   };
 
@@ -165,8 +150,8 @@ export function SearchPerformance({ dateRange, selectedProvider }: SearchPerform
             <Card key={i}>
               <CardContent className="pt-6">
                 <div className="animate-pulse space-y-3">
-                  <div className="h-4 bg-muted rounded w-24"></div>
-                  <div className="h-8 bg-muted rounded w-32"></div>
+                  <div className="h-4 bg-muted rounded w-24" />
+                  <div className="h-8 bg-muted rounded w-32" />
                 </div>
               </CardContent>
             </Card>
@@ -176,9 +161,20 @@ export function SearchPerformance({ dateRange, selectedProvider }: SearchPerform
     );
   }
 
+  if (connectedProviders.length === 0) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Connect Google Search Console to see page performance data.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {/* Stats Cards */}
+      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -224,80 +220,92 @@ export function SearchPerformance({ dateRange, selectedProvider }: SearchPerform
       {/* Impressions & Clicks Trend */}
       <Card>
         <CardHeader>
-          <CardTitle>Search Performance Trend</CardTitle>
-          <CardDescription>Impressions and clicks over time</CardDescription>
+          <CardTitle>Impressions &amp; Clicks Over Time</CardTitle>
+          <CardDescription>Daily search performance from Google Search Console</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" />
-              <Tooltip />
-              <Legend />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="impressions"
-                stroke="#0ea5e9"
-                strokeWidth={2}
-                name="Impressions"
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="clicks"
-                stroke="#8b5cf6"
-                strokeWidth={2}
-                name="Clicks"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={350}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" />
+                <Tooltip />
+                <Legend />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="impressions"
+                  stroke="#0ea5e9"
+                  strokeWidth={2}
+                  name="Impressions"
+                  dot={false}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="clicks"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  name="Clicks"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No data yet — click <strong>Sync Data</strong> to pull from Search Console.
+            </p>
+          )}
         </CardContent>
       </Card>
 
       {/* CTR & Position Trend */}
-      <Card>
-        <CardHeader>
-          <CardTitle>CTR & Position Trend</CardTitle>
-          <CardDescription>Click-through rate and average position over time</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis yAxisId="left" />
-              <YAxis yAxisId="right" orientation="right" reversed />
-              <Tooltip />
-              <Legend />
-              <Line
-                yAxisId="left"
-                type="monotone"
-                dataKey="avgCTR"
-                stroke="#10b981"
-                strokeWidth={2}
-                name="Avg CTR (%)"
-              />
-              <Line
-                yAxisId="right"
-                type="monotone"
-                dataKey="avgPosition"
-                stroke="#f59e0b"
-                strokeWidth={2}
-                name="Avg Position"
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
+      {chartData.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>CTR &amp; Position Trend</CardTitle>
+            <CardDescription>Click-through rate and average ranking position over time</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis yAxisId="left" />
+                <YAxis yAxisId="right" orientation="right" reversed />
+                <Tooltip />
+                <Legend />
+                <Line
+                  yAxisId="left"
+                  type="monotone"
+                  dataKey="avgCTR"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  name="Avg CTR (%)"
+                  dot={false}
+                />
+                <Line
+                  yAxisId="right"
+                  type="monotone"
+                  dataKey="avgPosition"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  name="Avg Position"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Top Performing Pages */}
+      {/* Top Pages */}
       <Card>
         <CardHeader>
           <CardTitle>Top Performing Pages</CardTitle>
-          <CardDescription>Pages with the most clicks from search</CardDescription>
+          <CardDescription>Pages with the most organic search clicks</CardDescription>
         </CardHeader>
         <CardContent>
           {topPages.length > 0 ? (
@@ -328,7 +336,9 @@ export function SearchPerformance({ dateRange, selectedProvider }: SearchPerform
               </TableBody>
             </Table>
           ) : (
-            <p className="text-sm text-muted-foreground text-center py-8">No search performance data available</p>
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No page data available yet.
+            </p>
           )}
         </CardContent>
       </Card>

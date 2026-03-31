@@ -17,10 +17,11 @@ const log = createLogger('SiteHealth');
 
 interface SiteHealthProps {
   dateRange: { from: Date; to: Date };
-  selectedProvider: string;
+  propertyId: string;
+  connectedProviders: { id: string }[];
 }
 
-export function SiteHealth({ dateRange, selectedProvider }: SiteHealthProps) {
+export function SiteHealth({ dateRange, propertyId, connectedProviders }: SiteHealthProps) {
   const [loading, setLoading] = useState(true);
   const [healthMetrics, setHealthMetrics] = useState<any[]>([]);
   const [summary, setSummary] = useState({
@@ -31,40 +32,40 @@ export function SiteHealth({ dateRange, selectedProvider }: SiteHealthProps) {
 
   useEffect(() => {
     loadHealthData();
-  }, [dateRange, selectedProvider]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, propertyId]);
 
   const loadHealthData = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
 
-      const query = supabase
-        .from("site_health_metrics")
+      // site_health_metrics is populated by external crawlers, not GSC sync.
+      // Attempt to load it; silently show empty state if table doesn't exist yet.
+      const { data, error } = await supabase
+        .from("site_health_metrics" as any)
         .select("*")
-        .eq("user_id", user.id)
         .gte("check_date", format(dateRange.from, "yyyy-MM-dd"))
         .lte("check_date", format(dateRange.to, "yyyy-MM-dd"))
-        .order("check_date", { ascending: false });
+        .order("check_date", { ascending: false })
+        .limit(100);
 
-      if (selectedProvider !== "all") {
-        query.eq("provider_name", selectedProvider);
+      if (error) {
+        // Table may not exist yet — show empty state instead of crashing
+        log.debug('loadData', 'site_health_metrics unavailable', { data: error });
+        setHealthMetrics([]);
+        setSummary({ critical: 0, warning: 0, info: 0 });
+        return;
       }
 
-      const { data, error } = await query;
+      const rows = (data || []) as any[];
+      setHealthMetrics(rows);
 
-      if (error) throw error;
-
-      setHealthMetrics(data || []);
-
-      // Calculate summary
-      const critical = (data || []).filter((m) => m.severity === "critical").length;
-      const warning = (data || []).filter((m) => m.severity === "warning").length;
-      const info = (data || []).filter((m) => m.severity === "info").length;
-
+      const critical = rows.filter((m) => m.severity === "critical").length;
+      const warning = rows.filter((m) => m.severity === "warning").length;
+      const info = rows.filter((m) => m.severity === "info").length;
       setSummary({ critical, warning, info });
     } catch (error) {
-      log.error('loadData', 'Error loading health data', { data: error });
+      log.error("loadData", "Error loading health data", { data: error });
     } finally {
       setLoading(false);
     }
@@ -215,7 +216,9 @@ export function SiteHealth({ dateRange, selectedProvider }: SiteHealthProps) {
             <div className="text-center py-12">
               <CheckCircle2 className="h-12 w-12 mx-auto text-green-500 mb-4" />
               <p className="text-lg font-medium">All Clear!</p>
-              <p className="text-sm text-muted-foreground">No health issues detected for the selected period</p>
+              <p className="text-sm text-muted-foreground">
+                No site health issues detected. This panel is populated by crawler audits — run an SEO audit from Admin Tools to generate data.
+              </p>
             </div>
           )}
         </CardContent>

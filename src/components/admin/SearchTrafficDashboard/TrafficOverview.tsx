@@ -3,10 +3,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -18,44 +14,28 @@ import {
   Cell,
 } from "recharts";
 import {
-  Users,
   Eye,
   MousePointer,
-  Activity,
-  TrendingUp,
-  TrendingDown,
   ArrowUpRight,
   ArrowDownRight,
+  Search,
   Smartphone,
   Monitor,
   Tablet,
+  AlertCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { createLogger } from '@/lib/logger';
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { createLogger } from "@/lib/logger";
 
-const log = createLogger('TrafficOverview');
+const log = createLogger("TrafficOverview");
 
 interface TrafficOverviewProps {
   dateRange: { from: Date; to: Date };
-  selectedProvider: string;
-}
-
-interface MetricCard {
-  title: string;
-  value: string;
-  change: number;
-  trend: "up" | "down";
-  icon: React.ReactNode;
-}
-
-interface ChartDataPoint {
-  date: string;
-  sessions: number;
-  users: number;
-  pageviews: number;
-  bounceRate: number;
+  propertyId: string;
+  connectedProviders: { id: string }[];
 }
 
 const COLORS = {
@@ -63,188 +43,128 @@ const COLORS = {
   secondary: "#8b5cf6",
   success: "#10b981",
   warning: "#f59e0b",
-  danger: "#ef4444",
 };
-
 const DEVICE_COLORS = ["#0ea5e9", "#8b5cf6", "#10b981"];
 
-export function TrafficOverview({ dateRange, selectedProvider }: TrafficOverviewProps) {
+export function TrafficOverview({ dateRange, propertyId, connectedProviders }: TrafficOverviewProps) {
   const [loading, setLoading] = useState(true);
-  const [metrics, setMetrics] = useState<MetricCard[]>([]);
-  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [chartData, setChartData] = useState<any[]>([]);
   const [deviceData, setDeviceData] = useState<any[]>([]);
-  const [countryData, setCountryData] = useState<any[]>([]);
+  const [stats, setStats] = useState({
+    totalImpressions: 0,
+    totalClicks: 0,
+    avgCTR: 0,
+    avgPosition: 0,
+    impressionsChange: 0,
+    clicksChange: 0,
+  });
 
   useEffect(() => {
     loadTrafficData();
-  }, [dateRange, selectedProvider]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dateRange, propertyId]);
 
   const loadTrafficData = async () => {
     try {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
 
-      // Get traffic summary
-      const { data: summaryData, error: summaryError } = await supabase
-        .rpc("get_traffic_summary", {
-          p_user_id: user.id,
-          p_start_date: format(dateRange.from, "yyyy-MM-dd"),
-          p_end_date: format(dateRange.to, "yyyy-MM-dd"),
-        });
+      const fromStr = format(dateRange.from, "yyyy-MM-dd");
+      const toStr = format(dateRange.to, "yyyy-MM-dd");
 
-      if (summaryError) throw summaryError;
+      // Previous period for comparison
+      const daysDiff = Math.ceil(
+        (dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24)
+      );
+      const prevFrom = format(subDays(dateRange.from, daysDiff), "yyyy-MM-dd");
+      const prevTo = format(subDays(dateRange.from, 1), "yyyy-MM-dd");
 
-      // Get previous period data for comparison
-      const daysDiff = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
-      const prevStart = new Date(dateRange.from);
-      prevStart.setDate(prevStart.getDate() - daysDiff);
-      const prevEnd = new Date(dateRange.from);
-      prevEnd.setDate(prevEnd.getDate() - 1);
+      const buildQuery = (from: string, to: string) => {
+        let q = supabase
+          .from("gsc_page_performance" as any)
+          .select("date, impressions, clicks, ctr, position, impressions_mobile, impressions_desktop, impressions_tablet")
+          .gte("date", from)
+          .lte("date", to);
 
-      const { data: prevData } = await supabase
-        .rpc("get_traffic_summary", {
-          p_user_id: user.id,
-          p_start_date: format(prevStart, "yyyy-MM-dd"),
-          p_end_date: format(prevEnd, "yyyy-MM-dd"),
-        });
+        if (propertyId !== "all") {
+          q = q.eq("property_id", propertyId);
+        } else if (connectedProviders.length > 0) {
+          q = q.in("property_id", connectedProviders.map((p) => p.id));
+        }
+        return q;
+      };
 
-      // Calculate totals and changes
-      const currentTotals = calculateTotals(summaryData || []);
-      const previousTotals = calculateTotals(prevData || []);
-      const changes = calculateChanges(currentTotals, previousTotals);
-
-      // Set metric cards
-      setMetrics([
-        {
-          title: "Total Sessions",
-          value: formatNumber(currentTotals.sessions),
-          change: changes.sessions,
-          trend: changes.sessions >= 0 ? "up" : "down",
-          icon: <Activity className="h-4 w-4" />,
-        },
-        {
-          title: "Unique Users",
-          value: formatNumber(currentTotals.users),
-          change: changes.users,
-          trend: changes.users >= 0 ? "up" : "down",
-          icon: <Users className="h-4 w-4" />,
-        },
-        {
-          title: "Page Views",
-          value: formatNumber(currentTotals.pageviews),
-          change: changes.pageviews,
-          trend: changes.pageviews >= 0 ? "up" : "down",
-          icon: <Eye className="h-4 w-4" />,
-        },
-        {
-          title: "Avg. Bounce Rate",
-          value: `${currentTotals.bounceRate.toFixed(1)}%`,
-          change: changes.bounceRate,
-          trend: changes.bounceRate <= 0 ? "up" : "down", // Lower is better for bounce rate
-          icon: <MousePointer className="h-4 w-4" />,
-        },
+      const [{ data: current }, { data: previous }] = await Promise.all([
+        buildQuery(fromStr, toStr),
+        buildQuery(prevFrom, prevTo),
       ]);
 
-      // Format chart data
-      const formattedChartData: ChartDataPoint[] = (summaryData || []).map((item: any) => ({
-        date: format(new Date(item.metric_date), "MMM dd"),
-        sessions: item.total_sessions || 0,
-        users: item.total_users || 0,
-        pageviews: item.total_pageviews || 0,
-        bounceRate: item.avg_bounce_rate || 0,
-      }));
+      const currentRows = (current || []) as any[];
+      const previousRows = (previous || []) as any[];
 
-      setChartData(formattedChartData);
+      // Aggregate current period by date
+      const dateAgg: Record<string, { date: string; impressions: number; clicks: number; count: number; position: number }> = {};
+      for (const row of currentRows) {
+        const key = format(new Date(row.date), "MMM dd");
+        if (!dateAgg[key]) dateAgg[key] = { date: key, impressions: 0, clicks: 0, count: 0, position: 0 };
+        dateAgg[key].impressions += row.impressions ?? 0;
+        dateAgg[key].clicks += row.clicks ?? 0;
+        dateAgg[key].position += row.position ?? 0;
+        dateAgg[key].count += 1;
+      }
+      setChartData(Object.values(dateAgg));
 
-      // Load device breakdown
-      const { data: deviceBreakdown } = await supabase
-        .from("traffic_metrics")
-        .select("device_category, sessions, users")
-        .eq("user_id", user.id)
-        .gte("metric_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("metric_date", format(dateRange.to, "yyyy-MM-dd"));
+      // Device breakdown (aggregate across all rows for current period)
+      const mobile = currentRows.reduce((s, r) => s + (r.impressions_mobile ?? 0), 0);
+      const desktop = currentRows.reduce((s, r) => s + (r.impressions_desktop ?? 0), 0);
+      const tablet = currentRows.reduce((s, r) => s + (r.impressions_tablet ?? 0), 0);
+      const deviceTotal = mobile + desktop + tablet;
 
-      if (deviceBreakdown) {
-        const deviceAgg = aggregateByField(deviceBreakdown, "device_category");
-        setDeviceData(deviceAgg);
+      if (deviceTotal > 0) {
+        setDeviceData([
+          { name: "Desktop", value: desktop },
+          { name: "Mobile", value: mobile },
+          { name: "Tablet", value: tablet },
+        ].filter((d) => d.value > 0));
       }
 
-      // Load country breakdown
-      const { data: countryBreakdown } = await supabase
-        .from("traffic_metrics")
-        .select("country, sessions, users")
-        .eq("user_id", user.id)
-        .gte("metric_date", format(dateRange.from, "yyyy-MM-dd"))
-        .lte("metric_date", format(dateRange.to, "yyyy-MM-dd"))
-        .not("country", "is", null)
-        .order("sessions", { ascending: false })
-        .limit(10);
+      // Summary stats
+      const totalImpressions = currentRows.reduce((s, r) => s + (r.impressions ?? 0), 0);
+      const totalClicks = currentRows.reduce((s, r) => s + (r.clicks ?? 0), 0);
+      const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+      const avgPosition = currentRows.length > 0
+        ? currentRows.reduce((s, r) => s + (r.position ?? 0), 0) / currentRows.length
+        : 0;
 
-      if (countryBreakdown) {
-        setCountryData(countryBreakdown);
-      }
+      const prevImpressions = previousRows.reduce((s, r) => s + (r.impressions ?? 0), 0);
+      const prevClicks = previousRows.reduce((s, r) => s + (r.clicks ?? 0), 0);
+
+      const pctChange = (curr: number, prev: number) =>
+        prev === 0 ? (curr > 0 ? 100 : 0) : ((curr - prev) / prev) * 100;
+
+      setStats({
+        totalImpressions,
+        totalClicks,
+        avgCTR,
+        avgPosition,
+        impressionsChange: pctChange(totalImpressions, prevImpressions),
+        clicksChange: pctChange(totalClicks, prevClicks),
+      });
     } catch (error) {
-      log.error('loadData', 'Error loading traffic data', { data: error });
+      log.error("loadData", "Error loading traffic overview", { data: error });
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateTotals = (data: any[]) => {
-    return data.reduce(
-      (acc, item) => ({
-        sessions: acc.sessions + (item.total_sessions || 0),
-        users: acc.users + (item.total_users || 0),
-        pageviews: acc.pageviews + (item.total_pageviews || 0),
-        bounceRate: acc.bounceRate + (item.avg_bounce_rate || 0),
-        count: acc.count + 1,
-      }),
-      { sessions: 0, users: 0, pageviews: 0, bounceRate: 0, count: 0 }
-    );
-  };
-
-  const calculateChanges = (current: any, previous: any) => {
-    const calcChange = (curr: number, prev: number) => {
-      if (prev === 0) return curr > 0 ? 100 : 0;
-      return ((curr - prev) / prev) * 100;
-    };
-
-    return {
-      sessions: calcChange(current.sessions, previous.sessions),
-      users: calcChange(current.users, previous.users),
-      pageviews: calcChange(current.pageviews, previous.pageviews),
-      bounceRate: calcChange(
-        current.bounceRate / (current.count || 1),
-        previous.bounceRate / (previous.count || 1)
-      ),
-    };
-  };
-
-  const aggregateByField = (data: any[], field: string) => {
-    const agg = data.reduce((acc, item) => {
-      const key = item[field] || "Unknown";
-      if (!acc[key]) {
-        acc[key] = { name: key, value: 0, sessions: 0 };
-      }
-      acc[key].value += item.sessions || 0;
-      acc[key].sessions += item.sessions || 0;
-      return acc;
-    }, {} as Record<string, any>);
-
-    return Object.values(agg).sort((a: any, b: any) => b.value - a.value);
-  };
-
   const formatNumber = (num: number) => {
-    if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`;
-    if (num >= 1000) return `${(num / 1000).toFixed(1)}K`;
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
     return num.toString();
   };
 
-  const getDeviceIcon = (device: string) => {
-    const deviceLower = device.toLowerCase();
-    if (deviceLower.includes("mobile")) return <Smartphone className="h-4 w-4" />;
-    if (deviceLower.includes("tablet")) return <Tablet className="h-4 w-4" />;
+  const getDeviceIcon = (name: string) => {
+    if (name === "Mobile") return <Smartphone className="h-4 w-4" />;
+    if (name === "Tablet") return <Tablet className="h-4 w-4" />;
     return <Monitor className="h-4 w-4" />;
   };
 
@@ -255,9 +175,9 @@ export function TrafficOverview({ dateRange, selectedProvider }: TrafficOverview
           <Card key={i}>
             <CardContent className="pt-6">
               <div className="animate-pulse space-y-3">
-                <div className="h-4 bg-muted rounded w-24"></div>
-                <div className="h-8 bg-muted rounded w-32"></div>
-                <div className="h-3 bg-muted rounded w-20"></div>
+                <div className="h-4 bg-muted rounded w-24" />
+                <div className="h-8 bg-muted rounded w-32" />
+                <div className="h-3 bg-muted rounded w-20" />
               </div>
             </CardContent>
           </Card>
@@ -266,153 +186,167 @@ export function TrafficOverview({ dateRange, selectedProvider }: TrafficOverview
     );
   }
 
+  if (connectedProviders.length === 0) {
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Connect Google Search Console to see traffic data. Use the <strong>Connect</strong> button in the setup panel below.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const metricCards = [
+    {
+      title: "Total Impressions",
+      value: formatNumber(stats.totalImpressions),
+      change: stats.impressionsChange,
+      icon: <Eye className="h-4 w-4" />,
+    },
+    {
+      title: "Total Clicks",
+      value: formatNumber(stats.totalClicks),
+      change: stats.clicksChange,
+      icon: <MousePointer className="h-4 w-4" />,
+    },
+    {
+      title: "Avg CTR",
+      value: `${stats.avgCTR.toFixed(2)}%`,
+      change: null,
+      icon: <ArrowUpRight className="h-4 w-4" />,
+    },
+    {
+      title: "Avg Position",
+      value: stats.avgPosition.toFixed(1),
+      change: null,
+      icon: <Search className="h-4 w-4" />,
+    },
+  ];
+
   return (
     <div className="space-y-6">
       {/* Metric Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {metrics.map((metric, index) => (
-          <Card key={index}>
+        {metricCards.map((m, i) => (
+          <Card key={i}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
-              {metric.icon}
+              <CardTitle className="text-sm font-medium">{m.title}</CardTitle>
+              {m.icon}
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{metric.value}</div>
-              <div className="flex items-center text-xs text-muted-foreground mt-1">
-                {metric.trend === "up" ? (
-                  <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
-                ) : (
-                  <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
-                )}
-                <span className={metric.trend === "up" ? "text-green-500" : "text-red-500"}>
-                  {Math.abs(metric.change).toFixed(1)}%
-                </span>
-                <span className="ml-1">vs previous period</span>
-              </div>
+              <div className="text-2xl font-bold">{m.value}</div>
+              {m.change !== null && (
+                <div className="flex items-center text-xs text-muted-foreground mt-1">
+                  {m.change >= 0 ? (
+                    <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
+                  ) : (
+                    <ArrowDownRight className="h-3 w-3 text-red-500 mr-1" />
+                  )}
+                  <span className={m.change >= 0 ? "text-green-500" : "text-red-500"}>
+                    {Math.abs(m.change).toFixed(1)}%
+                  </span>
+                  <span className="ml-1">vs prev period</span>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Traffic Trend Chart */}
+      {/* Trend Chart */}
       <Card>
         <CardHeader>
-          <CardTitle>Traffic Trend</CardTitle>
-          <CardDescription>Daily sessions, users, and pageviews over time</CardDescription>
+          <CardTitle>Impressions &amp; Clicks Trend</CardTitle>
+          <CardDescription>Daily organic search performance</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <AreaChart data={chartData}>
-              <defs>
-                <linearGradient id="colorSessions" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={COLORS.secondary} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={COLORS.secondary} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Area
-                type="monotone"
-                dataKey="sessions"
-                stroke={COLORS.primary}
-                fillOpacity={1}
-                fill="url(#colorSessions)"
-                name="Sessions"
-              />
-              <Area
-                type="monotone"
-                dataKey="users"
-                stroke={COLORS.secondary}
-                fillOpacity={1}
-                fill="url(#colorUsers)"
-                name="Users"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
+          {chartData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={350}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorImpressions" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS.primary} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={COLORS.primary} stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="colorClicks" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={COLORS.secondary} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={COLORS.secondary} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="impressions"
+                  stroke={COLORS.primary}
+                  fillOpacity={1}
+                  fill="url(#colorImpressions)"
+                  name="Impressions"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="clicks"
+                  stroke={COLORS.secondary}
+                  fillOpacity={1}
+                  fill="url(#colorClicks)"
+                  name="Clicks"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No data yet — click <strong>Sync Data</strong> to pull from Search Console.
+            </p>
+          )}
         </CardContent>
       </Card>
 
-      {/* Device & Country Breakdown */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Device Breakdown */}
+      {deviceData.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Device Breakdown</CardTitle>
-            <CardDescription>Sessions by device type</CardDescription>
+            <CardDescription>Impressions by device type</CardDescription>
           </CardHeader>
           <CardContent>
-            {deviceData.length > 0 ? (
-              <div className="space-y-4">
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={deviceData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {deviceData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={DEVICE_COLORS[index % DEVICE_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2">
-                  {deviceData.map((device, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        {getDeviceIcon(device.name)}
-                        <span className="text-sm">{device.name}</span>
-                      </div>
-                      <Badge variant="secondary">{formatNumber(device.sessions)}</Badge>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">No device data available</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Top Countries</CardTitle>
-            <CardDescription>Sessions by country</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {countryData.length > 0 ? (
-              <div className="space-y-3">
-                {countryData.slice(0, 5).map((country, index) => (
+            <div className="grid gap-6 md:grid-cols-2 items-center">
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={deviceData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    dataKey="value"
+                  >
+                    {deviceData.map((_, index) => (
+                      <Cell key={index} fill={DEVICE_COLORS[index % DEVICE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v: any) => formatNumber(v)} />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="space-y-2">
+                {deviceData.map((device, index) => (
                   <div key={index} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">#{index + 1}</span>
-                      <span className="text-sm">{country.country}</span>
+                      {getDeviceIcon(device.name)}
+                      <span className="text-sm">{device.name}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant="outline">{formatNumber(country.users)} users</Badge>
-                      <Badge>{formatNumber(country.sessions)} sessions</Badge>
-                    </div>
+                    <Badge variant="secondary">{formatNumber(device.value)}</Badge>
                   </div>
                 ))}
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-8">No country data available</p>
-            )}
+            </div>
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 }
