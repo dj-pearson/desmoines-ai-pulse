@@ -61,18 +61,49 @@ export default function AdminGscCallback() {
 
       setMessage("Fetching your Search Console properties…");
 
-      const { data: propertiesData, error: propError } = await supabase.functions.invoke(
-        "gsc-fetch-properties",
-        { body: { credentialId } }
-      );
+      // Use direct fetch so we can read the actual error body if it fails
+      let count = 0;
+      try {
+        const propRes = await fetch(
+          `${supabaseUrl}/functions/v1/gsc-fetch-properties`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+              apikey: anonKey,
+            },
+            body: JSON.stringify({ credentialId }),
+          }
+        );
 
-      if (propError) throw new Error(propError.message || "Failed to fetch properties.");
+        const propJson = await propRes.json().catch(() => ({}));
 
-      const count = propertiesData?.count ?? 0;
+        if (propRes.ok) {
+          count = propJson.count ?? 0;
+        } else {
+          // Property fetch failed — credentials are saved, user can sync later
+          console.warn(
+            "gsc-fetch-properties failed (will retry on sync):",
+            propJson.error || propRes.statusText
+          );
+        }
+      } catch (propErr) {
+        // Network-level failure — not critical, credentials are saved
+        console.warn("gsc-fetch-properties network error:", propErr);
+      }
+
       setStatus("success");
-      setMessage(`Connected! Found ${count} propert${count === 1 ? "y" : "ies"}.`);
+      setMessage(
+        count > 0
+          ? `Connected! Found ${count} propert${count === 1 ? "y" : "ies"}.`
+          : "Connected! Properties will load on the dashboard."
+      );
       toast.success("Google Search Console connected!", {
-        description: `${count} propert${count === 1 ? "y" : "ies"} imported.`,
+        description:
+          count > 0
+            ? `${count} propert${count === 1 ? "y" : "ies"} imported.`
+            : "Click 'Sync Data' on the dashboard to load your properties.",
       });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Connection failed.";
