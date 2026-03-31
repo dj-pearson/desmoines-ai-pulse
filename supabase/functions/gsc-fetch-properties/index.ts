@@ -87,20 +87,29 @@ serve(async (req) => {
     console.log(`GSC API response status: ${response.status}`);
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error("GSC API error body:", error);
+      const errorBody = await response.text();
+      console.error("GSC API error body:", errorBody);
 
-      // Update error count
+      // Record the error on the credential but don't fail the whole flow —
+      // the OAuth connection succeeded; the user can sync properties later.
       await supabase
         .from("gsc_oauth_credentials")
         .update({
           error_count: (credential.error_count || 0) + 1,
-          last_error: error,
+          last_error: errorBody,
           last_error_at: new Date().toISOString(),
         })
         .eq("id", credentialId);
 
-      throw new Error(`GSC API error: ${error}`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          properties: [],
+          count: 0,
+          warning: `GSC API returned ${response.status}. Check that the Search Console API is enabled in your Google Cloud project and that your account has verified properties.`,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const data = await response.json();
