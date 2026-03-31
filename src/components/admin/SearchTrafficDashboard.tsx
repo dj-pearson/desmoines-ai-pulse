@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -75,20 +75,37 @@ export function SearchTrafficDashboard() {
     try {
       setLoading(true);
 
-      // Load GSC properties with their credential status
+      // Load GSC properties (split into two queries to avoid PostgREST join 400 errors)
       const { data: properties, error } = await supabase
         .from("gsc_properties" as any)
-        .select("id, property_url, property_type, status, last_sync_at, created_at, oauth_credential_id, gsc_oauth_credentials(is_active, expires_at)")
+        .select("id, property_url, property_type, status, last_sync_at, created_at, oauth_credential_id")
         .order("created_at", { ascending: false });
 
       if (error) {
-        log.debug('loadProviders', 'gsc_properties not available yet', { data: error });
+        log.debug('loadProviders', 'gsc_properties not available yet — run: supabase db push', { data: error });
         setConnectedProviders([]);
         return;
       }
 
-      const providers: ConnectedProvider[] = (properties || []).map((prop: any) => {
-        const cred = prop.gsc_oauth_credentials;
+      const propRows = (properties || []) as any[];
+
+      // Separately fetch credential status for all credential IDs
+      const credIds = propRows.map((p: any) => p.oauth_credential_id).filter(Boolean);
+      const credMap: Record<string, { is_active: boolean; expires_at: string }> = {};
+
+      if (credIds.length > 0) {
+        const { data: creds } = await supabase
+          .from("gsc_oauth_credentials" as any)
+          .select("id, is_active, expires_at")
+          .in("id", credIds);
+
+        for (const cred of (creds || []) as any[]) {
+          credMap[cred.id] = cred;
+        }
+      }
+
+      const providers: ConnectedProvider[] = propRows.map((prop: any) => {
+        const cred = credMap[prop.oauth_credential_id];
         const isExpired = cred?.expires_at ? new Date(cred.expires_at) < new Date() : false;
         const isActive = cred?.is_active === true;
 
