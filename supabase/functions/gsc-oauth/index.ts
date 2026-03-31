@@ -128,24 +128,35 @@ serve(async (req) => {
         Date.now() + (tokenData.expires_in || 3600) * 1000
       );
 
-      // Get user from authorization header
+      // Get user from authorization header (best-effort — userId can be null)
       const authHeader = req.headers.get("Authorization");
-      let userId = null;
+      let userId: string | null = null;
       if (authHeader) {
-        const token = authHeader.replace("Bearer ", "");
-        const { data: { user } } = await supabase.auth.getUser(token);
-        userId = user?.id;
+        try {
+          const token = authHeader.replace("Bearer ", "");
+          const { data: authData, error: authErr } = await supabase.auth.getUser(token);
+          if (authErr) {
+            console.warn("Could not resolve user from auth token:", authErr.message);
+          } else {
+            userId = authData.user?.id ?? null;
+          }
+        } catch (authEx) {
+          console.warn("Auth getUser threw:", authEx);
+        }
       }
+
+      console.log(`Saving credentials for user_id: ${userId ?? "anonymous"}`);
+      console.log(`Token fields received: access_token=${!!tokenData.access_token}, refresh_token=${!!tokenData.refresh_token}, expires_in=${tokenData.expires_in}`);
 
       // Save credentials to database
       const { data: credential, error: insertError } = await supabase
         .from("gsc_oauth_credentials")
         .insert({
           access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          token_type: tokenData.token_type,
+          refresh_token: tokenData.refresh_token ?? null,
+          token_type: tokenData.token_type ?? "Bearer",
           expires_at: expiresAt.toISOString(),
-          scope: tokenData.scope,
+          scope: tokenData.scope ?? null,
           user_id: userId,
           is_active: true,
         })
@@ -153,7 +164,20 @@ serve(async (req) => {
         .single();
 
       if (insertError) {
-        throw new Error(`Failed to save credentials: ${insertError.message}`);
+        // Log the full error object to Supabase function logs for diagnosis
+        console.error("Insert error (full):", JSON.stringify(insertError));
+        const errMsg =
+          (insertError as any).message ||
+          (insertError as any).details ||
+          (insertError as any).code ||
+          JSON.stringify(insertError);
+        throw new Error(`Failed to save credentials: ${errMsg}`);
+      }
+
+      if (!credential) {
+        // Insert succeeded but returned no row — likely an RLS edge case
+        console.error("Insert returned no credential row despite no error");
+        throw new Error("Credential was not saved. Check RLS policies on gsc_oauth_credentials.");
       }
 
       console.log("OAuth credentials saved successfully");
