@@ -62,6 +62,26 @@ export interface PricingInfo {
   demand_multiplier: number;
 }
 
+export interface RateCardEntry {
+  placement_type: string;
+  base_daily_rate: number;
+  cpm_rate: number;
+  discount_7_day: number;
+  discount_14_day: number;
+  discount_30_day: number;
+}
+
+/** Fetch the ad rate card (including CPM rates) — callable without authentication. */
+export async function fetchRateCard(): Promise<RateCardEntry[]> {
+  const { data, error } = await supabase
+    .from("ad_rate_card")
+    .select("placement_type, base_daily_rate, cpm_rate, discount_7_day, discount_14_day, discount_30_day")
+    .eq("is_active", true);
+
+  if (error) return [];
+  return (data || []) as RateCardEntry[];
+}
+
 export function useCampaigns() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
