@@ -113,9 +113,27 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const properties = data.siteEntry || [];
+    const allProperties = data.siteEntry || [];
 
-    console.log(`Found ${properties.length} properties`);
+    console.log(`Found ${allProperties.length} total properties in GSC account`);
+
+    // Filter to only the target site domain so we don't import other verified sites
+    const siteUrl = Deno.env.get("SITE_URL") || Deno.env.get("VITE_SITE_URL") || "";
+    const siteDomain = siteUrl
+      .replace(/^https?:\/\/(www\.)?/, "")
+      .replace(/\/$/, "")
+      .toLowerCase();
+
+    const properties = siteDomain
+      ? allProperties.filter((p: any) => {
+          const propUrl = (p.siteUrl || "").toLowerCase();
+          return propUrl.includes(siteDomain);
+        })
+      : allProperties;
+
+    console.log(
+      `Filtered to ${properties.length} properties matching domain "${siteDomain}" (SITE_URL=${siteUrl})`
+    );
 
     // Update last used time
     await supabase
@@ -124,6 +142,23 @@ serve(async (req) => {
         last_used_at: new Date().toISOString(),
       })
       .eq("id", credentialId);
+
+    // Remove any existing properties for this credential that are NOT in the filtered list
+    // (cleans up properties from previous unfiltered runs)
+    const keepUrls = properties.map((p: any) => p.siteUrl);
+    const { data: existingProps } = await supabase
+      .from("gsc_properties")
+      .select("id, property_url")
+      .eq("oauth_credential_id", credentialId);
+
+    const idsToRemove = (existingProps || [])
+      .filter((ep: any) => !keepUrls.includes(ep.property_url))
+      .map((ep: any) => ep.id);
+
+    if (idsToRemove.length > 0) {
+      await supabase.from("gsc_properties").delete().in("id", idsToRemove);
+      console.log(`Removed ${idsToRemove.length} non-target properties from previous runs`);
+    }
 
     // Save properties to database
     const savedProperties = [];

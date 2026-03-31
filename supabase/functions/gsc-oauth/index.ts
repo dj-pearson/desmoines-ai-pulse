@@ -148,6 +148,50 @@ serve(async (req) => {
       console.log(`Saving credentials for user_id: ${userId ?? "anonymous"}`);
       console.log(`Token fields received: access_token=${!!tokenData.access_token}, refresh_token=${!!tokenData.refresh_token}, expires_in=${tokenData.expires_in}`);
 
+      // Deactivate all previous credentials for this user and cascade-delete their properties
+      if (userId) {
+        const oldCredsRes = await fetch(
+          `${supabaseUrl}/rest/v1/gsc_oauth_credentials?user_id=eq.${userId}&select=id`,
+          {
+            headers: {
+              Authorization: `Bearer ${supabaseServiceKey}`,
+              apikey: supabaseServiceKey,
+            },
+          }
+        );
+        const oldCreds: { id: string }[] = oldCredsRes.ok ? await oldCredsRes.json() : [];
+        const oldCredIds = oldCreds.map((c) => c.id);
+
+        if (oldCredIds.length > 0) {
+          // Delete gsc_properties linked to old credentials
+          await fetch(
+            `${supabaseUrl}/rest/v1/gsc_properties?oauth_credential_id=in.(${oldCredIds.join(",")})`,
+            {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${supabaseServiceKey}`,
+                apikey: supabaseServiceKey,
+              },
+            }
+          );
+
+          // Deactivate old credentials
+          await fetch(
+            `${supabaseUrl}/rest/v1/gsc_oauth_credentials?user_id=eq.${userId}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supabaseServiceKey}`,
+                apikey: supabaseServiceKey,
+              },
+              body: JSON.stringify({ is_active: false }),
+            }
+          );
+          console.log(`Deactivated ${oldCredIds.length} old credential(s) and their properties for user ${userId}`);
+        }
+      }
+
       // Save credentials via raw REST fetch to get exact PostgREST response
       const insertPayload = {
         access_token: tokenData.access_token,

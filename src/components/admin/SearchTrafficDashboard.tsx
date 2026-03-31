@@ -154,7 +154,29 @@ export function SearchTrafficDashboard() {
         }
       }
 
-      setConnectedProviders(providers);
+      // Client-side domain filter: only show properties that match the target site.
+      // This removes any leftover properties from other GSC-verified sites until
+      // the user re-authenticates and the backend cleanup runs.
+      const rawSiteUrl = import.meta.env.VITE_SITE_URL || "";
+      const targetDomain = rawSiteUrl
+        .replace(/^https?:\/\/(www\.)?/, "")
+        .replace(/\/$/, "")
+        .toLowerCase();
+
+      const filteredProviders = targetDomain
+        ? providers.filter(
+            (p) =>
+              p.property_url === "pending" ||
+              p.property_url.toLowerCase().includes(targetDomain)
+          )
+        : providers;
+
+      // Auto-select the desmoinesinsider property if nothing selected yet
+      if (filteredProviders.length === 1 && selectedPropertyId === "all") {
+        setSelectedPropertyId(filteredProviders[0].id);
+      }
+
+      setConnectedProviders(filteredProviders);
     } catch (error) {
       log.error('loadProviders', 'Error loading connected providers', { data: error });
       toast.error("Failed to load connected providers");
