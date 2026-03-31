@@ -23,6 +23,7 @@ import {
   Zap,
   ArrowUpRight,
   ArrowDownRight,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -190,6 +191,15 @@ export function SearchTrafficDashboard() {
       setSyncing(true);
       toast.info("Starting data synchronization…");
 
+      // If we have more than one real property, run a fetch-properties cleanup first
+      // so the domain filter removes other sites before we sync
+      const realProps = connectedProviders.filter(p => p.property_url !== "pending");
+      if (realProps.length > 1) {
+        toast.info("Cleaning up properties before sync…");
+        await handleRefreshProperties();
+        setSyncing(true); // handleRefreshProperties may reset syncing state
+      }
+
       // Check if we only have a synthetic credential-only entry (no real properties yet)
       const syntheticEntry = connectedProviders.find(p => p.property_url === "pending");
       if (syntheticEntry) {
@@ -293,6 +303,80 @@ export function SearchTrafficDashboard() {
     }
   };
 
+  const handleDisconnectAll = async () => {
+    if (!confirm("Disconnect all Google Search Console properties? You'll need to reconnect.")) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: creds } = await supabase
+        .from("gsc_oauth_credentials" as any)
+        .select("id")
+        .eq("user_id", user.id);
+
+      const credIds = ((creds || []) as any[]).map((c) => c.id);
+
+      if (credIds.length > 0) {
+        await supabase
+          .from("gsc_properties" as any)
+          .delete()
+          .in("oauth_credential_id", credIds);
+
+        await supabase
+          .from("gsc_oauth_credentials" as any)
+          .update({ is_active: false })
+          .in("id", credIds);
+      }
+
+      setConnectedProviders([]);
+      setSelectedPropertyId("all");
+      toast.success("Disconnected", {
+        description: "All GSC connections removed. Connect again to start fresh.",
+      });
+    } catch (error: any) {
+      log.error('disconnect', 'Disconnect failed', { data: error });
+      toast.error("Failed to disconnect", { description: error.message });
+    }
+  };
+
+  const handleRefreshProperties = async () => {
+    try {
+      const activeCredential = connectedProviders.find(
+        (p) => p.status === "connected"
+      );
+      if (!activeCredential) {
+        toast.warning("No active connection to refresh.");
+        return;
+      }
+
+      toast.info("Refreshing properties…");
+      const { data: session } = await supabase.auth.getSession();
+      const propRes = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gsc-fetch-properties`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.session?.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ credentialId: activeCredential.id }),
+        }
+      );
+      const propJson = await propRes.json().catch(() => ({}));
+
+      if (propJson.warning) {
+        toast.warning("GSC API issue", { description: propJson.warning });
+      } else {
+        toast.success(`Properties refreshed: ${propJson.count ?? 0} found`);
+      }
+      await loadConnectedProviders();
+    } catch (error: any) {
+      log.error('refreshProps', 'Refresh failed', { data: error });
+      toast.error("Failed to refresh properties");
+    }
+  };
+
   const getProviderIcon = (providerName: string) => {
     switch (providerName) {
       case "google_analytics":
@@ -380,36 +464,79 @@ export function SearchTrafficDashboard() {
               </AlertDescription>
             </Alert>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {connectedProviders.map((provider) => (
-                <Card key={provider.id} className={provider.status === "expired" ? "border-orange-500" : provider.status === "connected" ? "border-green-500" : "border-destructive"}>
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2">
-                        {getProviderIcon(provider.provider_name)}
-                        <div>
-                          <p className="font-medium text-sm">
-                            {getProviderLabel(provider.provider_name)}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate max-w-[180px]">
-                            {provider.property_name}
-                          </p>
-                          {provider.last_sync_at && (
-                            <p className="text-xs text-muted-foreground">
-                              Synced {format(new Date(provider.last_sync_at), "MMM d, h:mm a")}
-                            </p>
-                          )}
+            <div className="space-y-3">
+              {/* Group by provider type — show one card per Google account, not one per property */}
+              {(() => {
+                const groups: Record<string, ConnectedProvider[]> = {};
+                for (const p of connectedProviders) {
+                  if (!groups[p.provider_name]) groups[p.provider_name] = [];
+                  groups[p.provider_name].push(p);
+                }
+                return Object.entries(groups).map(([providerName, props]) => {
+                  const activeCount = props.filter(p => p.status === "connected").length;
+                  const latestSync = props
+                    .filter(p => p.last_sync_at)
+                    .sort((a, b) => new Date(b.last_sync_at!).getTime() - new Date(a.last_sync_at!).getTime())[0]
+                    ?.last_sync_at;
+                  const overallStatus = activeCount > 0 ? "connected" : "error";
+
+                  return (
+                    <Card
+                      key={providerName}
+                      className={overallStatus === "connected" ? "border-green-500" : "border-destructive"}
+                    >
+                      <CardContent className="pt-4 pb-4">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div className="flex items-center gap-3">
+                            {getProviderIcon(providerName)}
+                            <div>
+                              <p className="font-medium text-sm">{getProviderLabel(providerName)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {props.length === 1
+                                  ? props[0].property_name
+                                  : `${props.length} properties connected`}
+                              </p>
+                              {latestSync && (
+                                <p className="text-xs text-muted-foreground">
+                                  Last synced {format(new Date(latestSync), "MMM d, h:mm a")}
+                                </p>
+                              )}
+                              {props.length > 1 && (
+                                <p className="text-xs text-amber-400 mt-1">
+                                  ⚠ Multiple sites detected — click "Refresh Properties" to filter to {import.meta.env.VITE_SITE_URL || "your site"} only, then reconnect.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {overallStatus === "connected" && (
+                              <CheckCircle2 className="h-4 w-4 text-green-500" />
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              onClick={handleRefreshProperties}
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              Refresh Properties
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              onClick={handleDisconnectAll}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                              Disconnect
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                      {provider.status === "connected" ? (
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <AlertCircle className="h-4 w-4 text-orange-500" />
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </CardContent>
+                    </Card>
+                  );
+                });
+              })()}
             </div>
           )}
         </CardContent>
