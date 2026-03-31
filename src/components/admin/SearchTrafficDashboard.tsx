@@ -43,7 +43,8 @@ import { createLogger } from '@/lib/logger';
 const log = createLogger('SearchTrafficDashboard');
 
 interface ConnectedProvider {
-  id: string;           // gsc_properties.id UUID — used as propertyId for child components
+  id: string;                    // gsc_properties.id UUID — used as propertyId for child components
+  oauth_credential_id: string;   // gsc_oauth_credentials.id — needed to call gsc-fetch-properties
   property_url: string;
   property_name: string;
   provider_name: string;
@@ -118,6 +119,7 @@ export function SearchTrafficDashboard() {
 
         return {
           id: prop.id,
+          oauth_credential_id: prop.oauth_credential_id,
           property_url: prop.property_url,
           property_name: displayName,
           provider_name: "google_search_console",
@@ -145,6 +147,7 @@ export function SearchTrafficDashboard() {
             : false;
           providers.push({
             id: latestCred.id,
+            oauth_credential_id: latestCred.id,
             property_url: "pending",
             property_name: "Google Search Console (click Sync Data to load properties)",
             provider_name: "google_search_console",
@@ -341,28 +344,44 @@ export function SearchTrafficDashboard() {
 
   const handleRefreshProperties = async () => {
     try {
-      const activeCredential = connectedProviders.find(
-        (p) => p.status === "connected"
-      );
-      if (!activeCredential) {
+      // Find the active credential — use oauth_credential_id (not gsc_properties.id)
+      const activeProvider = connectedProviders.find((p) => p.status === "connected");
+      if (!activeProvider) {
         toast.warning("No active connection to refresh.");
         return;
       }
+      const credentialId = activeProvider.oauth_credential_id;
 
       toast.info("Refreshing properties…");
-      const { data: session } = await supabase.auth.getSession();
+
+      // Refresh the session to get a valid access token
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      if (sessionErr || !session?.access_token) {
+        // Session expired — fall back to direct DB cleanup
+        await handleDirectCleanup();
+        return;
+      }
+
       const propRes = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gsc-fetch-properties`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session.session?.access_token}`,
+            Authorization: `Bearer ${session.access_token}`,
             apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
           },
-          body: JSON.stringify({ credentialId: activeCredential.id }),
+          body: JSON.stringify({ credentialId }),
         }
       );
+
+      if (!propRes.ok) {
+        log.error('refreshProps', `gsc-fetch-properties returned ${propRes.status}`, {});
+        // Fall back to direct DB cleanup when the edge function is unavailable
+        await handleDirectCleanup();
+        return;
+      }
+
       const propJson = await propRes.json().catch(() => ({}));
 
       if (propJson.warning) {
@@ -374,6 +393,56 @@ export function SearchTrafficDashboard() {
     } catch (error: any) {
       log.error('refreshProps', 'Refresh failed', { data: error });
       toast.error("Failed to refresh properties");
+    }
+  };
+
+  // Direct DB cleanup: removes gsc_properties rows that don't belong to this site.
+  // Used as fallback when the edge function call fails.
+  const handleDirectCleanup = async () => {
+    try {
+      toast.info("Cleaning up non-site properties directly…");
+
+      const siteUrl = import.meta.env.VITE_SITE_URL || "";
+      const domain = siteUrl
+        .replace(/^https?:\/\/(www\.)?/, "")
+        .replace(/\/$/, "")
+        .toLowerCase();
+
+      if (!domain) {
+        toast.error("VITE_SITE_URL not configured — cannot filter automatically. Use Disconnect and reconnect.");
+        return;
+      }
+
+      // Fetch all properties, then delete those that don't match the domain
+      const { data: allProps } = await supabase
+        .from("gsc_properties" as any)
+        .select("id, property_url");
+
+      const toDelete = ((allProps || []) as any[])
+        .filter((p) => !p.property_url.toLowerCase().includes(domain))
+        .map((p) => p.id);
+
+      if (toDelete.length === 0) {
+        toast.success("Already showing only your site's properties.");
+        await loadConnectedProviders();
+        return;
+      }
+
+      const { error } = await supabase
+        .from("gsc_properties" as any)
+        .delete()
+        .in("id", toDelete);
+
+      if (error) {
+        toast.error("Could not remove extra properties", { description: error.message });
+        return;
+      }
+
+      toast.success(`Removed ${toDelete.length} extra properties. Now showing ${domain} only.`);
+      await loadConnectedProviders();
+    } catch (err: any) {
+      log.error('directCleanup', 'Cleanup failed', { data: err });
+      toast.error("Cleanup failed — use Disconnect and reconnect instead.");
     }
   };
 
