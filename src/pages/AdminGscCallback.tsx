@@ -52,10 +52,12 @@ export default function AdminGscCallback() {
 
       if (!tokenRes.ok) {
         const err = await tokenRes.json().catch(() => ({ error: tokenRes.statusText }));
-        throw new Error(err.error || "Token exchange failed.");
+        const detail = err.hint || err.error_description || err.error || "Token exchange failed.";
+        throw new Error(detail);
       }
 
-      const { credentialId } = await tokenRes.json();
+      const tokenJson = await tokenRes.json();
+      const { credentialId } = tokenJson;
 
       setMessage("Fetching your Search Console properties…");
 

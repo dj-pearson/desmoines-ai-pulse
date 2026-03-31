@@ -6,15 +6,43 @@
  * Get allowed origins based on environment
  */
 export function getAllowedOrigins(): string[] {
-  const siteUrl = Deno.env.get('VITE_SITE_URL');
+  // Check both SITE_URL and VITE_SITE_URL — either can be set as a Supabase secret.
+  // VITE_SITE_URL is the Vite convention for frontend; SITE_URL is the plain variant.
+  const siteUrl =
+    Deno.env.get('SITE_URL') ||
+    Deno.env.get('VITE_SITE_URL');
   const env = Deno.env.get('ENVIRONMENT') || 'development';
 
-  // Define explicit allowed origins for each environment
+  // Build base production list from the configured site URL
+  const productionOrigins: string[] = [];
+  if (siteUrl) {
+    // Normalise: strip trailing slash, accept both www and non-www variants
+    const normalised = siteUrl.replace(/\/$/, '');
+    productionOrigins.push(normalised);
+    // Also allow www <-> non-www sibling
+    if (normalised.includes('://www.')) {
+      productionOrigins.push(normalised.replace('://www.', '://'));
+    } else {
+      const url = new URL(normalised);
+      productionOrigins.push(`${url.protocol}//www.${url.host}`);
+    }
+  }
+
+  // Fallback hardcoded production origins so the function is never completely
+  // locked out if the secret is momentarily missing during a deploy.
+  const productionFallbacks = [
+    'https://desmoinesinsider.com',
+    'https://www.desmoinesinsider.com',
+  ];
+
   const allowedOrigins: Record<string, string[]> = {
-    production: siteUrl ? [siteUrl] : ['https://yourdomain.com'],
+    production: productionOrigins.length > 0
+      ? [...new Set([...productionOrigins, ...productionFallbacks])]
+      : productionFallbacks,
     staging: [
-      'https://staging.yourdomain.com',
+      'https://staging.desmoinesinsider.com',
       'https://lovable.dev',
+      ...(siteUrl ? [siteUrl] : []),
     ],
     development: [
       'http://localhost:8080',
@@ -24,13 +52,10 @@ export function getAllowedOrigins(): string[] {
       'http://127.0.0.1:8080',
       'http://127.0.0.1:5173',
       'http://127.0.0.1:3000',
-    ]
+    ],
   };
 
-  // Add Lovable preview domains for non-production environments
-  const baseOrigins = allowedOrigins[env] || allowedOrigins.development;
-
-  return baseOrigins;
+  return allowedOrigins[env] || allowedOrigins.development;
 }
 
 /**

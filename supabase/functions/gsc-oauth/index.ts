@@ -93,9 +93,32 @@ serve(async (req) => {
       });
 
       if (!tokenResponse.ok) {
-        const errorText = await tokenResponse.text();
-        console.error("Token exchange failed:", errorText);
-        throw new Error("Token exchange failed");
+        const errorBody = await tokenResponse.text();
+        console.error("Token exchange failed — Google response:", errorBody);
+        console.error("redirect_uri used:", googleRedirectUri);
+
+        // Parse Google's error for a readable message
+        let googleError = "token_exchange_failed";
+        let googleErrorDesc = errorBody;
+        try {
+          const parsed = JSON.parse(errorBody);
+          googleError = parsed.error || googleError;
+          googleErrorDesc = parsed.error_description || googleErrorDesc;
+        } catch { /* not JSON */ }
+
+        return new Response(
+          JSON.stringify({
+            error: googleError,
+            error_description: googleErrorDesc,
+            hint: googleError === "redirect_uri_mismatch"
+              ? `The GOOGLE_REDIRECT_URI secret (${googleRedirectUri}) must exactly match the authorized redirect URI in Google Cloud Console.`
+              : `Google rejected the token exchange. Check Supabase edge function logs for details.`,
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
       }
 
       const tokenData = await tokenResponse.json();
@@ -252,11 +275,12 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error in gsc-oauth function:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Error in gsc-oauth function:", msg);
 
     return new Response(
       JSON.stringify({
-        error: "An internal error occurred during OAuth processing",
+        error: msg || "An internal error occurred during OAuth processing",
       }),
       {
         status: 500,
