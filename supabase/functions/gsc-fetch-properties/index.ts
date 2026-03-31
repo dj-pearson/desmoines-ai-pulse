@@ -54,21 +54,61 @@ serve(async (req) => {
       );
     }
 
-    // Check if token is expired
-    const expiresAt = new Date(credential.expires_at);
-    const now = new Date();
+    // Auto-refresh token if expired
+    if (new Date(credential.expires_at) <= new Date()) {
+      console.log("Access token expired — attempting refresh...");
 
-    if (expiresAt <= now) {
-      return new Response(
-        JSON.stringify({
-          error: "Access token expired. Please refresh the token.",
-          requiresRefresh: true,
+      if (!credential.refresh_token) {
+        return new Response(
+          JSON.stringify({
+            error: "Access token expired and no refresh token available. Please reconnect.",
+            requiresRefresh: true,
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID");
+      const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+
+      const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: googleClientId!,
+          client_secret: googleClientSecret!,
+          refresh_token: credential.refresh_token,
+          grant_type: "refresh_token",
         }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      });
+
+      if (!refreshResponse.ok) {
+        const refreshError = await refreshResponse.text();
+        console.error("Token refresh failed:", refreshError);
+        return new Response(
+          JSON.stringify({
+            error: "Token refresh failed — please reconnect Google Search Console.",
+            details: refreshError,
+            requiresRefresh: true,
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const refreshData = await refreshResponse.json();
+      const newExpiresAt = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000);
+
+      await supabase
+        .from("gsc_oauth_credentials")
+        .update({
+          access_token: refreshData.access_token,
+          expires_at: newExpiresAt.toISOString(),
+          last_refreshed_at: new Date().toISOString(),
+        })
+        .eq("id", credentialId);
+
+      credential.access_token = refreshData.access_token;
+      console.log("Token refreshed successfully, new expiry:", newExpiresAt.toISOString());
     }
 
     console.log(`Fetching GSC properties for credential ${credentialId}...`);
