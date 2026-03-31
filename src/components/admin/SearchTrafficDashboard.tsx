@@ -82,16 +82,14 @@ export function SearchTrafficDashboard() {
         .order("created_at", { ascending: false });
 
       if (error) {
-        log.debug('loadProviders', 'gsc_properties not available yet — run: supabase db push', { data: error });
-        setConnectedProviders([]);
-        return;
+        log.debug('loadProviders', 'gsc_properties not available yet', { data: error });
       }
 
       const propRows = (properties || []) as any[];
 
       // Separately fetch credential status for all credential IDs
       const credIds = propRows.map((p: any) => p.oauth_credential_id).filter(Boolean);
-      const credMap: Record<string, { is_active: boolean; expires_at: string }> = {};
+      const credMap: Record<string, { id: string; is_active: boolean; expires_at: string }> = {};
 
       if (credIds.length > 0) {
         const { data: creds } = await supabase
@@ -113,7 +111,6 @@ export function SearchTrafficDashboard() {
         if (isActive && !isExpired) connStatus = "connected";
         else if (isExpired) connStatus = "expired";
 
-        // Derive a readable name from the property URL
         const displayName = prop.property_url.startsWith("sc-domain:")
           ? prop.property_url.replace("sc-domain:", "")
           : prop.property_url;
@@ -129,6 +126,34 @@ export function SearchTrafficDashboard() {
         };
       });
 
+      // If no properties exist yet but we have active credentials, show a
+      // synthetic "connected" entry so the user knows the OAuth worked and
+      // can click Sync Data to pull their properties.
+      if (providers.length === 0) {
+        const { data: activeCreds } = await supabase
+          .from("gsc_oauth_credentials" as any)
+          .select("id, is_active, expires_at, created_at")
+          .eq("is_active", true)
+          .order("created_at", { ascending: false })
+          .limit(1);
+
+        const latestCred = ((activeCreds || []) as any[])[0];
+        if (latestCred) {
+          const isExpired = latestCred.expires_at
+            ? new Date(latestCred.expires_at) < new Date()
+            : false;
+          providers.push({
+            id: latestCred.id,
+            property_url: "pending",
+            property_name: "Google Search Console (click Sync Data to load properties)",
+            provider_name: "google_search_console",
+            connected_at: latestCred.created_at,
+            last_sync_at: null,
+            status: isExpired ? "expired" : "connected",
+          });
+        }
+      }
+
       setConnectedProviders(providers);
     } catch (error) {
       log.error('loadProviders', 'Error loading connected providers', { data: error });
@@ -143,10 +168,37 @@ export function SearchTrafficDashboard() {
       setSyncing(true);
       toast.info("Starting data synchronization…");
 
-      // Determine which properties to sync
+      // Check if we only have a synthetic credential-only entry (no real properties yet)
+      const syntheticEntry = connectedProviders.find(p => p.property_url === "pending");
+      if (syntheticEntry) {
+        // Re-run fetch-properties to pull real properties from GSC API
+        toast.info("Fetching your Search Console properties…");
+        const { data: session } = await supabase.auth.getSession();
+        const propRes = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/gsc-fetch-properties`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.session?.access_token}`,
+              apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify({ credentialId: syntheticEntry.id }),
+          }
+        );
+        const propJson = await propRes.json().catch(() => ({}));
+        if (propJson.warning) {
+          toast.warning("GSC API issue", { description: propJson.warning });
+        }
+        await loadConnectedProviders();
+        setSyncing(false);
+        return;
+      }
+
+      // Determine which real properties to sync
       const propertiesToSync = selectedPropertyId === "all"
-        ? connectedProviders.filter(p => p.status === "connected").map(p => p.id)
-        : connectedProviders.filter(p => p.id === selectedPropertyId && p.status === "connected").map(p => p.id);
+        ? connectedProviders.filter(p => p.status === "connected" && p.property_url !== "pending").map(p => p.id)
+        : connectedProviders.filter(p => p.id === selectedPropertyId && p.status === "connected" && p.property_url !== "pending").map(p => p.id);
 
       if (propertiesToSync.length === 0) {
         toast.warning("No connected properties to sync. Check your Search Console connection.");
@@ -188,9 +240,9 @@ export function SearchTrafficDashboard() {
 
       const { data, error } = await supabase.functions.invoke("export-analytics-data", {
         body: {
-          providers: selectedProvider === "all"
+          providers: selectedPropertyId === "all"
             ? connectedProviders.map(p => p.provider_name)
-            : [selectedProvider],
+            : connectedProviders.filter(p => p.id === selectedPropertyId).map(p => p.provider_name),
           start_date: format(dateRange.from, "yyyy-MM-dd"),
           end_date: format(dateRange.to, "yyyy-MM-dd"),
           format: "csv",
