@@ -71,7 +71,7 @@ serve(async (req) => {
       );
     }
 
-    console.log("Fetching GSC properties...");
+    console.log(`Fetching GSC properties for credential ${credentialId}...`);
 
     // Fetch properties from GSC API
     const response = await fetch(
@@ -84,8 +84,11 @@ serve(async (req) => {
       }
     );
 
+    console.log(`GSC API response status: ${response.status}`);
+
     if (!response.ok) {
       const error = await response.text();
+      console.error("GSC API error body:", error);
 
       // Update error count
       await supabase
@@ -180,12 +183,11 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error in gsc-fetch-properties function:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Error in gsc-fetch-properties function:", msg);
 
     return new Response(
-      JSON.stringify({
-        error: "Internal server error",
-      }),
+      JSON.stringify({ error: msg }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
