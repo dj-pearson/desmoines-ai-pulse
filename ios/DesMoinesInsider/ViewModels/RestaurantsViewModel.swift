@@ -82,6 +82,7 @@ final class RestaurantsViewModel {
             query.offset = currentOffset
 
             let response = try await service.fetchRestaurants(query: query)
+            guard !Task.isCancelled else { return }
 
             if reset {
                 allRestaurants = response.restaurants

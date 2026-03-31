@@ -1,449 +1,399 @@
 {
   "project": "Des Moines AI Pulse",
-  "branchName": "claude/security-audit-fixes-5vEvp",
-  "description": "Security Audit & Hardening — Comprehensive security audit across all edge functions, React components, and shared utilities. Covers XSS prevention in email templates, input sanitization/bounds checking, CORS hardening, CSRF protection, authentication gaps, rate limiting, and SQL injection prevention.",
+  "branchName": "claude/ios-production-review-3vAjG",
+  "description": "iOS Production Readiness — Comprehensive hardening of the native iOS app covering security (certificate pinning, jailbreak detection, biometric auth, cache encryption), UI/UX polish (iPad layouts, scroll-to-top, search history, skeleton views), data layer fixes (retry logic, batch favorites, date parsing), and build/CI improvements (crash reporting, analytics, unit tests, App Store metadata automation).",
   "userStories": [
     {
-      "id": "SEC-001",
-      "title": "Create shared HTML escaping utility for edge functions",
-      "description": "As a developer, I need a shared escapeHtml utility so that all email-generating edge functions can safely render user-provided data without XSS risk.",
+      "id": "IOS-001",
+      "title": "Implement certificate pinning for Supabase API calls",
+      "description": "As a security-conscious user, I need the app to validate server certificates so that my data is protected from man-in-the-middle attacks on compromised networks.",
       "acceptanceCriteria": [
-        "Create supabase/functions/_shared/escapeHtml.ts exporting escapeHtml(text: string): string",
-        "Function escapes &, <, >, \", and ' characters to their HTML entity equivalents",
-        "Function handles null/undefined input gracefully (returns empty string)",
-        "Function is importable from all edge functions via relative path",
-        "Typecheck passes"
+        "Create a custom URLSessionDelegate that validates Supabase API server certificates",
+        "Pin the Supabase domain certificate (or public key) for all API communication",
+        "Enforce TLS 1.2+ minimum for all network connections",
+        "Add a fallback mechanism that gracefully fails if the certificate changes (show user-friendly error)",
+        "Verify pinning works in both Debug and Release configurations",
+        "App still compiles and runs correctly in Simulator"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "CRITICAL: 4 email-generating edge functions interpolate user data (event titles, venue names, admin notes, campaign messages) directly into HTML templates without escaping. This is the foundation fix that all other email XSS stories depend on. FIXED: Created supabase/functions/_shared/escapeHtml.ts with escapeHtml and escapeHtmlAttr functions."
+      "passes": false,
+      "notes": "CRITICAL SECURITY: No certificate pinning exists. App is vulnerable to MITM attacks on compromised networks. Must implement before production launch."
     },
     {
-      "id": "SEC-002",
-      "title": "Fix XSS in send-event-reminders email template",
-      "description": "As a user receiving event reminder emails, I need the email content to be safe from XSS so that malicious event data cannot execute scripts in my email client.",
+      "id": "IOS-002",
+      "title": "Add encrypted file protection to QueryCache disk storage",
+      "description": "As a user, I need cached API responses to be encrypted on disk so that my data is protected if the device is compromised.",
       "acceptanceCriteria": [
-        "Import escapeHtml from _shared/escapeHtml.ts into send-event-reminders/index.ts",
-        "Escape reminder.event_title, reminder.event_venue, reminder.event_location in HTML template",
-        "Escape subject line content that uses reminder.event_title",
-        "Text-only email content also escapes HTML entities",
-        "Typecheck passes"
+        "Set NSFileProtectionComplete attribute on all cache files written by QueryCache.swift",
+        "Add file protection attribute when creating the cache directory",
+        "Verify cache files are inaccessible when device is locked",
+        "Existing cache operations (read, write, prune) continue to function correctly",
+        "Add a cache version marker so old unencrypted caches are purged on upgrade"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "CRITICAL: Lines 99, 122, 130-131, 135, 162, 167-168 interpolate event data directly into HTML. FIXED: All user data in HTML and text templates now escaped via escapeHtml."
+      "passes": false,
+      "notes": "HIGH: QueryCache stores API responses (events, restaurants, user data) in the caches directory without encryption. Files are accessible if device is compromised."
     },
     {
-      "id": "SEC-003",
-      "title": "Fix XSS in send-weekly-digest email template",
-      "description": "As a user receiving weekly digest emails, I need the email content to be safe from XSS so that malicious event data cannot execute scripts in my email client.",
+      "id": "IOS-003",
+      "title": "Add jailbreak detection with user warning",
+      "description": "As a security-conscious user, I need the app to detect compromised devices so that I'm warned about potential security risks to my account.",
       "acceptanceCriteria": [
-        "Import escapeHtml from _shared/escapeHtml.ts into send-weekly-digest/index.ts",
-        "Escape event.title, event.location, event.category, event.recommendation_reason in all 4 email section builders",
-        "All buildUpcomingRSVPsSection, buildSavedEventsSection, buildRecommendationsSection, buildTrendingSection functions use escapeHtml",
-        "Typecheck passes"
+        "Create a JailbreakDetector service that checks common jailbreak indicators (Cydia, /var/mobile/Library, fork() behavior, writable system paths)",
+        "Show a non-blocking warning banner on launch if jailbreak is detected",
+        "Log jailbreak detection event via AppLogger",
+        "Do NOT block app usage (soft warning only, per App Store guidelines)",
+        "Detection does not trigger false positives on Simulator"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "CRITICAL: Lines 317-394 across 4 builder functions interpolate event data directly into HTML. FIXED: All 4 builder functions (buildUpcomingRSVPsSection, buildSavedEventsSection, buildRecommendationsSection, buildTrendingSection) now use escapeHtml."
+      "passes": false,
+      "notes": "CRITICAL: No jailbreak detection despite handling sensitive auth data. Keychain may be accessible on compromised devices."
     },
     {
-      "id": "SEC-004",
-      "title": "Fix XSS in notify-event-submission email template",
-      "description": "As an admin reviewing event submissions, I need the notification emails to be safe from XSS so that malicious submitter data cannot execute scripts.",
+      "id": "IOS-004",
+      "title": "Add biometric authentication (Face ID / Touch ID)",
+      "description": "As a user, I want to use Face ID or Touch ID to quickly and securely sign in to the app without entering my password each time.",
       "acceptanceCriteria": [
-        "Import escapeHtml from _shared/escapeHtml.ts into notify-event-submission/index.ts",
-        "Escape eventTitle, eventDate, eventVenue, eventCategory, submitterName, submitterEmail in buildAdminNotificationEmail",
-        "Escape eventTitle, adminNotes in buildSubmitterEmail",
-        "Email subject lines use escaped content",
-        "Typecheck passes"
+        "Import LocalAuthentication framework",
+        "Add biometric auth option in Settings view with enable/disable toggle",
+        "Store biometric preference securely in Keychain",
+        "On app launch, prompt biometric auth if enabled and session exists",
+        "Fall back to email/password if biometric fails or is unavailable",
+        "Add NSFaceIDUsageDescription to Info.plist",
+        "Handle all LAError cases gracefully (biometryNotAvailable, biometryNotEnrolled, userCancel, etc.)"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "CRITICAL: adminNotes is particularly dangerous — admin-entered free text rendered as raw HTML. FIXED: All interpolated values in buildAdminNotificationEmail and buildSubmitterEmail now use escapeHtml."
+      "passes": false,
+      "notes": "CRITICAL: Only email/password and Apple Sign-In available. Biometric auth improves both security and UX."
     },
     {
-      "id": "SEC-005",
-      "title": "Fix XSS in send-campaign-notification email template",
-      "description": "As a user receiving campaign notification emails, I need the email content to be safe from XSS so that malicious campaign data cannot execute scripts.",
+      "id": "IOS-005",
+      "title": "Add network retry utility for all service calls",
+      "description": "As a user on a flaky connection, I need API calls to automatically retry on transient failures so I don't see unnecessary error messages.",
       "acceptanceCriteria": [
-        "Import escapeHtml from _shared/escapeHtml.ts into send-campaign-notification/index.ts",
-        "Escape title, message, ctaLabel, campaignName in email HTML template",
-        "Validate ctaUrl is a safe URL (https only, no javascript: protocol)",
-        "Typecheck passes"
+        "Create a generic withRetry<T>(maxAttempts:backoffBase:operation:) async utility function",
+        "Implement exponential backoff with jitter (1s, 2s, 4s base delays)",
+        "Detect transient errors: NSURLErrorDomain codes, HTTP 5xx responses, timeout errors",
+        "Apply retry utility to EventsService, RestaurantsService, AttractionsService, FavoritesService",
+        "Respect Task cancellation during retry delays",
+        "Log retry attempts via AppLogger.network"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "HIGH: Lines 214-222 interpolate campaign data (title, message, campaignName) into HTML without escaping. FIXED: All values (title, message, ctaLabel, ctaUrl, campaignName) now escaped via escapeHtml."
+      "passes": false,
+      "notes": "HIGH: All services use simple try/catch without retry. StoreKitService has excellent retry logic that should be generalized."
     },
     {
-      "id": "SEC-006",
-      "title": "Add input validation and bounds checking to EventSubmissionForm",
-      "description": "As a developer, I need the event submission form to enforce field length limits and input validation so that oversized or malicious input is rejected before reaching the server.",
+      "id": "IOS-006",
+      "title": "Load favorites concurrently with async let",
+      "description": "As a user, I want my favorites to load faster by fetching events and restaurants simultaneously instead of sequentially.",
       "acceptanceCriteria": [
-        "Add maxLength validation to title field (200 chars)",
-        "Add maxLength validation to description field (5000 chars)",
-        "Add maxLength validation to venue field (200 chars)",
-        "Add maxLength validation to location/address fields (500 chars)",
-        "Add maxLength validation to price field (100 chars)",
-        "Add URL validation to website_url field",
-        "Add email validation to contact_email field",
-        "Add phone pattern validation to contact_phone field",
-        "Custom tags limited to 50 chars each, max 10 tags total",
-        "Typecheck passes"
+        "Refactor FavoritesService.loadFavorites() to use async let for concurrent event and restaurant loading",
+        "Both loadEventFavorites() and loadRestaurantFavorites() execute in parallel",
+        "Error in one type doesn't block loading of the other",
+        "Favorites view still displays correctly with partial results",
+        "Loading indicator reflects the combined operation"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "MEDIUM: EventSubmissionForm.tsx had no maxLength or format validation. FIXED: Added maxLength to title(200), description(5000), venue(200), location(200), address(500), price(100), website_url(2000), contact_email(254), contact_phone(20). Added URL/email/phone patterns. Tags limited to 50 chars each, 10 max."
+      "passes": false,
+      "notes": "MEDIUM: loadEventFavorites() and loadRestaurantFavorites() called sequentially. Using async let would cut load time roughly in half."
     },
     {
-      "id": "SEC-007",
-      "title": "Harden sanitizeString to prevent LIKE wildcard injection",
-      "description": "As a developer, I need the shared sanitizeString utility to also escape SQL LIKE wildcard characters so that user search input cannot manipulate query patterns.",
+      "id": "IOS-007",
+      "title": "Add deep link input validation for IDs",
+      "description": "As a developer, I need deep link path parameters to be validated so that malformed URLs don't cause crashes or unexpected behavior.",
       "acceptanceCriteria": [
-        "Update sanitizeString in _shared/validation.ts to escape % and _ characters (LIKE wildcards)",
-        "Add a new sanitizeLikeInput function specifically for LIKE query inputs that escapes %, _, and backslash",
-        "Existing sanitizeString behavior preserved for non-LIKE contexts",
-        "Add input length bounds checking (max 500 chars for search strings)",
-        "Typecheck passes"
+        "Add UUID format validation for event, restaurant, and attraction IDs in DeepLinkHandler",
+        "Reject IDs that don't match UUID pattern (8-4-4-4-12 hex format)",
+        "Log invalid deep link attempts via AppLogger",
+        "Show user-friendly error or redirect to home for invalid deep links",
+        "Existing valid deep links continue to work correctly"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "HIGH: sanitizeString only removes quotes and backslashes. FIXED: Added sanitizeLikeInput function that escapes %, _, and backslash. Updated api-events and api-restaurants to use sanitizeLikeInput for all ilike queries. Added maxLength bounds (500 chars) to both functions."
+      "passes": false,
+      "notes": "LOW: IDs extracted from deep link paths without length/character validation. Malformed IDs could cause unexpected behavior."
     },
     {
-      "id": "SEC-008",
-      "title": "Fix CORS wildcard on gsc-oauth endpoint",
-      "description": "As a developer, I need the Google Search Console OAuth endpoint to use environment-aware CORS so that OAuth token exchange is not accessible from arbitrary domains.",
+      "id": "IOS-008",
+      "title": "Add iPad adaptive layout with NavigationSplitView",
+      "description": "As an iPad user, I want the app to use a sidebar/detail layout on larger screens so I can browse content more efficiently.",
       "acceptanceCriteria": [
-        "Replace hardcoded '*' CORS origin in gsc-oauth/index.ts with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Origin validation applied to all response paths (success, error, preflight)",
-        "OAuth state parameter includes CSRF-resistant nonce",
-        "Typecheck passes"
+        "Detect horizontal size class using @Environment(\\.horizontalSizeClass)",
+        "Use NavigationSplitView on iPad (regular width) with sidebar + detail columns",
+        "Keep existing NavigationStack behavior on iPhone (compact width)",
+        "Tab bar items become sidebar items on iPad",
+        "Detail views display in the detail column rather than pushing full-screen",
+        "Landscape orientation works correctly on both iPad and iPhone",
+        "Test on iPad Pro 11\" and 13\" simulators"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "FIXED: Replaced wildcard CORS with handleCors/getCorsHeaders/isOriginAllowed from _shared/cors.ts. All response paths use validated origin headers. Error responses sanitized to not leak internal details."
+      "passes": false,
+      "notes": "MEDIUM: No iPad-specific layouts. Views optimized for iPhone only. iPad users get a stretched phone UI."
     },
     {
-      "id": "SEC-009",
-      "title": "Fix CORS wildcard on manage-subscription endpoint",
-      "description": "As a developer, I need the subscription management endpoint to use environment-aware CORS so that sensitive payment operations are not accessible from arbitrary domains.",
+      "id": "IOS-009",
+      "title": "Add scroll-to-top button and tab re-tap behavior",
+      "description": "As a user scrolling through long lists of events or restaurants, I want to quickly return to the top without manually scrolling.",
       "acceptanceCriteria": [
-        "Replace hardcoded '*' CORS origin in manage-subscription/index.ts with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Add returnUrl validation against allowed domain whitelist",
-        "Origin validation applied to all response paths",
-        "Typecheck passes"
+        "Add a floating scroll-to-top button that appears after scrolling down 500+ points",
+        "Button smoothly animates appearance/disappearance",
+        "Tapping the current tab in the tab bar scrolls the list to top",
+        "Haptic feedback on scroll-to-top action",
+        "Button has proper accessibility label ('Scroll to top')",
+        "Works on Home, Restaurants, Search, and Favorites tabs"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "FIXED: Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Added validateReturnUrl function that validates against site domain, blocks javascript:/data:/protocol-relative URLs, and falls back to site URL for invalid inputs."
+      "passes": false,
+      "notes": "MEDIUM: Long event and restaurant lists have no quick way to return to top. Standard iOS UX pattern missing."
     },
     {
-      "id": "SEC-010",
-      "title": "Fix CORS wildcard on oauth-callback endpoint",
-      "description": "As a developer, I need the OAuth callback endpoint to use environment-aware CORS and validate state parameters to prevent CSRF attacks.",
+      "id": "IOS-010",
+      "title": "Add search history and recent searches",
+      "description": "As a user, I want to see my recent searches so I can quickly repeat previous queries without retyping them.",
       "acceptanceCriteria": [
-        "Replace hardcoded '*' CORS origin in oauth-callback/index.ts with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Validate state parameter includes timestamp and verify it's not expired (5 min max)",
-        "Error messages sanitized to prevent info leakage",
-        "Typecheck passes"
+        "Store last 10 search queries in UserDefaults (via safeStorage pattern)",
+        "Display recent searches below the search bar when search field is focused and empty",
+        "Tapping a recent search populates the search field and triggers search",
+        "Add a 'Clear History' button to remove all recent searches",
+        "Swipe-to-delete individual recent searches",
+        "Recent searches persist across app launches",
+        "Works in both SearchView and MapView search"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "FIXED: Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Added state parameter validation: JSON parse in try/catch, timestamp expiry check (10 min max), provider validation. Error messages sanitized."
+      "passes": false,
+      "notes": "MEDIUM: No search history or autocomplete. Users must retype searches each time."
     },
     {
-      "id": "SEC-011",
-      "title": "Fix CORS wildcard on delete-user-account endpoint",
-      "description": "As a developer, I need the account deletion endpoint to use environment-aware CORS so that account deletion cannot be triggered from malicious websites.",
+      "id": "IOS-011",
+      "title": "Consolidate date parsing into a single utility",
+      "description": "As a developer, I need a single authoritative date parser so that date formats are handled consistently across the entire app.",
       "acceptanceCriteria": [
-        "Replace hardcoded '*' CORS origin in delete-user-account/index.ts with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Origin validation applied to all response paths",
-        "Typecheck passes"
+        "Create a DateParser utility with a single parse(string:) -> Date? method",
+        "Support all formats currently used: ISO 8601 with timezone, ISO 8601 without timezone, yyyy-MM-dd HH:mm:ss, yyyy-MM-dd",
+        "Replace Event.parsedDate manual parsing with DateParser.parse()",
+        "Replace Date.fromISO extension with DateParser.parse()",
+        "Remove duplicate ISO8601DateFormatter instances from services",
+        "Log unrecognized date formats via AppLogger for monitoring",
+        "All existing date displays continue to render correctly"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": "FIXED: Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Origin validation applied to all response paths. Error responses sanitized."
+      "passes": false,
+      "notes": "MEDIUM: Multiple inconsistent date parsers (Event.parsedDate tries 4 formats, Date.fromISO tries 2, raw ISO8601DateFormatter in services). Risk of silently dropping dates."
     },
     {
-      "id": "SEC-012",
-      "title": "Fix CORS wildcard on export-analytics-data endpoint",
-      "description": "As a developer, I need the analytics export endpoint to use environment-aware CORS so that user analytics data is not accessible from arbitrary domains.",
+      "id": "IOS-012",
+      "title": "Add full detail skeleton views for Event and Restaurant detail pages",
+      "description": "As a user, I want to see placeholder skeletons while detail pages load so the app feels responsive and I know content is coming.",
       "acceptanceCriteria": [
-        "Replace hardcoded '*' CORS origin in export-analytics-data/index.ts with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Add input validation on date range parameters (valid dates, max 1 year range)",
-        "Add CSV injection protection (escape formula chars =, +, -, @, |)",
-        "Typecheck passes"
+        "Create EventDetailSkeleton view matching EventDetailView layout (hero image, title, date, description blocks)",
+        "Create RestaurantDetailSkeleton view matching RestaurantDetailView layout",
+        "Show skeleton view while detail data is loading",
+        "Skeleton uses shimmer animation matching existing card skeletons",
+        "Skeleton respects reduceMotion accessibility setting",
+        "Transition from skeleton to real content is smooth (no jarring flash)"
       ],
       "priority": 12,
-      "passes": true,
-      "notes": "FIXED: Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Added date range validation (valid dates, max 1 year). Added csvEscapeValue function that prefixes formula chars (=,+,-,@,|) with single quote and properly quotes fields with commas/newlines. Error responses sanitized."
+      "passes": false,
+      "notes": "MEDIUM: Detail views only show DetailHeroSkeleton but body content loads unstructured. Full skeletons would improve perceived performance."
     },
     {
-      "id": "SEC-013",
-      "title": "Add authentication to bulk-update-restaurants endpoint",
-      "description": "As a developer, I need the bulk restaurant update endpoint to require admin authentication so that unauthorized users cannot trigger mass data modifications.",
+      "id": "IOS-013",
+      "title": "Add swipe-to-delete with undo toast for favorites",
+      "description": "As a user, I want to quickly remove favorites by swiping and have the option to undo the action in case I made a mistake.",
       "acceptanceCriteria": [
-        "Add admin authentication check using _shared/securityLayers.ts or API key auth",
-        "Replace CORS wildcard with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Add rate limiting (5 requests per 15 minutes)",
-        "Remove Google API key from image URLs returned to clients",
-        "Typecheck passes"
+        "Add swipe-to-delete gesture on favorite items in FavoritesView",
+        "Show undo toast for 5 seconds after removing a favorite",
+        "Tapping 'Undo' restores the favorite immediately",
+        "Favorite is only permanently removed after the undo window expires",
+        "Haptic feedback on delete and undo actions",
+        "Accessibility: VoiceOver announces delete and undo actions"
       ],
       "priority": 13,
-      "passes": true,
-      "notes": "FIXED: Added requireApiKey auth from _shared/apiKeyAuth.ts. Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Added rate limiting (5 req/15 min). Removed Google API key from image URLs. Error responses sanitized."
+      "passes": false,
+      "notes": "MEDIUM: Removing favorites has no undo support. Users can accidentally remove favorites with no recovery."
     },
     {
-      "id": "SEC-014",
-      "title": "Add authentication to send-campaign-notification endpoint",
-      "description": "As a developer, I need the campaign notification endpoint to require authentication so that unauthorized users cannot send emails to arbitrary addresses.",
+      "id": "IOS-014",
+      "title": "Add crash reporting with Firebase Crashlytics",
+      "description": "As a developer, I need crash reports from production so I can identify and fix issues that users experience.",
       "acceptanceCriteria": [
-        "Add admin or campaign-owner authentication check",
-        "Replace CORS wildcard with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Add rate limiting (10 requests per 15 minutes)",
-        "Validate recipient email against registered users only",
-        "Typecheck passes"
+        "Add Firebase Crashlytics SPM dependency to project.yml",
+        "Initialize Crashlytics in DesMoinesInsiderApp.swift",
+        "Add GoogleService-Info.plist to Resources (gitignored, injected in CI)",
+        "Add dSYM upload step to ios-native-release.yml workflow",
+        "Non-fatal errors from AppLogger.error calls forwarded to Crashlytics",
+        "User ID set on Crashlytics after authentication (anonymized)",
+        "Verify crash reports appear in Firebase Console in Debug builds"
       ],
       "priority": 14,
-      "passes": true,
-      "notes": "FIXED: Added JWT authentication requiring admin role or campaign ownership. Added rate limiting (10 req/15 min). Campaign ownership verified before sending. CORS was already using shared cors.ts."
+      "passes": false,
+      "notes": "CRITICAL for production: No crash reporting. Production crashes are invisible until users manually report them."
     },
     {
-      "id": "SEC-015",
-      "title": "Add rate limiting to gsc-oauth endpoint",
-      "description": "As a developer, I need rate limiting on the OAuth endpoint so that brute force attacks on token refresh are prevented.",
+      "id": "IOS-015",
+      "title": "Add lightweight analytics for key user actions",
+      "description": "As a product owner, I need visibility into feature adoption and user behavior so I can make data-driven decisions about the app.",
       "acceptanceCriteria": [
-        "Import and apply checkRateLimit from _shared/rateLimit.ts",
-        "Limit to 10 requests per 15 minutes per client",
-        "Return proper 429 response with Retry-After header",
-        "Typecheck passes"
+        "Add Firebase Analytics or Amplitude SPM dependency",
+        "Track key events: app_open, view_event, view_restaurant, search, save_favorite, subscription_view, purchase_start, purchase_complete",
+        "Track screen views for major screens (Home, Restaurants, Search, Map, Profile)",
+        "Add opt-out toggle in Settings view",
+        "Update PrivacyInfo.xcprivacy with analytics data collection",
+        "No PII (email, name) sent to analytics - only anonymized user IDs",
+        "Verify events appear in analytics dashboard"
       ],
       "priority": 15,
-      "passes": true,
-      "notes": "FIXED: Added checkRateLimit from _shared/rateLimit.ts with 10 req/15 min limit. Returns 429 with Retry-After header when exceeded."
+      "passes": false,
+      "notes": "CRITICAL for production: No analytics. Zero visibility into user behavior, feature adoption, or conversion funnels."
     },
     {
-      "id": "SEC-016",
-      "title": "Fix API key fallback in apiKeyAuth.ts allowing unauthenticated requests",
-      "description": "As a developer, I need the API key auth middleware to fail closed so that missing configuration does not silently allow all requests.",
+      "id": "IOS-016",
+      "title": "Add unit tests for core services and CI test lane",
+      "description": "As a developer, I need automated tests for core services so that regressions are caught before release.",
       "acceptanceCriteria": [
-        "When EDGE_FUNCTION_API_KEY is not set in production, reject all requests (fail closed)",
-        "When EDGE_FUNCTION_API_KEY is not set in development, allow requests with a warning log",
-        "Add environment check using ENVIRONMENT env var",
-        "Typecheck passes"
+        "Add DesMoinesInsiderTests target to project.yml",
+        "Create unit tests for AuthService (sign in, sign out, password validation, rate limiting)",
+        "Create unit tests for QueryCache (set, get, expiration, pruning)",
+        "Create unit tests for DateParser (all supported formats, edge cases)",
+        "Create unit tests for LocationService (caching, distance calculation, error handling)",
+        "Add 'make test' target to Makefile",
+        "Add xcodebuild test step to ios-native-build.yml CI workflow",
+        "Minimum 70% code coverage on tested services"
       ],
       "priority": 16,
-      "passes": true,
-      "notes": "FIXED: apiKeyAuth.ts now checks ENVIRONMENT env var. In production, rejects all requests when EDGE_FUNCTION_API_KEY is not set (fail closed). In development, allows with console.warn."
+      "passes": false,
+      "notes": "HIGH: No unit tests. Only UITests exist for screenshot generation. Core business logic is untested."
     },
     {
-      "id": "SEC-017",
-      "title": "Add pagination offset bounds checking to API endpoints",
-      "description": "As a developer, I need API pagination to enforce maximum offset values so that attackers cannot craft requests causing excessive database load.",
+      "id": "IOS-017",
+      "title": "Automate App Store metadata and screenshot upload",
+      "description": "As a developer, I need App Store metadata (description, keywords, screenshots) to be uploaded automatically so releases are consistent and efficient.",
       "acceptanceCriteria": [
-        "Add max offset validation (10000) to api-events validateQueryParams schema",
-        "Add max offset validation (10000) to api-restaurants validateQueryParams schema",
-        "Return 400 error for offset values exceeding maximum",
-        "Typecheck passes"
+        "Create ios/fastlane/metadata/en-US/ directory with description.txt, keywords.txt, release_notes.txt",
+        "Add 'upload_metadata' lane to Fastfile using fastlane deliver",
+        "Add 'upload_screenshots' lane to Fastfile",
+        "Integrate metadata upload into ios-native-release.yml as post-upload step",
+        "Screenshots from ios-screenshots.yml output are compatible with deliver format",
+        "Support URL and privacy policy URL included in metadata",
+        "Verify metadata appears correctly in App Store Connect"
       ],
       "priority": 17,
-      "passes": true,
-      "notes": "FIXED: Added max: 10000 to offset validation in both api-events and api-restaurants validateQueryParams schemas. Returns 400 for values exceeding maximum."
+      "passes": false,
+      "notes": "MEDIUM: App Store metadata and screenshots managed manually. Should be automated with fastlane deliver for consistent releases."
     },
     {
-      "id": "SEC-018",
-      "title": "Add input validation to update-event-datetime endpoint",
-      "description": "As a developer, I need the event datetime update endpoint to validate input and check authentication so that unauthorized users cannot modify events.",
+      "id": "IOS-018",
+      "title": "Add GDPR consent flow for data collection",
+      "description": "As a user in the EU, I need to give explicit consent before the app collects my location and personal data, as required by GDPR.",
       "acceptanceCriteria": [
-        "Add authentication check (admin or API key required)",
-        "Validate eventId is a valid UUID format",
-        "Validate eventStartLocal is a valid ISO datetime string",
-        "Validate eventTimezone is a valid IANA timezone identifier",
-        "Add CORS using _shared/cors.ts instead of allowing all origins",
-        "Typecheck passes"
+        "Add a consent screen during onboarding that explains what data is collected and why",
+        "Location, email, and name data collection require explicit opt-in toggles",
+        "Store consent state securely (Keychain or encrypted UserDefaults)",
+        "Add a 'Privacy & Data' section in Settings to review and change consent",
+        "If consent is withdrawn, stop collecting the corresponding data type",
+        "Log consent changes via AppLogger for compliance audit trail",
+        "Consent screen does not block app usage for non-EU users (detect locale)"
       ],
       "priority": 18,
-      "passes": true,
-      "notes": "FIXED: Added requireApiKey auth from _shared/apiKeyAuth.ts. Added UUID format validation for eventId, ISO datetime validation for eventStartLocal, IANA timezone validation for eventTimezone. Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Error responses sanitized."
+      "passes": false,
+      "notes": "LOW: PrivacyInfo.xcprivacy declares data collection but no explicit consent flow exists. May violate GDPR for EU users."
     },
     {
-      "id": "SEC-019",
-      "title": "Sanitize error responses across edge functions to prevent info leakage",
-      "description": "As a developer, I need error responses to not expose internal details (stack traces, database errors, API keys) so that attackers cannot gain intelligence about the system.",
+      "id": "IOS-019",
+      "title": "Add offline mode with graceful degradation",
+      "description": "As a user without internet access, I want the app to show cached content and clearly indicate what's available offline so I can still browse saved data.",
       "acceptanceCriteria": [
-        "Audit all catch blocks in edge functions for error.message or error.stack exposure",
-        "Replace detailed error messages with generic ones in production responses",
-        "Log detailed errors server-side only (console.error)",
-        "Ensure no API keys or connection strings appear in error responses",
-        "At least 10 functions fixed",
-        "Typecheck passes"
+        "Show persistent offline banner when NetworkMonitor.isConnected is false",
+        "Disable search, map, and other network-dependent features with clear messaging",
+        "Serve cached events, restaurants, and favorites when offline",
+        "Show 'Last updated X ago' timestamp on cached content",
+        "Pull-to-refresh shows 'No internet connection' toast instead of failing silently",
+        "Favorites added while offline are queued and synced when connection returns",
+        "Offline state transitions smoothly to online without full reload"
       ],
       "priority": 19,
-      "passes": true,
-      "notes": "FIXED: Sanitized error responses in 18+ edge functions: gsc-oauth, manage-subscription, delete-user-account, export-analytics-data, bulk-update-restaurants, publish-article-webhook, process-stripe-refund, generate-seo-content, update-event-datetime, register-device-token, check-core-web-vitals, gsc-fetch-properties, check-security-headers, send-event-reminders, send-weekly-digest, stripe-webhook, create-subscription-checkout, create-campaign-checkout. All now return generic error messages while logging details server-side."
+      "passes": false,
+      "notes": "MEDIUM: Offline banner shows but many UI elements still trigger network calls. Search and map don't degrade gracefully."
     },
     {
-      "id": "SEC-020",
-      "title": "Add SSRF protection to publish-article-webhook",
-      "description": "As a developer, I need the article webhook endpoint to validate destination URLs against SSRF so that internal systems cannot be targeted via webhook delivery.",
+      "id": "IOS-020",
+      "title": "Add in-app notification management",
+      "description": "As a user, I want to manage my notification preferences within the app so I can control what alerts I receive without leaving the app.",
       "acceptanceCriteria": [
-        "Import and apply validateURLForSSRF from _shared/validation.ts to webhookUrl parameter",
-        "Block webhooks to private IPs, localhost, and internal domains",
-        "Add authentication (API key or admin role required)",
-        "Add rate limiting (10 requests per 15 minutes)",
-        "Typecheck passes"
+        "Add notification settings section in Profile/Settings view",
+        "Show current notification permission status (enabled/disabled/not determined)",
+        "Add toggle for event reminders (enabled by default)",
+        "Add toggle for weekly digest notifications",
+        "If notifications are disabled at OS level, show button to open iOS Settings",
+        "In-app notification permission prompt on first event reminder attempt",
+        "Show notification badge on Saved tab when new reminders are scheduled"
       ],
       "priority": 20,
-      "passes": true,
-      "notes": "FIXED: Added requireApiKey auth from _shared/apiKeyAuth.ts. Added validateURLForSSRF from _shared/validation.ts to block webhooks to private IPs, localhost, and internal domains. Added rate limiting (10 req/15 min). Replaced wildcard CORS with handleCors/getCorsHeaders. Error responses sanitized."
+      "passes": false,
+      "notes": "LOW: Settings has 'Notification Settings' button but no actual notification management within the app."
     },
     {
-      "id": "SEC-021",
-      "title": "Add CSP nonce support for inline scripts",
-      "description": "As a developer, I need Content Security Policy nonces for inline scripts so that 'unsafe-inline' can eventually be removed from the CSP header.",
+      "id": "IOS-021",
+      "title": "Add StoreKit transaction error logging and user feedback",
+      "description": "As a user with a failed in-app purchase, I need clear feedback about what went wrong so I can resolve the issue or contact support.",
       "acceptanceCriteria": [
-        "Generate a random nonce per request in the HTML template",
-        "Apply nonce attribute to all inline script tags",
-        "Update CSP header in public/_headers to use 'nonce-{random}' instead of 'unsafe-inline' for script-src",
-        "Document the nonce pattern for future developers",
-        "Typecheck passes"
+        "Log failed transaction verification in listenForTransactions() instead of silently dropping",
+        "Show user-facing error toast when a background transaction fails verification",
+        "Add 'Contact Support' deep link in subscription error states",
+        "Log transaction failures to AppLogger.storekit with transaction ID (no user PII)",
+        "Failed transactions are tracked for retry on next app launch",
+        "Support team can look up transaction by logged ID"
       ],
       "priority": 21,
-      "passes": true,
-      "notes": "FIXED: Used CSP SHA-256 hashes instead of nonces (compatible with static hosting). Computed hashes for all 3 inline scripts in index.html: early error handler, service worker cache clearer, GA deferred loader. Replaced 'unsafe-inline' in script-src with 'sha256-...' hashes in public/_headers. Documented hash regeneration process in _headers comments. style-src retains 'unsafe-inline' (required by Tailwind CSS)."
+      "passes": false,
+      "notes": "HIGH: listenForTransactions() silently ignores verification errors with try?. Failed transactions are invisible to users and support."
     },
     {
-      "id": "SEC-022",
-      "title": "Add ReDoS protection to firecrawl-scraper regex patterns",
-      "description": "As a developer, I need regex patterns in the scraper to be safe from Regular Expression Denial of Service so that malicious input cannot cause CPU exhaustion.",
+      "id": "IOS-022",
+      "title": "Add entrance animations to card lists",
+      "description": "As a user, I want cards to smoothly animate in when they appear so the app feels polished and responsive.",
       "acceptanceCriteria": [
-        "Audit all regex patterns in firecrawl-scraper/index.ts for catastrophic backtracking",
-        "Escape user input before using in regex (event titles at line 156)",
-        "Add timeout protection for regex operations",
-        "Add rate limiting to the endpoint",
-        "Typecheck passes"
+        "Add staggered fade-in and slide-up animation when cards first appear in lists",
+        "Animation delay increases for each card (stagger effect)",
+        "Respect reduceMotion accessibility setting (skip animations if enabled)",
+        "Animation only plays on initial load, not on scroll-back",
+        "Works on Home events feed, Restaurants list, and Search results",
+        "No performance degradation on older devices (iPhone SE, iPhone 12)"
       ],
       "priority": 22,
-      "passes": true,
-      "notes": "FIXED: Event titles were already escaped via replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&') before regex use. Added HTML size limit (500KB) for regex matching to prevent CPU exhaustion on large inputs. Added rate limiting (10 req/15 min) to the endpoint."
+      "passes": false,
+      "notes": "LOW: Cards don't have entrance animations. Only skeleton loaders have shimmer. Adding staggered animations would improve polish."
     },
     {
-      "id": "SEC-023",
-      "title": "Add CSV injection protection to export-analytics-data",
-      "description": "As a developer, I need CSV exports to escape formula characters so that exported files cannot execute formulas when opened in spreadsheet applications.",
+      "id": "IOS-023",
+      "title": "Add progressive image loading with blur-up placeholder",
+      "description": "As a user on a slow connection, I want to see a low-quality preview of images while the full version loads so the app feels responsive.",
       "acceptanceCriteria": [
-        "Create a csvEscapeValue function that prefixes cells starting with =, +, -, @, | with a single quote",
-        "Apply escaping to all user-controlled fields in CSV output (query, provider_name, etc.)",
-        "Properly quote fields containing commas or newlines",
-        "Typecheck passes"
+        "Enhance CachedAsyncImage to show a small blurred placeholder first",
+        "Generate or request thumbnail URLs where available (Supabase image transforms)",
+        "Smooth crossfade transition from placeholder to full-resolution image",
+        "Works for event hero images, restaurant cards, and attraction images",
+        "Memory-efficient: thumbnail evicted from cache once full image loads",
+        "Fallback to colored rectangle placeholder if no thumbnail available"
       ],
       "priority": 23,
-      "passes": true,
-      "notes": "FIXED: Created csvEscapeValue function that prefixes cells starting with =, +, -, @, | with a single quote. Properly quotes fields containing commas, newlines, or double quotes. Applied to all user-controlled fields (provider_name, query, metric values) in CSV output."
+      "passes": false,
+      "notes": "LOW: CachedAsyncImage shows progress spinner during load. Progressive loading with blur-up would be more polished."
     },
     {
-      "id": "SEC-024",
-      "title": "Harden OAuth state parameter with CSRF nonce",
-      "description": "As a developer, I need the OAuth state parameter to include a cryptographic nonce so that CSRF attacks on the OAuth flow are prevented.",
+      "id": "IOS-024",
+      "title": "Add MetricKit performance monitoring",
+      "description": "As a developer, I need automatic performance metrics from production devices so I can identify and fix performance issues.",
       "acceptanceCriteria": [
-        "Generate a cryptographically random nonce for each OAuth initiation",
-        "Include nonce in state parameter alongside provider and timestamp",
-        "Validate nonce on callback by comparing with stored value",
-        "Reject state parameters older than 10 minutes",
-        "Works for both OAuthProviderSetup.tsx (client) and oauth-callback (server)",
-        "Typecheck passes"
+        "Import MetricKit framework and register MXMetricManagerSubscriber",
+        "Collect and log key metrics: app launch time, hang rate, memory usage, battery impact",
+        "Forward significant metric payloads to backend via Supabase edge function",
+        "Add performance dashboard data to admin panel (optional)",
+        "No user PII included in metric payloads",
+        "Works automatically with no user action required"
       ],
       "priority": 24,
-      "passes": true,
-      "notes": "FIXED: OAuthProviderSetup.tsx now generates a 16-byte cryptographic nonce via crypto.getRandomValues() and includes it in the state parameter alongside provider and timestamp. State is stored in secure storage for verification. Server-side oauth-callback validates state timestamp (10 min max expiry)."
-    },
-    {
-      "id": "SEC-025",
-      "title": "Add confirmation step to delete-user-account endpoint",
-      "description": "As a developer, I need the account deletion endpoint to require a confirmation token so that accidental or CSRF-triggered deletions are prevented.",
-      "acceptanceCriteria": [
-        "Require a confirmation_token parameter in the delete request",
-        "Token must be generated server-side and sent to user's email before deletion",
-        "Token expires after 15 minutes",
-        "Deletion only proceeds if token is valid and matches the authenticated user",
-        "Typecheck passes"
-      ],
-      "priority": 25,
-      "passes": true,
-      "notes": "FIXED: Implemented two-step deletion flow in delete-user-account edge function. Step 1 (action: 'request'): generates 32-byte crypto token, stores in account_deletion_tokens table with 15-min expiry. Step 2 (action: 'confirm' + confirmation_token): validates token against DB, checks expiry, proceeds with deletion. Created migration 20260328000001_create_account_deletion_tokens.sql with RLS (service-role only), indexes on (user_id, token) and expires_at."
-    },
-    {
-      "id": "SEC-026",
-      "title": "Add input validation to register-device-token endpoint",
-      "description": "As a developer, I need the device token registration endpoint to validate input so that invalid tokens and oversized payloads are rejected.",
-      "acceptanceCriteria": [
-        "Validate deviceToken is a non-empty string with max 500 characters",
-        "Validate platform is one of: 'ios', 'android', 'web'",
-        "Replace CORS wildcard with getCorsHeaders/handleCors from _shared/cors.ts",
-        "Typecheck passes"
-      ],
-      "priority": 26,
-      "passes": true,
-      "notes": "FIXED: Added validation for deviceToken (non-empty string, max 500 chars) and platform (must be ios/android/web). Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Error responses sanitized."
-    },
-    {
-      "id": "SEC-027",
-      "title": "Add Stripe idempotency keys to process-stripe-refund",
-      "description": "As a developer, I need Stripe API calls to include idempotency keys so that network retries cannot cause duplicate refunds.",
-      "acceptanceCriteria": [
-        "Generate a unique idempotency key per refund request (based on payment_intent_id + timestamp)",
-        "Pass idempotency key in Stripe-Idempotency-Key header",
-        "Log idempotency key for audit trail",
-        "Typecheck passes"
-      ],
-      "priority": 27,
-      "passes": true,
-      "notes": "FIXED: Generate unique idempotency key per refund (refund_{payment_intent_id}_{timestamp}). Passed via idempotencyKey option to stripe.refunds.create(). Key logged for audit trail and stored in refund metadata."
-    },
-    {
-      "id": "SEC-028",
-      "title": "Add returnUrl domain validation to manage-subscription",
-      "description": "As a developer, I need the subscription management endpoint to validate returnUrl against allowed domains so that open redirect attacks are prevented.",
-      "acceptanceCriteria": [
-        "Validate returnUrl starts with the site URL or is a relative path",
-        "Block javascript:, data:, and protocol-relative URLs",
-        "Fall back to site URL if returnUrl is invalid",
-        "Typecheck passes"
-      ],
-      "priority": 28,
-      "passes": true,
-      "notes": "FIXED: Added validateReturnUrl function that validates against site domain, blocks javascript:/data:/protocol-relative URLs, allows relative paths, and falls back to site URL for invalid inputs. Applied to Stripe portal session return_url."
-    },
-    {
-      "id": "SEC-029",
-      "title": "Add batchSize bounds checking to generate-seo-content",
-      "description": "As a developer, I need the SEO content generation endpoint to enforce bounds on batch size so that attackers cannot trigger excessive AI API calls.",
-      "acceptanceCriteria": [
-        "Validate batchSize is between 1 and 20",
-        "Return 400 error for out-of-range values",
-        "Add authentication requirement (admin or API key)",
-        "Typecheck passes"
-      ],
-      "priority": 29,
-      "passes": true,
-      "notes": "FIXED: Added batchSize validation (1-20 range) with 400 error for out-of-range values. Added requireApiKey auth from _shared/apiKeyAuth.ts. Replaced wildcard CORS with handleCors/getCorsHeaders from _shared/cors.ts. Error responses sanitized."
-    },
-    {
-      "id": "SEC-030",
-      "title": "Upgrade in-memory rate limiting to note serverless limitations",
-      "description": "As a developer, I need the rate limiting documentation to clearly state the limitations of in-memory rate limiting in serverless environments.",
-      "acceptanceCriteria": [
-        "Add clear documentation comment in _shared/rateLimit.ts about per-instance limitation",
-        "Add recommendation for Redis-backed rate limiting (Upstash) for production",
-        "Consider adding a rate_limit_events table as a simple database-backed alternative",
-        "No breaking changes to existing rate limiting interface",
-        "Typecheck passes"
-      ],
-      "priority": 30,
-      "passes": true,
-      "notes": "FIXED: Added comprehensive documentation to _shared/rateLimit.ts header explaining per-instance limitation, cold start resets, and distributed traffic bypass. Documented 3 recommended upgrades: Upstash Redis, database-backed rate_limit_events table, and Cloudflare Rate Limiting."
+      "passes": false,
+      "notes": "LOW: No performance monitoring. MetricKit is built into iOS and free - provides automatic performance insights."
     }
   ]
 }

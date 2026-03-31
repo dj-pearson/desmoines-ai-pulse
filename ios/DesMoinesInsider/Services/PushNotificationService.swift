@@ -1,4 +1,5 @@
 import Foundation
+import os
 import UIKit
 import UserNotifications
 
@@ -35,7 +36,7 @@ final class PushNotificationService: NSObject {
             // Register for remote notifications on the main thread
             UIApplication.shared.registerForRemoteNotifications()
         } catch {
-            print("Push notification permission error: \(error.localizedDescription)")
+            AppLogger.network.error("Push notification permission error: \(error.localizedDescription)")
         }
     }
 
@@ -50,7 +51,7 @@ final class PushNotificationService: NSObject {
     }
 
     func didFailToRegisterForRemoteNotifications(error: Error) {
-        print("Failed to register for push notifications: \(error.localizedDescription)")
+        AppLogger.network.error("Failed to register for push notifications: \(error.localizedDescription)")
         isRegistered = false
     }
 
@@ -73,7 +74,7 @@ final class PushNotificationService: NSObject {
                 )
             )
         } catch {
-            print("Failed to sync device token: \(error.localizedDescription)")
+            AppLogger.network.error("Failed to sync device token: \(error.localizedDescription)")
         }
     }
 
