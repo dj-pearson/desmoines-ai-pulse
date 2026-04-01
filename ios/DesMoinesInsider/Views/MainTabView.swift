@@ -99,9 +99,18 @@ struct MainTabView: View {
 
     // MARK: - iPad Layout (Sidebar + Detail)
 
+    /// iOS requires Binding<SelectionValue?> (optional) for List selection.
+    /// The non-optional overload is macOS-only and would fail to compile on iOS.
+    private var iPadSelectionBinding: Binding<Tab?> {
+        Binding(
+            get: { selectedTab },
+            set: { if let tab = $0 { selectedTab = tab } }
+        )
+    }
+
     private var iPadLayout: some View {
         NavigationSplitView {
-            List(selection: $selectedTab) {
+            List(selection: iPadSelectionBinding) {
                 ForEach(Tab.allCases, id: \.self) { tab in
                     Label(tab.title, systemImage: tab.icon)
                         .tag(tab)
