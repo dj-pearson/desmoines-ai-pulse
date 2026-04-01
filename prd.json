@@ -192,8 +192,8 @@
         "Transition from skeleton to real content is smooth (no jarring flash)"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": "MEDIUM: Detail views only show DetailHeroSkeleton but body content loads unstructured. Full skeletons would improve perceived performance."
+      "passes": true,
+      "notes": "FIXED: Created EventDetailSkeleton and RestaurantDetailSkeleton in LoadingView.swift. Both include hero skeleton + info rows + action button placeholders matching their respective detail view layouts. Use shimmer() animation and respect reduceMotion."
     },
     {
       "id": "IOS-013",
@@ -208,8 +208,8 @@
         "Accessibility: VoiceOver announces delete and undo actions"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "MEDIUM: Removing favorites has no undo support. Users can accidentally remove favorites with no recovery."
+      "passes": true,
+      "notes": "FIXED: Added undo-on-remove for favorites in FavoritesView. Tapping heart removes item optimistically from UI and shows UndoToast with 5-second window. Tapping Undo restores the item immediately. Deletion only commits after undo window expires. Haptic feedback on both delete and undo. VoiceOver announces removal and undo action."
     },
     {
       "id": "IOS-014",

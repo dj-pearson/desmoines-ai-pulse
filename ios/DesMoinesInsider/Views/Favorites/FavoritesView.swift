@@ -5,6 +5,7 @@ struct FavoritesView: View {
     @State private var viewModel = FavoritesViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var showScrollToTop = false
+    @State private var undoState: UndoRemoval?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -52,7 +53,77 @@ struct FavoritesView: View {
             .task {
                 await viewModel.loadFavorites()
             }
+            .overlay(alignment: .bottom) {
+                if let undo = undoState {
+                    UndoToast(itemName: undo.name, onUndo: performUndo)
+                        .padding(.bottom, 24)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .zIndex(100)
+                }
+            }
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: undoState != nil)
         }
+    }
+
+    // MARK: - Undo Support
+
+    private func removeEventWithUndo(event: Event) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        undoState?.commitTask?.cancel()
+
+        // Optimistically remove from UI
+        viewModel.upcomingEvents.removeAll { $0.id == event.id }
+        viewModel.pastEvents.removeAll { $0.id == event.id }
+
+        undoState = UndoRemoval(
+            kind: .event(event),
+            name: event.title,
+            commitTask: Task {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { return }
+                await viewModel.removeEventFavorite(eventId: event.id)
+                await MainActor.run { undoState = nil }
+            }
+        )
+    }
+
+    private func removeRestaurantWithUndo(restaurant: Restaurant) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        undoState?.commitTask?.cancel()
+
+        viewModel.favoriteRestaurants.removeAll { $0.id == restaurant.id }
+
+        undoState = UndoRemoval(
+            kind: .restaurant(restaurant),
+            name: restaurant.name,
+            commitTask: Task {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { return }
+                await viewModel.removeRestaurantFavorite(restaurantId: restaurant.id)
+                await MainActor.run { undoState = nil }
+            }
+        )
+    }
+
+    private func performUndo() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        guard let undo = undoState else { return }
+        undo.commitTask?.cancel()
+
+        switch undo.kind {
+        case .event(let event):
+            if let date = event.parsedDate, date >= Date() {
+                viewModel.upcomingEvents.append(event)
+                viewModel.upcomingEvents.sort { ($0.parsedDate ?? .distantFuture) < ($1.parsedDate ?? .distantFuture) }
+            } else {
+                viewModel.pastEvents.append(event)
+            }
+        case .restaurant(let restaurant):
+            viewModel.favoriteRestaurants.append(restaurant)
+            viewModel.favoriteRestaurants.sort { $0.name < $1.name }
+        }
+
+        undoState = nil
     }
 
     // MARK: - Saved Content (Sections)
@@ -87,7 +158,7 @@ struct FavoritesView: View {
                                 navigationPath.append(event)
                             } label: {
                                 FavoriteEventRow(event: event, isPast: false) {
-                                    Task { await viewModel.removeEventFavorite(eventId: event.id) }
+                                    removeEventWithUndo(event: event)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -107,7 +178,7 @@ struct FavoritesView: View {
                                 navigationPath.append(restaurant)
                             } label: {
                                 FavoriteRestaurantRow(restaurant: restaurant) {
-                                    Task { await viewModel.removeRestaurantFavorite(restaurantId: restaurant.id) }
+                                    removeRestaurantWithUndo(restaurant: restaurant)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -127,7 +198,7 @@ struct FavoritesView: View {
                                 navigationPath.append(event)
                             } label: {
                                 FavoriteEventRow(event: event, isPast: true) {
-                                    Task { await viewModel.removeEventFavorite(eventId: event.id) }
+                                    removeEventWithUndo(event: event)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -361,6 +432,56 @@ private struct FavoriteRestaurantRow: View {
         .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+}
+
+// MARK: - Undo Removal State
+
+private struct UndoRemoval {
+    enum Kind {
+        case event(Event)
+        case restaurant(Restaurant)
+    }
+
+    let kind: Kind
+    let name: String
+    var commitTask: Task<Void, Never>?
+}
+
+// MARK: - Undo Toast
+
+private struct UndoToast: View {
+    let itemName: String
+    let onUndo: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "trash")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.red)
+
+            Text("\"\(itemName)\" removed")
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+
+            Spacer()
+
+            Button {
+                onUndo()
+            } label: {
+                Text("Undo")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Color.accentColor)
+            }
+            .accessibilityLabel("Undo remove \(itemName)")
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(.ultraThickMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
+        .padding(.horizontal)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Removed \(itemName). Tap undo to restore.")
     }
 }
 
