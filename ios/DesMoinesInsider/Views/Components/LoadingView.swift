@@ -128,7 +128,7 @@ struct EventDetailSkeleton: View {
     private func skeletonRect(width: CGFloat, height: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: 4)
             .fill(Color(.systemGray5))
-            .frame(maxWidth: width == .infinity ? .infinity : nil, minWidth: nil, idealWidth: nil)
+            .frame(minWidth: nil, idealWidth: nil, maxWidth: width == .infinity ? .infinity : nil)
             .frame(width: width == .infinity ? nil : width, height: height)
     }
 }

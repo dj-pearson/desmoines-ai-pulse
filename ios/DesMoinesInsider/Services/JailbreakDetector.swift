@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import os
 
 /// Detects common jailbreak indicators on the device.

@@ -77,13 +77,10 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
         }
 
         // Check if any certificate in the chain matches our pinned SPKI hashes
-        let chainLength = SecTrustGetCertificateCount(serverTrust)
         var matched = false
 
-        for index in 0..<chainLength {
-            guard let certificate = SecTrustCopyCertificateChain(serverTrust)?[index] as? SecCertificate else {
-                continue
-            }
+        let certificateChain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate] ?? []
+        for certificate in certificateChain {
 
             if let spkiHash = spkiSHA256Hash(of: certificate) {
                 if pinnedSPKIHashes.contains(spkiHash) {
