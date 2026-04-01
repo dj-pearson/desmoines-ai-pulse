@@ -31,24 +31,26 @@
 
 ### Software Requirements
 
-| Tool                | Version             | Download / Install                                |
-| ------------------- | ------------------- | ------------------------------------------------- |
-| Android Studio      | Panda 2 (2025.1+)  | https://developer.android.com/studio              |
-| JDK                 | 17                  | Bundled with Android Studio at `jbr/`             |
-| Android SDK         | API 35 (Android 15) | Via Android Studio SDK Manager                    |
-| Android Build Tools | 35.0.0              | Via Android Studio SDK Manager                    |
-| Git                 | Latest              | https://git-scm.com                               |
-| Node.js             | 20+                 | For Supabase CLI                                  |
-| Supabase CLI        | Latest              | `npm install -g supabase`                         |
+| Tool                | Version             | Download / Install                    |
+| ------------------- | ------------------- | ------------------------------------- |
+| Android Studio      | Panda 2 (2025.1+)   | https://developer.android.com/studio  |
+| JDK                 | 17                  | Bundled with Android Studio at `jbr/` |
+| Android SDK         | API 35 (Android 15) | Via Android Studio SDK Manager        |
+| Android Build Tools | 35.0.0              | Via Android Studio SDK Manager        |
+| Git                 | Latest              | https://git-scm.com                   |
+| Node.js             | 20+                 | For Supabase CLI                      |
+| Supabase CLI        | Latest              | `npm install -g supabase`             |
 
 ### Android Studio SDK Manager Checklist
 
 Open **Android Studio > Settings > Languages & Frameworks > Android SDK**:
 
 **SDK Platforms tab:**
+
 - [x] Android 15.0 (API 35)
 
 **SDK Tools tab:**
+
 - [x] Android SDK Build-Tools 35.0.0
 - [x] Android SDK Platform-Tools
 - [x] Android Emulator
@@ -114,13 +116,13 @@ RELEASE_KEY_PASSWORD=your_key_password
 
 **Where to get each value** (detailed in sections below):
 
-| Variable               | Source                                                    |
-| ---------------------- | --------------------------------------------------------- |
-| `SUPABASE_URL`         | Supabase Dashboard > Settings > API (same as `VITE_SUPABASE_URL`) |
+| Variable               | Source                                                                 |
+| ---------------------- | ---------------------------------------------------------------------- |
+| `SUPABASE_URL`         | Supabase Dashboard > Settings > API (same as `VITE_SUPABASE_URL`)      |
 | `SUPABASE_ANON_KEY`    | Supabase Dashboard > Settings > API (same as `VITE_SUPABASE_ANON_KEY`) |
-| `GOOGLE_WEB_CLIENT_ID` | Google Cloud Console > Credentials > OAuth Web Client     |
-| `GOOGLE_MAPS_API_KEY`  | Google Cloud Console > Credentials > API Key              |
-| `RELEASE_*`            | You generate with `keytool` (Section 7)                   |
+| `GOOGLE_WEB_CLIENT_ID` | Google Cloud Console > Credentials > OAuth Web Client                  |
+| `GOOGLE_MAPS_API_KEY`  | Google Cloud Console > Credentials > API Key                           |
+| `RELEASE_*`            | You generate with `keytool` (Section 7)                                |
 
 ### Step 2: Place `google-services.json`
 
@@ -188,10 +190,10 @@ Use the same Google Cloud project linked to your Firebase project. If you don't 
 
 Go to **APIs & Services > Library** and enable these (search by name):
 
-| API                               | Purpose                 |
-| --------------------------------- | ----------------------- |
-| **Maps SDK for Android**          | Map tab in the app      |
-| **Identity Toolkit API**          | Google Sign-In          |
+| API                                   | Purpose                 |
+| ------------------------------------- | ----------------------- |
+| **Maps SDK for Android**              | Map tab in the app      |
+| **Identity Toolkit API**              | Google Sign-In          |
 | **Google Play Android Developer API** | Subscription validation |
 
 > **Note**: You do NOT need Maps JavaScript API, Maps SDK for iOS, URL signing, or any other Maps product. Only **Maps SDK for Android**.
@@ -202,14 +204,14 @@ Go to **APIs & Services > OAuth consent screen**:
 
 1. User Type: **External**
 2. Fill in:
-   | Field               | Value                                         |
+   | Field | Value |
    | ------------------- | --------------------------------------------- |
-   | App name            | Des Moines Insider                             |
-   | User support email  | support@desmoinesinsider.com                   |
-   | App logo            | Upload your 512x512 app icon                   |
-   | App domain          | https://desmoinesinsider.com                   |
-   | Privacy policy URL  | https://desmoinesinsider.com/privacy-policy    |
-   | Terms of service    | https://desmoinesinsider.com/terms             |
+   | App name | Des Moines Insider |
+   | User support email | support@desmoinesinsider.com |
+   | App logo | Upload your 512x512 app icon |
+   | App domain | https://desmoinesinsider.com |
+   | Privacy policy URL | https://desmoinesinsider.com/privacy-policy |
+   | Terms of service | https://desmoinesinsider.com/terms |
 3. Scopes: Add `email`, `profile`, `openid`
 4. Save and Continue
 5. **Publish the app** (move from Testing to Production) when ready for public use
@@ -420,6 +422,7 @@ Look for the `SHA1:` and `SHA256:` lines.
 ```
 
 This will show the alias name and all fingerprints. Look for:
+
 - `Alias name:` — verify this matches your `RELEASE_KEY_ALIAS` in `local.properties`
 - `SHA1:` — needed for Google Cloud Console Android OAuth clients and Firebase
 - `SHA256:` — needed for Play App Signing and deep link verification
@@ -436,11 +439,11 @@ This prints SHA-1 and SHA-256 for both debug and release in one shot.
 
 ### Where Each Fingerprint Is Used
 
-| Fingerprint    | Where to Add                                                       |
-| -------------- | ------------------------------------------------------------------ |
-| Debug SHA-1    | Google Cloud Console (Android OAuth client), Firebase Android app  |
-| Release SHA-1  | Google Cloud Console (Android OAuth client), Firebase Android app, Google Maps API key restriction |
-| Release SHA-256| Play Console (App signing), Digital Asset Links (deep links)       |
+| Fingerprint     | Where to Add                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------- |
+| Debug SHA-1     | Google Cloud Console (Android OAuth client), Firebase Android app                                  |
+| Release SHA-1   | Google Cloud Console (Android OAuth client), Firebase Android app, Google Maps API key restriction |
+| Release SHA-256 | Play Console (App signing), Digital Asset Links (deep links)                                       |
 
 ---
 
@@ -460,12 +463,12 @@ URL: https://play.google.com/console
 
 1. Click **Create app**
 2. Fill in:
-   | Field             | Value                    |
+   | Field | Value |
    | ----------------- | ------------------------ |
-   | App name          | Des Moines Insider       |
-   | Default language  | English (United States)  |
-   | App or game       | App                      |
-   | Free or paid      | Free                     |
+   | App name | Des Moines Insider |
+   | Default language | English (United States) |
+   | App or game | App |
+   | Free or paid | Free |
 3. Accept all declarations
 4. Click **Create app**
 
@@ -485,11 +488,11 @@ Google requires several policy forms before you can publish. Complete each one u
 2. Select **All or some functionality is restricted**
 3. Click **+ Add new instructions**
 4. Add a test account:
-   | Field    | Value                           |
+   | Field | Value |
    | -------- | ------------------------------- |
-   | Username | test@desmoinesinsider.com       |
-   | Password | TestPass123!                    |
-   | Notes    | Tap Profile tab > Sign In       |
+   | Username | test@desmoinesinsider.com |
+   | Password | TestPass123! |
+   | Notes | Tap Profile tab > Sign In |
 5. **Create this test account** in your Supabase Auth dashboard beforehand
 6. Save
 
@@ -529,14 +532,14 @@ Google requires several policy forms before you can publish. Complete each one u
 3. Fill in:
 
    **Data collection:**
-   | Data Type            | Collected? | Shared? | Purpose               | Optional? |
+   | Data Type | Collected? | Shared? | Purpose | Optional? |
    | -------------------- | ---------- | ------- | --------------------- | --------- |
-   | Email address        | Yes        | No      | Account management    | No        |
-   | Name                 | Yes        | No      | App functionality     | Yes       |
-   | Approximate location | Yes        | No      | Nearby content        | No        |
-   | Precise location     | Yes        | No      | Map, distance calc    | Yes       |
-   | App interactions     | Yes        | No      | Analytics             | No        |
-   | Purchase history     | Yes        | No      | Subscription mgmt    | No        |
+   | Email address | Yes | No | Account management | No |
+   | Name | Yes | No | App functionality | Yes |
+   | Approximate location | Yes | No | Nearby content | No |
+   | Precise location | Yes | No | Map, distance calc | Yes |
+   | App interactions | Yes | No | Analytics | No |
+   | Purchase history | Yes | No | Subscription mgmt | No |
 
    **Security practices:**
    - [x] Data is encrypted in transit
@@ -566,11 +569,11 @@ Go to **Grow > Store presence > Main store listing** and fill in:
 
 ### Required Text
 
-| Field             | Content |
-| ----------------- | ------- |
-| **App name**      | Des Moines Insider |
-| **Short description** (80 char max) | Discover Des Moines events, restaurants & attractions powered by AI |
-| **Full description** (4000 char max) | See below |
+| Field                                | Content                                                             |
+| ------------------------------------ | ------------------------------------------------------------------- |
+| **App name**                         | Des Moines Insider                                                  |
+| **Short description** (80 char max)  | Discover Des Moines events, restaurants & attractions powered by AI |
+| **Full description** (4000 char max) | See below                                                           |
 
 **Full description:**
 
@@ -604,20 +607,20 @@ Download now and never miss what's happening in Des Moines!
 
 ### Required Graphics
 
-| Asset              | Dimensions   | Format           | Notes                                     |
-| ------------------ | ------------ | ---------------- | ----------------------------------------- |
-| **App icon**       | 512 x 512    | PNG, no alpha    | Must match your in-app icon               |
-| **Feature graphic**| 1024 x 500   | PNG or JPEG      | Banner shown at top of store listing      |
+| Asset               | Dimensions | Format        | Notes                                |
+| ------------------- | ---------- | ------------- | ------------------------------------ |
+| **App icon**        | 512 x 512  | PNG, no alpha | Must match your in-app icon          |
+| **Feature graphic** | 1024 x 500 | PNG or JPEG   | Banner shown at top of store listing |
 
 ### Categorization
 
-| Field              | Value                                        |
-| ------------------ | -------------------------------------------- |
-| App category       | Travel & Local                               |
-| Tags               | Events, Restaurants, Travel, Local Guide     |
-| Contact email      | support@desmoinesinsider.com                 |
-| Contact website    | https://desmoinesinsider.com                 |
-| Privacy policy URL | https://desmoinesinsider.com/privacy-policy  |
+| Field              | Value                                       |
+| ------------------ | ------------------------------------------- |
+| App category       | Travel & Local                              |
+| Tags               | Events, Restaurants, Travel, Local Guide    |
+| Contact email      | support@desmoinesinsider.com                |
+| Contact website    | https://desmoinesinsider.com                |
+| Privacy policy URL | https://desmoinesinsider.com/privacy-policy |
 
 ---
 
@@ -625,11 +628,11 @@ Download now and never miss what's happening in Des Moines!
 
 ### Requirements Summary
 
-| Type                     | Count    | Aspect Ratio  | Min Size     | Recommended Size  |
-| ------------------------ | -------- | ------------- | ------------ | ----------------- |
-| **Phone screenshots**    | 2-8 req  | 9:16 or 16:9  | 320px side   | 1080x1920 (9:16)  |
-| **7" tablet screenshots**| 1-8 req  | 9:16 or 16:9  | 320px side   | 1200x1920 (9:16)  |
-| **10" tablet screenshots** | 0-8    | 9:16 or 16:9  | 1080px side  | 1600x2560 (9:16)  |
+| Type                       | Count   | Aspect Ratio | Min Size    | Recommended Size |
+| -------------------------- | ------- | ------------ | ----------- | ---------------- |
+| **Phone screenshots**      | 2-8 req | 9:16 or 16:9 | 320px side  | 1080x1920 (9:16) |
+| **7" tablet screenshots**  | 1-8 req | 9:16 or 16:9 | 320px side  | 1200x1920 (9:16) |
+| **10" tablet screenshots** | 0-8     | 9:16 or 16:9 | 1080px side | 1600x2560 (9:16) |
 
 > To be eligible for promotion, include **at least 4 phone screenshots** at a minimum of **1080px on each side**.
 
@@ -640,18 +643,21 @@ Download now and never miss what's happening in Des Moines!
 Open **Android Studio > Tools > Device Manager** (or the device icon in the toolbar):
 
 **Phone emulator:**
+
 1. Click **Create Virtual Device**
 2. Select **Pixel 7** (or Pixel 8)
 3. System image: **API 35** (with Google Play)
 4. Finish — this gives you 1080x2400 (9:16)
 
 **7-inch tablet emulator:**
+
 1. Click **Create Virtual Device**
 2. Select **Nexus 7 (2013)** or similar 7" device
 3. System image: **API 35**
 4. Finish
 
 **10-inch tablet emulator:**
+
 1. Click **Create Virtual Device**
 2. Select **Pixel Tablet** or **Nexus 10**
 3. System image: **API 35**
@@ -718,14 +724,14 @@ Go to **Monetize > Products > Subscriptions**:
 
 Base plan:
 
-| Field          | Value              |
-| -------------- | ------------------ |
+| Field          | Value                  |
+| -------------- | ---------------------- |
 | Base plan ID   | `insider-monthly-plan` |
-| Renewal type   | Auto-renewing      |
-| Billing period | 1 Month            |
-| Price          | $4.99 USD          |
-| Grace period   | 7 days             |
-| Account hold   | 30 days            |
+| Renewal type   | Auto-renewing          |
+| Billing period | 1 Month                |
+| Price          | $4.99 USD              |
+| Grace period   | 7 days                 |
+| Account hold   | 30 days                |
 
 #### VIP Tier
 
@@ -749,6 +755,7 @@ Base plan:
 ### Step 3: Verify Product IDs in Code
 
 These must match `BillingService.kt`:
+
 ```kotlin
 companion object {
     const val INSIDER_MONTHLY_ID = "insider_monthly"
@@ -822,15 +829,15 @@ All commands run from the `android/` directory. Set `JAVA_HOME` if running outsi
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 ```
 
-| Command                       | Purpose                           | Output Location                                        |
-| ----------------------------- | --------------------------------- | ------------------------------------------------------ |
-| `.\gradlew assembleDebug`     | Debug APK                         | `app/build/outputs/apk/debug/app-debug.apk`           |
-| `.\gradlew assembleRelease`   | Release APK (signed)              | `app/build/outputs/apk/release/app-release.apk`       |
-| `.\gradlew bundleRelease`     | Release AAB (for Play Store)      | `app/build/outputs/bundle/release/app-release.aab`    |
-| `.\gradlew lint`              | Lint analysis                     | `app/build/reports/lint-results-debug.html`            |
-| `.\gradlew test`              | Unit tests                        | `app/build/reports/tests/testDebugUnitTest/index.html` |
-| `.\gradlew connectedAndroidTest` | Instrumentation tests (needs emulator) | `app/build/reports/androidTests/connected/`     |
-| `.\gradlew signingReport`     | Show SHA-1/SHA-256 for all variants | Console output                                       |
+| Command                          | Purpose                                | Output Location                                        |
+| -------------------------------- | -------------------------------------- | ------------------------------------------------------ |
+| `.\gradlew assembleDebug`        | Debug APK                              | `app/build/outputs/apk/debug/app-debug.apk`            |
+| `.\gradlew assembleRelease`      | Release APK (signed)                   | `app/build/outputs/apk/release/app-release.apk`        |
+| `.\gradlew bundleRelease`        | Release AAB (for Play Store)           | `app/build/outputs/bundle/release/app-release.aab`     |
+| `.\gradlew lint`                 | Lint analysis                          | `app/build/reports/lint-results-debug.html`            |
+| `.\gradlew test`                 | Unit tests                             | `app/build/reports/tests/testDebugUnitTest/index.html` |
+| `.\gradlew connectedAndroidTest` | Instrumentation tests (needs emulator) | `app/build/reports/androidTests/connected/`            |
+| `.\gradlew signingReport`        | Show SHA-1/SHA-256 for all variants    | Console output                                         |
 
 ### Pre-Submission Test Checklist
 
@@ -883,11 +890,11 @@ Test on an emulator AND a physical device if possible:
 
 Test on at minimum:
 
-| Device          | API Level | Why                       |
-| --------------- | --------- | ------------------------- |
-| Pixel 7 (emu)   | API 35    | Latest Android            |
-| Pixel 4a (emu)  | API 26    | Min SDK (Android 8)       |
-| Physical device | Any       | Real-world performance    |
+| Device          | API Level | Why                    |
+| --------------- | --------- | ---------------------- |
+| Pixel 7 (emu)   | API 35    | Latest Android         |
+| Pixel 4a (emu)  | API 26    | Min SDK (Android 8)    |
+| Physical device | Any       | Real-world performance |
 
 ---
 
@@ -933,6 +940,7 @@ Test on at minimum:
 6. Add tester emails under **Testers** tab
 
 Internal testing is **approved instantly** (no Google review). Use it to verify:
+
 - App installs from Play Store
 - Subscriptions work end-to-end
 - Google Sign-In works with production configuration
@@ -947,6 +955,7 @@ Internal testing is **approved instantly** (no Google review). Use it to verify:
 ### First Review Expectations
 
 Google's first review typically takes **3-7 days** and commonly flags:
+
 - Missing privacy policy
 - Incomplete data safety form
 - Test account not working
@@ -959,24 +968,24 @@ Google's first review typically takes **3-7 days** and commonly flags:
 
 ### Monitor
 
-| What                | Where                                              |
-| ------------------- | -------------------------------------------------- |
-| Crashes & ANRs      | Play Console > Quality > Android Vitals            |
-| Ratings & reviews   | Play Console > Quality > Ratings and reviews       |
-| Install metrics     | Play Console > Statistics                          |
-| Edge function logs  | `supabase functions logs validate-android-receipt`  |
-| Auth issues         | Supabase Dashboard > Authentication > Users        |
+| What               | Where                                              |
+| ------------------ | -------------------------------------------------- |
+| Crashes & ANRs     | Play Console > Quality > Android Vitals            |
+| Ratings & reviews  | Play Console > Quality > Ratings and reviews       |
+| Install metrics    | Play Console > Statistics                          |
+| Edge function logs | `supabase functions logs validate-android-receipt` |
+| Auth issues        | Supabase Dashboard > Authentication > Users        |
 
 ### Key Metrics to Track
 
-| Metric             | Target  |
-| ------------------ | ------- |
-| Crash-free rate    | >99%    |
-| ANR rate           | <0.5%   |
-| Average rating     | >4.0    |
-| D1 retention       | >40%    |
-| D7 retention       | >20%    |
-| Sub conversion     | >3%     |
+| Metric          | Target |
+| --------------- | ------ |
+| Crash-free rate | >99%   |
+| ANR rate        | <0.5%  |
+| Average rating  | >4.0   |
+| D1 retention    | >40%   |
+| D7 retention    | >20%   |
+| Sub conversion  | >3%    |
 
 ### Updating the App
 
@@ -1005,6 +1014,7 @@ The debug keystore at `C:\Users\YOU\.android\debug.keystore` is created on first
 ### PowerShell breaks long commands
 
 PowerShell treats line breaks as command separators. Either:
+
 - Paste as a single line
 - Use backtick (`` ` ``) for line continuation (space before, nothing after)
 - Use Android Studio's built-in terminal instead
@@ -1051,30 +1061,30 @@ PowerShell treats line breaks as command separators. Either:
 
 ## Environment Variables Quick Reference
 
-| Variable                          | File             | Source                                                    |
-| --------------------------------- | ---------------- | --------------------------------------------------------- |
-| `SUPABASE_URL`                    | local.properties | Supabase Dashboard > Settings > API                       |
-| `SUPABASE_ANON_KEY`              | local.properties | Supabase Dashboard > Settings > API                       |
-| `GOOGLE_WEB_CLIENT_ID`           | local.properties | Google Cloud Console > Credentials > OAuth Web Client     |
-| `GOOGLE_MAPS_API_KEY`            | local.properties | Google Cloud Console > Credentials > API Key              |
-| `RELEASE_KEYSTORE_FILE`          | local.properties | Path to your `release.jks`                                |
-| `RELEASE_KEYSTORE_PASSWORD`      | local.properties | Set during `keytool -genkeypair`                          |
-| `RELEASE_KEY_ALIAS`              | local.properties | Set during `keytool -genkeypair` (verify with `-list`)    |
-| `RELEASE_KEY_PASSWORD`           | local.properties | Set during `keytool -genkeypair`                          |
-| `GOOGLE_PLAY_SERVICE_ACCOUNT_KEY`| Supabase secret  | Google Cloud Console > IAM > Service Accounts > JSON key  |
-| `google-services.json`           | android/app/     | Firebase Console > Project Settings > Android app         |
+| Variable                          | File             | Source                                                   |
+| --------------------------------- | ---------------- | -------------------------------------------------------- |
+| `SUPABASE_URL`                    | local.properties | Supabase Dashboard > Settings > API                      |
+| `SUPABASE_ANON_KEY`               | local.properties | Supabase Dashboard > Settings > API                      |
+| `GOOGLE_WEB_CLIENT_ID`            | local.properties | Google Cloud Console > Credentials > OAuth Web Client    |
+| `GOOGLE_MAPS_API_KEY`             | local.properties | Google Cloud Console > Credentials > API Key             |
+| `RELEASE_KEYSTORE_FILE`           | local.properties | Path to your `release.jks`                               |
+| `RELEASE_KEYSTORE_PASSWORD`       | local.properties | Set during `keytool -genkeypair`                         |
+| `RELEASE_KEY_ALIAS`               | local.properties | Set during `keytool -genkeypair` (verify with `-list`)   |
+| `RELEASE_KEY_PASSWORD`            | local.properties | Set during `keytool -genkeypair`                         |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_KEY` | Supabase secret  | Google Cloud Console > IAM > Service Accounts > JSON key |
+| `google-services.json`            | android/app/     | Firebase Console > Project Settings > Android app        |
 
 ---
 
 ## App Build Info
 
-| Property       | Value              |
-| -------------- | ------------------ |
-| Package name   | `com.desmoines.aipulse` |
-| Version code   | `1`                |
-| Version name   | `1.0.0`            |
-| Min SDK        | 26 (Android 8.0)   |
-| Target SDK     | 35 (Android 15)    |
-| Compile SDK    | 35                 |
-| Gradle         | 8.13               |
-| JDK            | 17                 |
+| Property     | Value                   |
+| ------------ | ----------------------- |
+| Package name | `com.desmoines.aipulse` |
+| Version code | `1`                     |
+| Version name | `1.0.0`                 |
+| Min SDK      | 26 (Android 8.0)        |
+| Target SDK   | 35 (Android 15)         |
+| Compile SDK  | 35                      |
+| Gradle       | 8.13                    |
+| JDK          | 17                      |
