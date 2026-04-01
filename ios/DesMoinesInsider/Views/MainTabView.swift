@@ -101,9 +101,11 @@ struct MainTabView: View {
 
     private var iPadLayout: some View {
         NavigationSplitView {
-            List(Tab.allCases, id: \.self, selection: $selectedTab) { tab in
-                Label(tab.title, systemImage: tab.icon)
-                    .tag(tab)
+            List(selection: $selectedTab) {
+                ForEach(Tab.allCases, id: \.self) { tab in
+                    Label(tab.title, systemImage: tab.icon)
+                        .tag(tab)
+                }
             }
             .navigationTitle("DSM Insider")
             .listStyle(.sidebar)

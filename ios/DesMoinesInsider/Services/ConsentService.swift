@@ -70,7 +70,7 @@ final class ConsentService {
     /// Save current selections and mark as completed.
     func saveAndComplete() {
         hasCompletedConsent = true
-        AppLogger.general.info("Consent flow completed: location=\(locationConsent), email=\(emailConsent), analytics=\(analyticsConsent)")
+        AppLogger.general.info("Consent flow completed: location=\(self.locationConsent), email=\(self.emailConsent), analytics=\(self.analyticsConsent)")
     }
 
     /// Revoke all consent.

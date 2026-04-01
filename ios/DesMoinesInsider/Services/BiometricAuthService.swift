@@ -27,6 +27,7 @@ final class BiometricAuthService {
         case .faceID: return "Face ID"
         case .touchID: return "Touch ID"
         case .opticID: return "Optic ID"
+        case .none: return "Biometrics"
         @unknown default: return "Biometrics"
         }
     }
@@ -37,6 +38,7 @@ final class BiometricAuthService {
         case .faceID: return "faceid"
         case .touchID: return "touchid"
         case .opticID: return "opticid"
+        case .none: return "lock.shield"
         @unknown default: return "lock.shield"
         }
     }
