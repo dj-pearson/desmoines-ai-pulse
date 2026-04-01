@@ -118,26 +118,25 @@ class RestaurantsViewModel @Inject constructor(
         combine(
             _sortBy, _showOpenNowOnly, _searchText, _currentTier,
         ) { sortBy, showOpenNowOnly, searchText, currentTier ->
-            val activeFilterCount = computeActiveFilterCount(
-                selectedCuisines = _selectedCuisines.value,
-                selectedPriceRanges = _selectedPriceRanges.value,
-                searchText = searchText,
-                showOpenNowOnly = showOpenNowOnly,
-            )
             RestaurantsScreenState(
                 sortBy = sortBy,
                 showOpenNowOnly = showOpenNowOnly,
                 searchText = searchText,
-                activeFilterCount = activeFilterCount,
                 currentTier = currentTier,
             )
         }
     ) { combined, sortState ->
+        val activeFilterCount = computeActiveFilterCount(
+            selectedCuisines = combined.selectedCuisines,
+            selectedPriceRanges = combined.selectedPriceRanges,
+            searchText = sortState.searchText,
+            showOpenNowOnly = sortState.showOpenNowOnly,
+        )
         combined.copy(
             sortBy = sortState.sortBy,
             showOpenNowOnly = sortState.showOpenNowOnly,
             searchText = sortState.searchText,
-            activeFilterCount = sortState.activeFilterCount,
+            activeFilterCount = activeFilterCount,
             currentTier = sortState.currentTier,
         )
     }.stateIn(
