@@ -192,33 +192,36 @@ struct SearchView: View {
                 Color.clear.frame(height: 0).id("top")
                 switch viewModel.selectedTab {
                 case .events:
-                    ForEach(viewModel.eventResults) { event in
+                    ForEach(Array(viewModel.eventResults.enumerated()), id: \.element.id) { index, event in
                         Button {
                             navigationPath.append(event)
                         } label: {
                             EventCardView(event: event)
                         }
                         .buttonStyle(.plain)
+                        .entranceAnimation(index: index)
                     }
 
                 case .restaurants:
-                    ForEach(viewModel.restaurantResults) { restaurant in
+                    ForEach(Array(viewModel.restaurantResults.enumerated()), id: \.element.id) { index, restaurant in
                         Button {
                             navigationPath.append(restaurant)
                         } label: {
                             RestaurantCardView(restaurant: restaurant)
                         }
                         .buttonStyle(.plain)
+                        .entranceAnimation(index: index)
                     }
 
                 case .attractions:
-                    ForEach(viewModel.attractionResults) { attraction in
+                    ForEach(Array(viewModel.attractionResults.enumerated()), id: \.element.id) { index, attraction in
                         Button {
                             navigationPath.append(attraction)
                         } label: {
                             AttractionCardView(attraction: attraction)
                         }
                         .buttonStyle(.plain)
+                        .entranceAnimation(index: index)
                     }
                 }
             }

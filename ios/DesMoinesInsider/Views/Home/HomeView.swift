@@ -333,13 +333,14 @@ struct HomeView: View {
                 .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(viewModel.events) { event in
+                    ForEach(Array(viewModel.events.enumerated()), id: \.element.id) { index, event in
                         Button {
                             navigationPath.append(event)
                         } label: {
                             EventCardView(event: event, toast: $toast)
                         }
                         .buttonStyle(.plain)
+                        .entranceAnimation(index: index)
                         .task {
                             await viewModel.loadMoreIfNeeded(currentItem: event)
                         }

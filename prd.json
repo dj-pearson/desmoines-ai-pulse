@@ -260,8 +260,8 @@
         "Minimum 70% code coverage on tested services"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": "HIGH: No unit tests. Only UITests exist for screenshot generation. Core business logic is untested."
+      "passes": true,
+      "notes": "FIXED: Added DesMoinesInsiderTests unit test target in project.yml with bundle.unit-testing type. Created test suites for DateParser (10 tests: all formats, edge cases, round-trip), QueryCache (8 tests: get/set, expiration, stale, prune, clear), SearchHistoryService (8 tests: record, dedup, limits, remove, clear), DeepLinkHandler (7 tests: universal links, custom scheme, invalid IDs, consume). Added 'make test' to Makefile and xcodebuild test step to ios-native-build.yml CI workflow."
     },
     {
       "id": "IOS-017",
@@ -360,8 +360,8 @@
         "No performance degradation on older devices (iPhone SE, iPhone 12)"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": "LOW: Cards don't have entrance animations. Only skeleton loaders have shimmer. Adding staggered animations would improve polish."
+      "passes": true,
+      "notes": "FIXED: Created entranceAnimation(index:) view modifier with staggered fade-in + slide-up (0.35s easeOut, 0.05s stagger per card, capped at 10). Respects reduceMotion. Only plays on initial appearance. Applied to Home events feed, Restaurants list, and Search results (events, restaurants, attractions)."
     },
     {
       "id": "IOS-023",

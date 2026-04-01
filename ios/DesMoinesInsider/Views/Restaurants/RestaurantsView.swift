@@ -62,11 +62,12 @@ struct RestaurantsView: View {
                         .padding(.top, 40)
                     } else {
                         LazyVStack(spacing: 12) {
-                            ForEach(viewModel.restaurants) { restaurant in
+                            ForEach(Array(viewModel.restaurants.enumerated()), id: \.element.id) { index, restaurant in
                                 NavigationLink(value: restaurant) {
                                     RestaurantCardView(restaurant: restaurant, toast: $toast)
                                 }
                                 .buttonStyle(.plain)
+                                .entranceAnimation(index: index)
                                 .task {
                                     await viewModel.loadMoreIfNeeded(currentItem: restaurant)
                                 }
