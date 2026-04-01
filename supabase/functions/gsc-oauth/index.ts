@@ -7,16 +7,23 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // Rate limiting: 10 requests per 15 minutes per client (SEC-015)
+  const rateLimit = checkRateLimit(req, {
+    max: 10,
+    message: "Too many OAuth requests. Please try again later.",
+  });
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response;
   }
 
   try {
@@ -86,8 +93,32 @@ serve(async (req) => {
       });
 
       if (!tokenResponse.ok) {
-        const error = await tokenResponse.text();
-        throw new Error(`Token exchange failed: ${error}`);
+        const errorBody = await tokenResponse.text();
+        console.error("Token exchange failed — Google response:", errorBody);
+        console.error("redirect_uri used:", googleRedirectUri);
+
+        // Parse Google's error for a readable message
+        let googleError = "token_exchange_failed";
+        let googleErrorDesc = errorBody;
+        try {
+          const parsed = JSON.parse(errorBody);
+          googleError = parsed.error || googleError;
+          googleErrorDesc = parsed.error_description || googleErrorDesc;
+        } catch { /* not JSON */ }
+
+        return new Response(
+          JSON.stringify({
+            error: googleError,
+            error_description: googleErrorDesc,
+            hint: googleError === "redirect_uri_mismatch"
+              ? `The GOOGLE_REDIRECT_URI secret (${googleRedirectUri}) must exactly match the authorized redirect URI in Google Cloud Console.`
+              : `Google rejected the token exchange. Check Supabase edge function logs for details.`,
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
       }
 
       const tokenData = await tokenResponse.json();
@@ -97,35 +128,119 @@ serve(async (req) => {
         Date.now() + (tokenData.expires_in || 3600) * 1000
       );
 
-      // Get user from authorization header
+      // Get user from authorization header (best-effort — userId can be null)
       const authHeader = req.headers.get("Authorization");
-      let userId = null;
+      let userId: string | null = null;
       if (authHeader) {
-        const token = authHeader.replace("Bearer ", "");
-        const { data: { user } } = await supabase.auth.getUser(token);
-        userId = user?.id;
+        try {
+          const token = authHeader.replace("Bearer ", "");
+          const { data: authData, error: authErr } = await supabase.auth.getUser(token);
+          if (authErr) {
+            console.warn("Could not resolve user from auth token:", authErr.message);
+          } else {
+            userId = authData.user?.id ?? null;
+          }
+        } catch (authEx) {
+          console.warn("Auth getUser threw:", authEx);
+        }
       }
 
-      // Save credentials to database
-      const { data: credential, error: insertError } = await supabase
-        .from("gsc_oauth_credentials")
-        .insert({
-          access_token: tokenData.access_token,
-          refresh_token: tokenData.refresh_token,
-          token_type: tokenData.token_type,
-          expires_at: expiresAt.toISOString(),
-          scope: tokenData.scope,
-          user_id: userId,
-          is_active: true,
-        })
-        .select()
-        .single();
+      console.log(`Saving credentials for user_id: ${userId ?? "anonymous"}`);
+      console.log(`Token fields received: access_token=${!!tokenData.access_token}, refresh_token=${!!tokenData.refresh_token}, expires_in=${tokenData.expires_in}`);
 
-      if (insertError) {
-        throw new Error(`Failed to save credentials: ${insertError.message}`);
+      // Deactivate all previous credentials for this user and cascade-delete their properties
+      if (userId) {
+        const oldCredsRes = await fetch(
+          `${supabaseUrl}/rest/v1/gsc_oauth_credentials?user_id=eq.${userId}&select=id`,
+          {
+            headers: {
+              Authorization: `Bearer ${supabaseServiceKey}`,
+              apikey: supabaseServiceKey,
+            },
+          }
+        );
+        const oldCreds: { id: string }[] = oldCredsRes.ok ? await oldCredsRes.json() : [];
+        const oldCredIds = oldCreds.map((c) => c.id);
+
+        if (oldCredIds.length > 0) {
+          // Delete gsc_properties linked to old credentials
+          await fetch(
+            `${supabaseUrl}/rest/v1/gsc_properties?oauth_credential_id=in.(${oldCredIds.join(",")})`,
+            {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${supabaseServiceKey}`,
+                apikey: supabaseServiceKey,
+              },
+            }
+          );
+
+          // Deactivate old credentials
+          await fetch(
+            `${supabaseUrl}/rest/v1/gsc_oauth_credentials?user_id=eq.${userId}`,
+            {
+              method: "PATCH",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${supabaseServiceKey}`,
+                apikey: supabaseServiceKey,
+              },
+              body: JSON.stringify({ is_active: false }),
+            }
+          );
+          console.log(`Deactivated ${oldCredIds.length} old credential(s) and their properties for user ${userId}`);
+        }
       }
 
-      console.log("OAuth credentials saved successfully");
+      // Save credentials via raw REST fetch to get exact PostgREST response
+      const insertPayload = {
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token ?? null,
+        token_type: tokenData.token_type ?? "Bearer",
+        expires_at: expiresAt.toISOString(),
+        scope: tokenData.scope ?? null,
+        user_id: userId,
+        is_active: true,
+      };
+
+      const insertResponse = await fetch(
+        `${supabaseUrl}/rest/v1/gsc_oauth_credentials`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${supabaseServiceKey}`,
+            apikey: supabaseServiceKey,
+            Prefer: "return=representation",
+          },
+          body: JSON.stringify(insertPayload),
+        }
+      );
+
+      const insertBodyText = await insertResponse.text();
+      console.log(`Insert HTTP status: ${insertResponse.status}`);
+      console.log(`Insert response body: ${insertBodyText}`);
+
+      if (!insertResponse.ok) {
+        throw new Error(
+          `Failed to save credentials (HTTP ${insertResponse.status}): ${insertBodyText}`
+        );
+      }
+
+      let credential: { id: string } | null = null;
+      try {
+        const parsed = JSON.parse(insertBodyText);
+        credential = Array.isArray(parsed) ? parsed[0] : parsed;
+      } catch {
+        console.warn("Could not parse insert response as JSON:", insertBodyText);
+      }
+
+      if (!credential?.id) {
+        console.error("Insert succeeded but returned no row");
+        throw new Error("Credential was not saved — no row returned. Check RLS policies.");
+      }
+
+      console.log("OAuth credentials saved successfully, id:", credential.id);
 
       return new Response(
         JSON.stringify({
@@ -185,19 +300,20 @@ serve(async (req) => {
       });
 
       if (!tokenResponse.ok) {
-        const error = await tokenResponse.text();
+        const errorText = await tokenResponse.text();
+        console.error("Token refresh failed:", errorText);
 
         // If refresh token is invalid, mark credential as inactive
         await supabase
           .from("gsc_oauth_credentials")
           .update({
             is_active: false,
-            last_error: `Refresh failed: ${error}`,
+            last_error: `Refresh failed`,
             last_error_at: new Date().toISOString(),
           })
           .eq("id", credentialId);
 
-        throw new Error(`Token refresh failed: ${error}`);
+        throw new Error("Token refresh failed");
       }
 
       const tokenData = await tokenResponse.json();
@@ -243,12 +359,12 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error in gsc-oauth function:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("Error in gsc-oauth function:", msg);
 
     return new Response(
       JSON.stringify({
-        error: error.message,
-        details: error.stack,
+        error: msg || "An internal error occurred during OAuth processing",
       }),
       {
         status: 500,

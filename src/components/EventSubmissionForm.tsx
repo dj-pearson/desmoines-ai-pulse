@@ -102,8 +102,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
   }, [setFocus]);
 
   const addTag = (tag: string) => {
-    if (tag && !selectedTags.includes(tag)) {
-      setSelectedTags([...selectedTags, tag]);
+    const trimmed = tag.slice(0, 50);
+    if (trimmed && !selectedTags.includes(trimmed) && selectedTags.length < 10) {
+      setSelectedTags([...selectedTags, trimmed]);
     }
   };
 
@@ -219,8 +220,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Label htmlFor="title">Event Title *</Label>
                 <Input
                   id="title"
-                  {...register("title", { required: "Event title is required" })}
+                  {...register("title", { required: "Event title is required", maxLength: { value: 200, message: "Title must be 200 characters or less" } })}
                   placeholder="e.g., Summer Jazz in the Park"
+                  maxLength={200}
                   aria-invalid={!!errors.title}
                   aria-describedby={errors.title ? "title-error" : undefined}
                 />
@@ -233,9 +235,10 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Label htmlFor="description">Description *</Label>
                 <Textarea
                   id="description"
-                  {...register("description", { required: "Please describe your event" })}
+                  {...register("description", { required: "Please describe your event", maxLength: { value: 5000, message: "Description must be 5000 characters or less" } })}
                   placeholder="Tell people what your event is about, what to expect, who should attend..."
                   rows={5}
+                  maxLength={5000}
                   aria-invalid={!!errors.description}
                   aria-describedby={errors.description ? "description-error" : undefined}
                 />
@@ -322,8 +325,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Label htmlFor="venue">Venue Name *</Label>
                 <Input
                   id="venue"
-                  {...register("venue", { required: "Venue name is required" })}
+                  {...register("venue", { required: "Venue name is required", maxLength: { value: 200, message: "Venue must be 200 characters or less" } })}
                   placeholder="e.g., Downtown Des Moines Park"
+                  maxLength={200}
                   aria-invalid={!!errors.venue}
                   aria-describedby={errors.venue ? "venue-error" : undefined}
                 />
@@ -336,8 +340,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Label htmlFor="location">City/Area</Label>
                 <Input
                   id="location"
-                  {...register("location")}
+                  {...register("location", { maxLength: { value: 200, message: "Location must be 200 characters or less" } })}
                   placeholder="e.g., Des Moines, West Des Moines"
+                  maxLength={200}
                 />
               </div>
 
@@ -345,8 +350,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Label htmlFor="address">Full Address</Label>
                 <Input
                   id="address"
-                  {...register("address")}
+                  {...register("address", { maxLength: { value: 500, message: "Address must be 500 characters or less" } })}
                   placeholder="123 Main St, Des Moines, IA 50309"
+                  maxLength={500}
                   autoComplete="street-address"
                 />
               </div>
@@ -450,8 +456,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Label htmlFor="price">Price/Cost</Label>
                 <Input
                   id="price"
-                  {...register("price")}
+                  {...register("price", { maxLength: { value: 100, message: "Price must be 100 characters or less" } })}
                   placeholder="e.g., Free, $10, $5-15"
+                  maxLength={100}
                 />
               </div>
 
@@ -460,8 +467,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Input
                   id="website_url"
                   type="url"
-                  {...register("website_url")}
+                  {...register("website_url", { maxLength: { value: 2000, message: "URL must be 2000 characters or less" }, pattern: { value: /^https?:\/\/.+/i, message: "Please enter a valid URL starting with http:// or https://" } })}
                   placeholder="https://yourwebsite.com/tickets"
+                  maxLength={2000}
                   autoComplete="url"
                 />
               </div>
@@ -471,8 +479,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Input
                   id="contact_email"
                   type="email"
-                  {...register("contact_email")}
+                  {...register("contact_email", { maxLength: { value: 254, message: "Email must be 254 characters or less" }, pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Please enter a valid email address" } })}
                   placeholder="contact@yourevent.com"
+                  maxLength={254}
                   autoComplete="email"
                 />
               </div>
@@ -482,8 +491,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
                 <Input
                   id="contact_phone"
                   type="tel"
-                  {...register("contact_phone")}
+                  {...register("contact_phone", { maxLength: { value: 20, message: "Phone number must be 20 characters or less" }, pattern: { value: /^[0-9()+\-.\s]*$/, message: "Please enter a valid phone number" } })}
                   placeholder="(515) 555-0123"
+                  maxLength={20}
                   autoComplete="tel"
                 />
               </div>
@@ -525,8 +535,9 @@ export default function EventSubmissionForm({ onSuccess, editEvent }: EventSubmi
             <div className="flex gap-2">
               <Input
                 value={customTag}
-                onChange={(e) => setCustomTag(e.target.value)}
+                onChange={(e) => setCustomTag(e.target.value.slice(0, 50))}
                 placeholder="Enter custom tag"
+                maxLength={50}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag(); } }}
               />
               <Button type="button" onClick={addCustomTag} size="sm">

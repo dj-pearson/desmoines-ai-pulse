@@ -31,13 +31,8 @@ extension Date {
         return nil
     }
 
-    /// Parse ISO 8601 string to Date
+    /// Parse ISO 8601 string to Date. Delegates to the centralized DateParser.
     static func fromISO(_ string: String?) -> Date? {
-        guard let string else { return nil }
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = formatter.date(from: string) { return date }
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.date(from: string)
+        DateParser.parse(string)
     }
 }

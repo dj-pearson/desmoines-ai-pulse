@@ -1,0 +1,8 @@
+What's New:
+- Improved network reliability with automatic retry on flaky connections
+- iPad sidebar navigation for a better big-screen experience
+- Search history: quickly re-run recent searches
+- Scroll-to-top button on long lists
+- Undo support when removing favorites
+- Staggered entrance animations for a smoother feel
+- Bug fixes and performance improvements

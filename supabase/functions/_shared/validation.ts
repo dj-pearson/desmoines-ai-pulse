@@ -138,12 +138,28 @@ export function validateInput(
 }
 
 /**
- * Sanitize string input to prevent SQL injection
+ * Sanitize string input to prevent SQL injection.
+ * Removes dangerous SQL characters. For LIKE queries, use sanitizeLikeInput instead.
  */
-export function sanitizeString(input: string): string {
-  // Remove potentially dangerous SQL characters and keywords
+export function sanitizeString(input: string, maxLength = 500): string {
   return input
+    .slice(0, maxLength)
     .replace(/[';\\]/g, '') // Remove quotes and backslashes
+    .trim();
+}
+
+/**
+ * Sanitize string input specifically for use in SQL LIKE/ILIKE patterns.
+ * Escapes LIKE wildcard characters (%, _) and backslash to prevent
+ * pattern manipulation attacks (e.g., searching '%' to match all rows).
+ */
+export function sanitizeLikeInput(input: string, maxLength = 500): string {
+  return input
+    .slice(0, maxLength)
+    .replace(/\\/g, '\\\\')  // Escape backslash first
+    .replace(/%/g, '\\%')    // Escape LIKE wildcard %
+    .replace(/_/g, '\\_')    // Escape LIKE wildcard _
+    .replace(/[';]/g, '')    // Remove quotes
     .trim();
 }
 

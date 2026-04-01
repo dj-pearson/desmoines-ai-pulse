@@ -27,8 +27,11 @@ final class FavoritesService {
     // ================================================================
 
     func loadFavorites() async {
-        await loadEventFavorites()
-        await loadRestaurantFavorites()
+        isLoading = true
+        async let events: () = loadEventFavorites()
+        async let restaurants: () = loadRestaurantFavorites()
+        _ = await (events, restaurants)
+        isLoading = false
     }
 
     private func loadEventFavorites() async {
@@ -109,17 +112,17 @@ final class FavoritesService {
     /// Fetch the full Event objects for all favorited event IDs.
     func fetchFavoriteEvents() async throws -> [Event] {
         guard !favoriteEventIds.isEmpty else { return [] }
-        let client = try db()
-
-        let events: [Event] = try await client
-            .from("events")
-            .select()
-            .in("id", values: Array(favoriteEventIds))
-            .order("date", ascending: true)
-            .execute()
-            .value
-
-        return events
+        return try await withRetry {
+            let client = try self.db()
+            let events: [Event] = try await client
+                .from("events")
+                .select()
+                .in("id", values: Array(self.favoriteEventIds))
+                .order("date", ascending: true)
+                .execute()
+                .value
+            return events
+        }
     }
 
     func isEventFavorited(_ eventId: String) -> Bool {
@@ -218,17 +221,17 @@ final class FavoritesService {
     /// Fetch the full Restaurant objects for all favorited restaurant IDs.
     func fetchFavoriteRestaurants() async throws -> [Restaurant] {
         guard !favoriteRestaurantIds.isEmpty else { return [] }
-        let client = try db()
-
-        let restaurants: [Restaurant] = try await client
-            .from("restaurants")
-            .select()
-            .in("id", values: Array(favoriteRestaurantIds))
-            .order("name", ascending: true)
-            .execute()
-            .value
-
-        return restaurants
+        return try await withRetry {
+            let client = try self.db()
+            let restaurants: [Restaurant] = try await client
+                .from("restaurants")
+                .select()
+                .in("id", values: Array(self.favoriteRestaurantIds))
+                .order("name", ascending: true)
+                .execute()
+                .value
+            return restaurants
+        }
     }
 
     func isRestaurantFavorited(_ restaurantId: String) -> Bool {

@@ -24,12 +24,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let propertyId: string | undefined;
+
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { propertyId, dateRange = 28 }: SyncRequest = await req.json();
+    const body: SyncRequest = await req.json();
+    propertyId = body.propertyId;
+    const dateRange = body.dateRange ?? 28;
 
     if (!propertyId) {
       return new Response(
@@ -72,18 +76,62 @@ serve(async (req) => {
       );
     }
 
-    // Check token expiration
+    // Auto-refresh token if expired
     if (new Date(credential.expires_at) <= new Date()) {
-      return new Response(
-        JSON.stringify({
-          error: "Access token expired",
-          requiresRefresh: true,
+      console.log("Access token expired — attempting refresh...");
+
+      if (!credential.refresh_token) {
+        return new Response(
+          JSON.stringify({
+            error: "Access token expired and no refresh token available. Please reconnect.",
+            requiresRefresh: true,
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const googleClientId = Deno.env.get("GOOGLE_CLIENT_ID");
+      const googleClientSecret = Deno.env.get("GOOGLE_CLIENT_SECRET");
+
+      const refreshResponse = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: googleClientId!,
+          client_secret: googleClientSecret!,
+          refresh_token: credential.refresh_token,
+          grant_type: "refresh_token",
         }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+      });
+
+      if (!refreshResponse.ok) {
+        const refreshError = await refreshResponse.text();
+        console.error("Token refresh failed:", refreshError);
+        return new Response(
+          JSON.stringify({
+            error: "Token refresh failed — please reconnect Google Search Console.",
+            details: refreshError,
+            requiresRefresh: true,
+          }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const refreshData = await refreshResponse.json();
+      const newExpiresAt = new Date(Date.now() + (refreshData.expires_in || 3600) * 1000);
+
+      // Persist refreshed token
+      await supabase
+        .from("gsc_oauth_credentials")
+        .update({
+          access_token: refreshData.access_token,
+          expires_at: newExpiresAt.toISOString(),
+          last_refreshed_at: new Date().toISOString(),
+        })
+        .eq("id", credential.id);
+
+      credential.access_token = refreshData.access_token;
+      console.log("Token refreshed successfully, new expiry:", newExpiresAt.toISOString());
     }
 
     // Calculate date range
@@ -108,6 +156,8 @@ serve(async (req) => {
     // ========================================================================
     console.log("Fetching keyword performance...");
 
+    // Use ["query", "date"] only — adding "page" creates an explosion of rows
+    // (same keyword × many pages × many dates) that causes timeouts.
     const keywordResponse = await fetch(
       `https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(
         property.property_url
@@ -121,8 +171,8 @@ serve(async (req) => {
         body: JSON.stringify({
           startDate: startDateStr,
           endDate: endDateStr,
-          dimensions: ["query", "page", "date"],
-          rowLimit: 25000, // Max allowed
+          dimensions: ["query", "date"],
+          rowLimit: 1000, // Top 1000 queries per day range is sufficient for analytics
         }),
       }
     );
@@ -138,35 +188,35 @@ serve(async (req) => {
     console.log(`Processing ${keywordRows.length} keyword records...`);
 
     let keywordsSynced = 0;
+    const BATCH_SIZE = 500;
 
-    for (const row of keywordRows) {
-      const query = row.keys[0];
-      const pageUrl = row.keys[1];
-      const date = row.keys[2];
+    // Build records array
+    const keywordRecords = keywordRows.map((row: any) => ({
+      property_id: propertyId,
+      query: row.keys[0],
+      page_url: null,
+      date: row.keys[1],
+      impressions: row.impressions || 0,
+      clicks: row.clicks || 0,
+      ctr: row.ctr ? Math.round(row.ctr * 10000) / 100 : 0,
+      position: row.position ? Math.round(row.position * 100) / 100 : null,
+      country: "USA",
+    }));
 
-      // Insert or update keyword performance
+    // Batch upserts — dramatically faster than one-at-a-time
+    for (let i = 0; i < keywordRecords.length; i += BATCH_SIZE) {
+      const batch = keywordRecords.slice(i, i + BATCH_SIZE);
       const { error: upsertError } = await supabase
         .from("gsc_keyword_performance")
-        .upsert(
-          {
-            property_id: propertyId,
-            query,
-            page_url: pageUrl,
-            date,
-            impressions: row.impressions || 0,
-            clicks: row.clicks || 0,
-            ctr: row.ctr ? Math.round(row.ctr * 10000) / 100 : 0, // Convert to percentage
-            position: row.position ? Math.round(row.position * 100) / 100 : null,
-            country: "USA", // Default, could be made dynamic
-          },
-          {
-            onConflict: "property_id,query,date,country",
-            ignoreDuplicates: false,
-          }
-        );
+        .upsert(batch, {
+          onConflict: "property_id,query,date,country",
+          ignoreDuplicates: false,
+        });
 
       if (!upsertError) {
-        keywordsSynced++;
+        keywordsSynced += batch.length;
+      } else {
+        console.error(`Keyword batch ${i / BATCH_SIZE + 1} error:`, upsertError.message);
       }
     }
 
@@ -251,38 +301,41 @@ serve(async (req) => {
       }
     }
 
-    // Insert aggregated page data
-    for (const entry of pagesByPageAndDate.values()) {
+    // Build aggregated page records and batch upsert
+    const pageRecords = Array.from(pagesByPageAndDate.values()).map((entry: any) => {
       const avgPosition = entry.count > 0 ? entry.position / entry.count : 0;
       const ctr = entry.impressions > 0 ? (entry.clicks / entry.impressions) * 100 : 0;
+      return {
+        property_id: propertyId,
+        page_url: entry.pageUrl,
+        date: entry.date,
+        impressions: entry.impressions,
+        clicks: entry.clicks,
+        ctr: Math.round(ctr * 100) / 100,
+        position: Math.round(avgPosition * 100) / 100,
+        impressions_mobile: entry.impressionsMobile,
+        impressions_desktop: entry.impressionsDesktop,
+        impressions_tablet: entry.impressionsTablet,
+        clicks_mobile: entry.clicksMobile,
+        clicks_desktop: entry.clicksDesktop,
+        clicks_tablet: entry.clicksTablet,
+        country: "USA",
+      };
+    });
 
+    for (let i = 0; i < pageRecords.length; i += BATCH_SIZE) {
+      const batch = pageRecords.slice(i, i + BATCH_SIZE);
       const { error: upsertError } = await supabase
         .from("gsc_page_performance")
-        .upsert(
-          {
-            property_id: propertyId,
-            page_url: entry.pageUrl,
-            date: entry.date,
-            impressions: entry.impressions,
-            clicks: entry.clicks,
-            ctr: Math.round(ctr * 100) / 100,
-            position: Math.round(avgPosition * 100) / 100,
-            impressions_mobile: entry.impressionsMobile,
-            impressions_desktop: entry.impressionsDesktop,
-            impressions_tablet: entry.impressionsTablet,
-            clicks_mobile: entry.clicksMobile,
-            clicks_desktop: entry.clicksDesktop,
-            clicks_tablet: entry.clicksTablet,
-            country: "USA",
-          },
-          {
-            onConflict: "property_id,page_url,date,country",
-            ignoreDuplicates: false,
-          }
-        );
+        .upsert(batch, {
+          onConflict: "property_id,page_url,date,country",
+          ignoreDuplicates: false,
+        });
 
       if (!upsertError) {
-        pagesSynced++;
+        pagesSynced += batch.length;
+      } else {
+        console.error(`Page batch ${i / BATCH_SIZE + 1} error:`, upsertError.message);
       }
     }
 
@@ -326,15 +379,13 @@ serve(async (req) => {
   } catch (error) {
     console.error("Error in gsc-sync-data function:", error);
 
-    // Update property sync status on error
-    try {
-      const { propertyId } = await req.json();
-      if (propertyId) {
+    // Update property sync status on error (use already-parsed propertyId from outer scope)
+    if (propertyId) {
+      try {
         const supabase = createClient(
           Deno.env.get("SUPABASE_URL")!,
           Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
         );
-
         await supabase
           .from("gsc_properties")
           .update({
@@ -343,8 +394,8 @@ serve(async (req) => {
             error_message: error.message,
           })
           .eq("id", propertyId);
-      }
-    } catch {}
+      } catch { /* best-effort cleanup */ }
+    }
 
     return new Response(
       JSON.stringify({

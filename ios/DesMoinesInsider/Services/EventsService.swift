@@ -39,8 +39,12 @@ actor EventsService {
     }
 
     func fetchEvents(query: EventsQuery = EventsQuery()) async throws -> EventsResponse {
+        try await withRetry { [self] in try await _fetchEvents(query: query) }
+    }
+
+    private func _fetchEvents(query: EventsQuery) async throws -> EventsResponse {
         let client = try db()
-        let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
+        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
         var request = client
             .from("events")
@@ -59,11 +63,11 @@ actor EventsService {
 
         // Date range
         if let start = query.dateStart {
-            let startStr = ISO8601DateFormatter().string(from: start)
+            let startStr = DateParser.toISO( start)
             request = request.gte("date", value: startStr)
         }
         if let end = query.dateEnd {
-            let endStr = ISO8601DateFormatter().string(from: end)
+            let endStr = DateParser.toISO( end)
             request = request.lt("date", value: endStr)
         }
 
@@ -90,15 +94,17 @@ actor EventsService {
     // MARK: - Fetch Single Event
 
     func fetchEvent(id: String) async throws -> Event {
-        let client = try db()
-        let event: Event = try await client
-            .from("events")
-            .select()
-            .eq("id", value: id)
-            .single()
-            .execute()
-            .value
-        return event
+        try await withRetry { [self] in
+            let client = try db()
+            let event: Event = try await client
+                .from("events")
+                .select()
+                .eq("id", value: id)
+                .single()
+                .execute()
+                .value
+            return event
+        }
     }
 
     // MARK: - Search Events (Fuzzy Fallback)
@@ -152,7 +158,7 @@ actor EventsService {
 
     private func fetchNearbyEventsViaTable(latitude: Double, longitude: Double, radiusMiles: Double, limit: Int) async throws -> [Event] {
         let client = try db()
-        let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
+        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
         let events: [Event] = try await client
             .from("events")
@@ -178,7 +184,7 @@ actor EventsService {
 
     func fetchFeaturedEvents(limit: Int = 10) async throws -> [Event] {
         let client = try db()
-        let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
+        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
         let events: [Event] = try await client
             .from("events")
@@ -196,7 +202,7 @@ actor EventsService {
 
     func fetchRelatedEvents(eventId: String, category: String, limit: Int = 6) async throws -> [Event] {
         let client = try db()
-        let today = ISO8601DateFormatter().string(from: Calendar.current.startOfDay(for: Date()))
+        let today = DateParser.toISO( Calendar.current.startOfDay(for: Date()))
 
         let events: [Event] = try await client
             .from("events")

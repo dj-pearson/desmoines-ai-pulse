@@ -9,7 +9,7 @@
 #   make release        # Ship to App Store Connect
 # ──────────────────────────────────────────────────
 
-.PHONY: help setup secrets generate build open clean beta release screenshots
+.PHONY: help setup secrets generate build test open clean beta release screenshots
 
 SHELL := /bin/bash
 PROJECT := DesMoinesInsider.xcodeproj
@@ -53,6 +53,19 @@ build: generate ## Build for iOS Simulator (no signing)
 		CODE_SIGNING_ALLOWED=NO \
 		| xcpretty --color
 	@echo "✅ Simulator build succeeded"
+
+# ─── Test ────────────────────────────────────────
+test: generate ## Run unit tests on iOS Simulator
+	xcodebuild test \
+		-project $(PROJECT) \
+		-scheme $(SCHEME) \
+		-configuration Debug \
+		-destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+		CODE_SIGN_IDENTITY="" \
+		CODE_SIGNING_REQUIRED=NO \
+		CODE_SIGNING_ALLOWED=NO \
+		| xcpretty --color
+	@echo "✅ Tests passed"
 
 # ─── Open in Xcode ──────────────────────────────
 open: generate ## Generate project and open in Xcode

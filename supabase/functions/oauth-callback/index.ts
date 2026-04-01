@@ -1,15 +1,13 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
   try {
     const url = new URL(req.url);
@@ -18,16 +16,35 @@ serve(async (req) => {
     const error = url.searchParams.get("error");
 
     if (error) {
-      throw new Error(`OAuth error: ${error}`);
+      throw new Error("OAuth authorization was denied");
     }
 
     if (!code || !state) {
-      throw new Error("Missing code or state parameter");
+      throw new Error("Missing required OAuth parameters");
     }
 
-    // Parse state
-    const stateData = JSON.parse(atob(state));
+    // Parse and validate state
+    let stateData;
+    try {
+      stateData = JSON.parse(atob(state));
+    } catch {
+      throw new Error("Invalid state parameter");
+    }
+
     const provider = stateData.provider;
+
+    // Validate state timestamp (reject if older than 10 minutes)
+    if (stateData.timestamp) {
+      const stateAge = Date.now() - stateData.timestamp;
+      const maxAge = 10 * 60 * 1000; // 10 minutes
+      if (stateAge > maxAge) {
+        throw new Error("OAuth state has expired. Please try again.");
+      }
+    }
+
+    if (!provider || typeof provider !== 'string') {
+      throw new Error("Invalid state parameter");
+    }
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -61,17 +78,14 @@ serve(async (req) => {
     });
 
     if (!tokenResponse.ok) {
-      throw new Error(`Token exchange failed: ${tokenResponse.statusText}`);
+      console.error("Token exchange failed:", tokenResponse.statusText);
+      throw new Error("Token exchange failed");
     }
 
     const tokens = await tokenResponse.json();
 
-    // Get user from session (should be passed via state or cookie)
-    // For now, we'll return the tokens and let the frontend handle storage
-    const redirectUrl = `${url.origin}/admin?oauth_success=true&provider=${provider}`;
-
-    // Store tokens (in a real implementation, you'd get the user ID from a secure session)
-    // This is a simplified version
+    // Redirect to admin with success
+    const redirectUrl = `${url.origin}/admin?oauth_success=true&provider=${encodeURIComponent(provider)}`;
 
     return new Response(null, {
       status: 302,
@@ -83,7 +97,9 @@ serve(async (req) => {
   } catch (error) {
     console.error("OAuth callback error:", error);
     const url = new URL(req.url);
-    const redirectUrl = `${url.origin}/admin?oauth_error=${encodeURIComponent(error.message)}`;
+    // Sanitize error message - don't expose internal details
+    const safeMessage = "OAuth authentication failed. Please try again.";
+    const redirectUrl = `${url.origin}/admin?oauth_error=${encodeURIComponent(safeMessage)}`;
 
     return new Response(null, {
       status: 302,

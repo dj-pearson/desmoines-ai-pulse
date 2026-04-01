@@ -1,26 +1,59 @@
 /**
- * SECURITY: verify_jwt = false
- * Reason: Webhook endpoint for external systems that cannot provide Supabase JWT tokens
- * Alternative measures: Service role key required for database operations, article ID validation ensures only valid records are processed
- * Risk level: MEDIUM
+ * Publish Article Webhook Edge Function
+ *
+ * Generates social media descriptions for articles using Claude API,
+ * then sends a webhook payload with article metadata.
+ *
+ * Security: Requires API key auth, SSRF protection on webhook URLs,
+ * rate limited to 10 requests per 15 minutes.
  */
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getAIConfig, getClaudeHeaders } from "../_shared/aiConfig.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { validateURLForSSRF } from "../_shared/validation.ts";
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
+
+  // Require API key authentication (SEC-020)
+  const authResponse = requireApiKey(req, corsHeaders);
+  if (authResponse) return authResponse;
+
+  // Rate limiting: 10 requests per 15 minutes (SEC-020)
+  const rateLimit = checkRateLimit(req, {
+    max: 10,
+    message: "Too many webhook requests. Please try again later.",
+  });
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response;
   }
 
   try {
     const { articleId, webhookUrl } = await req.json();
+
+    // Validate webhook URL against SSRF (SEC-020)
+    if (!webhookUrl || typeof webhookUrl !== 'string') {
+      return new Response(
+        JSON.stringify({ error: "webhookUrl is required" }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const ssrfResult = validateURLForSSRF(webhookUrl);
+    if (!ssrfResult.safe) {
+      return new Response(
+        JSON.stringify({ error: `Invalid webhook URL: ${ssrfResult.reason}` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -84,18 +117,15 @@ Return ONLY a JSON object with this exact structure:
     if (!aiResponse.ok) {
       const errorText = await aiResponse.text();
       console.error('Claude API error:', errorText);
-      throw new Error(`Claude API error: ${aiResponse.status} - ${errorText}`);
+      throw new Error('AI content generation failed');
     }
 
     const aiData = await aiResponse.json();
     const aiContent = aiData.content[0].text;
 
-    console.log('AI Response:', aiContent);
-
     // Parse AI response
     let descriptions;
     try {
-      // Try to extract JSON from the response
       const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         descriptions = JSON.parse(jsonMatch[0]);
@@ -104,7 +134,6 @@ Return ONLY a JSON object with this exact structure:
       }
     } catch (e) {
       console.error('Failed to parse AI response:', e);
-      // Fallback descriptions
       descriptions = {
         short_description: article.excerpt?.substring(0, 280) || article.title,
         long_description: article.excerpt || article.content.substring(0, 500)
@@ -113,7 +142,7 @@ Return ONLY a JSON object with this exact structure:
 
     // Prepare webhook payload
     const articleUrl = `https://desmoinesinsider.com/articles/${article.slug}`;
-    
+
     const webhookPayload = {
       article_id: article.id,
       article_title: article.title,
@@ -141,9 +170,8 @@ Return ONLY a JSON object with this exact structure:
     });
 
     if (!webhookResponse.ok) {
-      const errorText = await webhookResponse.text();
-      console.error('Webhook delivery failed:', errorText);
-      throw new Error(`Webhook delivery failed: ${webhookResponse.status}`);
+      console.error('Webhook delivery failed:', webhookResponse.status);
+      throw new Error('Webhook delivery failed');
     }
 
     console.log('Webhook delivered successfully');
@@ -160,8 +188,8 @@ Return ONLY a JSON object with this exact structure:
   } catch (error) {
     console.error('Error in publish-article-webhook:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
+      JSON.stringify({ error: 'Webhook processing failed' }),
+      {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }

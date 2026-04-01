@@ -99,6 +99,27 @@ targets:
           - appclip:desmoinesinsider.com
 
   # ──────────────────────────────────────────────────
+  # Unit Test Target — Core service and utility tests
+  # ──────────────────────────────────────────────────
+  DesMoinesInsiderTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: DesMoinesInsiderTests
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        INFOPLIST_FILE: DesMoinesInsiderTests/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.desmoines.aipulse.tests
+        CODE_SIGN_IDENTITY: ""
+        CODE_SIGNING_REQUIRED: "NO"
+        CODE_SIGNING_ALLOWED: "NO"
+    dependencies:
+      - target: DesMoinesInsider
+
+  # ──────────────────────────────────────────────────
   # UI Test Target — Used by Fastlane Snapshot for
   # automated App Store screenshot generation.
   # ──────────────────────────────────────────────────
@@ -128,9 +149,14 @@ schemes:
       targets:
         DesMoinesInsider: all
         DesMoinesInsiderClip: all
+        DesMoinesInsiderTests: [test]
     run:
       config: Debug
       storeKitConfiguration: DesMoinesInsider/Resources/Products.storekit
+    test:
+      config: Debug
+      targets:
+        - DesMoinesInsiderTests
     profile:
       config: Release
     archive:

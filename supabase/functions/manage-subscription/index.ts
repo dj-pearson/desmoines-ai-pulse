@@ -11,20 +11,43 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 
-// CORS headers for browser requests
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-};
+/**
+ * Validate returnUrl against allowed domains to prevent open redirect attacks (SEC-028).
+ */
+function validateReturnUrl(returnUrl: string | undefined, siteUrl: string): string {
+  if (!returnUrl) return `${siteUrl}/subscription`;
+
+  const lower = returnUrl.toLowerCase().trim();
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('//')) {
+    return `${siteUrl}/subscription`;
+  }
+
+  if (returnUrl.startsWith('/')) {
+    return `${siteUrl}${returnUrl}`;
+  }
+
+  try {
+    const parsed = new URL(returnUrl);
+    const site = new URL(siteUrl);
+    if (parsed.hostname === site.hostname) {
+      return returnUrl;
+    }
+  } catch {
+    // Invalid URL
+  }
+
+  return `${siteUrl}/subscription`;
+}
 
 serve(async (req) => {
   // Handle CORS preflight
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const corsResponse = handleCors(req);
+  if (corsResponse) return corsResponse;
+
+  const origin = req.headers.get("origin") || "";
+  const corsHeaders = getCorsHeaders(isOriginAllowed(origin) ? origin : undefined);
 
   try {
     // Initialize clients
@@ -101,7 +124,7 @@ serve(async (req) => {
 
         const portalSession = await stripe.billingPortal.sessions.create({
           customer: subscription.stripe_customer_id,
-          return_url: returnUrl || `${siteUrl}/subscription`,
+          return_url: validateReturnUrl(returnUrl, siteUrl),
         });
 
         return new Response(
@@ -269,7 +292,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("Manage subscription error:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Internal server error" }),
+      JSON.stringify({ error: "Internal server error" }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

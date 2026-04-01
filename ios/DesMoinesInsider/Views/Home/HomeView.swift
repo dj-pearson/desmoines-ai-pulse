@@ -7,12 +7,15 @@ struct HomeView: View {
     @State private var showFilters = false
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
+    @State private var showScrollToTop = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 0) {
+                    Color.clear.frame(height: 0).id("top")
                     headerSection
                     datePresetsSection
                     categoryChipsSection
@@ -39,7 +42,15 @@ struct HomeView: View {
                     activeFiltersBar
                     eventsList
                 }
+                .trackScrollOffset(showScrollToTop: $showScrollToTop)
             }
+            .coordinateSpace(name: "scroll")
+            .overlay(alignment: .bottomTrailing) {
+                ScrollToTopButton(isVisible: showScrollToTop) {
+                    withAnimation { proxy.scrollTo("top") }
+                }
+            }
+            } // ScrollViewReader
             .refreshable {
                 async let eventsRefresh: () = viewModel.refresh()
                 async let restaurantsRefresh: () = restaurantsVM.refresh()
@@ -322,13 +333,14 @@ struct HomeView: View {
                 .padding(.top, 40)
             } else {
                 LazyVStack(spacing: 12) {
-                    ForEach(viewModel.events) { event in
+                    ForEach(Array(viewModel.events.enumerated()), id: \.element.id) { index, event in
                         Button {
                             navigationPath.append(event)
                         } label: {
                             EventCardView(event: event, toast: $toast)
                         }
                         .buttonStyle(.plain)
+                        .entranceAnimation(index: index)
                         .task {
                             await viewModel.loadMoreIfNeeded(currentItem: event)
                         }

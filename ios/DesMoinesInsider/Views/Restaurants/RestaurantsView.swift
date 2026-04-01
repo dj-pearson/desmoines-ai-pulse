@@ -5,11 +5,14 @@ struct RestaurantsView: View {
     @State private var viewModel = RestaurantsViewModel()
     @State private var showFilters = false
     @State private var toast: ToastMessage?
+    @State private var showScrollToTop = false
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
+                    Color.clear.frame(height: 0).id("top")
                     // Sort picker
                     sortPicker
 
@@ -59,11 +62,12 @@ struct RestaurantsView: View {
                         .padding(.top, 40)
                     } else {
                         LazyVStack(spacing: 12) {
-                            ForEach(viewModel.restaurants) { restaurant in
+                            ForEach(Array(viewModel.restaurants.enumerated()), id: \.element.id) { index, restaurant in
                                 NavigationLink(value: restaurant) {
                                     RestaurantCardView(restaurant: restaurant, toast: $toast)
                                 }
                                 .buttonStyle(.plain)
+                                .entranceAnimation(index: index)
                                 .task {
                                     await viewModel.loadMoreIfNeeded(currentItem: restaurant)
                                 }
@@ -78,7 +82,15 @@ struct RestaurantsView: View {
                     }
                 }
                 .padding(.horizontal)
+                .trackScrollOffset(showScrollToTop: $showScrollToTop)
             }
+            .coordinateSpace(name: "scroll")
+            .overlay(alignment: .bottomTrailing) {
+                ScrollToTopButton(isVisible: showScrollToTop) {
+                    withAnimation { proxy.scrollTo("top") }
+                }
+            }
+            } // ScrollViewReader
             .refreshable {
                 await viewModel.refresh()
                 if viewModel.errorMessage == nil {

@@ -1,4 +1,5 @@
 import Foundation
+import os
 import UserNotifications
 
 /// Manages local notifications for event reminders.
@@ -59,7 +60,7 @@ final class LocalNotificationService {
             try await center.add(request)
             scheduledEventIds.insert(event.id)
         } catch {
-            print("Failed to schedule notification: \(error.localizedDescription)")
+            AppLogger.general.error("Failed to schedule notification: \(error.localizedDescription)")
         }
     }
 

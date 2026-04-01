@@ -14,7 +14,11 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private(set) var locationError: String?
 
     private let locationManager = CLLocationManager()
-    private var locationContinuation: CheckedContinuation<CLLocation, Error>?
+    private var pendingContinuations: [CheckedContinuation<CLLocation, Error>] = []
+    private var isRequestInFlight = false
+
+    /// Timeout duration for location requests (10 seconds).
+    private static let locationTimeout: TimeInterval = 10.0
 
     override init() {
         super.init()
@@ -49,8 +53,25 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         }
 
         return try await withCheckedThrowingContinuation { continuation in
-            self.locationContinuation = continuation
-            self.locationManager.requestLocation()
+            self.pendingContinuations.append(continuation)
+
+            // Only start a new location request if one isn't already in flight
+            if !self.isRequestInFlight {
+                self.isRequestInFlight = true
+                self.locationManager.requestLocation()
+
+                // Timeout: fail all pending continuations if location takes too long
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(Self.locationTimeout * 1_000_000_000))
+                    guard let self, self.isRequestInFlight else { return }
+                    self.isRequestInFlight = false
+                    let continuations = self.pendingContinuations
+                    self.pendingContinuations.removeAll()
+                    for c in continuations {
+                        c.resume(throwing: LocationError.unavailable)
+                    }
+                }
+            }
         }
     }
 
@@ -78,16 +99,24 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         Task { @MainActor in
             self.userLocation = location
-            self.locationContinuation?.resume(returning: location)
-            self.locationContinuation = nil
+            self.isRequestInFlight = false
+            let continuations = self.pendingContinuations
+            self.pendingContinuations.removeAll()
+            for c in continuations {
+                c.resume(returning: location)
+            }
         }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         Task { @MainActor in
             self.locationError = error.localizedDescription
-            self.locationContinuation?.resume(throwing: error)
-            self.locationContinuation = nil
+            self.isRequestInFlight = false
+            let continuations = self.pendingContinuations
+            self.pendingContinuations.removeAll()
+            for c in continuations {
+                c.resume(throwing: error)
+            }
             self.isLocating = false
         }
     }

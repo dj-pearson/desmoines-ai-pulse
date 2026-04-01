@@ -112,6 +112,38 @@ extension View {
     }
 }
 
+// MARK: - Staggered Entrance Animation
+
+extension View {
+    /// Adds a staggered fade-in and slide-up animation for list items.
+    /// Only plays once on initial appearance. Respects reduceMotion.
+    func entranceAnimation(index: Int, delay baseDelay: Double = 0.05) -> some View {
+        modifier(EntranceAnimationModifier(index: index, baseDelay: baseDelay))
+    }
+}
+
+private struct EntranceAnimationModifier: ViewModifier {
+    let index: Int
+    let baseDelay: Double
+
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(appeared || reduceMotion ? 1 : 0)
+            .offset(y: appeared || reduceMotion ? 0 : 20)
+            .onAppear {
+                guard !appeared, !reduceMotion else { return }
+                // Cap stagger at index 10 to avoid overly delayed cards
+                let stagger = Double(min(index, 10)) * baseDelay
+                withAnimation(.easeOut(duration: 0.35).delay(stagger)) {
+                    appeared = true
+                }
+            }
+    }
+}
+
 // MARK: - Haptic Feedback
 
 extension View {

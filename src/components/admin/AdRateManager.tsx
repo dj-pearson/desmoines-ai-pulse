@@ -15,6 +15,7 @@ interface RateCard {
   id: string;
   placement_type: string;
   base_daily_rate: number;
+  cpm_rate: number;
   min_days: number;
   max_days: number;
   min_lead_time_days: number;
@@ -187,6 +188,33 @@ export function AdRateManager() {
             </div>
           </CardHeader>
           <CardContent>
+            {/* CPM Pricing — highlighted section */}
+            <div className="mb-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <DollarSign className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">CPM Pricing</span>
+                <span className="text-xs text-muted-foreground">
+                  — shown to advertisers spending &gt;$5/day/placement as estimated impressions
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>CPM Rate ($ per 1,000 impressions)</Label>
+                  <Input
+                    type="number"
+                    step="0.50"
+                    min="1"
+                    value={getFieldValue(rate, "cpm_rate")}
+                    onChange={(e) => handleFieldChange(rate.placement_type, "cpm_rate", e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    At ${getFieldValue(rate, "base_daily_rate")}/day →{" "}
+                    ~{Math.round((getFieldValue(rate, "base_daily_rate") / (getFieldValue(rate, "cpm_rate") || 10)) * 1000).toLocaleString()} est. impressions/day
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {/* Base Rate */}
               <div className="space-y-2">

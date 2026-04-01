@@ -1,4 +1,5 @@
 import Foundation
+import os
 import StoreKit
 
 /// Manages In-App Purchases via StoreKit 2.
@@ -101,14 +102,14 @@ final class StoreKitService {
                 // This is the most common cause of Guideline 2.1(b) rejections.
                 errorMessage = StoreError.productLoadFailed.localizedDescription
                 #if DEBUG
-                print("[StoreKit] No products found for IDs: \(Self.productIDs)")
-                print("[StoreKit] Ensure products are created in App Store Connect and are in 'Ready to Submit' state.")
+                AppLogger.storekit.warning("No products found for IDs: \(Self.productIDs)")
+                AppLogger.storekit.warning("Ensure products are created in App Store Connect and are in 'Ready to Submit' state.")
                 #endif
             }
         } catch {
             errorMessage = StoreError.productLoadFailed.localizedDescription
             #if DEBUG
-            print("[StoreKit] Product load error: \(error.localizedDescription)")
+            AppLogger.storekit.error("Product load error: \(error.localizedDescription)")
             #endif
         }
 
@@ -190,16 +191,47 @@ final class StoreKitService {
     private func listenForTransactions() -> Task<Void, Never> {
         Task.detached { [weak self] in
             for await result in Transaction.updates {
-                if let transaction = try? self?.checkVerified(result) {
-                    await transaction.finish()
-                    await self?.updatePurchasedProducts()
-                    await self?.syncEntitlementToBackend(
-                        transaction: transaction,
-                        productId: transaction.productID
-                    )
+                do {
+                    let transaction = try self?.checkVerified(result)
+                    if let transaction {
+                        await transaction.finish()
+                        await self?.updatePurchasedProducts()
+                        await self?.syncEntitlementToBackend(
+                            transaction: transaction,
+                            productId: transaction.productID
+                        )
+                    }
+                } catch {
+                    AppLogger.storekit.error("Transaction verification failed: \(error.localizedDescription)")
+                    await self?.handleTransactionFailure(result: result, error: error)
                 }
             }
         }
+    }
+
+    /// Logs failed transaction details and posts a notification for UI to show error.
+    private func handleTransactionFailure(result: VerificationResult<Transaction>, error: Error) {
+        // Extract transaction ID for support lookup regardless of verification status
+        let transaction: Transaction
+        switch result {
+        case .unverified(let tx, _): transaction = tx
+        case .verified(let tx): transaction = tx
+        }
+
+        let transactionId = String(transaction.id)
+        let productId = transaction.productID
+        AppLogger.storekit.error("Failed transaction ID: \(transactionId), product: \(productId)")
+
+        // Post notification so UI can show error toast
+        NotificationCenter.default.post(
+            name: .storeKitTransactionFailed,
+            object: nil,
+            userInfo: [
+                "transactionId": transactionId,
+                "productId": productId,
+                "error": error.localizedDescription,
+            ]
+        )
     }
 
     // MARK: - Verify Transaction
@@ -248,7 +280,7 @@ final class StoreKitService {
             userId = session.user.id.uuidString
         } catch {
             #if DEBUG
-            print("[StoreKit] Cannot sync entitlement - no authenticated session: \(error.localizedDescription)")
+            AppLogger.storekit.warning("Cannot sync entitlement - no authenticated session: \(error.localizedDescription)")
             #endif
             return
         }
@@ -289,14 +321,14 @@ final class StoreKitService {
 
                 if decoded.valid {
                     #if DEBUG
-                    print("[StoreKit] Server validation succeeded: tier=\(decoded.entitlement?.tier ?? "unknown"), expires=\(decoded.entitlement?.expiresAt ?? "none")")
+                    AppLogger.storekit.info("Server validation succeeded: tier=\(decoded.entitlement?.tier ?? "unknown"), expires=\(decoded.entitlement?.expiresAt ?? "none")")
                     #endif
                     return
                 } else {
                     // Server explicitly said the receipt is invalid.
                     // Log a warning but do NOT revoke local access (grace period).
                     let reason = decoded.reason ?? "unknown"
-                    print("[StoreKit] Server validation returned invalid (grace period): reason=\(reason), product=\(productId), user=\(userId)")
+                    AppLogger.storekit.warning("Server validation returned invalid (grace period): reason=\(reason)")
                     return
                 }
             } catch {
@@ -306,7 +338,7 @@ final class StoreKitService {
                 if isTransient && attempt < Self.maxRetries - 1 {
                     let delay = Self.baseRetryDelay * pow(2.0, Double(attempt))
                     #if DEBUG
-                    print("[StoreKit] Transient error on attempt \(attempt + 1)/\(Self.maxRetries), retrying in \(delay)s: \(error.localizedDescription)")
+                    AppLogger.storekit.info("Transient error on attempt \(attempt + 1)/\(Self.maxRetries), retrying in \(delay)s: \(error.localizedDescription)")
                     #endif
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                     continue
@@ -319,7 +351,7 @@ final class StoreKitService {
 
         // All retries exhausted or non-transient error.
         // Log but do NOT revoke local entitlement (grace period).
-        print("[StoreKit] Server validation failed after \(Self.maxRetries) attempts (grace period): \(lastError?.localizedDescription ?? "unknown error"), product=\(productId), user=\(userId)")
+        AppLogger.storekit.error("Server validation failed after \(Self.maxRetries) attempts (grace period): \(lastError?.localizedDescription ?? "unknown error")")
     }
 
     /// Determines whether an error is transient (5xx / network) and worth retrying.
@@ -366,4 +398,8 @@ final class StoreKitService {
             }
         }
     }
+}
+
+extension Notification.Name {
+    static let storeKitTransactionFailed = Notification.Name("storeKitTransactionFailed")
 }

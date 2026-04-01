@@ -1,7 +1,12 @@
 import SwiftUI
 
 /// Root tab navigation. 6 tabs: Home, Dining, Search, Map (Explore), Saved, Profile.
+///
+/// On iPhone (compact width): standard TabView with bottom tab bar.
+/// On iPad (regular width): sidebar navigation with list items for each section.
 struct MainTabView: View {
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
     @State private var selectedTab = Tab.home {
         didSet {
             if oldValue != selectedTab {
@@ -37,6 +42,22 @@ struct MainTabView: View {
     }
 
     var body: some View {
+        Group {
+            if sizeClass == .regular {
+                iPadLayout
+            } else {
+                iPhoneLayout
+            }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            OfflineBanner()
+        }
+        .tint(Color.accentColor)
+    }
+
+    // MARK: - iPhone Layout (TabView)
+
+    private var iPhoneLayout: some View {
         TabView(selection: $selectedTab) {
             HomeView()
                 .tabItem {
@@ -74,10 +95,35 @@ struct MainTabView: View {
                 }
                 .tag(Tab.profile)
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            OfflineBanner()
+    }
+
+    // MARK: - iPad Layout (Sidebar + Detail)
+
+    private var iPadLayout: some View {
+        NavigationSplitView {
+            List(selection: $selectedTab) {
+                ForEach(Tab.allCases, id: \.self) { tab in
+                    Label(tab.title, systemImage: tab.icon)
+                        .tag(tab)
+                }
+            }
+            .navigationTitle("DSM Insider")
+            .listStyle(.sidebar)
+        } detail: {
+            tabContent(for: selectedTab)
         }
-        .tint(Color.accentColor)
+    }
+
+    @ViewBuilder
+    private func tabContent(for tab: Tab) -> some View {
+        switch tab {
+        case .home: HomeView()
+        case .restaurants: RestaurantsView()
+        case .search: SearchView()
+        case .map: EventMapView()
+        case .favorites: FavoritesView()
+        case .profile: ProfileView()
+        }
     }
 }
 

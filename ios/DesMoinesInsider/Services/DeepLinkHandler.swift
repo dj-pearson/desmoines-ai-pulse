@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Parses deep links and universal links into app navigation destinations.
 ///
@@ -49,6 +50,22 @@ final class DeepLinkHandler {
         return pendingDestination
     }
 
+    // MARK: - ID Validation
+
+    /// Validates that an ID looks like a UUID (8-4-4-4-12 hex format).
+    /// Rejects malformed IDs that could cause unexpected behavior.
+    private func isValidId(_ id: String) -> Bool {
+        // UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        UUID(uuidString: id) != nil
+    }
+
+    /// Validates and returns the ID, or nil if invalid (logging the rejection).
+    private func validatedId(_ id: String, source: String) -> String? {
+        if isValidId(id) { return id }
+        AppLogger.nav.warning("Rejected invalid deep link ID from \(source): \(id.prefix(50))")
+        return nil
+    }
+
     // MARK: - Parse Helpers
 
     private func parseUniversalLink(_ url: URL) -> Destination? {
@@ -65,12 +82,18 @@ final class DeepLinkHandler {
         }
 
         let type = path[0]
-        let id = path[1]
+        let rawId = path[1]
 
         switch type {
-        case "events": return .event(id: id)
-        case "restaurants": return .restaurant(id: id)
-        case "attractions": return .attraction(id: id)
+        case "events":
+            guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.home) }
+            return .event(id: id)
+        case "restaurants":
+            guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.restaurants) }
+            return .restaurant(id: id)
+        case "attractions":
+            guard let id = validatedId(rawId, source: "universal-link") else { return .tab(.home) }
+            return .attraction(id: id)
         default: return nil
         }
     }
@@ -80,12 +103,18 @@ final class DeepLinkHandler {
 
         let host = url.host ?? ""
         let path = url.pathComponents.filter { $0 != "/" }
-        let id = path.first ?? ""
+        let rawId = path.first ?? ""
 
         switch host {
-        case "event" where !id.isEmpty: return .event(id: id)
-        case "restaurant" where !id.isEmpty: return .restaurant(id: id)
-        case "attraction" where !id.isEmpty: return .attraction(id: id)
+        case "event" where !rawId.isEmpty:
+            guard let id = validatedId(rawId, source: "custom-scheme") else { return .tab(.home) }
+            return .event(id: id)
+        case "restaurant" where !rawId.isEmpty:
+            guard let id = validatedId(rawId, source: "custom-scheme") else { return .tab(.restaurants) }
+            return .restaurant(id: id)
+        case "attraction" where !rawId.isEmpty:
+            guard let id = validatedId(rawId, source: "custom-scheme") else { return .tab(.home) }
+            return .attraction(id: id)
         case "home": return .tab(.home)
         case "search": return .tab(.search)
         case "favorites": return .tab(.favorites)

@@ -113,6 +113,31 @@ jobs:
 
           echo "✅ iOS Simulator build succeeded"
 
+      - name: Run unit tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+
+          xcodebuild test \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcpretty --color --test || {
+              echo ""
+              echo "::error::Tests failed! Failures:"
+              echo "-------------------------------------------"
+              grep -E "(Test Case.*failed|error:)" "$RUNNER_TEMP/xcodebuild-test.log" | head -30
+              echo "-------------------------------------------"
+              exit 1
+            }
+
+          echo "✅ Unit tests passed"
+
   # ================================================================
   # Validate project configuration
   # ================================================================

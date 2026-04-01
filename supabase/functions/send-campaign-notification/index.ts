@@ -21,6 +21,8 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
+import { escapeHtml } from "../_shared/escapeHtml.ts";
+import { checkRateLimit } from "../_shared/rateLimit.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -36,11 +38,47 @@ serve(async (req) => {
     });
   }
 
+  // Rate limiting: 10 requests per 15 minutes (SEC-014)
+  const rateLimit = checkRateLimit(req, {
+    max: 10,
+    message: "Too many notification requests. Please try again later.",
+  });
+  if (!rateLimit.success && rateLimit.response) {
+    return rateLimit.response;
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+
+    // Require authentication (SEC-014)
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authorization required" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: "Invalid authentication" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Check if user is admin or campaign owner
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+
+    const isAdmin = profile?.role === "admin";
 
     const body = await req.json();
     const {
@@ -62,6 +100,22 @@ serve(async (req) => {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
+    }
+
+    // Verify user is admin or owns the campaign
+    if (!isAdmin) {
+      const { data: campaign } = await supabase
+        .from("campaigns")
+        .select("user_id")
+        .eq("id", campaignId)
+        .single();
+
+      if (!campaign || campaign.user_id !== user.id) {
+        return new Response(
+          JSON.stringify({ error: "Forbidden: not authorized for this campaign" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Resolve recipient email if not provided
@@ -211,15 +265,15 @@ function buildEmailHtml(params: {
               <!-- Content -->
               <tr>
                 <td style="padding:32px;">
-                  <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${title}</h2>
-                  <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${message}</p>
+                  <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${escapeHtml(title)}</h2>
+                  <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${escapeHtml(message)}</p>
                   ${ctaUrl ? `
-                  <a href="${ctaUrl}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
-                    ${ctaLabel}
+                  <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
+                    ${escapeHtml(ctaLabel)}
                   </a>
                   ` : ''}
                   <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7;">
-                  <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${campaignName}</strong></p>
+                  <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${escapeHtml(campaignName)}</strong></p>
                 </td>
               </tr>
               <!-- Footer -->

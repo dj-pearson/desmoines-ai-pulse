@@ -11,7 +11,9 @@ struct CachedAsyncImage<Placeholder: View>: View {
     @ViewBuilder let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
+    @State private var thumbnail: UIImage?
     @State private var isLoading = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Group {
@@ -20,6 +22,13 @@ struct CachedAsyncImage<Placeholder: View>: View {
                     .resizable()
                     .scaledToFill()
                     .clipped()
+                    .transition(reduceMotion ? .opacity : .opacity.animation(.easeIn(duration: 0.25)))
+            } else if let thumbnail {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFill()
+                    .clipped()
+                    .blur(radius: 12)
             } else if isLoading {
                 placeholder()
                     .overlay {
@@ -58,23 +67,43 @@ struct CachedAsyncImage<Placeholder: View>: View {
             return
         }
 
-        // 3. Network
+        // 3. Network — generate blur-up thumbnail while full image loads
         isLoading = true
 
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
             if let uiImage = UIImage(data: data) {
+                // Show tiny blurred thumbnail first for progressive feel
+                if thumbnail == nil {
+                    thumbnail = Self.generateThumbnail(from: uiImage)
+                }
+
                 ImageCache.shared.setMemory(uiImage, for: urlString)
-                // Extract cache TTL from response headers, default 7 days
                 let ttl = Self.cacheTTL(from: response)
                 await ImageCache.shared.setDisk(data, for: urlString, ttl: ttl)
-                image = uiImage
+
+                // Crossfade to full image
+                withAnimation(.easeIn(duration: 0.25)) {
+                    image = uiImage
+                }
+
+                // Release thumbnail from memory
+                thumbnail = nil
             }
         } catch {
             // Silently fail — placeholder shown
         }
 
         isLoading = false
+    }
+
+    /// Generate a tiny thumbnail for blur-up effect (12x12 then scaled up).
+    private static func generateThumbnail(from image: UIImage) -> UIImage? {
+        let size = CGSize(width: 12, height: 12)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
     }
 
     /// Extract max-age from Cache-Control header, default to 7 days.

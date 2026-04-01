@@ -34,6 +34,10 @@ actor AttractionsService {
     }
 
     func fetchAttractions(query: AttractionsQuery = AttractionsQuery()) async throws -> AttractionsResponse {
+        try await withRetry { [self] in try await _fetchAttractions(query: query) }
+    }
+
+    private func _fetchAttractions(query: AttractionsQuery) async throws -> AttractionsResponse {
         let client = try db()
         var request = client
             .from("attractions")

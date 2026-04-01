@@ -1,7 +1,19 @@
 /**
  * Rate limiting middleware for Supabase Edge Functions
- * Uses in-memory storage (resets on function cold start)
- * For production, consider using Upstash Redis or Supabase tables
+ *
+ * IMPORTANT LIMITATIONS (SEC-030):
+ * - Uses in-memory storage, which resets on every cold start.
+ * - Each serverless instance maintains its own rate limit counters,
+ *   so distributed traffic across multiple instances may bypass limits.
+ * - NOT suitable as a sole defense against determined attackers.
+ *
+ * RECOMMENDED UPGRADES for production:
+ * 1. **Upstash Redis** (@upstash/ratelimit) — true distributed rate limiting
+ *    with sliding window support. ~$0.20/100K commands.
+ * 2. **Database-backed** — create a `rate_limit_events` table in Supabase
+ *    and use COUNT(*) with timestamp filtering. Higher latency but persistent.
+ * 3. **Cloudflare Rate Limiting** — if fronted by Cloudflare, use their
+ *    built-in rate limiting rules at the edge.
  *
  * Rate Limit Tiers:
  *  - Read operations (default):     100 req / 15 min per client

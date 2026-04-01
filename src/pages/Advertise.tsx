@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,12 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Star, Eye, Target, Megaphone } from "lucide-react";
+import { CalendarIcon, Star, Eye, Target, Megaphone, Zap, TrendingUp } from "lucide-react";
 import { format, addDays, differenceInDays } from "date-fns";
 import { cn } from "@/lib/utils";
-import { useCampaigns } from "@/hooks/useCampaigns";
+import { useCampaigns, fetchRateCard } from "@/hooks/useCampaigns";
+import type { RateCardEntry } from "@/hooks/useCampaigns";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { PLACEMENT_SPECS } from "@/lib/placementSpecs";
@@ -21,6 +23,7 @@ import { notifyAdmins } from "@/hooks/useCampaignNotifications";
 import { supabase } from "@/integrations/supabase/client";
 import { ListingPicker } from "@/components/advertising/ListingPicker";
 import type { LinkedListing } from "@/components/advertising/ListingPicker";
+import { PlatformMetrics } from "@/components/advertising/PlatformMetrics";
 
 /** Minimum number of days from today before a campaign can start.
  *  Gives time for creative upload + admin review. */
@@ -63,6 +66,11 @@ export default function Advertise() {
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [linkedListing, setLinkedListing] = useState<LinkedListing | null>(null);
+  const [rateCard, setRateCard] = useState<RateCardEntry[]>([]);
+
+  useEffect(() => {
+    fetchRateCard().then(setRateCard);
+  }, []);
 
   const hasSponsoredListing = selectedPlacements.some(p => p.type === 'sponsored_listing');
 
@@ -205,6 +213,15 @@ export default function Advertise() {
                 <div className="text-sm text-muted-foreground">Local Audience</div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Real Platform Metrics — data from GSC, shown to advertisers for transparency */}
+      <section className="py-8 border-b">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <PlatformMetrics />
           </div>
         </div>
       </section>
@@ -381,27 +398,69 @@ export default function Advertise() {
                                ))}
                              </ul>
                            </div>
-                          {isSelected && (
-                            <div className="flex items-center space-x-2">
-                              <Label htmlFor={`days-${option.type}`} className="text-sm">
-                                Days:
-                              </Label>
-                              <Input
-                                id={`days-${option.type}`}
-                                type="number"
-                                min="1"
-                                max="365"
-                                value={selectedPlacement?.days || 7}
-                                onChange={(e) =>
-                                  handleDaysChange(option.type, parseInt(e.target.value) || 1)
-                                }
-                                className="w-20"
-                              />
-                              <span className="text-sm text-muted-foreground">
-                                = ${(selectedPlacement?.days || 7) * option.dailyCost}
-                              </span>
-                            </div>
-                          )}
+                          {isSelected && (() => {
+                            const days = selectedPlacement?.days || 7;
+                            const rateEntry = rateCard.find(r => r.placement_type === option.type);
+                            const cpmRate = rateEntry?.cpm_rate ?? 10;
+                            const isCpmTier = option.dailyCost > 5;
+                            const estDailyImpressions = isCpmTier
+                              ? Math.round((option.dailyCost / cpmRate) * 1000)
+                              : null;
+                            const estTotalImpressions = estDailyImpressions
+                              ? estDailyImpressions * days
+                              : null;
+
+                            return (
+                              <div className="mt-3 space-y-2">
+                                <div className="flex items-center space-x-2">
+                                  <Label htmlFor={`days-${option.type}`} className="text-sm">
+                                    Days:
+                                  </Label>
+                                  <Input
+                                    id={`days-${option.type}`}
+                                    type="number"
+                                    min="1"
+                                    max="365"
+                                    value={days}
+                                    onChange={(e) =>
+                                      handleDaysChange(option.type, parseInt(e.target.value) || 1)
+                                    }
+                                    className="w-20"
+                                  />
+                                  <span className="text-sm font-semibold">
+                                    = ${days * option.dailyCost}
+                                  </span>
+                                </div>
+
+                                {isCpmTier ? (
+                                  <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs space-y-1">
+                                    <div className="flex items-center gap-1.5 font-semibold text-primary">
+                                      <Zap className="h-3.5 w-3.5" />
+                                      CPM Pricing Active
+                                    </div>
+                                    <p className="text-muted-foreground">
+                                      Est.{" "}
+                                      <span className="font-semibold text-foreground">
+                                        ~{estDailyImpressions?.toLocaleString()} impressions/day
+                                      </span>{" "}
+                                      · {estTotalImpressions?.toLocaleString()} total over {days} {days === 1 ? "day" : "days"}
+                                    </p>
+                                    <p className="text-muted-foreground">
+                                      Based on ${cpmRate} CPM — adjust CPM in Admin → Advertising
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="rounded-md border border-border bg-muted/30 p-3 text-xs flex items-center gap-1.5 text-muted-foreground">
+                                    <TrendingUp className="h-3.5 w-3.5 shrink-0" />
+                                    <span>
+                                      <span className="font-medium text-foreground">Flat Rate</span>
+                                      {" "}— Standard visibility. Upgrade to a higher-tier placement for CPM-based impression estimates.
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -469,15 +528,28 @@ export default function Advertise() {
                   {selectedPlacements.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No placements selected</p>
                   ) : (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {selectedPlacements.map((placement) => {
                         const option = PLACEMENT_OPTIONS.find(opt => opt.type === placement.type);
+                        const rateEntry = rateCard.find(r => r.placement_type === placement.type);
+                        const cpmRate = rateEntry?.cpm_rate ?? 10;
+                        const dailyCost = option?.dailyCost || 0;
+                        const isCpmTier = dailyCost > 5;
+                        const estDailyImpressions = isCpmTier
+                          ? Math.round((dailyCost / cpmRate) * 1000)
+                          : null;
                         return (
-                          <div key={placement.type} className="flex justify-between text-sm">
-                            <span>
-                              {option?.name} ({placement.days} days)
-                            </span>
-                            <span>${(option?.dailyCost || 0) * placement.days}</span>
+                          <div key={placement.type} className="space-y-0.5">
+                            <div className="flex justify-between text-sm">
+                              <span>{option?.name} ({placement.days} days)</span>
+                              <span className="font-semibold">${dailyCost * placement.days}</span>
+                            </div>
+                            {isCpmTier && estDailyImpressions && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Zap className="h-3 w-3 text-primary" />
+                                ~{(estDailyImpressions * placement.days).toLocaleString()} est. impressions
+                              </p>
+                            )}
                           </div>
                         );
                       })}
