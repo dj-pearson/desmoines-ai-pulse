@@ -1,0 +1,35 @@
+# ============================================
+# Android SDK (auto-set by Android Studio)
+# ============================================
+# macOS:
+# sdk.dir=/Users/YOU/Library/Android/sdk
+# Windows:
+# sdk.dir=C:\\Users\\YOU\\AppData\\Local\\Android\\Sdk
+
+# ============================================
+# Supabase Credentials (REQUIRED)
+# ============================================
+# Get these from: https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key_here
+
+# ============================================
+# Google Sign-In (REQUIRED for auth)
+# ============================================
+# Get from Google Cloud Console > APIs & Services > Credentials > OAuth 2.0 Web Client ID
+GOOGLE_WEB_CLIENT_ID=YOUR_CLIENT_ID.apps.googleusercontent.com
+
+# ============================================
+# Google Maps (REQUIRED for map tab)
+# ============================================
+# Get from Google Cloud Console > APIs & Services > Credentials > API Key
+GOOGLE_MAPS_API_KEY=your_google_maps_api_key_here
+
+# ============================================
+# Release Signing (REQUIRED for release builds only)
+# ============================================
+# See SETUP_GUIDE.md Section 8 for how to generate the keystore
+RELEASE_KEYSTORE_FILE=../keystore/release.jks
+RELEASE_KEYSTORE_PASSWORD=your_keystore_password
+RELEASE_KEY_ALIAS=desmoines-insider
+RELEASE_KEY_PASSWORD=your_key_password

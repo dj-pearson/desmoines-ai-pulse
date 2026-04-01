@@ -9,7 +9,7 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Count
 import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.postgrest.query.TextSearchType
+import io.github.jan.supabase.postgrest.query.filter.TextSearchType
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.serialization.Serializable
 import javax.inject.Inject
@@ -64,11 +64,12 @@ class RestaurantsRemoteDataSource @Inject constructor(
     suspend fun fetchRestaurants(query: RestaurantsQuery = RestaurantsQuery()): RestaurantsResponse {
         val client = db()
 
-        val result = client.from("restaurants").select(count = Count.EXACT) {
+        val result = client.from("restaurants").select {
+            count(Count.EXACT)
             filter {
                 // Full-text search
                 if (!query.searchText.isNullOrBlank()) {
-                    textSearch("search_vector", query.searchText, config = "english", textSearchType = TextSearchType.WEBSEARCH)
+                    textSearch("search_vector", query.searchText, textSearchType = TextSearchType.WEBSEARCH, config = "english")
                 }
 
                 // Cuisine filter
@@ -273,7 +274,7 @@ class RestaurantsRemoteDataSource @Inject constructor(
     suspend fun fetchAvailableCuisines(): List<String> {
         val client = db()
         val rows = client.from("restaurants").select(
-            columns = io.github.jan.supabase.postgrest.query.Columns.list("cuisine"),
+            io.github.jan.supabase.postgrest.query.Columns.list("cuisine"),
         ) {
             order("cuisine", Order.ASCENDING)
         }.decodeList<CuisineRow>()

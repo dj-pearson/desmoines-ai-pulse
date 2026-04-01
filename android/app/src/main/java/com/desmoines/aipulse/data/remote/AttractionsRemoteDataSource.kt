@@ -59,7 +59,8 @@ class AttractionsRemoteDataSource @Inject constructor(
     suspend fun fetchAttractions(query: AttractionsQuery = AttractionsQuery()): AttractionsResponse {
         val client = db()
 
-        val result = client.from("attractions").select(count = Count.EXACT) {
+        val result = client.from("attractions").select {
+            count(Count.EXACT)
             // Multi-field ILIKE search (matches iOS .or("name.ilike.%X%,type.ilike.%X%,location.ilike.%X%"))
             if (!query.searchText.isNullOrBlank()) {
                 filter {

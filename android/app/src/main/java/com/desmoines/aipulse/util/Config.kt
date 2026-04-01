@@ -38,6 +38,12 @@ object Config {
     val GOOGLE_WEB_CLIENT_ID: String
         get() = com.desmoines.aipulse.BuildConfig.GOOGLE_WEB_CLIENT_ID
 
+    // Billing / Subscriptions
+    // Product IDs configured in Google Play Console — must match exactly
+    const val INSIDER_MONTHLY_PRODUCT_ID = "insider_monthly"
+    const val VIP_MONTHLY_PRODUCT_ID = "vip_monthly"
+    val SUBSCRIPTION_PRODUCT_IDS = listOf(INSIDER_MONTHLY_PRODUCT_ID, VIP_MONTHLY_PRODUCT_ID)
+
     // Search
     const val SEARCH_DEBOUNCE_MS = 300L
 

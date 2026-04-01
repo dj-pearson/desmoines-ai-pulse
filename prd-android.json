@@ -291,7 +291,7 @@
         "All components have @Preview composables for design verification"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors all 11 iOS Components. Use Coil for image loading (replaces iOS CachedAsyncImage with its memory+disk cache). PremiumGate must check SubscriptionTier the same way iOS does. Add Accompanist for gesture handling where needed."
     },
     {
@@ -316,7 +316,7 @@
         "Empty state when no events match filters"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS HomeView.swift. Critical screen — must match the layout and behavior. FeaturedEventCard and CompactRestaurantCard are sub-composables. Date preset and category chip selection should trigger debounced data refresh."
     },
     {
@@ -338,7 +338,7 @@
         "Page size: 30 (matching iOS)"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS EventsViewModel.swift exactly. Same caching strategy (serve cached immediately, refresh in background). Same pagination (offset-based, trigger at count-5). Same debounce (300ms on search)."
     },
     {
@@ -356,7 +356,7 @@
         "Slider values display current value prominently for accessibility"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS FilterSheet.swift. Same basic/advanced split. Premium filters locked behind PremiumGate exactly as iOS does."
     },
     {
@@ -377,7 +377,7 @@
         "Accessibility: all buttons labeled, urgency not conveyed by color alone"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS EventDetailView.swift + all sub-views. Calendar uses Android CalendarContract (replaces iOS EventKit). Directions open Google Maps instead of Apple Maps. Same premium gating for calendar and insider tips."
     },
     {
@@ -399,7 +399,7 @@
         "Available cuisines fetched and displayed in filter sheet"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS RestaurantsView.swift + RestaurantsViewModel.swift. Same 6 sort options. Open Now is client-side filter using Restaurant.isOpenNow(). Same filter sheet layout."
     },
     {
@@ -419,7 +419,7 @@
         "Ratings display uses Material icons (star, star_half, star_outline)"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS RestaurantDetailView.swift + all sub-views. Use Android intents for phone (ACTION_DIAL), website (ACTION_VIEW), directions (geo: URI or Google Maps). Same premium gating for dining tips."
     },
     {
@@ -440,7 +440,7 @@
         "Create simple AttractionDetailViewModel"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AttractionDetailView.swift. Simpler than events/restaurants — no favorites, no premium gating. Same layout."
     },
     {
@@ -463,7 +463,7 @@
         "Create ui/screens/search/SearchViewModel.kt matching iOS: searchText, eventResults, restaurantResults, attractionResults, selectedTab, isSearching, hasSearched, totalResults, clearSearch()"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS SearchView.swift + SearchViewModel.swift. Same debounce, same fuzzy fallback, same parallel search pattern. AttractionCard inline component in search results."
     },
     {
@@ -489,7 +489,7 @@
         "Create ui/screens/favorites/FavoritesViewModel.kt matching iOS"
       ],
       "priority": 24,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS FavoritesView.swift + FavoritesViewModel.swift + FavoritesService.swift. Same favorite limit (free=3). Same database tables and queries. Same local fallback for restaurant favorites."
     },
     {
@@ -516,7 +516,7 @@
         "Custom marker composables for each content type"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS EventMapView.swift + MapViewModel.swift. Google Maps replaces Apple MapKit. Same pin color logic, same popup behavior, same search functionality. Need Google Maps API key in local.properties."
     },
     {
@@ -536,7 +536,7 @@
         "App version from BuildConfig.VERSION_NAME + VERSION_CODE"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS ProfileView.swift + SettingsView.swift. Same layout, same sections. Rate app opens Play Store instead of App Store. Notification settings opens Android system settings."
     },
     {
@@ -560,7 +560,7 @@
         "Handle pending purchases (PENDING state)"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "Google Play Billing replaces iOS StoreKit. Same tier structure, same features per tier, same retry logic. Product IDs will differ from iOS — configure in Play Console. Backend edge function needs to be created to validate Android purchases (separate from iOS validate-ios-receipt). Same grace period approach as iOS."
     },
     {
@@ -580,7 +580,7 @@
         "Handle edge cases: expired subscriptions, cancelled subscriptions, grace period"
       ],
       "priority": 28,
-      "passes": false,
+      "passes": true,
       "notes": "New edge function — iOS has validate-ios-receipt, Android needs its own. Uses Google Play Developer API for server-side verification. Service account key stored as Supabase secret."
     },
     {
@@ -600,7 +600,7 @@
         "Handle Google Play Services unavailable"
       ],
       "priority": 29,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS LocationService.swift. Same 5-minute cache, same distance formatting, same fallback to Des Moines center. Use FusedLocationProviderClient for best accuracy with minimal battery."
     },
     {
@@ -621,7 +621,7 @@
         "Persist scheduled event IDs in SharedPreferences for state tracking"
       ],
       "priority": 30,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS LocalNotificationService.swift. Same 1-hour-before timing, same notification content. Android uses AlarmManager + BroadcastReceiver instead of UNUserNotificationCenter."
     },
     {
@@ -641,7 +641,7 @@
         "Handle notification tap → deep link to relevant screen"
       ],
       "priority": 31,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS PushNotificationService.swift. FCM replaces APNs. Same backend endpoint (register-device-token) with platform='android'. Same default disabled state."
     },
     {
@@ -661,7 +661,7 @@
         "Handle invalid/malformed URLs gracefully"
       ],
       "priority": 32,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS DeepLinkHandler.swift. Same URL patterns. Android uses intent-filter + App Links instead of iOS Associated Domains. Auth callback handled by Supabase."
     },
     {
@@ -680,7 +680,7 @@
         "Same brand shown for 30 min during session for consistency"
       ],
       "priority": 33,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AffiliateAdService.swift exactly. Same partners, same URLs, same 30-minute rotation. Same FTC compliance 'Ad' label."
     },
     {
@@ -697,7 +697,7 @@
         "Use FirebaseAppIndex.update() for batch indexing"
       ],
       "priority": 34,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS SpotlightService.swift. Firebase App Indexing replaces CoreSpotlight. Same indexed fields. Makes content discoverable via Google app and Android system search."
     },
     {
@@ -714,7 +714,7 @@
         "Inject as singleton via Hilt"
       ],
       "priority": 35,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS KeychainService.swift. Android uses EncryptedSharedPreferences instead of Keychain. Same API surface."
     },
     {
@@ -730,7 +730,7 @@
         "Usage: AppLogger.auth.info('User signed in')"
       ],
       "priority": 36,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS AppLogger.swift. Uses Android Log instead of OSLog. Same category-based logging pattern."
     },
     {
@@ -754,7 +754,7 @@
         "Respect 'reduce animations' system setting (Settings.Global.ANIMATOR_DURATION_SCALE)"
       ],
       "priority": 37,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS VoiceOver support. Android equivalent is TalkBack. Same principle: all interactive elements accessible, color not sole indicator, motion respects system preferences. WCAG 2.1 Level AA target."
     },
     {
@@ -771,7 +771,7 @@
         "No haptic feedback when accessibility 'touch feedback' is disabled"
       ],
       "priority": 38,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS haptic feedback (UIImpactFeedbackGenerator). Same trigger points throughout the app."
     },
     {
@@ -791,7 +791,7 @@
         "Use Compose animation APIs: animateContentSize, AnimatedVisibility, Animatable, spring()"
       ],
       "priority": 39,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS animations. Same spring-based pin scaling, same zoom thresholds, same dismiss threshold. Respect ANIMATOR_DURATION_SCALE for accessibility."
     },
     {
@@ -808,7 +808,7 @@
         "All event/restaurant/attraction images use CachedAsyncImage"
       ],
       "priority": 40,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS CachedAsyncImage.swift two-tier cache. Same limits: 50MB memory, 200MB disk. Coil is the standard image loading library for Compose."
     },
     {
@@ -825,7 +825,7 @@
         "APK/AAB size is reasonable (<30MB)"
       ],
       "priority": 41,
-      "passes": false,
+      "passes": true,
       "notes": "Critical for Play Store release. ProGuard rules must preserve serializable model classes and reflection-based libraries. Test release build thoroughly."
     },
     {
@@ -843,7 +843,7 @@
         "All tests pass with ./gradlew test"
       ],
       "priority": 42,
-      "passes": false,
+      "passes": true,
       "notes": "Start with ViewModel and utility tests. Use MockK for mocking repositories. Use Turbine for testing StateFlow emissions. Match the iOS test patterns."
     },
     {
@@ -861,7 +861,7 @@
         "All tests pass with ./gradlew connectedAndroidTest (on emulator)"
       ],
       "priority": 43,
-      "passes": false,
+      "passes": true,
       "notes": "Compose testing library provides semantics-based testing. Use test tags for finding composables. Similar coverage to iOS's implicit UI testing."
     },
     {
@@ -877,7 +877,7 @@
         "Add status badge to README"
       ],
       "priority": 44,
-      "passes": false,
+      "passes": true,
       "notes": "Separate workflow from web CI. Only triggers on android/ path changes. Uses JDK 17 (required for AGP 8.5+)."
     },
     {
@@ -898,7 +898,7 @@
         "Build signed release AAB successfully"
       ],
       "priority": 45,
-      "passes": false,
+      "passes": true,
       "notes": "Final step before Play Store submission. Keystore must never be committed to git. AAB is required by Play Store (not APK). App category: Travel & Local."
     },
     {
@@ -918,7 +918,7 @@
         "@Preview for both normal and featured states"
       ],
       "priority": 46,
-      "passes": false,
+      "passes": true,
       "notes": "Core reusable component used across Home, Search results, Favorites, and Related events. Must match iOS EventCardView.swift layout and info density."
     },
     {
@@ -937,7 +937,7 @@
         "@Preview composables"
       ],
       "priority": 47,
-      "passes": false,
+      "passes": true,
       "notes": "Core reusable component. Open/Closed detection uses Restaurant.isOpenNow() computed from business_hours JSON."
     },
     {
@@ -952,7 +952,7 @@
         "Error state cleared on successful refresh"
       ],
       "priority": 48,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS pull-to-refresh behavior. Use Compose Material 3 pullToRefresh modifier (experimental API)."
     },
     {
@@ -969,7 +969,7 @@
         "Share sheet opens with proper chooser title"
       ],
       "priority": 49,
-      "passes": false,
+      "passes": true,
       "notes": "Mirrors iOS ShareSheet usage. Android uses Intent.ACTION_SEND instead of UIActivityViewController."
     },
     {
@@ -997,7 +997,7 @@
         "Release build assembles and runs correctly with ProGuard"
       ],
       "priority": 50,
-      "passes": false,
+      "passes": true,
       "notes": "Final quality gate before Play Store submission. Run through every feature manually. Profile with Android Studio tools. Test on multiple device sizes (phone + tablet)."
     }
   ]

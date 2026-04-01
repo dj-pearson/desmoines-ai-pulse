@@ -7,9 +7,13 @@ import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
 import io.github.jan.supabase.auth.FlowType
 import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.annotations.SupabaseInternal
+import io.ktor.client.plugins.DefaultRequest
+import io.ktor.client.request.header
 
 private const val TAG = "SupabaseClient"
 
@@ -40,6 +44,7 @@ object SupabaseClientProvider {
      */
     val isConfigured: Boolean get() = client != null
 
+    @OptIn(SupabaseInternal::class)
     private fun createClient(): SupabaseClient? {
         val url = BuildConfig.SUPABASE_URL
         val key = BuildConfig.SUPABASE_ANON_KEY
@@ -58,7 +63,11 @@ object SupabaseClientProvider {
                 supabaseUrl = url,
                 supabaseKey = key
             ) {
-                defaultHeaders["X-Client-Info"] = Config.CLIENT_INFO_HEADER
+                httpConfig {
+                    install(DefaultRequest) {
+                        header("X-Client-Info", Config.CLIENT_INFO_HEADER)
+                    }
+                }
 
                 install(Auth) {
                     flowType = FlowType.PKCE
@@ -66,6 +75,7 @@ object SupabaseClientProvider {
                     host = "auth-callback"
                 }
 
+                install(Functions)
                 install(Postgrest)
                 install(Realtime)
                 install(Storage)
