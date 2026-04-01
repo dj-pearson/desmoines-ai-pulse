@@ -344,8 +344,8 @@
         "Support team can look up transaction by logged ID"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": "HIGH: listenForTransactions() silently ignores verification errors with try?. Failed transactions are invisible to users and support."
+      "passes": true,
+      "notes": "FIXED: Replaced try? with do/catch in listenForTransactions(). Failed verifications now logged via AppLogger.storekit with transaction ID and product ID for support lookup. Posts storeKitTransactionFailed notification for UI to show error toast. No PII logged."
     },
     {
       "id": "IOS-022",

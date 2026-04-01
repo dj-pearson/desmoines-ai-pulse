@@ -191,16 +191,47 @@ final class StoreKitService {
     private func listenForTransactions() -> Task<Void, Never> {
         Task.detached { [weak self] in
             for await result in Transaction.updates {
-                if let transaction = try? self?.checkVerified(result) {
-                    await transaction.finish()
-                    await self?.updatePurchasedProducts()
-                    await self?.syncEntitlementToBackend(
-                        transaction: transaction,
-                        productId: transaction.productID
-                    )
+                do {
+                    let transaction = try self?.checkVerified(result)
+                    if let transaction {
+                        await transaction.finish()
+                        await self?.updatePurchasedProducts()
+                        await self?.syncEntitlementToBackend(
+                            transaction: transaction,
+                            productId: transaction.productID
+                        )
+                    }
+                } catch {
+                    AppLogger.storekit.error("Transaction verification failed: \(error.localizedDescription)")
+                    await self?.handleTransactionFailure(result: result, error: error)
                 }
             }
         }
+    }
+
+    /// Logs failed transaction details and posts a notification for UI to show error.
+    private func handleTransactionFailure(result: VerificationResult<Transaction>, error: Error) {
+        // Extract transaction ID for support lookup regardless of verification status
+        let transaction: Transaction
+        switch result {
+        case .unverified(let tx, _): transaction = tx
+        case .verified(let tx): transaction = tx
+        }
+
+        let transactionId = String(transaction.id)
+        let productId = transaction.productID
+        AppLogger.storekit.error("Failed transaction ID: \(transactionId), product: \(productId)")
+
+        // Post notification so UI can show error toast
+        NotificationCenter.default.post(
+            name: .storeKitTransactionFailed,
+            object: nil,
+            userInfo: [
+                "transactionId": transactionId,
+                "productId": productId,
+                "error": error.localizedDescription,
+            ]
+        )
     }
 
     // MARK: - Verify Transaction
@@ -367,4 +398,8 @@ final class StoreKitService {
             }
         }
     }
+}
+
+extension Notification.Name {
+    static let storeKitTransactionFailed = Notification.Name("storeKitTransactionFailed")
 }
