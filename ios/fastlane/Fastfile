@@ -198,6 +198,41 @@ platform :ios do
   end
 
   # ============================================================================
+  # Upload App Store Metadata
+  # ============================================================================
+
+  desc "Upload metadata (description, keywords, release notes) to App Store Connect"
+  lane :upload_metadata do
+    deliver(
+      app_identifier: BUNDLE_ID,
+      metadata_path: "./metadata",
+      skip_binary_upload: true,
+      skip_screenshots: true,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+    UI.success("Metadata uploaded to App Store Connect!")
+  end
+
+  # ============================================================================
+  # Upload Screenshots
+  # ============================================================================
+
+  desc "Upload screenshots to App Store Connect"
+  lane :upload_screenshots do
+    deliver(
+      app_identifier: BUNDLE_ID,
+      screenshots_path: "./screenshots",
+      skip_binary_upload: true,
+      skip_metadata: true,
+      force: true,
+      overwrite_screenshots: true,
+      precheck_include_in_app_purchases: false
+    )
+    UI.success("Screenshots uploaded to App Store Connect!")
+  end
+
+  # ============================================================================
   # Convenience: Open in Xcode
   # ============================================================================
 
