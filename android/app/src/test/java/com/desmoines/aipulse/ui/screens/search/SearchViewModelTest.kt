@@ -13,7 +13,9 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -146,6 +148,7 @@ class SearchViewModelTest {
     @Test
     fun `onTabSelected changes active tab`() = runTest {
         viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         assertEquals(SearchTab.EVENTS, viewModel.uiState.value.selectedTab)
 
         viewModel.onTabSelected(SearchTab.RESTAURANTS)
