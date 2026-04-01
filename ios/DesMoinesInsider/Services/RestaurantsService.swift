@@ -41,6 +41,10 @@ actor RestaurantsService {
     // MARK: - Fetch Restaurants
 
     func fetchRestaurants(query: RestaurantsQuery = RestaurantsQuery()) async throws -> RestaurantsResponse {
+        try await withRetry { [self] in try await _fetchRestaurants(query: query) }
+    }
+
+    private func _fetchRestaurants(query: RestaurantsQuery) async throws -> RestaurantsResponse {
         let client = try db()
         var request = client
             .from("restaurants")

@@ -4,6 +4,7 @@ import SwiftUI
 struct SearchView: View {
     @State private var viewModel = SearchViewModel()
     @State private var navigationPath = NavigationPath()
+    @State private var showScrollToTop = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -115,6 +116,9 @@ struct SearchView: View {
     private var searchSuggestions: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // Recent searches
+                recentSearchesSection
+
                 // Quick categories
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Popular Categories")
@@ -182,8 +186,10 @@ struct SearchView: View {
     // MARK: - Results List
 
     private var resultsList: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             LazyVStack(spacing: 12) {
+                Color.clear.frame(height: 0).id("top")
                 switch viewModel.selectedTab {
                 case .events:
                     ForEach(viewModel.eventResults) { event in
@@ -217,6 +223,69 @@ struct SearchView: View {
                 }
             }
             .padding()
+            .trackScrollOffset(showScrollToTop: $showScrollToTop)
+        }
+        .coordinateSpace(name: "scroll")
+        .overlay(alignment: .bottomTrailing) {
+            ScrollToTopButton(isVisible: showScrollToTop) {
+                withAnimation { proxy.scrollTo("top") }
+            }
+        }
+        } // ScrollViewReader
+    }
+
+    // MARK: - Recent Searches
+
+    @ViewBuilder
+    private var recentSearchesSection: some View {
+        let history = SearchHistoryService.shared
+        if !history.recentSearches.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Recent Searches")
+                        .font(.headline)
+                    Spacer()
+                    Button("Clear") {
+                        withAnimation { history.clearAll() }
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+                }
+                .padding(.horizontal)
+
+                ForEach(Array(history.recentSearches.enumerated()), id: \.offset) { index, query in
+                    HStack {
+                        Button {
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            viewModel.searchText = query
+                        } label: {
+                            HStack {
+                                Image(systemName: "clock.arrow.counterclockwise")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Text(query)
+                                    .font(.subheadline)
+                                Spacer()
+                                Image(systemName: "arrow.up.left")
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            withAnimation { history.remove(at: index) }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .accessibilityLabel("Remove \(query) from recent searches")
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 10)
+                }
+            }
         }
     }
 

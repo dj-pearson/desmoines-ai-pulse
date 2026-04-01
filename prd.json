@@ -79,8 +79,8 @@
         "Log retry attempts via AppLogger.network"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": "HIGH: All services use simple try/catch without retry. StoreKitService has excellent retry logic that should be generalized."
+      "passes": true,
+      "notes": "FIXED: Created NetworkRetry.swift with generic withRetry<T> function. Exponential backoff with jitter (1s, 2s, 4s + random 0-0.5s). Detects transient errors via NSURLErrorDomain codes and HTTP 5xx keywords. Applied to EventsService.fetchEvents/fetchEvent, RestaurantsService.fetchRestaurants, AttractionsService.fetchAttractions, FavoritesService.fetchFavoriteEvents/fetchFavoriteRestaurants. Respects Task.isCancelled."
     },
     {
       "id": "IOS-006",
@@ -94,8 +94,8 @@
         "Loading indicator reflects the combined operation"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "MEDIUM: loadEventFavorites() and loadRestaurantFavorites() called sequentially. Using async let would cut load time roughly in half."
+      "passes": true,
+      "notes": "FIXED: Refactored FavoritesService.loadFavorites() to use async let for concurrent event and restaurant loading. Both loadEventFavorites() and loadRestaurantFavorites() now execute in parallel. isLoading flag wraps the combined operation."
     },
     {
       "id": "IOS-007",
@@ -109,8 +109,8 @@
         "Existing valid deep links continue to work correctly"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": "LOW: IDs extracted from deep link paths without length/character validation. Malformed IDs could cause unexpected behavior."
+      "passes": true,
+      "notes": "FIXED: Added UUID format validation in DeepLinkHandler via isValidId() and validatedId() helpers. Rejects IDs that don't match UUID pattern. Invalid deep links redirect to appropriate tab (home/restaurants). Logs rejections via AppLogger.nav."
     },
     {
       "id": "IOS-008",
@@ -126,8 +126,8 @@
         "Test on iPad Pro 11\" and 13\" simulators"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "MEDIUM: No iPad-specific layouts. Views optimized for iPhone only. iPad users get a stretched phone UI."
+      "passes": true,
+      "notes": "FIXED: Added iPad adaptive layout in MainTabView using @Environment(\\.horizontalSizeClass). iPad (regular width) gets NavigationSplitView with sidebar listing all tabs and detail column. iPhone (compact width) keeps existing TabView. Tab enum conforms to CaseIterable with title/icon properties for sidebar labels."
     },
     {
       "id": "IOS-009",
@@ -142,8 +142,8 @@
         "Works on Home, Restaurants, Search, and Favorites tabs"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "MEDIUM: Long event and restaurant lists have no quick way to return to top. Standard iOS UX pattern missing."
+      "passes": true,
+      "notes": "FIXED: Created ScrollToTopButton component with ScrollOffsetTracker modifier. Floating button appears after scrolling 500+ points with spring animation. Haptic feedback on tap. Respects reduceMotion. Added to HomeView, RestaurantsView, SearchView, and FavoritesView via ScrollViewReader + coordinateSpace tracking."
     },
     {
       "id": "IOS-010",
@@ -159,8 +159,8 @@
         "Works in both SearchView and MapView search"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": "MEDIUM: No search history or autocomplete. Users must retype searches each time."
+      "passes": true,
+      "notes": "FIXED: Created SearchHistoryService storing last 10 queries in UserDefaults. Recent searches displayed in SearchView suggestions area with individual delete (x button) and 'Clear' all. Tapping a recent search populates search field. Searches auto-recorded after returning results. Persists across app launches."
     },
     {
       "id": "IOS-011",
@@ -176,8 +176,8 @@
         "All existing date displays continue to render correctly"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "MEDIUM: Multiple inconsistent date parsers (Event.parsedDate tries 4 formats, Date.fromISO tries 2, raw ISO8601DateFormatter in services). Risk of silently dropping dates."
+      "passes": true,
+      "notes": "FIXED: Created DateParser enum with single parse() method supporting all formats (ISO 8601 with/without fractional seconds, T-separated, space-separated, date-only). Replaced Event.parsedDate inline parsing, Date.fromISO, and raw ISO8601DateFormatter().string(from:) in EventsService. Added DateParser.toISO() for formatting. Logs unrecognized formats via AppLogger."
     },
     {
       "id": "IOS-012",

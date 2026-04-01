@@ -4,6 +4,7 @@ import SwiftUI
 struct FavoritesView: View {
     @State private var viewModel = FavoritesViewModel()
     @State private var navigationPath = NavigationPath()
+    @State private var showScrollToTop = false
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -57,8 +58,10 @@ struct FavoritesView: View {
     // MARK: - Saved Content (Sections)
 
     private var savedContent: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             VStack(spacing: 20) {
+                Color.clear.frame(height: 0).id("top")
                 // Favorites limit indicator for free users
                 FavoritesLimitBanner(currentCount: viewModel.totalFavoriteCount)
                     .padding(.horizontal)
@@ -133,7 +136,15 @@ struct FavoritesView: View {
                 }
             }
             .padding(.vertical)
+            .trackScrollOffset(showScrollToTop: $showScrollToTop)
         }
+        .coordinateSpace(name: "scroll")
+        .overlay(alignment: .bottomTrailing) {
+            ScrollToTopButton(isVisible: showScrollToTop) {
+                withAnimation { proxy.scrollTo("top") }
+            }
+        }
+        } // ScrollViewReader
     }
 
     // MARK: - Section Builder

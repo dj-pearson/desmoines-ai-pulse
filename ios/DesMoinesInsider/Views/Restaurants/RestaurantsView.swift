@@ -5,11 +5,14 @@ struct RestaurantsView: View {
     @State private var viewModel = RestaurantsViewModel()
     @State private var showFilters = false
     @State private var toast: ToastMessage?
+    @State private var showScrollToTop = false
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(spacing: 12) {
+                    Color.clear.frame(height: 0).id("top")
                     // Sort picker
                     sortPicker
 
@@ -78,7 +81,15 @@ struct RestaurantsView: View {
                     }
                 }
                 .padding(.horizontal)
+                .trackScrollOffset(showScrollToTop: $showScrollToTop)
             }
+            .coordinateSpace(name: "scroll")
+            .overlay(alignment: .bottomTrailing) {
+                ScrollToTopButton(isVisible: showScrollToTop) {
+                    withAnimation { proxy.scrollTo("top") }
+                }
+            }
+            } // ScrollViewReader
             .refreshable {
                 await viewModel.refresh()
                 if viewModel.errorMessage == nil {
