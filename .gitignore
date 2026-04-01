@@ -86,5 +86,11 @@ android/app/google-services.json
 *.apk
 *.aab
 
+# Android signing keys - NEVER commit these
+*.keystore
+*.jks
+keystore-base64.txt
+android/key.properties
+
 # Added by ggshield
 .cache_ggshield

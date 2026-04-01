@@ -4,6 +4,13 @@ Complete setup guide for building and running the Des Moines Insider Android app
 
 **Last Updated**: 2026-03-31
 
+> **PowerShell Note**: All commands in this guide are written for **Windows PowerShell**. `keytool` and `gradlew` require the paths below. If you haven't added them to your PATH, use the full paths shown in each command. The Android Studio JBR (bundled JDK) is used for `keytool`:
+> ```powershell
+> # One-time: add Android Studio's keytool to your current session
+> $env:Path += ";C:\Program Files\Android\Android Studio\jbr\bin"
+> ```
+> After running this once per session, you can use `keytool` directly. To make it permanent, add `C:\Program Files\Android\Android Studio\jbr\bin` to your system **Environment Variables > PATH**.
+
 ---
 
 ## Table of Contents
@@ -117,12 +124,9 @@ To enable each:
 4. **Package name**: `com.desmoines.aipulse`
 5. **SHA-1 certificate fingerprint**: Get this from your debug keystore:
 
-   ```bash
-   # Windows (Git Bash or CMD)
-   keytool -list -v -keystore "%USERPROFILE%\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android 2>/dev/null | grep "SHA1:"
-
-   # macOS/Linux
-   keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android -keypass android 2>/dev/null | grep "SHA1:"
+   ```powershell
+   # Windows PowerShell
+   keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android -keypass android 2>$null | Select-String "SHA1:"
    ```
 
    Copy the SHA-1 hash (format: `XX:XX:XX:...`)
@@ -229,9 +233,10 @@ This key lets Supabase Edge Functions send push notifications:
 2. Click **Generate new private key**
 3. Download the JSON file
 4. Store this as the `FCM_SERVICE_ACCOUNT_KEY` Supabase secret:
-   ```bash
+   ```powershell
    # Minify the JSON and set as a Supabase secret
-   supabase secrets set FCM_SERVICE_ACCOUNT_KEY="$(cat firebase-service-account.json | tr -d '\n')"
+   $fcmKey = (Get-Content firebase-service-account.json -Raw) -replace "`r`n","" -replace "`n",""
+   supabase secrets set FCM_SERVICE_ACCOUNT_KEY="$fcmKey"
    ```
 5. Delete the local JSON file after setting the secret
 
@@ -380,28 +385,24 @@ The `local.properties` file contains your SDK path and API credentials. It is **
 
 ### 6.1 Install Infisical CLI
 
-```bash
-# Windows (via Scoop)
+```powershell
+# Windows - Option A: via Scoop (recommended)
 scoop bucket add nicehash https://github.com/nicehash/scoop-bucket
 scoop install infisical
 
-# Windows (via Chocolatey)
+# Windows - Option B: via Chocolatey
 choco install infisical
-
-# macOS
-brew install infisical/get-cli/infisical
-
-# Linux (Debian/Ubuntu)
-curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash
-sudo apt-get install infisical
 
 # Verify installation
 infisical --version
 ```
 
+> **macOS**: `brew install infisical/get-cli/infisical`
+> **Linux**: `curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash && sudo apt-get install infisical`
+
 ### 6.2 Authenticate with Infisical
 
-```bash
+```powershell
 # Login (opens browser for auth)
 infisical login
 
@@ -413,7 +414,7 @@ infisical user
 
 If not already initialized:
 
-```bash
+```powershell
 # From the project root (desmoines-ai-pulse/)
 infisical init
 ```
@@ -426,58 +427,63 @@ Select your Infisical project and environment (e.g., `dev`).
 
 Create/use the following script to pull secrets from Infisical and write `local.properties`:
 
-```bash
-# From the project root
-infisical export --env=dev --format=dotenv | grep -E "^(SUPABASE_URL|SUPABASE_ANON_KEY|GOOGLE_WEB_CLIENT_ID)" > /tmp/infisical_secrets.env
+```powershell
+# From the project root (desmoines-ai-pulse/)
 
-# Source the secrets
-source /tmp/infisical_secrets.env 2>/dev/null || {
-  export $(cat /tmp/infisical_secrets.env | xargs)
+# Pull secrets from Infisical and parse into a hashtable
+$secretsRaw = infisical export --env=dev --format=dotenv
+$envVars = @{}
+foreach ($line in ($secretsRaw | Select-String "^(SUPABASE_URL|SUPABASE_ANON_KEY|GOOGLE_WEB_CLIENT_ID)=" | ForEach-Object { $_.Line })) {
+    $parts = $line -split "=", 2
+    if ($parts.Count -eq 2) {
+        $envVars[$parts[0]] = $parts[1].Trim('"')
+    }
 }
 
+# Determine SDK path (escape backslashes for .properties format)
+$sdkPath = if ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { "$env:LOCALAPPDATA\Android\Sdk" }
+$sdkPathEscaped = $sdkPath -replace '\\', '\\'
+
 # Write local.properties
-cat > android/local.properties << EOF
-# Auto-generated from Infisical ($(date +%Y-%m-%d))
+@"
+# Auto-generated from Infisical ($(Get-Date -Format 'yyyy-MM-dd'))
 # DO NOT commit this file - it is gitignored
 
 # Android SDK path
-sdk.dir=$(echo $ANDROID_SDK_ROOT || echo $HOME/AppData/Local/Android/Sdk)
+sdk.dir=$sdkPathEscaped
 
 # Supabase
-SUPABASE_URL=${SUPABASE_URL}
-SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+SUPABASE_URL=$($envVars['SUPABASE_URL'])
+SUPABASE_ANON_KEY=$($envVars['SUPABASE_ANON_KEY'])
 
 # Google OAuth (Web Client ID - used by Credential Manager)
-GOOGLE_WEB_CLIENT_ID=${GOOGLE_WEB_CLIENT_ID}
-EOF
+GOOGLE_WEB_CLIENT_ID=$($envVars['GOOGLE_WEB_CLIENT_ID'])
+"@ | Set-Content -Path "android\local.properties" -Encoding utf8
 
-# Cleanup
-rm -f /tmp/infisical_secrets.env
-
-echo "local.properties written successfully"
+Write-Host "local.properties written successfully"
 ```
 
 **Option B: Using `infisical run`**
 
 If you have the secrets stored with the exact key names:
 
-```bash
+```powershell
 # Preview what will be injected
 infisical export --env=dev --format=dotenv
 
 # Use infisical run to inject env vars into any command
-infisical run --env=dev -- ./gradlew assembleDebug
+infisical run --env=dev -- .\gradlew assembleDebug
 ```
 
 **Option C: Manual**
 
 Pull individual values and write `local.properties` by hand:
 
-```bash
+```powershell
 # View available secrets
 infisical export --env=dev --format=dotenv
 
-# Then manually create android/local.properties:
+# Then manually create android\local.properties (see template below):
 ```
 
 ```properties
@@ -558,33 +564,33 @@ val googleClientId = BuildConfig.GOOGLE_WEB_CLIENT_ID
 
 ### 7.4 Build Debug APK (command line)
 
-```bash
-cd android
+```powershell
+Set-Location android
 
 # Debug build
-./gradlew assembleDebug
+.\gradlew assembleDebug
 
-# Output: android/app/build/outputs/apk/debug/app-debug.apk
+# Output: android\app\build\outputs\apk\debug\app-debug.apk
 ```
 
 ### 7.5 Build Release AAB (for Play Store)
 
-```bash
-cd android
+```powershell
+Set-Location android
 
 # Release bundle (requires signing config - see Section 9)
-./gradlew bundleRelease
+.\gradlew bundleRelease
 
-# Output: android/app/build/outputs/bundle/release/app-release.aab
+# Output: android\app\build\outputs\bundle\release\app-release.aab
 ```
 
 ### 7.6 Run with Infisical (inject secrets at build time)
 
-```bash
-cd android
+```powershell
+Set-Location android
 
 # Build with Infisical-injected environment variables
-infisical run --env=dev -- ./gradlew assembleDebug
+infisical run --env=dev -- .\gradlew assembleDebug
 ```
 
 ---
@@ -658,15 +664,16 @@ Before a production release, test via Internal Testing:
 
 **Only do this once** - losing the keystore means you can never update your app.
 
-```bash
-keytool -genkeypair \
-  -v \
-  -storetype PKCS12 \
-  -keystore des-moines-insider.keystore \
-  -alias des-moines-insider \
-  -keyalg RSA \
-  -keysize 2048 \
-  -validity 10000 \
+```powershell
+# Run from the android/ folder
+keytool -genkeypair `
+  -v `
+  -storetype PKCS12 `
+  -keystore des-moines-insider.keystore `
+  -alias des-moines-insider `
+  -keyalg RSA `
+  -keysize 2048 `
+  -validity 10000 `
   -dname "CN=Des Moines Insider, O=Des Moines Insider LLC, L=Des Moines, ST=Iowa, C=US"
 ```
 
@@ -674,15 +681,16 @@ You'll be prompted for a keystore password and key password. **Save these secure
 
 ### 9.2 Store Keystore Securely
 
-```bash
+```powershell
 # Base64 encode the keystore for storage in CI secrets
-base64 -i des-moines-insider.keystore > keystore-base64.txt
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("des-moines-insider.keystore")) |
+  Out-File -FilePath "keystore-base64.txt" -NoNewline -Encoding ascii
 
-# Store in Infisical
+# Store in Infisical (or GitHub Secrets):
 # Key: ANDROID_KEYSTORE_BASE64  Value: (contents of keystore-base64.txt)
 # Key: ANDROID_KEYSTORE_PASSWORD  Value: (your keystore password)
 # Key: ANDROID_KEY_ALIAS  Value: des-moines-insider
-# Key: ANDROID_KEY_PASSWORD  Value: (your key password)
+# Key: ANDROID_KEY_PASSWORD  Value: (your key password - same as keystore password for PKCS12)
 ```
 
 ### 9.3 Add Signing Config to build.gradle.kts
@@ -717,8 +725,8 @@ buildTypes {
 
 ### 9.4 Get Release SHA-1 (for Google Cloud Console)
 
-```bash
-keytool -list -v -keystore des-moines-insider.keystore -alias des-moines-insider | grep "SHA1:"
+```powershell
+keytool -list -v -keystore des-moines-insider.keystore -alias des-moines-insider | Select-String "SHA1:"
 ```
 
 Add this SHA-1 to your Android OAuth client in Google Cloud Console (Step 2.3.D).
@@ -830,7 +838,7 @@ jobs:
 |---|---|
 | `SUPABASE_URL is empty` | Verify `local.properties` has `SUPABASE_URL=...` (no quotes) |
 | `google-services.json not found` | Download from Firebase Console, place in `android/app/` |
-| `Duplicate class` | Run `./gradlew clean` then rebuild |
+| `Duplicate class` | Run `.\gradlew clean` then rebuild |
 | `Minification failed` | Check ProGuard rules, add `-keep` for Supabase/Ktor classes |
 
 ### Runtime Errors
@@ -863,30 +871,30 @@ jobs:
 
 ## Quick Reference Cheat Sheet
 
-```bash
+```powershell
 # Pull secrets from Infisical
 infisical export --env=dev --format=dotenv
 
 # Build debug APK
-cd android && ./gradlew assembleDebug
+Set-Location android; .\gradlew assembleDebug
 
 # Build release AAB
-cd android && ./gradlew bundleRelease
+Set-Location android; .\gradlew bundleRelease
 
 # Run tests
-cd android && ./gradlew test
+Set-Location android; .\gradlew test
 
 # Clean build
-cd android && ./gradlew clean
+Set-Location android; .\gradlew clean
 
 # Get debug SHA-1
-keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android | grep SHA1
+keytool -list -v -keystore "$env:USERPROFILE\.android\debug.keystore" -alias androiddebugkey -storepass android | Select-String "SHA1:"
 
 # Check installed SDK versions
-sdkmanager --list --sdk_root=$ANDROID_SDK_ROOT
+& "$env:LOCALAPPDATA\Android\Sdk\cmdline-tools\latest\bin\sdkmanager.bat" --list
 
 # Lint check
-cd android && ./gradlew lint
+Set-Location android; .\gradlew lint
 ```
 
 ---
