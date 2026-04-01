@@ -7,11 +7,15 @@ struct DesMoinesInsiderApp: App {
     @State private var favoritesService = FavoritesService.shared
     @State private var locationService = LocationService.shared
     @State private var biometricService = BiometricAuthService.shared
+    @State private var consent = ConsentService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("appLaunchCount") private var launchCount = 0
     @State private var showJailbreakWarning = false
     @State private var awaitingBiometric = false
+
+    /// MetricKit subscriber — retained for the lifetime of the app.
+    private let metricKit = MetricKitSubscriber.shared
 
     var body: some Scene {
         WindowGroup {
@@ -27,6 +31,8 @@ struct DesMoinesInsiderApp: App {
                     LaunchScreenView()
                 } else if !hasCompletedOnboarding {
                     OnboardingView(hasCompletedOnboarding: $hasCompletedOnboarding)
+                } else if consent.needsConsentPrompt {
+                    ConsentView { }
                 } else if awaitingBiometric {
                     BiometricLockView {
                         awaitingBiometric = false

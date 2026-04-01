@@ -41,6 +41,10 @@ struct SearchView: View {
                 }
             }
             .refreshable {
+                guard NetworkMonitor.shared.isConnected else {
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                    return
+                }
                 await viewModel.refresh()
                 if viewModel.isEmpty {
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
@@ -48,7 +52,13 @@ struct SearchView: View {
                     UINotificationFeedbackGenerator().notificationOccurred(.success)
                 }
             }
-            .searchable(text: $viewModel.searchText, prompt: "Search events, restaurants, attractions...")
+            .searchable(
+                text: $viewModel.searchText,
+                prompt: NetworkMonitor.shared.isConnected
+                    ? "Search events, restaurants, attractions..."
+                    : "Search unavailable offline"
+            )
+            .disabled(!NetworkMonitor.shared.isConnected && !viewModel.hasSearched)
             .navigationTitle("Search")
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
