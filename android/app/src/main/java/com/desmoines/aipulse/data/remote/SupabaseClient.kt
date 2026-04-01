@@ -2,6 +2,7 @@ package com.desmoines.aipulse.data.remote
 
 import android.util.Log
 import com.desmoines.aipulse.BuildConfig
+import com.desmoines.aipulse.util.CertificatePinningService
 import com.desmoines.aipulse.util.Config
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
@@ -12,6 +13,7 @@ import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.annotations.SupabaseInternal
+import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.DefaultRequest
 import io.ktor.client.request.header
 
@@ -63,6 +65,12 @@ object SupabaseClientProvider {
                 supabaseUrl = url,
                 supabaseKey = key
             ) {
+                httpEngine {
+                    OkHttp {
+                        CertificatePinningService.configurePinning(this.config)
+                    }
+                }
+
                 httpConfig {
                     install(DefaultRequest) {
                         header("X-Client-Info", Config.CLIENT_INFO_HEADER)

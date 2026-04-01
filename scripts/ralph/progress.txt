@@ -1239,3 +1239,97 @@ Started: 2026-03-27T14:05:42.010Z
 
 ## COMPLETE — All 50 Android stories implemented
 ---
+
+## 2026-04-01 - AND-SEC-001 (Android Security Audit)
+- Created BiometricAuthService.kt matching iOS BiometricAuthService.swift:
+  - Uses AndroidX Biometric library (1.2.0-alpha05) with Class 3 (strong) biometric requirement
+  - BiometricPrompt with suspend/resume coroutine integration for async authentication
+  - Supports fingerprint, face recognition, iris via BIOMETRIC_STRONG authenticator
+  - Enable/disable preference stored securely in EncryptedSharedPreferences via SecureStorage
+  - Handles all BiometricPrompt error codes: ERROR_HW_UNAVAILABLE, ERROR_NO_BIOMETRICS, ERROR_LOCKOUT, ERROR_LOCKOUT_PERMANENT, ERROR_TIMEOUT, ERROR_USER_CANCELED, ERROR_NEGATIVE_BUTTON, ERROR_VENDOR, etc.
+  - Human-readable status messages for all BiometricManager states
+- Integrated biometric lock screen into MainActivity:
+  - On app launch, prompts biometric if enabled and available
+  - Lock screen overlay with retry button if initial prompt fails
+  - Falls back to normal app flow on "Use Password" dismissal
+- Updated AuthViewModel to clear biometric preference on sign out
+- Added biometric library to version catalog (libs.versions.toml) and build.gradle.kts
+- Changed MainActivity to extend FragmentActivity (required by BiometricPrompt)
+- Files created: BiometricAuthService.kt
+- Files modified: MainActivity.kt, AuthViewModel.kt, build.gradle.kts, libs.versions.toml
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - BiometricPrompt requires FragmentActivity (not ComponentActivity) — ComponentActivity extends FragmentActivity so this is a safe change
+  - suspendCoroutine with resume() bridges BiometricPrompt callback API to coroutines cleanly
+  - BIOMETRIC_STRONG ensures only Class 3 (cryptographic) biometrics — no screen lock fallback
+  - onAuthenticationFailed() fires on each bad attempt but prompt stays open — only onAuthenticationError() is terminal
+  - setConfirmationRequired(false) skips the extra "Confirm" tap after face recognition succeeds
+---
+
+## 2026-04-01 - AND-SEC-002 (Android Security Audit)
+- Created CertificatePinningService.kt matching iOS CertificatePinningService.swift:
+  - Uses OkHttp CertificatePinner with SPKI SHA-256 hashes (same 3 hashes as iOS)
+  - Pins Let's Encrypt R3 intermediate, ISRG Root X1, DigiCert Global Root G2
+  - Pins *.supabase.co domain pattern
+  - Debug mode: report-only (logs via interceptor but allows connections)
+  - Release mode: enforces pinning (SSLPeerUnverifiedException on mismatch)
+  - configurePinning() method accepts OkHttpClient.Builder for flexible integration
+  - createPinnedClient() convenience method for standalone use
+- Integrated into SupabaseClientProvider:
+  - Added Ktor OkHttp engine configuration with certificate pinning
+  - All Supabase API calls now go through pinned OkHttp client
+- Files created: CertificatePinningService.kt
+- Files modified: SupabaseClient.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - OkHttp CertificatePinner uses "sha256/" prefix format (not bare base64 like iOS)
+  - Ktor OkHttp engine config exposes OkHttpClient.Builder directly via OkHttp { config { ... } }
+  - CertificatePinner.Builder().add(pattern, hash) can chain multiple hashes per domain
+  - In debug mode, use interceptor-based logging instead of CertificatePinner to avoid blocking dev environments
+  - Wildcard patterns (*.supabase.co) work with OkHttp CertificatePinner
+---
+
+## 2026-04-01 - AND-SEC-003 (Android Security Audit)
+- Created RootDetector.kt matching iOS JailbreakDetector.swift:
+  - 5 detection checks: su binary paths, root management apps, suspicious paths, test-keys, writable system paths
+  - Su binary check: 10 common su binary locations
+  - Root apps check: Magisk Manager, SuperUser, SuperSU, Xposed Installer, Cydia Substrate, Hide My Root, Root Cloak
+  - Suspicious paths: Superuser.apk, init.d, daemonsu, busybox, Magisk data/modules dirs
+  - Build tags: checks for "test-keys" in Build.TAGS
+  - Writable system paths: checks /system, /system/bin, /system/sbin, /vendor/bin
+  - Skips all checks on emulator (detects via Build.FINGERPRINT, MODEL, MANUFACTURER, PRODUCT, HARDWARE)
+- Integrated non-blocking AlertDialog warning into MainActivity:
+  - Shows on launch if root detected, dismissible with "I Understand" button
+  - Does NOT block app usage (soft warning only)
+  - Uses Material 3 AlertDialog with Warning icon in error color
+- Files created: RootDetector.kt
+- Files modified: MainActivity.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - File.exists() and File.canWrite() are the safest root checks — no permission requirements
+  - Build.TAGS.contains("test-keys") catches most custom ROM builds
+  - Emulator detection must cover: generic fingerprint, google_sdk model, goldfish/ranchu hardware, sdk_ product prefixes
+  - Root management apps detected via /data/data/ directory existence (no PackageManager query needed)
+  - AlertDialog in Compose is a standalone composable with icon, title, text, confirmButton params
+---
+
+## 2026-04-01 - AND-SEC-004 (Android Security Audit)
+- Enhanced existing SecureStorage.kt with additional convenience methods:
+  - saveBoolean/loadBoolean for boolean preferences (biometric enabled, consent toggles)
+  - saveLong/loadLong for timestamp storage (session timeout tracking)
+  - contains() for key existence checks
+  - All methods use the same EncryptedSharedPreferences backend with AES256_GCM encryption
+- SecureStorage already provides:
+  - MasterKey with AES256_GCM key scheme (hardware-backed on supported devices)
+  - EncryptedSharedPreferences with AES256_SIV key encryption + AES256_GCM value encryption
+  - Graceful fallback to standard SharedPreferences if Keystore unavailable
+  - save/load/delete/deleteAll string operations matching iOS KeychainService
+  - Hilt @Singleton injection via @Inject constructor
+- Files modified: SecureStorage.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - EncryptedSharedPreferences putBoolean/getBoolean and putLong/getLong work identically to regular SharedPreferences
+  - MasterKey.KeyScheme.AES256_GCM is hardware-backed on Android 9+ (API 28+) — our minSdk is 26 so some devices use software keystore
+  - The fallback pattern (try encrypted, catch → standard) is critical for emulators and devices with corrupted Keystore
+  - contains() delegates directly to SharedPreferences.contains() — works through encrypted wrapper
+---

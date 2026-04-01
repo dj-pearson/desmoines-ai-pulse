@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.model.UserRole
 import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.util.BiometricAuthService
 import com.desmoines.aipulse.util.Config
 import dagger.hilt.android.lifecycle.HiltViewModel
 import io.github.jan.supabase.auth.status.SessionStatus
@@ -26,6 +27,7 @@ private const val TAG = "AuthViewModel"
 @HiltViewModel
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val biometricAuthService: BiometricAuthService,
 ) : ViewModel() {
 
     // MARK: - Auth State
@@ -255,10 +257,42 @@ class AuthViewModel @Inject constructor(
     fun signOut() {
         viewModelScope.launch {
             authRepository.signOut()
+                .onSuccess {
+                    // Clear biometric auth on sign out (matching iOS pattern)
+                    biometricAuthService.reset()
+                }
                 .onFailure { error ->
                     setError(error.message ?: "Sign out failed.")
                 }
         }
+    }
+
+    // MARK: - Biometric Auth
+
+    /**
+     * Whether biometric auth is available and can be enabled.
+     */
+    val isBiometricAvailable: Boolean
+        get() = biometricAuthService.isAvailable
+
+    /**
+     * Whether biometric auth is currently enabled by the user.
+     */
+    val isBiometricEnabled: Boolean
+        get() = biometricAuthService.isEnabled
+
+    /**
+     * Enable biometric auth. Should be called after a successful biometric prompt.
+     */
+    fun enableBiometric() {
+        biometricAuthService.enable()
+    }
+
+    /**
+     * Disable biometric auth.
+     */
+    fun disableBiometric() {
+        biometricAuthService.disable()
     }
 
     // MARK: - Reset Password

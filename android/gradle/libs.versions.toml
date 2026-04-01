@@ -34,6 +34,7 @@ playBilling = "7.1.1"
 firebaseBom = "33.7.0"
 firebaseAppIndexing = "20.0.0"
 securityCrypto = "1.1.0-alpha06"
+biometric = "1.2.0-alpha05"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -109,6 +110,9 @@ firebase-appindexing = { group = "com.google.firebase", name = "firebase-appinde
 
 # Security (Encrypted SharedPreferences)
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
+
+# Biometric authentication
+biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
 
 # Ktor (HTTP engine for Supabase)
 ktor-client-okhttp = { group = "io.ktor", name = "ktor-client-okhttp", version.ref = "ktor" }

@@ -165,6 +165,9 @@ dependencies {
     // Security (Encrypted SharedPreferences)
     implementation(libs.security.crypto)
 
+    // Biometric authentication (Face/Fingerprint)
+    implementation(libs.biometric)
+
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
