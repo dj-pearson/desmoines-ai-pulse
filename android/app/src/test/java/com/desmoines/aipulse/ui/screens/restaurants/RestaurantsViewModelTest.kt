@@ -11,7 +11,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -67,6 +69,7 @@ class RestaurantsViewModelTest {
     @Test
     fun `setSortBy changes sort option`() = runTest {
         viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         viewModel.loadInitialData()
         advanceUntilIdle()
 
@@ -79,6 +82,7 @@ class RestaurantsViewModelTest {
     @Test
     fun `toggleCuisine adds and removes cuisine filter`() = runTest {
         viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         viewModel.loadInitialData()
         advanceUntilIdle()
 
@@ -94,6 +98,7 @@ class RestaurantsViewModelTest {
     @Test
     fun `togglePriceRange adds and removes price filter`() = runTest {
         viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         viewModel.loadInitialData()
         advanceUntilIdle()
 
@@ -129,6 +134,7 @@ class RestaurantsViewModelTest {
     @Test
     fun `activeFilterCount reflects active filters`() = runTest {
         viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         viewModel.loadInitialData()
         advanceUntilIdle()
 
@@ -144,6 +150,7 @@ class RestaurantsViewModelTest {
     @Test
     fun `toggleOpenNowOnly toggles filter`() = runTest {
         viewModel = createViewModel()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect {} }
         viewModel.loadInitialData()
         advanceUntilIdle()
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -165,9 +166,11 @@ class AuthViewModelTest {
             coEvery { authRepository.signIn(any(), any()) } returns Result.failure(RuntimeException("Invalid"))
 
             // Attempt sign in 5 times (MAX_AUTH_ATTEMPTS = 5)
+            // Use advanceTimeBy(1) instead of advanceUntilIdle() to avoid
+            // completing the lockout countdown timer (60 × delay(1000))
             repeat(5) {
                 viewModel.signIn("bad@test.com", "wrongpass")
-                advanceUntilIdle()
+                advanceTimeBy(1)
             }
 
             assertTrue(viewModel.isLockedOut)
@@ -181,13 +184,13 @@ class AuthViewModelTest {
             // Trigger lockout
             repeat(5) {
                 viewModel.signIn("bad@test.com", "wrongpass")
-                advanceUntilIdle()
+                advanceTimeBy(1)
             }
 
             // Next attempt should be blocked (no additional repository call)
             val callCountBefore = 5 // already called 5 times
             viewModel.signIn("good@test.com", "goodpass")
-            advanceUntilIdle()
+            advanceTimeBy(1)
 
             coVerify(exactly = callCountBefore) { authRepository.signIn(any(), any()) }
         }
