@@ -116,7 +116,7 @@ Privacy Policy: https://desmoinesinsider.com/privacy-policy
 > **Note:** Promotional text is NOT indexed for search. Its job is conversion — convincing
 > users who land on your page to tap Install. Update seasonally for relevance.
 
-NEW: See which restaurants are open right now! Plus faster loading, offline support, and a smoother experience throughout. Discover Des Moines events, restaurants & more.
+NEW: iPad support, Face ID/Touch ID login & smoother animations. Plus search history, favorites undo, and instant skeleton previews. Des Moines events & dining, elevated.
 
 ---
 
@@ -191,17 +191,18 @@ Iowa,dining,food,attraction,DSM,nightlife,tonight,weekend,local,guide,live music
 
 ---
 
-## What's New (Release Notes — for version 1.2.0)
+## What's New (Release Notes — for version 1.1.6)
 
-- **Open Now filter** — see which restaurants are currently open at a glance with live status badges
-- **Blazing fast load times** — events and restaurants now load instantly from cache on repeat visits and work offline
-- **Better images** — photos load faster and stay cached so you never see placeholder flickers when scrolling back
-- **Apple Sign-In fix** — resolved an issue that could prevent Sign in with Apple from completing
-- **Haptic feedback** — subtle vibrations on tab switches, pull-to-refresh, favorites, and filters make the app feel more responsive
-- **Stronger security** — auth tokens secured with iOS Keychain, subscription receipts validated server-side, and login forms now validate input in real-time with rate limiting
-- **Password strength meter** — see real-time feedback on password strength when creating your account
-- **Smoother detail pages** — event and restaurant detail views rebuilt for faster rendering
-- Performance and stability improvements
+- **Face ID & Touch ID** — sign in instantly with biometric authentication for a faster, more secure login
+- **iPad sidebar** — native sidebar navigation on iPad gives you a spacious, Mac-like layout to browse events and dining
+- **Skeleton previews** — content placeholders appear instantly while data loads so the app always feels alive, never blank
+- **Search history** — your recent searches are saved and shown as quick-tap suggestions
+- **Favorites undo** — accidentally removed a favorite? A one-tap undo brings it right back
+- **Entrance animations** — smooth reveal animations throughout give the app a more polished, native feel
+- **Subscription feedback** — clearer messages when a purchase completes, renews, or needs attention
+- **Deep link improvements** — tapping a shared event or restaurant link now opens the correct detail page reliably
+- **Scroll to top** — tap the active tab icon to jump back to the top of any list instantly
+- Stability and compatibility improvements for iOS 26
 
 ## What's New (Release Notes — for version 1.1.1)
 
