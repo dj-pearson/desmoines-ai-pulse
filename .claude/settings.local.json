@@ -56,7 +56,8 @@
       "Bash(export 'JAVA_HOME=/c/Program Files/Android/Android Studio/jbr')",
       "Bash(mkdir -p /tmp/functions)",
       "Bash($JAVA_HOME/bin/jar xf:*)",
-      "Bash(./gradlew compileDebugSources compileDebugUnitTestSources compileDebugAndroidTestSources)"
+      "Bash(./gradlew compileDebugSources compileDebugUnitTestSources compileDebugAndroidTestSources)",
+      "Bash(infisical:*)"
     ],
     "deny": [],
     "ask": []
