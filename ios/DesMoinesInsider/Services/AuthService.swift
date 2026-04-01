@@ -112,6 +112,9 @@ final class AuthService {
         currentProfile = nil
         isAuthenticated = false
         isAdmin = false
+
+        // Reset biometric auth preference on sign out
+        BiometricAuthService.shared.reset()
     }
 
     func resetPassword(email: String) async throws {

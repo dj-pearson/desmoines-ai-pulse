@@ -58,23 +58,7 @@ struct Event: Identifiable, Codable, Hashable {
     }
 
     var parsedDate: Date? {
-        // Try ISO 8601 first
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso.date(from: date) { return date }
-
-        // Try without fractional seconds
-        iso.formatOptions = [.withInternetDateTime]
-        if let date = iso.date(from: self.date) { return date }
-
-        // Try common formats
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        for format in ["yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd"] {
-            formatter.dateFormat = format
-            if let date = formatter.date(from: self.date) { return date }
-        }
-        return nil
+        DateParser.parse(date)
     }
 
     var coordinate: CLLocationCoordinate2D? {

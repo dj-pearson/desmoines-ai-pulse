@@ -5,9 +5,9 @@ import Foundation
 @MainActor
 @Observable
 final class FavoritesViewModel {
-    private(set) var upcomingEvents: [Event] = []
-    private(set) var pastEvents: [Event] = []
-    private(set) var favoriteRestaurants: [Restaurant] = []
+    var upcomingEvents: [Event] = []
+    var pastEvents: [Event] = []
+    var favoriteRestaurants: [Restaurant] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 

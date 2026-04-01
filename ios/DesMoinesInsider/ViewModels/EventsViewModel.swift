@@ -108,6 +108,7 @@ final class EventsViewModel {
             }
 
             let response = try await service.fetchEvents(query: query)
+            guard !Task.isCancelled else { return }
 
             // Apply premium filters client-side
             let filtered = applyPremiumFilters(response.events)

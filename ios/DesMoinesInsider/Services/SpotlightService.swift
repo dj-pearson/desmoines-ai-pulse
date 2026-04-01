@@ -1,6 +1,7 @@
 import Foundation
 import CoreSpotlight
 import MobileCoreServices
+import os
 
 /// Indexes app content (events, restaurants, attractions) into iOS Spotlight search.
 actor SpotlightService {
@@ -49,7 +50,7 @@ actor SpotlightService {
         do {
             try await CSSearchableIndex.default().indexSearchableItems(items)
         } catch {
-            print("Spotlight indexing error (events): \(error.localizedDescription)")
+            AppLogger.general.error("Spotlight indexing error (events): \(error.localizedDescription)")
         }
     }
 
@@ -89,7 +90,7 @@ actor SpotlightService {
         do {
             try await CSSearchableIndex.default().indexSearchableItems(items)
         } catch {
-            print("Spotlight indexing error (restaurants): \(error.localizedDescription)")
+            AppLogger.general.error("Spotlight indexing error (restaurants): \(error.localizedDescription)")
         }
     }
 
@@ -99,7 +100,7 @@ actor SpotlightService {
         do {
             try await CSSearchableIndex.default().deleteAllSearchableItems()
         } catch {
-            print("Spotlight remove error: \(error.localizedDescription)")
+            AppLogger.general.error("Spotlight remove error: \(error.localizedDescription)")
         }
     }
 
@@ -107,7 +108,7 @@ actor SpotlightService {
         do {
             try await CSSearchableIndex.default().deleteSearchableItems(withDomainIdentifiers: [domain])
         } catch {
-            print("Spotlight remove domain error: \(error.localizedDescription)")
+            AppLogger.general.error("Spotlight remove domain error: \(error.localizedDescription)")
         }
     }
 }

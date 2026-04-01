@@ -26,6 +26,8 @@ final class MapViewModel {
         span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
     ))
 
+    private var fetchTask: Task<Void, Never>?
+
     private let locationService = LocationService.shared
     private let eventsService = EventsService.shared
     private let restaurantsService = RestaurantsService.shared
@@ -38,6 +40,9 @@ final class MapViewModel {
     // MARK: - Load Data
 
     func loadNearbyContent() async {
+        // Cancel any in-flight fetch
+        fetchTask?.cancel()
+
         // In UI testing mode, skip location services entirely to avoid
         // permission dialogs and network delays on CI simulators.
         if Config.isUITesting {
@@ -50,6 +55,7 @@ final class MapViewModel {
 
         do {
             let location = try await locationService.getCurrentLocation()
+            guard !Task.isCancelled else { return }
             currentLatitude = location.coordinate.latitude
             currentLongitude = location.coordinate.longitude
 
@@ -61,6 +67,7 @@ final class MapViewModel {
 
             await fetchAllContent()
         } catch {
+            guard !Task.isCancelled else { return }
             // Fall back to Des Moines center
             await loadDefaultArea()
         }
@@ -80,36 +87,31 @@ final class MapViewModel {
         hasLoadedOnce = true
     }
 
-    /// Fetch all content types independently so one failure doesn't block the others.
+    /// Fetch all content types concurrently so one failure doesn't block the others.
     private func fetchAllContent() async {
         let lat = currentLatitude
         let lng = currentLongitude
 
-        // Fetch each type independently - if one fails, others still load
-        let fetchedEvents: [Event]
-        do {
-            fetchedEvents = try await eventsService.fetchNearbyEvents(latitude: lat, longitude: lng)
-        } catch {
-            fetchedEvents = []
-        }
+        // Fetch all types concurrently - if one fails, others still load
+        async let fetchedEvents: [Event] = {
+            do { return try await eventsService.fetchNearbyEvents(latitude: lat, longitude: lng) }
+            catch { return [] }
+        }()
 
-        let fetchedRestaurants: [Restaurant]
-        do {
-            fetchedRestaurants = try await restaurantsService.fetchNearbyRestaurants(latitude: lat, longitude: lng)
-        } catch {
-            fetchedRestaurants = []
-        }
+        async let fetchedRestaurants: [Restaurant] = {
+            do { return try await restaurantsService.fetchNearbyRestaurants(latitude: lat, longitude: lng) }
+            catch { return [] }
+        }()
 
-        let fetchedAttractions: [Attraction]
-        do {
-            fetchedAttractions = try await attractionsService.fetchNearbyAttractions(latitude: lat, longitude: lng)
-        } catch {
-            fetchedAttractions = []
-        }
+        async let fetchedAttractions: [Attraction] = {
+            do { return try await attractionsService.fetchNearbyAttractions(latitude: lat, longitude: lng) }
+            catch { return [] }
+        }()
 
-        events = fetchedEvents
-        restaurants = fetchedRestaurants
-        attractions = fetchedAttractions
+        let (e, r, a) = await (fetchedEvents, fetchedRestaurants, fetchedAttractions)
+        events = e
+        restaurants = r
+        attractions = a
 
         if events.isEmpty && restaurants.isEmpty && attractions.isEmpty {
             if !Config.isConfigured {

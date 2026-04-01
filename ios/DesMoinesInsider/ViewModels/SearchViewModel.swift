@@ -63,6 +63,11 @@ final class SearchViewModel {
             attractionResults = a
 
             isSearching = false
+
+            // Record successful searches to history
+            if !e.isEmpty || !r.isEmpty || !a.isEmpty {
+                SearchHistoryService.shared.record(searchText)
+            }
         }
     }
 

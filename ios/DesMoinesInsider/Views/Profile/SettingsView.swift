@@ -1,5 +1,6 @@
 import SwiftUI
 import StoreKit
+import UserNotifications
 
 /// App settings view with account management, subscription, and about sections.
 struct SettingsView: View {
@@ -8,10 +9,13 @@ struct SettingsView: View {
 
     @State private var auth = AuthService.shared
     @State private var storeKit = StoreKitService.shared
+    @State private var biometric = BiometricAuthService.shared
+    @State private var notifications = LocalNotificationService.shared
     @State private var showSubscription = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
     @State private var errorMessage: String?
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
         NavigationStack {
@@ -42,6 +46,27 @@ struct SettingsView: View {
                             Label("Restore Purchases", systemImage: "arrow.clockwise")
                         }
                     }
+
+                    if biometric.isAvailable {
+                        Section("Security") {
+                            Toggle(isOn: Binding(
+                                get: { biometric.isEnabled },
+                                set: { newValue in
+                                    Task {
+                                        if newValue {
+                                            _ = await biometric.enable()
+                                        } else {
+                                            biometric.disable()
+                                        }
+                                    }
+                                }
+                            )) {
+                                Label(biometric.biometricName, systemImage: biometric.biometricIcon)
+                            }
+                            .accessibilityLabel("Sign in with \(biometric.biometricName)")
+                            .accessibilityHint(biometric.isEnabled ? "Currently enabled" : "Currently disabled")
+                        }
+                    }
                 }
 
                 Section("General") {
@@ -56,12 +81,49 @@ struct SettingsView: View {
                 }
 
                 Section("Notifications") {
-                    Button {
-                        openNotificationSettings()
-                    } label: {
-                        Label("Notification Settings", systemImage: "bell")
+                    HStack {
+                        Label("Permission", systemImage: "bell")
+                        Spacer()
+                        Text(notificationStatusText)
+                            .font(.subheadline)
+                            .foregroundStyle(notificationStatus == .authorized ? .green : .secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Notification permission: \(notificationStatusText)")
+
+                    if notificationStatus == .denied {
+                        Button {
+                            openNotificationSettings()
+                        } label: {
+                            Label("Open iOS Settings", systemImage: "gear")
+                        }
+                    } else if notificationStatus == .notDetermined {
+                        Button {
+                            Task { await requestNotificationPermission() }
+                        } label: {
+                            Label("Enable Notifications", systemImage: "bell.badge")
+                        }
+                    }
+
+                    if notificationStatus == .authorized {
+                        @AppStorage("eventRemindersEnabled") var remindersEnabled = true
+                        Toggle(isOn: Binding(
+                            get: { UserDefaults.standard.bool(forKey: "eventRemindersEnabled") },
+                            set: { UserDefaults.standard.set($0, forKey: "eventRemindersEnabled") }
+                        )) {
+                            Label("Event Reminders", systemImage: "calendar.badge.clock")
+                        }
+
+                        HStack {
+                            Label("Scheduled Reminders", systemImage: "clock")
+                            Spacer()
+                            Text("\(notifications.scheduledEventIds.count)")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+                .task { await checkNotificationStatus() }
 
                 Section("About") {
                     Link(destination: Config.siteURL) {
@@ -99,7 +161,30 @@ struct SettingsView: View {
 
                 // Data & Privacy section (authenticated users only)
                 if auth.isAuthenticated {
-                    Section("Data & Privacy") {
+                    Section("Privacy & Data") {
+                        Toggle(isOn: Binding(
+                            get: { ConsentService.shared.locationConsent },
+                            set: { ConsentService.shared.locationConsent = $0 }
+                        )) {
+                            Label("Location Data", systemImage: "location")
+                        }
+
+                        Toggle(isOn: Binding(
+                            get: { ConsentService.shared.emailConsent },
+                            set: { ConsentService.shared.emailConsent = $0 }
+                        )) {
+                            Label("Email Communications", systemImage: "envelope")
+                        }
+
+                        Toggle(isOn: Binding(
+                            get: { ConsentService.shared.analyticsConsent },
+                            set: { ConsentService.shared.analyticsConsent = $0 }
+                        )) {
+                            Label("Analytics", systemImage: "chart.bar")
+                        }
+                    }
+
+                    Section("Account") {
                         Button(role: .destructive) {
                             showDeleteConfirmation = true
                         } label: {
@@ -173,6 +258,31 @@ struct SettingsView: View {
         if let url = URL(string: UIApplication.openNotificationSettingsURLString) {
             UIApplication.shared.open(url)
         }
+    }
+
+    private var notificationStatusText: String {
+        switch notificationStatus {
+        case .authorized: return "Enabled"
+        case .denied: return "Disabled"
+        case .notDetermined: return "Not Set"
+        case .provisional: return "Provisional"
+        case .ephemeral: return "Temporary"
+        @unknown default: return "Unknown"
+        }
+    }
+
+    private func checkNotificationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationStatus = settings.authorizationStatus
+    }
+
+    private func requestNotificationPermission() async {
+        let center = UNUserNotificationCenter.current()
+        let granted = try? await center.requestAuthorization(options: [.alert, .badge, .sound])
+        if granted == true {
+            notificationStatus = .authorized
+        }
+        await checkNotificationStatus()
     }
 
     private func requestAppReview() {

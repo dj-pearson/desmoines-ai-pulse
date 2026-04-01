@@ -17,13 +17,40 @@ actor QueryCache {
     private let defaultTTL: TimeInterval
     private let maxDiskBytes: Int = 50 * 1024 * 1024 // 50 MB
 
+    /// Cache format version. Increment to force a full cache purge on upgrade
+    /// (e.g. when switching from unencrypted to encrypted storage).
+    private static let cacheVersion = 2
+
     private init() {
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         cacheDir = caches.appendingPathComponent("QueryCache", isDirectory: true)
         defaultTTL = TimeInterval(Config.cacheExpirationMinutes * 60)
 
-        // Ensure directory exists
-        try? FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+        // Ensure directory exists with file protection
+        let fm = FileManager.default
+        try? fm.createDirectory(at: cacheDir, withIntermediateDirectories: true)
+
+        // Set NSFileProtectionComplete on the cache directory so files are
+        // inaccessible when the device is locked.
+        try? fm.setAttributes(
+            [.protectionKey: FileProtectionType.complete],
+            ofItemAtPath: cacheDir.path
+        )
+
+        // Purge old unversioned cache when upgrading
+        let versionFile = cacheDir.appendingPathComponent(".cache-version")
+        let currentVersion = (try? String(contentsOf: versionFile, encoding: .utf8))
+            .flatMap { Int($0) } ?? 0
+        if currentVersion < Self.cacheVersion {
+            // Old cache format — purge everything
+            if let files = try? fm.contentsOfDirectory(at: cacheDir, includingPropertiesForKeys: nil) {
+                for file in files where file.lastPathComponent != ".cache-version" {
+                    try? fm.removeItem(at: file)
+                }
+            }
+            try? String(Self.cacheVersion).write(to: versionFile, atomically: true, encoding: .utf8)
+            AppLogger.cache.info("Cache upgraded to version \(Self.cacheVersion), old entries purged")
+        }
     }
 
     // MARK: - Public API
@@ -58,7 +85,7 @@ actor QueryCache {
 
         do {
             let data = try JSONEncoder().encode(entry)
-            try data.write(to: fileURL, options: .atomic)
+            try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
             AppLogger.cache.debug("Cached \(data.count) bytes for key: \(key)")
         } catch {
             AppLogger.cache.error("Cache write failed for key: \(key) — \(error.localizedDescription)")
