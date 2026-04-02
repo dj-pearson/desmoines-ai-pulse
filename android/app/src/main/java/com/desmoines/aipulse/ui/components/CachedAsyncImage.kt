@@ -104,6 +104,7 @@ fun CachedAsyncImage(
             }
         },
         success = { state ->
+            val scope = this
             isLoaded = true
             val blurMod = if (blurRadius > 0.5f) {
                 Modifier.blur(blurRadius.dp)
@@ -111,7 +112,7 @@ fun CachedAsyncImage(
                 Modifier
             }
             Box(modifier = blurMod.graphicsLayer { this.alpha = alpha }) {
-                SubcomposeAsyncImageContent()
+                scope.SubcomposeAsyncImageContent()
             }
         },
         error = {

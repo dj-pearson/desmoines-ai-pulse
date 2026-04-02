@@ -65,10 +65,10 @@ object SupabaseClientProvider {
                 supabaseUrl = url,
                 supabaseKey = key
             ) {
-                httpEngine {
-                    OkHttp {
-                        CertificatePinningService.configurePinning(this.config)
-                    }
+                // In Supabase Kotlin SDK v3, httpEngine is a property.
+                // We provide a pre-configured OkHttp engine to support certificate pinning.
+                httpEngine = OkHttp.create {
+                    preconfigured = CertificatePinningService.createPinnedClient()
                 }
 
                 httpConfig {
