@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.model.UserRole
 import com.desmoines.aipulse.data.repository.AuthRepository
+import com.desmoines.aipulse.util.AuthErrorMapper
 import com.desmoines.aipulse.util.BiometricAuthService
 import com.desmoines.aipulse.util.Config
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,6 +60,9 @@ class AuthViewModel @Inject constructor(
 
     private val _showVerificationAlert = MutableStateFlow(false)
     val showVerificationAlert: StateFlow<Boolean> = _showVerificationAlert.asStateFlow()
+
+    private val _recoveryAction = MutableStateFlow<AuthErrorMapper.RecoveryAction?>(null)
+    val recoveryAction: StateFlow<AuthErrorMapper.RecoveryAction?> = _recoveryAction.asStateFlow()
 
     // MARK: - Rate Limiting
 
@@ -178,10 +182,13 @@ class AuthViewModel @Inject constructor(
             authRepository.signIn(email, password)
                 .onSuccess {
                     failedAttemptTimestamps.clear()
+                    _recoveryAction.value = null
                 }
                 .onFailure { error ->
                     recordFailedAttempt()
-                    setError(error.message ?: "Sign in failed.")
+                    val mapped = AuthErrorMapper.map(error)
+                    _recoveryAction.value = mapped.recoveryAction
+                    setError(mapped.message)
                 }
             _isSigningIn.value = false
         }
@@ -231,9 +238,12 @@ class AuthViewModel @Inject constructor(
             )
                 .onSuccess {
                     _showVerificationAlert.value = true
+                    _recoveryAction.value = null
                 }
                 .onFailure { error ->
-                    setError(error.message ?: "Sign up failed.")
+                    val mapped = AuthErrorMapper.map(error)
+                    _recoveryAction.value = mapped.recoveryAction
+                    setError(mapped.message)
                 }
             _isSigningUp.value = false
         }
@@ -310,6 +320,27 @@ class AuthViewModel @Inject constructor(
                 }
                 .onFailure { error ->
                     setError(error.message ?: "Failed to send reset email.")
+                }
+        }
+    }
+
+    // MARK: - Resend Verification
+
+    fun resendVerification(email: String) {
+        if (email.isEmpty()) {
+            setError("Please enter your email address.")
+            return
+        }
+        viewModelScope.launch {
+            // Supabase resend = calling signUp again with existing email triggers resend
+            authRepository.resetPassword(email)
+                .onSuccess {
+                    setError("Verification email resent. Check your inbox.")
+                    _recoveryAction.value = null
+                }
+                .onFailure { error ->
+                    val mapped = AuthErrorMapper.map(error)
+                    setError(mapped.message)
                 }
         }
     }

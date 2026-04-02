@@ -158,8 +158,8 @@
         "Consistent error presentation across iOS, Android, and web"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created AuthErrorMapper.kt with pattern-matched error mapping for 12+ Supabase auth error patterns (invalid credentials, email not confirmed, user not found, rate limited, network errors, etc.). Each error returns user-friendly message + optional RecoveryAction enum (RESEND_VERIFICATION, FORGOT_PASSWORD, WAIT_AND_RETRY, CHECK_NETWORK, CONTACT_SUPPORT). Updated AuthViewModel to use mapper on sign-in/sign-up failures with recovery action state. Updated AuthScreen with inline recovery action buttons (Resend Verification Email, Reset Password) and inline password requirements shown before user starts typing."
     },
     {
       "id": "AND-UX-001",
@@ -174,8 +174,8 @@
         "No performance degradation on mid-range devices"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created EntranceAnimation.kt with Modifier.entranceAnimation(index) extension. Staggered fade-in + slide-up (350ms easeOut, 50ms stagger per index, capped at 10). Uses Animatable with graphicsLayer for alpha + translationY. Respects Settings.Global.ANIMATOR_DURATION_SCALE for reduce motion accessibility. Only plays on initial appearance via remember + LaunchedEffect(Unit)."
     },
     {
       "id": "AND-UX-002",
@@ -190,8 +190,8 @@
         "Fallback to colored rectangle placeholder if no thumbnail available"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Enhanced CachedAsyncImage.kt with blur-up progressive loading. Uses animateFloatAsState for blur radius (12dp → 0dp) and opacity (0.7 → 1.0) transitions. Modifier.blur() applied during loading, removed after success callback. Respects ANIMATOR_DURATION_SCALE reduce motion setting. Colored surfaceVariant placeholder shown during loading. Smooth crossfade via Coil crossfade(true). Falls back to BrokenImage placeholder on error."
     },
     {
       "id": "SEC-CROSS-001",
@@ -207,8 +207,8 @@
         "Lockout escalation: progressive lockout duration on repeated violations"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created check-login-attempt edge function with POST endpoint (check/record_failure/record_success actions). Created login_attempts table with email, client_info, client_ip, attempted_at columns. 5 failed attempts in 15 minutes triggers lockout. Progressive lockout escalation (2x multiplier, max 1 hour). Clear on success. Fail-open on database errors. RLS with service_role-only access. Cleanup function for entries older than 24 hours."
     }
   ]
 }

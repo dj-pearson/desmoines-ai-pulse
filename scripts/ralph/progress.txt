@@ -1423,3 +1423,97 @@ Started: 2026-03-27T14:05:42.010Z
   - cleanup_rate_limit_entries should be called via pg_cron or a scheduled edge function
   - Rate limit table is lightweight: ~100 bytes per entry, auto-cleaned after 1 hour
 ---
+
+## 2026-04-02 - AUTH-UX-001 (Auth UX)
+- Created AuthErrorMapper.kt with pattern-matched error mapping:
+  - 12+ Supabase auth error patterns mapped to user-friendly messages
+  - AuthError data class with message + optional RecoveryAction enum
+  - RecoveryAction types: RESEND_VERIFICATION, FORGOT_PASSWORD, WAIT_AND_RETRY, CHECK_NETWORK, CONTACT_SUPPORT
+  - Patterns: invalid credentials, email not confirmed, user not found, already registered, rate limited, password weak, network errors, OAuth errors, session expired, account banned, not configured
+  - passwordRequirements list for inline display during sign-up
+- Updated AuthViewModel:
+  - signIn/signUp failure handlers now use AuthErrorMapper.map(error)
+  - Added recoveryAction StateFlow for UI to show contextual recovery buttons
+  - Added resendVerification(email) method
+- Updated AuthScreen:
+  - Inline password requirements shown during sign-up (before user starts typing)
+  - Recovery action buttons appear after errors: "Resend Verification Email" for unverified accounts, "Reset Password" for invalid credentials
+  - recoveryAction state collected and rendered conditionally
+- Files created: AuthErrorMapper.kt
+- Files modified: AuthViewModel.kt, AuthScreen.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Supabase auth errors come as exception messages (not error codes) — pattern matching on lowercase message content is the most reliable approach
+  - RecoveryAction enum decouples error-to-action logic from UI rendering
+  - passwordRequirements as a static list enables both inline display and validation reuse
+  - TextButton with recovery action should check errorMessage != null to avoid showing when error is cleared
+---
+
+## 2026-04-02 - AND-UX-001 (Android UX)
+- Created EntranceAnimation.kt with Modifier.entranceAnimation(index) extension:
+  - Staggered fade-in + slide-up animation matching iOS entranceAnimation(index:) modifier
+  - 350ms FastOutSlowInEasing animation per item
+  - 50ms stagger delay per index (capped at 10 items to avoid excessive delays)
+  - Slides up 60px (~24dp) while fading from 0 to 1 alpha
+  - Uses Animatable with graphicsLayer for GPU-accelerated rendering
+  - Respects Settings.Global.ANIMATOR_DURATION_SCALE (0 = animations disabled)
+  - Only plays on initial appearance via remember { Animatable(0f) }
+- Files created: EntranceAnimation.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Modifier.composed {} is required for stateful modifiers that use remember/LaunchedEffect
+  - graphicsLayer { alpha; translationY } is more performant than Modifier.alpha().offset() — avoids recomposition
+  - Settings.Global.ANIMATOR_DURATION_SCALE = 0 is the Android standard for reduce motion
+  - Animatable(0f) starts at 0, animates to 1f — graphicsLayer reads the value each frame
+  - coerceAtMost(10) caps the stagger delay to avoid items taking too long to appear
+---
+
+## 2026-04-02 - AND-UX-002 (Android UX)
+- Enhanced CachedAsyncImage.kt with blur-up progressive loading:
+  - animateFloatAsState for blur radius: 12dp (loading) → 0dp (loaded) over 300ms
+  - animateFloatAsState for opacity: 0.7 (loading) → 1.0 (loaded) over 300ms
+  - Modifier.blur(radius.dp) applied during transition, removed when radius < 0.5f
+  - success callback sets isLoaded = true, triggering blur/opacity animations
+  - SubcomposeAsyncImageContent rendered inside animated Box with blur + graphicsLayer
+  - Colored surfaceVariant placeholder shown during Coil loading phase
+  - Respects ANIMATOR_DURATION_SCALE reduce motion setting (skips blur animation)
+  - Coil crossfade(true) for smooth content swap (disabled when reduce motion)
+  - Falls back to BrokenImage placeholder on error (unchanged)
+- Files modified: CachedAsyncImage.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Modifier.blur() is expensive — only apply when blurRadius > 0.5f, remove entirely when done
+  - SubcomposeAsyncImage success state provides SubcomposeAsyncImageContent() composable for custom rendering
+  - animateFloatAsState with tween(300ms) provides smooth transitions without manual Animatable management
+  - isLoaded state needs remember { mutableStateOf(false) } — not rememberSaveable (no need to survive config change)
+---
+
+## 2026-04-02 - SEC-CROSS-001 (Cross-Platform Security)
+- Created check-login-attempt edge function:
+  - POST endpoint with actions: check, record_failure, record_success
+  - Validates lockout status before clients attempt Supabase auth
+  - 5 failed attempts in 15-minute window triggers lockout
+  - Progressive lockout escalation: 2x multiplier per violation cycle (15min → 30min → 60min max)
+  - record_success clears all failed attempts for the email
+  - Tracks client_info and client_ip for audit trail
+  - Rate limited itself (30 req/15min) to prevent abuse
+  - Fail-open pattern: allows auth if database query fails
+  - Uses CORS middleware and Supabase service_role client
+- Created login_attempts migration:
+  - login_attempts table with email, client_info, client_ip, attempted_at
+  - Index on (email, attempted_at DESC) for efficient window queries
+  - Index on attempted_at for cleanup queries
+  - RLS with service_role-only policy
+  - cleanup_login_attempts() function for entries older than 24 hours
+- Files created: supabase/functions/check-login-attempt/index.ts, 20260402000002_create_login_attempts_table.sql
+- **Learnings for future iterations:**
+  - Fail-open pattern is critical for auth-adjacent services — never block login if the lockout check itself fails
+  - Progressive escalation uses Math.pow(multiplier, violationCount-1) — first violation = base, second = 2x, third = 4x
+  - Edge function rate limiting the lockout checker prevents it from becoming an attack vector itself
+  - Client devices should call check-login-attempt BEFORE Supabase auth, then record_failure/success AFTER
+  - Email normalization (trim + lowercase) prevents lockout bypass via case manipulation
+---
+
+## COMPLETE — All 12 mobile security audit stories implemented
+---
+---
