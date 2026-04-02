@@ -63,6 +63,43 @@ class SecureStorage @Inject constructor(
     }
 
     /**
+     * Save a boolean value for the given key.
+     */
+    fun saveBoolean(key: String, value: Boolean) {
+        prefs.edit().putBoolean(key, value).apply()
+    }
+
+    /**
+     * Load a boolean value for the given key.
+     * Returns the defaultValue if the key doesn't exist.
+     */
+    fun loadBoolean(key: String, defaultValue: Boolean = false): Boolean {
+        return prefs.getBoolean(key, defaultValue)
+    }
+
+    /**
+     * Save a long value for the given key.
+     */
+    fun saveLong(key: String, value: Long) {
+        prefs.edit().putLong(key, value).apply()
+    }
+
+    /**
+     * Load a long value for the given key.
+     * Returns the defaultValue if the key doesn't exist.
+     */
+    fun loadLong(key: String, defaultValue: Long = 0L): Long {
+        return prefs.getLong(key, defaultValue)
+    }
+
+    /**
+     * Check if a key exists in secure storage.
+     */
+    fun contains(key: String): Boolean {
+        return prefs.contains(key)
+    }
+
+    /**
      * Delete a single item by key.
      */
     fun delete(key: String) {

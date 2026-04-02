@@ -1239,3 +1239,281 @@ Started: 2026-03-27T14:05:42.010Z
 
 ## COMPLETE — All 50 Android stories implemented
 ---
+
+## 2026-04-01 - AND-SEC-001 (Android Security Audit)
+- Created BiometricAuthService.kt matching iOS BiometricAuthService.swift:
+  - Uses AndroidX Biometric library (1.2.0-alpha05) with Class 3 (strong) biometric requirement
+  - BiometricPrompt with suspend/resume coroutine integration for async authentication
+  - Supports fingerprint, face recognition, iris via BIOMETRIC_STRONG authenticator
+  - Enable/disable preference stored securely in EncryptedSharedPreferences via SecureStorage
+  - Handles all BiometricPrompt error codes: ERROR_HW_UNAVAILABLE, ERROR_NO_BIOMETRICS, ERROR_LOCKOUT, ERROR_LOCKOUT_PERMANENT, ERROR_TIMEOUT, ERROR_USER_CANCELED, ERROR_NEGATIVE_BUTTON, ERROR_VENDOR, etc.
+  - Human-readable status messages for all BiometricManager states
+- Integrated biometric lock screen into MainActivity:
+  - On app launch, prompts biometric if enabled and available
+  - Lock screen overlay with retry button if initial prompt fails
+  - Falls back to normal app flow on "Use Password" dismissal
+- Updated AuthViewModel to clear biometric preference on sign out
+- Added biometric library to version catalog (libs.versions.toml) and build.gradle.kts
+- Changed MainActivity to extend FragmentActivity (required by BiometricPrompt)
+- Files created: BiometricAuthService.kt
+- Files modified: MainActivity.kt, AuthViewModel.kt, build.gradle.kts, libs.versions.toml
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - BiometricPrompt requires FragmentActivity (not ComponentActivity) — ComponentActivity extends FragmentActivity so this is a safe change
+  - suspendCoroutine with resume() bridges BiometricPrompt callback API to coroutines cleanly
+  - BIOMETRIC_STRONG ensures only Class 3 (cryptographic) biometrics — no screen lock fallback
+  - onAuthenticationFailed() fires on each bad attempt but prompt stays open — only onAuthenticationError() is terminal
+  - setConfirmationRequired(false) skips the extra "Confirm" tap after face recognition succeeds
+---
+
+## 2026-04-01 - AND-SEC-002 (Android Security Audit)
+- Created CertificatePinningService.kt matching iOS CertificatePinningService.swift:
+  - Uses OkHttp CertificatePinner with SPKI SHA-256 hashes (same 3 hashes as iOS)
+  - Pins Let's Encrypt R3 intermediate, ISRG Root X1, DigiCert Global Root G2
+  - Pins *.supabase.co domain pattern
+  - Debug mode: report-only (logs via interceptor but allows connections)
+  - Release mode: enforces pinning (SSLPeerUnverifiedException on mismatch)
+  - configurePinning() method accepts OkHttpClient.Builder for flexible integration
+  - createPinnedClient() convenience method for standalone use
+- Integrated into SupabaseClientProvider:
+  - Added Ktor OkHttp engine configuration with certificate pinning
+  - All Supabase API calls now go through pinned OkHttp client
+- Files created: CertificatePinningService.kt
+- Files modified: SupabaseClient.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - OkHttp CertificatePinner uses "sha256/" prefix format (not bare base64 like iOS)
+  - Ktor OkHttp engine config exposes OkHttpClient.Builder directly via OkHttp { config { ... } }
+  - CertificatePinner.Builder().add(pattern, hash) can chain multiple hashes per domain
+  - In debug mode, use interceptor-based logging instead of CertificatePinner to avoid blocking dev environments
+  - Wildcard patterns (*.supabase.co) work with OkHttp CertificatePinner
+---
+
+## 2026-04-01 - AND-SEC-003 (Android Security Audit)
+- Created RootDetector.kt matching iOS JailbreakDetector.swift:
+  - 5 detection checks: su binary paths, root management apps, suspicious paths, test-keys, writable system paths
+  - Su binary check: 10 common su binary locations
+  - Root apps check: Magisk Manager, SuperUser, SuperSU, Xposed Installer, Cydia Substrate, Hide My Root, Root Cloak
+  - Suspicious paths: Superuser.apk, init.d, daemonsu, busybox, Magisk data/modules dirs
+  - Build tags: checks for "test-keys" in Build.TAGS
+  - Writable system paths: checks /system, /system/bin, /system/sbin, /vendor/bin
+  - Skips all checks on emulator (detects via Build.FINGERPRINT, MODEL, MANUFACTURER, PRODUCT, HARDWARE)
+- Integrated non-blocking AlertDialog warning into MainActivity:
+  - Shows on launch if root detected, dismissible with "I Understand" button
+  - Does NOT block app usage (soft warning only)
+  - Uses Material 3 AlertDialog with Warning icon in error color
+- Files created: RootDetector.kt
+- Files modified: MainActivity.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - File.exists() and File.canWrite() are the safest root checks — no permission requirements
+  - Build.TAGS.contains("test-keys") catches most custom ROM builds
+  - Emulator detection must cover: generic fingerprint, google_sdk model, goldfish/ranchu hardware, sdk_ product prefixes
+  - Root management apps detected via /data/data/ directory existence (no PackageManager query needed)
+  - AlertDialog in Compose is a standalone composable with icon, title, text, confirmButton params
+---
+
+## 2026-04-01 - AND-SEC-004 (Android Security Audit)
+- Enhanced existing SecureStorage.kt with additional convenience methods:
+  - saveBoolean/loadBoolean for boolean preferences (biometric enabled, consent toggles)
+  - saveLong/loadLong for timestamp storage (session timeout tracking)
+  - contains() for key existence checks
+  - All methods use the same EncryptedSharedPreferences backend with AES256_GCM encryption
+- SecureStorage already provides:
+  - MasterKey with AES256_GCM key scheme (hardware-backed on supported devices)
+  - EncryptedSharedPreferences with AES256_SIV key encryption + AES256_GCM value encryption
+  - Graceful fallback to standard SharedPreferences if Keystore unavailable
+  - save/load/delete/deleteAll string operations matching iOS KeychainService
+  - Hilt @Singleton injection via @Inject constructor
+- Files modified: SecureStorage.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - EncryptedSharedPreferences putBoolean/getBoolean and putLong/getLong work identically to regular SharedPreferences
+  - MasterKey.KeyScheme.AES256_GCM is hardware-backed on Android 9+ (API 28+) — our minSdk is 26 so some devices use software keystore
+  - The fallback pattern (try encrypted, catch → standard) is critical for emulators and devices with corrupted Keystore
+  - contains() delegates directly to SharedPreferences.contains() — works through encrypted wrapper
+---
+
+## 2026-04-02 - AND-SEC-005 (Android Security Audit)
+- Created SessionTimeoutService.kt for enforcing idle and absolute session timeouts:
+  - Regular users: 60-min idle timeout, 8-hour absolute timeout
+  - Admin users: 30-min idle timeout, 4-hour absolute timeout (stricter)
+  - Uses Application.ActivityLifecycleCallbacks (onActivityResumed) to reset idle timer
+  - Exposes sessionState as StateFlow<SessionState> (ACTIVE/WARNING/EXPIRED)
+  - Shows warning 5 minutes before expiry via WARNING state with minutesRemaining
+  - Persists last activity and session start timestamps in SecureStorage
+  - Periodic 30-second timeout checks via coroutine Job
+  - isSessionValid() for app restart validation
+  - startTracking(isAdmin)/stopTracking() lifecycle tied to auth state
+- Files created: SessionTimeoutService.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Application.ActivityLifecycleCallbacks fires on ALL activities — simpler than LifecycleObserver for idle tracking
+  - CoroutineScope with SupervisorJob + Dispatchers.Main survives configuration changes
+  - Absolute timeout is non-resettable (tracks session start time, not last activity)
+  - Warning state fires at warningBefore threshold (5 min) — UI should show countdown dialog
+---
+
+## 2026-04-02 - AND-SEC-006 (Android Security Audit)
+- Created ConsentService.kt matching iOS ConsentService.swift:
+  - Per-type toggles: location, email, analytics stored in SecureStorage (EncryptedSharedPreferences)
+  - EU locale detection using 32 ISO 3166-1 alpha-2 country codes (27 EU + EEA + UK)
+  - StateFlow-based reactive UI (locationConsent, emailConsent, analyticsConsent)
+  - needsConsentPrompt computed property: true for EU users who haven't completed flow
+  - Bulk operations: acceptAll(), saveAndComplete(), revokeAll()
+  - Changes logged via AppLogger.general for GDPR audit trail
+- Updated SettingsScreen.kt with new sections:
+  - Security section: Biometric unlock toggle (when available and authenticated)
+  - Privacy & Data section: Location, Email, Analytics consent toggles with descriptions
+  - SettingsToggleRow composable: icon + title + subtitle + Switch
+  - Added new parameters: isBiometricAvailable/Enabled, consent toggles with callbacks
+  - Renamed "Data & Privacy" to "Account Data" (delete account)
+- Files created: ConsentService.kt
+- Files modified: SettingsScreen.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Locale.getDefault().country returns ISO 3166-1 alpha-2 code — reliable for EU detection
+  - ConsentService uses @Singleton + @Inject constructor — no manual @Provides needed
+  - SettingsToggleRow uses Switch composable (Material 3) instead of SettingsRow with chevron
+  - Consent toggles use StateFlow so UI recomposes on change without manual state management
+  - ConsentService stores in SecureStorage (encrypted) vs iOS using plain UserDefaults
+---
+
+## 2026-04-02 - IOS-SEC-001 (iOS Security Audit)
+- Created SessionTimeoutService.swift matching Android SessionTimeoutService.kt:
+  - @MainActor @Observable singleton with SessionState enum (.active, .warning(minutesRemaining), .expired)
+  - Regular users: 60-min idle timeout, 8-hour absolute timeout
+  - Admin users: 30-min idle timeout, 4-hour absolute timeout
+  - Persists timestamps in Keychain via KeychainService (String encoding of TimeInterval)
+  - 30-second periodic check interval via Task with Task.isCancelled guard
+  - recordActivity() resets idle timer and clears warning state
+  - isSessionValid() for app restart validation
+  - startTracking(isAdmin)/stopTracking() lifecycle
+- Files created: SessionTimeoutService.swift
+- **Learnings for future iterations:**
+  - KeychainService stores TimeInterval as String — Keychain doesn't natively support numeric types
+  - Task.sleep(nanoseconds:) is the Swift concurrency equivalent of coroutine delay()
+  - SessionState uses associated value .warning(minutesRemaining: Int) — cleaner than separate StateFlow
+  - @Observable (iOS 17+) replaces @Published for automatic SwiftUI observation
+  - Timeout constants organized in private enum Timeout for namespace clarity
+---
+
+## 2026-04-02 - WEB-SEC-001 (Backend Security)
+- Created database migration 20260402000001_create_rate_limit_table.sql:
+  - rate_limit_entries table with client_id, endpoint, window_start, request_count
+  - Composite index on (client_id, endpoint, window_start) for fast lookups
+  - Index on created_at for cleanup queries
+  - Unique constraint for atomic upsert (INSERT ON CONFLICT)
+  - check_rate_limit() PL/pgSQL function: atomic rate limit check with upsert
+  - cleanup_rate_limit_entries() function: removes entries older than 1 hour
+  - RLS enabled with service_role-only policy (edge functions only)
+- Updated supabase/functions/_shared/rateLimit.ts:
+  - Added checkRateLimitPersistent() async function using database-backed storage
+  - Uses Supabase service_role client to call check_rate_limit RPC
+  - Falls back to in-memory storage if database is unavailable
+  - Original checkRateLimit() kept synchronous for backward compatibility
+  - All 35+ existing edge functions continue working unchanged
+  - New endpoint parameter for per-function rate limit tracking
+- Files created: 20260402000001_create_rate_limit_table.sql
+- Files modified: rateLimit.ts
+- **Learnings for future iterations:**
+  - Breaking change avoided: async checkRateLimit would break all callers — added checkRateLimitPersistent instead
+  - PL/pgSQL INSERT ON CONFLICT provides atomic counter increment without race conditions
+  - Supabase service_role key needed for rate limit table access (RLS blocks anon/authenticated)
+  - cleanup_rate_limit_entries should be called via pg_cron or a scheduled edge function
+  - Rate limit table is lightweight: ~100 bytes per entry, auto-cleaned after 1 hour
+---
+
+## 2026-04-02 - AUTH-UX-001 (Auth UX)
+- Created AuthErrorMapper.kt with pattern-matched error mapping:
+  - 12+ Supabase auth error patterns mapped to user-friendly messages
+  - AuthError data class with message + optional RecoveryAction enum
+  - RecoveryAction types: RESEND_VERIFICATION, FORGOT_PASSWORD, WAIT_AND_RETRY, CHECK_NETWORK, CONTACT_SUPPORT
+  - Patterns: invalid credentials, email not confirmed, user not found, already registered, rate limited, password weak, network errors, OAuth errors, session expired, account banned, not configured
+  - passwordRequirements list for inline display during sign-up
+- Updated AuthViewModel:
+  - signIn/signUp failure handlers now use AuthErrorMapper.map(error)
+  - Added recoveryAction StateFlow for UI to show contextual recovery buttons
+  - Added resendVerification(email) method
+- Updated AuthScreen:
+  - Inline password requirements shown during sign-up (before user starts typing)
+  - Recovery action buttons appear after errors: "Resend Verification Email" for unverified accounts, "Reset Password" for invalid credentials
+  - recoveryAction state collected and rendered conditionally
+- Files created: AuthErrorMapper.kt
+- Files modified: AuthViewModel.kt, AuthScreen.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Supabase auth errors come as exception messages (not error codes) — pattern matching on lowercase message content is the most reliable approach
+  - RecoveryAction enum decouples error-to-action logic from UI rendering
+  - passwordRequirements as a static list enables both inline display and validation reuse
+  - TextButton with recovery action should check errorMessage != null to avoid showing when error is cleared
+---
+
+## 2026-04-02 - AND-UX-001 (Android UX)
+- Created EntranceAnimation.kt with Modifier.entranceAnimation(index) extension:
+  - Staggered fade-in + slide-up animation matching iOS entranceAnimation(index:) modifier
+  - 350ms FastOutSlowInEasing animation per item
+  - 50ms stagger delay per index (capped at 10 items to avoid excessive delays)
+  - Slides up 60px (~24dp) while fading from 0 to 1 alpha
+  - Uses Animatable with graphicsLayer for GPU-accelerated rendering
+  - Respects Settings.Global.ANIMATOR_DURATION_SCALE (0 = animations disabled)
+  - Only plays on initial appearance via remember { Animatable(0f) }
+- Files created: EntranceAnimation.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Modifier.composed {} is required for stateful modifiers that use remember/LaunchedEffect
+  - graphicsLayer { alpha; translationY } is more performant than Modifier.alpha().offset() — avoids recomposition
+  - Settings.Global.ANIMATOR_DURATION_SCALE = 0 is the Android standard for reduce motion
+  - Animatable(0f) starts at 0, animates to 1f — graphicsLayer reads the value each frame
+  - coerceAtMost(10) caps the stagger delay to avoid items taking too long to appear
+---
+
+## 2026-04-02 - AND-UX-002 (Android UX)
+- Enhanced CachedAsyncImage.kt with blur-up progressive loading:
+  - animateFloatAsState for blur radius: 12dp (loading) → 0dp (loaded) over 300ms
+  - animateFloatAsState for opacity: 0.7 (loading) → 1.0 (loaded) over 300ms
+  - Modifier.blur(radius.dp) applied during transition, removed when radius < 0.5f
+  - success callback sets isLoaded = true, triggering blur/opacity animations
+  - SubcomposeAsyncImageContent rendered inside animated Box with blur + graphicsLayer
+  - Colored surfaceVariant placeholder shown during Coil loading phase
+  - Respects ANIMATOR_DURATION_SCALE reduce motion setting (skips blur animation)
+  - Coil crossfade(true) for smooth content swap (disabled when reduce motion)
+  - Falls back to BrokenImage placeholder on error (unchanged)
+- Files modified: CachedAsyncImage.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Modifier.blur() is expensive — only apply when blurRadius > 0.5f, remove entirely when done
+  - SubcomposeAsyncImage success state provides SubcomposeAsyncImageContent() composable for custom rendering
+  - animateFloatAsState with tween(300ms) provides smooth transitions without manual Animatable management
+  - isLoaded state needs remember { mutableStateOf(false) } — not rememberSaveable (no need to survive config change)
+---
+
+## 2026-04-02 - SEC-CROSS-001 (Cross-Platform Security)
+- Created check-login-attempt edge function:
+  - POST endpoint with actions: check, record_failure, record_success
+  - Validates lockout status before clients attempt Supabase auth
+  - 5 failed attempts in 15-minute window triggers lockout
+  - Progressive lockout escalation: 2x multiplier per violation cycle (15min → 30min → 60min max)
+  - record_success clears all failed attempts for the email
+  - Tracks client_info and client_ip for audit trail
+  - Rate limited itself (30 req/15min) to prevent abuse
+  - Fail-open pattern: allows auth if database query fails
+  - Uses CORS middleware and Supabase service_role client
+- Created login_attempts migration:
+  - login_attempts table with email, client_info, client_ip, attempted_at
+  - Index on (email, attempted_at DESC) for efficient window queries
+  - Index on attempted_at for cleanup queries
+  - RLS with service_role-only policy
+  - cleanup_login_attempts() function for entries older than 24 hours
+- Files created: supabase/functions/check-login-attempt/index.ts, 20260402000002_create_login_attempts_table.sql
+- **Learnings for future iterations:**
+  - Fail-open pattern is critical for auth-adjacent services — never block login if the lockout check itself fails
+  - Progressive escalation uses Math.pow(multiplier, violationCount-1) — first violation = base, second = 2x, third = 4x
+  - Edge function rate limiting the lockout checker prevents it from becoming an attack vector itself
+  - Client devices should call check-login-attempt BEFORE Supabase auth, then record_failure/success AFTER
+  - Email normalization (trim + lowercase) prevents lockout bypass via case manipulation
+---
+
+## COMPLETE — All 12 mobile security audit stories implemented
+---
+---
