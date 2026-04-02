@@ -90,8 +90,8 @@
         "Persist last activity timestamp in secure storage for app restart scenarios"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created SessionTimeoutService.kt with lifecycle-aware idle tracking via Application.ActivityLifecycleCallbacks. Enforces user (60min idle, 8h absolute) and admin (30min idle, 4h absolute) timeouts. Exposes SessionState StateFlow (ACTIVE/WARNING/EXPIRED) with 5-minute warning. Persists timestamps in SecureStorage for app restart. Periodic 30-second checks via coroutine. Integrated stop/start lifecycle with auth flow."
     },
     {
       "id": "AND-SEC-006",
@@ -107,8 +107,8 @@
         "Non-EU users skip consent screen automatically"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created ConsentService.kt matching iOS ConsentService.swift with per-type toggles (location, email, analytics) stored in EncryptedSharedPreferences via SecureStorage. EU locale detection using 32 country codes. StateFlow-based reactive UI for consent toggles. acceptAll/saveAndComplete/revokeAll bulk operations. Privacy & Data section added to SettingsScreen with toggle rows for each consent type. Changes logged for GDPR audit trail."
     },
     {
       "id": "IOS-SEC-001",
@@ -124,8 +124,8 @@
         "Persist last activity timestamp in Keychain for app restart scenarios"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created SessionTimeoutService.swift with scene-phase-aware idle tracking via periodic Task checks. Enforces user (60min idle, 8h absolute) and admin (30min idle, 4h absolute) timeouts. Exposes SessionState enum (.active, .warning(minutesRemaining), .expired). Persists timestamps in Keychain via KeychainService. 30-second check interval. Start/stop lifecycle tied to auth state."
     },
     {
       "id": "WEB-SEC-001",
@@ -141,8 +141,8 @@
         "All 35+ edge functions continue working without changes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created rate_limit_entries table with composite index on (client_id, endpoint, window_start) and unique constraint for atomic upsert. Created check_rate_limit() PL/pgSQL function for atomic rate limit check via INSERT ON CONFLICT. Created cleanup_rate_limit_entries() for expired entry removal. RLS enabled with service_role-only policy. Updated rateLimit.ts with new checkRateLimitPersistent() async function using database storage with in-memory fallback. Original checkRateLimit() kept synchronous for backward compatibility — all 35+ edge functions continue working unchanged."
     },
     {
       "id": "AUTH-UX-001",

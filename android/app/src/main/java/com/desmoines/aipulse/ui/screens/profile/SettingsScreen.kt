@@ -23,9 +23,11 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Star
@@ -39,6 +41,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -67,6 +70,18 @@ fun SettingsScreen(
     isDeleting: Boolean = false,
     showDeleteConfirmation: Boolean = false,
     errorMessage: String? = null,
+    // Biometric auth
+    isBiometricAvailable: Boolean = false,
+    isBiometricEnabled: Boolean = false,
+    onToggleBiometric: (Boolean) -> Unit = {},
+    // Consent / Privacy
+    locationConsent: Boolean = false,
+    emailConsent: Boolean = false,
+    analyticsConsent: Boolean = false,
+    onToggleLocationConsent: (Boolean) -> Unit = {},
+    onToggleEmailConsent: (Boolean) -> Unit = {},
+    onToggleAnalyticsConsent: (Boolean) -> Unit = {},
+    // Navigation
     onNavigateBack: () -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
     onNavigateToWebView: (String) -> Unit = {},
@@ -147,6 +162,50 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
+            // Security section
+            if (isAuthenticated && isBiometricAvailable) {
+                SectionHeader("Security")
+
+                SettingsToggleRow(
+                    icon = Icons.Default.Fingerprint,
+                    title = "Biometric Unlock",
+                    subtitle = if (isBiometricEnabled) "Enabled" else "Disabled",
+                    checked = isBiometricEnabled,
+                    onCheckedChange = onToggleBiometric,
+                )
+
+                HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+            }
+
+            // Privacy & Data (consent toggles)
+            SectionHeader("Privacy & Data")
+
+            SettingsToggleRow(
+                icon = Icons.Default.PrivacyTip,
+                title = "Location Data",
+                subtitle = "Allow location-based recommendations",
+                checked = locationConsent,
+                onCheckedChange = onToggleLocationConsent,
+            )
+
+            SettingsToggleRow(
+                icon = Icons.Default.Email,
+                title = "Email Communications",
+                subtitle = "Receive event updates and newsletters",
+                checked = emailConsent,
+                onCheckedChange = onToggleEmailConsent,
+            )
+
+            SettingsToggleRow(
+                icon = Icons.Default.Info,
+                title = "Analytics",
+                subtitle = "Help improve the app with usage data",
+                checked = analyticsConsent,
+                onCheckedChange = onToggleAnalyticsConsent,
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
             // Notifications
             SectionHeader("Notifications")
 
@@ -199,9 +258,9 @@ fun SettingsScreen(
 
             HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
 
-            // Data & Privacy (authenticated only)
+            // Danger Zone (authenticated only)
             if (isAuthenticated) {
-                SectionHeader("Data & Privacy")
+                SectionHeader("Account Data")
 
                 Row(
                     modifier = Modifier
@@ -349,6 +408,45 @@ private fun SettingsRow(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
             )
         }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String? = null,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(24.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge)
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }
 

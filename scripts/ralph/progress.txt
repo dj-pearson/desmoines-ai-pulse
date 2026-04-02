@@ -1333,3 +1333,93 @@ Started: 2026-03-27T14:05:42.010Z
   - The fallback pattern (try encrypted, catch → standard) is critical for emulators and devices with corrupted Keystore
   - contains() delegates directly to SharedPreferences.contains() — works through encrypted wrapper
 ---
+
+## 2026-04-02 - AND-SEC-005 (Android Security Audit)
+- Created SessionTimeoutService.kt for enforcing idle and absolute session timeouts:
+  - Regular users: 60-min idle timeout, 8-hour absolute timeout
+  - Admin users: 30-min idle timeout, 4-hour absolute timeout (stricter)
+  - Uses Application.ActivityLifecycleCallbacks (onActivityResumed) to reset idle timer
+  - Exposes sessionState as StateFlow<SessionState> (ACTIVE/WARNING/EXPIRED)
+  - Shows warning 5 minutes before expiry via WARNING state with minutesRemaining
+  - Persists last activity and session start timestamps in SecureStorage
+  - Periodic 30-second timeout checks via coroutine Job
+  - isSessionValid() for app restart validation
+  - startTracking(isAdmin)/stopTracking() lifecycle tied to auth state
+- Files created: SessionTimeoutService.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Application.ActivityLifecycleCallbacks fires on ALL activities — simpler than LifecycleObserver for idle tracking
+  - CoroutineScope with SupervisorJob + Dispatchers.Main survives configuration changes
+  - Absolute timeout is non-resettable (tracks session start time, not last activity)
+  - Warning state fires at warningBefore threshold (5 min) — UI should show countdown dialog
+---
+
+## 2026-04-02 - AND-SEC-006 (Android Security Audit)
+- Created ConsentService.kt matching iOS ConsentService.swift:
+  - Per-type toggles: location, email, analytics stored in SecureStorage (EncryptedSharedPreferences)
+  - EU locale detection using 32 ISO 3166-1 alpha-2 country codes (27 EU + EEA + UK)
+  - StateFlow-based reactive UI (locationConsent, emailConsent, analyticsConsent)
+  - needsConsentPrompt computed property: true for EU users who haven't completed flow
+  - Bulk operations: acceptAll(), saveAndComplete(), revokeAll()
+  - Changes logged via AppLogger.general for GDPR audit trail
+- Updated SettingsScreen.kt with new sections:
+  - Security section: Biometric unlock toggle (when available and authenticated)
+  - Privacy & Data section: Location, Email, Analytics consent toggles with descriptions
+  - SettingsToggleRow composable: icon + title + subtitle + Switch
+  - Added new parameters: isBiometricAvailable/Enabled, consent toggles with callbacks
+  - Renamed "Data & Privacy" to "Account Data" (delete account)
+- Files created: ConsentService.kt
+- Files modified: SettingsScreen.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Locale.getDefault().country returns ISO 3166-1 alpha-2 code — reliable for EU detection
+  - ConsentService uses @Singleton + @Inject constructor — no manual @Provides needed
+  - SettingsToggleRow uses Switch composable (Material 3) instead of SettingsRow with chevron
+  - Consent toggles use StateFlow so UI recomposes on change without manual state management
+  - ConsentService stores in SecureStorage (encrypted) vs iOS using plain UserDefaults
+---
+
+## 2026-04-02 - IOS-SEC-001 (iOS Security Audit)
+- Created SessionTimeoutService.swift matching Android SessionTimeoutService.kt:
+  - @MainActor @Observable singleton with SessionState enum (.active, .warning(minutesRemaining), .expired)
+  - Regular users: 60-min idle timeout, 8-hour absolute timeout
+  - Admin users: 30-min idle timeout, 4-hour absolute timeout
+  - Persists timestamps in Keychain via KeychainService (String encoding of TimeInterval)
+  - 30-second periodic check interval via Task with Task.isCancelled guard
+  - recordActivity() resets idle timer and clears warning state
+  - isSessionValid() for app restart validation
+  - startTracking(isAdmin)/stopTracking() lifecycle
+- Files created: SessionTimeoutService.swift
+- **Learnings for future iterations:**
+  - KeychainService stores TimeInterval as String — Keychain doesn't natively support numeric types
+  - Task.sleep(nanoseconds:) is the Swift concurrency equivalent of coroutine delay()
+  - SessionState uses associated value .warning(minutesRemaining: Int) — cleaner than separate StateFlow
+  - @Observable (iOS 17+) replaces @Published for automatic SwiftUI observation
+  - Timeout constants organized in private enum Timeout for namespace clarity
+---
+
+## 2026-04-02 - WEB-SEC-001 (Backend Security)
+- Created database migration 20260402000001_create_rate_limit_table.sql:
+  - rate_limit_entries table with client_id, endpoint, window_start, request_count
+  - Composite index on (client_id, endpoint, window_start) for fast lookups
+  - Index on created_at for cleanup queries
+  - Unique constraint for atomic upsert (INSERT ON CONFLICT)
+  - check_rate_limit() PL/pgSQL function: atomic rate limit check with upsert
+  - cleanup_rate_limit_entries() function: removes entries older than 1 hour
+  - RLS enabled with service_role-only policy (edge functions only)
+- Updated supabase/functions/_shared/rateLimit.ts:
+  - Added checkRateLimitPersistent() async function using database-backed storage
+  - Uses Supabase service_role client to call check_rate_limit RPC
+  - Falls back to in-memory storage if database is unavailable
+  - Original checkRateLimit() kept synchronous for backward compatibility
+  - All 35+ existing edge functions continue working unchanged
+  - New endpoint parameter for per-function rate limit tracking
+- Files created: 20260402000001_create_rate_limit_table.sql
+- Files modified: rateLimit.ts
+- **Learnings for future iterations:**
+  - Breaking change avoided: async checkRateLimit would break all callers — added checkRateLimitPersistent instead
+  - PL/pgSQL INSERT ON CONFLICT provides atomic counter increment without race conditions
+  - Supabase service_role key needed for rate limit table access (RLS blocks anon/authenticated)
+  - cleanup_rate_limit_entries should be called via pg_cron or a scheduled edge function
+  - Rate limit table is lightweight: ~100 bytes per entry, auto-cleaned after 1 hour
+---
