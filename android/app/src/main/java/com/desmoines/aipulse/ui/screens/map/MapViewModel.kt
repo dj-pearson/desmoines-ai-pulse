@@ -143,7 +143,7 @@ enum class PinColor { RED, ORANGE, BLUE }
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
-    @ApplicationContext private val appContext: Context,
+    @param:ApplicationContext private val appContext: Context,
     private val eventsRepository: EventsRepository,
     private val restaurantsRepository: RestaurantsRepository,
     private val attractionsRepository: AttractionsRepository,

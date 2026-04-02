@@ -156,7 +156,7 @@ fun MapScreen(
             state.eventAnnotations.forEach { annotation ->
                 val isSelected = state.selectedEvent?.id == annotation.event.id
                 MarkerComposable(
-                    keys = arrayOf(annotation.id, isSelected),
+                    keys = arrayOf<Any>(annotation.id, isSelected),
                     state = MarkerState(position = annotation.position),
                     title = annotation.event.title,
                     onClick = {
@@ -176,7 +176,7 @@ fun MapScreen(
             state.restaurantAnnotations.forEach { annotation ->
                 val isSelected = state.selectedRestaurant?.id == annotation.restaurant.id
                 MarkerComposable(
-                    keys = arrayOf(annotation.id, isSelected),
+                    keys = arrayOf<Any>(annotation.id, isSelected),
                     state = MarkerState(position = annotation.position),
                     title = annotation.restaurant.name,
                     onClick = {
@@ -192,7 +192,7 @@ fun MapScreen(
             state.attractionAnnotations.forEach { annotation ->
                 val isSelected = state.selectedAttraction?.id == annotation.attraction.id
                 MarkerComposable(
-                    keys = arrayOf(annotation.id, isSelected),
+                    keys = arrayOf<Any>(annotation.id, isSelected),
                     state = MarkerState(position = annotation.position),
                     title = annotation.attraction.name,
                     onClick = {

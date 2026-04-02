@@ -29,7 +29,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarHalf
+import androidx.compose.material.icons.automirrored.filled.StarHalf
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -301,7 +301,7 @@ private fun AttractionDetailInfo(
                     for (star in 1..5) {
                         val icon = when {
                             star.toDouble() <= attraction.rating -> Icons.Filled.Star
-                            star - 0.5 <= attraction.rating -> Icons.Filled.StarHalf
+                            star - 0.5 <= attraction.rating -> Icons.AutoMirrored.Filled.StarHalf
                             else -> Icons.Filled.StarOutline
                         }
                         val tint = when {

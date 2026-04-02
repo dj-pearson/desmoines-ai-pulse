@@ -20,7 +20,7 @@ import kotlin.coroutines.suspendCoroutine
  */
 @Singleton
 class BiometricAuthService @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val secureStorage: SecureStorage,
 ) {
 

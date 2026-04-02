@@ -29,7 +29,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class SessionTimeoutService @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val secureStorage: SecureStorage,
 ) {
 

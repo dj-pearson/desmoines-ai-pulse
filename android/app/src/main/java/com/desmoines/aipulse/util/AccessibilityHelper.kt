@@ -25,7 +25,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class AccessibilityHelper @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     private val accessibilityManager: AccessibilityManager? =
         context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
@@ -57,6 +57,7 @@ class AccessibilityHelper @Inject constructor(
      */
     val isHapticFeedbackEnabled: Boolean
         get() {
+            @Suppress("DEPRECATION")
             val setting = Settings.System.getInt(
                 context.contentResolver,
                 Settings.System.HAPTIC_FEEDBACK_ENABLED,
@@ -102,6 +103,7 @@ fun rememberIsScreenReaderEnabled(): Boolean {
 fun rememberIsHapticFeedbackEnabled(): Boolean {
     val context = LocalContext.current
     return remember {
+        @Suppress("DEPRECATION")
         val setting = Settings.System.getInt(
             context.contentResolver,
             Settings.System.HAPTIC_FEEDBACK_ENABLED,

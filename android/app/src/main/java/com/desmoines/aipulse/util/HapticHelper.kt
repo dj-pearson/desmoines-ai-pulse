@@ -23,7 +23,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class HapticHelper @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     private val vibrator: Vibrator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         val manager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
@@ -42,6 +42,7 @@ class HapticHelper @Inject constructor(
      */
     private val isEnabled: Boolean
         get() {
+            @Suppress("DEPRECATION")
             val setting = Settings.System.getInt(
                 context.contentResolver,
                 Settings.System.HAPTIC_FEEDBACK_ENABLED,

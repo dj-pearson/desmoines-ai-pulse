@@ -57,7 +57,8 @@
       "Bash(mkdir -p /tmp/functions)",
       "Bash($JAVA_HOME/bin/jar xf:*)",
       "Bash(./gradlew compileDebugSources compileDebugUnitTestSources compileDebugAndroidTestSources)",
-      "Bash(infisical:*)"
+      "Bash(infisical:*)",
+      "Bash(./gradlew.bat clean:*)"
     ],
     "deny": [],
     "ask": []

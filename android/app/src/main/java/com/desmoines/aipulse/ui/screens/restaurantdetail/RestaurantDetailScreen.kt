@@ -35,7 +35,7 @@ import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.StarHalf
+import androidx.compose.material.icons.automirrored.filled.StarHalf
 import androidx.compose.material.icons.filled.StarOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -338,7 +338,7 @@ private fun RestaurantDetailInfo(
                         for (star in 1..5) {
                             val icon = when {
                                 star.toDouble() <= rating -> Icons.Filled.Star
-                                star.toDouble() - 0.5 <= rating -> Icons.Filled.StarHalf
+                                star.toDouble() - 0.5 <= rating -> Icons.AutoMirrored.Filled.StarHalf
                                 else -> Icons.Filled.StarOutline
                             }
                             val tint = when {

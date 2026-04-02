@@ -111,12 +111,12 @@ class EventsViewModel @Inject constructor(
      * Combined UI state for HomeScreen. Mirrors iOS approach of computed properties
      * exposed to the view, but uses Compose-friendly StateFlow.
      */
+    @Suppress("UNCHECKED_CAST")
     val uiState: StateFlow<HomeScreenState> = combine(
         _events, _featuredEvents, _restaurants,
         _isLoading, _isLoadingMore, _isRefreshing,
         _hasMore, _totalCount, _errorMessage,
-    ) { values ->
-        @Suppress("UNCHECKED_CAST")
+    ) { values: Array<Any?> ->
         HomeScreenState(
             events = values[0] as List<Event>,
             featuredEvents = values[1] as List<Event>,
@@ -133,7 +133,7 @@ class EventsViewModel @Inject constructor(
             _selectedCategory, _selectedDatePreset, _showFeaturedOnly,
             _searchText, _showFreeOnly, _maxDistance, _minRating, _currentTier,
             networkMonitor.isConnected,
-        ) { filterValues ->
+        ) { filterValues: Array<Any?> ->
             FilterState(
                 selectedCategory = filterValues[0] as EventCategory?,
                 selectedDatePreset = filterValues[1] as DateFilterPreset?,

@@ -25,7 +25,7 @@ private const val LOCAL_RESTAURANT_KEY = "localRestaurantFavorites"
 @Singleton
 class FavoritesRepositoryImpl @Inject constructor(
     private val remoteDataSource: FavoritesRemoteDataSource,
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
 ) : FavoritesRepository {
 
     // In-memory cache of favorite IDs
