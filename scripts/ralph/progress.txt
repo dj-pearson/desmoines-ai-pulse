@@ -1517,3 +1517,59 @@ Started: 2026-03-27T14:05:42.010Z
 ## COMPLETE — All 12 mobile security audit stories implemented
 ---
 ---
+
+## 2026-04-03 - AUDIT-SEC-001 (Android Audit)
+- Set android:allowBackup="false" in AndroidManifest.xml to prevent sensitive data extraction
+- Added android:dataExtractionRules="@xml/data_extraction_rules" for Android 12+ (API 31+)
+- Added android:fullBackupContent="@xml/backup_rules" for pre-API-31 devices
+- Created res/xml/data_extraction_rules.xml excluding sharedpref, database, no_backup, cache domains from cloud backup and device transfer
+- Created res/xml/backup_rules.xml with matching exclusion rules for older Android versions
+- Files created: android/app/src/main/res/xml/data_extraction_rules.xml, android/app/src/main/res/xml/backup_rules.xml
+- Files modified: android/app/src/main/AndroidManifest.xml
+- **Learnings for future iterations:**
+  - Android 12+ uses data_extraction_rules (cloud-backup + device-transfer sections)
+  - Pre-API-31 uses full-backup-content format (simpler domain exclusions)
+  - EncryptedSharedPreferences files live in sharedpref domain — must be excluded from backup
+  - Room database cache also needs exclusion to prevent stale data on restore
+---
+
+## 2026-04-03 - AUDIT-SEC-002 (Android Audit)
+- Added 30s connect/read/write timeouts and 60s call timeout to CertificatePinningService.createPinnedClient()
+- Timeouts applied via OkHttpClient.Builder before certificate pinning configuration
+- Added 30s connect/read timeouts to image loading OkHttpClient in DesMoinesInsiderApp.kt
+- Added IMAGE_TIMEOUT_SECONDS constant to companion object
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/util/CertificatePinningService.kt, android/app/src/main/java/com/desmoines/aipulse/DesMoinesInsiderApp.kt
+- **Learnings for future iterations:**
+  - OkHttp timeout order: connectTimeout < readTimeout < writeTimeout < callTimeout
+  - callTimeout is an overall safety net that covers the entire call including redirects
+  - Image loading uses separate OkHttpClient from Supabase API client — both need timeouts
+  - Timeouts must be set on Builder before passing to configurePinning()
+---
+
+## 2026-04-03 - AUDIT-PERF-001 (Android Audit)
+- Added @Immutable annotation (androidx.compose.runtime) to Event, Restaurant, Attraction, LatLng data classes
+- All classes verified: only val properties, List<String> (immutable interface), no mutable state
+- EventCategory enum is already stable by default in Compose compiler
+- @Serializable and @Immutable annotations coexist without conflict
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/data/model/Event.kt, Restaurant.kt, Attraction.kt, LatLng.kt
+- **Learnings for future iterations:**
+  - @Immutable tells Compose compiler to treat all properties as stable, skipping recomposition when instance equality holds
+  - Kotlin data classes with only val + immutable types qualify for @Immutable
+  - List<T> is immutable interface — safe for @Immutable even though MutableList extends it
+  - kotlinx.serialization processes at compile time, @Immutable is a Compose compiler hint — no conflict
+---
+
+## 2026-04-03 - AUDIT-UX-001 (Android Audit)
+- Added SwipeToDismissBox (Material 3) to all favorite list items in FavoritesScreen.kt
+- Created SwipeToDismissItem composable with: end-to-start swipe direction, animated red errorContainer background, delete icon in circle, haptic feedback on dismiss threshold
+- Wrapped FavoriteEventRow (upcoming events), FavoriteEventRow (past events), and FavoriteRestaurantRow with SwipeToDismissItem
+- Existing heart icon button preserved as alternative removal method
+- Proper accessibility semantics: contentDescription = "Swipe left to remove from saved"
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/screens/favorites/FavoritesScreen.kt
+- **Learnings for future iterations:**
+  - SwipeToDismissBox replaces deprecated SwipeToDismiss in Material 3
+  - rememberSwipeToDismissBoxState with confirmValueChange callback controls dismiss behavior
+  - SwipeToDismissBoxValue.EndToStart = swipe left; enableDismissFromStartToEnd = false disables right swipe
+  - animateColorAsState on background provides smooth visual transition as user swipes
+  - backgroundContent composable receives dismiss state for conditional rendering
+---

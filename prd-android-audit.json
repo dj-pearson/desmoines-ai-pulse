@@ -1,0 +1,194 @@
+{
+  "project": "Des Moines AI Pulse - Android Audit",
+  "branchName": "claude/android-app-audit-WLagP",
+  "description": "Deep audit of the native Android app covering UI/UX, performance, and security. Addresses critical security hardening (backup rules, network timeouts), Compose performance optimizations (@Immutable annotations), and UX improvements (swipe-to-dismiss favorites, BackHandler for sheets, scroll-to-top on tab switch, string resources for i18n). All items discovered via comprehensive code review of the Kotlin/Jetpack Compose codebase.",
+  "userStories": [
+    {
+      "id": "AUDIT-SEC-001",
+      "title": "Disable automatic backup and add data extraction rules",
+      "description": "As a user, I need my sensitive data (auth tokens, encrypted preferences, biometric settings) excluded from Android auto-backup so that my account cannot be compromised if my cloud backup is accessed by another device.",
+      "acceptanceCriteria": [
+        "Set android:allowBackup=\"false\" in AndroidManifest.xml",
+        "Add android:dataExtractionRules=\"@xml/data_extraction_rules\" for Android 12+ (API 31+)",
+        "Add android:fullBackupContent=\"@xml/backup_rules\" for Android 11 and below",
+        "Create res/xml/data_extraction_rules.xml that excludes: shared_prefs (contains encrypted tokens), databases (Room cache), no_backup directory",
+        "Create res/xml/backup_rules.xml with matching exclusion rules for pre-API-31",
+        "Allow backup of non-sensitive preferences (theme, onboarding state) if desired",
+        "Verify manifest compiles without errors"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "FIXED: Set android:allowBackup=false in AndroidManifest.xml. Created res/xml/data_extraction_rules.xml for Android 12+ and res/xml/backup_rules.xml for pre-API-31. Both exclude sharedpref, database, no_backup, and cache domains from cloud backup and device transfer."
+    },
+    {
+      "id": "AUDIT-SEC-002",
+      "title": "Add network request timeouts to OkHttp/Supabase client",
+      "description": "As a user, I need network requests to have reasonable timeouts so the app doesn't hang indefinitely when the server is unresponsive, preventing ANRs and poor UX.",
+      "acceptanceCriteria": [
+        "Configure connect timeout of 30 seconds on the OkHttp client in CertificatePinningService.createPinnedClient()",
+        "Configure read timeout of 30 seconds",
+        "Configure write timeout of 30 seconds",
+        "Configure call timeout of 60 seconds as an overall safety net",
+        "Apply the same timeouts to the image loading OkHttp client in DesMoinesInsiderApp.kt",
+        "Verify existing certificate pinning still works with the timeout configuration"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "FIXED: Added 30s connect/read/write timeouts and 60s call timeout to CertificatePinningService.createPinnedClient(). Added 30s connect/read timeouts to image loading OkHttpClient in DesMoinesInsiderApp. Timeouts are applied before certificate pinning configuration so both work together."
+    },
+    {
+      "id": "AUDIT-PERF-001",
+      "title": "Add @Immutable annotations to data model classes for Compose stability",
+      "description": "As a developer, I need data model classes annotated with @Immutable so the Compose compiler can skip unnecessary recompositions, improving scroll performance and reducing frame drops.",
+      "acceptanceCriteria": [
+        "Add @Immutable annotation to Event data class in data/model/Event.kt",
+        "Add @Immutable annotation to Restaurant data class in data/model/Restaurant.kt",
+        "Add @Immutable annotation to Attraction data class in data/model/Attraction.kt",
+        "Add @Immutable annotation to LatLng data class in data/model/LatLng.kt",
+        "Add @Immutable annotation to EventCategory enum if present",
+        "Verify all annotated classes are truly immutable (all val properties, no mutable collections)",
+        "Ensure kotlinx.serialization @Serializable still works with @Immutable"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "FIXED: Added @Immutable from androidx.compose.runtime to Event, Restaurant, Attraction, and LatLng data classes. All classes verified to have only val properties and immutable List<String> collections. EventCategory is an enum (already stable by default in Compose). @Serializable and @Immutable coexist without conflict as they target different compilation phases."
+    },
+    {
+      "id": "AUDIT-UX-001",
+      "title": "Add swipe-to-dismiss gesture on favorites list items",
+      "description": "As a user, I want to swipe left on saved items in my Favorites screen to quickly remove them, matching modern Android UX patterns and reducing friction for managing saved content.",
+      "acceptanceCriteria": [
+        "Add SwipeToDismissBox (Material 3) wrapper around FavoriteEventRow items",
+        "Add SwipeToDismissBox wrapper around FavoriteRestaurantRow items",
+        "Show red background with delete icon when swiping end-to-start",
+        "Trigger haptic feedback on dismiss threshold",
+        "Call existing onRemoveEventFavorite/onRemoveRestaurantFavorite on dismiss",
+        "Add animateItem() modifier to LazyColumn items for smooth removal animation",
+        "Ensure accessibility: swipe action has proper semantics label",
+        "Keep the existing heart icon button as an alternative removal method"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "FIXED: Added SwipeToDismissBox (Material 3) wrapper around all favorite list items in FavoritesScreen.kt. Created SwipeToDismissItem composable with: end-to-start swipe with animated red errorContainer background, delete icon, haptic feedback on dismiss threshold, proper accessibility semantics. Wraps FavoriteEventRow (upcoming + past) and FavoriteRestaurantRow items. Existing heart icon button preserved as alternative removal method."
+    },
+    {
+      "id": "AUDIT-UX-002",
+      "title": "Add BackHandler for bottom sheet dismissal before navigation pop",
+      "description": "As a user, pressing the system back button should first dismiss any open bottom sheet (filter sheet, modal) before navigating back, preventing confusing navigation behavior.",
+      "acceptanceCriteria": [
+        "Add BackHandler in MainScreen.kt that dismisses ModalBottomSheet if visible before allowing back navigation",
+        "Add BackHandler in HomeScreen.kt FilterSheet composable",
+        "Ensure back press closes search overlay before navigating away from SearchScreen",
+        "Test that normal back navigation still works when no sheets are open"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUDIT-UX-003",
+      "title": "Implement scroll-to-top on bottom navigation tab re-selection",
+      "description": "As a user, I want to tap the currently selected bottom navigation tab to scroll back to the top of the list, following standard Android navigation patterns.",
+      "acceptanceCriteria": [
+        "Track LazyListState for Home, Dining, Search, Favorites screens",
+        "On re-selecting the current tab in bottom navigation, animate scroll to position 0",
+        "Add haptic feedback on scroll-to-top action",
+        "Ensure scroll-to-top works with both LazyColumn and LazyRow lists"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUDIT-UX-004",
+      "title": "Extract hardcoded strings to string resources for i18n readiness",
+      "description": "As a developer, I need all user-facing strings moved to res/values/strings.xml so the app is ready for localization and follows Android best practices.",
+      "acceptanceCriteria": [
+        "Extract strings from AuthScreen.kt (Sign In, Sign Up, email/password labels, validation messages)",
+        "Extract strings from HomeScreen.kt (filter labels, empty states, section headers)",
+        "Extract strings from FavoritesScreen.kt (Saved, section headers, sign-in prompt)",
+        "Extract strings from ProfileScreen.kt (profile labels, delete account dialog)",
+        "Extract strings from SearchScreen.kt (search placeholder, offline state, no results)",
+        "Extract strings from SubscriptionBanner.kt and AdBannerView.kt",
+        "Extract strings from OfflineBanner.kt and LoadingView.kt",
+        "Use stringResource() in all Composables instead of hardcoded strings",
+        "Ensure string resources include format placeholders where needed (e.g. %d items)"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUDIT-PERF-002",
+      "title": "Add image size constraints to Coil image requests",
+      "description": "As a user, I need images loaded at appropriate sizes to reduce memory usage and improve scroll performance, especially on devices with limited RAM.",
+      "acceptanceCriteria": [
+        "Update CachedAsyncImage.kt to pass size constraints from the Compose layout to the Coil ImageRequest",
+        "Use SubcomposeAsyncImage or pass Size parameter based on modifier constraints",
+        "Ensure thumbnail images (80dp cards) don't load full-resolution originals",
+        "Verify hero images (full-width) still load at appropriate resolution",
+        "Measure memory improvement with Android Profiler before/after"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUDIT-UX-005",
+      "title": "Add WebView error and empty states",
+      "description": "As a user, I need clear feedback when a WebView page fails to load or is blank, with retry options instead of a blank screen.",
+      "acceptanceCriteria": [
+        "Add error state to WebViewScreen.kt when page load fails (onReceivedError callback)",
+        "Show error illustration, message, and Retry button",
+        "Add empty state when URL is null or blank",
+        "Add timeout detection (30s) with appropriate messaging",
+        "Ensure back navigation works from error state"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUDIT-UX-006",
+      "title": "Add premium lock indicators to filter options",
+      "description": "As a free-tier user, I need visual indicators on premium-only filter options so I understand which features require an upgrade.",
+      "acceptanceCriteria": [
+        "Add lock icon or 'Insider' badge next to premium-only filter chips in FilterSheet.kt",
+        "Show PremiumGate dialog when tapping a locked filter option",
+        "Visually distinguish locked vs. unlocked filter options (opacity, icon)",
+        "Ensure screen reader announces premium status of locked filters"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUDIT-PERF-003",
+      "title": "Fix unnecessary recomposition from .take(10) in HomeScreen",
+      "description": "As a developer, I need to prevent HomeScreen from creating new list instances on every recomposition by memoizing derived collections.",
+      "acceptanceCriteria": [
+        "Wrap restaurants.take(10) in remember with proper key in HomeScreen.kt",
+        "Apply same pattern to any other .take(), .filter(), or .map() calls on state lists in composables",
+        "Verify with Layout Inspector that RestaurantsSection recomposition count is reduced"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUDIT-UX-007",
+      "title": "Add responsive tablet and landscape layouts",
+      "description": "As a tablet user, I need the app to use multi-column layouts on larger screens instead of stretching phone layouts, providing a native tablet experience.",
+      "acceptanceCriteria": [
+        "Add WindowSizeClass dependency from Material 3 adaptive",
+        "Create 2-column grid layout for event/restaurant lists on medium+ width screens",
+        "Add list-detail split view for tablets on detail screens",
+        "Handle landscape orientation with appropriate layout adjustments",
+        "Test on common tablet sizes (10-inch, 7-inch)"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
