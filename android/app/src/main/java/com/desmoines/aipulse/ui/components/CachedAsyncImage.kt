@@ -22,12 +22,15 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import coil3.compose.SubcomposeAsyncImage
 import coil3.compose.SubcomposeAsyncImageContent
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Dimension
+import coil3.size.Size
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 
 /**
@@ -43,7 +46,8 @@ fun CachedAsyncImage(
     url: String?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    maxSizePx: Int = 0,
 ) {
     if (url.isNullOrBlank()) {
         ImagePlaceholder(modifier = modifier)
@@ -81,6 +85,13 @@ fun CachedAsyncImage(
         model = ImageRequest.Builder(context)
             .data(url)
             .crossfade(if (reduceMotion) false else true)
+            .apply {
+                // Constrain decoded image size to reduce memory when displaying in small views.
+                // When maxSizePx is 0 Coil resolves the size from the composable's layout constraints.
+                if (maxSizePx > 0) {
+                    size(Size(Dimension(maxSizePx), Dimension(maxSizePx)))
+                }
+            }
             .build(),
         contentDescription = contentDescription,
         modifier = modifier,

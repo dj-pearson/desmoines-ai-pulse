@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.ui.navigation
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -49,6 +50,7 @@ import com.desmoines.aipulse.data.remote.BillingService
 @Composable
 fun MainNavHost(
     navController: NavHostController,
+    scrollToTopTrigger: Int = 0,
     modifier: Modifier = Modifier
 ) {
     NavHost(
@@ -85,6 +87,7 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
 
         HomeScreen(
             state = state,
+            scrollToTopTrigger = scrollToTopTrigger,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },
@@ -102,6 +105,11 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             onLoadMore = { viewModel.loadMoreIfNeeded(state.events.size - 1) },
             onFavoriteClick = null, // Favorites implemented in AND-024
         )
+
+        // Dismiss filter sheet on system back press before navigating away
+        BackHandler(enabled = showFilterSheet) {
+            showFilterSheet = false
+        }
 
         if (showFilterSheet) {
             FilterSheet(
@@ -153,6 +161,11 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             onLoadMore = { viewModel.loadMoreIfNeeded(state.restaurants.size - 1) },
             onFavoriteClick = null, // Favorites wired in AND-024
         )
+
+        // Dismiss filter sheet on system back press before navigating away
+        BackHandler(enabled = showFilterSheet) {
+            showFilterSheet = false
+        }
 
         if (showFilterSheet) {
             RestaurantFilterSheet(

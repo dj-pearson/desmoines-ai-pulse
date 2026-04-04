@@ -124,6 +124,7 @@ data class HomeScreenState(
 @Composable
 fun HomeScreen(
     state: HomeScreenState = HomeScreenState(),
+    scrollToTopTrigger: Int = 0,
     onNavigateToEventDetail: (String) -> Unit = {},
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
@@ -138,6 +139,13 @@ fun HomeScreen(
     val haptic = rememberHapticPerformer()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
+
+    // Scroll to top when the user re-taps the active bottom nav tab
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     // Trigger load more when within 5 items of end
     LaunchedEffect(listState) {
@@ -264,8 +272,11 @@ fun HomeScreen(
                 // Popular restaurants carousel
                 if (state.restaurants.isNotEmpty()) {
                     item(key = "restaurants") {
+                        val topRestaurants = remember(state.restaurants) {
+                            state.restaurants.take(10)
+                        }
                         RestaurantsSection(
-                            restaurants = state.restaurants.take(10),
+                            restaurants = topRestaurants,
                             onRestaurantClick = onNavigateToRestaurantDetail
                         )
                     }

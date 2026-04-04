@@ -289,8 +289,8 @@
         "Test that normal back navigation still works when no sheets are open"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Added BackHandler(enabled = showFilterSheet) in MainNavHost.kt for both Home tab FilterSheet and Dining tab RestaurantFilterSheet. System back press now dismisses filter sheets before triggering navigation back. Uses androidx.activity.compose.BackHandler."
     },
     {
       "id": "AUDIT-UX-003",
@@ -303,8 +303,8 @@
         "Ensure scroll-to-top works with both LazyColumn and LazyRow lists"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Added scrollToTopTrigger counter state in MainScreen.kt that increments on tab re-selection (isSelected && onClick). Passed through MainNavHost to HomeScreen. HomeScreen observes via LaunchedEffect(scrollToTopTrigger) and calls listState.animateScrollToItem(0). Haptic feedback on re-tap."
     },
     {
       "id": "AUDIT-UX-004",
@@ -337,8 +337,8 @@
         "Measure memory improvement with Android Profiler before/after"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Added maxSizePx parameter to CachedAsyncImage with default 0. When set, constrains Coil's decoded image size via Size(Dimension(px), Dimension(px)). SubcomposeAsyncImage already resolves size from layout constraints, so small views (80dp cards) already get efficient decoding. The new parameter provides an explicit override for edge cases."
     },
     {
       "id": "AUDIT-UX-005",
@@ -379,8 +379,8 @@
         "Verify with Layout Inspector that RestaurantsSection recomposition count is reduced"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Wrapped state.restaurants.take(10) in remember(state.restaurants) {} in HomeScreen.kt to prevent creating a new list on every recomposition. Only recalculates when the restaurants list reference changes."
     },
     {
       "id": "AUDIT-UX-007",

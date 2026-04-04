@@ -14,6 +14,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.contentDescription
@@ -45,6 +48,10 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val haptic = rememberHapticPerformer()
+
+    // Counter that increments when the user re-taps the already-selected tab.
+    // Screens observe this to scroll their lists back to the top.
+    var scrollToTopTrigger by remember { mutableStateOf(0) }
 
     // Observe pending deep link destinations
     val pendingDestination by deepLinkHandler.pendingDestination.collectAsState()
@@ -115,7 +122,11 @@ fun MainScreen(
                                 selected = isSelected
                             },
                             onClick = {
-                                if (!isSelected) {
+                                if (isSelected) {
+                                    // Re-tap on active tab → scroll to top
+                                    haptic.light()
+                                    scrollToTopTrigger++
+                                } else {
                                     haptic.light()
                                     navController.navigate(tab.route) {
                                         // Pop up to the start destination to avoid building
@@ -159,6 +170,7 @@ fun MainScreen(
             OfflineBanner(networkMonitor = networkMonitor)
             MainNavHost(
                 navController = navController,
+                scrollToTopTrigger = scrollToTopTrigger,
                 modifier = Modifier.weight(1f)
             )
         }
