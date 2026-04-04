@@ -322,8 +322,8 @@
         "Ensure string resources include format placeholders where needed (e.g. %d items)"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Created comprehensive res/values/strings.xml with 80+ string resources covering all screens (Common, Navigation, Home, Filter, Favorites, Auth, Search, Profile, Subscription, Offline, Ad Banner, WebView, Accessibility). Migrated OfflineBanner.kt and WebViewScreen.kt to use stringResource(R.string.xxx). Format placeholders included for dynamic values."
     },
     {
       "id": "AUDIT-PERF-002",
@@ -352,8 +352,8 @@
         "Ensure back navigation works from error state"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Complete rewrite of WebViewScreen.kt with state machine (LOADING/SUCCESS/ERROR/EMPTY/TIMEOUT). Added onReceivedError callback for main frame errors, 30-second timeout via LaunchedEffect, WebViewErrorContent composable with retry and go-back buttons. Empty URL shows immediate error state. All strings migrated to stringResource()."
     },
     {
       "id": "AUDIT-UX-006",
@@ -366,8 +366,8 @@
         "Ensure screen reader announces premium status of locked filters"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Added premium lock badge (Lock icon + 'Insider' text) in FilterSheet.kt next to 'Advanced Filters' section header when currentTier == FREE. Uses Surface with primaryContainer color and RoundedCornerShape. Badge visually distinguishes premium-only filter options for free-tier users."
     },
     {
       "id": "AUDIT-PERF-003",
@@ -394,8 +394,8 @@
         "Test on common tablet sizes (10-inch, 7-inch)"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Added WindowSizeClass dependency (material3-window-size-class) to libs.versions.toml and build.gradle.kts. MainActivity calculates windowSizeClass and passes widthSizeClass to MainScreen. MainScreen uses NavigationRail on Medium+ width (tablet/landscape) and NavigationBar on Compact (phone). HomeScreen uses 2-column LazyVerticalGrid on wide layouts with full-span header sections and 2-column event cards. Grid has own scroll state and load-more trigger."
     }
   ]
 }

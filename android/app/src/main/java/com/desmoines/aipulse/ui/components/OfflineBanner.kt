@@ -21,12 +21,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.desmoines.aipulse.R
 import com.desmoines.aipulse.util.NetworkMonitor
 
 /**
@@ -49,7 +51,7 @@ fun OfflineBanner(networkMonitor: NetworkMonitor) {
         exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
     ) {
         BannerContent(
-            text = "No internet connection",
+            text = stringResource(R.string.offline_no_connection),
             icon = Icons.Filled.CloudOff,
             backgroundColor = Color(0xFFE65100), // Orange
             contentColor = Color.White
@@ -63,7 +65,7 @@ fun OfflineBanner(networkMonitor: NetworkMonitor) {
         exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
     ) {
         BannerContent(
-            text = "Back online",
+            text = stringResource(R.string.offline_back_online),
             icon = Icons.Filled.CloudDone,
             backgroundColor = Color(0xFF2E7D32), // Green
             contentColor = Color.White

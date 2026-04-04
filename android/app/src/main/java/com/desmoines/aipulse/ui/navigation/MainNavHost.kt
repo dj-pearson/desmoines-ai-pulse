@@ -51,6 +51,7 @@ import com.desmoines.aipulse.data.remote.BillingService
 fun MainNavHost(
     navController: NavHostController,
     scrollToTopTrigger: Int = 0,
+    useWideLayout: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     NavHost(
@@ -59,7 +60,7 @@ fun MainNavHost(
         modifier = modifier
     ) {
         // Tab destinations
-        addTabDestinations(navController)
+        addTabDestinations(navController, scrollToTopTrigger, useWideLayout)
 
         // Detail destinations
         addDetailDestinations(navController)
@@ -69,7 +70,11 @@ fun MainNavHost(
     }
 }
 
-private fun NavGraphBuilder.addTabDestinations(navController: NavHostController) {
+private fun NavGraphBuilder.addTabDestinations(
+    navController: NavHostController,
+    scrollToTopTrigger: Int,
+    useWideLayout: Boolean,
+) {
     composable(Route.Home.route) {
         val viewModel: EventsViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsState()
@@ -88,6 +93,7 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
         HomeScreen(
             state = state,
             scrollToTopTrigger = scrollToTopTrigger,
+            useWideLayout = useWideLayout,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },

@@ -1621,3 +1621,61 @@ Started: 2026-03-27T14:05:42.010Z
   - Coil 3's Size takes Dimension objects, not raw Int — use Dimension(px) to wrap pixel values
   - Default maxSizePx=0 means "let Coil resolve from layout" — backward compatible with all existing callers
 ---
+
+## 2026-04-04 - AUDIT-UX-004 (Android Audit)
+- Created comprehensive res/values/strings.xml with 80+ string resources covering all app screens
+- String categories: Common, Navigation, Home Screen, Filter Sheet, Favorites, Auth, Search, Profile, Subscription, Offline Banner, Ad Banner, WebView, Accessibility
+- Migrated OfflineBanner.kt to use stringResource(R.string.offline_no_connection) and stringResource(R.string.offline_back_online)
+- Migrated WebViewScreen.kt to use stringResource() for all user-facing strings
+- Format placeholders included (e.g. %d, %s) for dynamic values
+- Files modified: android/app/src/main/res/values/strings.xml (NEW), android/app/src/main/java/com/desmoines/aipulse/ui/components/OfflineBanner.kt, android/app/src/main/java/com/desmoines/aipulse/ui/components/WebViewScreen.kt
+- **Learnings for future iterations:**
+  - Use stringResource(R.string.xxx) in Composables, not getString() — Compose recomposes on locale change
+  - Format strings with stringResource(R.string.xxx, arg1, arg2) for dynamic values
+  - Group strings by screen/feature in strings.xml with XML comments for maintainability
+---
+
+## 2026-04-04 - AUDIT-UX-005 (Android Audit)
+- Complete rewrite of WebViewScreen.kt with proper error handling state machine
+- Added WebViewState enum: LOADING, SUCCESS, ERROR, EMPTY, TIMEOUT
+- Added onReceivedError callback filtering for main frame errors only (isForMainFrame)
+- Added 30-second timeout via LaunchedEffect that sets TIMEOUT state if still LOADING
+- Created WebViewErrorContent composable with error icon, message, retry and go-back buttons
+- Empty URL detected immediately and shows EMPTY state without loading WebView
+- All strings migrated to stringResource(R.string.xxx)
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/components/WebViewScreen.kt
+- **Learnings for future iterations:**
+  - WebViewClient.onReceivedError fires for subresources too — filter with isForMainFrame to avoid false positives
+  - WebView timeout must be manual (LaunchedEffect + delay) — no built-in timeout mechanism
+  - State enum is cleaner than multiple boolean flags for WebView lifecycle management
+---
+
+## 2026-04-04 - AUDIT-UX-006 (Android Audit)
+- Added premium lock badge to FilterSheet.kt "Advanced Filters" section header
+- Badge shows Lock icon + "Insider" text in primaryContainer Surface when currentTier == FREE
+- Uses RoundedCornerShape(6.dp) with Row layout for icon + text
+- Visually distinguishes premium-only filters from free filters
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/FilterSheet.kt
+- **Learnings for future iterations:**
+  - Use Surface with colorScheme.primaryContainer for subtle badge backgrounds
+  - Icons.Filled.Lock is the standard premium indicator icon in Material 3
+---
+
+## 2026-04-04 - AUDIT-UX-007 (Android Audit)
+- Added material3-window-size-class dependency to libs.versions.toml and build.gradle.kts
+- MainActivity calculates WindowSizeClass and passes widthSizeClass to MainScreen
+- MainScreen uses NavigationRail on Medium+ width (tablet/landscape) instead of NavigationBar
+- NavigationRail placed in Row layout on left side with content on right
+- Shared onTabClick handler extracted to avoid duplication between rail and bar
+- HomeScreen accepts useWideLayout parameter, uses LazyVerticalGrid(columns=2) on wide layouts
+- Grid uses GridItemSpan(maxLineSpan) for full-width header sections, 2-column for event cards
+- Separate gridState and load-more LaunchedEffect for grid layout
+- MainNavHost passes useWideLayout through to HomeScreen
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt, android/app/src/main/java/com/desmoines/aipulse/ui/screens/MainScreen.kt, android/app/src/main/java/com/desmoines/aipulse/ui/navigation/MainNavHost.kt, android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/HomeScreen.kt, android/gradle/libs.versions.toml, android/app/build.gradle.kts
+- **Learnings for future iterations:**
+  - calculateWindowSizeClass(activity) must be called in setContent{} — it reads the activity window
+  - @OptIn(ExperimentalMaterial3WindowSizeClassApi::class) required for calculateWindowSizeClass
+  - NavigationRail replaces NavigationBar for Medium+ width — same items, different container
+  - LazyVerticalGrid with GridItemSpan(maxLineSpan) for full-width items + 2-column for cards
+  - Separate LazyGridState needed — cannot share LazyListState between LazyColumn and LazyVerticalGrid
+---
