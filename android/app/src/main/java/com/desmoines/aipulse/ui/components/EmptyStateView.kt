@@ -1,6 +1,11 @@
 package com.desmoines.aipulse.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +19,13 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -38,44 +49,65 @@ fun EmptyStateView(
     message: String,
     modifier: Modifier = Modifier,
     actionTitle: String? = null,
-    onAction: (() -> Unit)? = null
+    onAction: (() -> Unit)? = null,
+    secondaryActionTitle: String? = null,
+    onSecondaryAction: (() -> Unit)? = null,
 ) {
-    Column(
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 40.dp)
             .semantics { contentDescription = "$title. $message" },
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        contentAlignment = Alignment.Center
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.height(Dimens.SpacingLg))
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-        Spacer(modifier = Modifier.height(Dimens.SpacingSm))
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        if (actionTitle != null && onAction != null) {
-            Spacer(modifier = Modifier.height(Dimens.SpacingXl))
-            Button(
-                onClick = onAction,
-                shape = CircleShape
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn(animationSpec = tween(durationMillis = 350)) +
+                slideInVertically(animationSpec = tween(durationMillis = 350)) { it / 6 }
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 40.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Text(text = actionTitle)
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    modifier = Modifier.size(72.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.height(Dimens.SpacingLg))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(Dimens.SpacingSm))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (actionTitle != null && onAction != null) {
+                    Spacer(modifier = Modifier.height(Dimens.SpacingXl))
+                    Button(
+                        onClick = onAction,
+                        shape = CircleShape
+                    ) {
+                        Text(text = actionTitle)
+                    }
+                }
+                if (secondaryActionTitle != null && onSecondaryAction != null) {
+                    Spacer(modifier = Modifier.height(Dimens.SpacingSm))
+                    TextButton(onClick = onSecondaryAction) {
+                        Text(text = secondaryActionTitle)
+                    }
+                }
             }
         }
     }
