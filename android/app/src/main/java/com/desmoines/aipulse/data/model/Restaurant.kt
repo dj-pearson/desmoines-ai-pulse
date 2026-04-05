@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.data.model
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -16,6 +17,7 @@ import java.util.Locale
  * Restaurant data model matching the Supabase `restaurants` table.
  * Mirrors iOS Restaurant.swift.
  */
+@Immutable
 @Serializable
 data class Restaurant(
     val id: String,

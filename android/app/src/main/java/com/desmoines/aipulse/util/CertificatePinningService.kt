@@ -3,6 +3,7 @@ package com.desmoines.aipulse.util
 import com.desmoines.aipulse.BuildConfig
 import okhttp3.CertificatePinner
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 /**
  * Validates server certificates for Supabase API connections using public key pinning.
@@ -93,11 +94,26 @@ object CertificatePinningService {
         return builder
     }
 
+    /** Connect timeout in seconds for all network requests. */
+    private const val CONNECT_TIMEOUT_SECONDS = 30L
+    /** Read timeout in seconds for all network requests. */
+    private const val READ_TIMEOUT_SECONDS = 30L
+    /** Write timeout in seconds for all network requests. */
+    private const val WRITE_TIMEOUT_SECONDS = 30L
+    /** Overall call timeout as a safety net. */
+    private const val CALL_TIMEOUT_SECONDS = 60L
+
     /**
-     * Creates a new OkHttpClient with certificate pinning configured.
+     * Creates a new OkHttpClient with certificate pinning and request timeouts configured.
      * Suitable for use as the Ktor HTTP engine for Supabase.
      */
     fun createPinnedClient(): OkHttpClient {
-        return configurePinning(OkHttpClient.Builder()).build()
+        return configurePinning(
+            OkHttpClient.Builder()
+                .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        ).build()
     }
 }

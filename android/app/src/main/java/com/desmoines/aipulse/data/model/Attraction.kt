@@ -1,6 +1,7 @@
 package com.desmoines.aipulse.data.model
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.util.Locale
@@ -9,6 +10,7 @@ import java.util.Locale
  * Attraction data model matching the Supabase `attractions` table.
  * Mirrors iOS Attraction.swift.
  */
+@Immutable
 @Serializable
 data class Attraction(
     val id: String,

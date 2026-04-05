@@ -1,4 +1,130 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Des Moines Insider</string>
+
+    <!-- Common -->
+    <string name="loading">Loading…</string>
+    <string name="retry">Retry</string>
+    <string name="done">Done</string>
+    <string name="clear">Clear</string>
+    <string name="cancel">Cancel</string>
+    <string name="close">Close</string>
+    <string name="go_back">Go back</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="sign_in">Sign In</string>
+    <string name="sign_up">Sign Up</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="remove_from_saved">Remove from saved</string>
+    <string name="swipe_to_remove">Swipe left to remove from saved</string>
+
+    <!-- Navigation -->
+    <string name="tab_home">Home</string>
+    <string name="tab_dining">Dining</string>
+    <string name="tab_search">Search</string>
+    <string name="tab_map">Map</string>
+    <string name="tab_saved">Saved</string>
+    <string name="tab_profile">Profile</string>
+
+    <!-- Home Screen -->
+    <string name="home_title">Des Moines Insider</string>
+    <string name="home_whats_happening">What\'s happening in Des Moines</string>
+    <string name="home_no_events_title">No Events Found</string>
+    <string name="home_no_events_message">Try adjusting your filters or check back later.</string>
+    <string name="home_offline_title">You\'re Offline</string>
+    <string name="home_offline_message">Check your internet connection and try again.</string>
+    <string name="home_featured_events">Featured Events</string>
+    <string name="home_popular_restaurants">Popular Restaurants</string>
+    <string name="home_see_all">See All</string>
+    <string name="home_events_count">%d events</string>
+    <string name="home_active_filters">%d active filters</string>
+    <string name="home_clear_filters">Clear filters</string>
+
+    <!-- Filter Sheet -->
+    <string name="filters_title">Filters</string>
+    <string name="filters_category">Category</string>
+    <string name="filters_when">When</string>
+    <string name="filters_options">Options</string>
+    <string name="filters_featured_only">Featured Events Only</string>
+    <string name="filters_advanced">Advanced Filters</string>
+    <string name="filters_insider_badge">Insider</string>
+    <string name="filters_free_only">Free Events Only</string>
+    <string name="filters_max_distance">Max Distance</string>
+    <string name="filters_min_rating">Min Rating</string>
+    <string name="filters_miles">%d miles</string>
+    <string name="filters_miles_a11y">%d miles maximum distance</string>
+    <string name="filters_stars">%s stars</string>
+    <string name="filters_stars_a11y">%s stars minimum rating</string>
+    <string name="filters_set_distance">Set distance limit</string>
+    <string name="filters_set_rating">Set minimum rating</string>
+    <string name="filters_close">Close filters</string>
+
+    <!-- Favorites Screen -->
+    <string name="saved_title">Saved</string>
+    <string name="saved_items_count">%d saved items</string>
+    <string name="saved_item_count">%d saved item</string>
+    <string name="saved_upcoming_events">Upcoming Events</string>
+    <string name="saved_restaurants">Restaurants</string>
+    <string name="saved_past_events">Past Events</string>
+    <string name="saved_past_event">Past event</string>
+    <string name="saved_sign_in_title">Sign In to Save Items</string>
+    <string name="saved_sign_in_message">Create an account to save your favorite events and restaurants, and access them from any device.</string>
+    <string name="saved_no_items_title">No Saved Items</string>
+    <string name="saved_no_items_message">Events and restaurants you save will appear here. Tap the heart icon on any item to save it.</string>
+    <string name="saved_loading">Loading saved items…</string>
+
+    <!-- Auth Screen -->
+    <string name="auth_first_name">First Name</string>
+    <string name="auth_last_name">Last Name</string>
+    <string name="auth_email">Email</string>
+    <string name="auth_password">Password</string>
+    <string name="auth_confirm_password">Confirm Password</string>
+    <string name="auth_invalid_email">Please enter a valid email address</string>
+    <string name="auth_passwords_mismatch">Passwords do not match</string>
+    <string name="auth_forgot_password">Forgot Password?</string>
+    <string name="auth_or_continue_with">Or continue with</string>
+    <string name="auth_google_sign_in">Sign in with Google</string>
+
+    <!-- Search Screen -->
+    <string name="search_placeholder">Search events, restaurants, attractions…</string>
+    <string name="search_offline_title">You\'re Offline</string>
+    <string name="search_no_results_title">No Results</string>
+    <string name="search_no_results_message">Try a different search term.</string>
+
+    <!-- Profile Screen -->
+    <string name="profile_title">Profile</string>
+    <string name="profile_updated">Profile Updated</string>
+    <string name="profile_delete_title">Delete Account?</string>
+    <string name="profile_delete_message">This will permanently delete your account and all associated data. This action cannot be undone.</string>
+    <string name="profile_delete_confirm">Delete Account</string>
+
+    <!-- Subscription -->
+    <string name="subscription_free_plan">Free Plan</string>
+    <string name="subscription_insider">Insider</string>
+    <string name="subscription_vip">VIP</string>
+    <string name="subscription_upgrade_prompt">Upgrade to premium for more features</string>
+    <string name="subscription_upgrade_favorites">Upgrade for unlimited favorites</string>
+
+    <!-- Offline Banner -->
+    <string name="offline_no_connection">No internet connection</string>
+    <string name="offline_back_online">Back online</string>
+
+    <!-- Ad Banner -->
+    <string name="ad_enjoying_app">Enjoying Des Moines Insider?</string>
+    <string name="ad_go_ad_free">Go ad-free with Insider</string>
+    <string name="ad_remove_ads">Remove Ads — Upgrade</string>
+
+    <!-- WebView -->
+    <string name="webview_nothing_to_display">Nothing to Display</string>
+    <string name="webview_no_url">No URL was provided.</string>
+    <string name="webview_failed_title">Failed to Load Page</string>
+    <string name="webview_failed_message">Something went wrong. Please check your connection and try again.</string>
+    <string name="webview_timeout_title">Page Took Too Long</string>
+    <string name="webview_timeout_message">The page didn\'t load within 30 seconds. Check your connection and try again.</string>
+
+    <!-- Accessibility -->
+    <string name="a11y_tab_format">%1$s, tab %2$d of %3$d</string>
+    <string name="a11y_tab_selected">, selected</string>
+    <string name="a11y_section_items">%1$s, %2$d items</string>
+    <string name="a11y_section_item">%1$s, %2$d item</string>
 </resources>

@@ -12,6 +12,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.LaunchedEffect
@@ -52,6 +54,7 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var biometricAuthService: BiometricAuthService
 
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -60,6 +63,8 @@ class MainActivity : FragmentActivity() {
         handleDeepLinkIntent(intent)
 
         setContent {
+            val windowSizeClass = calculateWindowSizeClass(this)
+
             DesMoinesInsiderTheme {
                 val hasCompletedOnboarding by onboardingPreferences.hasCompletedOnboarding
                     .collectAsState(initial = true) // default true to avoid flash
@@ -164,7 +169,8 @@ class MainActivity : FragmentActivity() {
                     } else {
                         MainScreen(
                             networkMonitor = networkMonitor,
-                            deepLinkHandler = deepLinkHandler
+                            deepLinkHandler = deepLinkHandler,
+                            widthSizeClass = windowSizeClass.widthSizeClass
                         )
                     }
                 }

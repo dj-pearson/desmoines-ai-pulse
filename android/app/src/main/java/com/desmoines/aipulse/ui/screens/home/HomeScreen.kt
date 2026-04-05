@@ -22,6 +22,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -124,6 +130,8 @@ data class HomeScreenState(
 @Composable
 fun HomeScreen(
     state: HomeScreenState = HomeScreenState(),
+    scrollToTopTrigger: Int = 0,
+    useWideLayout: Boolean = false,
     onNavigateToEventDetail: (String) -> Unit = {},
     onNavigateToRestaurantDetail: (String) -> Unit = {},
     onNavigateToSubscription: () -> Unit = {},
@@ -138,11 +146,37 @@ fun HomeScreen(
     val haptic = rememberHapticPerformer()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
+
+    // Scroll to top when the user re-taps the active bottom nav tab
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            if (useWideLayout) {
+                gridState.animateScrollToItem(0)
+            } else {
+                listState.animateScrollToItem(0)
+            }
+        }
+    }
 
     // Trigger load more when within 5 items of end
     LaunchedEffect(listState) {
         snapshotFlow {
             val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleIndex to totalItems
+        }.collect { (lastVisible, total) ->
+            if (total > 0 && lastVisible >= total - 5 && state.hasMore && !state.isLoadingMore) {
+                onLoadMore()
+            }
+        }
+    }
+
+    // Load more trigger for grid layout
+    LaunchedEffect(gridState) {
+        snapshotFlow {
+            val layoutInfo = gridState.layoutInfo
             val totalItems = layoutInfo.totalItemsCount
             val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             lastVisibleIndex to totalItems
@@ -195,160 +229,275 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                // Header section
-                item(key = "header") {
-                    HeaderSection(totalCount = state.totalCount)
-                }
-
-                // Date presets
-                item(key = "datePresets") {
-                    DatePresetsRow(
-                        selected = state.selectedDatePreset,
-                        onSelect = { preset ->
-                            haptic.light()
-                            onSelectDatePreset(
-                                if (state.selectedDatePreset == preset) null else preset
-                            )
-                        }
-                    )
-                }
-
-                // Category chips
-                item(key = "categoryChips") {
-                    CategoryChipsRow(
-                        selected = state.selectedCategory,
-                        onSelect = { category ->
-                            haptic.light()
-                            onSelectCategory(
-                                if (state.selectedCategory == category) null else category
-                            )
-                        }
-                    )
-                }
-
-                // Error banner
-                if (state.errorMessage != null) {
-                    item(key = "error") {
-                        ErrorBanner(
-                            message = state.errorMessage,
-                            onRetry = onRefresh
-                        )
+            if (useWideLayout) {
+                // Tablet / landscape: 2-column grid for event cards
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    // Full-span header sections
+                    item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
+                        HeaderSection(totalCount = state.totalCount)
                     }
-                }
-
-                // Featured events carousel
-                if (state.featuredEvents.isNotEmpty()) {
-                    item(key = "featured") {
-                        FeaturedEventsSection(
-                            events = state.featuredEvents,
-                            onEventClick = onNavigateToEventDetail
-                        )
-                    }
-                }
-
-                // Ad banner for free users
-                item(key = "adBanner") {
-                    AdBannerView(
-                        currentTier = state.currentTier,
-                        onUpgradeClick = onNavigateToSubscription,
-                        modifier = Modifier
-                            .padding(horizontal = Dimens.SpacingLg)
-                            .padding(vertical = 4.dp)
-                    )
-                }
-
-                // Popular restaurants carousel
-                if (state.restaurants.isNotEmpty()) {
-                    item(key = "restaurants") {
-                        RestaurantsSection(
-                            restaurants = state.restaurants.take(10),
-                            onRestaurantClick = onNavigateToRestaurantDetail
-                        )
-                    }
-                }
-
-                // Active filters bar with animated entrance/exit
-                item(key = "activeFilters") {
-                    AnimatedVisibility(
-                        visible = state.activeFilterCount > 0,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut(),
-                    ) {
-                        ActiveFiltersBar(
-                            count = state.activeFilterCount,
-                            onClear = {
+                    item(key = "datePresets", span = { GridItemSpan(maxLineSpan) }) {
+                        DatePresetsRow(
+                            selected = state.selectedDatePreset,
+                            onSelect = { preset ->
                                 haptic.light()
-                                onClearFilters()
+                                onSelectDatePreset(
+                                    if (state.selectedDatePreset == preset) null else preset
+                                )
                             }
                         )
                     }
-                }
-
-                // Events list or loading/empty states
-                if (state.isLoading) {
-                    // Skeleton loaders
-                    items(6) {
-                        EventCardSkeleton(
-                            modifier = Modifier
-                                .padding(horizontal = Dimens.SpacingLg)
-                                .padding(vertical = 4.dp)
+                    item(key = "categoryChips", span = { GridItemSpan(maxLineSpan) }) {
+                        CategoryChipsRow(
+                            selected = state.selectedCategory,
+                            onSelect = { category ->
+                                haptic.light()
+                                onSelectCategory(
+                                    if (state.selectedCategory == category) null else category
+                                )
+                            }
                         )
                     }
-                } else if (state.events.isEmpty() && !state.isConnected) {
-                    // Offline empty state
-                    item(key = "offline") {
-                        EmptyStateView(
-                            icon = Icons.Filled.WifiOff,
-                            title = "You're Offline",
-                            message = "Check your internet connection and try again.",
-                            actionTitle = "Retry",
-                            onAction = onRefresh,
-                            modifier = Modifier.padding(top = 40.dp)
-                        )
-                    }
-                } else if (state.events.isEmpty()) {
-                    // No events empty state
-                    item(key = "empty") {
-                        EmptyStateView(
-                            icon = Icons.Filled.CalendarMonth,
-                            title = "No Events Found",
-                            message = "Try adjusting your filters or check back later.",
-                            actionTitle = if (state.activeFilterCount > 0) "Clear Filters" else null,
-                            onAction = if (state.activeFilterCount > 0) onClearFilters else null,
-                            modifier = Modifier.padding(top = 40.dp)
-                        )
-                    }
-                } else {
-                    // Events list
-                    itemsIndexed(
-                        items = state.events,
-                        key = { _, event -> event.id }
-                    ) { _, event ->
-                        EventCardView(
-                            event = event,
-                            onFavoriteClick = onFavoriteClick,
-                            modifier = Modifier
-                                .padding(horizontal = Dimens.SpacingLg)
-                                .padding(vertical = 4.dp)
-                                .clickable { onNavigateToEventDetail(event.id) }
-                        )
-                    }
-
-                    // Load more indicator
-                    if (state.isLoadingMore) {
-                        item(key = "loadMore") {
-                            InlineLoadingView()
+                    if (state.errorMessage != null) {
+                        item(key = "error", span = { GridItemSpan(maxLineSpan) }) {
+                            ErrorBanner(message = state.errorMessage, onRetry = onRefresh)
                         }
                     }
-                }
+                    if (state.featuredEvents.isNotEmpty()) {
+                        item(key = "featured", span = { GridItemSpan(maxLineSpan) }) {
+                            FeaturedEventsSection(
+                                events = state.featuredEvents,
+                                onEventClick = onNavigateToEventDetail
+                            )
+                        }
+                    }
+                    item(key = "adBanner", span = { GridItemSpan(maxLineSpan) }) {
+                        AdBannerView(
+                            currentTier = state.currentTier,
+                            onUpgradeClick = onNavigateToSubscription,
+                            modifier = Modifier
+                                .padding(horizontal = Dimens.SpacingLg)
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                    if (state.restaurants.isNotEmpty()) {
+                        item(key = "restaurants", span = { GridItemSpan(maxLineSpan) }) {
+                            val topRestaurants = remember(state.restaurants) {
+                                state.restaurants.take(10)
+                            }
+                            RestaurantsSection(
+                                restaurants = topRestaurants,
+                                onRestaurantClick = onNavigateToRestaurantDetail
+                            )
+                        }
+                    }
+                    item(key = "activeFilters", span = { GridItemSpan(maxLineSpan) }) {
+                        AnimatedVisibility(
+                            visible = state.activeFilterCount > 0,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            ActiveFiltersBar(
+                                count = state.activeFilterCount,
+                                onClear = {
+                                    haptic.light()
+                                    onClearFilters()
+                                }
+                            )
+                        }
+                    }
 
-                // Bottom spacing
-                item(key = "bottomSpacer") {
-                    Spacer(modifier = Modifier.height(20.dp))
+                    // 2-column event cards or full-span states
+                    if (state.isLoading) {
+                        gridItems(6) {
+                            EventCardSkeleton(
+                                modifier = Modifier
+                                    .padding(horizontal = Dimens.SpacingMd)
+                                    .padding(vertical = 4.dp)
+                            )
+                        }
+                    } else if (state.events.isEmpty() && !state.isConnected) {
+                        item(key = "offline", span = { GridItemSpan(maxLineSpan) }) {
+                            EmptyStateView(
+                                icon = Icons.Filled.WifiOff,
+                                title = "You're Offline",
+                                message = "Check your internet connection and try again.",
+                                actionTitle = "Retry",
+                                onAction = onRefresh,
+                                modifier = Modifier.padding(top = 40.dp)
+                            )
+                        }
+                    } else if (state.events.isEmpty()) {
+                        item(key = "empty", span = { GridItemSpan(maxLineSpan) }) {
+                            EmptyStateView(
+                                icon = Icons.Filled.CalendarMonth,
+                                title = "No Events Found",
+                                message = "Try adjusting your filters or check back later.",
+                                actionTitle = if (state.activeFilterCount > 0) "Clear Filters" else null,
+                                onAction = if (state.activeFilterCount > 0) onClearFilters else null,
+                                modifier = Modifier.padding(top = 40.dp)
+                            )
+                        }
+                    } else {
+                        gridItemsIndexed(
+                            items = state.events,
+                            key = { _, event -> event.id }
+                        ) { _, event ->
+                            EventCardView(
+                                event = event,
+                                onFavoriteClick = onFavoriteClick,
+                                modifier = Modifier
+                                    .padding(horizontal = Dimens.SpacingMd)
+                                    .padding(vertical = 4.dp)
+                                    .clickable { onNavigateToEventDetail(event.id) }
+                            )
+                        }
+                        if (state.isLoadingMore) {
+                            item(key = "loadMore", span = { GridItemSpan(maxLineSpan) }) {
+                                InlineLoadingView()
+                            }
+                        }
+                    }
+                    item(key = "bottomSpacer", span = { GridItemSpan(maxLineSpan) }) {
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+                }
+            } else {
+                // Phone: single-column LazyColumn
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    item(key = "header") {
+                        HeaderSection(totalCount = state.totalCount)
+                    }
+                    item(key = "datePresets") {
+                        DatePresetsRow(
+                            selected = state.selectedDatePreset,
+                            onSelect = { preset ->
+                                haptic.light()
+                                onSelectDatePreset(
+                                    if (state.selectedDatePreset == preset) null else preset
+                                )
+                            }
+                        )
+                    }
+                    item(key = "categoryChips") {
+                        CategoryChipsRow(
+                            selected = state.selectedCategory,
+                            onSelect = { category ->
+                                haptic.light()
+                                onSelectCategory(
+                                    if (state.selectedCategory == category) null else category
+                                )
+                            }
+                        )
+                    }
+                    if (state.errorMessage != null) {
+                        item(key = "error") {
+                            ErrorBanner(message = state.errorMessage, onRetry = onRefresh)
+                        }
+                    }
+                    if (state.featuredEvents.isNotEmpty()) {
+                        item(key = "featured") {
+                            FeaturedEventsSection(
+                                events = state.featuredEvents,
+                                onEventClick = onNavigateToEventDetail
+                            )
+                        }
+                    }
+                    item(key = "adBanner") {
+                        AdBannerView(
+                            currentTier = state.currentTier,
+                            onUpgradeClick = onNavigateToSubscription,
+                            modifier = Modifier
+                                .padding(horizontal = Dimens.SpacingLg)
+                                .padding(vertical = 4.dp)
+                        )
+                    }
+                    if (state.restaurants.isNotEmpty()) {
+                        item(key = "restaurants") {
+                            val topRestaurants = remember(state.restaurants) {
+                                state.restaurants.take(10)
+                            }
+                            RestaurantsSection(
+                                restaurants = topRestaurants,
+                                onRestaurantClick = onNavigateToRestaurantDetail
+                            )
+                        }
+                    }
+                    item(key = "activeFilters") {
+                        AnimatedVisibility(
+                            visible = state.activeFilterCount > 0,
+                            enter = expandVertically() + fadeIn(),
+                            exit = shrinkVertically() + fadeOut(),
+                        ) {
+                            ActiveFiltersBar(
+                                count = state.activeFilterCount,
+                                onClear = {
+                                    haptic.light()
+                                    onClearFilters()
+                                }
+                            )
+                        }
+                    }
+                    if (state.isLoading) {
+                        items(6) {
+                            EventCardSkeleton(
+                                modifier = Modifier
+                                    .padding(horizontal = Dimens.SpacingLg)
+                                    .padding(vertical = 4.dp)
+                            )
+                        }
+                    } else if (state.events.isEmpty() && !state.isConnected) {
+                        item(key = "offline") {
+                            EmptyStateView(
+                                icon = Icons.Filled.WifiOff,
+                                title = "You're Offline",
+                                message = "Check your internet connection and try again.",
+                                actionTitle = "Retry",
+                                onAction = onRefresh,
+                                modifier = Modifier.padding(top = 40.dp)
+                            )
+                        }
+                    } else if (state.events.isEmpty()) {
+                        item(key = "empty") {
+                            EmptyStateView(
+                                icon = Icons.Filled.CalendarMonth,
+                                title = "No Events Found",
+                                message = "Try adjusting your filters or check back later.",
+                                actionTitle = if (state.activeFilterCount > 0) "Clear Filters" else null,
+                                onAction = if (state.activeFilterCount > 0) onClearFilters else null,
+                                modifier = Modifier.padding(top = 40.dp)
+                            )
+                        }
+                    } else {
+                        itemsIndexed(
+                            items = state.events,
+                            key = { _, event -> event.id }
+                        ) { _, event ->
+                            EventCardView(
+                                event = event,
+                                onFavoriteClick = onFavoriteClick,
+                                modifier = Modifier
+                                    .padding(horizontal = Dimens.SpacingLg)
+                                    .padding(vertical = 4.dp)
+                                    .clickable { onNavigateToEventDetail(event.id) }
+                            )
+                        }
+                        if (state.isLoadingMore) {
+                            item(key = "loadMore") {
+                                InlineLoadingView()
+                            }
+                        }
+                    }
+                    item(key = "bottomSpacer") {
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
                 }
             }
         }
