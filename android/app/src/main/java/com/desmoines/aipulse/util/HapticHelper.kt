@@ -98,21 +98,86 @@ class HapticHelper @Inject constructor(
  * haptic.medium()  // medium impact (favorite toggle, pull-to-refresh)
  * ```
  */
+/**
+ * Contextual haptic feedback performer with a semantic API that matches
+ * iOS `HapticFeedback.swift` one-to-one. Each method maps to a system
+ * vibration pattern that best represents the intent on Android.
+ *
+ * All calls become no-ops when the user has disabled haptic feedback.
+ */
 class HapticPerformer(
     private val feedback: HapticFeedback,
-    private val enabled: Boolean
+    private val enabled: Boolean,
+    private val vibrator: Vibrator? = null,
 ) {
-    /** Light impact — for selections, filter changes, chip taps. */
-    fun light() {
+    private val hasAmplitudeControl: Boolean
+        get() = vibrator?.hasAmplitudeControl() == true
+
+    private fun oneShot(durationMs: Long, amplitude: Int) {
         if (!enabled) return
-        feedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        val v = vibrator ?: run {
+            feedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            return
+        }
+        val amp = if (hasAmplitudeControl) amplitude else VibrationEffect.DEFAULT_AMPLITUDE
+        v.vibrate(VibrationEffect.createOneShot(durationMs, amp))
     }
 
-    /** Medium impact — for favorite toggles, primary actions, pull-to-refresh completion. */
-    fun medium() {
+    private fun waveform(timings: LongArray, amplitudes: IntArray) {
         if (!enabled) return
-        feedback.performHapticFeedback(HapticFeedbackType.LongPress)
+        val v = vibrator ?: run {
+            feedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            return
+        }
+        if (hasAmplitudeControl) {
+            v.vibrate(VibrationEffect.createWaveform(timings, amplitudes, -1))
+        } else {
+            v.vibrate(VibrationEffect.createWaveform(timings, -1))
+        }
     }
+
+    // MARK: - Impact
+
+    /** Light impact — selections, filter changes, chip taps. */
+    fun light() = oneShot(10, 50)
+
+    /** Medium impact — favorite toggles, primary actions, pull-to-refresh threshold. */
+    fun medium() = oneShot(18, 128)
+
+    /** Heavy impact — modal presentation, confirm dialogs. */
+    fun heavy() = oneShot(28, 200)
+
+    // MARK: - Notification semantics (match UINotificationFeedbackGenerator)
+
+    /** Success — booking complete, itinerary saved, sign-in success. */
+    fun success() = waveform(longArrayOf(0, 12, 60, 18), intArrayOf(0, 90, 0, 180))
+
+    /** Warning — non-blocking validation, rate-limit hit. */
+    fun warning() = waveform(longArrayOf(0, 20, 80, 20), intArrayOf(0, 160, 0, 160))
+
+    /** Error — failed auth, failed payment, form validation error. */
+    fun error() = waveform(longArrayOf(0, 30, 60, 30, 60, 30), intArrayOf(0, 220, 0, 220, 0, 220))
+
+    // MARK: - Selection
+
+    /** Selection tick — picker / segmented control change. */
+    fun selection() = oneShot(5, 40)
+
+    // MARK: - Toggle
+
+    /** Toggle ON — favorite added, filter enabled. */
+    fun toggleOn() = oneShot(14, 160)
+
+    /** Toggle OFF — favorite removed, filter disabled. */
+    fun toggleOff() = oneShot(10, 80)
+
+    // MARK: - Premium
+
+    /** Premium unlock — subtle double-tap pattern for celebratory moments. */
+    fun premiumUnlock() = waveform(
+        longArrayOf(0, 15, 40, 25, 40, 35),
+        intArrayOf(0, 140, 0, 180, 0, 220)
+    )
 }
 
 /**
@@ -123,5 +188,17 @@ class HapticPerformer(
 fun rememberHapticPerformer(): HapticPerformer {
     val feedback = LocalHapticFeedback.current
     val enabled = rememberIsHapticFeedbackEnabled()
-    return remember(feedback, enabled) { HapticPerformer(feedback, enabled) }
+    val context = LocalContext.current
+    val vibrator: Vibrator? = remember(context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)
+                ?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    }
+    return remember(feedback, enabled, vibrator) {
+        HapticPerformer(feedback, enabled, vibrator)
+    }
 }

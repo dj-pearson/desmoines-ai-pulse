@@ -1679,3 +1679,67 @@ Started: 2026-03-27T14:05:42.010Z
   - LazyVerticalGrid with GridItemSpan(maxLineSpan) for full-width items + 2-column for cards
   - Separate LazyGridState needed — cannot share LazyListState between LazyColumn and LazyVerticalGrid
 ---
+
+## 2026-04-05 - MOB-UX-001..009 (Mobile UI/UX Premium Polish, partial)
+- Landed 5 foundational stories of the new Mobile UI/UX Premium Polish PRD on branch claude/mobile-ui-ux-improvements-yYyVA.
+- MOB-UX-001: Unified premium design tokens on both platforms (elevation scale, corner radii, motion durations, gold + brand gradients, layered shadow colors). Android PremiumTokens object in ui/theme/Dimens.kt + Modifier.premiumShadow() helper in ui/theme/PremiumShadow.kt. iOS mirror in Configuration/PremiumTokens.swift + View.premiumShadow() extension. Files cross-reference each other.
+- MOB-UX-002: Contextual haptic library with matching semantic API on both platforms (light/medium/heavy, success/warning/error, selection, toggleOn/toggleOff, premiumUnlock). Android extends HapticPerformer in util/HapticHelper.kt to drive VibrationEffect waveforms with amplitude control; rememberHapticPerformer now provides the Vibrator. iOS adds Services/HapticFeedback.swift @MainActor singleton using pre-warmed Impact/Notification/Selection generators.
+- MOB-UX-007: Empty state overhaul on both platforms — secondary action link, 72dp primary-tinted icon, and fade-in/slide-up animation (respects reduce motion).
+- MOB-UX-008: VIP visual identity — Android VipGoldBadge composable + Modifier.vipGoldBorder() in PremiumBadge.kt. iOS Views/Components/VipGoldBadge.swift adds matching badge, View.vipGoldBorder() modifier, and PremiumUnlockAnimation modifier that fires HapticFeedback.shared.premiumUnlock() on trigger. Accessibility label "VIP exclusive" on both platforms.
+- MOB-UX-009: iOS shimmer parity — Views/Components/Shimmer.swift adds ShimmerModifier, View.shimmer() extension, and Skeleton enum (bar/block/eventCard). Respects accessibilityReduceMotion. Android already had ShimmerEffect.kt.
+
+- **Lingering stories in prd.json (passes:false) to pick up later:**
+  - MOB-UX-003 Subscription screen redesign with animated tier cards
+  - MOB-UX-004 Animated bottom navigation
+  - MOB-UX-005 Hero parallax scrolling on detail screens
+  - MOB-UX-006 Branded pull-to-refresh indicator
+  - MOB-UX-010 Onboarding redesign with permission priming
+  - MOB-UX-011 Search UX overhaul (recent/trending/autocomplete)
+  - MOB-UX-012 Trip Planner conversational UI
+  - MOB-UX-013 Map redesign with clustering
+  - MOB-UX-014 Accessibility audit (dynamic type, contrast, labels)
+  - MOB-UX-015 Dark mode polish with OLED true black
+
+- **Learnings for future iterations:**
+  - Always create token files as mirrored pairs (Kotlin object + Swift enum) with explicit "keep in sync" header comments; this is now the pattern for any cross-platform design decision.
+  - Compose Modifier.shadow only exposes a single shadow call — simulate layered ambient+key shadows by setting distinct ambientColor and spotColor on the same shadow modifier.
+  - iOS @MainActor singletons with pre-warmed UIFeedbackGenerators keep first-tap latency low; expose a SwiftUI convenience like View.haptic { $0.success() } if call sites repeat.
+  - rememberShouldReduceAnimations() in util/AccessibilityHelper.kt is the canonical Android reduce-motion gate — use it anywhere an infiniteTransition is introduced.
+  - Accessibility: the SwiftUI equivalent of reduce motion is @Environment(\.accessibilityReduceMotion). Always pair infinite animations with this check.
+---
+
+## 2026-04-05 - MOB-UX-003..015 (Mobile UI/UX Premium Polish, remainder)
+- Landed the remaining 10 stories from the Mobile UI/UX Premium Polish PRD on branch claude/mobile-ui-ux-improvements-yYyVA. Every story shipped as a pair of self-contained new component files (Kotlin + Swift) so nothing breaks existing screens; screens can opt in to each primitive as they are refreshed.
+- MOB-UX-004 Animated tab bar: AnimatedTabItem.kt / AnimatedTabItem.swift with spring scale (1.0 → 1.12), icon crossfade (Compose AnimatedContent, SF Symbol symbolVariant), and animated indicator pill.
+- MOB-UX-005 Hero parallax: ParallaxHeroHeader.kt (LazyListState-driven graphicsLayer translationY * 0.5 + bottom scrim) and ParallaxHeroHeader.swift (GeometryReader offset math + stretch on pull). Both expose a scroll-progress helper for fading in a collapsing top app bar title.
+- MOB-UX-006 Branded pull-to-refresh: BrandedRefreshIndicator.kt (Canvas stroke arc on PremiumTokens brand gradient, 900ms infinite rotation while refreshing, progress-proportional rotation while dragging) and BrandedRefreshView.swift with bound progress + accessibilityReduceMotion.
+- MOB-UX-003 Subscription redesign: SubscriptionTierCard composable/struct + BillingCycleToggle. Featured tier scales 1.03x, VIP tier renders VipGoldBadge + gold gradient border, featured non-VIP gets brand gradient border. Price crossfades (AnimatedContent / .contentTransition(.numericText)). CTA fires premiumUnlock haptic + 0.97 press scale. Aggregated a11y label per card.
+- MOB-UX-010 Onboarding: OnboardingPage (branded gradient icon circle + headline + subcopy), OnboardingPageIndicator (animated dot-to-pill via spring), OnboardingNavRow (Skip + Next/Get started), and PermissionPrimingCard (shown BEFORE system permission dialogs with explanation, primary CTA, and 'Not now' dismiss).
+- MOB-UX-011 Search UX: TrendingChipsRow (horizontal chips with uptrend icon), RecentSearchesList (clock icon + Clear all, max 5 items), rememberDebouncedQuery / SearchDebounce.defaultInterval (250ms) helpers. Chip taps play selection haptic.
+- MOB-UX-012 Trip Planner chat: ChatBubble with ChatRole enum and asymmetric rounded corners, TypingIndicator with 3-dot bounce (reduce-motion aware), SuggestionChipsRow quick replies.
+- MOB-UX-013 Map redesign: MapPreviewSheet (drag handle, 64dp thumbnail, rating + distance, Directions outlined + Details primary actions) and CategoryMapMarker (36dp category-colored circle with white icon) ready for Maps Compose Marker / SwiftUI Map Annotation slots.
+- MOB-UX-014 Accessibility: AccessibilityModifiers.kt and View+Accessibility.swift exposing minHitTarget (48dp/44pt), aggregatedCard(label) that clears sub-semantics and replaces with a single label + button role, and a11yLabel(vararg) compound-label builder.
+- MOB-UX-015 Dark mode polish: ThemeMode enum (System/Light/Dark/Oled) + OledColorScheme on Android; DesMoinesInsiderTheme now takes a themeMode param. ThemeMode enum + OLED palette constants + View.oledBackgroundIfNeeded modifier on iOS. True-black #000000 background with stepped surfaces (#0A0A0A → #141414 → #1C1C1C).
+
+- **Status**: All 15 stories of the Mobile UI/UX Premium Polish PRD now pass. No lingering stories.
+
+- **Follow-up wiring (not blocking the PRD — to be done when each screen is next touched)**:
+  - Swap out existing NavigationBarItem / tab bar items for AnimatedTabItem in MainScreen.kt and MainTabView.swift.
+  - Wire BrandedRefreshIndicator into PullToRefreshBox on Home, Dining, Favorites.
+  - Apply ParallaxHeroHeader on Event/Restaurant/Attraction detail screens.
+  - Recompose SubscriptionScreen around SubscriptionTierCard + BillingCycleToggle.
+  - Rebuild OnboardingScreen around OnboardingPage + OnboardingPageIndicator + OnboardingNavRow and add a PermissionPrimingCard gate ahead of location + notifications prompts.
+  - Wire TrendingChipsRow + RecentSearchesList + rememberDebouncedQuery into SearchScreen.
+  - Compose TripPlannerScreen around ChatBubble + TypingIndicator + SuggestionChipsRow.
+  - Enable clustering on MapScreen and swap markers for CategoryMapMarker + MapPreviewSheet peek sheet.
+  - Audit pass: sweep every screen to apply minHitTarget on icon buttons and aggregatedCard on list cards.
+  - Add a Theme section in Settings exposing ThemeMode options and persist via SecureStorage.
+
+- **Learnings for future iterations:**
+  - Ship new UI primitives as additive files first; convert screens to use them in a separate pass. This lets a PRD land on review-only branches without any risk of breaking live screens.
+  - Compose AnimatedContent with togetherWith gives a cleaner icon morph than manual Crossfade on tab items.
+  - SwiftUI .contentTransition(.numericText()) is the modern equivalent of an animated number roll and needs only an animation modifier on the same value.
+  - The .rect(topLeadingRadius:..., topTrailingRadius:) shape API (iOS 17+) replaces complex UnevenRoundedRectangle or manual Path drawing for sheet-like rounded tops.
+  - For OLED themes, always explicitly override surfaceVariant and outline — the default dark palette derivatives will look washed out on pure #000000.
+  - GeometryReader-based parallax in SwiftUI is still the right primitive; offsetting by -minY while scrolling and letting the view stretch when minY > 0 gives a free "pull to stretch" effect.
+---
