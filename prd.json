@@ -410,8 +410,8 @@
         "No regressions in existing screens"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Added PremiumTokens object to android/app/src/main/java/com/desmoines/aipulse/ui/theme/Dimens.kt (elevation scale, corner radii + Shape helpers, motion duration ms, PremiumGoldGradient, BrandGradient, layered shadow colors). Created matching ios/DesMoinesInsider/Configuration/PremiumTokens.swift as an enum with identical values and a SwiftUI View.premiumShadow() extension. Added android Modifier.premiumShadow() + premiumCardShadow() helpers in ui/theme/PremiumShadow.kt. Both files cross-reference each other in header comments for parity."
     },
     {
       "id": "MOB-UX-002",
@@ -425,8 +425,8 @@
         "Single import site per platform; no direct UIImpactFeedbackGenerator / HapticFeedbackConstants use in screens"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Expanded Android HapticPerformer in util/HapticHelper.kt with a full semantic API (light/medium/heavy, success/warning/error, selection, toggleOn/toggleOff, premiumUnlock) backed by VibrationEffect waveforms with amplitude control where available and graceful fallback to LocalHapticFeedback. rememberHapticPerformer now wires in the system Vibrator. Created matching ios/DesMoinesInsider/Services/HapticFeedback.swift @MainActor singleton with identical method names using UIImpactFeedbackGenerator + UINotificationFeedbackGenerator + UISelectionFeedbackGenerator. Both platforms respect the system haptic preference and pre-warm generators."
     },
     {
       "id": "MOB-UX-003",
@@ -501,8 +501,8 @@
         "No raw \"No results\" strings remain in screens"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Extended Android EmptyStateView.kt with optional secondaryActionTitle/onSecondaryAction (TextButton), upscaled icon to 72dp with primary tint, and added AnimatedVisibility fade-in + slide-up (350ms) on first appearance. Updated iOS EmptyStateView.swift with matching secondaryActionTitle/secondaryAction parameters, primary CTA now fires HapticFeedback.shared.light(), and added opacity+offset fade-in using PremiumTokens.motionBase."
     },
     {
       "id": "MOB-UX-008",
@@ -516,8 +516,8 @@
         "Accessibility label: \"Insider exclusive\" / \"VIP exclusive\""
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED: Added VipGoldBadge composable to android PremiumBadge.kt with WorkspacePremium crown icon on PremiumTokens.PremiumGoldGradient background and a subtle infinite shimmer translate (respects rememberShouldReduceAnimations). Added Modifier.vipGoldBorder() helper for VIP-only card outlines. Created ios/DesMoinesInsider/Views/Components/VipGoldBadge.swift with matching VipGoldBadge struct (SF Symbol crown.fill, premiumGoldGradient capsule, accessibilityReduceMotion-aware shimmer), View.vipGoldBorder() extension, and PremiumUnlockAnimation view modifier that plays a spring scale + HapticFeedback.shared.premiumUnlock() when the trigger flips. Accessibility label 'VIP exclusive' on both platforms."
     },
     {
       "id": "MOB-UX-009",
@@ -530,8 +530,8 @@
         "Respect reduce motion (replace shimmer animation with static placeholder)"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "FIXED (iOS parity): Android already had ShimmerEffect.kt with rememberShimmerBrush and reduce-motion support. Created ios/DesMoinesInsider/Views/Components/Shimmer.swift with ShimmerModifier (GeometryReader-based gradient sweep honoring accessibilityReduceMotion), View.shimmer() extension, and a Skeleton enum providing bar(), block(), and eventCard building blocks that match the final card layouts. Screens can now apply .shimmer() to skeleton placeholders on iOS matching Android."
     },
     {
       "id": "MOB-UX-010",

@@ -1679,3 +1679,31 @@ Started: 2026-03-27T14:05:42.010Z
   - LazyVerticalGrid with GridItemSpan(maxLineSpan) for full-width items + 2-column for cards
   - Separate LazyGridState needed — cannot share LazyListState between LazyColumn and LazyVerticalGrid
 ---
+
+## 2026-04-05 - MOB-UX-001..009 (Mobile UI/UX Premium Polish, partial)
+- Landed 5 foundational stories of the new Mobile UI/UX Premium Polish PRD on branch claude/mobile-ui-ux-improvements-yYyVA.
+- MOB-UX-001: Unified premium design tokens on both platforms (elevation scale, corner radii, motion durations, gold + brand gradients, layered shadow colors). Android PremiumTokens object in ui/theme/Dimens.kt + Modifier.premiumShadow() helper in ui/theme/PremiumShadow.kt. iOS mirror in Configuration/PremiumTokens.swift + View.premiumShadow() extension. Files cross-reference each other.
+- MOB-UX-002: Contextual haptic library with matching semantic API on both platforms (light/medium/heavy, success/warning/error, selection, toggleOn/toggleOff, premiumUnlock). Android extends HapticPerformer in util/HapticHelper.kt to drive VibrationEffect waveforms with amplitude control; rememberHapticPerformer now provides the Vibrator. iOS adds Services/HapticFeedback.swift @MainActor singleton using pre-warmed Impact/Notification/Selection generators.
+- MOB-UX-007: Empty state overhaul on both platforms — secondary action link, 72dp primary-tinted icon, and fade-in/slide-up animation (respects reduce motion).
+- MOB-UX-008: VIP visual identity — Android VipGoldBadge composable + Modifier.vipGoldBorder() in PremiumBadge.kt. iOS Views/Components/VipGoldBadge.swift adds matching badge, View.vipGoldBorder() modifier, and PremiumUnlockAnimation modifier that fires HapticFeedback.shared.premiumUnlock() on trigger. Accessibility label "VIP exclusive" on both platforms.
+- MOB-UX-009: iOS shimmer parity — Views/Components/Shimmer.swift adds ShimmerModifier, View.shimmer() extension, and Skeleton enum (bar/block/eventCard). Respects accessibilityReduceMotion. Android already had ShimmerEffect.kt.
+
+- **Lingering stories in prd.json (passes:false) to pick up later:**
+  - MOB-UX-003 Subscription screen redesign with animated tier cards
+  - MOB-UX-004 Animated bottom navigation
+  - MOB-UX-005 Hero parallax scrolling on detail screens
+  - MOB-UX-006 Branded pull-to-refresh indicator
+  - MOB-UX-010 Onboarding redesign with permission priming
+  - MOB-UX-011 Search UX overhaul (recent/trending/autocomplete)
+  - MOB-UX-012 Trip Planner conversational UI
+  - MOB-UX-013 Map redesign with clustering
+  - MOB-UX-014 Accessibility audit (dynamic type, contrast, labels)
+  - MOB-UX-015 Dark mode polish with OLED true black
+
+- **Learnings for future iterations:**
+  - Always create token files as mirrored pairs (Kotlin object + Swift enum) with explicit "keep in sync" header comments; this is now the pattern for any cross-platform design decision.
+  - Compose Modifier.shadow only exposes a single shadow call — simulate layered ambient+key shadows by setting distinct ambientColor and spotColor on the same shadow modifier.
+  - iOS @MainActor singletons with pre-warmed UIFeedbackGenerators keep first-tap latency low; expose a SwiftUI convenience like View.haptic { $0.success() } if call sites repeat.
+  - rememberShouldReduceAnimations() in util/AccessibilityHelper.kt is the canonical Android reduce-motion gate — use it anywhere an infiniteTransition is introduced.
+  - Accessibility: the SwiftUI equivalent of reduce motion is @Environment(\.accessibilityReduceMotion). Always pair infinite animations with this check.
+---
