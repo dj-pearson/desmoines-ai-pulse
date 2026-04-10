@@ -103,6 +103,7 @@ export default function Auth() {
     remainingAttempts,
     timeUntilReset,
     checkRateLimit,
+    checkDisposableEmail,
     logFailedAttempt,
     validateInput
   } = useAuthSecurity();
@@ -285,6 +286,17 @@ export default function Auth() {
       toast({
         title: "Invalid Email",
         description: emailValidation.errors[0],
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Block disposable / throwaway email domains
+    const disposableCheck = await checkDisposableEmail(formData.email);
+    if (!disposableCheck.allowed) {
+      toast({
+        title: "Email Not Allowed",
+        description: disposableCheck.message || "This email provider is not allowed for signup.",
         variant: "destructive",
       });
       return;

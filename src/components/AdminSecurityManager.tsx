@@ -20,9 +20,11 @@ import {
   Settings,
   Clock,
   UserX,
+  Mail,
 } from "lucide-react";
 import { createLogger } from '@/lib/logger';
 import { storage } from '@/lib/safeStorage';
+import BlockedEmailDomainsManager from '@/components/admin/BlockedEmailDomainsManager';
 
 const log = createLogger('AdminSecurityManager');
 
@@ -249,10 +251,14 @@ export default function AdminSecurityManager() {
       </div>
 
       <Tabs defaultValue="settings" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="settings">Settings</TabsTrigger>
           <TabsTrigger value="monitoring">Monitoring</TabsTrigger>
           <TabsTrigger value="access-control">Access Control</TabsTrigger>
+          <TabsTrigger value="email-domains" className="flex items-center gap-1.5">
+            <Mail className="h-4 w-4" />
+            <span className="hidden sm:inline">Email Domains</span>
+          </TabsTrigger>
           <TabsTrigger value="logs">Security Logs</TabsTrigger>
         </TabsList>
 
@@ -545,6 +551,10 @@ export default function AdminSecurityManager() {
               </CardContent>
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="email-domains" className="space-y-4">
+          <BlockedEmailDomainsManager />
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-4">
