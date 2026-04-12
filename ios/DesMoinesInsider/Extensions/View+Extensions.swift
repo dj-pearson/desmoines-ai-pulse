@@ -1,14 +1,5 @@
 import SwiftUI
 
-// MARK: - Shimmer Effect
-
-extension View {
-    /// Adds a shimmer/loading effect over the view.
-    func shimmer() -> some View {
-        modifier(ShimmerModifier())
-    }
-}
-
 // MARK: - Accessibility: Selected Toggle Trait
 
 extension View {
@@ -48,42 +39,6 @@ private struct ContrastAwareCardShadow: ViewModifier {
                 )
             ) { _ in
                 isHighContrast = UIAccessibility.isDarkerSystemColorsEnabled
-            }
-    }
-}
-
-private struct ShimmerModifier: ViewModifier {
-    @State private var phase: CGFloat = 0
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                if !reduceMotion {
-                    GeometryReader { geometry in
-                        LinearGradient(
-                            colors: [
-                                .clear,
-                                .white.opacity(0.3),
-                                .clear,
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: geometry.size.width * 2)
-                        .offset(x: -geometry.size.width + (phase * geometry.size.width * 3))
-                        .clipped()
-                    }
-                }
-            }
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(
-                    .linear(duration: 1.5)
-                    .repeatForever(autoreverses: false)
-                ) {
-                    phase = 1
-                }
             }
     }
 }
