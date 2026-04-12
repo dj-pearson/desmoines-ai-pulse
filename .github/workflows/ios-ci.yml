@@ -53,6 +53,14 @@ env:
   PROJECT_DIR: 'ios'
   SCHEME: 'DesMoinesInsider'
 
+# GITHUB_TOKEN needs contents:write so the version-bump job can push
+# the updated ios/project.yml back to main. All other jobs only read.
+# NOTE: Repo admins must also enable "Allow GitHub Actions to create
+# and approve pull requests / push" under Settings → Actions → General
+# → Workflow permissions (or set the default to "Read and write").
+permissions:
+  contents: write
+
 # Prevent duplicate runs on the same branch and cancel stale ones
 concurrency:
   group: ios-ci-${{ github.ref }}
@@ -149,7 +157,39 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add ios/project.yml
           git commit -m "chore(ios): bump version to ${{ steps.bump.outputs.new_version }} (build ${{ steps.bump.outputs.new_build }}) [version bump]"
-          git push
+
+          # Retry up to 3 times to handle race conditions with other pushes.
+          # If push is denied (permission 403), emit a clear instruction
+          # and fail the job so the problem is visible.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:"${GITHUB_REF#refs/heads/}"; then
+              echo "✅ Version bump pushed: ${{ steps.bump.outputs.new_version }} (build ${{ steps.bump.outputs.new_build }})"
+              exit 0
+            fi
+            echo "::warning::Push attempt $attempt/3 failed. Fetching and retrying..."
+            git fetch origin "${GITHUB_REF#refs/heads/}"
+            git rebase "origin/${GITHUB_REF#refs/heads/}" || {
+              echo "::error::Rebase failed — manual intervention needed"
+              exit 1
+            }
+            sleep $((attempt * 3))
+          done
+
+          echo "::error::Failed to push version bump after 3 attempts."
+          echo ""
+          echo "============================================================"
+          echo "TROUBLESHOOTING:"
+          echo "  If this is a '403 Permission denied' error, enable write"
+          echo "  access for GitHub Actions in this repository:"
+          echo ""
+          echo "  Settings → Actions → General → Workflow permissions"
+          echo "  → Select 'Read and write permissions' → Save"
+          echo ""
+          echo "  Or for branch protection on main, allow github-actions[bot]"
+          echo "  to bypass: Settings → Branches → Edit main rule →"
+          echo "  'Allow specified actors to bypass required pull requests'"
+          echo "============================================================"
+          exit 1
 
   # ================================================================
   # Build & validate the Swift project
