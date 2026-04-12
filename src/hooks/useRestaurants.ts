@@ -29,6 +29,7 @@ interface RestaurantFilters {
   featuredOnly?: boolean;
   openNow?: boolean;
   tags?: string[];
+  dietary?: string[];
   limit?: number;
   offset?: number;
 }
@@ -82,6 +83,26 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       // Apply featured filter
       if (filters.featuredOnly) {
         query = query.eq("is_featured", true);
+      }
+
+      // Apply dietary keyword filter (searches description and cuisine fields)
+      if (filters.dietary && filters.dietary.length > 0) {
+        const dietaryKeywords: Record<string, string[]> = {
+          vegan: ["vegan"],
+          vegetarian: ["vegetarian", "veggie"],
+          "gluten-free": ["gluten free", "gluten-free", "celiac"],
+          keto: ["keto", "low carb"],
+          halal: ["halal"],
+        };
+        const orClauses = filters.dietary.flatMap((diet) => {
+          const keywords = dietaryKeywords[diet] || [diet];
+          return keywords.flatMap((kw) => [
+            `description.ilike.%${kw}%`,
+            `cuisine.ilike.%${kw}%`,
+            `name.ilike.%${kw}%`,
+          ]);
+        });
+        query = query.or(orClauses.join(","));
       }
 
       // Apply sorting with AI-based popularity as default
@@ -183,6 +204,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
     filters.location,
     filters.sortBy,
     filters.featuredOnly,
+    filters.dietary,
     filters.limit,
     filters.offset,
   ]);
