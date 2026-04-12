@@ -1,0 +1,317 @@
+# ================================================================
+# iOS CI: Auto Version Bump & Build Validation
+# ================================================================
+#
+# Triggers automatically when iOS app files are updated on main.
+# Reads the current version from ios/project.yml, auto-increments
+# the patch version and build number, commits the bump, then runs
+# a Simulator build + unit tests to validate compilation.
+#
+# Version history is tracked in ios/project.yml:
+#   MARKETING_VERSION  - Semantic version shown to users (e.g. 1.1.8)
+#   CURRENT_PROJECT_VERSION - Incrementing build number (e.g. 35)
+#
+# The auto-increment bumps PATCH (1.1.8 → 1.1.9) and build number
+# (+1) on every push to ios/ on the main branch. For MINOR or MAJOR
+# bumps, update ios/project.yml manually before merging.
+#
+# On pull requests, this workflow validates the build WITHOUT bumping
+# the version (read-only).
+#
+# ================================================================
+
+name: iOS CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '!ios/README.md'
+      - '!ios/fastlane/metadata/**'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - '!ios/README.md'
+      - '!ios/fastlane/metadata/**'
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: 'Version bump type (patch on push by default)'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+          - none
+
+env:
+  XCODE_VERSION: '26.0'
+  PROJECT_DIR: 'ios'
+  SCHEME: 'DesMoinesInsider'
+
+# Prevent duplicate runs on the same branch and cancel stale ones
+concurrency:
+  group: ios-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ================================================================
+  # Auto-increment version on push to main
+  # ================================================================
+  version-bump:
+    name: Auto Version Bump
+    runs-on: ubuntu-latest
+    # Only bump version on push to main (not PRs, not [skip ci])
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, '[version bump]')
+    outputs:
+      new_version: ${{ steps.bump.outputs.new_version }}
+      new_build: ${{ steps.bump.outputs.new_build }}
+      bumped: ${{ steps.bump.outputs.bumped }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Read current version and bump
+        id: bump
+        run: |
+          PROJECT_YML="ios/project.yml"
+
+          # Extract current MARKETING_VERSION and CURRENT_PROJECT_VERSION
+          CURRENT_VERSION=$(grep 'MARKETING_VERSION:' "$PROJECT_YML" | head -1 | sed 's/.*"\(.*\)"/\1/')
+          CURRENT_BUILD=$(grep 'CURRENT_PROJECT_VERSION:' "$PROJECT_YML" | head -1 | sed 's/.*"\(.*\)"/\1/')
+
+          echo "Current version: $CURRENT_VERSION (build $CURRENT_BUILD)"
+
+          # Determine bump type
+          BUMP_TYPE="${{ github.event.inputs.bump_type || 'patch' }}"
+          if [ "$BUMP_TYPE" = "none" ]; then
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
+            echo "new_version=$CURRENT_VERSION" >> "$GITHUB_OUTPUT"
+            echo "new_build=$CURRENT_BUILD" >> "$GITHUB_OUTPUT"
+            echo "Skipping version bump (bump_type=none)"
+            exit 0
+          fi
+
+          # Parse semantic version components
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
+          MAJOR=${MAJOR:-1}
+          MINOR=${MINOR:-1}
+          PATCH=${PATCH:-8}
+
+          case "$BUMP_TYPE" in
+            major)
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+              ;;
+            minor)
+              MINOR=$((MINOR + 1))
+              PATCH=0
+              ;;
+            patch)
+              PATCH=$((PATCH + 1))
+              ;;
+          esac
+
+          NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          NEW_BUILD=$((CURRENT_BUILD + 1))
+
+          echo "Bumping: $CURRENT_VERSION → $NEW_VERSION (build $CURRENT_BUILD → $NEW_BUILD)"
+
+          # Update project.yml
+          sed -i "s/MARKETING_VERSION: \"$CURRENT_VERSION\"/MARKETING_VERSION: \"$NEW_VERSION\"/" "$PROJECT_YML"
+          sed -i "s/CURRENT_PROJECT_VERSION: \"$CURRENT_BUILD\"/CURRENT_PROJECT_VERSION: \"$NEW_BUILD\"/" "$PROJECT_YML"
+
+          # Verify the update
+          grep 'MARKETING_VERSION:' "$PROJECT_YML"
+          grep 'CURRENT_PROJECT_VERSION:' "$PROJECT_YML"
+
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new_build=$NEW_BUILD" >> "$GITHUB_OUTPUT"
+          echo "bumped=true" >> "$GITHUB_OUTPUT"
+
+      - name: Commit version bump
+        if: steps.bump.outputs.bumped == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add ios/project.yml
+          git commit -m "chore(ios): bump version to ${{ steps.bump.outputs.new_version }} (build ${{ steps.bump.outputs.new_build }}) [version bump]"
+          git push
+
+  # ================================================================
+  # Build & validate the Swift project
+  # ================================================================
+  build:
+    name: Build & Test (Simulator)
+    runs-on: macos-15
+    timeout-minutes: 30
+    needs: [version-bump]
+    # Run even if version-bump was skipped (PRs, manual dispatch)
+    if: always() && !failure() && !cancelled()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Pull latest to get the version bump commit if it happened
+          ref: ${{ github.ref }}
+
+      - name: Select Xcode version
+        run: |
+          if [ -d "/Applications/Xcode_${XCODE_VERSION}.app" ]; then
+            sudo xcode-select -s "/Applications/Xcode_${XCODE_VERSION}.app/Contents/Developer"
+          else
+            echo "::warning::Xcode ${XCODE_VERSION} not found. Using default."
+            ls -d /Applications/Xcode*.app 2>/dev/null || echo "No Xcode found"
+          fi
+          echo "Xcode: $(xcodebuild -version | head -1)"
+          echo "Swift: $(swift --version | head -1)"
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate placeholder secrets for CI build
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          chmod +x scripts/generate-secrets.sh
+          SUPABASE_URL="https://placeholder.supabase.co" \
+          SUPABASE_ANON_KEY="placeholder-key-for-ci-build" \
+          bash scripts/generate-secrets.sh
+
+      - name: Generate Xcode project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          xcodegen generate
+          echo "✅ Xcode project generated"
+
+      - name: Resolve Swift Package Manager dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          for attempt in 1 2 3; do
+            echo "SPM resolve attempt $attempt/3..."
+            if xcodebuild -resolvePackageDependencies \
+              -project DesMoinesInsider.xcodeproj \
+              -scheme "${{ env.SCHEME }}" \
+              -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache"; then
+              echo "✅ SPM dependencies resolved"
+              exit 0
+            fi
+            echo "::warning::SPM resolve attempt $attempt failed"
+            rm -rf "$RUNNER_TEMP/spm-cache" 2>/dev/null || true
+            sleep $((attempt * 10))
+          done
+          echo "::error::SPM dependency resolution failed after 3 attempts"
+          exit 1
+
+      - name: Build for iOS Simulator
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild.log" | xcpretty --color || {
+              echo ""
+              echo "::error::Build failed! Raw compiler errors:"
+              grep -E "(error:|fatal error)" "$RUNNER_TEMP/xcodebuild.log" | head -60
+              exit 1
+            }
+          echo "✅ iOS Simulator build succeeded"
+
+      - name: Run unit tests
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project DesMoinesInsider.xcodeproj \
+            -scheme "${{ env.SCHEME }}" \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,name=iPhone 16,OS=latest" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/spm-cache" \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | xcpretty --color --test || {
+              echo ""
+              echo "::error::Tests failed!"
+              grep -E "(Test Case.*failed|error:)" "$RUNNER_TEMP/xcodebuild-test.log" | head -30
+              exit 1
+            }
+          echo "✅ Unit tests passed"
+
+      - name: Report version
+        if: needs.version-bump.outputs.bumped == 'true'
+        run: |
+          echo "### iOS Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Version** | ${{ needs.version-bump.outputs.new_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Build** | ${{ needs.version-bump.outputs.new_build }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | \`${{ github.event_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ================================================================
+  # Validate project configuration (fast, runs on Linux)
+  # ================================================================
+  validate-config:
+    name: Validate iOS Configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate project structure
+        run: |
+          echo "=== Checking required files ==="
+          ERRORS=0
+          for f in \
+            ios/project.yml \
+            ios/DesMoinesInsider/App/DesMoinesInsiderApp.swift \
+            ios/DesMoinesInsider/Resources/Info.plist \
+            ios/DesMoinesInsider/Configuration/Config.swift \
+            ios/DesMoinesInsider/App/DesMoinesInsider.entitlements \
+            ios/scripts/generate-secrets.sh \
+            ios/.gitignore; do
+            if [ -f "$f" ]; then
+              echo "✅ $f"
+            else
+              echo "❌ MISSING: $f"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done
+
+          echo ""
+          echo "=== Version info ==="
+          grep 'MARKETING_VERSION:' ios/project.yml
+          grep 'CURRENT_PROJECT_VERSION:' ios/project.yml
+
+          echo ""
+          SWIFT_COUNT=$(find ios/DesMoinesInsider -name "*.swift" | wc -l | xargs)
+          echo "Swift files: $SWIFT_COUNT"
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error::$ERRORS required file(s) missing"
+            exit 1
+          fi
+          echo "✅ Configuration validation passed"

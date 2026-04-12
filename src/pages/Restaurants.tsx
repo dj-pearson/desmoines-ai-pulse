@@ -5,20 +5,19 @@ import { AdBanner } from "@/components/AdBanner";
 import SEOHead from "@/components/SEOHead";
 import { RestaurantOpenings } from "@/components/RestaurantOpenings";
 import {
-  RestaurantFilters,
-  RestaurantFilterOptions,
+  type RestaurantFilterOptions,
 } from "@/components/RestaurantFilters";
+import { RestaurantSmartPresets } from "@/components/RestaurantSmartPresets";
+import { RestaurantInlineFilters } from "@/components/RestaurantInlineFilters";
 import {
   useRestaurants,
   useRestaurantFilterOptions,
   useCuisineCounts,
 } from "@/hooks/useRestaurants";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CardsGridSkeleton, LoadingSpinner } from "@/components/ui/loading-skeleton";
 import {
-  MapPin,
   Star,
   DollarSign,
   ChefHat,
@@ -34,13 +33,7 @@ import {
   SlidersHorizontal,
   TrendingUp,
   ArrowRight,
-  Flame,
   Leaf,
-  Pizza,
-  Fish,
-  Beef,
-  Coffee,
-  Globe,
   ChevronDown,
   Shuffle,
 } from "lucide-react";
@@ -71,28 +64,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 
 // Lazy load map component to prevent react-leaflet bundling issues
 const RestaurantsMap = lazy(() => import("@/components/RestaurantsMap"));
 
-// Popular cuisine quick-filters with icons
-const cuisineQuickFilters = [
-  { label: "All", value: "", icon: Utensils },
-  { label: "American", value: "American", icon: Beef },
-  { label: "Italian", value: "Italian", icon: Pizza },
-  { label: "Mexican", value: "Mexican", icon: Flame },
-  { label: "Asian", value: "Asian", icon: Globe },
-  { label: "Seafood", value: "Seafood", icon: Fish },
-  { label: "Vegetarian", value: "Vegetarian", icon: Leaf },
-  { label: "Coffee & Cafe", value: "Cafe", icon: Coffee },
-];
 
 const sortOptions = [
   { value: "popularity", label: "Most Popular", icon: TrendingUp },
@@ -118,11 +93,8 @@ export default function Restaurants() {
     openNow: false,
     tags: [],
   });
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "map">("list");
   const [searchInput, setSearchInput] = useState("");
-  const [activeCuisineQuick, setActiveCuisineQuick] = useState("");
   const { toast } = useToast();
 
   const ITEMS_PER_PAGE = 30;
@@ -179,22 +151,6 @@ export default function Restaurants() {
     }
   }, [restaurants?.length, isLoading, filters.search, announce]);
 
-  const handleCuisineQuickFilter = useCallback((cuisineValue: string) => {
-    setActiveCuisineQuick(cuisineValue);
-    if (cuisineValue === "") {
-      setFilters((prev) => ({ ...prev, cuisine: [] }));
-    } else {
-      // Match any cuisine containing the value (e.g., "Asian" matches "Asian Fusion", "Thai", etc.)
-      const matchingCuisines = filterOptions.cuisines.filter((c) =>
-        c.toLowerCase().includes(cuisineValue.toLowerCase())
-      );
-      setFilters((prev) => ({
-        ...prev,
-        cuisine: matchingCuisines.length > 0 ? matchingCuisines : [cuisineValue],
-      }));
-    }
-  }, [filterOptions.cuisines]);
-
   const handleClearFilters = useCallback(() => {
     setFilters({
       search: "",
@@ -208,39 +164,11 @@ export default function Restaurants() {
       tags: [],
     });
     setSearchInput("");
-    setActiveCuisineQuick("");
     toast({
       title: "Filters Cleared",
       description: "All filters have been reset",
     });
   }, [toast]);
-
-  const removeFilter = useCallback((filterType: string, value?: string) => {
-    setFilters((prev) => {
-      switch (filterType) {
-        case "search":
-          setSearchInput("");
-          return { ...prev, search: "" };
-        case "cuisine":
-          setActiveCuisineQuick("");
-          return { ...prev, cuisine: prev.cuisine.filter((c) => c !== value) };
-        case "priceRange":
-          return { ...prev, priceRange: prev.priceRange.filter((p) => p !== value) };
-        case "location":
-          return { ...prev, location: prev.location.filter((l) => l !== value) };
-        case "tags":
-          return { ...prev, tags: prev.tags.filter((t) => t !== value) };
-        case "featuredOnly":
-          return { ...prev, featuredOnly: false };
-        case "openNow":
-          return { ...prev, openNow: false };
-        case "rating":
-          return { ...prev, rating: [0, 5] };
-        default:
-          return prev;
-      }
-    });
-  }, []);
 
   const getActiveFiltersCount = useMemo(() => {
     let count = 0;
@@ -516,33 +444,36 @@ export default function Restaurants() {
             className="mb-4"
           />
           <div className="flex gap-8">
-          <div className="flex-1 min-w-0 space-y-8">
-            {/* Cuisine Quick Filter Bar */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-              {cuisineQuickFilters.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeCuisineQuick === item.value;
-                return (
-                  <button
-                    key={item.value}
-                    onClick={() => handleCuisineQuickFilter(item.value)}
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-full whitespace-nowrap transition-all duration-200 text-sm font-medium border ${
-                      isActive
-                        ? "bg-[#2D1B69] text-white border-[#2D1B69] shadow-md dark:bg-primary dark:border-primary"
-                        : "bg-white text-gray-700 border-gray-200 hover:border-[#2D1B69]/30 hover:bg-[#2D1B69]/5 shadow-sm dark:bg-card dark:text-gray-300 dark:border-gray-700 dark:hover:border-primary/40 dark:hover:bg-primary/10"
-                    }`}
-                    aria-pressed={isActive}
-                  >
-                    <Icon className="h-4 w-4" />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </div>
+          <div className="flex-1 min-w-0 space-y-6">
+            {/* Smart Preset Filters - one-tap scenarios */}
+            <RestaurantSmartPresets
+              onApplyPreset={setFilters}
+              defaultFilters={{
+                search: "",
+                cuisine: [],
+                priceRange: [],
+                rating: [0, 5],
+                location: [],
+                sortBy: "popularity",
+                featuredOnly: false,
+                openNow: false,
+                tags: [],
+              }}
+            />
 
-            {/* Sort & Filter Controls Bar */}
+            {/* Inline Filter Pills - always visible, no hidden panel */}
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <RestaurantInlineFilters
+                  filters={filters}
+                  onFiltersChange={setFilters}
+                  availableCuisines={filterOptions.cuisines}
+                  availableLocations={filterOptions.locations}
+                  totalResults={totalCount}
+                  isLoading={isLoading}
+                />
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {/* Sort dropdown */}
                 <Select
                   value={filters.sortBy}
@@ -550,7 +481,7 @@ export default function Restaurants() {
                     setFilters((prev) => ({ ...prev, sortBy: value as RestaurantFilterOptions["sortBy"] }))
                   }
                 >
-                  <SelectTrigger className="w-44 bg-white dark:bg-card rounded-xl shadow-sm">
+                  <SelectTrigger className="w-40 bg-white dark:bg-card rounded-xl shadow-sm text-sm">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -568,183 +499,18 @@ export default function Restaurants() {
                   </SelectContent>
                 </Select>
 
-                {/* Advanced filters button */}
-                {isMobile ? (
-                  <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
-                    <SheetTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className="rounded-xl bg-white shadow-sm relative"
-                      >
-                        <SlidersHorizontal className="h-4 w-4 mr-2" />
-                        Filters
-                        {getActiveFiltersCount > 0 && (
-                          <Badge className="ml-2 bg-[#DC143C] text-white h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-                            {getActiveFiltersCount}
-                          </Badge>
-                        )}
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
-                      <SheetHeader>
-                        <SheetTitle className="text-xl">Filter Restaurants</SheetTitle>
-                      </SheetHeader>
-                      <div className="mt-6 space-y-6 overflow-y-auto max-h-[calc(85vh-120px)]">
-                        <RestaurantFilters
-                          filters={filters}
-                          onFiltersChange={setFilters}
-                          availableCuisines={filterOptions.cuisines}
-                          availableLocations={filterOptions.locations}
-                          availableTags={filterOptions.tags}
-                          totalResults={totalCount}
-                          isLoading={isLoading}
-                        />
-                        <div className="flex gap-3 pt-4 sticky bottom-0 bg-background pb-4">
-                          <Button variant="outline" onClick={handleClearFilters} className="flex-1 rounded-xl">
-                            Clear All
-                          </Button>
-                          <Button onClick={() => setShowMobileFilters(false)} className="flex-1 rounded-xl bg-[#2D1B69]">
-                            Show {restaurants?.length || 0} Results
-                          </Button>
-                        </div>
-                      </div>
-                    </SheetContent>
-                  </Sheet>
-                ) : (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                    className="rounded-xl bg-white shadow-sm relative"
-                  >
-                    <SlidersHorizontal className="h-4 w-4 mr-2" />
-                    More Filters
-                    {getActiveFiltersCount > 0 && (
-                      <Badge className="ml-2 bg-[#DC143C] text-white h-5 w-5 p-0 flex items-center justify-center text-xs rounded-full">
-                        {getActiveFiltersCount}
-                      </Badge>
-                    )}
-                  </Button>
-                )}
+                {/* Results count */}
+                <p className="text-sm text-muted-foreground whitespace-nowrap hidden md:block">
+                  {isLoading ? (
+                    "Searching..."
+                  ) : (
+                    <span>
+                      <strong className="text-foreground">{totalCount}</strong> found
+                    </span>
+                  )}
+                </p>
               </div>
-
-              {/* Results count */}
-              <p className="text-sm text-muted-foreground">
-                {isLoading ? (
-                  "Searching..."
-                ) : (
-                  <span>
-                    <strong className="text-foreground">{totalCount}</strong> restaurant{totalCount !== 1 ? "s" : ""} found
-                  </span>
-                )}
-              </p>
             </div>
-
-            {/* Active Filter Chips */}
-            {hasActiveFilters && (
-              <div className="flex flex-wrap items-center gap-2">
-                {filters.search && (
-                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
-                    Search: "{filters.search}"
-                    <button onClick={() => removeFilter("search")} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                )}
-                {filters.cuisine.map((cuisine) => (
-                  <Badge key={cuisine} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white dark:bg-card shadow-sm border">
-                    <ChefHat className="h-3 w-3" />
-                    {cuisine}
-                    <button onClick={() => removeFilter("cuisine", cuisine)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {filters.priceRange.map((price) => (
-                  <Badge key={price} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
-                    <DollarSign className="h-3 w-3" />
-                    {price}
-                    <button onClick={() => removeFilter("priceRange", price)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {filters.location.map((location) => (
-                  <Badge key={location} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
-                    <MapPin className="h-3 w-3" />
-                    {location}
-                    <button onClick={() => removeFilter("location", location)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {filters.tags.map((tag) => (
-                  <Badge key={tag} variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
-                    {tag}
-                    <button onClick={() => removeFilter("tags", tag)} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                ))}
-                {filters.featuredOnly && (
-                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-amber-50 border-amber-200 text-amber-800">
-                    <Sparkles className="h-3 w-3" />
-                    Featured Only
-                    <button onClick={() => removeFilter("featuredOnly")} className="ml-1 hover:bg-amber-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                )}
-                {filters.openNow && (
-                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-emerald-50 border-emerald-200 text-emerald-800">
-                    <Clock className="h-3 w-3" />
-                    Open Now
-                    <button onClick={() => removeFilter("openNow")} className="ml-1 hover:bg-emerald-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                )}
-                {(filters.rating[0] !== 0 || filters.rating[1] !== 5) && (
-                  <Badge variant="secondary" className="gap-1 pl-3 pr-1 py-1.5 rounded-full bg-white shadow-sm border">
-                    <Star className="h-3 w-3" />
-                    Rating: {filters.rating[0]}-{filters.rating[1]}
-                    <button onClick={() => removeFilter("rating")} className="ml-1 hover:bg-gray-200 rounded-full p-0.5">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleClearFilters}
-                  className="text-xs h-7 text-[#DC143C] hover:text-[#DC143C]/80 hover:bg-red-50"
-                >
-                  Clear All
-                </Button>
-              </div>
-            )}
-
-            {/* Advanced Filters Panel */}
-            {showAdvancedFilters && !isMobile && (
-              <div className="bg-white dark:bg-card rounded-2xl shadow-md p-6 border">
-                <RestaurantFilters
-                  filters={filters}
-                  onFiltersChange={setFilters}
-                  availableCuisines={filterOptions.cuisines}
-                  availableLocations={filterOptions.locations}
-                  availableTags={filterOptions.tags}
-                  totalResults={totalCount}
-                  isLoading={isLoading}
-                />
-                <div className="flex justify-between mt-6">
-                  <Button variant="outline" onClick={handleClearFilters} className="rounded-xl">
-                    Clear Filters
-                  </Button>
-                  <Button onClick={() => setShowAdvancedFilters(false)} className="rounded-xl bg-[#2D1B69]">
-                    Apply Filters
-                  </Button>
-                </div>
-              </div>
-            )}
 
             {/* Restaurant Openings Section */}
             <RestaurantOpenings />
