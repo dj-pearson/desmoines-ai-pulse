@@ -1,8 +1,19 @@
-What's New:
-- Improved network reliability with automatic retry on flaky connections
-- iPad sidebar navigation for a better big-screen experience
-- Search history: quickly re-run recent searches
-- Scroll-to-top button on long lists
-- Undo support when removing favorites
-- Staggered entrance animations for a smoother feel
+What's New in 1.1.8:
+
+SMARTER SEARCH
+- One-tap smart filters: Date Night, Quick Lunch, Family Friendly, Late Night, Brunch, Happy Hour, and more — each sets the perfect combo of cuisine, price, and rating for you
+- Always-visible filter pills for cuisine, price, area, rating, and dietary needs — no more digging through hidden menus
+- Dietary filters (vegan, vegetarian, gluten-free, keto, halal) built right into restaurant search
+- Tap any active filter chip to instantly remove it
+
+DESIGN & POLISH
+- OLED true-black dark mode — saves battery and looks stunning on iPhone displays
+- Smoother animations throughout with spring physics and staggered entrances
+- Parallax hero headers on detail pages
+- Refined haptic feedback on every interaction
+- Skeleton shimmer loading screens replace blank white flashes
+
+RELIABILITY
+- Fixed duplicate type declarations that could cause crashes
+- Improved build stability for Xcode 26 and Swift 6.2
 - Bug fixes and performance improvements
