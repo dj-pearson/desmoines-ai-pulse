@@ -6,8 +6,8 @@ struct OnboardingView: View {
     @State private var currentPage = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let pages: [OnboardingPage] = [
-        OnboardingPage(
+    private let pages: [OnboardingPageData] = [
+        OnboardingPageData(
             icon: "building.2.crop.circle.fill",
             assetImage: "AppLogo",
             title: "Welcome to Des Moines Insider",
@@ -19,7 +19,7 @@ struct OnboardingView: View {
             ],
             color: .accentColor
         ),
-        OnboardingPage(
+        OnboardingPageData(
             icon: "heart.circle.fill",
             title: "Save Your Favorites",
             subtitle: "Keep track of events and places you love. Never miss what matters to you.",
@@ -30,7 +30,7 @@ struct OnboardingView: View {
             ],
             color: .red
         ),
-        OnboardingPage(
+        OnboardingPageData(
             icon: "map.circle.fill",
             title: "Explore What's Nearby",
             subtitle: "Use the map to discover events and restaurants near your current location.",
@@ -122,7 +122,7 @@ struct OnboardingView: View {
 
     // MARK: - Page View
 
-    private func pageView(_ page: OnboardingPage) -> some View {
+    private func pageView(_ page: OnboardingPageData) -> some View {
         VStack(spacing: 24) {
             Spacer()
 
@@ -169,7 +169,7 @@ struct OnboardingView: View {
 
 // MARK: - Page Model
 
-private struct OnboardingPage {
+private struct OnboardingPageData {
     let icon: String
     /// If set, uses a bundled image from the asset catalog instead of an SF Symbol.
     var assetImage: String? = nil

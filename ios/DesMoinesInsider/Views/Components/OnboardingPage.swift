@@ -95,7 +95,7 @@ struct OnboardingNavRow: View {
 struct PermissionPrimingCard: View {
     let systemImage: String
     let title: String
-    let body: String
+    let bodyText: String
     let primaryLabel: String
     let onPrimary: () -> Void
     let onDismiss: () -> Void
@@ -116,7 +116,7 @@ struct PermissionPrimingCard: View {
                 .multilineTextAlignment(.center)
                 .padding(.top, 18)
 
-            Text(body)
+            Text(bodyText)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
