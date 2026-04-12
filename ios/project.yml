@@ -9,8 +9,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    MARKETING_VERSION: "1.1.8"
-    CURRENT_PROJECT_VERSION: "35"
+    MARKETING_VERSION: "1.1.9"
+    CURRENT_PROJECT_VERSION: "36"
 
 packages:
   Supabase:

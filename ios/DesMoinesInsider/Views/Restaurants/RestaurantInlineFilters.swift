@@ -176,7 +176,7 @@ private struct AreaPill: View {
             PopoverList(title: "Neighborhood", hasSelection: !viewModel.selectedLocations.isEmpty) {
                 viewModel.selectedLocations = []
             } content: {
-                FlowChipGrid(items: LocationArea.allCases.map { $0.rawValue }) { item in
+                FlowChipGrid(items: viewModel.availableLocations.prefix(40).map { $0 }) { item in
                     viewModel.selectedLocations.contains(item)
                 } onTap: { item in
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()

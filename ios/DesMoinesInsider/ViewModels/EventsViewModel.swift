@@ -29,6 +29,13 @@ final class EventsViewModel {
     var showFeaturedOnly = false {
         didSet { resetAndFetch() }
     }
+    var selectedCities: Set<String> = [] {
+        didSet { resetAndFetch() }
+    }
+
+    /// Currently applied smart preset, if any. Cleared when the user changes
+    /// any individual filter manually.
+    var activePreset: EventPreset? = nil
 
     // Premium filters (Insider+ only)
     var showFreeOnly = false {
@@ -98,6 +105,8 @@ final class EventsViewModel {
             query.searchText = searchText.isEmpty ? nil : searchText
             query.category = selectedCategory?.rawValue
             query.isFeatured = showFeaturedOnly ? true : nil
+            query.cities = selectedCities.isEmpty ? nil : Array(selectedCities)
+            query.freeOnly = showFreeOnly
             query.limit = pageSize
             query.offset = currentOffset
 
@@ -183,6 +192,7 @@ final class EventsViewModel {
         if showFeaturedOnly { count += 1 }
         if !searchText.isEmpty { count += 1 }
         if showFreeOnly { count += 1 }
+        if !selectedCities.isEmpty { count += 1 }
         if maxDistance != nil { count += 1 }
         if minRating != nil { count += 1 }
         return count
@@ -194,8 +204,30 @@ final class EventsViewModel {
         showFeaturedOnly = false
         searchText = ""
         showFreeOnly = false
+        selectedCities = []
         maxDistance = nil
         minRating = nil
+        activePreset = nil
+    }
+
+    // MARK: - Smart Presets
+
+    /// Applies a bundled set of event filters in one tap. Tapping the same
+    /// preset again clears all filters.
+    func applyPreset(_ preset: EventPreset) {
+        if activePreset == preset {
+            clearFilters()
+            return
+        }
+        selectedCategory = preset.category
+        selectedDatePreset = preset.datePreset
+        showFeaturedOnly = preset.featured
+        showFreeOnly = preset.free
+        selectedCities = []
+        maxDistance = nil
+        minRating = nil
+        searchText = ""
+        activePreset = preset
     }
 
     // MARK: - Premium Filters (applied client-side)
@@ -203,9 +235,7 @@ final class EventsViewModel {
     private func applyPremiumFilters(_ events: [Event]) -> [Event] {
         var result = events
 
-        if showFreeOnly {
-            result = result.filter { $0.isFree }
-        }
+        // `showFreeOnly` is now server-side; keep maxDistance + minRating client-side
 
         if let maxDistance, let userLocation = LocationService.shared.userLocation {
             result = result.filter { event in

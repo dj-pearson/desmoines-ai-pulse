@@ -11,6 +11,7 @@ final class RestaurantsViewModel {
     private(set) var totalCount = 0
     private(set) var errorMessage: String?
     private(set) var availableCuisines: [String] = []
+    private(set) var availableLocations: [String] = []
 
     var searchText = "" {
         didSet { resetAndFetch() }
@@ -67,7 +68,8 @@ final class RestaurantsViewModel {
 
         async let restaurantsTask: () = fetchRestaurants(reset: true)
         async let cuisinesTask: () = loadCuisines()
-        _ = await (restaurantsTask, cuisinesTask)
+        async let locationsTask: () = loadLocations()
+        _ = await (restaurantsTask, cuisinesTask, locationsTask)
     }
 
     func refresh() async {
@@ -138,13 +140,22 @@ final class RestaurantsViewModel {
         await fetchRestaurants(reset: false)
     }
 
-    // MARK: - Cuisines
+    // MARK: - Cuisines & Locations
 
     private func loadCuisines() async {
         do {
             availableCuisines = try await service.fetchAvailableCuisines()
         } catch {
             availableCuisines = []
+        }
+    }
+
+    func loadLocations() async {
+        guard availableLocations.isEmpty else { return }
+        do {
+            availableLocations = try await service.fetchAvailableLocations()
+        } catch {
+            availableLocations = []
         }
     }
 
