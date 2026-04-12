@@ -25,6 +25,8 @@ actor EventsService {
     struct EventsQuery {
         var searchText: String?
         var category: String?
+        var cities: [String]?
+        var freeOnly: Bool = false
         var dateStart: Date?
         var dateEnd: Date?
         var isFeatured: Bool?
@@ -74,6 +76,23 @@ actor EventsService {
         // Featured only
         if query.isFeatured == true {
             request = request.eq("is_featured", value: true)
+        }
+
+        // City filter (partial match on city or location via OR)
+        if let cities = query.cities, !cities.isEmpty {
+            let orClauses = cities.flatMap { city -> [String] in
+                let escaped = city.replacingOccurrences(of: "%", with: "\\%")
+                return [
+                    "city.ilike.%\(escaped)%",
+                    "location.ilike.%\(escaped)%",
+                ]
+            }
+            request = request.or(orClauses.joined(separator: ","))
+        }
+
+        // Free events only (matches null/free/$0 price, same as web app)
+        if query.freeOnly {
+            request = request.or("price.is.null,price.ilike.%free%,price.ilike.%$0%")
         }
 
         // Sort + Paginate + Execute (transforms must come after all filters)

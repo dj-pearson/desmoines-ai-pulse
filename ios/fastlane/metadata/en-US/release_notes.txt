@@ -1,8 +1,27 @@
-What's New:
-- Improved network reliability with automatic retry on flaky connections
-- iPad sidebar navigation for a better big-screen experience
-- Search history: quickly re-run recent searches
-- Scroll-to-top button on long lists
-- Undo support when removing favorites
-- Staggered entrance animations for a smoother feel
-- Bug fixes and performance improvements
+What's New in 1.1.9:
+
+SMARTER SEARCH ON DINING & HOME
+- New Quick Picks row with one-tap filter combos:
+  • Dining: Date Night, Quick Lunch, Family, Late Night, Brunch,
+    Happy Hour, Healthy, With Kids
+  • Home: Free Weekend, Live Music, Food & Drink, Family Fun,
+    Art & Culture, Outdoors, Tonight, This Week, Featured
+- Always-visible filter pills replace the old "Filters" sheet —
+  no more tapping through multiple screens to narrow results
+
+DINING TAB REBUILT
+- Filter by cuisine, price, neighborhood, rating, and dietary
+  (vegan, vegetarian, gluten-free, keto, halal) right from the top
+- Neighborhoods now pulled from live data instead of a static list
+- Sort moved to the toolbar for more room to browse
+
+ACTIVE FILTER CHIPS
+- See every applied filter at a glance
+- Tap × on any chip to remove just that one filter
+- One tap to clear everything
+
+UNDER THE HOOD
+- Fixed pagination bug when client-side filters were active
+- Swift compilation fixes (duplicate type declarations)
+- Improved build stability on Xcode 26 / Swift 6.2
+- Automated version bumping in CI

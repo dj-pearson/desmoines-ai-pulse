@@ -1,14 +1,13 @@
 import SwiftUI
 
-/// Main home/feed view with featured events, popular restaurants, date presets, category filters, and event list.
+/// Main home/feed view with featured events, popular restaurants, smart
+/// presets, inline filter pills, and event list.
 struct HomeView: View {
     @State private var viewModel = EventsViewModel()
     @State private var restaurantsVM = RestaurantsViewModel()
-    @State private var showFilters = false
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -17,8 +16,14 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 0).id("top")
                     headerSection
-                    datePresetsSection
-                    categoryChipsSection
+
+                    // Smart Presets — one-tap event scenarios
+                    EventSmartPresets(viewModel: viewModel)
+                        .padding(.top, 6)
+
+                    // Inline filter pills — always visible, no hidden sheet
+                    EventInlineFilters(viewModel: viewModel)
+                        .padding(.top, 2)
 
                     // Error banner
                     if let error = viewModel.errorMessage {
@@ -63,24 +68,6 @@ struct HomeView: View {
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    filterButton
-                }
-            }
-            .sheet(isPresented: $showFilters) {
-                FilterSheet(
-                    selectedCategory: $viewModel.selectedCategory,
-                    selectedDatePreset: $viewModel.selectedDatePreset,
-                    showFeaturedOnly: $viewModel.showFeaturedOnly,
-                    showFreeOnly: $viewModel.showFreeOnly,
-                    maxDistance: $viewModel.maxDistance,
-                    minRating: $viewModel.minRating,
-                    onClear: { viewModel.clearFilters() }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
@@ -113,83 +100,6 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
         .padding(.top, 4)
-    }
-
-    // MARK: - Date Presets
-
-    private var datePresetsSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(DateFilterPreset.allCases) { preset in
-                    let isSelected = viewModel.selectedDatePreset == preset
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(reduceMotion ? nil : .snappy) {
-                            viewModel.selectedDatePreset = isSelected ? nil : preset
-                        }
-                    } label: {
-                        Text(preset.rawValue)
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(isSelected ? Color.accentColor : Color(.systemGray6))
-                            .foregroundStyle(isSelected ? .white : .primary)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    // VoiceOver: announces "selected" / "not selected" in addition to label
-                    .accessibilityLabel("Filter by \(preset.rawValue)")
-                    .accessibilitySelected(isSelected)
-                    .accessibilityHint(isSelected ? "Tap to clear this filter" : "Tap to apply this filter")
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-        }
-    }
-
-    // MARK: - Category Chips
-
-    private var categoryChipsSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(EventCategory.allCases.prefix(8)) { category in
-                    let isSelected = viewModel.selectedCategory == category
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(reduceMotion ? nil : .snappy) {
-                            viewModel.selectedCategory = isSelected ? nil : category
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: category.icon)
-                                .font(.caption)
-                            Text(category.displayName)
-                                .font(.caption.weight(.medium))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(isSelected ? category.color.opacity(0.2) : Color(.systemGray6))
-                        .foregroundStyle(isSelected ? category.color : .secondary)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    isSelected ? category.color.opacity(0.3) : Color.clear,
-                                    lineWidth: 1
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    // VoiceOver: announces "selected" / "not selected" in addition to label
-                    .accessibilityLabel("Filter by \(category.displayName)")
-                    .accessibilitySelected(isSelected)
-                    .accessibilityHint(isSelected ? "Tap to clear this filter" : "Tap to apply this filter")
-                }
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-        }
     }
 
     // MARK: - Featured Section
@@ -281,26 +191,80 @@ struct HomeView: View {
         .accessibilityLabel("Error: \(message). Tap retry to try again.")
     }
 
-    // MARK: - Active Filters Bar
+    // MARK: - Active Filter Chips (individually removable)
 
     @ViewBuilder
     private var activeFiltersBar: some View {
         if viewModel.activeFilterCount > 0 {
-            HStack {
-                Text("\(viewModel.activeFilterCount) filter\(viewModel.activeFilterCount > 1 ? "s" : "") active")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Clear All") {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation { viewModel.clearFilters() }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Text("\(viewModel.events.count) results")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+
+                    if let category = viewModel.selectedCategory {
+                        chip(category.displayName, icon: category.icon, tint: category.color) {
+                            viewModel.selectedCategory = nil
+                        }
+                    }
+                    if let preset = viewModel.selectedDatePreset {
+                        chip(preset.rawValue, icon: "calendar") {
+                            viewModel.selectedDatePreset = nil
+                        }
+                    }
+                    if viewModel.showFreeOnly {
+                        chip("Free", icon: "ticket.fill", tint: .green) {
+                            viewModel.showFreeOnly = false
+                        }
+                    }
+                    if viewModel.showFeaturedOnly {
+                        chip("Featured", icon: "star.fill", tint: .orange) {
+                            viewModel.showFeaturedOnly = false
+                        }
+                    }
+                    ForEach(Array(viewModel.selectedCities).sorted(), id: \.self) { city in
+                        chip(city, icon: "mappin.and.ellipse") {
+                            viewModel.selectedCities.remove(city)
+                        }
+                    }
+
+                    Button("Clear all") {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation { viewModel.clearFilters() }
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 4)
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal)
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
         }
+    }
+
+    private func chip(
+        _ text: String,
+        icon: String,
+        tint: Color = .accentColor,
+        onRemove: @escaping () -> Void
+    ) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onRemove()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon).font(.system(size: 10))
+                Text(text).font(.caption.weight(.medium)).lineLimit(1)
+                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .foregroundStyle(tint)
+            .background(tint.opacity(0.12), in: Capsule())
+            .overlay(Capsule().strokeBorder(tint.opacity(0.3), lineWidth: 0.5))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Remove filter: \(text)")
     }
 
     // MARK: - Events List
@@ -358,30 +322,6 @@ struct HomeView: View {
         .padding(.bottom, 20)
     }
 
-    // MARK: - Filter Button
-
-    private var filterButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showFilters = true
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.title3)
-
-                if viewModel.activeFilterCount > 0 {
-                    Text("\(viewModel.activeFilterCount)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 16, height: 16)
-                        .background(Color.red, in: Circle())
-                        .offset(x: 4, y: -4)
-                }
-            }
-        }
-        .accessibilityLabel("Filters")
-        .accessibilityHint(viewModel.activeFilterCount > 0 ? "\(viewModel.activeFilterCount) active" : "No active filters")
-    }
 }
 
 // MARK: - Compact Restaurant Card (for home feed horizontal scroll)
