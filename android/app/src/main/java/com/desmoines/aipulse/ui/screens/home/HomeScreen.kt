@@ -313,7 +313,7 @@ fun HomeScreen(
 
                     // 2-column event cards or full-span states
                     if (state.isLoading) {
-                        gridItems(6) {
+                        items(count = 6) {
                             EventCardSkeleton(
                                 modifier = Modifier
                                     .padding(horizontal = Dimens.SpacingMd)
