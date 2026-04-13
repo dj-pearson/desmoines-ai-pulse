@@ -135,6 +135,38 @@ jobs:
           echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> $GITHUB_ENV
           echo "Keystore decoded ($(du -h "$KEYSTORE_PATH" | cut -f1))"
 
+      - name: Verify keystore fingerprint
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          EXPECTED_UPLOAD_SHA1: ${{ secrets.EXPECTED_UPLOAD_SHA1 }}
+        run: |
+          SHA1=$(keytool -list -v \
+            -keystore "$KEYSTORE_PATH" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -storepass "$ANDROID_KEYSTORE_PASSWORD" 2>/dev/null \
+            | awk -F': ' '/SHA1:/ {print $2; exit}' \
+            | tr -d '[:space:]')
+          if [ -z "$SHA1" ]; then
+            echo "::error::Could not read SHA1 from keystore — alias or password likely wrong."
+            exit 1
+          fi
+          echo "Keystore SHA1: $SHA1"
+          if [ -n "$EXPECTED_UPLOAD_SHA1" ]; then
+            EXPECTED=$(echo "$EXPECTED_UPLOAD_SHA1" | tr -d '[:space:]')
+            if [ "$SHA1" != "$EXPECTED" ]; then
+              echo "::error::Keystore SHA1 does not match EXPECTED_UPLOAD_SHA1 secret."
+              echo "::error::Play Console will reject this AAB with the 'wrong key' error."
+              echo "  Expected: $EXPECTED"
+              echo "  Got:      $SHA1"
+              exit 1
+            fi
+            echo "SHA1 matches EXPECTED_UPLOAD_SHA1 — Play will accept this build."
+          else
+            echo "::warning::EXPECTED_UPLOAD_SHA1 secret not set — skipping fingerprint match check."
+            echo "::warning::Set it to the Play Console upload key SHA1 to catch keystore drift early."
+          fi
+
       # ============================================================
       # 4. WRITE local.properties WITH REAL SECRETS
       # ============================================================
