@@ -31,7 +31,8 @@ CREATE INDEX IF NOT EXISTS idx_blocked_email_domains_created_at
 COMMENT ON TABLE public.blocked_email_domains IS
     'Email domains blocked from signup (disposable/throwaway email providers). Seeded from disposable-email-domains/disposable-email-domains and maintained by admins.';
 
--- Keep updated_at fresh on every update
+-- Keep updated_at fresh on every update (drop first so re-runs / partial applies are safe)
+DROP TRIGGER IF EXISTS update_blocked_email_domains_updated_at ON public.blocked_email_domains;
 CREATE TRIGGER update_blocked_email_domains_updated_at
     BEFORE UPDATE ON public.blocked_email_domains
     FOR EACH ROW
@@ -42,6 +43,11 @@ CREATE TRIGGER update_blocked_email_domains_updated_at
 -- ----------------------------------------------------------------------------
 
 ALTER TABLE public.blocked_email_domains ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Blocked email domains are publicly readable" ON public.blocked_email_domains;
+DROP POLICY IF EXISTS "Admins can insert blocked email domains" ON public.blocked_email_domains;
+DROP POLICY IF EXISTS "Admins can update blocked email domains" ON public.blocked_email_domains;
+DROP POLICY IF EXISTS "Admins can delete blocked email domains" ON public.blocked_email_domains;
 
 -- Anyone (including anonymous signup form) can read so the client can check
 -- an email domain without needing an authenticated session. The list itself
