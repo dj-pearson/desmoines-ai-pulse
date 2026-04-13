@@ -268,6 +268,21 @@ export default function Footer() {
                   </Link>
                 </li>
                 <li>
+                  <Link to="/cookie-policy" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    Cookie Policy
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/acceptable-use" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    Acceptable Use
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/dmca" className="text-neutral-400 hover:text-white transition-colors text-sm">
+                    DMCA / Copyright
+                  </Link>
+                </li>
+                <li>
                   <Link to="/contact" className="text-neutral-400 hover:text-white transition-colors text-sm">
                     Contact Us
                   </Link>
@@ -286,15 +301,28 @@ export default function Footer() {
       {/* Bottom Bar */}
       <div className="border-t border-neutral-800 py-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center text-sm text-neutral-400">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start text-sm text-neutral-400">
               <span>Made with</span>
               <Heart className="h-4 w-4 mx-1 text-red-500 fill-red-500" />
               <span>for Des Moines</span>
             </div>
-            <p className="text-neutral-500 text-sm">
-              © {new Date().getFullYear()} Des Moines Insider. All rights reserved.
-            </p>
+            <div className="text-neutral-500 text-xs space-y-1">
+              <p>
+                © {new Date().getFullYear()} Des Moines Insider. All rights reserved.
+              </p>
+              {/* Physical postal address — required by CAN-SPAM §5(a)(5) for any
+                  marketing email we send out, and generally useful for legal notices. */}
+              <address className="not-italic">
+                Des Moines Insider · Des Moines, Iowa, USA ·{" "}
+                <a
+                  href="mailto:hello@desmoinesinsider.com"
+                  className="underline hover:no-underline"
+                >
+                  hello@desmoinesinsider.com
+                </a>
+              </address>
+            </div>
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,9 +74,10 @@ export default function Auth() {
     phone: "",
     location: "",
     interests: [] as string[],
-    emailNotifications: true,
+    emailNotifications: false,
     smsNotifications: false,
-    eventRecommendations: true,
+    eventRecommendations: false,
+    termsAccepted: false,
     // Business fields
     businessName: "",
     businessType: "",
@@ -345,6 +346,16 @@ export default function Auth() {
       return;
     }
 
+    // Terms & Privacy acceptance is mandatory (contract formation + privacy law compliance)
+    if (!formData.termsAccepted) {
+      toast({
+        title: "Agreement Required",
+        description: "Please accept the Terms of Service and Privacy Policy to create an account.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Business account validation
     if (accountType === "business") {
       if (!formData.businessName) {
@@ -378,6 +389,19 @@ export default function Auth() {
 
     setIsLoading(true);
 
+    // Consent record — timestamped acceptance of ToS + Privacy Policy
+    // Required for CCPA/GDPR/CAN-SPAM/TCPA record-keeping (proves affirmative consent)
+    const consentRecord = {
+      terms_accepted: true,
+      terms_accepted_at: new Date().toISOString(),
+      terms_version: "2026-03-10",
+      privacy_version: "2025-11-25",
+      // Marketing consent captured separately and only if explicitly checked
+      email_marketing_consent: !!formData.emailNotifications,
+      sms_marketing_consent: !!formData.smsNotifications,
+      personalization_consent: !!formData.eventRecommendations,
+    };
+
     // Prepare metadata based on account type
     const metadata = accountType === "personal"
       ? {
@@ -391,7 +415,8 @@ export default function Auth() {
             email_notifications: formData.emailNotifications,
             sms_notifications: formData.smsNotifications,
             event_recommendations: formData.eventRecommendations,
-          }
+          },
+          consent: consentRecord,
         }
       : {
           account_type: "business",
@@ -403,6 +428,7 @@ export default function Auth() {
           last_name: formData.lastName,
           phone: formData.phone,
           location: formData.location,
+          consent: consentRecord,
         };
 
     const result = await signup(formData.email, formData.password, metadata);
@@ -894,46 +920,78 @@ export default function Auth() {
                   </div>
                 )}
 
-                {/* Communication Preferences (Personal accounts only) */}
+                {/* Communication Preferences (Personal accounts only) — explicit opt-in, not pre-checked */}
                 {accountType === "personal" && (
                   <div className="space-y-3">
-                    <Label>Communication Preferences</Label>
+                    <Label>Optional Communication Preferences</Label>
+                    <p className="text-xs text-muted-foreground">
+                      These are off by default. Check only what you want — you can change these any time in your profile settings, and transactional emails (receipts, account alerts) are always sent regardless.
+                    </p>
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start space-x-2">
                       <Checkbox
                         id="emailNotifications"
                         checked={formData.emailNotifications}
                         onCheckedChange={(checked) => handleInputChange("emailNotifications", checked)}
+                        className="mt-0.5"
                       />
-                      <Label htmlFor="emailNotifications" className="text-sm">
-                        Email notifications about events
+                      <Label htmlFor="emailNotifications" className="text-sm font-normal leading-snug">
+                        Send me marketing emails about events, restaurants, and promotions. I can unsubscribe anytime.
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start space-x-2">
                       <Checkbox
                         id="smsNotifications"
                         checked={formData.smsNotifications}
                         onCheckedChange={(checked) => handleInputChange("smsNotifications", checked)}
+                        className="mt-0.5"
                       />
-                      <Label htmlFor="smsNotifications" className="text-sm">
-                        SMS notifications (requires phone number)
+                      <Label htmlFor="smsNotifications" className="text-sm font-normal leading-snug">
+                        Send me SMS/text messages. Message &amp; data rates may apply; reply STOP to cancel, HELP for help. Consent is not a condition of purchase. (TCPA)
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start space-x-2">
                       <Checkbox
                         id="eventRecommendations"
                         checked={formData.eventRecommendations}
                         onCheckedChange={(checked) => handleInputChange("eventRecommendations", checked)}
+                        className="mt-0.5"
                       />
-                      <Label htmlFor="eventRecommendations" className="text-sm">
-                        Personalized event recommendations
+                      <Label htmlFor="eventRecommendations" className="text-sm font-normal leading-snug">
+                        Use my activity to personalize event recommendations (AI-assisted profiling). You can opt out at any time.
                       </Label>
                     </div>
                   </div>
                 </div>
                 )}
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                {/* Mandatory Terms & Privacy acceptance — required for all account types */}
+                <div className="flex items-start space-x-2 pt-2 border-t">
+                  <Checkbox
+                    id="termsAccepted"
+                    checked={formData.termsAccepted}
+                    onCheckedChange={(checked) => handleInputChange("termsAccepted", !!checked)}
+                    className="mt-0.5"
+                    aria-required="true"
+                  />
+                  <Label htmlFor="termsAccepted" className="text-sm font-normal leading-snug">
+                    <span className="text-red-500">*</span> I am at least 13 years old and I agree to the{" "}
+                    <Link to="/terms" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
+                      Terms of Service
+                    </Link>
+                    {", "}
+                    <Link to="/privacy-policy" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
+                      Privacy Policy
+                    </Link>
+                    {", and "}
+                    <Link to="/acceptable-use" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
+                      Acceptable Use Policy
+                    </Link>
+                    .
+                  </Label>
+                </div>
+
+                <Button type="submit" className="w-full" disabled={isLoading || !formData.termsAccepted}>
                   {isLoading ? "Creating account..." : "Create Account"}
                 </Button>
               </form>

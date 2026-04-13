@@ -159,6 +159,12 @@ const SubmitEvent = lazyWithRetry(() => import("./pages/SubmitEvent"));
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Terms from "./pages/Terms";
 import AccessibilityStatement from "./pages/AccessibilityStatement";
+import CookiePolicy from "./pages/CookiePolicy";
+import DMCAPolicy from "./pages/DMCAPolicy";
+import AcceptableUsePolicy from "./pages/AcceptableUsePolicy";
+
+// Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
+import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
@@ -384,6 +390,9 @@ const App = () => (
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/terms" element={<Terms />} />
             <Route path="/accessibility" element={<AccessibilityStatement />} />
+            <Route path="/cookie-policy" element={<CookiePolicy />} />
+            <Route path="/dmca" element={<DMCAPolicy />} />
+            <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
             {/* Community voting */}
@@ -423,6 +432,7 @@ const App = () => (
           </Suspense>
           </main>
           </RouteErrorBoundary>
+          <CookieConsentBanner />
           <BottomNav />
         </KeyboardShortcutsProvider>
       </ErrorBoundary>
