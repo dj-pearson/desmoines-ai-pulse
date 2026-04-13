@@ -37,11 +37,15 @@ object CertificatePinningService {
      * - DigiCert Global Root G2 SPKI (common Supabase CA)
      */
     private val pinnedSPKIHashes = listOf(
-        // Let's Encrypt R3 intermediate
+        // Google Trust Services WE1 intermediate (current Supabase issuer)
+        "sha256/kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
+        // GTS Root R4 (current Supabase root)
+        "sha256/mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
+        // Let's Encrypt R3 intermediate (fallback)
         "sha256/jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=",
-        // ISRG Root X1
+        // ISRG Root X1 (fallback)
         "sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=",
-        // DigiCert Global Root G2 (common Supabase CA)
+        // DigiCert Global Root G2 (fallback)
         "sha256/i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=",
     )
 

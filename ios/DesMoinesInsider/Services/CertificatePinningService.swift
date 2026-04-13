@@ -27,11 +27,15 @@ final class CertificatePinningService: NSObject, URLSessionDelegate {
     /// - Let's Encrypt R3 intermediate SPKI (backup)
     /// - ISRG Root X1 SPKI (backup)
     private let pinnedSPKIHashes: Set<String> = [
-        // Let's Encrypt R3 intermediate
+        // Google Trust Services WE1 intermediate (current Supabase issuer)
+        "kIdp6NNEd8wsugYyyIYFsi1ylMCED3hZbSR8ZFsa/A4=",
+        // GTS Root R4 (current Supabase root)
+        "mEflZT5enoR1FuXLgYYGqnVEoZvmf9c2bVBpiOjYQ0c=",
+        // Let's Encrypt R3 intermediate (fallback)
         "jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=",
-        // ISRG Root X1
+        // ISRG Root X1 (fallback)
         "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=",
-        // DigiCert Global Root G2 (common Supabase CA)
+        // DigiCert Global Root G2 (fallback)
         "i7WTqTvh0OioIruIfFR4kMPnBqrS2rdiVPl/s2uC/CY=",
     ]
 
