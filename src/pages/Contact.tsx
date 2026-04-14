@@ -139,7 +139,7 @@ export default function Contact() {
                     <div className="flex items-start gap-3">
                       <Mail className="w-5 h-5 text-primary mt-0.5" />
                       <div>
-                        <p className="font-medium">Email</p>
+                        <p className="font-medium">General inquiries</p>
                         <a
                           href="mailto:hello@desmoinesinsider.com"
                           className="text-muted-foreground hover:text-primary transition-colors"
@@ -151,16 +151,89 @@ export default function Contact() {
                     <div className="flex items-start gap-3">
                       <MapPin className="w-5 h-5 text-primary mt-0.5" />
                       <div>
-                        <p className="font-medium">Location</p>
-                        <p className="text-muted-foreground">Des Moines, Iowa</p>
+                        <p className="font-medium">Mailing address</p>
+                        <address className="not-italic text-muted-foreground">
+                          Des Moines Insider<br />
+                          Des Moines, Iowa, USA
+                        </address>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
                       <Clock className="w-5 h-5 text-primary mt-0.5" />
                       <div>
-                        <p className="font-medium">Response Time</p>
+                        <p className="font-medium">Response time</p>
                         <p className="text-muted-foreground">Within 24-48 hours</p>
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Dedicated legal + compliance contact channels. Separating
+                    these makes it easier for regulators, counsel, and rights
+                    holders to reach us and supports CAN-SPAM, DMCA, and
+                    CCPA/GDPR response-time requirements. */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Legal &amp; compliance</CardTitle>
+                    <CardDescription>
+                      Use the address that matches your concern so we can route
+                      it to the right person.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div>
+                      <p className="font-medium text-foreground">Privacy requests (CCPA / GDPR)</p>
+                      <a
+                        href="mailto:privacy@desmoinesinsider.com"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        privacy@desmoinesinsider.com
+                      </a>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">DMCA / copyright</p>
+                      <a
+                        href="mailto:dmca@desmoinesinsider.com"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        dmca@desmoinesinsider.com
+                      </a>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Abuse / acceptable-use reports</p>
+                      <a
+                        href="mailto:abuse@desmoinesinsider.com"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        abuse@desmoinesinsider.com
+                      </a>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Security disclosures</p>
+                      <a
+                        href="mailto:security@desmoinesinsider.com"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        security@desmoinesinsider.com
+                      </a>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Billing &amp; refunds</p>
+                      <a
+                        href="mailto:billing@desmoinesinsider.com"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        billing@desmoinesinsider.com
+                      </a>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">Unsubscribe</p>
+                      <a
+                        href="mailto:unsubscribe@desmoinesinsider.com"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        unsubscribe@desmoinesinsider.com
+                      </a>
                     </div>
                   </CardContent>
                 </Card>

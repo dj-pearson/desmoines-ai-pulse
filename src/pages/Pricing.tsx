@@ -142,20 +142,28 @@ const testimonials = [
 
 const faqs = [
   {
+    question: "Do subscriptions auto-renew?",
+    answer: "Yes. Insider and VIP subscriptions renew automatically at the end of each billing period (monthly plans every month, yearly plans every year) at the same price, until you cancel. We'll email you a receipt for every successful renewal. You can cancel any time from your account's subscription page — cancellation is online and takes about 30 seconds (no phone call, no retention gate). You keep access until the end of the period you already paid for.",
+  },
+  {
     question: "Can I cancel anytime?",
-    answer: "Yes! You can cancel your subscription at any time. You'll continue to have access until the end of your billing period.",
+    answer: "Yes. Open Account › Subscription in the web app and click Cancel — that single click stops all future charges. You'll continue to have access until the end of your current billing period. (iOS subscribers: because Apple manages iOS in-app billing, please cancel from Settings › Apple ID › Subscriptions.)",
   },
   {
     question: "Is there a free trial?",
-    answer: "New Insider and VIP members get a 7-day free trial. Cancel anytime during the trial and you won't be charged.",
+    answer: "New Insider and VIP members get a 7-day free trial. If you don't cancel before the trial ends, your card will be charged the plan price shown at checkout and will auto-renew at the same price each period. Cancel any time during the trial from Account › Subscription and you won't be charged.",
   },
   {
     question: "What payment methods do you accept?",
-    answer: "We accept all major credit cards, debit cards, and Apple Pay through our secure Stripe payment system.",
+    answer: "We accept all major credit cards, debit cards, and Apple Pay through our secure Stripe payment system. Card numbers are never stored on our servers — Stripe handles PCI-compliant tokenization.",
   },
   {
     question: "Can I switch plans?",
-    answer: "Absolutely! You can upgrade or downgrade your plan at any time. Changes take effect on your next billing cycle.",
+    answer: "Absolutely! You can upgrade or downgrade your plan at any time. Upgrades take effect immediately (prorated); downgrades take effect at the next renewal date. You can always see your next charge in Account › Subscription.",
+  },
+  {
+    question: "What about refunds?",
+    answer: "We don't issue prorated refunds for partial months or years — instead, when you cancel you keep access through the end of the period you already paid for. If you think you were charged in error, email billing@desmoinesinsider.com within 30 days and we'll take a look.",
   },
 ];
 
@@ -334,6 +342,39 @@ export default function Pricing() {
           {/* Pricing Cards */}
           <section className="py-12 -mt-8">
             <div className="container mx-auto px-4">
+              {/* Pre-purchase auto-renewal disclosure — FTC "click-to-cancel"
+                  §465.3 / ROSCA / California ARL require clear and conspicuous
+                  disclosure of renewal terms BEFORE the subscription CTA. */}
+              <div
+                role="note"
+                aria-label="Subscription renewal disclosure"
+                className="max-w-3xl mx-auto mb-6 rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900 p-4 text-sm"
+              >
+                <p className="font-semibold text-foreground mb-1">
+                  Before you subscribe
+                </p>
+                <ul className="list-disc ml-5 space-y-1 text-muted-foreground">
+                  <li>
+                    Paid plans <strong>auto-renew</strong> at the end of each
+                    billing period ({isYearly ? "every 12 months" : "every month"}) at
+                    the same price shown above, until you cancel.
+                  </li>
+                  <li>
+                    The 7-day free trial converts to a paid subscription at the
+                    displayed price if you don&apos;t cancel before it ends.
+                  </li>
+                  <li>
+                    You can cancel online any time from{" "}
+                    <strong>Account › Subscription</strong> — one click, no phone
+                    call required.
+                  </li>
+                  <li>
+                    iOS in-app purchases are billed by Apple; cancel from
+                    Settings › Apple ID › Subscriptions.
+                  </li>
+                </ul>
+              </div>
+
               <div className="grid md:grid-cols-3 gap-6 max-w-6xl mx-auto">
                 {plans.map((plan) => (
                   <Card
@@ -386,6 +427,12 @@ export default function Pricing() {
                         {isYearly && getSavings(plan) && (
                           <p className="text-sm text-green-600 mt-1">
                             Save ${getSavings(plan)} per year
+                          </p>
+                        )}
+                        {plan.priceMonthly > 0 && (
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Auto-renews at ${isYearly ? plan.priceYearly.toFixed(2) : plan.priceMonthly.toFixed(2)}/
+                            {isYearly ? "yr" : "mo"}. Cancel anytime.
                           </p>
                         )}
                       </div>

@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useArticles } from '@/hooks/useArticles';
 import { Article } from '@/hooks/useArticles';
 import { Badge } from '@/components/ui/badge';
+import { AIDisclosureBadge, AIDisclosureNotice } from '@/components/AIDisclosureBadge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -224,6 +225,15 @@ const ArticleDetails: React.FC = () => {
                   <Badge variant="secondary" className="text-sm">
                     {article.category}
                   </Badge>
+                  {/* AI transparency disclosure — show whenever the article was
+                      produced from an AI suggestion pipeline (EU AI Act Art. 50,
+                      CA AB 2013, Colorado AI Act). */}
+                  {article.generated_from_suggestion_id && (
+                    <AIDisclosureBadge
+                      label="AI-assisted"
+                      tooltip="This article was drafted with AI assistance and edited by our team before publishing. Details and quotes may still contain errors — please verify anything important."
+                    />
+                  )}
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
@@ -250,6 +260,22 @@ const ArticleDetails: React.FC = () => {
                   <p className="text-xl text-muted-foreground mb-8 leading-relaxed">
                     {article.excerpt}
                   </p>
+                )}
+
+                {article.generated_from_suggestion_id && (
+                  <AIDisclosureNotice
+                    className="mb-8"
+                    title="About this article"
+                  >
+                    <p className="text-muted-foreground leading-snug">
+                      This article was drafted with the help of an AI model
+                      trained on public data and reviewed by a human editor
+                      before publishing. Treat factual claims as a starting
+                      point, not a final source — if you&apos;re making a
+                      decision (reservations, travel, purchases) please verify
+                      with the venue or original source first.
+                    </p>
+                  </AIDisclosureNotice>
                 )}
 
                 {/* Action Buttons */}

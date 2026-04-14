@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { storage } from "@/lib/safeStorage";
+import { logCookieConsent } from "@/lib/consentLog";
 import { Cookie, X } from "lucide-react";
 
 const STORAGE_KEY = "cookie-consent";
@@ -76,6 +77,12 @@ function saveConsent(consent: CookieConsent) {
       })
     );
   }
+  // Append to the consent audit log for GDPR Art. 7 / CCPA record-keeping.
+  // Fire-and-forget so a logging failure can't block the user's choice.
+  void logCookieConsent(
+    { analytics: consent.analytics, advertising: consent.advertising },
+    { gpc: !!consent.gpc, version: consent.version }
+  );
 }
 
 export function CookieConsentBanner() {

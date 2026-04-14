@@ -16,6 +16,7 @@ import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SecurityUtils } from "@/lib/securityUtils";
+import { logConsent } from "@/lib/consentLog";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -428,6 +429,14 @@ export default function Auth() {
           last_name: formData.lastName,
           phone: formData.phone,
           location: formData.location,
+          // Business contacts get the same communication-preferences block so we
+          // have matching consent records (required by CAN-SPAM and TCPA for any
+          // marketing communications to business contacts at numbers they provide).
+          communication_preferences: {
+            email_notifications: formData.emailNotifications,
+            sms_notifications: formData.smsNotifications,
+            event_recommendations: formData.eventRecommendations,
+          },
           consent: consentRecord,
         };
 
@@ -439,17 +448,56 @@ export default function Auth() {
         description: result.error || "Failed to create account",
         variant: "destructive",
       });
-    } else if (result.needsVerification) {
-      // Show email confirmation screen
-      setSignupEmail(formData.email);
-      setShowEmailConfirmation(true);
     } else {
-      // Signup successful and no verification needed (rare case)
-      toast({
-        title: "Account Created!",
-        description: "Welcome to Des Moines Insider!",
+      // Persist the consent record to the append-only audit log so we can
+      // prove affirmative opt-in under CAN-SPAM, TCPA, GDPR Art. 7, CCPA.
+      // Fire and forget — never block signup on logging.
+      void logConsent({
+        type: "terms",
+        granted: true,
+        source: "signup",
+        policyVersion: consentRecord.terms_version,
+        email: formData.email,
+        metadata: { privacy_version: consentRecord.privacy_version },
       });
-      navigate("/", { replace: true });
+      if (formData.emailNotifications) {
+        void logConsent({
+          type: "marketing_email",
+          granted: true,
+          source: "signup",
+          email: formData.email,
+        });
+      }
+      if (formData.smsNotifications) {
+        void logConsent({
+          type: "marketing_sms",
+          granted: true,
+          source: "signup",
+          email: formData.email,
+          metadata: { phone_provided: !!formData.phone },
+        });
+      }
+      if (formData.eventRecommendations) {
+        void logConsent({
+          type: "personalization_ai",
+          granted: true,
+          source: "signup",
+          email: formData.email,
+        });
+      }
+
+      if (result.needsVerification) {
+        // Show email confirmation screen
+        setSignupEmail(formData.email);
+        setShowEmailConfirmation(true);
+      } else {
+        // Signup successful and no verification needed (rare case)
+        toast({
+          title: "Account Created!",
+          description: "Welcome to Des Moines Insider!",
+        });
+        navigate("/", { replace: true });
+      }
     }
 
     setIsLoading(false);
@@ -920,9 +968,10 @@ export default function Auth() {
                   </div>
                 )}
 
-                {/* Communication Preferences (Personal accounts only) — explicit opt-in, not pre-checked */}
-                {accountType === "personal" && (
-                  <div className="space-y-3">
+                {/* Communication Preferences — explicit opt-in, not pre-checked.
+                    Shown for both personal and business accounts so we capture
+                    the same marketing / TCPA consent record for every user. */}
+                <div className="space-y-3">
                     <Label>Optional Communication Preferences</Label>
                     <p className="text-xs text-muted-foreground">
                       These are off by default. Check only what you want — you can change these any time in your profile settings, and transactional emails (receipts, account alerts) are always sent regardless.
@@ -963,7 +1012,6 @@ export default function Auth() {
                     </div>
                   </div>
                 </div>
-                )}
 
                 {/* Mandatory Terms & Privacy acceptance — required for all account types */}
                 <div className="flex items-start space-x-2 pt-2 border-t">

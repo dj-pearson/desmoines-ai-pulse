@@ -169,6 +169,9 @@ import { CookieConsentBanner } from "@/components/CookieConsentBanner";
 // Contact page
 const Contact = lazyWithRetry(() => import("./pages/Contact"));
 
+// Public CAN-SPAM one-click unsubscribe
+const Unsubscribe = lazyWithRetry(() => import("./pages/Unsubscribe"));
+
 // Admin sub-pages
 const AdminContent = lazyWithRetry(() => import("./pages/AdminContent"));
 const AdminMenus = lazyWithRetry(() => import("./pages/AdminMenus"));
@@ -393,6 +396,8 @@ const App = () => (
             <Route path="/cookie-policy" element={<CookiePolicy />} />
             <Route path="/dmca" element={<DMCAPolicy />} />
             <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+            {/* One-click newsletter unsubscribe (CAN-SPAM §5(a)(5)) */}
+            <Route path="/unsubscribe" element={<Unsubscribe />} />
             {/* Contact page */}
             <Route path="/contact" element={<Contact />} />
             {/* Community voting */}

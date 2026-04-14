@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { OptimizedLogo } from "@/components/OptimizedLogo";
+import { logConsent } from "@/lib/consentLog";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -37,9 +38,18 @@ export default function Footer() {
         throw error;
       }
 
+      // Record affirmative marketing-email consent for CAN-SPAM / GDPR proof.
+      void logConsent({
+        type: "newsletter",
+        granted: true,
+        source: "newsletter_form",
+        email: email.toLowerCase().trim(),
+        metadata: { location: "footer" },
+      });
+
       toast({
         title: "Subscribed!",
-        description: "Welcome to the Des Moines Insider community.",
+        description: "Welcome to the Des Moines Insider community. You can unsubscribe any time via the link in every email.",
       });
       setEmail("");
     } catch (error) {
@@ -122,10 +132,18 @@ export default function Footer() {
                 </Button>
               </form>
 
-              {/* Social Proof */}
-              <p className="text-neutral-500 text-xs mb-4 flex items-center gap-1">
+              {/* Social Proof + CAN-SPAM disclosure. Submitting the form is an
+                  affirmative opt-in; we log it to consent_records. */}
+              <p className="text-neutral-500 text-xs mb-1 flex items-center gap-1">
                 <Users className="h-3 w-3" aria-hidden="true" />
                 Join 15,000+ Des Moines locals. Free forever, unsubscribe anytime.
+              </p>
+              <p className="text-neutral-500 text-[11px] mb-4 leading-snug">
+                By subscribing you agree to receive marketing emails from Des Moines Insider and acknowledge our{" "}
+                <Link to="/privacy-policy" className="underline hover:text-neutral-300">
+                  Privacy Policy
+                </Link>
+                . Every email includes a one-click unsubscribe link.
               </p>
 
               {/* Social Links */}
