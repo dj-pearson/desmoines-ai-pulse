@@ -128,13 +128,39 @@ export function useLoginActivity() {
     loginType: LoginActivity['login_type'],
     options: { mfaVerified?: boolean; sessionId?: string } = {}
   ) => {
-    return logActivityMutation.mutateAsync({
+    const activity = await logActivityMutation.mutateAsync({
       email,
       loginType,
       success: true,
       mfaVerified: options.mfaVerified,
       sessionId: options.sessionId,
     });
+
+    // If the server flagged this login as coming from a previously unseen
+    // device or IP, send a transactional security alert to the user.
+    // Fire-and-forget — don't block the login on email delivery.
+    const risk = (activity?.risk_factors ?? []) as string[];
+    const isNewDevice = risk.includes('new_device') || risk.includes('new_ip');
+    if (isNewDevice) {
+      void supabase.functions
+        .invoke('send-security-notification', {
+          body: {
+            event_type: 'new_device_login',
+            context: {
+              login_type: loginType,
+              user_agent:
+                typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+              city: activity?.city ?? undefined,
+              region: activity?.region ?? undefined,
+              country: activity?.country ?? undefined,
+              ip: activity?.ip_address ?? undefined,
+            },
+          },
+        })
+        .catch((err) => console.warn('security alert failed', err));
+    }
+
+    return activity;
   };
 
   // Log failed login

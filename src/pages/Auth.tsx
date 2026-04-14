@@ -74,6 +74,9 @@ export default function Auth() {
     lastName: "",
     phone: "",
     location: "",
+    // ISO yyyy-mm-dd string. Empty = not yet provided. Used for COPPA age
+    // gate only — we do not store the raw DOB, just a minimum-age attestation.
+    dateOfBirth: "",
     interests: [] as string[],
     emailNotifications: false,
     smsNotifications: false,
@@ -347,6 +350,47 @@ export default function Auth() {
       return;
     }
 
+    // COPPA age gate — block accounts for children under 13.
+    // COPPA (15 U.S.C. §§ 6501–6506) prohibits operators from knowingly
+    // collecting personal information from children under 13 without verifiable
+    // parental consent; we don't collect that consent, so the rule is "no one
+    // under 13". We require a DOB, compute age at submission time, and reject
+    // if under 13. The DOB itself is NOT persisted — we only store the
+    // computed minimum-age attestation in the consent record.
+    if (!formData.dateOfBirth) {
+      toast({
+        title: "Date of birth required",
+        description: "Please enter your date of birth so we can make sure our service is appropriate for you.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const dobTime = Date.parse(formData.dateOfBirth);
+    if (Number.isNaN(dobTime)) {
+      toast({
+        title: "Invalid date of birth",
+        description: "Please enter a valid date.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const dobDate = new Date(dobTime);
+    const today = new Date();
+    let age = today.getFullYear() - dobDate.getFullYear();
+    const m = today.getMonth() - dobDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+      age--;
+    }
+    if (age < 13) {
+      toast({
+        title: "Sorry — you're not old enough to sign up",
+        description:
+          "Des Moines Insider requires users to be at least 13 years old. If you're a parent creating an account for a child, please contact privacy@desmoinesinsider.com.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Terms & Privacy acceptance is mandatory (contract formation + privacy law compliance)
     if (!formData.termsAccepted) {
       toast({
@@ -397,6 +441,9 @@ export default function Auth() {
       terms_accepted_at: new Date().toISOString(),
       terms_version: "2026-03-10",
       privacy_version: "2025-11-25",
+      // Minimum-age attestation derived from DOB. We store only the boolean
+      // ("yes, at least 13") — the raw DOB is discarded after validation.
+      at_least_13: true,
       // Marketing consent captured separately and only if explicitly checked
       email_marketing_consent: !!formData.emailNotifications,
       sms_marketing_consent: !!formData.smsNotifications,
@@ -914,6 +961,28 @@ export default function Auth() {
                   />
                 </div>
 
+                {/* Date of birth — used only for COPPA age verification.
+                    We do NOT persist the raw DOB; only a minimum-age flag is
+                    saved, per our data-minimization policy. */}
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth">
+                    Date of birth <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+                    required
+                    max={new Date().toISOString().slice(0, 10)}
+                    autoComplete="bday"
+                    aria-describedby="dob-description"
+                  />
+                  <p id="dob-description" className="text-xs text-muted-foreground">
+                    We use this only to confirm you are at least 13 (COPPA). We do not save your date of birth — only whether you meet our age requirement.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="location">
                     Location <span className="text-red-500">*</span>
@@ -1023,7 +1092,7 @@ export default function Auth() {
                     aria-required="true"
                   />
                   <Label htmlFor="termsAccepted" className="text-sm font-normal leading-snug">
-                    <span className="text-red-500">*</span> I am at least 13 years old and I agree to the{" "}
+                    <span className="text-red-500">*</span> I agree to the{" "}
                     <Link to="/terms" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
                       Terms of Service
                     </Link>

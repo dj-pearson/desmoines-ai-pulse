@@ -227,6 +227,15 @@ export default function Contact() {
                       </a>
                     </div>
                     <div>
+                      <p className="font-medium text-foreground">DPA / B2B legal</p>
+                      <a
+                        href="mailto:legal@desmoinesinsider.com"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        legal@desmoinesinsider.com
+                      </a>
+                    </div>
+                    <div>
                       <p className="font-medium text-foreground">Unsubscribe</p>
                       <a
                         href="mailto:unsubscribe@desmoinesinsider.com"

@@ -162,6 +162,7 @@ import AccessibilityStatement from "./pages/AccessibilityStatement";
 import CookiePolicy from "./pages/CookiePolicy";
 import DMCAPolicy from "./pages/DMCAPolicy";
 import AcceptableUsePolicy from "./pages/AcceptableUsePolicy";
+import DataProcessingAgreement from "./pages/DataProcessingAgreement";
 
 // Cookie consent (GDPR/CCPA opt-in banner) — lightweight, mount globally
 import { CookieConsentBanner } from "@/components/CookieConsentBanner";
@@ -396,6 +397,7 @@ const App = () => (
             <Route path="/cookie-policy" element={<CookiePolicy />} />
             <Route path="/dmca" element={<DMCAPolicy />} />
             <Route path="/acceptable-use" element={<AcceptableUsePolicy />} />
+            <Route path="/dpa" element={<DataProcessingAgreement />} />
             {/* One-click newsletter unsubscribe (CAN-SPAM §5(a)(5)) */}
             <Route path="/unsubscribe" element={<Unsubscribe />} />
             {/* Contact page */}
