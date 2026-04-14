@@ -23,6 +23,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { handleCors, getCorsHeaders, isOriginAllowed } from "../_shared/cors.ts";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
 import { checkRateLimit } from "../_shared/rateLimit.ts";
+import { renderEmail } from "../_shared/emailLayout.ts";
 
 serve(async (req) => {
   const corsResponse = handleCors(req);
@@ -155,15 +156,32 @@ serve(async (req) => {
       const siteUrl = Deno.env.get("VITE_SITE_URL") || "https://desmoinesinsider.com";
 
       const emailSubject = title || `Campaign Update: ${campaignName}`;
-      const emailHtml = buildEmailHtml({
+      const bodyHtml = buildEmailBodyHtml({
         title: emailSubject,
         message: message || "",
         campaignName,
         campaignId,
         notificationType,
         siteUrl,
-        metadata,
       });
+      const bodyText = buildEmailBodyText({
+        title: emailSubject,
+        message: message || "",
+        campaignName,
+      });
+
+      // Campaign notifications are transactional — they are responses to the
+      // recipient's own advertising-campaign activity. The transactional footer
+      // includes the postal address but no unsubscribe link (CAN-SPAM §5(a) does
+      // not require one for true transactional messages).
+      const rendered = renderEmail({
+        bodyHtml,
+        bodyText,
+        category: "transactional",
+        recipient: { email: emailAddress },
+      });
+      const emailHtml = rendered.html;
+      const emailText = rendered.text;
 
       if (resendApiKey) {
         try {
@@ -178,6 +196,7 @@ serve(async (req) => {
               to: [emailAddress],
               subject: emailSubject,
               html: emailHtml,
+              text: emailText,
             }),
           });
           emailSent = res.ok;
@@ -196,7 +215,10 @@ serve(async (req) => {
               personalizations: [{ to: [{ email: emailAddress }] }],
               from: { email: fromEmail },
               subject: emailSubject,
-              content: [{ type: "text/html", value: emailHtml }],
+              content: [
+                { type: "text/plain", value: emailText },
+                { type: "text/html", value: emailHtml },
+              ],
             }),
           });
           emailSent = res.ok || res.status === 202;
@@ -229,14 +251,13 @@ serve(async (req) => {
   }
 });
 
-function buildEmailHtml(params: {
+function buildEmailBodyHtml(params: {
   title: string;
   message: string;
   campaignName: string;
   campaignId: string;
   notificationType: string;
   siteUrl: string;
-  metadata?: Record<string, unknown>;
 }): string {
   const { title, message, campaignName, campaignId, siteUrl, notificationType } = params;
 
@@ -244,55 +265,32 @@ function buildEmailHtml(params: {
   const ctaLabel = getCampaignCtaLabel(notificationType);
 
   return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    </head>
-    <body style="margin:0;padding:0;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-      <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:32px 16px;">
-        <tr>
-          <td align="center">
-            <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-              <!-- Header -->
-              <tr>
-                <td style="background-color:#1a1a2e;padding:24px 32px;">
-                  <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:600;">Des Moines AI Pulse</h1>
-                  <p style="margin:4px 0 0;color:#a0a0b0;font-size:13px;">Advertising Platform</p>
-                </td>
-              </tr>
-              <!-- Content -->
-              <tr>
-                <td style="padding:32px;">
-                  <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${escapeHtml(title)}</h2>
-                  <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${escapeHtml(message)}</p>
-                  ${ctaUrl ? `
-                  <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
-                    ${escapeHtml(ctaLabel)}
-                  </a>
-                  ` : ''}
-                  <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7;">
-                  <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${escapeHtml(campaignName)}</strong></p>
-                </td>
-              </tr>
-              <!-- Footer -->
-              <tr>
-                <td style="background-color:#fafafa;padding:20px 32px;border-top:1px solid #e4e4e7;">
-                  <p style="margin:0;color:#a1a1aa;font-size:12px;text-align:center;">
-                    &copy; ${new Date().getFullYear()} Des Moines AI Pulse &bull;
-                    <a href="${siteUrl}/campaigns" style="color:#6366f1;text-decoration:none;">My Campaigns</a> &bull;
-                    <a href="mailto:support@desmoinesinsider.com" style="color:#6366f1;text-decoration:none;">Support</a>
-                  </p>
-                </td>
-              </tr>
-            </table>
-          </td>
-        </tr>
-      </table>
-    </body>
-    </html>
+    <div style="background-color:#1a1a2e;padding:24px 32px;border-radius:8px 8px 0 0;">
+      <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:600;">Des Moines AI Pulse</h1>
+      <p style="margin:4px 0 0;color:#a0a0b0;font-size:13px;">Advertising Platform</p>
+    </div>
+    <div style="padding:32px;background-color:#ffffff;border:1px solid #e4e4e7;border-top:none;border-radius:0 0 8px 8px;">
+      <h2 style="margin:0 0 16px;color:#1a1a2e;font-size:20px;font-weight:600;">${escapeHtml(title)}</h2>
+      <p style="margin:0 0 24px;color:#4a4a5a;font-size:15px;line-height:1.6;">${escapeHtml(message)}</p>
+      ${ctaUrl ? `
+      <a href="${escapeHtml(ctaUrl)}" style="display:inline-block;background-color:#6366f1;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:500;font-size:14px;">
+        ${escapeHtml(ctaLabel)}
+      </a>
+      ` : ''}
+      <hr style="margin:32px 0;border:none;border-top:1px solid #e4e4e7;">
+      <p style="margin:0;color:#71717a;font-size:13px;">Campaign: <strong>${escapeHtml(campaignName)}</strong> &bull;
+        <a href="${siteUrl}/campaigns" style="color:#6366f1;text-decoration:none;">Manage campaigns</a>
+      </p>
+    </div>
   `;
+}
+
+function buildEmailBodyText(params: {
+  title: string;
+  message: string;
+  campaignName: string;
+}): string {
+  return `${params.title}\n\n${params.message}\n\nCampaign: ${params.campaignName}`;
 }
 
 function getCampaignCtaUrl(type: string, campaignId: string, siteUrl: string): string {

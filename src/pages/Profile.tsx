@@ -12,6 +12,7 @@ import { PreferencesSettings } from "@/components/PreferencesSettings";
 import { FavoritesView } from "@/components/FavoritesView";
 import { MFAManagement } from "@/components/auth/MFAManagement";
 import { SessionManagementDashboard } from "@/components/auth/SessionManagementDashboard";
+import { PrivacyControls } from "@/components/PrivacyControls";
 import { User, Mail, Phone, MapPin, Settings, Save, Edit, Users, Heart, Calendar, Trophy } from "lucide-react";
 import { useSocialFeatures } from "@/hooks/useSocialFeatures";
 import { useUserSubmittedEvents } from "@/hooks/useUserSubmittedEvents";
@@ -473,6 +474,7 @@ export default function Profile() {
             <MFAManagement />
             <SessionManagementDashboard />
             <PreferencesSettings />
+            <PrivacyControls />
           </TabsContent>
         </Tabs>
       </div>
