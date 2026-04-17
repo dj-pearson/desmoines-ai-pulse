@@ -35,7 +35,10 @@ import com.desmoines.aipulse.ui.components.CategoryBadge
 import com.desmoines.aipulse.ui.components.icon
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import com.desmoines.aipulse.ui.theme.glassSurface
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -63,7 +66,11 @@ fun FeaturedEventCard(
             modifier = Modifier
                 .width(Dimens.FeaturedCardWidth)
                 .height(150.dp)
-                .clip(RoundedCornerShape(Dimens.CardCornerRadius))
+                .glassSurface(
+                    shape = RoundedCornerShape(Dimens.CardCornerRadius),
+                    intensity = GlassIntensity.Card,
+                    elevation = PremiumTokens.Elevation4,
+                )
         ) {
             if (event.imageUrl != null) {
                 CachedAsyncImage(

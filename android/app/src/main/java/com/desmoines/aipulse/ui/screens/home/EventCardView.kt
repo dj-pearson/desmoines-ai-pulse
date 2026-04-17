@@ -48,7 +48,10 @@ import com.desmoines.aipulse.ui.components.icon
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import com.desmoines.aipulse.ui.theme.glassSurface
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -83,10 +86,15 @@ fun EventCardView(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .glassSurface(
+                shape = RoundedCornerShape(18.dp),
+                intensity = GlassIntensity.Card,
+                elevation = PremiumTokens.Elevation4,
+            )
             .semantics { contentDescription = accessibilityLabel },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
             // Image section
@@ -145,8 +153,11 @@ fun EventCardView(
                             onClick = { onFavoriteClick(event.id) },
                             modifier = Modifier
                                 .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.3f))
+                                .glassSurface(
+                                    shape = CircleShape,
+                                    intensity = GlassIntensity.Chip,
+                                    elevation = PremiumTokens.Elevation2,
+                                )
                         ) {
                             Icon(
                                 imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
@@ -348,8 +359,11 @@ fun DateBadge(
     Column(
         modifier = modifier
             .width(48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+            .glassSurface(
+                shape = RoundedCornerShape(10.dp),
+                intensity = GlassIntensity.Bar,
+                elevation = PremiumTokens.Elevation2,
+            )
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

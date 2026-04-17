@@ -14,11 +14,25 @@ struct EmptyStateView: View {
     @State private var visible = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            Image(systemName: icon)
-                .font(.system(size: 72, weight: .regular))
-                .foregroundStyle(Color.accentColor)
-                .accessibilityHidden(true)
+        VStack(spacing: 18) {
+            ZStack {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.12))
+                    .frame(width: 112, height: 112)
+                    .blur(radius: 14)
+                Image(systemName: icon)
+                    .font(.system(size: 64, weight: .regular))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [Color.accentColor, Color.accentColor.opacity(0.6)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .symbolRenderingMode(.hierarchical)
+            }
+            .accessibilityHidden(true)
+            .scaleEffect(visible ? 1 : 0.85)
 
             Text(title)
                 .font(.title3.bold())
@@ -35,10 +49,11 @@ struct EmptyStateView: View {
                     action()
                 }
                 .font(.subheadline.weight(.semibold))
-                .padding(.horizontal, 24)
-                .padding(.vertical, 10)
-                .background(Color.accentColor.opacity(0.12), in: Capsule())
+                .padding(.horizontal, 26)
+                .padding(.vertical, 12)
                 .foregroundStyle(Color.accentColor)
+                .glassChip()
+                .pressable()
                 .padding(.top, 8)
             }
 
@@ -50,10 +65,14 @@ struct EmptyStateView: View {
                 .foregroundStyle(.secondary)
             }
         }
-        .padding()
+        .padding(.vertical, 32)
+        .padding(.horizontal, 24)
+        .frame(maxWidth: .infinity)
+        .glassCard(cornerRadius: PremiumTokens.cornerXl, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
+        .padding(.horizontal, 24)
         .opacity(visible ? 1 : 0)
-        .offset(y: visible ? 0 : 12)
-        .animation(.easeOut(duration: PremiumTokens.motionBase), value: visible)
+        .offset(y: visible ? 0 : 16)
+        .animation(PremiumTokens.springSmooth, value: visible)
         .onAppear { visible = true }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(title). \(message)")

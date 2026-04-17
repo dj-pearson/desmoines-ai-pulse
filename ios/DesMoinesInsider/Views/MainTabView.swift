@@ -53,6 +53,32 @@ struct MainTabView: View {
             OfflineBanner()
         }
         .tint(Color.accentColor)
+        .onAppear {
+            Self.configureTranslucentAppearance()
+        }
+    }
+
+    /// Applies a glass-style translucent appearance to the system tab and nav
+    /// bars. iOS already renders bars with a `UIBlurEffect` behind the scenes;
+    /// we swap to a `.systemUltraThinMaterial` variant and soften the hairline
+    /// separator so the bars feel continuous with the content above them.
+    private static func configureTranslucentAppearance() {
+        let tabAppearance = UITabBarAppearance()
+        tabAppearance.configureWithDefaultBackground()
+        tabAppearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+        tabAppearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.55)
+        tabAppearance.shadowColor = UIColor.separator.withAlphaComponent(0.25)
+        UITabBar.appearance().standardAppearance = tabAppearance
+        UITabBar.appearance().scrollEdgeAppearance = tabAppearance
+
+        let navAppearance = UINavigationBarAppearance()
+        navAppearance.configureWithTransparentBackground()
+        navAppearance.backgroundEffect = UIBlurEffect(style: .systemUltraThinMaterial)
+        navAppearance.backgroundColor = UIColor.systemBackground.withAlphaComponent(0.5)
+        navAppearance.shadowColor = .clear
+        UINavigationBar.appearance().standardAppearance = navAppearance
+        UINavigationBar.appearance().compactAppearance = navAppearance
+        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
     }
 
     // MARK: - iPhone Layout (TabView)

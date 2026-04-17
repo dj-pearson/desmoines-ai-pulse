@@ -84,4 +84,41 @@ object PremiumTokens {
     // Shadow color for light mode layered shadows
     val ShadowKey = Color(0x26000000)     // ~15% black
     val ShadowAmbient = Color(0x0F000000) // ~6% black
+
+    // Glassmorphism — keep in sync with iOS View+Glass.swift
+    // Background tints painted on top of the Material blur.
+    val GlassTintLight = Color(0x59FFFFFF)  // ~35% white
+    val GlassTintDark = Color(0x47000000)   // ~28% black
+    val GlassBorderLight = Color(0x73FFFFFF) // ~45% white
+    val GlassBorderDark = Color(0x1AFFFFFF)  // ~10% white
+    val GlassHighlightLight = Color(0x8CFFFFFF)
+    val GlassHighlightDark = Color(0x14FFFFFF)
+
+    // Layered accent gradients
+    val HeroWarmGradient: Brush = Brush.linearGradient(
+        colors = listOf(Color(0xFFFF7E5F), Color(0xFFFEB47A))
+    )
+    val HeroCoolGradient: Brush = Brush.linearGradient(
+        colors = listOf(Color(0xFF1E1B4B), Color(0xFF3B2F82), Color(0xFF2563EB))
+    )
+    val ImageScrim: Brush = Brush.verticalGradient(
+        colors = listOf(
+            Color.Transparent,
+            Color(0x59000000),
+            Color(0xB3000000)
+        )
+    )
+}
+
+/**
+ * Shared motion curves. Match iOS `springSnappy`, `springSmooth`, `springBouncy`
+ * in PremiumTokens.swift so the two platforms feel the same on interaction.
+ */
+object PremiumMotion {
+    // Snappy spring for chips/toggles/icons
+    const val SnappyDurationMs = 260
+    // Balanced spring for cards/sheets
+    const val SmoothDurationMs = 360
+    // Bouncy spring for celebratory moments
+    const val BouncyDurationMs = 420
 }

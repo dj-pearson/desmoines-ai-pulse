@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -130,7 +131,7 @@ fun MainScreen(
         Row(modifier = Modifier.fillMaxSize()) {
             if (showBottomBar) {
                 NavigationRail(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxHeight(),
                 ) {
@@ -188,8 +189,9 @@ fun MainScreen(
             bottomBar = {
                 if (showBottomBar) {
                     NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.onSurface
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        tonalElevation = 0.dp,
                     ) {
                         val tabs = BottomNavTab.entries
                         tabs.forEachIndexed { index, tab ->

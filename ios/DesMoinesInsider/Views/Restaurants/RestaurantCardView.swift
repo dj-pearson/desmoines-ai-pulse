@@ -116,10 +116,9 @@ struct RestaurantCardView: View {
                 }
             }
         }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+        .padding(12)
+        .glassCard(cornerRadius: 16, material: .regularMaterial, elevation: PremiumTokens.elevation4)
+        .pressable()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(restaurant.name), \(restaurant.cuisine ?? "restaurant"), \(restaurant.ratingText)")
     }

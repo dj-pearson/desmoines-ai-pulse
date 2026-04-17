@@ -156,9 +156,8 @@ struct EventCardView: View {
             }
             .padding(14)
         }
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .accessibleCardShadow()
+        .glassCard(cornerRadius: 18, material: .regularMaterial, elevation: PremiumTokens.elevation4)
+        .pressable()
         // .contain so VoiceOver can separately focus the favorite button inside
         .accessibilityElement(children: .contain)
         .accessibilityLabel(cardAccessibilityLabel)

@@ -311,6 +311,159 @@
       "priority": 20,
       "passes": true,
       "notes": "Native SwiftUI: EventCardSkeleton matches EventCardView (180pt image + date badge + favorite + category + title + time/location + price). RestaurantCardSkeleton matches RestaurantCardView (100x100 image + name/heart + cuisine/price + 5-star rating + location). DetailHeroSkeleton added to LoadingView (300pt image + gradient + badge/title). All use .redacted(reason: .placeholder).shimmer()."
+    },
+    {
+      "id": "IOS-021",
+      "title": "Glassmorphism foundation: tokens + reusable View modifier library",
+      "description": "Establish a reusable glass surface vocabulary so every card, chip, bar, and overlay across the app can adopt the same frosted-glass language with a single modifier.",
+      "acceptanceCriteria": [
+        "Add glass tint, border, highlight, and inner shadow tokens to PremiumTokens.swift",
+        "Add motion springs (springSnappy, springSmooth, springBouncy) and a spacing scale (space2..space48)",
+        "Add accent gradients heroWarmGradient, heroCoolGradient, and imageScrim",
+        "Create View+Glass.swift exposing .glassCard(), .glassChip(), .glassBar(), .glassOverlay() modifiers backed by a single GlassSurfaceModifier",
+        "Add .glassSheen() animated highlight modifier (respects reduceMotion)",
+        "Add .pressable(scale:) interaction modifier shared across cards/chips/buttons"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa. Glass surfaces are a Material + tint + gradient border sandwich, paired with premiumShadow. Pressable uses interactive spring and skips animation under reduceMotion."
+    },
+    {
+      "id": "IOS-022",
+      "title": "Apply glass surface treatment to core cards, chips, badges, hero, FAB",
+      "description": "Apply the new glass primitives to the most-seen surfaces so the app's visual language reads as cohesive and modern out of the gate.",
+      "acceptanceCriteria": [
+        "EventCardView background uses .glassCard with corner 18 and pressable interaction",
+        "RestaurantCardView background uses .glassCard with corner 16 and pressable interaction",
+        "FilterChipView uses .ultraThinMaterial + tint blend with stronger border and pressable",
+        "CategoryBadge gets gradient fill, white hairline, and category-tinted shadow",
+        "EmptyStateView wraps content in glassCard, gradient icon, glassChip primary action button",
+        "ScrollToTopButton uses glassBar background and pressable",
+        "ParallaxHeroHeader scrim upgraded to PremiumTokens.imageScrim plus subtle top-left highlight"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa. Verify on light, dark, OLED, high-contrast, and Larger Text accessibility settings."
+    },
+    {
+      "id": "IOS-023",
+      "title": "Translucent system tab bar and navigation bar appearance",
+      "description": "Make the iOS tab bar and navigation bar feel continuous with content by switching to a systemUltraThinMaterial blur and softening separators.",
+      "acceptanceCriteria": [
+        "MainTabView configures UITabBarAppearance with systemUltraThinMaterial blur",
+        "MainTabView configures UINavigationBarAppearance with systemUltraThinMaterial blur and clear shadow",
+        "Appearance applied once on appear via static configurator",
+        "Tab and nav bars remain readable on imagery, light, dark, and OLED themes"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa."
+    },
+    {
+      "id": "IOS-024",
+      "title": "Apply pressable + glass treatment to remaining feature surfaces",
+      "description": "Extend the new glass language to surfaces not yet touched: Featured event cards, hotel/deal cards, AnimatedTabItem selection pill, SubscriptionBanner, SubscriptionTierCard, Search tab picker, Map control overlays, Auth form fields, Onboarding pages, Profile sections, Saved screen banners.",
+      "acceptanceCriteria": [
+        "AnimatedTabItem selected pill uses .glassChip + accent tint",
+        "FeaturedEventCard image card uses glassOverlay with stronger scrim and category badge",
+        "SubscriptionBanner cards adopt glass + gradient border (gold for VIP, brand for Insider)",
+        "SubscriptionTierCard featured row uses glassCard + sheen for VIP",
+        "SearchView tab picker switches to a glassChip-style segmented control",
+        "EventMapView search overlay, toggle group, pin count badge, and bottom popup use glass surfaces",
+        "AuthView form fields use glass input style with smooth focus",
+        "OnboardingView pages get glass content cards",
+        "ProfileView settings rows wrapped in glassCard groups"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Deferred. Foundation modifiers exist; finish the rest screen-by-screen so visual QA can be performed in tight scope per PR."
+    },
+    {
+      "id": "IOS-025",
+      "title": "Detail-screen hero glass overlays and matched-geometry transitions",
+      "description": "Make tapping a card on a list flow into its detail screen with a matched-geometry hero animation and a glass title overlay layered above the parallax image.",
+      "acceptanceCriteria": [
+        "EventCardView, RestaurantCardView, AttractionCardView mark hero image + title with .matchedGeometryEffect ids",
+        "Corresponding detail headers receive matching ids and animate from card to hero on push",
+        "Title and badges sit inside a glassOverlay above the imageScrim instead of plain text",
+        "Push animation uses PremiumTokens.springSmooth, respects reduceMotion",
+        "Pop animation reverses the matched-geometry transition without flicker",
+        "VoiceOver focus moves to the detail title after the transition"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Deferred. Requires per-feature refactor. Use NavigationTransition (iOS 18+) where available, fall back to a shared Namespace approach."
+    },
+    {
+      "id": "IOS-026",
+      "title": "Brand-driven button + form field design system",
+      "description": "Replace ad-hoc Button + TextField styling with a small set of brand-driven primary, secondary, ghost, and destructive button styles plus a unified glass-input field.",
+      "acceptanceCriteria": [
+        "Add ButtonStyle: BrandPrimaryButtonStyle (brandGradient + glassBar), BrandSecondaryButtonStyle (.thinMaterial + accent border), BrandGhostButtonStyle, BrandDestructiveButtonStyle",
+        "Add TextFieldStyle: GlassTextFieldStyle (.thinMaterial background, accent focus ring, gentle press scale)",
+        "Replace existing Color.accentColor.opacity(...) buttons across the app with the new styles",
+        "AuthView, ProfileView, SubscriptionView, SettingsView migrated",
+        "Style supports loading and disabled states with subtle gradient shimmer"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Deferred. Add a Components/ButtonStyles directory and wire styles via .buttonStyle()."
+    },
+    {
+      "id": "IOS-027",
+      "title": "Typography token system + responsive type ramp",
+      "description": "Codify a typography system (display, headline, title, body, caption) with weights, leading, and Dynamic Type behaviors so type is consistent across screens.",
+      "acceptanceCriteria": [
+        "Create AppTypography.swift with 10 named text styles and helper modifiers",
+        "Each style supports Dynamic Type and clamps at accessibility 5",
+        "Replace ad-hoc .font(.title3.bold()) usages across HomeView, RestaurantsView, ProfileView, AttractionsView, EventDetailView with named styles",
+        "Snapshot tests at extra-extra-extra-large dynamic type pass without truncation"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Deferred. Cross-platform: keep aligned with Android Type.kt naming."
+    },
+    {
+      "id": "IOS-028",
+      "title": "Heart-burst, share-confirm, calendar-add micro-interactions",
+      "description": "Add small celebratory animations to the favorite, share, and calendar actions so the app rewards interaction.",
+      "acceptanceCriteria": [
+        "Favorite tap shows a 250ms heart pop (scale 1 -> 1.25 -> 1) + confetti burst on first save in a session",
+        "Share success shows a glass toast with checkmark fade",
+        "Calendar add shows a glass toast with calendar.badge.plus icon and a soft success haptic",
+        "All animations respect reduceMotion and disable to instant state"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "Deferred. Reuse existing ToastOverlay.swift for the success messaging, build a HeartBurstView in Components."
+    },
+    {
+      "id": "IOS-029",
+      "title": "Smooth theme switching transition (light <-> dark <-> OLED)",
+      "description": "When the user changes theme in Settings, the entire app should crossfade between color schemes instead of an instant swap.",
+      "acceptanceCriteria": [
+        "Wrap the root view in a custom CrossfadeColorScheme container",
+        "Theme change triggers a 300ms ease-in-out crossfade (respects reduceMotion)",
+        "OLED transition reveals true-black background with same crossfade",
+        "Setting persists across launches"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "Deferred. Use a snapshot crossfade approach since SwiftUI does not animate ColorScheme changes natively."
+    },
+    {
+      "id": "IOS-030",
+      "title": "Launch screen + app icon refresh aligned with new visual identity",
+      "description": "Refresh the launch screen and app icon so first impression matches the modernized in-app visual language.",
+      "acceptanceCriteria": [
+        "Update LaunchScreen storyboard to use brandGradient background with the AppLogo at center",
+        "Provide a glassmorphic edge-lit AppIcon variant in 1024 master + all required sizes",
+        "Add iOS 18 tinted + dark variant icons",
+        "Snapshot Apple-required marketing screenshots after refresh"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "Deferred. Coordinate with marketing for icon rendering before final export."
     }
   ]
 }

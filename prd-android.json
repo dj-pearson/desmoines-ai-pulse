@@ -999,6 +999,165 @@
       "priority": 50,
       "passes": true,
       "notes": "Final quality gate before Play Store submission. Run through every feature manually. Profile with Android Studio tools. Test on multiple device sizes (phone + tablet)."
+    },
+    {
+      "id": "AND-051",
+      "title": "Glassmorphism foundation: tokens + GlassSurface modifier + GlassCard composable",
+      "description": "Establish a reusable glass surface vocabulary in Compose that mirrors the iOS View+Glass.swift API so every card, chip, bar, and overlay across the app can adopt the same frosted-glass language.",
+      "acceptanceCriteria": [
+        "Add glass tint, border, highlight tokens and accent gradients to PremiumTokens (Dimens.kt)",
+        "Add PremiumMotion durations matching iOS spring timings (260/360/420 ms)",
+        "Create ui/theme/Glass.kt exposing GlassIntensity enum (Card/Chip/Bar/Overlay)",
+        "Create Modifier.glassSurface(shape, intensity, elevation) primitive painting tint + border + premiumShadow",
+        "Create GlassCard composable wrapper with content slot",
+        "Provide GlassCapabilities.supportsBackdropBlur for runtime feature detection (Android 12+)"
+      ],
+      "priority": 51,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa. Shape and elevation default per intensity; uses isSystemInDarkTheme() for tint variant selection. Compose has no first-party backdrop blur across all API levels — render approximates glass via tint + hairline border."
+    },
+    {
+      "id": "AND-052",
+      "title": "Apply glass surface treatment to event cards, featured cards, badges, empty state",
+      "description": "Apply the new glass primitives to the most-seen surfaces so the Android app's visual language reads as cohesive and modern.",
+      "acceptanceCriteria": [
+        "EventCardView Card uses Modifier.glassSurface (Card intensity, 18.dp corner) and transparent Card container",
+        "EventCardView favorite IconButton uses glassSurface (Chip intensity, CircleShape)",
+        "EventCardView DateBadge uses glassSurface (Bar intensity, 10.dp corner)",
+        "FeaturedEventCard image container uses glassSurface (Card intensity)",
+        "EmptyStateView wraps content column in glassSurface (Card intensity, 28.dp corner) and renders icon inside a tinted circle",
+        "Visuals verified in light, dark, OLED, dynamic color (Android 12+), and TalkBack"
+      ],
+      "priority": 52,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa. CompactRestaurantCard, CategoryBadge, PremiumBadge, VipGoldBadge, and SubscriptionTierCard not yet migrated — see AND-054."
+    },
+    {
+      "id": "AND-053",
+      "title": "Translucent NavigationBar + NavigationRail and animated NavHost transitions",
+      "description": "Make the bottom navigation feel like floating glass and add cinematic enter/exit transitions between routes.",
+      "acceptanceCriteria": [
+        "NavigationBar containerColor uses MaterialTheme.colorScheme.surface.copy(alpha = 0.72f) with tonalElevation 0",
+        "NavigationRail uses the same translucent containerColor",
+        "MainNavHost defines enterTransition/exitTransition: tab swaps fade only, deeper navigation slides+fades using PremiumMotion.SmoothDurationMs",
+        "popEnter/popExit slide+fade in the opposite direction",
+        "isTabRoute helper recognizes Home/Dining/Search/Map/Saved/Profile",
+        "Animations remain performant on a low-end device (Pixel 4a)"
+      ],
+      "priority": 53,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa. NavigationBar tonalElevation set to 0 to avoid the M3 elevation overlay competing with the alpha tint."
+    },
+    {
+      "id": "AND-054",
+      "title": "Apply glass treatment to remaining components and screens",
+      "description": "Extend the glass language to remaining surfaces: CompactRestaurantCard, CategoryBadge gradient pill, PremiumBadge, VipGoldBadge, AnimatedTabItem indicator, SubscriptionTierCard featured row, ParallaxHeroHeader title overlay, BrandedRefreshIndicator container, ToastOverlay, OfflineBanner, MapPreviewSheet, FilterSheet drag handle row.",
+      "acceptanceCriteria": [
+        "CompactRestaurantCard uses glassSurface for the image container",
+        "CategoryBadge uses Modifier.background(Brush) gradient + thin Color.White.copy(alpha = 0.25f) border + category-tinted shadow",
+        "PremiumBadge and VipGoldBadge wrap content in glassSurface (Chip)",
+        "AnimatedTabItem selected indicator pill uses glassSurface (Chip) + accent tint",
+        "SubscriptionTierCard featured row gets glassSurface + GoldGradient stroke",
+        "ParallaxHeroHeader bottom title overlay uses glassSurface (Overlay)",
+        "ToastOverlay surface uses glassSurface (Bar) instead of solid Surface",
+        "MapPreviewSheet, RestaurantFilterSheet adopt the same translucent containerColor as the home FilterSheet",
+        "OfflineBanner uses glassSurface (Bar) tinted with status color"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": "Deferred. Migrate one component per PR for tight visual QA. Cross-check rendering across Material You dynamic themes."
+    },
+    {
+      "id": "AND-055",
+      "title": "Add real backdrop blur via Modifier.blur on Android 12+ surfaces",
+      "description": "Where the device supports RenderEffect-based blur (Android 12+), use Modifier.blur() to render true backdrop blur behind glass surfaces. Fall back to the tint-only glassSurface on older devices.",
+      "acceptanceCriteria": [
+        "Add helper Modifier.glassBackdropBlur(radius) gated by GlassCapabilities.supportsBackdropBlur",
+        "Apply backdrop blur behind FilterSheet, MapPreviewSheet, NavigationBar (under content), and detail hero scrim when supported",
+        "Fall back gracefully on Android 8-11 (no crash, no visual regression)",
+        "Rendering remains 60fps on a 2021 mid-tier device (e.g. Pixel 5a)",
+        "Add a settings toggle to disable backdrop blur for users on battery-saver"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Deferred. Optional: evaluate dev.chrisbanes.haze:haze-materials as a richer alternative if first-party Modifier.blur causes performance issues."
+    },
+    {
+      "id": "AND-056",
+      "title": "Brand-driven Button + TextField Compose component set",
+      "description": "Replace ad-hoc Material 3 Button/TextField usage with brand-styled wrappers (BrandPrimaryButton, BrandSecondaryButton, BrandGhostButton, BrandDestructiveButton, GlassTextField).",
+      "acceptanceCriteria": [
+        "BrandPrimaryButton uses BrandGradient brush + glassSurface (Bar) + Material3 ripple",
+        "BrandSecondaryButton uses transparent fill + accent border + glassSurface (Chip)",
+        "GlassTextField uses translucent surface, accent focus indicator with animateColorAsState, and animated label transition",
+        "AuthScreen, ProfileScreen, SubscriptionScreen, SettingsScreen migrate to the new components",
+        "All buttons preserve existing accessibility (semantics, ripple, contentDescription)"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": "Deferred. Place in ui/components/buttons/ and ui/components/inputs/."
+    },
+    {
+      "id": "AND-057",
+      "title": "Shared element transitions for card -> detail (Compose 1.7+)",
+      "description": "Use Compose 1.7+ SharedTransitionLayout to morph from a list card to its detail screen so the hero image and title flow into place instead of jumping.",
+      "acceptanceCriteria": [
+        "Wrap MainNavHost content in SharedTransitionLayout",
+        "EventCardView, RestaurantCardView, AttractionCardView image and title use sharedElement keys",
+        "Detail screens declare matching sharedElement keys on hero image and title",
+        "Transition duration matches PremiumMotion.SmoothDurationMs",
+        "Reduce-motion (system) and accessibility setting disable the transition",
+        "No layout flicker on pop"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": "Deferred. Requires Compose 1.7.x (BoM 2024.06+) and feature flag gating until BoM is upgraded."
+    },
+    {
+      "id": "AND-058",
+      "title": "Hero parallax + glass title overlay across detail screens",
+      "description": "Make event/restaurant/attraction detail headers use the existing ParallaxHeroHeader paired with a glass title overlay sitting above the imageScrim.",
+      "acceptanceCriteria": [
+        "EventDetailScreen, RestaurantDetailScreen, AttractionDetailScreen headers use ParallaxHeroHeader",
+        "Title + category badge sit inside a glassSurface (Overlay) panel pinned to the bottom",
+        "Hero parallax factor 0.5 matches iOS",
+        "Scroll past hero fades title into the TopAppBar title slot",
+        "Header collapse animation uses PremiumMotion.SmoothDurationMs"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": "Deferred. Coordinate with iOS detail header refactor (IOS-025) to keep visual parity."
+    },
+    {
+      "id": "AND-059",
+      "title": "Heart-burst + share-confirm + calendar-add micro-interactions",
+      "description": "Add small celebratory animations to favorite/share/add-to-calendar actions so they feel rewarding.",
+      "acceptanceCriteria": [
+        "Favorite tap shows a 250ms heart pop (scale 1 -> 1.25 -> 1)",
+        "First save in a session shows a confetti particle burst",
+        "Share success shows a glass Snackbar with checkmark",
+        "Calendar add success shows a glass Snackbar with calendar icon and a HapticPerformer.success() pulse",
+        "All animations respect AnimatorDurationScale = 0 (rememberShouldReduceAnimations)"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": "Deferred. Reuse ToastOverlay.kt. Build HeartBurst composable with Canvas + AnimationSpec."
+    },
+    {
+      "id": "AND-060",
+      "title": "Theme switch crossfade + adaptive icon refresh",
+      "description": "Crossfade between light/dark/OLED themes when the user switches in Settings, and refresh the launcher icon to reflect the modern visual identity.",
+      "acceptanceCriteria": [
+        "ThemeMode change triggers a 300ms Crossfade across the entire MainScreen",
+        "OLED transition reveals true-black surface without flicker",
+        "Adaptive launcher icon updated with brandGradient + AppLogo silhouette (foreground + background layers)",
+        "Monochrome launcher icon variant added for Material You themed icons",
+        "Themed splash screen via SplashScreen API uses brandGradient background",
+        "Marketing screenshots regenerated"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": "Deferred. Splash + adaptive icon updates require coordinating with marketing assets."
     }
   ]
 }

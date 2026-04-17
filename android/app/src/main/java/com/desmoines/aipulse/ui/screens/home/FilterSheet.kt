@@ -104,6 +104,8 @@ fun FilterSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        scrimColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f),
     ) {
         Column(
             modifier = Modifier

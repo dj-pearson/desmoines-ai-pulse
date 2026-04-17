@@ -28,6 +28,35 @@ enum PremiumTokens {
     static let motionFast: Double = 0.15
     static let motionBase: Double = 0.28
     static let motionSlow: Double = 0.45
+    static let motionHero: Double = 0.6
+
+    // MARK: - Signature springs
+    //
+    // Use across interactive elements so the app feels consistently "alive".
+
+    /// Snappy spring for small UI state changes (toggles, chips, icons).
+    static let springSnappy: Animation = .interactiveSpring(response: 0.32, dampingFraction: 0.78, blendDuration: 0.18)
+
+    /// Balanced spring for cards, sheets, and tab indicators.
+    static let springSmooth: Animation = .spring(response: 0.42, dampingFraction: 0.82, blendDuration: 0.2)
+
+    /// Bouncy spring for celebratory moments (favorite added, subscription upgrade).
+    static let springBouncy: Animation = .spring(response: 0.45, dampingFraction: 0.62, blendDuration: 0.25)
+
+    // MARK: - Spacing scale (pt)
+    //
+    // Keep in sync with Android Dimens.Spacing.
+
+    static let space2: CGFloat = 2
+    static let space4: CGFloat = 4
+    static let space8: CGFloat = 8
+    static let space12: CGFloat = 12
+    static let space16: CGFloat = 16
+    static let space20: CGFloat = 20
+    static let space24: CGFloat = 24
+    static let space32: CGFloat = 32
+    static let space40: CGFloat = 40
+    static let space48: CGFloat = 48
 
     // MARK: - Gradients
 
@@ -59,6 +88,54 @@ enum PremiumTokens {
 
     static let shadowKey = Color.black.opacity(0.15)
     static let shadowAmbient = Color.black.opacity(0.06)
+
+    // MARK: - Glassmorphism
+    //
+    // Border + highlight colors used by the Glass modifier family.
+    // Values tuned so glass surfaces read as light panels in light mode
+    // and frosted dark panels in dark/OLED mode.
+
+    static let glassBorderLight = Color.white.opacity(0.45)
+    static let glassBorderDark = Color.white.opacity(0.10)
+    static let glassHighlightLight = Color.white.opacity(0.55)
+    static let glassHighlightDark = Color.white.opacity(0.08)
+    static let glassInnerShadow = Color.black.opacity(0.04)
+    static let glassTintLight = Color.white.opacity(0.35)
+    static let glassTintDark = Color.black.opacity(0.28)
+
+    // MARK: - Accent gradients (surface-safe)
+
+    /// Warm sunrise used on hero headers when a category is not supplied.
+    static let heroWarmGradient = LinearGradient(
+        colors: [
+            Color(red: 0xFF / 255.0, green: 0x7E / 255.0, blue: 0x5F / 255.0),
+            Color(red: 0xFE / 255.0, green: 0xB4 / 255.0, blue: 0x7A / 255.0)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    /// Cool night gradient for premium / nightlife surfaces.
+    static let heroCoolGradient = LinearGradient(
+        colors: [
+            Color(red: 0x1E / 255.0, green: 0x1B / 255.0, blue: 0x4B / 255.0),
+            Color(red: 0x3B / 255.0, green: 0x2F / 255.0, blue: 0x82 / 255.0),
+            Color(red: 0x25 / 255.0, green: 0x63 / 255.0, blue: 0xEB / 255.0)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+    )
+
+    /// Subtle scrim used on top of images to improve text legibility.
+    static let imageScrim = LinearGradient(
+        colors: [
+            Color.black.opacity(0.0),
+            Color.black.opacity(0.35),
+            Color.black.opacity(0.7)
+        ],
+        startPoint: .top,
+        endPoint: .bottom
+    )
 
     // MARK: - OLED palette (mirrors Android OledColorScheme)
 
