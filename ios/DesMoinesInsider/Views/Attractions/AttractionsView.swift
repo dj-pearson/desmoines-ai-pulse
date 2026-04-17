@@ -45,7 +45,7 @@ struct AttractionsView: View {
                             LazyVStack(spacing: 12) {
                                 ForEach(Array(viewModel.attractions.enumerated()), id: \.element.id) { index, attraction in
                                     NavigationLink(value: attraction) {
-                                        AttractionCardView(
+                                        BrowseAttractionCardView(
                                             attraction: attraction,
                                             isFavorite: favoritesService.isAttractionFavorited(attraction.id),
                                             onToggleFavorite: { toggleFavorite(attraction) }
@@ -326,7 +326,7 @@ struct AttractionsView: View {
 
 // MARK: - Attraction Card
 
-private struct AttractionCardView: View {
+private struct BrowseAttractionCardView: View {
     let attraction: Attraction
     let isFavorite: Bool
     let onToggleFavorite: () -> Void
