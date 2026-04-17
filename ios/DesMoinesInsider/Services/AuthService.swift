@@ -21,6 +21,32 @@ final class AuthService {
     private(set) var isAdmin = false
     private(set) var isLoading = true
 
+    /// True when the signed-in user's email has not yet been confirmed.
+    /// Apple Sign-In users are treated as verified (Apple pre-verifies the
+    /// email before returning it to us).
+    var needsEmailVerification: Bool {
+        guard let user = currentUser else { return false }
+        if user.emailConfirmedAt != nil { return false }
+        return primaryProvider(for: user) != "apple"
+    }
+
+    private func primaryProvider(for user: User) -> String? {
+        // Supabase sets app_metadata.provider to the primary sign-in provider.
+        // Fallback: inspect identities[].provider if metadata is missing.
+        if let meta = user.appMetadata["provider"], case .string(let provider) = meta {
+            return provider
+        }
+        return user.identities?.first?.provider
+    }
+
+    /// Request a new verification email for the currently signed-in user.
+    /// Matches Supabase `auth.resend` for the `signup` email type.
+    func resendVerificationEmail() async throws {
+        guard let supabase else { throw AuthError.notConfigured }
+        guard let email = currentUser?.email else { throw AuthError.noUser }
+        try await supabase.auth.resend(email: email, type: .signup)
+    }
+
     @ObservationIgnored private var authListener: Task<Void, Never>?
     private let supabase: SupabaseClient?
 

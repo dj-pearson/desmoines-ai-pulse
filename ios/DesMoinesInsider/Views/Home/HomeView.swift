@@ -17,6 +17,10 @@ struct HomeView: View {
                     Color.clear.frame(height: 0).id("top")
                     headerSection
 
+                    exploreAttractionsCard
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+
                     // Smart Presets — one-tap event scenarios
                     EventSmartPresets(viewModel: viewModel)
                         .padding(.top, 6)
@@ -74,6 +78,14 @@ struct HomeView: View {
             .navigationDestination(for: Restaurant.self) { restaurant in
                 RestaurantDetailView(restaurant: restaurant)
             }
+            .navigationDestination(for: Attraction.self) { attraction in
+                AttractionDetailView(attraction: attraction)
+            }
+            .navigationDestination(for: HomeDestination.self) { destination in
+                switch destination {
+                case .attractions: AttractionsView()
+                }
+            }
             .task {
                 async let eventsLoad: () = viewModel.loadInitialData()
                 async let restaurantsLoad: () = restaurantsVM.loadInitialData()
@@ -81,6 +93,57 @@ struct HomeView: View {
             }
             .toastOverlay(message: $toast)
         }
+    }
+
+    // MARK: - Explore Attractions Entry Point
+
+    /// Primary entry point to the Attractions browse screen. Tab bar is already
+    /// at 6 items on iPhone, so Attractions lives here as an "Explore" CTA on
+    /// the Home tab rather than a 7th tab.
+    private var exploreAttractionsCard: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            navigationPath.append(HomeDestination.attractions)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.purple.opacity(0.85), Color.pink.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: "star.circle.fill")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Explore Attractions")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Museums, parks, and must-see places")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(12)
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Explore attractions. Museums, parks, and must-see places.")
+        .accessibilityHint("Opens the attractions browse screen")
     }
 
     // MARK: - Header
@@ -510,6 +573,15 @@ private struct EventCardSkeleton: View {
         .redacted(reason: .placeholder)
         .shimmer()
     }
+}
+
+// MARK: - Navigation
+
+/// Typed destinations for navigationPath.append(). Keeps the Home tab's
+/// internal navigation separate from content-type destinations (Event,
+/// Restaurant, Attraction) which each have their own navigationDestination.
+enum HomeDestination: Hashable {
+    case attractions
 }
 
 #Preview {

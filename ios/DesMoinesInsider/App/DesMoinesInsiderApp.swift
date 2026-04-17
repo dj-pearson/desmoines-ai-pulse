@@ -39,6 +39,8 @@ struct DesMoinesInsiderApp: App {
                     BiometricLockView {
                         awaitingBiometric = false
                     }
+                } else if authService.isAuthenticated && authService.needsEmailVerification {
+                    VerifyEmailView()
                 } else {
                     MainTabView()
                         .safeAreaInset(edge: .top, spacing: 0) {

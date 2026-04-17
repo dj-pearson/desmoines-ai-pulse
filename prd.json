@@ -695,8 +695,8 @@
         "All tabs that can navigate to attractions register a navigationDestination(for: Attraction.self) handler"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": "TOP-4 CRITICAL — partial implementation in this PR (FavoritesView section + favorite toggle wiring). Full AttractionsView list is scoped as follow-up."
+      "passes": true,
+      "notes": "FIXED: FavoritesService now exposes favoriteAttractionIds + toggleFavoriteAttraction() with the same Supabase / UserDefaults fallback as restaurant favorites. FavoritesViewModel + FavoritesView render an Attractions section with undo. New Views/Attractions/AttractionsView.swift built on the RestaurantsView template: search with 350ms debounce, horizontal AttractionType chips, Featured toggle, rating menu, sort menu (Newest/Top rated/Name), paginated LazyVStack with entrance animations + AttractionCardSkeleton + EmptyStateView. New AttractionsViewModel handles debounced search, client-side multi-type filter, sort, and pagination. Surfaced from HomeView via a gradient 'Explore Attractions' card that pushes AttractionsView via HomeDestination enum. Attraction.self navigationDestination registered on HomeView, SearchView (already), and FavoritesView. 'Related Attractions' section on AttractionDetailView is deferred to a follow-up."
     },
     {
       "id": "IOS-AUDIT-2026-005",
@@ -709,8 +709,8 @@
         "Bypass for Apple Sign-In users (email is pre-verified by Apple)"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": "Documented for follow-up; not in TOP-4."
+      "passes": true,
+      "notes": "FIXED: AuthService.needsEmailVerification computed property checks user.emailConfirmedAt, with Apple Sign-In users bypassed via app_metadata.provider / identities fallback. DesMoinesInsiderApp routes authenticated-but-unverified users to the new VerifyEmailView before MainTabView. VerifyEmailView displays the signed-up email, a 'Resend verification email' button with 60-second cooldown (calls AuthService.resendVerificationEmail → supabase.auth.resend type: .signup), an 'Open Mail app' deep link, and a 'Use a different account' sign-out fallback. The listener's .tokenRefreshed case re-runs fetchProfile so emailConfirmedAt updates propagate and the gate dismisses automatically once the user taps the confirmation link."
     },
     {
       "id": "IOS-AUDIT-2026-006",
@@ -723,8 +723,8 @@
         "Verified: scrolling/zooming a 100+ pin region maintains 60fps in Xcode Instruments"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": "Documented for follow-up; not in TOP-4."
+      "passes": true,
+      "notes": "FIXED: MapViewModel annotations are now stored `private(set) var [EventAnnotation]` (and restaurant/attraction equivalents) rebuilt imperatively via didSet on events/restaurants/attractions and the three show* toggles. SwiftUI no longer reallocates on every re-read. regionFitting moved to a nonisolated static async function wrapping Task.detached(priority: .userInitiated) so 100+ coordinate bounding-box computation no longer blocks the main actor. Added MapCluster grid aggregator + shouldCluster threshold (60 pins); EventMapView switches to cluster rendering when exceeded and tracks the visible region via onMapCameraChange. Tapping a cluster animates the camera to ~2.5× closer zoom so members separate out. New ClusterMapPin view renders the count with size/opacity scaling and category tint."
     },
     {
       "id": "IOS-AUDIT-2026-007",
