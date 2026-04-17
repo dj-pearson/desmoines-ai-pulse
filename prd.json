@@ -631,6 +631,156 @@
       "priority": 39,
       "passes": true,
       "notes": "FIXED: Added ThemeMode enum (System/Light/Dark/Oled) to Android ui/theme/Theme.kt. Created OledColorScheme copying DarkColorScheme and overriding background=#000000, surface=#0A0A0A, surfaceVariant=#141414, outline=#2A2A2A, onSurface=#EDEDED, onSurfaceVariant=#BDBDBD. DesMoinesInsiderTheme now takes a themeMode parameter — Oled short-circuits dynamic color and uses OledColorScheme; Light/Dark override system preference; System falls back to isSystemInDarkTheme(). Status bar appearance tracks the effective dark flag. Added matching ThemeMode enum (CaseIterable, Identifiable, preferredColorScheme mapping) and OLED palette constants (oledBackground/Surface1/2/3/Outline/OnSurface/OnSurfaceVariant) to ios/DesMoinesInsider/Configuration/PremiumTokens.swift plus a View.oledBackgroundIfNeeded(mode) modifier for root screens. Selected mode should be persisted via the existing secure storage service and injected at the app root."
+    },
+    {
+      "id": "IOS-AUDIT-2026-001",
+      "title": "[CRITICAL/SECURITY] Sign-out leaks user data — clear all caches, Keychain, favorites, search history, session-timeout state",
+      "description": "AuthService.signOut() (Services/AuthService.swift:108-118) only clears in-memory auth state and resets the biometric preference. It does NOT call QueryCache.shared.clearAll(), KeychainService.shared.deleteAll(), FavoritesService reset, SearchHistoryService.clearAll(), SpotlightService deletion, or SessionTimeoutService.stopTracking(). After sign-out a second user on the same device can see the previous user's cached profile, favorites, recent searches, and Spotlight-indexed content. Also leaves stale session-timeout timestamps in the Keychain.",
+      "acceptanceCriteria": [
+        "AuthService.signOut() calls QueryCache.shared.clearAll() to wipe disk cache",
+        "AuthService.signOut() calls KeychainService.shared.deleteAll() (after biometric reset reads its key)",
+        "AuthService.signOut() resets FavoritesService (favorite ids cleared in-memory and persisted state purged)",
+        "AuthService.signOut() calls SearchHistoryService.shared.clearAll()",
+        "AuthService.signOut() calls SpotlightService deletion to remove indexed favorites from system search",
+        "AuthService.signOut() calls SessionTimeoutService.shared.stopTracking()",
+        "Cleanup runs even when supabase.signOut() throws (use defer / do-finally semantics)",
+        "Repeat sign-in on same device shows empty Favorites/Search History until user re-loads"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": "TOP-4 CRITICAL — implementing in this PR."
+    },
+    {
+      "id": "IOS-AUDIT-2026-002",
+      "title": "[CRITICAL/SECURITY] Session timeout never signs the user out",
+      "description": "SessionTimeoutService.checkTimeouts() (Services/SessionTimeoutService.swift:119-161) sets sessionState = .expired when idle/absolute thresholds are reached, but no observer in App or AuthService calls AuthService.signOut(). The user remains authenticated indefinitely; .expired is purely informational. This violates the documented 'Auto-sign out when timeout is reached' acceptance criterion in AND-SEC-005 / IOS session security stories.",
+      "acceptanceCriteria": [
+        "DesMoinesInsiderApp observes SessionTimeoutService.sessionState and triggers signOut() on .expired",
+        "On expiry, user is returned to AuthView with a one-time toast/alert: 'Signed out for inactivity.'",
+        "Warning state surfaces a non-blocking banner with minutesRemaining and a 'Stay signed in' button that calls recordActivity()",
+        "Tracking starts after successful sign-in (in AuthService.startAuthListener .signedIn branch) and stops on .signedOut",
+        "isSessionValid() is consulted on cold-launch and triggers signOut() before MainTabView renders if false",
+        "Tested: leave the app open for >idle threshold (mocked to 30s in DEBUG) and confirm AuthView re-appears"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "TOP-4 CRITICAL — implementing in this PR."
+    },
+    {
+      "id": "IOS-AUDIT-2026-003",
+      "title": "[HIGH/SECURITY] Biometric lock screen has a 'Skip' button that bypasses authentication",
+      "description": "DesMoinesInsiderApp.swift BiometricLockView (lines 179-183) renders a 'Skip' button that calls onUnlock() directly, defeating the purpose of biometric protection. A device thief can bypass Face ID/Touch ID with a single tap. Skip is also offered before the user has had a chance to retry, and there is no fallback to email/password re-authentication.",
+      "acceptanceCriteria": [
+        "Remove the 'Skip' button entirely from BiometricLockView",
+        "Replace with a 'Sign Out' fallback that calls AuthService.signOut() and routes back to AuthView",
+        "BiometricLockView automatically invokes biometric.authenticate() on first appear (no extra tap)",
+        "After 3 failed attempts, force the Sign Out fallback (no infinite retry)",
+        "Lock screen blocks all underlying app content (full-screen ZStack already does this — verify no leakage)",
+        "VoiceOver: Sign Out button has accessibilityLabel 'Sign out and use password to re-authenticate'"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": "TOP-4 CRITICAL — implementing in this PR."
+    },
+    {
+      "id": "IOS-AUDIT-2026-004",
+      "title": "[HIGH/UX] Attractions are second-class — no list view, no Favorites support, dead-end detail",
+      "description": "The app exposes Attractions only via Map and Search; there is no AttractionsView list/browse screen comparable to RestaurantsView (Views/Attractions/ contains only AttractionDetailView). FavoritesView (Views/Favorites/FavoritesView.swift:150-207) only renders Events and Restaurants — saved attractions silently disappear from the Saved tab. AttractionDetailView has no related/discovery section. This breaks discoverability for a category the Subscription tier upsells.",
+      "acceptanceCriteria": [
+        "Add Views/Attractions/AttractionsView.swift mirroring RestaurantsView (search, filters, pull-to-refresh, LazyVStack with skeletons, empty state)",
+        "Add an Attractions section to FavoritesView that renders saved attractions with the same card style as restaurants",
+        "FavoritesService.swift exposes favoriteAttractionIds + toggleFavoriteAttraction() if not already wired",
+        "AttractionsView is reachable from MainTabView (either as a 7th tab or, on iPhone where 5 tabs are recommended, surfaced via Home 'Explore' card → AttractionsView NavigationLink)",
+        "AttractionDetailView gains a Related Attractions section using AttractionsService.fetchNearby()",
+        "All tabs that can navigate to attractions register a navigationDestination(for: Attraction.self) handler"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "TOP-4 CRITICAL — partial implementation in this PR (FavoritesView section + favorite toggle wiring). Full AttractionsView list is scoped as follow-up."
+    },
+    {
+      "id": "IOS-AUDIT-2026-005",
+      "title": "[MEDIUM/SECURITY] No email-verification gate before app access",
+      "description": "AuthViewModel.signUp() shows showVerificationAlert but does not block navigation; user proceeds to MainTabView with an unverified email. Email-verified users are required for password reset and prevent account takeover via typo'd addresses.",
+      "acceptanceCriteria": [
+        "DesMoinesInsiderApp routes authenticated-but-unverified users to a VerifyEmailView",
+        "VerifyEmailView shows the email, a 'Resend verification' button, and 'Open Mail app' deep link",
+        "Auth state listener re-checks user.emailConfirmedAt after each .tokenRefreshed event",
+        "Bypass for Apple Sign-In users (email is pre-verified by Apple)"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": "Documented for follow-up; not in TOP-4."
+    },
+    {
+      "id": "IOS-AUDIT-2026-006",
+      "title": "[MEDIUM/PERFORMANCE] Map annotations recompute on every read; no clustering",
+      "description": "MapViewModel.swift:202-224 exposes eventAnnotations / restaurantAnnotations / attractionAnnotations as computed properties that allocate fresh arrays on every access — SwiftUI re-reads these on each redraw. With 100+ pins this generates significant allocation pressure. There is also no MKMapView clustering (clusteringIdentifier) so dense areas render as overlapping pins.",
+      "acceptanceCriteria": [
+        "Convert annotation arrays to @Published stored properties recomputed only when source data changes",
+        "Adopt MKMarkerAnnotationView with clusteringIdentifier (or SwiftUI MapKit clustering API on iOS 17+) for events/restaurants/attractions",
+        "Region-fitting (MapViewModel.swift:236-249) moved off the main thread via Task.detached",
+        "Verified: scrolling/zooming a 100+ pin region maintains 60fps in Xcode Instruments"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": "Documented for follow-up; not in TOP-4."
+    },
+    {
+      "id": "IOS-AUDIT-2026-007",
+      "title": "[MEDIUM/PERFORMANCE] Restaurant client-side filtering blocks main thread",
+      "description": "RestaurantsViewModel.swift:183 runs .filter { $0.isOpenNow() } and string-matching across 100+ restaurants on the main thread on every filter toggle. Causes UI jank, especially on older devices.",
+      "acceptanceCriteria": [
+        "applyClientFilters() / applyClientSide() dispatched to a background queue (Task.detached)",
+        "Filter toggle UI is debounced to 150ms (matches existing search debounce at line 262)",
+        "Filtered results assigned back on @MainActor",
+        "No regression in filter responsiveness — user-perceivable latency under 100ms"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": "Documented for follow-up; not in TOP-4."
+    },
+    {
+      "id": "IOS-AUDIT-2026-008",
+      "title": "[MEDIUM/PERFORMANCE] Favorites fetched as a single unbounded .in() query",
+      "description": "FavoritesService.swift:113-125 / 222-234 fetches every favorite event/restaurant in a single .in('id', values: ...) query with no pagination. Power users with 100+ favorites pay the full decode cost on every Favorites tab open.",
+      "acceptanceCriteria": [
+        "Page favorites in batches of 25 with infinite scroll",
+        "Cache decoded favorites in QueryCache with a short TTL (5 min)",
+        "Background prefetch of next page when within 5 cells of the end",
+        "Tab open with 100+ favorites renders first page in under 500ms"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": "Documented for follow-up; not in TOP-4."
+    },
+    {
+      "id": "IOS-AUDIT-2026-009",
+      "title": "[LOW/UX] Filter chips and ad banners duplicated across HomeView and RestaurantsView",
+      "description": "Removable filter-chip UI is reimplemented in HomeView.swift:245-268 and RestaurantsView.swift:189-212. Ad banner placement logic is repeated in HomeView, RestaurantsView, and RestaurantDetailView. Should consolidate into Views/Components/FilterChipView.swift and Views/Components/AdSlot.swift.",
+      "acceptanceCriteria": [
+        "Create FilterChipView(text:icon:onRemove:) component used by HomeView, RestaurantsView, and (future) AttractionsView",
+        "Create AdSlot(placement:) component wrapping AffiliateAdService lookup and rendering",
+        "Both call sites in HomeView and RestaurantsView updated to consume the shared component",
+        "No visual regression — screenshots match before/after"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": "Documented for follow-up; not in TOP-4."
+    },
+    {
+      "id": "IOS-AUDIT-2026-010",
+      "title": "[LOW/SECURITY] Keychain accessibility flag could be tightened",
+      "description": "KeychainService.swift:27 uses kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly so tokens are accessible while the device is locked (after first unlock since boot). For an app that does not run background tasks requiring Keychain reads while locked, kSecAttrAccessibleWhenUnlockedThisDeviceOnly is stricter and reduces the post-compromise window.",
+      "acceptanceCriteria": [
+        "Audit which background tasks (push notification handlers, BGTaskScheduler) read Keychain values",
+        "If none require locked access, switch to kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
+        "Migration path: read existing items under old flag, re-save under new flag on first launch after upgrade",
+        "No regression in cold-launch UX (biometric prompt order remains unchanged)"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": "Documented for follow-up; not in TOP-4."
     }
   ]
 }

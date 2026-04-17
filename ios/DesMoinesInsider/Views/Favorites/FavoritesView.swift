@@ -50,6 +50,9 @@ struct FavoritesView: View {
             .navigationDestination(for: Restaurant.self) { restaurant in
                 RestaurantDetailView(restaurant: restaurant)
             }
+            .navigationDestination(for: Attraction.self) { attraction in
+                AttractionDetailView(attraction: attraction)
+            }
             .task {
                 await viewModel.loadFavorites()
             }
@@ -105,6 +108,24 @@ struct FavoritesView: View {
         )
     }
 
+    private func removeAttractionWithUndo(attraction: Attraction) {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        undoState?.commitTask?.cancel()
+
+        viewModel.favoriteAttractions.removeAll { $0.id == attraction.id }
+
+        undoState = UndoRemoval(
+            kind: .attraction(attraction),
+            name: attraction.name,
+            commitTask: Task {
+                try? await Task.sleep(for: .seconds(5))
+                guard !Task.isCancelled else { return }
+                await viewModel.removeAttractionFavorite(attractionId: attraction.id)
+                await MainActor.run { undoState = nil }
+            }
+        )
+    }
+
     private func performUndo() {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         guard let undo = undoState else { return }
@@ -121,6 +142,9 @@ struct FavoritesView: View {
         case .restaurant(let restaurant):
             viewModel.favoriteRestaurants.append(restaurant)
             viewModel.favoriteRestaurants.sort { $0.name < $1.name }
+        case .attraction(let attraction):
+            viewModel.favoriteAttractions.append(attraction)
+            viewModel.favoriteAttractions.sort { $0.name < $1.name }
         }
 
         undoState = nil
@@ -179,6 +203,26 @@ struct FavoritesView: View {
                             } label: {
                                 FavoriteRestaurantRow(restaurant: restaurant) {
                                     removeRestaurantWithUndo(restaurant: restaurant)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+
+                // Attractions Section
+                if !viewModel.favoriteAttractions.isEmpty {
+                    savedSection(
+                        title: "Attractions",
+                        icon: "star.fill",
+                        count: viewModel.favoriteAttractions.count
+                    ) {
+                        ForEach(viewModel.favoriteAttractions) { attraction in
+                            Button {
+                                navigationPath.append(attraction)
+                            } label: {
+                                FavoriteAttractionRow(attraction: attraction) {
+                                    removeAttractionWithUndo(attraction: attraction)
                                 }
                             }
                             .buttonStyle(.plain)
@@ -435,12 +479,79 @@ private struct FavoriteRestaurantRow: View {
     }
 }
 
+// MARK: - Favorite Attraction Row
+
+private struct FavoriteAttractionRow: View {
+    let attraction: Attraction
+    let onRemove: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 14) {
+            CachedAsyncImage(url: attraction.imageUrl) {
+                ZStack {
+                    Rectangle().fill(Color.purple.opacity(0.1))
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.purple.opacity(0.4))
+                }
+            }
+            .frame(width: 80, height: 80)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(attraction.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+
+                Text(attraction.attractionType.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let rating = attraction.rating {
+                    HStack(spacing: 3) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.yellow)
+                        Text(String(format: "%.1f", rating))
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let location = attraction.location, !location.isEmpty {
+                    Label(location, systemImage: "mappin")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                if reduceMotion { onRemove() } else { withAnimation { onRemove() } }
+            } label: {
+                Image(systemName: "heart.fill")
+                    .foregroundStyle(.red)
+                    .font(.title3)
+            }
+            .accessibilityLabel("Remove from saved")
+        }
+        .padding(10)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
+    }
+}
+
 // MARK: - Undo Removal State
 
 private struct UndoRemoval {
     enum Kind {
         case event(Event)
         case restaurant(Restaurant)
+        case attraction(Attraction)
     }
 
     let kind: Kind

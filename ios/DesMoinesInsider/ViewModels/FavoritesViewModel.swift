@@ -8,6 +8,7 @@ final class FavoritesViewModel {
     var upcomingEvents: [Event] = []
     var pastEvents: [Event] = []
     var favoriteRestaurants: [Restaurant] = []
+    var favoriteAttractions: [Attraction] = []
     private(set) var isLoading = false
     private(set) var errorMessage: String?
 
@@ -17,11 +18,16 @@ final class FavoritesViewModel {
     var isAuthenticated: Bool { auth.isAuthenticated }
 
     var totalFavoriteCount: Int {
-        favoritesService.favoriteEventIds.count + favoritesService.favoriteRestaurantIds.count
+        favoritesService.favoriteEventIds.count
+            + favoritesService.favoriteRestaurantIds.count
+            + favoritesService.favoriteAttractionIds.count
     }
 
     var hasAnyFavorites: Bool {
-        !upcomingEvents.isEmpty || !pastEvents.isEmpty || !favoriteRestaurants.isEmpty
+        !upcomingEvents.isEmpty
+            || !pastEvents.isEmpty
+            || !favoriteRestaurants.isEmpty
+            || !favoriteAttractions.isEmpty
     }
 
     // MARK: - Load
@@ -58,7 +64,25 @@ final class FavoritesViewModel {
             favoriteRestaurants = []
         }
 
+        do {
+            favoriteAttractions = try await favoritesService.fetchFavoriteAttractions()
+        } catch {
+            // Attractions favorites table may not exist yet — that's OK
+            favoriteAttractions = []
+        }
+
         isLoading = false
+    }
+
+    // MARK: - Remove Attraction Favorite
+
+    func removeAttractionFavorite(attractionId: String) async {
+        do {
+            try await favoritesService.toggleFavoriteAttraction(attractionId: attractionId)
+            favoriteAttractions.removeAll { $0.id == attractionId }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     func refresh() async {

@@ -13,6 +13,7 @@ final class FavoritesService {
 
     private(set) var favoriteEventIds: Set<String> = []
     private(set) var favoriteRestaurantIds: Set<String> = []
+    private(set) var favoriteAttractionIds: Set<String> = []
     private(set) var isLoading = false
 
     private let supabase: SupabaseClient? = SupabaseService.shared.client
@@ -30,7 +31,8 @@ final class FavoritesService {
         isLoading = true
         async let events: () = loadEventFavorites()
         async let restaurants: () = loadRestaurantFavorites()
-        _ = await (events, restaurants)
+        async let attractions: () = loadAttractionFavorites()
+        _ = await (events, restaurants, attractions)
         isLoading = false
     }
 
@@ -239,10 +241,136 @@ final class FavoritesService {
     }
 
     // ================================================================
+    // MARK: - Attraction Favorites
+    // ================================================================
+
+    /// Load saved attractions for the current user. Falls back to local
+    /// UserDefaults storage when the `user_attraction_interactions` table is
+    /// not yet available (matches the restaurant-favorites fallback pattern).
+    private func loadAttractionFavorites() async {
+        guard let userId = AuthService.shared.currentUser?.id.uuidString else {
+            favoriteAttractionIds = []
+            return
+        }
+
+        do {
+            let client = try db()
+            struct FavoriteRow: Decodable {
+                let attraction_id: String
+            }
+            let rows: [FavoriteRow] = try await client
+                .from("user_attraction_interactions")
+                .select("attraction_id")
+                .eq("user_id", value: userId)
+                .eq("interaction_type", value: "favorite")
+                .execute()
+                .value
+
+            favoriteAttractionIds = Set(rows.map(\.attraction_id))
+        } catch {
+            // Table may not exist yet — fall back to local storage.
+            favoriteAttractionIds = loadLocalAttractionFavorites()
+        }
+    }
+
+    /// Toggle an attraction favorite. Returns `true` if now favorited, `false` if removed.
+    @discardableResult
+    func toggleFavoriteAttraction(attractionId: String) async throws -> Bool {
+        guard let userId = AuthService.shared.currentUser?.id.uuidString else {
+            throw FavoritesError.notAuthenticated
+        }
+
+        if favoriteAttractionIds.contains(attractionId) {
+            return try await removeAttractionFavorite(userId: userId, attractionId: attractionId)
+        } else {
+            return try await addAttractionFavorite(userId: userId, attractionId: attractionId)
+        }
+    }
+
+    private func addAttractionFavorite(userId: String, attractionId: String) async throws -> Bool {
+        let maxFavorites = SubscriptionTier.free.maxFavorites
+        if maxFavorites > 0 && favoriteAttractionIds.count >= maxFavorites {
+            throw FavoritesError.limitReached(max: maxFavorites)
+        }
+
+        do {
+            struct InsertRow: Encodable {
+                let user_id: String
+                let attraction_id: String
+                let interaction_type: String
+            }
+
+            let client = try db()
+            try await client
+                .from("user_attraction_interactions")
+                .insert(InsertRow(user_id: userId, attraction_id: attractionId, interaction_type: "favorite"))
+                .execute()
+        } catch {
+            saveLocalAttractionFavorite(attractionId, add: true)
+        }
+
+        favoriteAttractionIds.insert(attractionId)
+        return true
+    }
+
+    private func removeAttractionFavorite(userId: String, attractionId: String) async throws -> Bool {
+        do {
+            let client = try db()
+            try await client
+                .from("user_attraction_interactions")
+                .delete()
+                .eq("user_id", value: userId)
+                .eq("attraction_id", value: attractionId)
+                .eq("interaction_type", value: "favorite")
+                .execute()
+        } catch {
+            saveLocalAttractionFavorite(attractionId, add: false)
+        }
+
+        favoriteAttractionIds.remove(attractionId)
+        return false
+    }
+
+    /// Fetch the full Attraction objects for all favorited attraction IDs.
+    func fetchFavoriteAttractions() async throws -> [Attraction] {
+        guard !favoriteAttractionIds.isEmpty else { return [] }
+        return try await withRetry {
+            let client = try self.db()
+            let attractions: [Attraction] = try await client
+                .from("attractions")
+                .select()
+                .in("id", values: Array(self.favoriteAttractionIds))
+                .order("name", ascending: true)
+                .execute()
+                .value
+            return attractions
+        }
+    }
+
+    func isAttractionFavorited(_ attractionId: String) -> Bool {
+        favoriteAttractionIds.contains(attractionId)
+    }
+
+    // ================================================================
+    // MARK: - Sign-Out Cleanup
+    // ================================================================
+
+    /// Clear all in-memory favorites and local-fallback storage. Call on sign-out
+    /// so the next user on the same device starts with an empty Saved tab.
+    func reset() {
+        favoriteEventIds = []
+        favoriteRestaurantIds = []
+        favoriteAttractionIds = []
+        UserDefaults.standard.removeObject(forKey: localRestaurantKey)
+        UserDefaults.standard.removeObject(forKey: localAttractionKey)
+    }
+
+    // ================================================================
     // MARK: - Local Storage Fallback (Restaurant Favorites)
     // ================================================================
 
     private let localRestaurantKey = "localRestaurantFavorites"
+    private let localAttractionKey = "localAttractionFavorites"
 
     private func loadLocalRestaurantFavorites() -> Set<String> {
         let array = UserDefaults.standard.stringArray(forKey: localRestaurantKey) ?? []
@@ -257,6 +385,21 @@ final class FavoritesService {
             favorites.remove(id)
         }
         UserDefaults.standard.set(Array(favorites), forKey: localRestaurantKey)
+    }
+
+    private func loadLocalAttractionFavorites() -> Set<String> {
+        let array = UserDefaults.standard.stringArray(forKey: localAttractionKey) ?? []
+        return Set(array)
+    }
+
+    private func saveLocalAttractionFavorite(_ id: String, add: Bool) {
+        var favorites = loadLocalAttractionFavorites()
+        if add {
+            favorites.insert(id)
+        } else {
+            favorites.remove(id)
+        }
+        UserDefaults.standard.set(Array(favorites), forKey: localAttractionKey)
     }
 
     // ================================================================
