@@ -39,9 +39,7 @@ struct HomeView: View {
                     }
 
                     // Ad banner for free users (hidden for subscribers — ad-free experience)
-                    AdBannerView()
-                        .padding(.horizontal)
-                        .padding(.vertical, 4)
+                    AdSlot(.feed)
 
                     // Popular Restaurants
                     if !restaurantsVM.restaurants.isEmpty {
@@ -266,27 +264,29 @@ struct HomeView: View {
                         .foregroundStyle(.secondary)
 
                     if let category = viewModel.selectedCategory {
-                        chip(category.displayName, icon: category.icon, tint: category.color) {
-                            viewModel.selectedCategory = nil
-                        }
+                        FilterChipView(
+                            text: category.displayName,
+                            icon: category.icon,
+                            tint: category.color
+                        ) { viewModel.selectedCategory = nil }
                     }
                     if let preset = viewModel.selectedDatePreset {
-                        chip(preset.rawValue, icon: "calendar") {
+                        FilterChipView(text: preset.rawValue, icon: "calendar") {
                             viewModel.selectedDatePreset = nil
                         }
                     }
                     if viewModel.showFreeOnly {
-                        chip("Free", icon: "ticket.fill", tint: .green) {
+                        FilterChipView(text: "Free", icon: "ticket.fill", tint: .green) {
                             viewModel.showFreeOnly = false
                         }
                     }
                     if viewModel.showFeaturedOnly {
-                        chip("Featured", icon: "star.fill", tint: .orange) {
+                        FilterChipView(text: "Featured", icon: "star.fill", tint: .orange) {
                             viewModel.showFeaturedOnly = false
                         }
                     }
                     ForEach(Array(viewModel.selectedCities).sorted(), id: \.self) { city in
-                        chip(city, icon: "mappin.and.ellipse") {
+                        FilterChipView(text: city, icon: "mappin.and.ellipse") {
                             viewModel.selectedCities.remove(city)
                         }
                     }
@@ -303,31 +303,6 @@ struct HomeView: View {
                 .padding(.vertical, 4)
             }
         }
-    }
-
-    private func chip(
-        _ text: String,
-        icon: String,
-        tint: Color = .accentColor,
-        onRemove: @escaping () -> Void
-    ) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            onRemove()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 10))
-                Text(text).font(.caption.weight(.medium)).lineLimit(1)
-                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .foregroundStyle(tint)
-            .background(tint.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(tint.opacity(0.3), lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Remove filter: \(text)")
     }
 
     // MARK: - Events List

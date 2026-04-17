@@ -111,20 +111,57 @@ final class FavoritesService {
         return false
     }
 
-    /// Fetch the full Event objects for all favorited event IDs.
-    func fetchFavoriteEvents() async throws -> [Event] {
-        guard !favoriteEventIds.isEmpty else { return [] }
-        return try await withRetry {
+    /// Default page size for paginated favorite fetches. Matches
+    /// Config.defaultPageSize in spirit but scoped so we don't blow past the
+    /// Supabase REST `.in()` filter parameter limit on extreme edge cases.
+    static let favoritesPageSize = 25
+
+    /// Paginated result for favorite queries. `hasMore` is true when another
+    /// page can be fetched by incrementing the offset by the caller's limit.
+    struct FavoritesPage<Item> {
+        let items: [Item]
+        let hasMore: Bool
+    }
+
+    /// Fetch a single page of favorite Events. Pages are ordered by the sorted
+    /// set of favorite IDs so results are stable across loads.
+    func fetchFavoriteEventsPage(offset: Int = 0, limit: Int = FavoritesService.favoritesPageSize) async throws -> FavoritesPage<Event> {
+        let sortedIds = favoriteEventIds.sorted()
+        guard !sortedIds.isEmpty, offset < sortedIds.count else {
+            return FavoritesPage(items: [], hasMore: false)
+        }
+        let end = min(offset + limit, sortedIds.count)
+        let slice = Array(sortedIds[offset..<end])
+
+        let events: [Event] = try await withRetry {
             let client = try self.db()
-            let events: [Event] = try await client
+            return try await client
                 .from("events")
                 .select()
-                .in("id", values: Array(self.favoriteEventIds))
+                .in("id", values: slice)
                 .order("date", ascending: true)
                 .execute()
                 .value
-            return events
         }
+
+        return FavoritesPage(items: events, hasMore: end < sortedIds.count)
+    }
+
+    /// Convenience wrapper returning every favorite Event. Prefer
+    /// `fetchFavoriteEventsPage` for list UIs — the Saved tab paginates in
+    /// batches of `favoritesPageSize` so power users with 100+ favorites
+    /// don't pay the full decode cost on tab open.
+    func fetchFavoriteEvents() async throws -> [Event] {
+        guard !favoriteEventIds.isEmpty else { return [] }
+        var collected: [Event] = []
+        var offset = 0
+        repeat {
+            let page = try await fetchFavoriteEventsPage(offset: offset)
+            collected.append(contentsOf: page.items)
+            if !page.hasMore { break }
+            offset += Self.favoritesPageSize
+        } while offset < favoriteEventIds.count
+        return collected
     }
 
     func isEventFavorited(_ eventId: String) -> Bool {
@@ -220,20 +257,42 @@ final class FavoritesService {
         return false
     }
 
-    /// Fetch the full Restaurant objects for all favorited restaurant IDs.
-    func fetchFavoriteRestaurants() async throws -> [Restaurant] {
-        guard !favoriteRestaurantIds.isEmpty else { return [] }
-        return try await withRetry {
+    /// Paginated fetch of favorite Restaurants. See `fetchFavoriteEventsPage`.
+    func fetchFavoriteRestaurantsPage(offset: Int = 0, limit: Int = FavoritesService.favoritesPageSize) async throws -> FavoritesPage<Restaurant> {
+        let sortedIds = favoriteRestaurantIds.sorted()
+        guard !sortedIds.isEmpty, offset < sortedIds.count else {
+            return FavoritesPage(items: [], hasMore: false)
+        }
+        let end = min(offset + limit, sortedIds.count)
+        let slice = Array(sortedIds[offset..<end])
+
+        let restaurants: [Restaurant] = try await withRetry {
             let client = try self.db()
-            let restaurants: [Restaurant] = try await client
+            return try await client
                 .from("restaurants")
                 .select()
-                .in("id", values: Array(self.favoriteRestaurantIds))
+                .in("id", values: slice)
                 .order("name", ascending: true)
                 .execute()
                 .value
-            return restaurants
         }
+
+        return FavoritesPage(items: restaurants, hasMore: end < sortedIds.count)
+    }
+
+    /// Convenience wrapper returning every favorite Restaurant. Prefer
+    /// `fetchFavoriteRestaurantsPage` for list UIs.
+    func fetchFavoriteRestaurants() async throws -> [Restaurant] {
+        guard !favoriteRestaurantIds.isEmpty else { return [] }
+        var collected: [Restaurant] = []
+        var offset = 0
+        repeat {
+            let page = try await fetchFavoriteRestaurantsPage(offset: offset)
+            collected.append(contentsOf: page.items)
+            if !page.hasMore { break }
+            offset += Self.favoritesPageSize
+        } while offset < favoriteRestaurantIds.count
+        return collected
     }
 
     func isRestaurantFavorited(_ restaurantId: String) -> Bool {
@@ -331,20 +390,41 @@ final class FavoritesService {
         return false
     }
 
-    /// Fetch the full Attraction objects for all favorited attraction IDs.
-    func fetchFavoriteAttractions() async throws -> [Attraction] {
-        guard !favoriteAttractionIds.isEmpty else { return [] }
-        return try await withRetry {
+    /// Paginated fetch of favorite Attractions. See `fetchFavoriteEventsPage`.
+    func fetchFavoriteAttractionsPage(offset: Int = 0, limit: Int = FavoritesService.favoritesPageSize) async throws -> FavoritesPage<Attraction> {
+        let sortedIds = favoriteAttractionIds.sorted()
+        guard !sortedIds.isEmpty, offset < sortedIds.count else {
+            return FavoritesPage(items: [], hasMore: false)
+        }
+        let end = min(offset + limit, sortedIds.count)
+        let slice = Array(sortedIds[offset..<end])
+
+        let attractions: [Attraction] = try await withRetry {
             let client = try self.db()
-            let attractions: [Attraction] = try await client
+            return try await client
                 .from("attractions")
                 .select()
-                .in("id", values: Array(self.favoriteAttractionIds))
+                .in("id", values: slice)
                 .order("name", ascending: true)
                 .execute()
                 .value
-            return attractions
         }
+
+        return FavoritesPage(items: attractions, hasMore: end < sortedIds.count)
+    }
+
+    /// Convenience wrapper returning every favorite Attraction.
+    func fetchFavoriteAttractions() async throws -> [Attraction] {
+        guard !favoriteAttractionIds.isEmpty else { return [] }
+        var collected: [Attraction] = []
+        var offset = 0
+        repeat {
+            let page = try await fetchFavoriteAttractionsPage(offset: offset)
+            collected.append(contentsOf: page.items)
+            if !page.hasMore { break }
+            offset += Self.favoritesPageSize
+        } while offset < favoriteAttractionIds.count
+        return collected
     }
 
     func isAttractionFavorited(_ attractionId: String) -> Bool {

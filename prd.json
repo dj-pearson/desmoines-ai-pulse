@@ -647,8 +647,8 @@
         "Repeat sign-in on same device shows empty Favorites/Search History until user re-loads"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": "TOP-4 CRITICAL — implementing in this PR."
+      "passes": true,
+      "notes": "FIXED (commit c258154): AuthService.signOut() now wraps cleanup in a defer block that fires even if supabase.auth.signOut() throws. Order: reset in-memory auth state → BiometricAuthService.reset() (reads its Keychain entry before it's wiped) → SessionTimeoutService.stopTracking() → SearchHistoryService.clearAll() → FavoritesService.reset() → Task.detached { SpotlightService.removeAllItems(); QueryCache.clearAll() } → KeychainService.deleteAll(). FavoritesService.reset() zeroes favoriteEventIds/favoriteRestaurantIds/favoriteAttractionIds and removes the local UserDefaults fallback keys. Verified: sign out on flaky network still purges local data; next sign-in on the same device shows empty Saved/Search History."
     },
     {
       "id": "IOS-AUDIT-2026-002",
@@ -663,8 +663,8 @@
         "Tested: leave the app open for >idle threshold (mocked to 30s in DEBUG) and confirm AuthView re-appears"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": "TOP-4 CRITICAL — implementing in this PR."
+      "passes": true,
+      "notes": "FIXED (commit c258154): AuthService.startAuthListener now calls SessionTimeoutService.startTracking(isAdmin:) on .initialSession/.signedIn/.tokenRefreshed and stopTracking() on .signedOut. SessionState made Equatable so DesMoinesInsiderApp can .onChange(of:); on .expired we sign out and show a 'Signed out for inactivity' alert. Cold-launch calls sessionTimeout.isSessionValid() and signs out before authenticated UI renders. A new SessionTimeoutBanner surfaces the .warning state with minutesRemaining and a 'Stay signed in' button that calls recordActivity()."
     },
     {
       "id": "IOS-AUDIT-2026-003",
@@ -679,8 +679,8 @@
         "VoiceOver: Sign Out button has accessibilityLabel 'Sign out and use password to re-authenticate'"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": "TOP-4 CRITICAL — implementing in this PR."
+      "passes": true,
+      "notes": "FIXED (commit c258154): BiometricLockView rewritten — Skip button removed, replaced with a destructive 'Sign Out' button (accessibilityLabel 'Sign out and use password to re-authenticate') that calls AuthService.signOut() and lets the app shell route back to AuthView automatically. View auto-invokes biometric.authenticate() in .task on first appear; subsequent retries go through the 'Try Again' button. After 3 failed attempts the retry button is disabled (grayed) and the prompt explains to sign out. Removed the duplicate authenticate() call from the parent DesMoinesInsiderApp .task so we never fire two simultaneous evaluatePolicy calls."
     },
     {
       "id": "IOS-AUDIT-2026-004",
@@ -737,8 +737,8 @@
         "No regression in filter responsiveness — user-perceivable latency under 100ms"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": "Documented for follow-up; not in TOP-4."
+      "passes": true,
+      "notes": "FIXED: RestaurantsViewModel.applyClientSide(to:openNow:dietary:) converted to a nonisolated private static pure function, wrapped by a new applyClientSideOffMain(list:openNow:dietary:) that runs the filter inside Task.detached(priority: .userInitiated) and hops the result back to @MainActor on return. fetchRestaurants now awaits the off-main variant after loading. A new scheduleClientFilters() fires a 150ms-debounced Task that cancels its predecessor, so rapid Open Now / dietary toggles coalesce into a single off-main filter pass. Hot no-op path (openNow=false, dietary empty) stays synchronous to avoid the actor hop."
     },
     {
       "id": "IOS-AUDIT-2026-008",
@@ -751,8 +751,8 @@
         "Tab open with 100+ favorites renders first page in under 500ms"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": "Documented for follow-up; not in TOP-4."
+      "passes": true,
+      "notes": "FIXED: FavoritesService exposes fetchFavoriteEventsPage / fetchFavoriteRestaurantsPage / fetchFavoriteAttractionsPage — each returns a FavoritesPage<T> with items + hasMore. Slicing is deterministic via the sorted() favorite-ID set so pages are stable across loads. Default page size is FavoritesService.favoritesPageSize (25). The legacy fetchFavoriteEvents / fetchFavoriteRestaurants / fetchFavoriteAttractions are now thin convenience wrappers that walk pages internally. FavoritesViewModel was rewritten to drive per-section pagination (events / restaurants / attractions) with isLoadingMore* flags, hasMore* flags, and per-row loadMore*IfNeeded(currentItem:) helpers that only fire when the user scrolls within 5 cells of the end. FavoritesView wires .task { await viewModel.loadMoreEventsIfNeeded(currentItem: event) } on every event/restaurant/attraction row and renders a ProgressView spinner at the tail of each section while the next page is fetching. Tab open with 100+ favorites now renders the first 25 immediately instead of decoding everything up-front."
     },
     {
       "id": "IOS-AUDIT-2026-009",
@@ -765,8 +765,8 @@
         "No visual regression — screenshots match before/after"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": "Documented for follow-up; not in TOP-4."
+      "passes": true,
+      "notes": "FIXED: New Views/Components/FilterChipView.swift (text:icon:tint:onRemove:) is now the single source for removable filter chips — consumed by HomeView, RestaurantsView, and AttractionsView. The three duplicated private chip(...) helpers were removed (HomeView.swift:308-331, RestaurantsView.swift:189-212, AttractionsView.swift:248-267). New Views/Components/AdSlot.swift wraps AdBannerView with a Placement enum (.feed for vertical feeds with standard horizontal padding, .detail for tightly-laid-out detail pages). HomeView feed, RestaurantsView feed, RestaurantDetailView body, and AttractionsView all consume AdSlot. Free-tier check stays in AdBannerView; AdSlot is a pure layout wrapper."
     },
     {
       "id": "IOS-AUDIT-2026-010",
@@ -779,8 +779,8 @@
         "No regression in cold-launch UX (biometric prompt order remains unchanged)"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": "Documented for follow-up; not in TOP-4."
+      "passes": true,
+      "notes": "FIXED: KeychainService.save() now uses kSecAttrAccessibleWhenUnlockedThisDeviceOnly (exposed as static let accessibility so future changes stay centralised). Audited all Keychain consumers — AuthService, SessionTimeoutService, BiometricAuthService, SettingsView — none require locked access; PushNotificationService does not read Keychain. Added migrateAccessibilityIfNeeded() that enumerates every generic-password item under the service bundle, reads each account+data, and re-saves via delete()+save() so existing installs get re-stamped with the stricter flag. Gated by a UserDefaults migration version (keychain.accessibilityMigrationVersion = 1) so it only runs once per upgrade. Called from DesMoinesInsiderApp.task before QueryCache.pruneExpired so later Keychain reads land on the new flag. Biometric prompt ordering unchanged."
     }
   ]
 }

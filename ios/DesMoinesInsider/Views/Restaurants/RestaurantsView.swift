@@ -25,7 +25,7 @@ struct RestaurantsView: View {
                         }
 
                         // Ad banner for free users (hidden for subscribers)
-                        AdBannerView()
+                        AdSlot(.detail)
 
                         // Error banner
                         if let error = viewModel.errorMessage {
@@ -139,37 +139,37 @@ struct RestaurantsView: View {
                     .foregroundStyle(.secondary)
 
                 if viewModel.showOpenNowOnly {
-                    chip("Open Now", icon: "clock.fill", tint: .green) {
+                    FilterChipView(text: "Open Now", icon: "clock.fill", tint: .green) {
                         viewModel.showOpenNowOnly = false
                     }
                 }
                 if viewModel.featuredOnly {
-                    chip("Featured", icon: "sparkles", tint: .orange) {
+                    FilterChipView(text: "Featured", icon: "sparkles", tint: .orange) {
                         viewModel.featuredOnly = false
                     }
                 }
                 if viewModel.minRating > 0 {
-                    chip(ratingLabel(viewModel.minRating), icon: "star.fill", tint: .yellow) {
+                    FilterChipView(text: ratingLabel(viewModel.minRating), icon: "star.fill", tint: .yellow) {
                         viewModel.minRating = 0
                     }
                 }
                 ForEach(Array(viewModel.selectedCuisines).sorted(), id: \.self) { cuisine in
-                    chip(cuisine, icon: "fork.knife") {
+                    FilterChipView(text: cuisine, icon: "fork.knife") {
                         viewModel.selectedCuisines.remove(cuisine)
                     }
                 }
                 ForEach(Array(viewModel.selectedPriceRanges).sorted(), id: \.self) { price in
-                    chip(price, icon: "dollarsign.circle") {
+                    FilterChipView(text: price, icon: "dollarsign.circle") {
                         viewModel.selectedPriceRanges.remove(price)
                     }
                 }
                 ForEach(Array(viewModel.selectedLocations).sorted(), id: \.self) { loc in
-                    chip(loc, icon: "mappin.and.ellipse") {
+                    FilterChipView(text: loc, icon: "mappin.and.ellipse") {
                         viewModel.selectedLocations.remove(loc)
                     }
                 }
                 ForEach(Array(viewModel.selectedDietary).sorted(), id: \.self) { diet in
-                    chip(diet.capitalized, icon: "leaf.fill") {
+                    FilterChipView(text: diet.capitalized, icon: "leaf.fill") {
                         viewModel.selectedDietary.remove(diet)
                     }
                 }
@@ -184,31 +184,6 @@ struct RestaurantsView: View {
             }
             .padding(.vertical, 2)
         }
-    }
-
-    private func chip(
-        _ text: String,
-        icon: String,
-        tint: Color = .accentColor,
-        onRemove: @escaping () -> Void
-    ) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            onRemove()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 10))
-                Text(text).font(.caption.weight(.medium))
-                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .foregroundStyle(tint)
-            .background(tint.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(tint.opacity(0.3), lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Remove filter: \(text)")
     }
 
     private func ratingLabel(_ r: Double) -> String {

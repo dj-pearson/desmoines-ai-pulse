@@ -186,6 +186,9 @@ struct FavoritesView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .task {
+                                await viewModel.loadMoreEventsIfNeeded(currentItem: event)
+                            }
                         }
                     }
                 }
@@ -206,6 +209,15 @@ struct FavoritesView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .task {
+                                await viewModel.loadMoreRestaurantsIfNeeded(currentItem: restaurant)
+                            }
+                        }
+
+                        if viewModel.isLoadingMoreRestaurants {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                         }
                     }
                 }
@@ -226,6 +238,15 @@ struct FavoritesView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .task {
+                                await viewModel.loadMoreAttractionsIfNeeded(currentItem: attraction)
+                            }
+                        }
+
+                        if viewModel.isLoadingMoreAttractions {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                         }
                     }
                 }
@@ -246,6 +267,15 @@ struct FavoritesView: View {
                                 }
                             }
                             .buttonStyle(.plain)
+                            .task {
+                                await viewModel.loadMoreEventsIfNeeded(currentItem: event)
+                            }
+                        }
+
+                        if viewModel.isLoadingMoreEvents {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                         }
                     }
                 }

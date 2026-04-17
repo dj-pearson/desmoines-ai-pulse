@@ -218,17 +218,17 @@ struct AttractionsView: View {
                     .foregroundStyle(.secondary)
 
                 if viewModel.featuredOnly {
-                    chip("Featured", icon: "sparkles", tint: .orange) {
+                    FilterChipView(text: "Featured", icon: "sparkles", tint: .orange) {
                         viewModel.featuredOnly = false
                     }
                 }
                 if viewModel.minRating > 0 {
-                    chip(ratingLabel(viewModel.minRating), icon: "star.fill", tint: .yellow) {
+                    FilterChipView(text: ratingLabel(viewModel.minRating), icon: "star.fill", tint: .yellow) {
                         viewModel.minRating = 0
                     }
                 }
                 ForEach(Array(viewModel.selectedTypes).sorted(by: { $0.displayName < $1.displayName })) { type in
-                    chip(type.displayName, icon: type.icon) {
+                    FilterChipView(text: type.displayName, icon: type.icon) {
                         viewModel.selectedTypes.remove(type)
                     }
                 }
@@ -243,31 +243,6 @@ struct AttractionsView: View {
             }
             .padding(.vertical, 2)
         }
-    }
-
-    private func chip(
-        _ text: String,
-        icon: String,
-        tint: Color = .accentColor,
-        onRemove: @escaping () -> Void
-    ) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            onRemove()
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 10))
-                Text(text).font(.caption.weight(.medium))
-                Image(systemName: "xmark").font(.system(size: 9, weight: .bold))
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .foregroundStyle(tint)
-            .background(tint.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(tint.opacity(0.3), lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Remove filter: \(text)")
     }
 
     // MARK: - Sort Menu

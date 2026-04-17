@@ -82,6 +82,11 @@ struct DesMoinesInsiderApp: App {
             .task {
                 launchCount += 1
 
+                // One-time migration of Keychain items to the stricter
+                // WhenUnlockedThisDeviceOnly accessibility flag. Runs before
+                // any Keychain reads (BiometricAuthService, session checks).
+                KeychainService.shared.migrateAccessibilityIfNeeded()
+
                 // Prune expired cache entries on launch
                 await QueryCache.shared.pruneExpired()
 
