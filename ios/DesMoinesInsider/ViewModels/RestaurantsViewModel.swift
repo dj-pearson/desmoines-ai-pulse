@@ -225,7 +225,7 @@ final class RestaurantsViewModel {
     }
 
     /// Keyword list mirroring the web app's dietary search fallback.
-    private static func keywords(for diet: String) -> [String] {
+    nonisolated private static func keywords(for diet: String) -> [String] {
         switch diet {
         case "vegan":        return ["vegan"]
         case "vegetarian":   return ["vegetarian", "veggie"]
