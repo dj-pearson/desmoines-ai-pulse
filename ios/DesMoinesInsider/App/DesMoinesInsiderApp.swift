@@ -8,11 +8,13 @@ struct DesMoinesInsiderApp: App {
     @State private var locationService = LocationService.shared
     @State private var biometricService = BiometricAuthService.shared
     @State private var consent = ConsentService.shared
+    @State private var sessionTimeout = SessionTimeoutService.shared
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("appLaunchCount") private var launchCount = 0
     @State private var showJailbreakWarning = false
     @State private var awaitingBiometric = false
+    @State private var sessionExpiredMessage: String?
 
     /// MetricKit subscriber — retained for the lifetime of the app.
     private let metricKit = MetricKitSubscriber.shared
@@ -37,8 +39,15 @@ struct DesMoinesInsiderApp: App {
                     BiometricLockView {
                         awaitingBiometric = false
                     }
+                } else if authService.isAuthenticated && authService.needsEmailVerification {
+                    VerifyEmailView()
                 } else {
                     MainTabView()
+                        .safeAreaInset(edge: .top, spacing: 0) {
+                            SessionTimeoutBanner(state: sessionTimeout.sessionState) {
+                                sessionTimeout.recordActivity()
+                            }
+                        }
                 }
             }
             .alert("Security Warning", isPresented: $showJailbreakWarning) {
@@ -46,12 +55,37 @@ struct DesMoinesInsiderApp: App {
             } message: {
                 Text("This device may have been modified. Your data could be at risk. We recommend using an unmodified device for the best security.")
             }
+            .alert(
+                "Signed Out",
+                isPresented: Binding(
+                    get: { sessionExpiredMessage != nil },
+                    set: { if !$0 { sessionExpiredMessage = nil } }
+                ),
+                actions: {
+                    Button("OK", role: .cancel) { sessionExpiredMessage = nil }
+                },
+                message: {
+                    Text(sessionExpiredMessage ?? "")
+                }
+            )
+            .onChange(of: sessionTimeout.sessionState) { _, newState in
+                guard case .expired = newState, authService.isAuthenticated else { return }
+                Task {
+                    sessionExpiredMessage = "You were signed out for inactivity. Sign in again to continue."
+                    try? await authService.signOut()
+                }
+            }
             .onOpenURL { url in
                 // Handle auth callbacks (email verification, OAuth redirects, etc.)
                 SupabaseService.shared.client?.handle(url)
             }
             .task {
                 launchCount += 1
+
+                // One-time migration of Keychain items to the stricter
+                // WhenUnlockedThisDeviceOnly accessibility flag. Runs before
+                // any Keychain reads (BiometricAuthService, session checks).
+                KeychainService.shared.migrateAccessibilityIfNeeded()
 
                 // Prune expired cache entries on launch
                 await QueryCache.shared.pruneExpired()
@@ -61,14 +95,19 @@ struct DesMoinesInsiderApp: App {
                     showJailbreakWarning = true
                 }
 
-                // Biometric auth on launch (if enabled and user has a session)
+                // Cold-launch session validity check: if the persisted timestamps
+                // show the session is past its idle/absolute window, sign out
+                // before any authenticated UI renders.
+                if authService.isAuthenticated, !sessionTimeout.isSessionValid() {
+                    sessionExpiredMessage = "Your session expired while the app was closed. Please sign in again."
+                    try? await authService.signOut()
+                }
+
+                // Biometric auth on launch (if enabled and user has a session).
+                // The actual prompt is owned by BiometricLockView's .task so
+                // we don't fire two simultaneous evaluatePolicy calls.
                 if biometricService.isEnabled && authService.isAuthenticated {
                     awaitingBiometric = true
-                    let success = await biometricService.authenticate()
-                    if success {
-                        awaitingBiometric = false
-                    }
-                    // If biometric fails, user stays on lock screen with retry button
                 }
 
                 if authService.isAuthenticated {
@@ -129,11 +168,25 @@ private struct LaunchScreenView: View {
 // MARK: - Biometric Lock Screen
 
 /// Shown when biometric auth is enabled and the user needs to verify their identity.
+///
+/// SECURITY: This view does NOT offer a "Skip" option — bypassing biometric auth
+/// would defeat its purpose. Users who can't authenticate must sign out and
+/// re-enter their email/password. After `maxFailedAttempts` retries the retry
+/// button is disabled to discourage brute-forcing.
 private struct BiometricLockView: View {
     let onUnlock: () -> Void
 
     @State private var biometric = BiometricAuthService.shared
+    @State private var auth = AuthService.shared
     @State private var isAuthenticating = false
+    @State private var failedAttempts = 0
+    @State private var isSigningOut = false
+
+    private let maxFailedAttempts = 3
+
+    private var isRetryDisabled: Bool {
+        isAuthenticating || failedAttempts >= maxFailedAttempts
+    }
 
     var body: some View {
         ZStack {
@@ -149,41 +202,75 @@ private struct BiometricLockView: View {
                     .font(.title.bold())
                     .foregroundStyle(.white)
 
-                Text("Authenticate with \(biometric.biometricName) to continue")
+                Text(promptMessage)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
 
                 Button {
-                    Task {
-                        isAuthenticating = true
-                        let success = await biometric.authenticate()
-                        if success {
-                            onUnlock()
-                        }
-                        isAuthenticating = false
-                    }
+                    Task { await attemptAuthentication() }
                 } label: {
                     Label("Try Again", systemImage: biometric.biometricIcon)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
+                        .background(isRetryDisabled ? Color.gray.opacity(0.4) : Color.accentColor)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
-                .disabled(isAuthenticating)
+                .disabled(isRetryDisabled)
                 .padding(.horizontal, 48)
                 .accessibilityLabel("Authenticate with \(biometric.biometricName)")
 
-                Button("Skip") {
-                    onUnlock()
+                Button(role: .destructive) {
+                    Task { await signOutAndReturnToLogin() }
+                } label: {
+                    Text(isSigningOut ? "Signing out…" : "Sign Out")
+                        .font(.subheadline.weight(.semibold))
                 }
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .accessibilityLabel("Skip biometric authentication")
+                .disabled(isSigningOut)
+                .foregroundStyle(.white.opacity(0.85))
+                .accessibilityLabel("Sign out and use password to re-authenticate")
             }
         }
+        .task {
+            // Auto-invoke biometric prompt on first appear so the user doesn't
+            // need an extra tap. Subsequent retries go through the button.
+            if failedAttempts == 0 {
+                await attemptAuthentication()
+            }
+        }
+    }
+
+    private var promptMessage: String {
+        if failedAttempts >= maxFailedAttempts {
+            return "Too many failed attempts. Sign out and use your password to continue."
+        }
+        return "Authenticate with \(biometric.biometricName) to continue."
+    }
+
+    private func attemptAuthentication() async {
+        guard !isRetryDisabled else { return }
+        isAuthenticating = true
+        let success = await biometric.authenticate()
+        isAuthenticating = false
+        if success {
+            failedAttempts = 0
+            onUnlock()
+        } else {
+            failedAttempts += 1
+        }
+    }
+
+    private func signOutAndReturnToLogin() async {
+        isSigningOut = true
+        try? await auth.signOut()
+        // Sign-out flips isAuthenticated → false, which routes the app shell
+        // away from BiometricLockView automatically. We still call onUnlock so
+        // the awaitingBiometric flag clears in the parent.
+        onUnlock()
+        isSigningOut = false
     }
 }
 

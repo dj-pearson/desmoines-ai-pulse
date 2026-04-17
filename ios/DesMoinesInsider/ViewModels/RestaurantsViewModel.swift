@@ -38,13 +38,14 @@ final class RestaurantsViewModel {
         didSet { resetAndFetch() }
     }
     var showOpenNowOnly = false {
-        didSet { if oldValue != showOpenNowOnly { applyClientFilters() } }
+        didSet { if oldValue != showOpenNowOnly { scheduleClientFilters() } }
     }
     var activePreset: RestaurantPreset? = nil
 
     private var currentOffset = 0
     private let pageSize = Config.defaultPageSize
     private var fetchTask: Task<Void, Never>?
+    private var clientFilterTask: Task<Void, Never>?
 
     private let service = RestaurantsService.shared
     private let cache = QueryCache.shared
@@ -108,9 +109,11 @@ final class RestaurantsViewModel {
             } else {
                 allRestaurants.append(contentsOf: response.restaurants)
             }
-            // Apply client-side filters (open now, dietary)
-            restaurants = Self.applyClientSide(
-                to: allRestaurants,
+            // Apply client-side filters (open now, dietary) on a background
+            // task so 100+ isOpenNow() calls + description string-matching
+            // don't block the main thread during scroll.
+            restaurants = await Self.applyClientSideOffMain(
+                list: allRestaurants,
                 openNow: showOpenNowOnly,
                 dietary: selectedDietary
             )
@@ -164,16 +167,42 @@ final class RestaurantsViewModel {
     /// All fetched restaurants before client-side filters are applied.
     private var allRestaurants: [Restaurant] = []
 
-    private func applyClientFilters() {
-        restaurants = Self.applyClientSide(
-            to: allRestaurants,
-            openNow: showOpenNowOnly,
-            dietary: selectedDietary
-        )
+    /// Debounce toggle bursts (user tapping Open Now on/off quickly) and run
+    /// the actual filter off the main thread. Matches the 150ms target in
+    /// IOS-AUDIT-2026-007 acceptance criteria.
+    private func scheduleClientFilters() {
+        clientFilterTask?.cancel()
+        clientFilterTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, let self else { return }
+            let filtered = await Self.applyClientSideOffMain(
+                list: self.allRestaurants,
+                openNow: self.showOpenNowOnly,
+                dietary: self.selectedDietary
+            )
+            guard !Task.isCancelled else { return }
+            self.restaurants = filtered
+        }
     }
 
-    /// Shared filter helper — runs after data loads and on client-filter toggle.
-    private static func applyClientSide(
+    /// Runs `applyClientSide` inside a detached task so the isOpenNow() /
+    /// string-matching loop never blocks the UI. Keeps the pure filter logic
+    /// as a nonisolated static function so it's straightforward to unit test.
+    private static func applyClientSideOffMain(
+        list: [Restaurant],
+        openNow: Bool,
+        dietary: Set<String>
+    ) async -> [Restaurant] {
+        // Cheap no-op path: nothing to filter, stay on the caller's actor.
+        if !openNow && dietary.isEmpty { return list }
+        return await Task.detached(priority: .userInitiated) {
+            applyClientSide(to: list, openNow: openNow, dietary: dietary)
+        }.value
+    }
+
+    /// Shared pure-function filter. Runs on any actor; callers that care
+    /// about perf should go through `applyClientSideOffMain`.
+    nonisolated private static func applyClientSide(
         to list: [Restaurant],
         openNow: Bool,
         dietary: Set<String>

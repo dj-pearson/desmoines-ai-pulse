@@ -3,23 +3,47 @@ import MapKit
 import SwiftUI
 
 /// ViewModel for the map view showing nearby events, restaurants, and attractions.
+///
+/// Annotation arrays (`eventAnnotations`, `restaurantAnnotations`,
+/// `attractionAnnotations`) are **stored** properties recomputed only when
+/// source data or category toggles change. Previously these were computed
+/// properties that allocated fresh arrays on every SwiftUI re-read — with
+/// 100+ pins that caused noticeable allocation pressure and map jank.
 @MainActor
 @Observable
 final class MapViewModel {
-    private(set) var events: [Event] = []
-    private(set) var restaurants: [Restaurant] = []
-    private(set) var attractions: [Attraction] = []
+    var events: [Event] = [] {
+        didSet { refreshEventAnnotations() }
+    }
+    var restaurants: [Restaurant] = [] {
+        didSet { refreshRestaurantAnnotations() }
+    }
+    var attractions: [Attraction] = [] {
+        didSet { refreshAttractionAnnotations() }
+    }
     private(set) var isLoading = false
     private(set) var errorMessage: String?
     private(set) var hasLoadedOnce = false
 
-    var showEvents = true
-    var showRestaurants = true
-    var showAttractions = true
+    var showEvents = true {
+        didSet { refreshEventAnnotations() }
+    }
+    var showRestaurants = true {
+        didSet { refreshRestaurantAnnotations() }
+    }
+    var showAttractions = true {
+        didSet { refreshAttractionAnnotations() }
+    }
     var selectedEvent: Event?
     var selectedRestaurant: Restaurant?
     var selectedAttraction: Attraction?
     var searchText = ""
+
+    // Stored annotation caches. `private(set)` so the view can read but only
+    // the ViewModel can mutate via the refresh helpers below.
+    private(set) var eventAnnotations: [EventAnnotation] = []
+    private(set) var restaurantAnnotations: [RestaurantAnnotation] = []
+    private(set) var attractionAnnotations: [AttractionAnnotation] = []
 
     var cameraPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: Config.defaultLatitude, longitude: Config.defaultLongitude),
@@ -168,11 +192,12 @@ final class MapViewModel {
         restaurants = searchedRestaurants
         attractions = searchedAttractions
 
-        // If we got results, fit the map to show them
+        // If we got results, fit the map to show them. Compute the bounding
+        // region off the main actor so 100+ coordinates don't block UI.
         let allCoords = (events.compactMap(\.coordinate)
                          + restaurants.compactMap(\.coordinate)
                          + attractions.compactMap(\.coordinate))
-        if let region = regionFitting(coordinates: allCoords) {
+        if let region = await Self.regionFitting(coordinates: allCoords) {
             cameraPosition = .region(region)
         }
 
@@ -197,27 +222,36 @@ final class MapViewModel {
         selectedAttraction = nil
     }
 
-    // MARK: - Annotations
+    // MARK: - Annotation Refresh
 
-    var eventAnnotations: [EventAnnotation] {
-        guard showEvents else { return [] }
-        return events.compactMap { event in
+    private func refreshEventAnnotations() {
+        guard showEvents else {
+            if !eventAnnotations.isEmpty { eventAnnotations = [] }
+            return
+        }
+        eventAnnotations = events.compactMap { event in
             guard let coord = event.coordinate else { return nil }
             return EventAnnotation(event: event, coordinate: coord)
         }
     }
 
-    var restaurantAnnotations: [RestaurantAnnotation] {
-        guard showRestaurants else { return [] }
-        return restaurants.compactMap { restaurant in
+    private func refreshRestaurantAnnotations() {
+        guard showRestaurants else {
+            if !restaurantAnnotations.isEmpty { restaurantAnnotations = [] }
+            return
+        }
+        restaurantAnnotations = restaurants.compactMap { restaurant in
             guard let coord = restaurant.coordinate else { return nil }
             return RestaurantAnnotation(restaurant: restaurant, coordinate: coord)
         }
     }
 
-    var attractionAnnotations: [AttractionAnnotation] {
-        guard showAttractions else { return [] }
-        return attractions.compactMap { attraction in
+    private func refreshAttractionAnnotations() {
+        guard showAttractions else {
+            if !attractionAnnotations.isEmpty { attractionAnnotations = [] }
+            return
+        }
+        attractionAnnotations = attractions.compactMap { attraction in
             guard let coord = attraction.coordinate else { return nil }
             return AttractionAnnotation(attraction: attraction, coordinate: coord)
         }
@@ -227,36 +261,96 @@ final class MapViewModel {
         eventAnnotations.count + restaurantAnnotations.count + attractionAnnotations.count
     }
 
+    // MARK: - Clustering
+
+    /// Threshold above which we switch from per-pin rendering to grid clusters.
+    /// Tuned for a 6.1" display at the default zoom (~0.12° span).
+    static let clusterThreshold = 60
+
+    /// Returns true when the total visible annotation count exceeds the
+    /// threshold and clustering should be used instead of individual pins.
+    var shouldCluster: Bool { totalPinCount > Self.clusterThreshold }
+
+    /// Collapses every annotation into a uniform grid of `MapCluster` pins.
+    /// Grid size scales with the visible span so clusters stay roughly
+    /// the same size on screen as the user zooms.
+    ///
+    /// Callers should only evaluate this when `shouldCluster == true`; it is
+    /// O(n) in the total annotation count and recomputes on each read.
+    func clusters(for region: MKCoordinateRegion) -> [MapCluster] {
+        // Bucket size ≈ 1/8th of the latitude span — tight enough to preserve
+        // geographic meaning, coarse enough to collapse dense areas.
+        let latBucket = max(region.span.latitudeDelta / 8.0, 0.005)
+        let lngBucket = max(region.span.longitudeDelta / 8.0, 0.005)
+
+        var buckets: [BucketKey: MapCluster] = [:]
+
+        func ingest(id: String, coord: CLLocationCoordinate2D, kind: MapCluster.Kind) {
+            let key = BucketKey(
+                lat: Int((coord.latitude / latBucket).rounded()),
+                lng: Int((coord.longitude / lngBucket).rounded())
+            )
+            if var existing = buckets[key] {
+                existing.memberIds.append(id)
+                existing.addCoordinate(coord)
+                existing.kinds.insert(kind)
+                buckets[key] = existing
+            } else {
+                buckets[key] = MapCluster(
+                    id: "\(key.lat):\(key.lng)",
+                    coordinate: coord,
+                    memberIds: [id],
+                    kinds: [kind]
+                )
+            }
+        }
+
+        for a in eventAnnotations { ingest(id: a.id, coord: a.coordinate, kind: .event) }
+        for a in restaurantAnnotations { ingest(id: a.id, coord: a.coordinate, kind: .restaurant) }
+        for a in attractionAnnotations { ingest(id: a.id, coord: a.coordinate, kind: .attraction) }
+
+        return Array(buckets.values)
+    }
+
+    private struct BucketKey: Hashable {
+        let lat: Int
+        let lng: Int
+    }
+
     var isEmpty: Bool {
         hasLoadedOnce && !isLoading && totalPinCount == 0
     }
 
     // MARK: - Helpers
 
-    private func regionFitting(coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion? {
+    /// Compute a bounding region around the given coordinates. Runs on a
+    /// detached task so large result sets (100+ pins) don't block the UI.
+    nonisolated static func regionFitting(coordinates: [CLLocationCoordinate2D]) async -> MKCoordinateRegion? {
         guard !coordinates.isEmpty else { return nil }
 
-        var minLat = coordinates[0].latitude
-        var maxLat = coordinates[0].latitude
-        var minLng = coordinates[0].longitude
-        var maxLng = coordinates[0].longitude
+        return await Task.detached(priority: .userInitiated) {
+            var minLat = coordinates[0].latitude
+            var maxLat = coordinates[0].latitude
+            var minLng = coordinates[0].longitude
+            var maxLng = coordinates[0].longitude
 
-        for coord in coordinates {
-            minLat = min(minLat, coord.latitude)
-            maxLat = max(maxLat, coord.latitude)
-            minLng = min(minLng, coord.longitude)
-            maxLng = max(maxLng, coord.longitude)
-        }
+            for coord in coordinates {
+                minLat = min(minLat, coord.latitude)
+                maxLat = max(maxLat, coord.latitude)
+                minLng = min(minLng, coord.longitude)
+                maxLng = max(maxLng, coord.longitude)
+            }
 
-        let center = CLLocationCoordinate2D(
-            latitude: (minLat + maxLat) / 2,
-            longitude: (minLng + maxLng) / 2
-        )
-        let span = MKCoordinateSpan(
-            latitudeDelta: max((maxLat - minLat) * 1.3, 0.02),
-            longitudeDelta: max((maxLng - minLng) * 1.3, 0.02)
-        )
-        return MKCoordinateRegion(center: center, span: span)
+            let center = CLLocationCoordinate2D(
+                latitude: (minLat + maxLat) / 2,
+                longitude: (minLng + maxLng) / 2
+            )
+            let span = MKCoordinateSpan(
+                latitudeDelta: max((maxLat - minLat) * 1.3, 0.02),
+                longitudeDelta: max((maxLng - minLng) * 1.3, 0.02)
+            )
+            return MKCoordinateRegion(center: center, span: span)
+        }.value
     }
 }
 
@@ -287,4 +381,40 @@ struct AttractionAnnotation: Identifiable {
     let attraction: Attraction
     let coordinate: CLLocationCoordinate2D
     var id: String { attraction.id }
+}
+
+// MARK: - Cluster
+
+/// A grid-bucket aggregate used when the total annotation count exceeds
+/// `MapViewModel.clusterThreshold`. Stores the centroid of its members and
+/// which categories are represented so the pin view can tint accordingly.
+struct MapCluster: Identifiable {
+    enum Kind: Hashable {
+        case event
+        case restaurant
+        case attraction
+    }
+
+    let id: String
+    private(set) var coordinate: CLLocationCoordinate2D
+    var memberIds: [String]
+    var kinds: Set<Kind>
+
+    var count: Int { memberIds.count }
+
+    /// Update the stored coordinate to the running centroid after each member
+    /// is added. Keeps the cluster pin visually anchored to its members.
+    mutating func addCoordinate(_ coord: CLLocationCoordinate2D) {
+        let n = Double(memberIds.count)
+        let newLat = (coordinate.latitude * (n - 1) + coord.latitude) / n
+        let newLng = (coordinate.longitude * (n - 1) + coord.longitude) / n
+        coordinate = CLLocationCoordinate2D(latitude: newLat, longitude: newLng)
+    }
+
+    /// Primary tint for rendering: prefer events (red) > restaurants (orange) > attractions (green).
+    var tintColor: Color {
+        if kinds.contains(.event) { return .red }
+        if kinds.contains(.restaurant) { return .orange }
+        return .green
+    }
 }

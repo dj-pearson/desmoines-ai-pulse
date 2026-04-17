@@ -38,7 +38,7 @@ final class SessionTimeoutService {
 
     // MARK: - State
 
-    enum SessionState {
+    enum SessionState: Equatable {
         case active
         case warning(minutesRemaining: Int)
         case expired
