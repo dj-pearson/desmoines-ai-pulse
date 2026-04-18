@@ -29,6 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.desmoines.aipulse.R
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
+import com.desmoines.aipulse.ui.theme.glassSurface
 import com.desmoines.aipulse.util.NetworkMonitor
 
 /**
@@ -83,8 +86,13 @@ private fun BannerContent(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(backgroundColor)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .glassSurface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                intensity = GlassIntensity.Bar,
+                elevation = PremiumTokens.Elevation4,
+            )
+            .background(backgroundColor.copy(alpha = 0.85f))
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -99,7 +107,7 @@ private fun BannerContent(
             text = text,
             color = contentColor,
             fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.SemiBold
         )
     }
 }

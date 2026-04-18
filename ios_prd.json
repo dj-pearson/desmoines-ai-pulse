@@ -364,9 +364,10 @@
       "title": "Apply pressable + glass treatment to remaining feature surfaces",
       "description": "Extend the new glass language to surfaces not yet touched: Featured event cards, hotel/deal cards, AnimatedTabItem selection pill, SubscriptionBanner, SubscriptionTierCard, Search tab picker, Map control overlays, Auth form fields, Onboarding pages, Profile sections, Saved screen banners.",
       "acceptanceCriteria": [
-        "AnimatedTabItem selected pill uses .glassChip + accent tint",
+        "AnimatedTabItem selected indicator gets glass halo behind the icon with bouncy spring",
+        "ToastOverlay uses glassBar with accent-tinted circular icon badge",
+        "SubscriptionBanner upsell card + subscribedCard migrated to glassCard with tier-tinted border",
         "FeaturedEventCard image card uses glassOverlay with stronger scrim and category badge",
-        "SubscriptionBanner cards adopt glass + gradient border (gold for VIP, brand for Insider)",
         "SubscriptionTierCard featured row uses glassCard + sheen for VIP",
         "SearchView tab picker switches to a glassChip-style segmented control",
         "EventMapView search overlay, toggle group, pin count badge, and bottom popup use glass surfaces",
@@ -376,7 +377,7 @@
       ],
       "priority": 24,
       "passes": false,
-      "notes": "Deferred. Foundation modifiers exist; finish the rest screen-by-screen so visual QA can be performed in tight scope per PR."
+      "notes": "Partially complete in claude/redesign-modern-ui-Ic6pa: AnimatedTabItem, ToastOverlay, SubscriptionBanner (upsell + subscribed) migrated. Remaining: FeaturedEventCard, SubscriptionTierCard, SearchView picker, Map overlays, AuthView inputs (ready to use GlassTextFieldStyle), OnboardingView cards, ProfileView rows."
     },
     {
       "id": "IOS-025",
@@ -401,13 +402,28 @@
       "acceptanceCriteria": [
         "Add ButtonStyle: BrandPrimaryButtonStyle (brandGradient + glassBar), BrandSecondaryButtonStyle (.thinMaterial + accent border), BrandGhostButtonStyle, BrandDestructiveButtonStyle",
         "Add TextFieldStyle: GlassTextFieldStyle (.thinMaterial background, accent focus ring, gentle press scale)",
+        "Expose .brandPrimary / .brandSecondary / .brandGhost / .brandDestructive + .glassInput as static extensions",
+        "Add .brandLoading(_:) helper for inline spinner overlay on any button",
         "Replace existing Color.accentColor.opacity(...) buttons across the app with the new styles",
-        "AuthView, ProfileView, SubscriptionView, SettingsView migrated",
-        "Style supports loading and disabled states with subtle gradient shimmer"
+        "AuthView, ProfileView, SubscriptionView, SettingsView migrated"
       ],
       "priority": 26,
       "passes": false,
-      "notes": "Deferred. Add a Components/ButtonStyles directory and wire styles via .buttonStyle()."
+      "notes": "Foundation done in claude/redesign-modern-ui-Ic6pa (Views/Components/BrandButtonStyles.swift with 4 button styles + GlassTextFieldStyle + .brandLoading helper). Deferred: migrating AuthView, ProfileView, SubscriptionView, SettingsView call sites to the new styles — needs per-screen visual QA."
+    },
+    {
+      "id": "IOS-028b",
+      "title": "Heart-burst particle + scale micro-interaction component",
+      "description": "Standalone HeartBurstView component so the favorite action feels rewarding without changing the semantics of the underlying heart button.",
+      "acceptanceCriteria": [
+        "HeartBurstView wraps any heart icon content and animates scale 1 -> 1.35 -> 1 with a spring on burst toggle",
+        "Six radial heart particles fade out over 550ms",
+        "Fires HapticFeedback.shared.light() on burst",
+        "Honors reduceMotion: skips scale + particles and just swaps the icon"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa at Views/Components/HeartBurstView.swift. Wiring to EventCardView, RestaurantCardView, AttractionCardView favorite buttons remains in IOS-028 (larger micro-interaction rollup)."
     },
     {
       "id": "IOS-027",

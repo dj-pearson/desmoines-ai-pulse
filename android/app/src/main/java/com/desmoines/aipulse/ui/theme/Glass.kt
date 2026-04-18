@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -119,4 +120,22 @@ fun GlassCard(
 object GlassCapabilities {
     val supportsBackdropBlur: Boolean
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+}
+
+/**
+ * Applies a real [Modifier.blur] to a content layer on devices that support it
+ * (API 31+), with a graceful no-op on older devices. Use on a background or
+ * sibling layer *behind* a glass surface when you want a true frosted-backdrop
+ * look — for example, a wallpaper-style hero image layered under a
+ * translucent `GlassCard` title panel.
+ *
+ * Note: [Modifier.blur] operates on the compositing layer itself, so this
+ * should be applied to the layer you want blurred (e.g., the image), not the
+ * glass surface sitting on top of it.
+ */
+fun Modifier.glassBackdropBlur(
+    radius: androidx.compose.ui.unit.Dp = 24.dp,
+): Modifier {
+    if (!GlassCapabilities.supportsBackdropBlur) return this
+    return this.blur(radius = radius)
 }

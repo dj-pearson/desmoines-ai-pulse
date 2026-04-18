@@ -38,9 +38,14 @@ private struct ToastView: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: message.icon)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(iconColor)
+            ZStack {
+                Circle()
+                    .fill(iconColor.opacity(0.18))
+                    .frame(width: 28, height: 28)
+                Image(systemName: message.icon)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(iconColor)
+            }
 
             Text(message.text)
                 .font(.subheadline.weight(.medium))
@@ -49,8 +54,11 @@ private struct ToastView: View {
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
-        .background(.ultraThickMaterial, in: Capsule())
-        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: 4)
+        .glassBar(cornerRadius: 999, material: .ultraThickMaterial, elevation: PremiumTokens.elevation8)
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(iconColor.opacity(0.25), lineWidth: 0.75)
+        )
     }
 
     private var iconColor: Color {

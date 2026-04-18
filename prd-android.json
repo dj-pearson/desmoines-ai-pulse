@@ -1053,19 +1053,19 @@
       "title": "Apply glass treatment to remaining components and screens",
       "description": "Extend the glass language to remaining surfaces: CompactRestaurantCard, CategoryBadge gradient pill, PremiumBadge, VipGoldBadge, AnimatedTabItem indicator, SubscriptionTierCard featured row, ParallaxHeroHeader title overlay, BrandedRefreshIndicator container, ToastOverlay, OfflineBanner, MapPreviewSheet, FilterSheet drag handle row.",
       "acceptanceCriteria": [
+        "AnimatedTabItem selected icon gets a tinted glass halo behind it",
+        "ToastOverlay surface uses glassSurface (Bar) instead of solid inverseSurface",
+        "OfflineBanner uses glassSurface (Bar) tinted with status color",
         "CompactRestaurantCard uses glassSurface for the image container",
         "CategoryBadge uses Modifier.background(Brush) gradient + thin Color.White.copy(alpha = 0.25f) border + category-tinted shadow",
         "PremiumBadge and VipGoldBadge wrap content in glassSurface (Chip)",
-        "AnimatedTabItem selected indicator pill uses glassSurface (Chip) + accent tint",
         "SubscriptionTierCard featured row gets glassSurface + GoldGradient stroke",
         "ParallaxHeroHeader bottom title overlay uses glassSurface (Overlay)",
-        "ToastOverlay surface uses glassSurface (Bar) instead of solid Surface",
-        "MapPreviewSheet, RestaurantFilterSheet adopt the same translucent containerColor as the home FilterSheet",
-        "OfflineBanner uses glassSurface (Bar) tinted with status color"
+        "MapPreviewSheet, RestaurantFilterSheet adopt the same translucent containerColor as the home FilterSheet"
       ],
       "priority": 54,
       "passes": false,
-      "notes": "Deferred. Migrate one component per PR for tight visual QA. Cross-check rendering across Material You dynamic themes."
+      "notes": "Partially complete in claude/redesign-modern-ui-Ic6pa: AnimatedTabItem, ToastOverlay, OfflineBanner migrated. Remaining: CompactRestaurantCard, CategoryBadge gradient, PremiumBadge, VipGoldBadge, SubscriptionTierCard, ParallaxHeroHeader overlay, MapPreviewSheet, RestaurantFilterSheet."
     },
     {
       "id": "AND-055",
@@ -1080,7 +1080,7 @@
       ],
       "priority": 55,
       "passes": false,
-      "notes": "Deferred. Optional: evaluate dev.chrisbanes.haze:haze-materials as a richer alternative if first-party Modifier.blur causes performance issues."
+      "notes": "Helper implemented in claude/redesign-modern-ui-Ic6pa (Modifier.glassBackdropBlur in ui/theme/Glass.kt). Deferred: wiring it into FilterSheet/MapPreviewSheet/NavigationBar backdrops and the battery-saver opt-out setting."
     },
     {
       "id": "AND-056",
@@ -1089,13 +1089,29 @@
       "acceptanceCriteria": [
         "BrandPrimaryButton uses BrandGradient brush + glassSurface (Bar) + Material3 ripple",
         "BrandSecondaryButton uses transparent fill + accent border + glassSurface (Chip)",
+        "BrandGhostButton uses TextButton with brand sizing",
+        "BrandDestructiveButton uses red gradient + glassSurface (Bar)",
         "GlassTextField uses translucent surface, accent focus indicator with animateColorAsState, and animated label transition",
         "AuthScreen, ProfileScreen, SubscriptionScreen, SettingsScreen migrate to the new components",
         "All buttons preserve existing accessibility (semantics, ripple, contentDescription)"
       ],
       "priority": 56,
       "passes": false,
-      "notes": "Deferred. Place in ui/components/buttons/ and ui/components/inputs/."
+      "notes": "Foundation implemented in claude/redesign-modern-ui-Ic6pa: ui/components/BrandButtons.kt (4 button composables with loading + press scale) and ui/components/GlassTextField.kt. Deferred: migrating AuthScreen, ProfileScreen, SubscriptionScreen, SettingsScreen to the new composables."
+    },
+    {
+      "id": "AND-059b",
+      "title": "HeartBurst composable — particle + scale micro-interaction",
+      "description": "Reusable Compose component that renders six radial heart particles and scales its content, matching iOS HeartBurstView.",
+      "acceptanceCriteria": [
+        "HeartBurst composable with triggerKey + content slot drawn via Canvas with cubic heart path",
+        "Six particles radiate 28dp over 550ms, alpha fades to 0",
+        "Content scales with a bouncy spring when triggerKey changes",
+        "Respects rememberShouldReduceAnimations — no animation when animator duration scale is 0"
+      ],
+      "priority": 59,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa at ui/components/HeartBurst.kt. Wiring to EventCardView, RestaurantDetailScreen, and AttractionDetailScreen favorite toggles remains in the broader AND-059 micro-interaction rollup."
     },
     {
       "id": "AND-057",
