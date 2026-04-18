@@ -41,9 +41,15 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.CategoryBadge
+import com.desmoines.aipulse.ui.components.HeartBurst
 import com.desmoines.aipulse.ui.components.icon
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
@@ -147,24 +153,34 @@ fun EventCardView(
                     // Category badge
                     CategoryBadge(category = category)
 
-                    // Favorite button
+                    // Favorite button with heart-burst micro-interaction
                     if (onFavoriteClick != null) {
-                        IconButton(
-                            onClick = { onFavoriteClick(event.id) },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .glassSurface(
-                                    shape = CircleShape,
-                                    intensity = GlassIntensity.Chip,
-                                    elevation = PremiumTokens.Elevation2,
-                                )
+                        var burstKey by remember { mutableIntStateOf(0) }
+                        LaunchedEffect(isFavorited) {
+                            // Trigger burst only on favoriting, not un-favoriting
+                            if (isFavorited) burstKey++
+                        }
+                        HeartBurst(
+                            triggerKey = burstKey,
+                            modifier = Modifier.size(40.dp),
                         ) {
-                            Icon(
-                                imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (isFavorited) "Remove ${event.title} from saved" else "Save ${event.title}",
-                                tint = if (isFavorited) Color.Red else Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            IconButton(
+                                onClick = { onFavoriteClick(event.id) },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .glassSurface(
+                                        shape = CircleShape,
+                                        intensity = GlassIntensity.Chip,
+                                        elevation = PremiumTokens.Elevation2,
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = if (isFavorited) "Remove ${event.title} from saved" else "Save ${event.title}",
+                                    tint = if (isFavorited) Color.Red else Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }

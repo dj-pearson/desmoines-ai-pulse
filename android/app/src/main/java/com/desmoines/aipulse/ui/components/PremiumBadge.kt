@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -58,9 +59,20 @@ fun PremiumBadge(
 
     Row(
         modifier = modifier
+            .shadow(
+                elevation = 2.dp,
+                shape = CircleShape,
+                ambientColor = backgroundColor.copy(alpha = 0.3f),
+                spotColor = backgroundColor.copy(alpha = 0.4f),
+            )
             .clip(CircleShape)
-            .background(backgroundColor)
-            .padding(horizontal = 7.dp, vertical = 3.dp)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(backgroundColor, backgroundColor.copy(alpha = 0.75f))
+                )
+            )
+            .border(0.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+            .padding(horizontal = 9.dp, vertical = 4.dp)
             .semantics {
                 contentDescription = "${tier.displayName} premium feature"
             },

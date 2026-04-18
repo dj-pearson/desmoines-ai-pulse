@@ -34,7 +34,10 @@ import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import com.desmoines.aipulse.ui.theme.glassSurface
 import java.util.Locale
 
 /**
@@ -59,7 +62,11 @@ fun CompactRestaurantCard(
             modifier = Modifier
                 .width(Dimens.CompactCardWidth)
                 .height(110.dp)
-                .clip(RoundedCornerShape(Dimens.CardCornerRadius))
+                .glassSurface(
+                    shape = RoundedCornerShape(Dimens.CardCornerRadius),
+                    intensity = GlassIntensity.Card,
+                    elevation = PremiumTokens.Elevation2,
+                )
         ) {
             if (restaurant.imageUrl != null) {
                 CachedAsyncImage(

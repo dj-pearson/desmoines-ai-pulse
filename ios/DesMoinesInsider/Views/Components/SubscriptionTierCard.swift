@@ -120,8 +120,7 @@ struct SubscriptionTierCard: View {
             .padding(.top, 18)
         }
         .padding(20)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerXl))
+        .glassCard(cornerRadius: PremiumTokens.cornerXl, material: .regularMaterial, elevation: isFeatured ? PremiumTokens.elevation8 : PremiumTokens.elevation4)
         .overlay(
             RoundedRectangle(cornerRadius: PremiumTokens.cornerXl)
                 .strokeBorder(

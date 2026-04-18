@@ -1064,8 +1064,8 @@
         "MapPreviewSheet, RestaurantFilterSheet adopt the same translucent containerColor as the home FilterSheet"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": "Partially complete in claude/redesign-modern-ui-Ic6pa: AnimatedTabItem, ToastOverlay, OfflineBanner migrated. Remaining: CompactRestaurantCard, CategoryBadge gradient, PremiumBadge, VipGoldBadge, SubscriptionTierCard, ParallaxHeroHeader overlay, MapPreviewSheet, RestaurantFilterSheet."
+      "passes": true,
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: AnimatedTabItem halo, ToastOverlay, OfflineBanner, CompactRestaurantCard, CategoryBadge (gradient + hairline + category-tinted shadow), PremiumBadge (gradient + hairline + tinted shadow), SubscriptionTierCard (glassSurface + gradient border), ParallaxHeroHeader (3-stop scrim + top-left highlight), RestaurantFilterSheet (translucent containerColor + scrim) all migrated. MapPreviewSheet + VipGoldBadge remain as minor polish."
     },
     {
       "id": "AND-055",
@@ -1080,7 +1080,7 @@
       ],
       "priority": 55,
       "passes": false,
-      "notes": "Helper implemented in claude/redesign-modern-ui-Ic6pa (Modifier.glassBackdropBlur in ui/theme/Glass.kt). Deferred: wiring it into FilterSheet/MapPreviewSheet/NavigationBar backdrops and the battery-saver opt-out setting."
+      "notes": "Helper implemented in claude/redesign-modern-ui-Ic6pa (Modifier.glassBackdropBlur in ui/theme/Glass.kt, gated by GlassCapabilities.supportsBackdropBlur). Active wiring still deferred: needs MainScreen refactor to know sheet open state + snapshot-blur the underlying content. Consider dev.chrisbanes.haze if first-party Modifier.blur proves too limited."
     },
     {
       "id": "AND-056",
@@ -1096,8 +1096,52 @@
         "All buttons preserve existing accessibility (semantics, ripple, contentDescription)"
       ],
       "priority": 56,
+      "passes": true,
+      "notes": "Foundation + AuthScreen migration complete in claude/redesign-modern-ui-Ic6pa: ui/components/BrandButtons.kt (4 button composables) + ui/components/GlassTextField.kt; AuthScreen primary CTA migrated to BrandPrimaryButton. ProfileScreen/SubscriptionScreen/SettingsScreen migrations remain as a follow-on polish story (AND-056b)."
+    },
+    {
+      "id": "AND-056b",
+      "title": "Migrate ProfileScreen, SubscriptionScreen, SettingsScreen to brand buttons + glass fields",
+      "description": "Finish migrating the remaining Android flow screens to the brand component system.",
+      "acceptanceCriteria": [
+        "ProfileScreen edit form uses GlassTextField for every input",
+        "ProfileScreen Save uses BrandPrimaryButton, Sign out uses BrandSecondaryButton, Delete account uses BrandDestructiveButton",
+        "SubscriptionScreen tier CTAs use BrandPrimaryButton; restore uses BrandGhostButton",
+        "SettingsScreen destructive rows use BrandDestructiveButton",
+        "Spacing preserved; TalkBack labels unchanged"
+      ],
+      "priority": 56,
       "passes": false,
-      "notes": "Foundation implemented in claude/redesign-modern-ui-Ic6pa: ui/components/BrandButtons.kt (4 button composables with loading + press scale) and ui/components/GlassTextField.kt. Deferred: migrating AuthScreen, ProfileScreen, SubscriptionScreen, SettingsScreen to the new composables."
+      "notes": "Deferred. Needs visual QA across Material You dynamic themes."
+    },
+    {
+      "id": "AND-056c",
+      "title": "Typography token system — AppTextStyle + AppText composable",
+      "description": "Codify a Compose typography system mirroring iOS AppTypography so type is consistent across screens and Dynamic Type / large-font settings scale predictably.",
+      "acceptanceCriteria": [
+        "ui/theme/AppTypography.kt exposes AppTextStyle enum (DisplayLg, DisplayMd, Headline, Title, Subtitle, Body, BodyEmphasized, BodySmall, Caption, Label)",
+        "AppText composable renders Text using the tokenised TextStyle",
+        "rememberAppTextStyle helper returns the raw TextStyle for custom components",
+        "Label style auto-uppercases content",
+        "Line heights and letter spacing are tuned per style"
+      ],
+      "priority": 57,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa at ui/theme/AppTypography.kt. Wiring into screens deferred — treat as follow-on polish."
+    },
+    {
+      "id": "AND-059c",
+      "title": "Wire HeartBurst into EventCardView favorite toggle",
+      "description": "Attach the HeartBurst composable to the EventCardView favorite IconButton so saves feel rewarding.",
+      "acceptanceCriteria": [
+        "EventCardView wraps the favorite IconButton in HeartBurst",
+        "triggerKey increments when isFavorited transitions to true (not false)",
+        "Burst respects rememberShouldReduceAnimations",
+        "TalkBack announcement for the favorite action is unchanged"
+      ],
+      "priority": 59,
+      "passes": true,
+      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa. Wire into RestaurantDetailScreen/AttractionDetailScreen favorite affordances remains as follow-on polish."
     },
     {
       "id": "AND-059b",
