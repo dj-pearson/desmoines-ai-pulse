@@ -208,7 +208,12 @@ extension View {
 private struct PressableScaleModifier: ViewModifier {
     let minScale: CGFloat
 
-    @State private var isPressed = false
+    // `@GestureState` auto-resets when the gesture is cancelled — critical inside
+    // a ScrollView so that a scroll drag releases the pressed state and lets the
+    // scroll view own the gesture. `DragGesture(minimumDistance: 0)` captures the
+    // touch immediately and fights the scroll view's pan gesture, which made the
+    // cards feel "sticky" while scrolling.
+    @GestureState private var isPressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     func body(content: Content) -> some View {
@@ -216,12 +221,9 @@ private struct PressableScaleModifier: ViewModifier {
             .scaleEffect(isPressed && !reduceMotion ? minScale : 1.0)
             .animation(PremiumTokens.springSnappy, value: isPressed)
             .simultaneousGesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { _ in
-                        if !isPressed { isPressed = true }
-                    }
-                    .onEnded { _ in
-                        isPressed = false
+                LongPressGesture(minimumDuration: 1.0, maximumDistance: 10)
+                    .updating($isPressed) { currentState, gestureState, _ in
+                        gestureState = currentState
                     }
             )
     }
