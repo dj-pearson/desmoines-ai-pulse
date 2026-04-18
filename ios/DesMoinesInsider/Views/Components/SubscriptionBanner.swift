@@ -118,8 +118,7 @@ struct SubscriptionBanner: View {
                     .strokeBorder(tierColor.opacity(0.3), lineWidth: 1)
             )
         }
-        .buttonStyle(.plain)
-        .pressable()
+        .buttonStyle(.pressableCard)
         .accessibilityLabel("\(storeKit.currentTier.displayName) plan. Tap to manage subscription.")
     }
 

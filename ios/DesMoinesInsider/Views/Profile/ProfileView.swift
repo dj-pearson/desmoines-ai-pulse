@@ -220,8 +220,7 @@ struct ProfileView: View {
                     .glassBar(cornerRadius: PremiumTokens.cornerLg, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
                     .padding(.horizontal, 40)
             }
-            .buttonStyle(.plain)
-            .pressable()
+            .buttonStyle(.pressableCard)
 
             // Premium teaser for guests
             SubscriptionBanner(style: .compact)

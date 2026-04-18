@@ -53,7 +53,7 @@ struct EmptyStateView: View {
                 .padding(.vertical, 12)
                 .foregroundStyle(Color.accentColor)
                 .glassChip()
-                .pressable()
+                .buttonStyle(.pressableCard)
                 .padding(.top, 8)
             }
 

@@ -26,7 +26,6 @@ struct SubscriptionTierCard: View {
     var strikethroughPrice: String? = nil
     let onCtaTap: () -> Void
 
-    @GestureState private var pressed = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -109,15 +108,7 @@ struct SubscriptionTierCard: View {
                 .foregroundStyle(.white)
                 .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerLg))
             }
-            .buttonStyle(.plain)
-            .scaleEffect(pressed ? 0.97 : 1.0)
-            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: pressed)
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 1.0, maximumDistance: 10)
-                    .updating($pressed) { currentState, gestureState, _ in
-                        gestureState = currentState
-                    }
-            )
+            .buttonStyle(.pressableCard)
             .padding(.top, 18)
         }
         .padding(20)

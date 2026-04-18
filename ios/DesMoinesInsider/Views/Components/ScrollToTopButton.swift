@@ -37,7 +37,7 @@ struct ScrollToTopButton: View {
                     .frame(width: 48, height: 48)
                     .glassBar(cornerRadius: 24, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
                 }
-                .pressable(scale: 0.9)
+                .buttonStyle(PressableCardStyle(scale: 0.9))
                 .accessibilityLabel("Scroll to top")
                 .padding(20)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))

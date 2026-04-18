@@ -52,7 +52,7 @@ struct RestaurantsView: View {
                                     NavigationLink(value: restaurant) {
                                         RestaurantCardView(restaurant: restaurant, toast: $toast)
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.pressableCard)
                                     .entranceAnimation(index: index)
                                     .task {
                                         await viewModel.loadMoreIfNeeded(currentItem: restaurant)

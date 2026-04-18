@@ -341,7 +341,7 @@ struct HomeView: View {
                         } label: {
                             EventCardView(event: event, toast: $toast)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                         .task {
                             await viewModel.loadMoreIfNeeded(currentItem: event)
