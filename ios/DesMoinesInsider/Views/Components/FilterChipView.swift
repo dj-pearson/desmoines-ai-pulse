@@ -28,13 +28,19 @@ struct FilterChipView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .bold))
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
             .foregroundStyle(tint)
-            .background(tint.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(tint.opacity(0.3), lineWidth: 0.5))
+            .background {
+                Capsule(style: .continuous).fill(.ultraThinMaterial)
+                Capsule(style: .continuous).fill(tint.opacity(0.14))
+            }
+            .overlay(Capsule(style: .continuous).strokeBorder(tint.opacity(0.35), lineWidth: 0.75))
+            .clipShape(Capsule(style: .continuous))
+            .shadow(color: tint.opacity(0.18), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
+        .pressable(scale: 0.94)
         .accessibilityLabel("Remove filter: \(text)")
     }
 }

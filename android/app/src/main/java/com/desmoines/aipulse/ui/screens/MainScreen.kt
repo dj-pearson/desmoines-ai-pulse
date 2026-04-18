@@ -24,7 +24,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.desmoines.aipulse.ui.theme.LocalBackdropBlurState
+import com.desmoines.aipulse.ui.theme.rememberBackdropBlurScope
+import com.desmoines.aipulse.ui.theme.respondsToBackdropBlur
 import com.desmoines.aipulse.util.rememberHapticPerformer
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +61,11 @@ fun MainScreen(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val haptic = rememberHapticPerformer()
+
+    // Shared backdrop blur state: any screen presenting a sheet can set
+    // isBlurred = true and the entire nav host below will pick up a
+    // Modifier.glassBackdropBlur on supported devices.
+    val backdropBlur = rememberBackdropBlurScope()
 
     // Counter that increments when the user re-taps the already-selected tab.
     // Screens observe this to scroll their lists back to the top.
@@ -125,12 +135,15 @@ fun MainScreen(
         }
     }
 
+    CompositionLocalProvider(
+        LocalBackdropBlurState provides backdropBlur,
+    ) {
     if (useNavRail) {
         // Tablet / landscape: NavigationRail on the left + content on the right
         Row(modifier = Modifier.fillMaxSize()) {
             if (showBottomBar) {
                 NavigationRail(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
                     contentColor = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.fillMaxHeight(),
                 ) {
@@ -177,7 +190,9 @@ fun MainScreen(
                     navController = navController,
                     scrollToTopTrigger = scrollToTopTrigger,
                     useWideLayout = true,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .respondsToBackdropBlur()
                 )
             }
         }
@@ -188,8 +203,9 @@ fun MainScreen(
             bottomBar = {
                 if (showBottomBar) {
                     NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        contentColor = MaterialTheme.colorScheme.onSurface
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        tonalElevation = 0.dp,
                     ) {
                         val tabs = BottomNavTab.entries
                         tabs.forEachIndexed { index, tab ->
@@ -236,9 +252,12 @@ fun MainScreen(
                     navController = navController,
                     scrollToTopTrigger = scrollToTopTrigger,
                     useWideLayout = false,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .respondsToBackdropBlur()
                 )
             }
         }
     }
+    } // CompositionLocalProvider
 }

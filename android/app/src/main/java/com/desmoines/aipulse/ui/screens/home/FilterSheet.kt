@@ -87,6 +87,14 @@ fun FilterSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
+    // Flag the backdrop scope so MainNavHost below applies a real RenderEffect
+    // blur on Android 12+. Clean up on dismissal via DisposableEffect.
+    val backdrop = com.desmoines.aipulse.ui.theme.LocalBackdropBlurState.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        backdrop.isBlurred = true
+        onDispose { backdrop.isBlurred = false }
+    }
+
     // Local state for sliders to avoid constant ViewModel updates during drag
     var localMaxDistance by remember(maxDistance) {
         mutableDoubleStateOf(maxDistance ?: 30.0)
@@ -104,6 +112,8 @@ fun FilterSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        scrimColor = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.45f),
     ) {
         Column(
             modifier = Modifier

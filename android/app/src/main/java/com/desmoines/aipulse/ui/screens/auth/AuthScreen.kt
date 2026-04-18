@@ -423,8 +423,8 @@ fun AuthScreen(
 
             Spacer(modifier = Modifier.height(Dimens.SpacingXl))
 
-            // Primary action button
-            Button(
+            // Primary action button (migrated to brand button system)
+            BrandPrimaryButton(
                 onClick = {
                     focusManager.clearFocus()
                     if (isSignUpMode) {
@@ -433,27 +433,11 @@ fun AuthScreen(
                         viewModel.signIn(email, password)
                     }
                 },
-                enabled = !isSigningIn && !isSigningUp && lockoutSeconds <= 0,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(Dimens.ButtonHeight)
-                    .padding(horizontal = Dimens.SpacingLg),
-                shape = RoundedCornerShape(Dimens.CardCornerRadius),
-            ) {
-                if (isSigningIn || isSigningUp) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(modifier = Modifier.width(Dimens.SpacingSm))
-                }
-                Text(
-                    text = if (isSignUpMode) "Create Account" else "Sign In",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
+                modifier = Modifier.padding(horizontal = Dimens.SpacingLg),
+                enabled = lockoutSeconds <= 0,
+                isLoading = isSigningIn || isSigningUp,
+                text = if (isSignUpMode) "Create Account" else "Sign In",
+            )
 
             // Forgot password (sign in only)
             if (!isSignUpMode) {

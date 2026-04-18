@@ -27,21 +27,32 @@ struct AnimatedTabItem: View {
                     .animation(
                         reduceMotion
                             ? .linear(duration: 0)
-                            : .spring(response: 0.35, dampingFraction: 0.65),
+                            : PremiumTokens.springSmooth,
                         value: isSelected
                     )
 
-                Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
-                    .symbolVariant(isSelected ? .fill : .none)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-                    .scaleEffect(isSelected ? 1.12 : 1.0)
-                    .animation(
-                        reduceMotion
-                            ? .linear(duration: 0)
-                            : .spring(response: 0.4, dampingFraction: 0.6),
-                        value: isSelected
-                    )
+                ZStack {
+                    // Glass halo behind the icon when selected
+                    if isSelected {
+                        Circle()
+                            .fill(Color.accentColor.opacity(0.14))
+                            .frame(width: 38, height: 38)
+                            .blur(radius: 6)
+                            .transition(.scale.combined(with: .opacity))
+                    }
+
+                    Image(systemName: systemImage)
+                        .font(.system(size: 22, weight: isSelected ? .semibold : .regular))
+                        .symbolVariant(isSelected ? .fill : .none)
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                        .scaleEffect(isSelected ? 1.12 : 1.0)
+                }
+                .animation(
+                    reduceMotion
+                        ? .linear(duration: 0)
+                        : PremiumTokens.springBouncy,
+                    value: isSelected
+                )
 
                 Text(label)
                     .font(.caption2)

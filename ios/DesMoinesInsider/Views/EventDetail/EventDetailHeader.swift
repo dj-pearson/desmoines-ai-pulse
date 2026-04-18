@@ -29,15 +29,22 @@ struct EventDetailHeader: View {
             // Decorative — title is in the text overlay below; hide from VoiceOver
             .accessibilityHidden(true)
 
-            // Gradient overlay
-            LinearGradient(
-                colors: [.clear, .clear, .black.opacity(0.7)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            // Layered scrim (matches PremiumTokens.imageScrim) + subtle
+            // top-left highlight so imagery stays lively while the title
+            // underneath stays legible.
+            PremiumTokens.imageScrim
 
-            // Title overlay
-            VStack(alignment: .leading, spacing: 6) {
+            LinearGradient(
+                colors: [Color.white.opacity(0.18), .clear],
+                startPoint: .topLeading,
+                endPoint: .center
+            )
+            .frame(maxHeight: .infinity, alignment: .top)
+            .blendMode(.plusLighter)
+            .allowsHitTesting(false)
+
+            // Title overlay on a glass panel for cohesion with list cards
+            VStack(alignment: .leading, spacing: 8) {
                 CategoryBadge(category: event.eventCategory)
 
                 Text(event.title)
@@ -45,7 +52,10 @@ struct EventDetailHeader: View {
                     .foregroundStyle(.white)
                     .lineLimit(3)
             }
-            .padding()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassOverlay(cornerRadius: PremiumTokens.cornerLg, material: .ultraThinMaterial)
+            .padding(16)
         }
         // clip the ZStack so neither the image nor overlays can push layout wider than screen
         .clipped()

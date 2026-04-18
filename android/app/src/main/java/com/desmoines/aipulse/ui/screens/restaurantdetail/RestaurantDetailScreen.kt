@@ -50,7 +50,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -72,8 +74,12 @@ import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.components.AdBannerView
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.FullScreenImageViewer
+import com.desmoines.aipulse.ui.components.HeartBurst
 import com.desmoines.aipulse.ui.components.LoadingView
 import com.desmoines.aipulse.ui.components.PremiumBadge
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
+import com.desmoines.aipulse.ui.theme.glassSurface
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.CategoryFood
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
@@ -136,15 +142,24 @@ fun RestaurantDetailScreen(
                             contentDescription = "Share restaurant"
                         )
                     }
-                    IconButton(onClick = {
-                        haptic.medium()
-                        onToggleFavorite()
-                    }) {
-                        Icon(
-                            imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                            contentDescription = if (isFavorited) "Remove from saved" else "Save restaurant",
-                            tint = if (isFavorited) Color.Red else MaterialTheme.colorScheme.onSurface
-                        )
+                    var favoriteBurst by remember { mutableIntStateOf(0) }
+                    LaunchedEffect(isFavorited) {
+                        if (isFavorited) favoriteBurst++
+                    }
+                    HeartBurst(
+                        triggerKey = favoriteBurst,
+                        modifier = Modifier.size(48.dp),
+                    ) {
+                        IconButton(onClick = {
+                            haptic.medium()
+                            onToggleFavorite()
+                        }) {
+                            Icon(
+                                imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                                contentDescription = if (isFavorited) "Remove from saved" else "Save restaurant",
+                                tint = if (isFavorited) Color.Red else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -253,26 +268,39 @@ private fun RestaurantDetailHeader(
             }
         }
 
-        // Gradient overlay
+        // Layered scrim matching PremiumTokens.ImageScrim
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(PremiumTokens.ImageScrim)
+        )
+
+        // Subtle top-left highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
                 .background(
-                    Brush.verticalGradient(
+                    Brush.linearGradient(
                         colors = listOf(
+                            Color.White.copy(alpha = 0.18f),
                             Color.Transparent,
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.7f)
                         )
                     )
                 )
         )
 
-        // Title overlay at bottom
+        // Title overlay — wrapped in glass panel for legibility and cohesion
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp)
+                .glassSurface(
+                    shape = RoundedCornerShape(PremiumTokens.CornerLg),
+                    intensity = GlassIntensity.Overlay,
+                    elevation = PremiumTokens.Elevation2,
+                )
+                .padding(horizontal = 14.dp, vertical = 12.dp)
         ) {
             // Cuisine badge
             restaurant.cuisine?.let { cuisine ->

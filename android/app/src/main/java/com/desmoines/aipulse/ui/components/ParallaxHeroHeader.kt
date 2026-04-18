@@ -62,7 +62,9 @@ fun ParallaxHeroHeader(
     ) {
         content()
 
-        // Bottom scrim for title legibility
+        // Multi-stop scrim matching iOS PremiumTokens.imageScrim — transparent
+        // at the top, fading through a mid tone to near-opaque at the bottom
+        // so hero titles stay legible without washing out the imagery.
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -70,7 +72,8 @@ fun ParallaxHeroHeader(
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.55f),
+                            Color.Black.copy(alpha = 0.35f),
+                            Color.Black.copy(alpha = 0.7f),
                         ),
                         startY = 0f,
                         endY = Float.POSITIVE_INFINITY,
@@ -78,6 +81,21 @@ fun ParallaxHeroHeader(
                 ),
             contentAlignment = Alignment.BottomStart,
         ) {}
+
+        // Subtle top-left highlight to lift the corner, mirroring iOS hero.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(height * 0.6f)
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.18f),
+                            Color.Transparent,
+                        ),
+                    )
+                ),
+        )
     }
 }
 

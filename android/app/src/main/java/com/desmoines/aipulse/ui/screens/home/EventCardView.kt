@@ -41,14 +41,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import com.desmoines.aipulse.data.model.Event
 import com.desmoines.aipulse.ui.components.CachedAsyncImage
 import com.desmoines.aipulse.ui.components.CategoryBadge
+import com.desmoines.aipulse.ui.components.HeartBurst
 import com.desmoines.aipulse.ui.components.icon
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
 import com.desmoines.aipulse.ui.theme.Dimens
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import com.desmoines.aipulse.ui.theme.glassSurface
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -83,10 +92,15 @@ fun EventCardView(
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .glassSurface(
+                shape = RoundedCornerShape(18.dp),
+                intensity = GlassIntensity.Card,
+                elevation = PremiumTokens.Elevation4,
+            )
             .semantics { contentDescription = accessibilityLabel },
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column {
             // Image section
@@ -139,21 +153,34 @@ fun EventCardView(
                     // Category badge
                     CategoryBadge(category = category)
 
-                    // Favorite button
+                    // Favorite button with heart-burst micro-interaction
                     if (onFavoriteClick != null) {
-                        IconButton(
-                            onClick = { onFavoriteClick(event.id) },
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.3f))
+                        var burstKey by remember { mutableIntStateOf(0) }
+                        LaunchedEffect(isFavorited) {
+                            // Trigger burst only on favoriting, not un-favoriting
+                            if (isFavorited) burstKey++
+                        }
+                        HeartBurst(
+                            triggerKey = burstKey,
+                            modifier = Modifier.size(40.dp),
                         ) {
-                            Icon(
-                                imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = if (isFavorited) "Remove ${event.title} from saved" else "Save ${event.title}",
-                                tint = if (isFavorited) Color.Red else Color.White,
-                                modifier = Modifier.size(20.dp)
-                            )
+                            IconButton(
+                                onClick = { onFavoriteClick(event.id) },
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .glassSurface(
+                                        shape = CircleShape,
+                                        intensity = GlassIntensity.Chip,
+                                        elevation = PremiumTokens.Elevation2,
+                                    )
+                            ) {
+                                Icon(
+                                    imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    contentDescription = if (isFavorited) "Remove ${event.title} from saved" else "Save ${event.title}",
+                                    tint = if (isFavorited) Color.Red else Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -348,8 +375,11 @@ fun DateBadge(
     Column(
         modifier = modifier
             .width(48.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))
+            .glassSurface(
+                shape = RoundedCornerShape(10.dp),
+                intensity = GlassIntensity.Bar,
+                elevation = PremiumTokens.Elevation2,
+            )
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {

@@ -77,13 +77,9 @@ struct OnboardingNavRow: View {
             } label: {
                 Text(isLastPage ? "Get started" : "Next")
                     .font(.headline)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.accentColor)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerLg))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.brandPrimary(size: .compact))
+            .frame(maxWidth: 180)
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
@@ -127,25 +123,16 @@ struct PermissionPrimingCard: View {
                 onPrimary()
             } label: {
                 Text(primaryLabel)
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 48)
-                    .background(Color.accentColor)
-                    .foregroundStyle(.white)
-                    .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerLg))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.brandPrimary)
             .padding(.top, 20)
 
             Button("Not now", action: onDismiss)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .buttonStyle(.brandGhost(size: .compact))
                 .padding(.top, 4)
         }
-        .padding(24)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: PremiumTokens.cornerXl))
-        .premiumShadow(elevation: 8)
+        .padding(28)
+        .glassCard(cornerRadius: PremiumTokens.cornerXl, material: .regularMaterial, elevation: PremiumTokens.elevation8)
     }
 }
 

@@ -34,17 +34,23 @@ struct ParallaxHeroHeader<Content: View>: View {
                     .frame(width: proxy.size.width, height: stretchedHeight)
                     .clipped()
 
-                // Bottom scrim for title legibility
+                // Layered scrim: soft top highlight fading into a deeper bottom
+                // gradient, matched to PremiumTokens.imageScrim so imagery
+                // reads consistently across cards, hero headers, and map sheets.
+                PremiumTokens.imageScrim
+                    .frame(height: stretchedHeight)
+                    .allowsHitTesting(false)
+
+                // Subtle radial glow in the top-left to lift the corner
                 LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color.clear,
-                        Color.black.opacity(0.55)
-                    ]),
-                    startPoint: .top,
-                    endPoint: .bottom
+                    colors: [Color.white.opacity(0.18), Color.clear],
+                    startPoint: .topLeading,
+                    endPoint: .center
                 )
-                .frame(height: stretchedHeight)
+                .frame(height: stretchedHeight * 0.6)
+                .frame(maxWidth: .infinity, alignment: .top)
                 .allowsHitTesting(false)
+                .blendMode(.plusLighter)
             }
             .offset(y: offset)
         }

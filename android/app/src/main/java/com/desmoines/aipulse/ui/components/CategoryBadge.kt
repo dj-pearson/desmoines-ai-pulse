@@ -1,11 +1,14 @@
 package com.desmoines.aipulse.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CardGiftcard
@@ -74,9 +77,23 @@ fun CategoryBadge(
 
     Row(
         modifier = modifier
+            .shadow(
+                elevation = 4.dp,
+                shape = CircleShape,
+                ambientColor = category.color.copy(alpha = 0.4f),
+                spotColor = category.color.copy(alpha = 0.5f),
+            )
             .clip(CircleShape)
-            .background(category.color.copy(alpha = 0.85f))
-            .padding(horizontal = horizontalPadding, vertical = verticalPadding)
+            .background(
+                Brush.linearGradient(
+                    colors = listOf(
+                        category.color.copy(alpha = 0.95f),
+                        category.color.copy(alpha = 0.7f),
+                    )
+                )
+            )
+            .border(0.5.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+            .padding(horizontal = horizontalPadding + 2.dp, vertical = verticalPadding + 1.dp)
             .semantics { contentDescription = category.displayName },
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)

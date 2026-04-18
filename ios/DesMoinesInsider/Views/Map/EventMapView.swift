@@ -196,10 +196,9 @@ struct EventMapView: View {
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassBar(cornerRadius: PremiumTokens.cornerMd, material: .ultraThickMaterial, elevation: PremiumTokens.elevation4)
         }
     }
 
@@ -226,8 +225,8 @@ struct EventMapView: View {
             .tint(viewModel.showAttractions ? .green : .gray)
         }
         .font(.caption)
-        .padding(8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(10)
+        .glassBar(cornerRadius: PremiumTokens.cornerMd, material: .ultraThinMaterial, elevation: PremiumTokens.elevation4)
         .padding(.trailing)
     }
 
@@ -266,11 +265,11 @@ struct EventMapView: View {
             Image(systemName: "mappin.circle.fill")
                 .font(.caption)
             Text("\(viewModel.totalPinCount) places")
-                .font(.caption2.weight(.medium))
+                .font(.caption2.weight(.semibold))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .glassChip(cornerRadius: 999, material: .ultraThinMaterial)
     }
 
     // MARK: - Event Popup

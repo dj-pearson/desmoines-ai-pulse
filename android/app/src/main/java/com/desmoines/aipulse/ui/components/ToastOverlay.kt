@@ -33,8 +33,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
 import com.desmoines.aipulse.ui.theme.StatusError
 import com.desmoines.aipulse.ui.theme.StatusSuccess
+import com.desmoines.aipulse.ui.theme.glassSurface
 import kotlinx.coroutines.delay
 
 /**
@@ -93,39 +96,38 @@ fun ToastOverlay(
                     ToastMessage.Style.INFO -> "Info"
                     ToastMessage.Style.ERROR -> "Error"
                 }
-                Surface(
+                val accent = when (msg.style) {
+                    ToastMessage.Style.SUCCESS -> StatusSuccess
+                    ToastMessage.Style.INFO -> Color(0xFF2196F3)
+                    ToastMessage.Style.ERROR -> StatusError
+                }
+                Row(
                     modifier = Modifier
                         .padding(bottom = 24.dp, start = 16.dp, end = 16.dp)
+                        .glassSurface(
+                            shape = RoundedCornerShape(24.dp),
+                            intensity = GlassIntensity.Bar,
+                            elevation = PremiumTokens.Elevation8,
+                        )
+                        .padding(horizontal = 18.dp, vertical = 12.dp)
                         .semantics {
                             contentDescription = "$styleLabel: ${msg.text}"
                             liveRegion = LiveRegionMode.Polite
                         },
-                    shape = RoundedCornerShape(24.dp),
-                    tonalElevation = 6.dp,
-                    shadowElevation = 8.dp,
-                    color = MaterialTheme.colorScheme.inverseSurface
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = msg.icon,
-                            contentDescription = null, // Described by container live region
-                            tint = when (msg.style) {
-                                ToastMessage.Style.SUCCESS -> StatusSuccess
-                                ToastMessage.Style.INFO -> Color(0xFF2196F3)
-                                ToastMessage.Style.ERROR -> StatusError
-                            }
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = msg.text,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.inverseOnSurface,
-                            maxLines = 2
-                        )
-                    }
+                    Icon(
+                        imageVector = msg.icon,
+                        contentDescription = null,
+                        tint = accent
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = msg.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2
+                    )
                 }
             }
         }

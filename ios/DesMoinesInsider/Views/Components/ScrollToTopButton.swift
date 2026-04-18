@@ -28,15 +28,18 @@ struct ScrollToTopButton: View {
                     UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     action()
                 } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 44, height: 44)
-                        .background(Color.accentColor, in: Circle())
-                        .shadow(color: .black.opacity(0.2), radius: 6, x: 0, y: 3)
+                    ZStack {
+                        Circle().fill(Color.accentColor.opacity(0.85))
+                        Image(systemName: "arrow.up")
+                            .font(.body.weight(.bold))
+                            .foregroundStyle(.white)
+                    }
+                    .frame(width: 48, height: 48)
+                    .glassBar(cornerRadius: 24, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
                 }
+                .pressable(scale: 0.9)
                 .accessibilityLabel("Scroll to top")
-                .padding(16)
+                .padding(20)
                 .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
         }

@@ -117,6 +117,8 @@ struct SearchView: View {
                 .accessibilityAddTraits(viewModel.selectedTab == tab ? .isSelected : [])
             }
         }
+        .padding(6)
+        .glassChip(cornerRadius: PremiumTokens.cornerLg, material: .thinMaterial)
         .padding(.horizontal)
         .padding(.top, 8)
     }

@@ -107,30 +107,42 @@ fun AnimatedTabItem(
         )
         Spacer(Modifier.height(4.dp))
 
-        AnimatedContent(
-            targetState = isSelected,
-            transitionSpec = {
-                if (reduceMotion) {
-                    (fadeIn() togetherWith fadeOut())
-                } else {
-                    (scaleIn(initialScale = 0.7f) + fadeIn()) togetherWith
-                        (scaleOut(targetScale = 0.7f) + fadeOut())
-                }
-            },
-            label = "tab-icon",
-        ) { selectedState ->
-            Icon(
-                imageVector = if (selectedState) selectedIcon else unselectedIcon,
-                contentDescription = null,
-                tint = if (selectedState) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(24.dp)
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                    },
-            )
+        Box(contentAlignment = Alignment.Center) {
+            // Glass halo pulses in when the tab is selected.
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(RoundedCornerShape(19.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)),
+                )
+            }
+
+            AnimatedContent(
+                targetState = isSelected,
+                transitionSpec = {
+                    if (reduceMotion) {
+                        (fadeIn() togetherWith fadeOut())
+                    } else {
+                        (scaleIn(initialScale = 0.7f) + fadeIn()) togetherWith
+                            (scaleOut(targetScale = 0.7f) + fadeOut())
+                    }
+                },
+                label = "tab-icon",
+            ) { selectedState ->
+                Icon(
+                    imageVector = if (selectedState) selectedIcon else unselectedIcon,
+                    contentDescription = null,
+                    tint = if (selectedState) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        },
+                )
+            }
         }
 
         Spacer(Modifier.height(2.dp))

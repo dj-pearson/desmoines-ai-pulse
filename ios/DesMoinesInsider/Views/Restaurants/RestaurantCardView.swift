@@ -6,6 +6,7 @@ struct RestaurantCardView: View {
     @Binding var toast: ToastMessage?
 
     @State private var favorites = FavoritesService.shared
+    @State private var favoriteBurst = false
 
     init(restaurant: Restaurant, toast: Binding<ToastMessage?> = .constant(nil)) {
         self.restaurant = restaurant
@@ -35,10 +36,12 @@ struct RestaurantCardView: View {
 
                     Spacer()
 
-                    // Favorite button
+                    // Favorite button with heart-burst micro-interaction
                     Button {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         let wasFavorited = favorites.isRestaurantFavorited(restaurant.id)
+                        if !wasFavorited {
+                            favoriteBurst.toggle()
+                        }
                         Task {
                             do {
                                 try await favorites.toggleRestaurantFavorite(restaurantId: restaurant.id)
@@ -50,9 +53,15 @@ struct RestaurantCardView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: favorites.isRestaurantFavorited(restaurant.id) ? "heart.fill" : "heart")
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(favorites.isRestaurantFavorited(restaurant.id) ? .red : .secondary)
+                        HeartBurstView(
+                            isFavorited: favorites.isRestaurantFavorited(restaurant.id),
+                            burst: $favoriteBurst
+                        ) {
+                            Image(systemName: favorites.isRestaurantFavorited(restaurant.id) ? "heart.fill" : "heart")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(favorites.isRestaurantFavorited(restaurant.id) ? .red : .secondary)
+                                .frame(width: 24, height: 24)
+                        }
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(favorites.isRestaurantFavorited(restaurant.id) ? "Remove from saved" : "Save restaurant")
@@ -116,10 +125,9 @@ struct RestaurantCardView: View {
                 }
             }
         }
-        .padding(10)
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+        .padding(12)
+        .glassCard(cornerRadius: 16, material: .regularMaterial, elevation: PremiumTokens.elevation4)
+        .pressable()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(restaurant.name), \(restaurant.cuisine ?? "restaurant"), \(restaurant.ratingText)")
     }

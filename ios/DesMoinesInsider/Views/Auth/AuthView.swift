@@ -38,10 +38,10 @@ struct AuthView: View {
                         HStack(spacing: 12) {
                             TextField("First Name", text: $viewModel.firstName)
                                 .textContentType(.givenName)
-                                .textFieldStyle(.roundedInput)
+                                .textFieldStyle(.glassInput)
                             TextField("Last Name", text: $viewModel.lastName)
                                 .textContentType(.familyName)
-                                .textFieldStyle(.roundedInput)
+                                .textFieldStyle(.glassInput)
                         }
                     }
 
@@ -50,7 +50,7 @@ struct AuthView: View {
                             .textContentType(.emailAddress)
                             .keyboardType(.emailAddress)
                             .autocapitalization(.none)
-                            .textFieldStyle(.roundedInput)
+                            .textFieldStyle(.glassInput)
 
                         if !viewModel.email.isEmpty && !viewModel.isEmailValid {
                             Text("Please enter a valid email address")
@@ -63,7 +63,7 @@ struct AuthView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         SecureField("Password", text: $viewModel.password)
                             .textContentType(isSignUpMode ? .newPassword : .password)
-                            .textFieldStyle(.roundedInput)
+                            .textFieldStyle(.glassInput)
                             .accessibilityHint(isSignUpMode ? "Must be at least 8 characters with uppercase, lowercase, and a number" : "")
 
                         if isSignUpMode && !viewModel.password.isEmpty {
@@ -75,7 +75,7 @@ struct AuthView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             SecureField("Confirm Password", text: $viewModel.confirmPassword)
                                 .textContentType(.newPassword)
-                                .textFieldStyle(.roundedInput)
+                                .textFieldStyle(.glassInput)
 
                             if !viewModel.confirmPassword.isEmpty && !viewModel.passwordsMatch {
                                 Text("Passwords do not match")
@@ -122,13 +122,9 @@ struct AuthView: View {
                                 .tint(.white)
                         }
                         Text(isSignUpMode ? "Create Account" : "Sign In")
-                            .fontWeight(.semibold)
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(.white)
                 }
+                .buttonStyle(.brandPrimary)
                 .disabled(viewModel.isSigningIn || viewModel.isSigningUp || viewModel.isLockedOut)
                 .padding(.horizontal)
 

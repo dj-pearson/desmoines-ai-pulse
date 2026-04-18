@@ -45,7 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.desmoines.aipulse.ui.theme.GlassIntensity
 import com.desmoines.aipulse.ui.theme.PremiumTokens
+import com.desmoines.aipulse.ui.theme.glassSurface
 import com.desmoines.aipulse.util.rememberHapticPerformer
 import com.desmoines.aipulse.util.rememberShouldReduceAnimations
 
@@ -96,8 +98,11 @@ fun SubscriptionTierCard(
                 scaleY = scale
             }
             .fillMaxWidth()
-            .clip(RoundedCornerShape(PremiumTokens.CornerXl))
-            .background(surface)
+            .glassSurface(
+                shape = RoundedCornerShape(PremiumTokens.CornerXl),
+                intensity = GlassIntensity.Card,
+                elevation = if (isFeatured) PremiumTokens.Elevation8 else PremiumTokens.Elevation4,
+            )
             .then(
                 if (isVip) {
                     Modifier.border(

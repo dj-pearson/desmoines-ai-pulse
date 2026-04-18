@@ -78,8 +78,8 @@ struct SubscriptionBanner: View {
             }
             .accessibilityLabel("Upgrade to a premium subscription plan")
         }
-        .padding(16)
-        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 16))
+        .padding(18)
+        .glassCard(cornerRadius: PremiumTokens.cornerLg, material: .regularMaterial, elevation: PremiumTokens.elevation4)
     }
 
     private var subscribedCard: some View {
@@ -110,10 +110,16 @@ struct SubscriptionBanner: View {
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
-            .padding(16)
-            .background(tierColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
+            .padding(18)
+            .background(tierColor.opacity(0.08))
+            .glassCard(cornerRadius: PremiumTokens.cornerLg, material: .regularMaterial, elevation: PremiumTokens.elevation4)
+            .overlay(
+                RoundedRectangle(cornerRadius: PremiumTokens.cornerLg, style: .continuous)
+                    .strokeBorder(tierColor.opacity(0.3), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
+        .pressable()
         .accessibilityLabel("\(storeKit.currentTier.displayName) plan. Tap to manage subscription.")
     }
 

@@ -424,18 +424,20 @@ private struct FeaturedEventCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Image
+            // Image with scrim for legibility
             ZStack(alignment: .bottomLeading) {
                 CachedAsyncImage(url: event.imageUrl) {
                     Rectangle()
                         .fill(event.eventCategory.color.gradient)
                 }
                 .frame(width: 260, height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(PremiumTokens.imageScrim)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .glassCard(cornerRadius: 14, material: .regularMaterial, elevation: PremiumTokens.elevation4)
 
                 // Category badge
                 CategoryBadge(category: event.eventCategory)
-                    .padding(8)
+                    .padding(10)
             }
 
             // Title
