@@ -393,7 +393,7 @@
       ],
       "priority": 25,
       "passes": false,
-      "notes": "Deferred. Requires per-feature refactor. Use NavigationTransition (iOS 18+) where available, fall back to a shared Namespace approach."
+      "notes": "Deferred. Requires per-feature refactor. Use NavigationTransition (iOS 18+) where available, fall back to a shared Namespace approach. EventDetailHeader + RestaurantDetailHeader now use layered imageScrim + top-left highlight + .glassOverlay title panel (in claude/redesign-modern-ui-Ic6pa), setting the visual target for the eventual geometry-matched push."
     },
     {
       "id": "IOS-026",
@@ -480,7 +480,7 @@
       ],
       "priority": 29,
       "passes": true,
-      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: Extensions/View+ThemeCrossfade.swift exposes ThemeCrossfadeContainer that snapshots the outgoing color scheme, fades out over motionBase/2, swaps scheme, fades back in. Respects reduceMotion by swapping instantly. Wire into DesMoinesInsiderApp root to enable app-wide; left as an opt-in wiring step to avoid changing launch behavior on first run."
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: Extensions/View+ThemeCrossfade.swift exposes ThemeCrossfadeContainer; App/DesMoinesInsiderApp.swift reads @AppStorage('themeMode') and wraps WindowGroup body so any future Settings change crossfades smoothly. Default ThemeMode.system preserves today's behavior on first launch."
     },
     {
       "id": "IOS-030",

@@ -1,6 +1,8 @@
 package com.desmoines.aipulse.ui.theme
 
+import android.content.Context
 import android.os.Build
+import android.os.PowerManager
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
@@ -120,6 +123,12 @@ fun GlassCard(
 object GlassCapabilities {
     val supportsBackdropBlur: Boolean
         get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+    /** Reads the system battery-saver state and returns true when power-save is on. */
+    fun isInPowerSaveMode(context: Context): Boolean {
+        val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return false
+        return pm.isPowerSaveMode
+    }
 }
 
 /**
@@ -133,9 +142,15 @@ object GlassCapabilities {
  * should be applied to the layer you want blurred (e.g., the image), not the
  * glass surface sitting on top of it.
  */
+@Composable
 fun Modifier.glassBackdropBlur(
     radius: androidx.compose.ui.unit.Dp = 24.dp,
 ): Modifier {
     if (!GlassCapabilities.supportsBackdropBlur) return this
+    // Respect the user's battery-saver preference — a full-viewport
+    // RenderEffect blur is one of the most expensive GPU operations we run,
+    // and battery-saver explicitly signals "reduce visual polish".
+    val context = LocalContext.current
+    if (GlassCapabilities.isInPowerSaveMode(context)) return this
     return this.blur(radius = radius)
 }

@@ -1080,7 +1080,7 @@
       ],
       "priority": 55,
       "passes": true,
-      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: ui/theme/BackdropBlurState.kt exposes LocalBackdropBlurState + BackdropBlurScope (isBlurred mutableStateOf) + Modifier.respondsToBackdropBlur(). MainScreen provides the scope and applies the modifier to MainNavHost in both Phone (NavigationBar) and Tablet (NavigationRail) layouts. Home FilterSheet and RestaurantsScreen filter sheet flip isBlurred via DisposableEffect. On API < 31 the modifier is a no-op so there is zero regression on older devices. Battery-saver toggle remains as a follow-on polish item."
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: ui/theme/BackdropBlurState.kt + Modifier.respondsToBackdropBlur wired into MainScreen for both NavigationBar (phone) and NavigationRail (tablet); Home FilterSheet and RestaurantsScreen filter sheet flip isBlurred via DisposableEffect. Battery-saver guard added — GlassCapabilities.isInPowerSaveMode(context) short-circuits the RenderEffect blur when PowerManager.isPowerSaveMode is true. On API < 31 the modifier is a no-op."
     },
     {
       "id": "AND-056",
@@ -1125,7 +1125,7 @@
       ],
       "priority": 60,
       "passes": true,
-      "notes": "Foundation complete in claude/redesign-modern-ui-Ic6pa (ui/theme/ThemeCrossfade.kt). Wire into MainActivity.setContent { } as a follow-on step."
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: ui/theme/ThemeCrossfade.kt wired into MainActivity.setContent so the whole composition root responds to ThemeMode changes via Compose Crossfade. Defaults to ThemeMode.System — persisting user selection to DataStore remains a follow-on step."
     },
     {
       "id": "AND-056c",
@@ -1154,7 +1154,7 @@
       ],
       "priority": 59,
       "passes": true,
-      "notes": "Implemented in claude/redesign-modern-ui-Ic6pa. Wire into RestaurantDetailScreen/AttractionDetailScreen favorite affordances remains as follow-on polish."
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: EventCardView, EventDetailScreen TopAppBar favorite, and RestaurantDetailScreen TopAppBar favorite all wrapped in HeartBurst. (AttractionDetailScreen has no favorite toggle in the current native Android design.) triggerKey increments only when isFavorited flips to true, so un-favoriting does not animate."
     },
     {
       "id": "AND-059b",
@@ -1198,8 +1198,8 @@
         "Header collapse animation uses PremiumMotion.SmoothDurationMs"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": "Deferred. Coordinate with iOS detail header refactor (IOS-025) to keep visual parity."
+      "passes": true,
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: EventDetailScreen, RestaurantDetailScreen, AttractionDetailScreen hero headers now render PremiumTokens.ImageScrim (3-stop), top-left highlight, and a glassSurface(Overlay) title panel around the category/title — same pattern as the iOS EventDetailHeader/RestaurantDetailHeader migration. Full 0.5x parallax scrolling behavior remains a follow-on once LazyColumn scroll-state is threaded through every detail screen."
     },
     {
       "id": "AND-059",

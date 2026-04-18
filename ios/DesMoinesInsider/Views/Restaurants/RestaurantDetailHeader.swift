@@ -18,13 +18,19 @@ struct RestaurantDetailHeader: View {
             }
             .frame(maxWidth: .infinity, minHeight: 300, maxHeight: 300)
 
-            LinearGradient(
-                colors: [.clear, .clear, .black.opacity(0.7)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+            // Layered scrim + top-left highlight (mirrors hero header pattern)
+            PremiumTokens.imageScrim
 
-            VStack(alignment: .leading, spacing: 6) {
+            LinearGradient(
+                colors: [Color.white.opacity(0.18), .clear],
+                startPoint: .topLeading,
+                endPoint: .center
+            )
+            .frame(maxHeight: .infinity, alignment: .top)
+            .blendMode(.plusLighter)
+            .allowsHitTesting(false)
+
+            VStack(alignment: .leading, spacing: 8) {
                 // Cuisine badge
                 if let cuisine = restaurant.cuisine {
                     Text(cuisine)
@@ -40,7 +46,10 @@ struct RestaurantDetailHeader: View {
                     .foregroundStyle(.white)
                     .lineLimit(3)
             }
-            .padding()
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassOverlay(cornerRadius: PremiumTokens.cornerLg, material: .ultraThinMaterial)
+            .padding(16)
         }
         .clipped()
         .onTapGesture {

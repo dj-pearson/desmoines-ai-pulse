@@ -12,6 +12,7 @@ struct DesMoinesInsiderApp: App {
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @AppStorage("appLaunchCount") private var launchCount = 0
+    @AppStorage("themeMode") private var themeModeRaw: String = ThemeMode.system.rawValue
     @State private var showJailbreakWarning = false
     @State private var awaitingBiometric = false
     @State private var sessionExpiredMessage: String?
@@ -19,8 +20,13 @@ struct DesMoinesInsiderApp: App {
     /// MetricKit subscriber — retained for the lifetime of the app.
     private let metricKit = MetricKitSubscriber.shared
 
+    private var themeMode: ThemeMode {
+        ThemeMode(rawValue: themeModeRaw) ?? .system
+    }
+
     var body: some Scene {
         WindowGroup {
+            ThemeCrossfadeContainer(mode: themeMode) {
             Group {
                 if !Config.isConfigured {
                     // Supabase credentials are missing — show a helpful error
@@ -117,6 +123,7 @@ struct DesMoinesInsiderApp: App {
                     requestReviewIfEligible()
                 }
             }
+            } // ThemeCrossfadeContainer
         }
     }
 

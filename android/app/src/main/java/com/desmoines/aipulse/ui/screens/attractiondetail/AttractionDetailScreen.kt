@@ -66,6 +66,9 @@ import com.desmoines.aipulse.ui.components.FullScreenImageViewer
 import com.desmoines.aipulse.ui.components.LoadingView
 import com.desmoines.aipulse.ui.theme.BrandOrange
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
+import com.desmoines.aipulse.ui.theme.glassSurface
 
 /**
  * Attraction Detail screen matching iOS AttractionDetailView.swift.
@@ -214,26 +217,39 @@ private fun AttractionDetailHeader(
             }
         }
 
-        // Gradient overlay
+        // Layered scrim matching PremiumTokens.ImageScrim
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .background(PremiumTokens.ImageScrim)
+        )
+
+        // Subtle top-left highlight
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
                 .background(
-                    Brush.verticalGradient(
+                    Brush.linearGradient(
                         colors = listOf(
+                            Color.White.copy(alpha = 0.18f),
                             Color.Transparent,
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.7f)
                         )
                     )
                 )
         )
 
-        // Type badge + name at bottom-left
+        // Type badge + name wrapped in a glass panel for consistency with other detail screens
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(16.dp),
+                .padding(16.dp)
+                .glassSurface(
+                    shape = RoundedCornerShape(PremiumTokens.CornerLg),
+                    intensity = GlassIntensity.Overlay,
+                    elevation = PremiumTokens.Elevation2,
+                )
+                .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // Type badge (frosted capsule)

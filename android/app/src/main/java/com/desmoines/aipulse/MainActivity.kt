@@ -29,6 +29,8 @@ import androidx.lifecycle.lifecycleScope
 import com.desmoines.aipulse.ui.screens.MainScreen
 import com.desmoines.aipulse.ui.screens.onboarding.OnboardingScreen
 import com.desmoines.aipulse.ui.theme.DesMoinesInsiderTheme
+import com.desmoines.aipulse.ui.theme.ThemeCrossfadeContainer
+import com.desmoines.aipulse.ui.theme.ThemeMode
 import com.desmoines.aipulse.util.BiometricAuthService
 import com.desmoines.aipulse.util.DeepLinkHandler
 import com.desmoines.aipulse.util.NetworkMonitor
@@ -65,7 +67,10 @@ class MainActivity : FragmentActivity() {
         setContent {
             val windowSizeClass = calculateWindowSizeClass(this)
 
-            DesMoinesInsiderTheme {
+            // TODO: persist ThemeMode to DataStore and read here; defaulting
+            // to System preserves existing behavior while the container lets
+            // future theme changes crossfade smoothly.
+            ThemeCrossfadeContainer(themeMode = ThemeMode.System) { _ ->
                 val hasCompletedOnboarding by onboardingPreferences.hasCompletedOnboarding
                     .collectAsState(initial = true) // default true to avoid flash
 
