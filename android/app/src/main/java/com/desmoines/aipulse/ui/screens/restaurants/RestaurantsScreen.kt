@@ -682,6 +682,14 @@ fun RestaurantFilterSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
+    // Flag backdrop blur scope so MainNavHost picks up a real RenderEffect
+    // blur on Android 12+ while the filter sheet is presented.
+    val backdrop = com.desmoines.aipulse.ui.theme.LocalBackdropBlurState.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        backdrop.isBlurred = true
+        onDispose { backdrop.isBlurred = false }
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

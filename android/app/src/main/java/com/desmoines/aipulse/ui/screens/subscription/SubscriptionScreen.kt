@@ -58,6 +58,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.ui.components.BrandGhostButton
+import com.desmoines.aipulse.ui.components.BrandPrimaryButton
 
 /**
  * Subscription screen matching iOS SubscriptionView.swift.
@@ -158,22 +160,13 @@ fun SubscriptionScreen(
 
                 Spacer(Modifier.height(20.dp))
 
-                // Purchase button
-                Button(
+                // Purchase button — migrated to BrandPrimaryButton
+                BrandPrimaryButton(
                     onClick = onPurchase,
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = selectedTier != null && selectedTier != currentTier && !isLoading,
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(if (isLoading) "Processing..." else "Subscribe")
-                }
+                    enabled = selectedTier != null && selectedTier != currentTier,
+                    isLoading = isLoading,
+                    text = if (isLoading) "Processing..." else "Subscribe",
+                )
             } else if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.padding(24.dp))
             }
@@ -191,13 +184,12 @@ fun SubscriptionScreen(
 
             Spacer(Modifier.height(16.dp))
 
-            // Restore purchases
-            OutlinedButton(
+            // Restore purchases — migrated to BrandGhostButton
+            BrandGhostButton(
                 onClick = onRestorePurchases,
                 enabled = !isLoading,
-            ) {
-                Text("Restore Purchases")
-            }
+                text = "Restore Purchases",
+            )
 
             Spacer(Modifier.height(24.dp))
 

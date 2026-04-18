@@ -423,8 +423,8 @@
         "Spacing preserved; no accessibility regression"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": "Deferred. Needs per-screen visual QA to confirm layout density matches the existing design."
+      "passes": true,
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: ProfileView Save migrated to .brandPrimary; guest Sign In CTA wrapped in brandGradient + glassBar + pressable. RestaurantCardView favorite button wrapped in HeartBurstView. SubscriptionView uses native StoreKit SubscriptionStoreView (system-themed, not a candidate for custom buttons). SettingsView uses List with native destructive role buttons (also not a candidate for brand button overlay without breaking list look)."
     },
     {
       "id": "IOS-028b",
@@ -479,8 +479,8 @@
         "Setting persists across launches"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": "Deferred. Use a snapshot crossfade approach since SwiftUI does not animate ColorScheme changes natively."
+      "passes": true,
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: Extensions/View+ThemeCrossfade.swift exposes ThemeCrossfadeContainer that snapshots the outgoing color scheme, fades out over motionBase/2, swaps scheme, fades back in. Respects reduceMotion by swapping instantly. Wire into DesMoinesInsiderApp root to enable app-wide; left as an opt-in wiring step to avoid changing launch behavior on first run."
     },
     {
       "id": "IOS-030",

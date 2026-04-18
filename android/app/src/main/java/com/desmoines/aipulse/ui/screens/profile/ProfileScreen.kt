@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.components.BannerStyle
+import com.desmoines.aipulse.ui.components.BrandPrimaryButton
 import com.desmoines.aipulse.ui.components.SubscriptionBanner
 
 /**
@@ -382,26 +383,13 @@ private fun AuthenticatedContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Save Button
-        Button(
+        // Save Button — migrated to BrandPrimaryButton
+        BrandPrimaryButton(
             onClick = onSaveProfile,
-            modifier = Modifier.fillMaxWidth(),
+            isLoading = isSaving,
             enabled = !isSaving,
-            shape = RoundedCornerShape(12.dp),
-        ) {
-            if (isSaving) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Text(
-                    text = "Save Changes",
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-        }
+            text = "Save Changes",
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -514,17 +502,10 @@ private fun GuestContent(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
+        BrandPrimaryButton(
             onClick = onNavigateToAuth,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-        ) {
-            Text(
-                text = "Sign In or Create Account",
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(vertical = 4.dp),
-            )
-        }
+            text = "Sign In or Create Account",
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 

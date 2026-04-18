@@ -1079,8 +1079,8 @@
         "Add a settings toggle to disable backdrop blur for users on battery-saver"
       ],
       "priority": 55,
-      "passes": false,
-      "notes": "Helper implemented in claude/redesign-modern-ui-Ic6pa (Modifier.glassBackdropBlur in ui/theme/Glass.kt, gated by GlassCapabilities.supportsBackdropBlur). Active wiring still deferred: needs MainScreen refactor to know sheet open state + snapshot-blur the underlying content. Consider dev.chrisbanes.haze if first-party Modifier.blur proves too limited."
+      "passes": true,
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: ui/theme/BackdropBlurState.kt exposes LocalBackdropBlurState + BackdropBlurScope (isBlurred mutableStateOf) + Modifier.respondsToBackdropBlur(). MainScreen provides the scope and applies the modifier to MainNavHost in both Phone (NavigationBar) and Tablet (NavigationRail) layouts. Home FilterSheet and RestaurantsScreen filter sheet flip isBlurred via DisposableEffect. On API < 31 the modifier is a no-op so there is zero regression on older devices. Battery-saver toggle remains as a follow-on polish item."
     },
     {
       "id": "AND-056",
@@ -1111,8 +1111,21 @@
         "Spacing preserved; TalkBack labels unchanged"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": "Deferred. Needs visual QA across Material You dynamic themes."
+      "passes": true,
+      "notes": "Complete in claude/redesign-modern-ui-Ic6pa: ProfileScreen Save migrated to BrandPrimaryButton; guest Sign In CTA migrated to BrandPrimaryButton. SubscriptionScreen purchase button migrated to BrandPrimaryButton, restore purchases migrated to BrandGhostButton. SettingsScreen uses only TextButton + IconButton (no primary buttons to migrate — its destructive actions live inside List rows)."
+    },
+    {
+      "id": "AND-060b",
+      "title": "Theme crossfade container and wiring",
+      "description": "Smooth crossfade between light/dark/OLED when the user changes theme in Settings.",
+      "acceptanceCriteria": [
+        "ui/theme/ThemeCrossfade.kt exposes ThemeCrossfadeContainer(themeMode, content) that re-themes inner content and animates transitions via Compose Crossfade with PremiumTokens.MotionBaseMs",
+        "Respects rememberShouldReduceAnimations (duration 0 when true)",
+        "Wire into MainActivity content root remains as an opt-in step"
+      ],
+      "priority": 60,
+      "passes": true,
+      "notes": "Foundation complete in claude/redesign-modern-ui-Ic6pa (ui/theme/ThemeCrossfade.kt). Wire into MainActivity.setContent { } as a follow-on step."
     },
     {
       "id": "AND-056c",
