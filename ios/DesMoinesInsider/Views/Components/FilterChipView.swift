@@ -39,8 +39,7 @@ struct FilterChipView: View {
             .clipShape(Capsule(style: .continuous))
             .shadow(color: tint.opacity(0.18), radius: 4, x: 0, y: 2)
         }
-        .buttonStyle(.plain)
-        .pressable(scale: 0.94)
+        .buttonStyle(PressableCardStyle(scale: 0.94))
         .accessibilityLabel("Remove filter: \(text)")
     }
 }

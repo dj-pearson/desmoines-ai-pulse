@@ -51,7 +51,7 @@ struct AttractionsView: View {
                                             onToggleFavorite: { toggleFavorite(attraction) }
                                         )
                                     }
-                                    .buttonStyle(.plain)
+                                    .buttonStyle(.pressableCard)
                                     .entranceAnimation(index: index)
                                     .task {
                                         await viewModel.loadMoreIfNeeded(currentItem: attraction)

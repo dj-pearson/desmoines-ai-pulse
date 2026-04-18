@@ -210,7 +210,7 @@ struct SearchView: View {
                         } label: {
                             EventCardView(event: event)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                     }
 
@@ -221,7 +221,7 @@ struct SearchView: View {
                         } label: {
                             RestaurantCardView(restaurant: restaurant)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                     }
 
@@ -232,7 +232,7 @@ struct SearchView: View {
                         } label: {
                             AttractionCardView(attraction: attraction)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                     }
                 }

@@ -127,7 +127,6 @@ struct RestaurantCardView: View {
         }
         .padding(12)
         .glassCard(cornerRadius: 16, material: .regularMaterial, elevation: PremiumTokens.elevation4)
-        .pressable()
         .accessibilityElement(children: .contain)
         .accessibilityLabel("\(restaurant.name), \(restaurant.cuisine ?? "restaurant"), \(restaurant.ratingText)")
     }

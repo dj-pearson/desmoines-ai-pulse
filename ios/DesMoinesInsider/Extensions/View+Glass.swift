@@ -193,38 +193,26 @@ private struct GlassSheenModifier: ViewModifier {
     }
 }
 
-// MARK: - Pressable interactive scale
+// MARK: - Pressable button style
 //
-// Gives any tappable surface a consistent physical response — scales down
-// subtly on press, lifts back with a spring. Works on top of Buttons,
-// cards, chips, and navigation links.
+// Scales down slightly on press. Use as a `ButtonStyle` so SwiftUI owns the
+// press-state tracking — inside a ScrollView the press is automatically
+// cancelled as soon as the scroll view starts panning. A custom gesture
+// attached to the card itself (even via `simultaneousGesture`) races with
+// the scroll view and makes lists feel sticky; a ButtonStyle does not.
 
-extension View {
-    func pressable(scale: CGFloat = 0.97) -> some View {
-        modifier(PressableScaleModifier(minScale: scale))
+struct PressableCardStyle: ButtonStyle {
+    var scale: CGFloat = 0.97
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && !reduceMotion ? scale : 1.0)
+            .animation(PremiumTokens.springSnappy, value: configuration.isPressed)
     }
 }
 
-private struct PressableScaleModifier: ViewModifier {
-    let minScale: CGFloat
-
-    // `@GestureState` auto-resets when the gesture is cancelled — critical inside
-    // a ScrollView so that a scroll drag releases the pressed state and lets the
-    // scroll view own the gesture. `DragGesture(minimumDistance: 0)` captures the
-    // touch immediately and fights the scroll view's pan gesture, which made the
-    // cards feel "sticky" while scrolling.
-    @GestureState private var isPressed = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    func body(content: Content) -> some View {
-        content
-            .scaleEffect(isPressed && !reduceMotion ? minScale : 1.0)
-            .animation(PremiumTokens.springSnappy, value: isPressed)
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 1.0, maximumDistance: 10)
-                    .updating($isPressed) { currentState, gestureState, _ in
-                        gestureState = currentState
-                    }
-            )
-    }
+extension ButtonStyle where Self == PressableCardStyle {
+    static var pressableCard: PressableCardStyle { PressableCardStyle() }
 }
