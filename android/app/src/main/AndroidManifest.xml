@@ -3,13 +3,6 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- Event reminder notifications -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".DesMoinesInsiderApp"
@@ -19,25 +12,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.DesMoinesInsider">
-        <!-- Google Maps API key from local.properties -->
-        <meta-data
-            android:name="com.google.android.geo.API_KEY"
-            android:value="${GOOGLE_MAPS_API_KEY}" />
-
-        <!-- Firebase Cloud Messaging push notification service -->
-        <service
-            android:name=".util.PushNotificationService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
-
-        <!-- Event reminder alarm receiver -->
-        <receiver
-            android:name=".util.NotificationReceiver"
-            android:exported="false" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -54,33 +28,6 @@
                 <data
                     android:scheme="com.desmoines.aipulse"
                     android:host="auth-callback" />
-            </intent-filter>
-
-            <!-- Custom scheme deep links for in-app navigation -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="com.desmoines.aipulse" />
-            </intent-filter>
-
-            <!-- Universal links / Android App Links for desmoinesinsider.com -->
-            <intent-filter android:autoVerify="true">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="desmoinesinsider.com"
-                    android:pathPrefix="/events" />
-                <data
-                    android:scheme="https"
-                    android:host="desmoinesinsider.com"
-                    android:pathPrefix="/restaurants" />
-                <data
-                    android:scheme="https"
-                    android:host="desmoinesinsider.com"
-                    android:pathPrefix="/attractions" />
             </intent-filter>
         </activity>
     </application>

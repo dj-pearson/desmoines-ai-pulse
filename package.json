@@ -19,6 +19,7 @@
     "type-check:strict": "tsc --project tsconfig.strict.json --noEmit",
     "preview": "vite preview",
     "migrate": "tsx scripts/run-migration.ts",
+    "db:backup": "tsx scripts/supabase-backup.ts",
     "crawl-events": "tsx scripts/event-datetime-crawler.ts",
     "crawl-events:apply": "tsx scripts/event-datetime-crawler.ts --apply",
     "convert-timezones": "tsx scripts/convert-timezones.ts --dry-run",
