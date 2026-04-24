@@ -58,6 +58,8 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
                     OkHttpNetworkFetcherFactory(
                         callFactory = {
                             OkHttpClient.Builder()
+                                .connectTimeout(IMAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                                .readTimeout(IMAGE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
                                 .addNetworkInterceptor(cacheControlInterceptor())
                                 .build()
                         }
@@ -99,5 +101,7 @@ class DesMoinesInsiderApp : Application(), SingletonImageLoader.Factory {
         private const val DISK_CACHE_SIZE = 200L * 1024 * 1024
         /** Default cache TTL when server doesn't specify Cache-Control */
         private const val DEFAULT_CACHE_DAYS = 7
+        /** Timeout for image download connections in seconds */
+        private const val IMAGE_TIMEOUT_SECONDS = 30L
     }
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ import { PasswordStrengthMeter } from "@/components/PasswordStrengthMeter";
 import { MFAVerificationDialog } from "@/components/auth/MFAVerificationDialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SecurityUtils } from "@/lib/securityUtils";
+import { logConsent } from "@/lib/consentLog";
 
 // Google Logo SVG Component (official colors)
 const GoogleLogo = ({ className }: { className?: string }) => (
@@ -73,10 +74,14 @@ export default function Auth() {
     lastName: "",
     phone: "",
     location: "",
+    // ISO yyyy-mm-dd string. Empty = not yet provided. Used for COPPA age
+    // gate only — we do not store the raw DOB, just a minimum-age attestation.
+    dateOfBirth: "",
     interests: [] as string[],
-    emailNotifications: true,
+    emailNotifications: false,
     smsNotifications: false,
-    eventRecommendations: true,
+    eventRecommendations: false,
+    termsAccepted: false,
     // Business fields
     businessName: "",
     businessType: "",
@@ -103,6 +108,7 @@ export default function Auth() {
     remainingAttempts,
     timeUntilReset,
     checkRateLimit,
+    checkDisposableEmail,
     logFailedAttempt,
     validateInput
   } = useAuthSecurity();
@@ -290,6 +296,17 @@ export default function Auth() {
       return;
     }
 
+    // Block disposable / throwaway email domains
+    const disposableCheck = await checkDisposableEmail(formData.email);
+    if (!disposableCheck.allowed) {
+      toast({
+        title: "Email Not Allowed",
+        description: disposableCheck.message || "This email provider is not allowed for signup.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Validate password strength
     const passwordValidation = validateInput('password', formData.password);
     if (!passwordValidation.isValid) {
@@ -333,6 +350,57 @@ export default function Auth() {
       return;
     }
 
+    // COPPA age gate — block accounts for children under 13.
+    // COPPA (15 U.S.C. §§ 6501–6506) prohibits operators from knowingly
+    // collecting personal information from children under 13 without verifiable
+    // parental consent; we don't collect that consent, so the rule is "no one
+    // under 13". We require a DOB, compute age at submission time, and reject
+    // if under 13. The DOB itself is NOT persisted — we only store the
+    // computed minimum-age attestation in the consent record.
+    if (!formData.dateOfBirth) {
+      toast({
+        title: "Date of birth required",
+        description: "Please enter your date of birth so we can make sure our service is appropriate for you.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const dobTime = Date.parse(formData.dateOfBirth);
+    if (Number.isNaN(dobTime)) {
+      toast({
+        title: "Invalid date of birth",
+        description: "Please enter a valid date.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const dobDate = new Date(dobTime);
+    const today = new Date();
+    let age = today.getFullYear() - dobDate.getFullYear();
+    const m = today.getMonth() - dobDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dobDate.getDate())) {
+      age--;
+    }
+    if (age < 13) {
+      toast({
+        title: "Sorry — you're not old enough to sign up",
+        description:
+          "Des Moines Insider requires users to be at least 13 years old. If you're a parent creating an account for a child, please contact privacy@desmoinesinsider.com.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Terms & Privacy acceptance is mandatory (contract formation + privacy law compliance)
+    if (!formData.termsAccepted) {
+      toast({
+        title: "Agreement Required",
+        description: "Please accept the Terms of Service and Privacy Policy to create an account.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Business account validation
     if (accountType === "business") {
       if (!formData.businessName) {
@@ -366,6 +434,22 @@ export default function Auth() {
 
     setIsLoading(true);
 
+    // Consent record — timestamped acceptance of ToS + Privacy Policy
+    // Required for CCPA/GDPR/CAN-SPAM/TCPA record-keeping (proves affirmative consent)
+    const consentRecord = {
+      terms_accepted: true,
+      terms_accepted_at: new Date().toISOString(),
+      terms_version: "2026-03-10",
+      privacy_version: "2025-11-25",
+      // Minimum-age attestation derived from DOB. We store only the boolean
+      // ("yes, at least 13") — the raw DOB is discarded after validation.
+      at_least_13: true,
+      // Marketing consent captured separately and only if explicitly checked
+      email_marketing_consent: !!formData.emailNotifications,
+      sms_marketing_consent: !!formData.smsNotifications,
+      personalization_consent: !!formData.eventRecommendations,
+    };
+
     // Prepare metadata based on account type
     const metadata = accountType === "personal"
       ? {
@@ -379,7 +463,8 @@ export default function Auth() {
             email_notifications: formData.emailNotifications,
             sms_notifications: formData.smsNotifications,
             event_recommendations: formData.eventRecommendations,
-          }
+          },
+          consent: consentRecord,
         }
       : {
           account_type: "business",
@@ -391,6 +476,15 @@ export default function Auth() {
           last_name: formData.lastName,
           phone: formData.phone,
           location: formData.location,
+          // Business contacts get the same communication-preferences block so we
+          // have matching consent records (required by CAN-SPAM and TCPA for any
+          // marketing communications to business contacts at numbers they provide).
+          communication_preferences: {
+            email_notifications: formData.emailNotifications,
+            sms_notifications: formData.smsNotifications,
+            event_recommendations: formData.eventRecommendations,
+          },
+          consent: consentRecord,
         };
 
     const result = await signup(formData.email, formData.password, metadata);
@@ -401,17 +495,56 @@ export default function Auth() {
         description: result.error || "Failed to create account",
         variant: "destructive",
       });
-    } else if (result.needsVerification) {
-      // Show email confirmation screen
-      setSignupEmail(formData.email);
-      setShowEmailConfirmation(true);
     } else {
-      // Signup successful and no verification needed (rare case)
-      toast({
-        title: "Account Created!",
-        description: "Welcome to Des Moines Insider!",
+      // Persist the consent record to the append-only audit log so we can
+      // prove affirmative opt-in under CAN-SPAM, TCPA, GDPR Art. 7, CCPA.
+      // Fire and forget — never block signup on logging.
+      void logConsent({
+        type: "terms",
+        granted: true,
+        source: "signup",
+        policyVersion: consentRecord.terms_version,
+        email: formData.email,
+        metadata: { privacy_version: consentRecord.privacy_version },
       });
-      navigate("/", { replace: true });
+      if (formData.emailNotifications) {
+        void logConsent({
+          type: "marketing_email",
+          granted: true,
+          source: "signup",
+          email: formData.email,
+        });
+      }
+      if (formData.smsNotifications) {
+        void logConsent({
+          type: "marketing_sms",
+          granted: true,
+          source: "signup",
+          email: formData.email,
+          metadata: { phone_provided: !!formData.phone },
+        });
+      }
+      if (formData.eventRecommendations) {
+        void logConsent({
+          type: "personalization_ai",
+          granted: true,
+          source: "signup",
+          email: formData.email,
+        });
+      }
+
+      if (result.needsVerification) {
+        // Show email confirmation screen
+        setSignupEmail(formData.email);
+        setShowEmailConfirmation(true);
+      } else {
+        // Signup successful and no verification needed (rare case)
+        toast({
+          title: "Account Created!",
+          description: "Welcome to Des Moines Insider!",
+        });
+        navigate("/", { replace: true });
+      }
     }
 
     setIsLoading(false);
@@ -828,6 +961,28 @@ export default function Auth() {
                   />
                 </div>
 
+                {/* Date of birth — used only for COPPA age verification.
+                    We do NOT persist the raw DOB; only a minimum-age flag is
+                    saved, per our data-minimization policy. */}
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth">
+                    Date of birth <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(e) => handleInputChange("dateOfBirth", e.target.value)}
+                    required
+                    max={new Date().toISOString().slice(0, 10)}
+                    autoComplete="bday"
+                    aria-describedby="dob-description"
+                  />
+                  <p id="dob-description" className="text-xs text-muted-foreground">
+                    We use this only to confirm you are at least 13 (COPPA). We do not save your date of birth — only whether you meet our age requirement.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="location">
                     Location <span className="text-red-500">*</span>
@@ -882,46 +1037,78 @@ export default function Auth() {
                   </div>
                 )}
 
-                {/* Communication Preferences (Personal accounts only) */}
-                {accountType === "personal" && (
-                  <div className="space-y-3">
-                    <Label>Communication Preferences</Label>
+                {/* Communication Preferences — explicit opt-in, not pre-checked.
+                    Shown for both personal and business accounts so we capture
+                    the same marketing / TCPA consent record for every user. */}
+                <div className="space-y-3">
+                    <Label>Optional Communication Preferences</Label>
+                    <p className="text-xs text-muted-foreground">
+                      These are off by default. Check only what you want — you can change these any time in your profile settings, and transactional emails (receipts, account alerts) are always sent regardless.
+                    </p>
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start space-x-2">
                       <Checkbox
                         id="emailNotifications"
                         checked={formData.emailNotifications}
                         onCheckedChange={(checked) => handleInputChange("emailNotifications", checked)}
+                        className="mt-0.5"
                       />
-                      <Label htmlFor="emailNotifications" className="text-sm">
-                        Email notifications about events
+                      <Label htmlFor="emailNotifications" className="text-sm font-normal leading-snug">
+                        Send me marketing emails about events, restaurants, and promotions. I can unsubscribe anytime.
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start space-x-2">
                       <Checkbox
                         id="smsNotifications"
                         checked={formData.smsNotifications}
                         onCheckedChange={(checked) => handleInputChange("smsNotifications", checked)}
+                        className="mt-0.5"
                       />
-                      <Label htmlFor="smsNotifications" className="text-sm">
-                        SMS notifications (requires phone number)
+                      <Label htmlFor="smsNotifications" className="text-sm font-normal leading-snug">
+                        Send me SMS/text messages. Message &amp; data rates may apply; reply STOP to cancel, HELP for help. Consent is not a condition of purchase. (TCPA)
                       </Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-start space-x-2">
                       <Checkbox
                         id="eventRecommendations"
                         checked={formData.eventRecommendations}
                         onCheckedChange={(checked) => handleInputChange("eventRecommendations", checked)}
+                        className="mt-0.5"
                       />
-                      <Label htmlFor="eventRecommendations" className="text-sm">
-                        Personalized event recommendations
+                      <Label htmlFor="eventRecommendations" className="text-sm font-normal leading-snug">
+                        Use my activity to personalize event recommendations (AI-assisted profiling). You can opt out at any time.
                       </Label>
                     </div>
                   </div>
                 </div>
-                )}
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                {/* Mandatory Terms & Privacy acceptance — required for all account types */}
+                <div className="flex items-start space-x-2 pt-2 border-t">
+                  <Checkbox
+                    id="termsAccepted"
+                    checked={formData.termsAccepted}
+                    onCheckedChange={(checked) => handleInputChange("termsAccepted", !!checked)}
+                    className="mt-0.5"
+                    aria-required="true"
+                  />
+                  <Label htmlFor="termsAccepted" className="text-sm font-normal leading-snug">
+                    <span className="text-red-500">*</span> I agree to the{" "}
+                    <Link to="/terms" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
+                      Terms of Service
+                    </Link>
+                    {", "}
+                    <Link to="/privacy-policy" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
+                      Privacy Policy
+                    </Link>
+                    {", and "}
+                    <Link to="/acceptable-use" target="_blank" rel="noopener" className="text-primary underline hover:no-underline">
+                      Acceptable Use Policy
+                    </Link>
+                    .
+                  </Label>
+                </div>
+
+                <Button type="submit" className="w-full" disabled={isLoading || !formData.termsAccepted}>
                   {isLoading ? "Creating account..." : "Create Account"}
                 </Button>
               </form>

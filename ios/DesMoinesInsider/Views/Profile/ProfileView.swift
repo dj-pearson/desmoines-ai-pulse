@@ -109,20 +109,16 @@ struct ProfileView: View {
                     Task { await viewModel.saveProfile() }
                 } label: {
                     HStack {
-                        Spacer()
                         if viewModel.isSaving {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Text("Save Changes")
-                                .fontWeight(.semibold)
+                            ProgressView().tint(.white)
                         }
-                        Spacer()
+                        Text(viewModel.isSaving ? "Saving..." : "Save Changes")
                     }
-                    .padding(.vertical, 4)
                 }
-                .listRowBackground(Color.accentColor)
-                .foregroundStyle(.white)
+                .buttonStyle(.brandPrimary)
+                .listRowInsets(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
+                .listRowBackground(Color.clear)
+                .disabled(viewModel.isSaving)
             }
 
             // App Section
@@ -217,12 +213,14 @@ struct ProfileView: View {
             } label: {
                 Text("Sign In or Create Account")
                     .font(.headline)
+                    .foregroundStyle(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 12))
-                    .foregroundStyle(.white)
+                    .background(PremiumTokens.brandGradient)
+                    .glassBar(cornerRadius: PremiumTokens.cornerLg, material: .ultraThinMaterial, elevation: PremiumTokens.elevation8)
                     .padding(.horizontal, 40)
             }
+            .buttonStyle(.pressableCard)
 
             // Premium teaser for guests
             SubscriptionBanner(style: .compact)

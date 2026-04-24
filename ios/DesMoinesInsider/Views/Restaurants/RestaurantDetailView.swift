@@ -28,9 +28,7 @@ struct RestaurantDetailView: View {
                     showSubscription: $showSubscription
                 )
 
-                AdBannerView()
-                    .padding(.horizontal)
-                    .padding(.vertical, 8)
+                AdSlot(.feed)
             }
             .frame(maxWidth: .infinity)
         }

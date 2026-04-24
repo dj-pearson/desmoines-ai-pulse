@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "50755690449",
-    "project_id": "des-moines-insider-19162",
-    "storage_bucket": "des-moines-insider-19162.firebasestorage.app"
+    "project_number": "999545522641",
+    "project_id": "des-moines-insider-d5787",
+    "storage_bucket": "des-moines-insider-d5787.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:50755690449:android:8ec5c6b736bce3f8accaf0",
+        "mobilesdk_app_id": "1:999545522641:android:b7e0f5c65bac706e6878f0",
         "android_client_info": {
           "package_name": "com.desmoines.aipulse"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyD0nSzHjFpT5dK5HYhW4T8WH4LyDgUJSJQ"
+          "current_key": "AIzaSyAuMsI6CpFO28o1KdSGFZiWSnnOzf1GmcA"
         }
       ],
       "services": {

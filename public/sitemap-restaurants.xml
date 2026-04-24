@@ -697,13 +697,13 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/daves-hot-chicken</loc>
+    <loc>https://desmoinesinsider.com/restaurants/daves-hot-chicken-2</loc>
     <lastmod>2026-03-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/daves-hot-chicken-2</loc>
+    <loc>https://desmoinesinsider.com/restaurants/daves-hot-chicken</loc>
     <lastmod>2026-03-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -1070,7 +1070,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/francies-bar-grill</loc>
-    <lastmod>2026-03-18</lastmod>
+    <lastmod>2026-04-01</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1358,7 +1358,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/izumi-sushi-hibachi-all-you-can-eat</loc>
-    <lastmod>2025-12-05</lastmod>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -1873,13 +1873,13 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/outback-steakhouse</loc>
+    <loc>https://desmoinesinsider.com/restaurants/outback-steakhouse-2</loc>
     <lastmod>2025-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/outback-steakhouse-2</loc>
+    <loc>https://desmoinesinsider.com/restaurants/outback-steakhouse</loc>
     <lastmod>2025-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -2365,14 +2365,14 @@
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/texas-roadhouse-2</loc>
-    <lastmod>2025-11-06</lastmod>
+    <loc>https://desmoinesinsider.com/restaurants/texas-roadhouse</loc>
+    <lastmod>2026-02-05</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/restaurants/texas-roadhouse</loc>
-    <lastmod>2026-02-05</lastmod>
+    <loc>https://desmoinesinsider.com/restaurants/texas-roadhouse-2</loc>
+    <lastmod>2025-11-06</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
@@ -2570,7 +2570,7 @@
   </url>
   <url>
     <loc>https://desmoinesinsider.com/restaurants/the-urban-grill</loc>
-    <lastmod>2026-02-12</lastmod>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>

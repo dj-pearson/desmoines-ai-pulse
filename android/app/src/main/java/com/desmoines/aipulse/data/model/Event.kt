@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.data.model
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import java.time.LocalDate
@@ -12,6 +13,7 @@ import java.time.temporal.ChronoUnit
  * Event data model matching the Supabase `events` table.
  * Mirrors iOS Event.swift.
  */
+@Immutable
 @Serializable
 data class Event(
     val id: String,

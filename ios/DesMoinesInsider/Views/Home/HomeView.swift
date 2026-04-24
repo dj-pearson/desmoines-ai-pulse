@@ -1,14 +1,13 @@
 import SwiftUI
 
-/// Main home/feed view with featured events, popular restaurants, date presets, category filters, and event list.
+/// Main home/feed view with featured events, popular restaurants, smart
+/// presets, inline filter pills, and event list.
 struct HomeView: View {
     @State private var viewModel = EventsViewModel()
     @State private var restaurantsVM = RestaurantsViewModel()
-    @State private var showFilters = false
     @State private var navigationPath = NavigationPath()
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -17,8 +16,18 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 0).id("top")
                     headerSection
-                    datePresetsSection
-                    categoryChipsSection
+
+                    exploreAttractionsCard
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+
+                    // Smart Presets — one-tap event scenarios
+                    EventSmartPresets(viewModel: viewModel)
+                        .padding(.top, 6)
+
+                    // Inline filter pills — always visible, no hidden sheet
+                    EventInlineFilters(viewModel: viewModel)
+                        .padding(.top, 2)
 
                     // Error banner
                     if let error = viewModel.errorMessage {
@@ -30,9 +39,7 @@ struct HomeView: View {
                     }
 
                     // Ad banner for free users (hidden for subscribers — ad-free experience)
-                    AdBannerView()
-                        .padding(.horizontal)
-                        .padding(.vertical, 4)
+                    AdSlot(.feed)
 
                     // Popular Restaurants
                     if !restaurantsVM.restaurants.isEmpty {
@@ -63,29 +70,19 @@ struct HomeView: View {
             }
             .navigationTitle("Des Moines Insider")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    filterButton
-                }
-            }
-            .sheet(isPresented: $showFilters) {
-                FilterSheet(
-                    selectedCategory: $viewModel.selectedCategory,
-                    selectedDatePreset: $viewModel.selectedDatePreset,
-                    showFeaturedOnly: $viewModel.showFeaturedOnly,
-                    showFreeOnly: $viewModel.showFreeOnly,
-                    maxDistance: $viewModel.maxDistance,
-                    minRating: $viewModel.minRating,
-                    onClear: { viewModel.clearFilters() }
-                )
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-            }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
             .navigationDestination(for: Restaurant.self) { restaurant in
                 RestaurantDetailView(restaurant: restaurant)
+            }
+            .navigationDestination(for: Attraction.self) { attraction in
+                AttractionDetailView(attraction: attraction)
+            }
+            .navigationDestination(for: HomeDestination.self) { destination in
+                switch destination {
+                case .attractions: AttractionsView()
+                }
             }
             .task {
                 async let eventsLoad: () = viewModel.loadInitialData()
@@ -94,6 +91,57 @@ struct HomeView: View {
             }
             .toastOverlay(message: $toast)
         }
+    }
+
+    // MARK: - Explore Attractions Entry Point
+
+    /// Primary entry point to the Attractions browse screen. Tab bar is already
+    /// at 6 items on iPhone, so Attractions lives here as an "Explore" CTA on
+    /// the Home tab rather than a 7th tab.
+    private var exploreAttractionsCard: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            navigationPath.append(HomeDestination.attractions)
+        } label: {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color.purple.opacity(0.85), Color.pink.opacity(0.7)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 56, height: 56)
+
+                    Image(systemName: "star.circle.fill")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Explore Attractions")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("Museums, parks, and must-see places")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(12)
+            .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Explore attractions. Museums, parks, and must-see places.")
+        .accessibilityHint("Opens the attractions browse screen")
     }
 
     // MARK: - Header
@@ -113,83 +161,6 @@ struct HomeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
         .padding(.top, 4)
-    }
-
-    // MARK: - Date Presets
-
-    private var datePresetsSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(DateFilterPreset.allCases) { preset in
-                    let isSelected = viewModel.selectedDatePreset == preset
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(reduceMotion ? nil : .snappy) {
-                            viewModel.selectedDatePreset = isSelected ? nil : preset
-                        }
-                    } label: {
-                        Text(preset.rawValue)
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(isSelected ? Color.accentColor : Color(.systemGray6))
-                            .foregroundStyle(isSelected ? .white : .primary)
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    // VoiceOver: announces "selected" / "not selected" in addition to label
-                    .accessibilityLabel("Filter by \(preset.rawValue)")
-                    .accessibilitySelected(isSelected)
-                    .accessibilityHint(isSelected ? "Tap to clear this filter" : "Tap to apply this filter")
-                }
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 10)
-        }
-    }
-
-    // MARK: - Category Chips
-
-    private var categoryChipsSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(EventCategory.allCases.prefix(8)) { category in
-                    let isSelected = viewModel.selectedCategory == category
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        withAnimation(reduceMotion ? nil : .snappy) {
-                            viewModel.selectedCategory = isSelected ? nil : category
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: category.icon)
-                                .font(.caption)
-                            Text(category.displayName)
-                                .font(.caption.weight(.medium))
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(isSelected ? category.color.opacity(0.2) : Color(.systemGray6))
-                        .foregroundStyle(isSelected ? category.color : .secondary)
-                        .clipShape(Capsule())
-                        .overlay(
-                            Capsule()
-                                .stroke(
-                                    isSelected ? category.color.opacity(0.3) : Color.clear,
-                                    lineWidth: 1
-                                )
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    // VoiceOver: announces "selected" / "not selected" in addition to label
-                    .accessibilityLabel("Filter by \(category.displayName)")
-                    .accessibilitySelected(isSelected)
-                    .accessibilityHint(isSelected ? "Tap to clear this filter" : "Tap to apply this filter")
-                }
-            }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
-        }
     }
 
     // MARK: - Featured Section
@@ -281,25 +252,56 @@ struct HomeView: View {
         .accessibilityLabel("Error: \(message). Tap retry to try again.")
     }
 
-    // MARK: - Active Filters Bar
+    // MARK: - Active Filter Chips (individually removable)
 
     @ViewBuilder
     private var activeFiltersBar: some View {
         if viewModel.activeFilterCount > 0 {
-            HStack {
-                Text("\(viewModel.activeFilterCount) filter\(viewModel.activeFilterCount > 1 ? "s" : "") active")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Clear All") {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    withAnimation { viewModel.clearFilters() }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Text("\(viewModel.events.count) results")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+
+                    if let category = viewModel.selectedCategory {
+                        FilterChipView(
+                            text: category.displayName,
+                            icon: category.icon,
+                            tint: category.color
+                        ) { viewModel.selectedCategory = nil }
+                    }
+                    if let preset = viewModel.selectedDatePreset {
+                        FilterChipView(text: preset.rawValue, icon: "calendar") {
+                            viewModel.selectedDatePreset = nil
+                        }
+                    }
+                    if viewModel.showFreeOnly {
+                        FilterChipView(text: "Free", icon: "ticket.fill", tint: .green) {
+                            viewModel.showFreeOnly = false
+                        }
+                    }
+                    if viewModel.showFeaturedOnly {
+                        FilterChipView(text: "Featured", icon: "star.fill", tint: .orange) {
+                            viewModel.showFeaturedOnly = false
+                        }
+                    }
+                    ForEach(Array(viewModel.selectedCities).sorted(), id: \.self) { city in
+                        FilterChipView(text: city, icon: "mappin.and.ellipse") {
+                            viewModel.selectedCities.remove(city)
+                        }
+                    }
+
+                    Button("Clear all") {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation { viewModel.clearFilters() }
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+                    .padding(.horizontal, 4)
                 }
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal)
+                .padding(.vertical, 4)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
         }
     }
 
@@ -339,7 +341,7 @@ struct HomeView: View {
                         } label: {
                             EventCardView(event: event, toast: $toast)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                         .task {
                             await viewModel.loadMoreIfNeeded(currentItem: event)
@@ -358,30 +360,6 @@ struct HomeView: View {
         .padding(.bottom, 20)
     }
 
-    // MARK: - Filter Button
-
-    private var filterButton: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            showFilters = true
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Image(systemName: "line.3.horizontal.decrease.circle")
-                    .font(.title3)
-
-                if viewModel.activeFilterCount > 0 {
-                    Text("\(viewModel.activeFilterCount)")
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 16, height: 16)
-                        .background(Color.red, in: Circle())
-                        .offset(x: 4, y: -4)
-                }
-            }
-        }
-        .accessibilityLabel("Filters")
-        .accessibilityHint(viewModel.activeFilterCount > 0 ? "\(viewModel.activeFilterCount) active" : "No active filters")
-    }
 }
 
 // MARK: - Compact Restaurant Card (for home feed horizontal scroll)
@@ -446,18 +424,20 @@ private struct FeaturedEventCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // Image
+            // Image with scrim for legibility
             ZStack(alignment: .bottomLeading) {
                 CachedAsyncImage(url: event.imageUrl) {
                     Rectangle()
                         .fill(event.eventCategory.color.gradient)
                 }
                 .frame(width: 260, height: 150)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(PremiumTokens.imageScrim)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .glassCard(cornerRadius: 14, material: .regularMaterial, elevation: PremiumTokens.elevation4)
 
                 // Category badge
                 CategoryBadge(category: event.eventCategory)
-                    .padding(8)
+                    .padding(10)
             }
 
             // Title
@@ -570,6 +550,15 @@ private struct EventCardSkeleton: View {
         .redacted(reason: .placeholder)
         .shimmer()
     }
+}
+
+// MARK: - Navigation
+
+/// Typed destinations for navigationPath.append(). Keeps the Home tab's
+/// internal navigation separate from content-type destinations (Event,
+/// Restaurant, Attraction) which each have their own navigationDestination.
+enum HomeDestination: Hashable {
+    case attractions
 }
 
 #Preview {

@@ -10,10 +10,22 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+
+/**
+ * User-selectable theme mode. Mirrors iOS `ThemeMode` in PremiumTokens.swift.
+ * Persist the selection in secure storage and pass into [DesMoinesInsiderTheme]
+ * via [themeMode].
+ */
+enum class ThemeMode {
+    System,
+    Light,
+    Dark,
+    Oled,
+}
 
 private val LightColorScheme = lightColorScheme(
     primary = PrimaryLight,
@@ -59,18 +71,44 @@ private val DarkColorScheme = darkColorScheme(
     onError = OnErrorDark
 )
 
+/**
+ * OLED true-black color scheme for eye comfort on OLED devices.
+ * Background is pure #000000 with elevated surface layers stepping
+ * #0A0A0A → #141414 → #1C1C1C. Mirrors iOS OLED palette in PremiumTokens.swift.
+ */
+private val OledColorScheme = DarkColorScheme.copy(
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFEDEDED),
+    surface = Color(0xFF0A0A0A),
+    onSurface = Color(0xFFEDEDED),
+    surfaceVariant = Color(0xFF141414),
+    onSurfaceVariant = Color(0xFFBDBDBD),
+    outline = Color(0xFF2A2A2A),
+)
+
 @Composable
 fun DesMoinesInsiderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    themeMode: ThemeMode = ThemeMode.System,
     content: @Composable () -> Unit
 ) {
+    // Resolve effective dark/oled selection from themeMode, falling back to
+    // the system dark preference when on System.
+    val isDark = when (themeMode) {
+        ThemeMode.System -> darkTheme
+        ThemeMode.Light -> false
+        ThemeMode.Dark, ThemeMode.Oled -> true
+    }
+    val useOled = themeMode == ThemeMode.Oled
+
     val colorScheme = when {
+        useOled -> OledColorScheme
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+            if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        darkTheme -> DarkColorScheme
+        isDark -> DarkColorScheme
         else -> LightColorScheme
     }
 
@@ -78,8 +116,7 @@ fun DesMoinesInsiderTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.surface.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !isDark
         }
     }
 

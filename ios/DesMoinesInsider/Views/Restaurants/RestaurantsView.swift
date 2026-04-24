@@ -1,95 +1,81 @@
 import SwiftUI
 
-/// Restaurants listing with filters and sorting.
+/// Restaurants listing with smart presets, inline filter pills, and sorting.
 struct RestaurantsView: View {
     @State private var viewModel = RestaurantsViewModel()
-    @State private var showFilters = false
     @State private var toast: ToastMessage?
     @State private var showScrollToTop = false
 
     var body: some View {
         NavigationStack {
             ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 12) {
-                    Color.clear.frame(height: 0).id("top")
-                    // Sort picker
-                    sortPicker
+                ScrollView {
+                    VStack(spacing: 14) {
+                        Color.clear.frame(height: 0).id("top")
 
-                    // Ad banner for free users (hidden for subscribers)
-                    AdBannerView()
+                        // Smart Presets — one-tap filter combos
+                        RestaurantSmartPresets(viewModel: viewModel)
 
-                    // Active filters
-                    if viewModel.activeFilterCount > 0 {
-                        activeFiltersBar
-                    }
+                        // Inline Filter Pills — always visible
+                        RestaurantInlineFilters(viewModel: viewModel)
 
-                    // Error banner
-                    if let error = viewModel.errorMessage {
-                        HStack(spacing: 10) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.yellow)
-                            Text(error)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                            Spacer()
-                            Button {
-                                Task { await viewModel.refresh() }
-                            } label: {
-                                Text("Retry")
-                                    .font(.caption.bold())
-                                    .foregroundStyle(Color.accentColor)
+                        // Active filter chips (tap × to remove individually)
+                        if viewModel.activeFilterCount > 0 {
+                            activeChips
+                        }
+
+                        // Ad banner for free users (hidden for subscribers)
+                        AdSlot(.detail)
+
+                        // Error banner
+                        if let error = viewModel.errorMessage {
+                            errorBanner(error)
+                        }
+
+                        // Content
+                        if viewModel.isLoading {
+                            ForEach(0..<4, id: \.self) { _ in
+                                RestaurantCardSkeleton()
                             }
-                        }
-                        .padding(12)
-                        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
-                    }
-
-                    // Content
-                    if viewModel.isLoading {
-                        ForEach(0..<4, id: \.self) { _ in
-                            RestaurantCardSkeleton()
-                        }
-                    } else if viewModel.restaurants.isEmpty {
-                        EmptyStateView(
-                            icon: "fork.knife",
-                            title: "No Restaurants Found",
-                            message: "Try adjusting your filters.",
-                            actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
-                            action: { viewModel.clearFilters() }
-                        )
-                        .padding(.top, 40)
-                    } else {
-                        LazyVStack(spacing: 12) {
-                            ForEach(Array(viewModel.restaurants.enumerated()), id: \.element.id) { index, restaurant in
-                                NavigationLink(value: restaurant) {
-                                    RestaurantCardView(restaurant: restaurant, toast: $toast)
+                        } else if viewModel.restaurants.isEmpty {
+                            EmptyStateView(
+                                icon: "fork.knife",
+                                title: "No Restaurants Found",
+                                message: "Try adjusting your filters.",
+                                actionTitle: viewModel.activeFilterCount > 0 ? "Clear Filters" : nil,
+                                action: { viewModel.clearFilters() }
+                            )
+                            .padding(.top, 40)
+                        } else {
+                            LazyVStack(spacing: 12) {
+                                ForEach(Array(viewModel.restaurants.enumerated()), id: \.element.id) { index, restaurant in
+                                    NavigationLink(value: restaurant) {
+                                        RestaurantCardView(restaurant: restaurant, toast: $toast)
+                                    }
+                                    .buttonStyle(.pressableCard)
+                                    .entranceAnimation(index: index)
+                                    .task {
+                                        await viewModel.loadMoreIfNeeded(currentItem: restaurant)
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                                .entranceAnimation(index: index)
-                                .task {
-                                    await viewModel.loadMoreIfNeeded(currentItem: restaurant)
+
+                                if viewModel.isLoadingMore {
+                                    ProgressView()
+                                        .frame(maxWidth: .infinity)
+                                        .padding()
                                 }
                             }
-
-                            if viewModel.isLoadingMore {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                            }
                         }
                     }
+                    .padding(.horizontal)
+                    .trackScrollOffset(showScrollToTop: $showScrollToTop)
                 }
-                .padding(.horizontal)
-                .trackScrollOffset(showScrollToTop: $showScrollToTop)
-            }
-            .coordinateSpace(name: "scroll")
-            .overlay(alignment: .bottomTrailing) {
-                ScrollToTopButton(isVisible: showScrollToTop) {
-                    withAnimation { proxy.scrollTo("top") }
+                .coordinateSpace(name: "scroll")
+                .overlay(alignment: .bottomTrailing) {
+                    ScrollToTopButton(isVisible: showScrollToTop) {
+                        withAnimation { proxy.scrollTo("top") }
+                    }
                 }
-            }
             } // ScrollViewReader
             .refreshable {
                 await viewModel.refresh()
@@ -99,32 +85,11 @@ struct RestaurantsView: View {
                     UINotificationFeedbackGenerator().notificationOccurred(.error)
                 }
             }
-            .navigationTitle("Restaurants")
+            .navigationTitle("Dining")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        showFilters = true
-                    } label: {
-                        ZStack(alignment: .topTrailing) {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                            if viewModel.activeFilterCount > 0 {
-                                Text("\(viewModel.activeFilterCount)")
-                                    .font(.system(size: 10, weight: .bold))
-                                    .foregroundStyle(.white)
-                                    .frame(width: 16, height: 16)
-                                    .background(Color.red, in: Circle())
-                                    .offset(x: 4, y: -4)
-                            }
-                        }
-                    }
-                    .accessibilityLabel("Filters")
+                    sortMenu
                 }
-            }
-            .sheet(isPresented: $showFilters) {
-                RestaurantFilterSheet(viewModel: viewModel)
-                    .presentationDetents([.medium])
-                    .presentationDragIndicator(.visible)
             }
             .navigationDestination(for: Restaurant.self) { restaurant in
                 RestaurantDetailView(restaurant: restaurant)
@@ -136,155 +101,118 @@ struct RestaurantsView: View {
         }
     }
 
-    private var sortPicker: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                // Open Now toggle
+    // MARK: - Sort Menu (in toolbar)
+
+    private var sortMenu: some View {
+        Menu {
+            ForEach(RestaurantSortOption.allCases) { option in
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    viewModel.showOpenNowOnly.toggle()
+                    viewModel.sortBy = option
+                    viewModel.activePreset = nil
                 } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "clock.fill")
-                            .font(.caption2)
-                        Text("Open Now")
-                            .font(.subheadline.weight(.medium))
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(viewModel.showOpenNowOnly ? Color.green : Color(.systemGray6))
-                    .foregroundStyle(viewModel.showOpenNowOnly ? .white : .primary)
-                    .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open Now filter")
-                .accessibilitySelected(viewModel.showOpenNowOnly)
-                .accessibilityHint(viewModel.showOpenNowOnly ? "Tap to show all restaurants" : "Tap to show only open restaurants")
-
-                ForEach(RestaurantSortOption.allCases) { option in
-                    Button {
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        viewModel.sortBy = option
-                    } label: {
+                    if viewModel.sortBy == option {
+                        Label(option.rawValue, systemImage: "checkmark")
+                    } else {
                         Text(option.rawValue)
-                            .font(.subheadline.weight(.medium))
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 8)
-                            .background(
-                                viewModel.sortBy == option
-                                    ? Color.accentColor
-                                    : Color(.systemGray6)
-                            )
-                            .foregroundStyle(
-                                viewModel.sortBy == option ? .white : .primary
-                            )
-                            .clipShape(Capsule())
                     }
-                    .buttonStyle(.plain)
                 }
             }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(viewModel.sortBy.rawValue)
+                    .font(.subheadline.weight(.medium))
+            }
+        }
+        .accessibilityLabel("Sort: \(viewModel.sortBy.rawValue)")
+    }
+
+    // MARK: - Active Filter Chips
+
+    private var activeChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                Text("\(viewModel.restaurants.count) results")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                if viewModel.showOpenNowOnly {
+                    FilterChipView(text: "Open Now", icon: "clock.fill", tint: .green) {
+                        viewModel.showOpenNowOnly = false
+                    }
+                }
+                if viewModel.featuredOnly {
+                    FilterChipView(text: "Featured", icon: "sparkles", tint: .orange) {
+                        viewModel.featuredOnly = false
+                    }
+                }
+                if viewModel.minRating > 0 {
+                    FilterChipView(text: ratingLabel(viewModel.minRating), icon: "star.fill", tint: .yellow) {
+                        viewModel.minRating = 0
+                    }
+                }
+                ForEach(Array(viewModel.selectedCuisines).sorted(), id: \.self) { cuisine in
+                    FilterChipView(text: cuisine, icon: "fork.knife") {
+                        viewModel.selectedCuisines.remove(cuisine)
+                    }
+                }
+                ForEach(Array(viewModel.selectedPriceRanges).sorted(), id: \.self) { price in
+                    FilterChipView(text: price, icon: "dollarsign.circle") {
+                        viewModel.selectedPriceRanges.remove(price)
+                    }
+                }
+                ForEach(Array(viewModel.selectedLocations).sorted(), id: \.self) { loc in
+                    FilterChipView(text: loc, icon: "mappin.and.ellipse") {
+                        viewModel.selectedLocations.remove(loc)
+                    }
+                }
+                ForEach(Array(viewModel.selectedDietary).sorted(), id: \.self) { diet in
+                    FilterChipView(text: diet.capitalized, icon: "leaf.fill") {
+                        viewModel.selectedDietary.remove(diet)
+                    }
+                }
+
+                Button("Clear all") {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    viewModel.clearFilters()
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.red)
+                .padding(.horizontal, 4)
+            }
+            .padding(.vertical, 2)
         }
     }
 
-    private var activeFiltersBar: some View {
-        HStack {
-            Text("\(viewModel.activeFilterCount) filter\(viewModel.activeFilterCount > 1 ? "s" : "") active")
-                .font(.caption.weight(.medium))
+    private func ratingLabel(_ r: Double) -> String {
+        r.truncatingRemainder(dividingBy: 1) == 0
+            ? "\(Int(r))★+"
+            : String(format: "%.1f★+", r)
+    }
+
+    // MARK: - Error Banner
+
+    private func errorBanner(_ error: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.yellow)
+            Text(error)
+                .font(.caption)
                 .foregroundStyle(.secondary)
+                .lineLimit(2)
             Spacer()
-            Button("Clear All") {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                viewModel.clearFilters()
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Color.accentColor)
-        }
-    }
-}
-
-// MARK: - Restaurant Filter Sheet
-
-private struct RestaurantFilterSheet: View {
-    @Bindable var viewModel: RestaurantsViewModel
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                // Cuisine
-                Section("Cuisine") {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(viewModel.availableCuisines, id: \.self) { cuisine in
-                                Button {
-                                    if viewModel.selectedCuisines.contains(cuisine) {
-                                        viewModel.selectedCuisines.remove(cuisine)
-                                    } else {
-                                        viewModel.selectedCuisines.insert(cuisine)
-                                    }
-                                } label: {
-                                    Text(cuisine)
-                                        .font(.caption.weight(.medium))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 6)
-                                        .background(
-                                            viewModel.selectedCuisines.contains(cuisine)
-                                                ? Color.accentColor
-                                                : Color(.systemGray6)
-                                        )
-                                        .foregroundStyle(
-                                            viewModel.selectedCuisines.contains(cuisine) ? .white : .primary
-                                        )
-                                        .clipShape(Capsule())
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                }
-
-                // Price Range
-                Section("Price Range") {
-                    HStack(spacing: 8) {
-                        ForEach(PriceRange.allCases) { range in
-                            Button {
-                                if viewModel.selectedPriceRanges.contains(range.rawValue) {
-                                    viewModel.selectedPriceRanges.remove(range.rawValue)
-                                } else {
-                                    viewModel.selectedPriceRanges.insert(range.rawValue)
-                                }
-                            } label: {
-                                Text(range.rawValue)
-                                    .font(.subheadline.weight(.medium))
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(
-                                        viewModel.selectedPriceRanges.contains(range.rawValue)
-                                            ? Color.accentColor
-                                            : Color(.systemGray6)
-                                    )
-                                    .foregroundStyle(
-                                        viewModel.selectedPriceRanges.contains(range.rawValue) ? .white : .primary
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Filters")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Clear") { viewModel.clearFilters() }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                        .fontWeight(.semibold)
-                }
+            Button {
+                Task { await viewModel.refresh() }
+            } label: {
+                Text("Retry")
+                    .font(.caption.bold())
+                    .foregroundStyle(Color.accentColor)
             }
         }
+        .padding(12)
+        .background(Color(.systemGray6), in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
@@ -293,13 +221,11 @@ private struct RestaurantFilterSheet: View {
 private struct RestaurantCardSkeleton: View {
     var body: some View {
         HStack(spacing: 14) {
-            // Image placeholder
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.systemGray5))
                 .frame(width: 100, height: 100)
 
             VStack(alignment: .leading, spacing: 6) {
-                // Name + heart row
                 HStack {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color(.systemGray5))
@@ -310,7 +236,6 @@ private struct RestaurantCardSkeleton: View {
                         .frame(width: 16, height: 16)
                 }
 
-                // Cuisine + price row
                 HStack(spacing: 8) {
                     RoundedRectangle(cornerRadius: 4)
                         .fill(Color(.systemGray6))
@@ -320,7 +245,6 @@ private struct RestaurantCardSkeleton: View {
                         .frame(width: 30, height: 12)
                 }
 
-                // Star rating row
                 HStack(spacing: 3) {
                     ForEach(0..<5, id: \.self) { _ in
                         Circle()
@@ -332,7 +256,6 @@ private struct RestaurantCardSkeleton: View {
                         .frame(width: 24, height: 10)
                 }
 
-                // Location row
                 HStack(spacing: 4) {
                     Circle()
                         .fill(Color(.systemGray6))

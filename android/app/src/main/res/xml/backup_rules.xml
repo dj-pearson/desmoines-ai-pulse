@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Backup rules for Android 11 and below (pre-API 31).
+    Excludes sensitive data from auto-backup.
+    See: https://developer.android.com/guide/topics/data/autobackup
+-->
+<full-backup-content>
+    <!-- Exclude encrypted shared preferences (auth tokens, biometric prefs) -->
+    <exclude domain="sharedpref" />
+    <!-- Exclude Room database -->
+    <exclude domain="database" />
+    <!-- Exclude no_backup directory -->
+    <exclude domain="no_backup" />
+    <!-- Exclude cache directory -->
+    <exclude domain="cache" />
+</full-backup-content>

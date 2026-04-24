@@ -7,6 +7,7 @@ import { DealCard } from '@/components/DealCard';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Tag } from 'lucide-react';
+import AffiliateDisclosureBanner from '@/components/AffiliateDisclosureBanner';
 
 const CATEGORIES = [
   { value: 'all', label: 'All Deals' },
@@ -43,6 +44,13 @@ export default function Deals() {
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
               Exclusive discounts on restaurants, attractions, hotels, and more in Des Moines.
             </p>
+          </div>
+
+          {/* FTC affiliate disclosure — required "clear and conspicuous"
+              above-the-fold for any page containing affiliate or sponsored
+              links. See 16 CFR Part 255. */}
+          <div className="max-w-3xl mx-auto mb-8">
+            <AffiliateDisclosureBanner variant="banner" />
           </div>
 
           {/* Category filter */}

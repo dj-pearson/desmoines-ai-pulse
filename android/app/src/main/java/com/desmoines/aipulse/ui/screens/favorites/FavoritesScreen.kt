@@ -1,6 +1,9 @@
 package com.desmoines.aipulse.ui.screens.favorites
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,8 +18,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -35,10 +40,15 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeTopAppBar
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -174,13 +184,17 @@ private fun SavedContent(
                 items = state.upcomingEvents,
                 key = { "event-${it.id}" },
             ) { event ->
-                FavoriteEventRow(
-                    event = event,
-                    isPast = false,
-                    onClick = { onNavigateToEventDetail(event.id) },
-                    onRemove = { onRemoveEventFavorite(event.id) },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                SwipeToDismissItem(
+                    onDismiss = { onRemoveEventFavorite(event.id) },
+                ) {
+                    FavoriteEventRow(
+                        event = event,
+                        isPast = false,
+                        onClick = { onNavigateToEventDetail(event.id) },
+                        onRemove = { onRemoveEventFavorite(event.id) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
 
@@ -197,12 +211,16 @@ private fun SavedContent(
                 items = state.favoriteRestaurants,
                 key = { "restaurant-${it.id}" },
             ) { restaurant ->
-                FavoriteRestaurantRow(
-                    restaurant = restaurant,
-                    onClick = { onNavigateToRestaurantDetail(restaurant.id) },
-                    onRemove = { onRemoveRestaurantFavorite(restaurant.id) },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                SwipeToDismissItem(
+                    onDismiss = { onRemoveRestaurantFavorite(restaurant.id) },
+                ) {
+                    FavoriteRestaurantRow(
+                        restaurant = restaurant,
+                        onClick = { onNavigateToRestaurantDetail(restaurant.id) },
+                        onRemove = { onRemoveRestaurantFavorite(restaurant.id) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
 
@@ -219,18 +237,90 @@ private fun SavedContent(
                 items = state.pastEvents,
                 key = { "past-event-${it.id}" },
             ) { event ->
-                FavoriteEventRow(
-                    event = event,
-                    isPast = true,
-                    onClick = { onNavigateToEventDetail(event.id) },
-                    onRemove = { onRemoveEventFavorite(event.id) },
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+                SwipeToDismissItem(
+                    onDismiss = { onRemoveEventFavorite(event.id) },
+                ) {
+                    FavoriteEventRow(
+                        event = event,
+                        isPast = true,
+                        onClick = { onNavigateToEventDetail(event.id) },
+                        onRemove = { onRemoveEventFavorite(event.id) },
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
             }
         }
 
         // Bottom spacer
         item { Spacer(modifier = Modifier.height(16.dp)) }
+    }
+}
+
+// ================================================================
+// Swipe to Dismiss
+// ================================================================
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDismissItem(
+    onDismiss: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    val haptic = rememberHapticPerformer()
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart) {
+                haptic.medium()
+                onDismiss()
+                true
+            } else {
+                false
+            }
+        },
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            val color by animateColorAsState(
+                targetValue = when (dismissState.targetValue) {
+                    SwipeToDismissBoxValue.EndToStart -> MaterialTheme.colorScheme.errorContainer
+                    else -> Color.Transparent
+                },
+                animationSpec = tween(200),
+                label = "dismiss-bg",
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp)
+                    .background(color, RoundedCornerShape(14.dp))
+                    .padding(end = 24.dp),
+                contentAlignment = Alignment.CenterEnd,
+            ) {
+                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) {
+                    Icon(
+                        imageVector = Icons.Filled.Delete,
+                        contentDescription = "Remove from saved",
+                        tint = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .background(
+                                MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                                CircleShape,
+                            )
+                            .padding(4.dp),
+                    )
+                }
+            }
+        },
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true,
+        modifier = Modifier.semantics {
+            contentDescription = "Swipe left to remove from saved"
+        },
+    ) {
+        content()
     }
 }
 

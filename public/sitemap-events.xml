@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
+    <loc>https://desmoinesinsider.com/events/harry-potter-and-the-deathly-hallows-part-2-live-in-concert-2027-02-26</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/outlander-in-concert-2026-11-02</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/steve-martin-martin-short-2026-10-11</loc>
     <lastmod>2026-02-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/rise-against-ricochet-2026-2026-10-07</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/tucker-wetmore-the-brunette-world-tour-2026-10-03</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -61,6 +85,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/cameron-whitcomb-fragile-egos-tour-2026-07-29</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/iowa-barnstormers-vs-san-antonio-gunslingers-2026-07-24</loc>
     <lastmod>2026-03-19</lastmod>
     <changefreq>weekly</changefreq>
@@ -69,6 +99,18 @@
   <url>
     <loc>https://desmoinesinsider.com/events/studio-one-presents-lord-huron-2026-07-19</loc>
     <lastmod>2026-02-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/ziggy-marley-brightside-tour-2026-2026-07-09</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/st-paul-the-broken-bones-2026-06-30</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -91,8 +133,20 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/the-robert-cray-band-2026-06-25</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/luke-bryan-word-on-the-street-tour-2026-06-19</loc>
     <lastmod>2026-02-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/christopher-cross-2026-06-18</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -103,14 +157,56 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/todd-rundgren-damned-if-i-do-tour-2026-06-14</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/noises-off-2026-06-05</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/the-last-dinner-party-2026-06-04</loc>
     <lastmod>2026-02-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/tell-it-like-it-is-iowa-storytellers-project-2026-06-02</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/brit-floyd-2026-06-01</loc>
     <lastmod>2026-02-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/lucy-darling-you-re-welcome-2026-05-31</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/may-30th-event-ages-21-2026-05-30</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/an-exploration-of-baseball-s-history-in-iowa-2026-05-27</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/jeremiah-watkins-2026-05-22</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -139,14 +235,38 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/george-thorogood-and-the-destroyers-the-baddest-show-on-earth-2026-05-19</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/cinderella-musical-2026-05-16</loc>
     <lastmod>2026-02-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/steve-byrne-2026-05-15</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/cozy-worldwide-throwback-and-current-r-b-hip-hop-party-21-2026-05-15</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/chicken-little-2026-05-15</loc>
     <lastmod>2026-02-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/frank-caliendo-2026-05-14</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -175,8 +295,26 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/polkadots-2026-05-08</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/t-j-miller-2026-05-08</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/groove-dance-competition-may-2026-05-08</loc>
     <lastmod>2026-02-26</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/project-s-t-a-g-e-festival-2026-05-06</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -207,6 +345,12 @@
   <url>
     <loc>https://desmoinesinsider.com/events/polkadots-the-cool-kids-musical-2026-05-01</loc>
     <lastmod>2026-02-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/drew-lynch-2026-04-30</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -259,6 +403,12 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/crazy-for-you-added-saturday-matinee-2026-04-25</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/kud-dukat-presents-folklore-festival-2026-04-25</loc>
     <lastmod>2026-02-27</lastmod>
     <changefreq>weekly</changefreq>
@@ -267,6 +417,30 @@
   <url>
     <loc>https://desmoinesinsider.com/events/the-rock-orchestra-by-candlelight-2026-04-24</loc>
     <lastmod>2026-02-16</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/marlon-wayans-2026-04-24</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/the-pork-tornadoes-2026-04-24</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/event-on-april-23-2026-04-23</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/drake-relays-2026-2026-04-23</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -301,6 +475,30 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/runaway-twain-live-improv-with-chow-down-2026-04-19</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/fortune-feimster-takin-care-of-biscuits-comedy-tour-early-show-2026-04-19</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/crazy-for-you-sunday-matinee-2026-04-19</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/dsm-flea-2026-04-19</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/masterworks-6-hope-copland-gershwin-2026-04-18</loc>
     <lastmod>2026-02-27</lastmod>
     <changefreq>weekly</changefreq>
@@ -313,8 +511,20 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/chad-daniels-2026-04-17</loc>
+    <lastmod>2026-02-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/crazy-for-you-2026-04-17</loc>
     <lastmod>2025-11-06</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/event-on-april-17-2026-04-17</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -325,14 +535,14 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/chad-daniels-2026-04-17</loc>
-    <lastmod>2026-02-27</lastmod>
+    <loc>https://desmoinesinsider.com/events/turn-it-up-dance-challenge-2026-04-17</loc>
+    <lastmod>2026-02-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/turn-it-up-dance-challenge-2026-04-17</loc>
-    <lastmod>2026-02-26</lastmod>
+    <loc>https://desmoinesinsider.com/events/2026-27-season-announcement-2026-04-17</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -349,6 +559,30 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/christine-rebet-sound-of-time-2026-04-16</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/bill-owens-work-and-leisure-2026-04-16</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/chick-hatching-learning-day-2026-04-16</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/gov-t-mule-and-larkin-poe-2026-04-15</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/matt-mccusker-healing-frequency-tour-2026-04-11</loc>
     <lastmod>2026-02-03</lastmod>
     <changefreq>weekly</changefreq>
@@ -357,6 +591,30 @@
   <url>
     <loc>https://desmoinesinsider.com/events/the-magic-of-eric-eaton-2026-04-10</loc>
     <lastmod>2026-02-26</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/tim-hawkins-live-2026-04-10</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/groove-dance-competition-and-convention-2026-04-10</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/all-your-friends-the-indie-party-2026-04-10</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/bloodywood-2026-04-10</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -391,6 +649,18 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/chris-falcon-live-at-confluence-brewing-2026-04-09</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/trivia-2026-04-09</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/journey-final-frontier-tour-2026-2026-04-08</loc>
     <lastmod>2026-03-22</lastmod>
     <changefreq>weekly</changefreq>
@@ -403,20 +673,44 @@
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/iowa-barnstormers-vs-green-bay-blizzard-2026-04-04</loc>
-    <lastmod>2026-03-19</lastmod>
+    <loc>https://desmoinesinsider.com/events/magnolia-park-2026-04-08</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://desmoinesinsider.com/events/gasolina-party-2026-04-04</loc>
-    <lastmod>2026-02-26</lastmod>
+    <loc>https://desmoinesinsider.com/events/authors-visiting-in-des-moines-julia-quinn-2026-04-07</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/haywire-617-2026-04-05</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
     <loc>https://desmoinesinsider.com/events/iowa-barnstormers-vs-green-bay-blizzard-2026-04-04</loc>
     <lastmod>2026-03-21</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/iowa-barnstormers-vs-green-bay-blizzard-2026-04-04</loc>
+    <lastmod>2026-03-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/heated-rivalry-night-2026-04-04</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/gasolina-party-2026-04-04</loc>
+    <lastmod>2026-02-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -439,14 +733,56 @@
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/broadway-sing-along-2026-04-03</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/disco-always-2026-04-03</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/carly-pearce-2026-04-02</loc>
     <lastmod>2026-02-27</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
+    <loc>https://desmoinesinsider.com/events/popdarts-league-wednesdays-thursdays-2026-04-02</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/matt-woods-live-at-confluence-brewing-2026-04-02</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://desmoinesinsider.com/events/church-basement-ladies-2026-04-02</loc>
     <lastmod>2026-03-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/illuminated-art-pop-up-featuring-matt-corones-2026-04-02</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/botanically-dyed-eggs-2026-04-02</loc>
+    <lastmod>2026-04-02</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/meet-play-2026-04-02</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -465,6 +801,18 @@
   <url>
     <loc>https://desmoinesinsider.com/events/55th-annual-juried-student-exhibition-2026-04-02</loc>
     <lastmod>2026-03-20</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/white-rabbit-red-rabbit-2026-04-01</loc>
+    <lastmod>2026-04-01</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://desmoinesinsider.com/events/fun-classes-diy-painting-this-week-2026-04-01</loc>
+    <lastmod>2026-04-02</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
@@ -5649,354 +5997,6 @@
   <url>
     <loc>https://desmoinesinsider.com/events/freedom-will-be-theirs-by-the-sword-author-visit-2025-10-03</loc>
     <lastmod>2025-12-12</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/october-s-first-friday-pen-ink-2025-10-07</loc>
-    <lastmod>2025-12-12</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/learn-german-with-iowa-european-cultural-connection-2025-10-03</loc>
-    <lastmod>2025-12-12</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/movie-in-the-park-colby-park-2025-09-18</loc>
-    <lastmod>2025-12-12</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/harvest-handmade-in-water-works-park-2025-10-03</loc>
-    <lastmod>2025-12-13</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/spooky-sprint-des-moines-2025-10-03</loc>
-    <lastmod>2025-12-13</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/saturday-skate-south-2025-10-03</loc>
-    <lastmod>2025-12-13</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/cam-cummings-band-2025-08-29</loc>
-    <lastmod>2025-12-25</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/trey-kennedy-2025-10-03</loc>
-    <lastmod>2026-02-03</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/danae-hays-2025-10-03</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/backroads-and-byways-junkin-tour-fall-edition-2018-01-25</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/statemint-west-des-moines-2018-01-25</loc>
-    <lastmod>2025-12-06</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/statemint-pop-up-shopping-event-2025-10-03</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/prairie-meadows-battle-of-the-bands-2018-01-25</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/jon-rudnitsky-2025-10-02</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/brian-herrin-live-at-confluence-2025-09-30</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/drake-hoops-fest-2018-01-25</loc>
-    <lastmod>2025-12-05</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/drake-volleyball-vs-murray-state-2025-10-02</loc>
-    <lastmod>2025-11-06</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/cocktails-and-cardboard-2018-01-25</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/statm-nt-consignment-fall-2025-2025-10-02</loc>
-    <lastmod>2025-12-06</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/taylor-swift-trivia-listening-party-2025-10-07</loc>
-    <lastmod>2026-01-10</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/backroads-and-byways-junkin-tour-fall-edition-2025-10-02</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/danae-hays-2025-10-02</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/trivia-night-2025-10-02</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/aj-croce-2025-10-02</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/willis-2018-01-25</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/the-haunting-exile-2025-09-18</loc>
-    <lastmod>2025-11-06</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/croce-plays-croce-2025-10-01</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/in-the-stacks-with-author-joseph-levalley-2025-10-01</loc>
-    <lastmod>2025-12-19</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/kid-s-nature-club-a-leaf-can-be-2025-10-01</loc>
-    <lastmod>2026-01-05</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/bright-star-2025-10-01</loc>
-    <lastmod>2026-01-08</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/15th-annual-healthiest-state-walk-2018-01-25</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/glendale-cemetery-historical-tour-2025-09-18</loc>
-    <lastmod>2025-12-05</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/yoga-flow-2025-10-01</loc>
-    <lastmod>2025-12-23</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/willis-2025-09-30</loc>
-    <lastmod>2026-02-03</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/leonid-friends-2025-09-30</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/floral-design-with-pepperharrow-2025-09-30</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/johnston-farmers-market-2025-09-30</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/turnstile-mannequin-pussy-jane-remover-in-des-moines-2025-09-28</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/grand-view-softball-comedy-night-2025-09-28</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/tanner-taylor-organ-trio-2025-09-28</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/party-time-2025-09-28</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/art-night-with-art-is-rad-2025-09-28</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/live-music-scott-davis-and-the-drama-kings-2025-09-28</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/sunday-funday-bags-tournament-2025-09-28</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/2025-iowa-s-latino-heritage-festival-day-two-2025-09-28</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/coronation-33-victory-brunch-2025-09-28</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/nature-in-focus-water-wonders-2025-09-28</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/the-rad-run-40-years-strong-5k-2025-09-28</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/triple-elvis-ep-funoff-release-show-2018-01-25</loc>
-    <lastmod>2025-12-08</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/speakeasy-comedy-w-lukas-mccrary-2025-09-27</loc>
-    <lastmod>2026-02-26</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/speakeasy-comedy-pop-up-comedy-show-w-lukas-mccrary-2025-10-02</loc>
-    <lastmod>2025-12-19</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/ballet-des-moines-at-hoyt-sherman-place-2025-09-27</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/season-debut-triumph-tchaikovsky-5-2025-09-18</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/blithe-spirit-by-noel-coward-2018-01-25</loc>
-    <lastmod>2026-01-09</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/phantom-fall-fest-2025-09-18</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/eric-church-at-wells-fargo-arena-2025-09-27</loc>
-    <lastmod>2026-02-27</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/macabre-cabaret-festival-of-phobias-2025-09-27</loc>
-    <lastmod>2025-12-08</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://desmoinesinsider.com/events/greg-wheeler-and-the-poly-mall-cops-at-xbk-live-2025-09-27</loc>
-    <lastmod>2026-02-26</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>

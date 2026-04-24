@@ -4,24 +4,16 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Calendar,
-  MapPin,
-  Tag,
   Search,
-  Filter,
   List,
   Map,
   X,
-  SlidersHorizontal,
   SearchX,
   Sparkles,
   Navigation,
   AlertCircle,
   RefreshCw,
   Clock,
-  Music,
-  UtensilsCrossed,
-  Palette,
-  TreePine,
   Users,
   Ticket,
   ChevronDown,
@@ -32,15 +24,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { SortDropdown, EVENT_SORT_OPTIONS } from "@/components/SortDropdown";
 import { EmptyState } from "@/components/ui/empty-state";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -48,30 +31,23 @@ import {
   LoadingSpinner,
 } from "@/components/ui/loading-skeleton";
 import { SocialEventCard } from "@/components/SocialEventCard";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import Header from "@/components/Header";
 import { AdBanner } from "@/components/AdBanner";
 import Footer from "@/components/Footer";
 import SEOHead from "@/components/SEOHead";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
-import InteractiveDateSelector from "@/components/InteractiveDateSelector";
 import { useToast } from "@/hooks/use-toast";
 import { FAQSection } from "@/components/FAQSection";
 import {
   createEventSlugWithCentralTime,
-  formatInCentralTime,
 } from "@/lib/timezone";
 import { useBatchEventSocial } from "@/hooks/useBatchEventSocial";
 import { BackToTop } from "@/components/BackToTop";
 import { useAnnounce } from "@/hooks/use-announce";
 import { useFilterKeyboardShortcuts } from "@/hooks/useFilterKeyboardShortcuts";
 import { SmartFilterChips } from "@/components/SmartFilters";
+import { EventSmartPresets } from "@/components/EventSmartPresets";
+import { EventInlineFilters } from "@/components/EventInlineFilters";
 import { BreadcrumbListSchema } from "@/components/schema/BreadcrumbListSchema";
 import { BRAND, getCanonicalUrl } from "@/lib/brandConfig";
 import { SearchAutocomplete, addRecentSearch } from "@/components/SearchAutocomplete";
@@ -114,17 +90,6 @@ const DATE_PRESETS = [
   { key: "this-week", label: "This Week", icon: Calendar },
 ] as const;
 
-// Category icons for filter pills
-const CATEGORY_ICONS: Record<string, any> = {
-  "Music": Music,
-  "Food": UtensilsCrossed,
-  "Food & Drink": UtensilsCrossed,
-  "Art": Palette,
-  "Art & Culture": Palette,
-  "Outdoor": TreePine,
-  "Family": Users,
-  "Sports": Star,
-};
 
 export default function EventsPage() {
   const navigate = useNavigate();
@@ -146,8 +111,6 @@ export default function EventsPage() {
   const [activeDatePreset, setActiveDatePreset] = useState<string | null>(null);
   const [location, setLocation] = useState("any-location");
   const [priceRange, setPriceRange] = useState("any-price");
-  const [showFilters, setShowFilters] = useState(false);
-  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [viewMode, setViewMode] = useState("list");
   const [sortBy, setSortBy] = useState("date_asc");
   const [page, setPage] = useState(1);
@@ -606,61 +569,20 @@ export default function EventsPage() {
     );
   }
 
-  // Filter section content (shared between mobile sheet and desktop panel)
-  const filterContent = (
-    <div className="space-y-5">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Category</label>
-        <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-          <SelectTrigger className={isMobile ? "input-mobile" : ""}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Categories</SelectItem>
-            {categories?.map((category) => (
-              <SelectItem key={category} value={category}>{category}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Date Range</label>
-        <InteractiveDateSelector onDateChange={(d) => { setDateFilter(d); setActiveDatePreset(null); }} className="w-full" />
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Location</label>
-        <Select value={location} onValueChange={setLocation}>
-          <SelectTrigger className={isMobile ? "input-mobile" : ""}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any-location">Any location</SelectItem>
-            <SelectItem value="downtown">Downtown Des Moines</SelectItem>
-            <SelectItem value="west-des-moines">West Des Moines</SelectItem>
-            <SelectItem value="ankeny">Ankeny</SelectItem>
-            <SelectItem value="urbandale">Urbandale</SelectItem>
-            <SelectItem value="clive">Clive</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Price</label>
-        <Select value={priceRange} onValueChange={setPriceRange}>
-          <SelectTrigger className={isMobile ? "input-mobile" : ""}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="any-price">Any price</SelectItem>
-            <SelectItem value="free">Free</SelectItem>
-            <SelectItem value="under-25">Under $25</SelectItem>
-            <SelectItem value="25-50">$25 - $50</SelectItem>
-            <SelectItem value="50-100">$50 - $100</SelectItem>
-            <SelectItem value="over-100">Over $100</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
+  // Handle smart preset application for events
+  const handleEventPreset = (presetFilters: {
+    category?: string;
+    priceRange?: string;
+    datePreset?: string;
+  }) => {
+    if (presetFilters.category) setSelectedCategory(presetFilters.category);
+    if (presetFilters.priceRange) setPriceRange(presetFilters.priceRange);
+    if (presetFilters.datePreset) handleDatePreset(presetFilters.datePreset);
+  };
+
+  const handleClearPreset = () => {
+    handleClearFilters();
+  };
 
   return (
     <>
@@ -751,7 +673,7 @@ export default function EventsPage() {
               </div>
 
               {/* Action Row */}
-              <div className="flex flex-wrap items-center justify-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
                 <Button
                   onClick={handleSurpriseMe}
                   variant="secondary"
@@ -781,50 +703,6 @@ export default function EventsPage() {
                   {isLoadingLocation ? 'Locating...' : isNearMeActive ? 'Near Me' : 'Near Me'}
                 </Button>
 
-                {isMobile ? (
-                  <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
-                    <SheetTrigger asChild>
-                      <Button variant="secondary" size="sm" className="bg-white/10 hover:bg-white/20 text-white border-white/10 rounded-full relative">
-                        <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
-                        Filters
-                        {activeFiltersCount > 0 && (
-                          <Badge className="ml-1.5 bg-indigo-500 text-white h-5 w-5 p-0 flex items-center justify-center text-[10px] rounded-full">
-                            {activeFiltersCount}
-                          </Badge>
-                        )}
-                      </Button>
-                    </SheetTrigger>
-                    <SheetContent side="bottom" className="h-[85vh] sheet-mobile">
-                      <SheetHeader>
-                        <SheetTitle className="text-xl">Filter Events</SheetTitle>
-                      </SheetHeader>
-                      <div className="sheet-handle" />
-                      <div className="mt-6 overflow-y-auto max-h-[calc(85vh-120px)] pb-safe">
-                        {filterContent}
-                        <div className="flex gap-3 mt-6 pt-4 border-t">
-                          <Button variant="outline" onClick={handleClearFilters} className="flex-1 btn-mobile">Clear All</Button>
-                          <Button onClick={() => setShowMobileFilters(false)} className="flex-1 btn-mobile">Show {events?.length || 0} Events</Button>
-                        </div>
-                      </div>
-                    </SheetContent>
-                  </Sheet>
-                ) : (
-                  <Button
-                    onClick={() => setShowFilters(!showFilters)}
-                    variant="secondary"
-                    size="sm"
-                    className={`rounded-full ${showFilters ? 'bg-white text-slate-900 shadow-lg' : 'bg-white/10 hover:bg-white/20 text-white border-white/10'}`}
-                  >
-                    <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
-                    Filters
-                    {activeFiltersCount > 0 && (
-                      <Badge className="ml-1.5 bg-indigo-500 text-white h-5 w-5 p-0 flex items-center justify-center text-[10px] rounded-full">
-                        {activeFiltersCount}
-                      </Badge>
-                    )}
-                  </Button>
-                )}
-
                 <div className="flex items-center rounded-full bg-white/10 p-0.5">
                   <Button
                     onClick={() => setViewMode("list")}
@@ -846,6 +724,30 @@ export default function EventsPage() {
                   </Button>
                 </div>
               </div>
+
+              {/* Smart Presets - one-tap event discovery */}
+              <EventSmartPresets
+                onApplyPreset={handleEventPreset}
+                onClearPreset={handleClearPreset}
+              />
+
+              {/* Inline Filter Pills - always visible, no hidden panel */}
+              <div className="mt-4">
+                <EventInlineFilters
+                  selectedCategory={selectedCategory}
+                  onCategoryChange={setSelectedCategory}
+                  location={location}
+                  onLocationChange={setLocation}
+                  priceRange={priceRange}
+                  onPriceRangeChange={setPriceRange}
+                  onDateChange={(d) => { setDateFilter(d); setActiveDatePreset(null); }}
+                  categories={categories || []}
+                  totalResults={events?.length || 0}
+                  isLoading={isLoading}
+                  onClearAll={handleClearFilters}
+                  activeFiltersCount={activeFiltersCount}
+                />
+              </div>
             </div>
           </div>
         </section>
@@ -866,67 +768,6 @@ export default function EventsPage() {
             </div>
           )}
 
-          {/* Desktop Filters Panel */}
-          {showFilters && !isMobile && (
-            <div className="bg-card rounded-2xl shadow-lg border p-6 mb-6 animate-in slide-in-from-top-2 duration-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {filterContent}
-              </div>
-              <div className="flex items-center justify-between mt-5 pt-4 border-t">
-                <Button variant="ghost" size="sm" onClick={handleClearFilters} className="text-muted-foreground">
-                  <X className="h-3.5 w-3.5 mr-1.5" />
-                  Clear Filters
-                </Button>
-                <span className="text-sm text-muted-foreground">{events?.length || 0} events found</span>
-              </div>
-            </div>
-          )}
-
-          {/* Active Filters Summary */}
-          {activeFiltersCount > 0 && (
-            <div className="flex flex-wrap items-center gap-2 mb-4">
-              <span className="text-sm text-muted-foreground">Active filters:</span>
-              {searchQuery && (
-                <Badge variant="secondary" className="gap-1 pr-1">
-                  Search: "{searchQuery}"
-                  <button onClick={() => setSearchQuery("")} className="ml-1 hover:bg-accent rounded-full p-0.5"><X className="h-3 w-3" /></button>
-                </Badge>
-              )}
-              {selectedCategory !== "all" && (
-                <Badge variant="secondary" className="gap-1 pr-1">
-                  {selectedCategory}
-                  <button onClick={() => setSelectedCategory("all")} className="ml-1 hover:bg-accent rounded-full p-0.5"><X className="h-3 w-3" /></button>
-                </Badge>
-              )}
-              {activeDatePreset && (
-                <Badge variant="secondary" className="gap-1 pr-1">
-                  {DATE_PRESETS.find(p => p.key === activeDatePreset)?.label || "Custom date"}
-                  <button onClick={() => { setActiveDatePreset(null); setDateFilter(null); }} className="ml-1 hover:bg-accent rounded-full p-0.5"><X className="h-3 w-3" /></button>
-                </Badge>
-              )}
-              {location !== "any-location" && (
-                <Badge variant="secondary" className="gap-1 pr-1">
-                  {location.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                  <button onClick={() => setLocation("any-location")} className="ml-1 hover:bg-accent rounded-full p-0.5"><X className="h-3 w-3" /></button>
-                </Badge>
-              )}
-              {priceRange !== "any-price" && (
-                <Badge variant="secondary" className="gap-1 pr-1">
-                  {priceRange === 'free' ? 'Free' : priceRange}
-                  <button onClick={() => setPriceRange("any-price")} className="ml-1 hover:bg-accent rounded-full p-0.5"><X className="h-3 w-3" /></button>
-                </Badge>
-              )}
-              {isNearMeActive && (
-                <Badge variant="secondary" className="gap-1 pr-1">
-                  Near Me
-                  <button onClick={() => { setIsNearMeActive(false); setUserLocation(null); }} className="ml-1 hover:bg-accent rounded-full p-0.5"><X className="h-3 w-3" /></button>
-                </Badge>
-              )}
-              <button onClick={handleClearFilters} className="text-xs text-muted-foreground hover:text-foreground underline">
-                Clear all
-              </button>
-            </div>
-          )}
 
           {/* Category Quick Filters (smart chips) */}
           {!searchQuery && (

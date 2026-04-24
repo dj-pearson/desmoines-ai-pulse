@@ -10,6 +10,7 @@ interface AuthSecurityHookReturn {
   remainingAttempts: number;
   timeUntilReset: number;
   checkRateLimit: (email: string) => Promise<{ allowed: boolean; message?: string }>;
+  checkDisposableEmail: (email: string) => Promise<{ allowed: boolean; message?: string }>;
   logFailedAttempt: (email: string, attemptType: 'login' | 'signup' | 'password_reset', errorMessage: string) => Promise<void>;
   validateInput: (field: string, value: string) => { isValid: boolean; errors: string[] };
 }
@@ -96,6 +97,46 @@ export function useAuthSecurity(): AuthSecurityHookReturn {
     }
   };
 
+  /**
+   * Check whether the email's domain is on the disposable / blocked list.
+   * Calls the `is_email_domain_blocked` RPC which looks the domain up in
+   * public.blocked_email_domains. Fails open on transport errors so a
+   * database outage never blocks legitimate signups.
+   */
+  const checkDisposableEmail = async (
+    email: string
+  ): Promise<{ allowed: boolean; message?: string }> => {
+    try {
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        return { allowed: true };
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase.rpc as any)(
+        'is_email_domain_blocked',
+        { p_email: email.trim().toLowerCase() }
+      );
+
+      if (error) {
+        log.error('checkDisposableEmail', 'Disposable email RPC failed', { error });
+        return { allowed: true }; // fail open
+      }
+
+      if (data === true) {
+        return {
+          allowed: false,
+          message:
+            'Disposable and temporary email addresses are not allowed. Please use a permanent email.',
+        };
+      }
+
+      return { allowed: true };
+    } catch (error) {
+      log.error('checkDisposableEmail', 'Disposable email check error', { error });
+      return { allowed: true }; // fail open
+    }
+  };
+
   const logFailedAttempt = async (
     email: string, 
     attemptType: 'login' | 'signup' | 'password_reset', 
@@ -172,6 +213,7 @@ export function useAuthSecurity(): AuthSecurityHookReturn {
     remainingAttempts,
     timeUntilReset,
     checkRateLimit,
+    checkDisposableEmail,
     logFailedAttempt,
     validateInput,
   };

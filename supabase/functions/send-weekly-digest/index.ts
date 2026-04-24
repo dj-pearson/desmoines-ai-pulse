@@ -4,6 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
+import { renderEmail } from "../_shared/emailLayout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -118,9 +119,28 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
       return;
     }
 
-    // Build email HTML
-    const html = buildDigestHTML(recipient, content);
+    // Build email body — the shared layout renders the branded wrapper and
+    // the CAN-SPAM compliant footer (postal address + unsubscribe).
+    const bodyHtml = buildDigestBodyHtml(recipient, content);
+    const bodyText = buildDigestBodyText(recipient, content);
     const subject = `Your Weekly Events: ${totalEvents} Events to Explore 🎉`;
+
+    // Look up unsubscribe token for one-click marketing opt-out.
+    const { data: subscriberRow } = await supabase
+      .from("newsletter_subscribers")
+      .select("unsubscribe_token")
+      .eq("email", recipient.email.toLowerCase().trim())
+      .maybeSingle();
+
+    const rendered = renderEmail({
+      bodyHtml,
+      bodyText,
+      category: "marketing",
+      recipient: {
+        email: recipient.email,
+        unsubscribeToken: subscriberRow?.unsubscribe_token ?? null,
+      },
+    });
 
     // Send email via Resend
     const resendResponse = await fetch("https://api.resend.com/emails", {
@@ -133,7 +153,14 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
         from: "Des Moines Insider <events@desmoinesinsider.com>",
         to: [recipient.email],
         subject: subject,
-        html: html,
+        html: rendered.html,
+        text: rendered.text,
+        headers: rendered.listUnsubscribe
+          ? {
+              "List-Unsubscribe": rendered.listUnsubscribe,
+              "List-Unsubscribe-Post": rendered.listUnsubscribePost ?? "",
+            }
+          : undefined,
       }),
     });
 
@@ -165,27 +192,32 @@ async function sendDigestEmail(recipient: Recipient, supabase: any) {
   }
 }
 
-function buildDigestHTML(recipient: Recipient, content: DigestContent): string {
+function buildDigestBodyText(recipient: Recipient, content: DigestContent): string {
+  const greeting = recipient.first_name
+    ? `Hi ${recipient.first_name}!`
+    : "Hi there!";
+  const totalEvents =
+    (content.upcoming_rsvps?.length || 0) +
+    (content.saved_events?.length || 0) +
+    (content.recommendations?.length || 0) +
+    (content.trending_events?.length || 0);
+  return `
+${greeting}
+
+Here's your personalized weekly roundup of events happening in Des Moines — ${totalEvents} event${totalEvents === 1 ? "" : "s"} to explore.
+
+Browse all events: ${SITE_URL}/events
+Your event dashboard: ${SITE_URL}/my-events
+`.trim();
+}
+
+function buildDigestBodyHtml(recipient: Recipient, content: DigestContent): string {
   const greeting = recipient.first_name
     ? `Hi ${recipient.first_name}!`
     : "Hi there!";
 
   return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Your Weekly Events Digest</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      background-color: #f4f4f4;
-      margin: 0;
-      padding: 0;
-    }
     .container {
       max-width: 600px;
       margin: 0 auto;
@@ -254,20 +286,7 @@ function buildDigestHTML(recipient: Recipient, content: DigestContent): string {
       margin: 10px 5px;
       font-weight: bold;
     }
-    .footer {
-      background: #f9f9f9;
-      padding: 20px;
-      text-align: center;
-      font-size: 12px;
-      color: #666;
-    }
-    .footer a {
-      color: #667eea;
-      text-decoration: none;
-    }
   </style>
-</head>
-<body>
   <div class="container">
     <div class="header">
       <h1>🎉 Your Weekly Events</h1>
@@ -288,21 +307,7 @@ function buildDigestHTML(recipient: Recipient, content: DigestContent): string {
         <a href="${SITE_URL}/my-events" class="cta-button">My Events Dashboard</a>
       </div>
     </div>
-
-    <div class="footer">
-      <p><strong>Des Moines Insider</strong> - Your guide to DSM events</p>
-      <p>
-        <a href="${SITE_URL}/profile">Manage Email Preferences</a> |
-        <a href="${SITE_URL}">Visit Website</a>
-      </p>
-      <p style="margin-top: 15px; font-size: 11px;">
-        You're receiving this because you subscribed to weekly event digests.<br>
-        Don't want these emails? <a href="${SITE_URL}/profile">Update your preferences</a>
-      </p>
-    </div>
   </div>
-</body>
-</html>
   `;
 }
 

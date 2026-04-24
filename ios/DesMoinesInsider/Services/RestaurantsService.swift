@@ -240,4 +240,22 @@ actor RestaurantsService {
 
         return Array(Set(rows.compactMap(\.cuisine))).sorted()
     }
+
+    // MARK: - Location / Area List
+
+    func fetchAvailableLocations() async throws -> [String] {
+        struct LocationRow: Decodable {
+            let location: String?
+        }
+        let client = try db()
+        let rows: [LocationRow] = try await client
+            .from("restaurants")
+            .select("location")
+            .not("location", operator: .is, value: "null")
+            .order("location", ascending: true)
+            .execute()
+            .value
+
+        return Array(Set(rows.compactMap(\.location))).sorted()
+    }
 }

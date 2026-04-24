@@ -44,10 +44,25 @@ struct CategoryBadge: View {
             Text(category.displayName)
                 .font(size.font)
         }
-        .padding(.horizontal, size.hPadding)
-        .padding(.vertical, size.vPadding)
-        .background(category.color.opacity(0.85), in: Capsule())
+        .padding(.horizontal, size.hPadding + 2)
+        .padding(.vertical, size.vPadding + 1)
         .foregroundStyle(.white)
+        .background {
+            Capsule(style: .continuous).fill(.ultraThinMaterial)
+            Capsule(style: .continuous).fill(
+                LinearGradient(
+                    colors: [category.color.opacity(0.92), category.color.opacity(0.7)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        }
+        .overlay(
+            Capsule(style: .continuous)
+                .strokeBorder(Color.white.opacity(0.25), lineWidth: 0.5)
+        )
+        .clipShape(Capsule(style: .continuous))
+        .shadow(color: category.color.opacity(0.35), radius: 4, x: 0, y: 2)
     }
 }
 

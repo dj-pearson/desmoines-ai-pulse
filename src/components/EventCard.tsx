@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { AIDisclosureBadge } from "@/components/AIDisclosureBadge";
 import EventFeedback from "@/components/EventFeedback";
 import ShareDialog from "@/components/ShareDialog";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -137,10 +138,10 @@ function EventCardComponent({ event, onViewDetails }: EventCardProps) {
           </Badge>
           <div className="flex items-center gap-2">
             {event.is_enhanced && (
-              <Badge variant="secondary" className="text-xs">
-                <Sparkles className="h-3 w-3 mr-1" />
-                AI Enhanced
-              </Badge>
+              <AIDisclosureBadge
+                label="AI-enhanced"
+                tooltip="The description for this event was rewritten or expanded with AI assistance. Original event details come from the venue or promoter. Please verify times, prices, and availability directly with the source."
+              />
             )}
           </div>
         </div>

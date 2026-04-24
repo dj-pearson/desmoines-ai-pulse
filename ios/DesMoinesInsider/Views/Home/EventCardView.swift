@@ -6,6 +6,7 @@ struct EventCardView: View {
     @Binding var toast: ToastMessage?
 
     @State private var favorites = FavoritesService.shared
+    @State private var favoriteBurst = false
 
     init(event: Event, toast: Binding<ToastMessage?> = .constant(nil)) {
         self.event = event
@@ -51,8 +52,10 @@ struct EventCardView: View {
                 VStack(alignment: .trailing, spacing: 6) {
                     // Favorite button — separate focusable element inside the card container
                     Button {
-                        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                         let wasFavorited = favorites.isFavorited(event.id)
+                        if !wasFavorited {
+                            favoriteBurst.toggle()
+                        }
                         Task {
                             do {
                                 try await favorites.toggleFavorite(eventId: event.id)
@@ -64,11 +67,16 @@ struct EventCardView: View {
                             }
                         }
                     } label: {
-                        Image(systemName: favorites.isFavorited(event.id) ? "heart.fill" : "heart")
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(favorites.isFavorited(event.id) ? .red : .white)
-                            .frame(width: 36, height: 36)
-                            .background(.ultraThinMaterial, in: Circle())
+                        HeartBurstView(
+                            isFavorited: favorites.isFavorited(event.id),
+                            burst: $favoriteBurst
+                        ) {
+                            Image(systemName: favorites.isFavorited(event.id) ? "heart.fill" : "heart")
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(favorites.isFavorited(event.id) ? .red : .white)
+                                .frame(width: 36, height: 36)
+                                .background(.ultraThinMaterial, in: Circle())
+                        }
                     }
                     .accessibilityLabel(
                         favorites.isFavorited(event.id)
@@ -156,9 +164,7 @@ struct EventCardView: View {
             }
             .padding(14)
         }
-        .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .accessibleCardShadow()
+        .glassCard(cornerRadius: 18, material: .regularMaterial, elevation: PremiumTokens.elevation4)
         // .contain so VoiceOver can separately focus the favorite button inside
         .accessibilityElement(children: .contain)
         .accessibilityLabel(cardAccessibilityLabel)

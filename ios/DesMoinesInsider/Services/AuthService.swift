@@ -21,6 +21,32 @@ final class AuthService {
     private(set) var isAdmin = false
     private(set) var isLoading = true
 
+    /// True when the signed-in user's email has not yet been confirmed.
+    /// Apple Sign-In users are treated as verified (Apple pre-verifies the
+    /// email before returning it to us).
+    var needsEmailVerification: Bool {
+        guard let user = currentUser else { return false }
+        if user.emailConfirmedAt != nil { return false }
+        return primaryProvider(for: user) != "apple"
+    }
+
+    private func primaryProvider(for user: User) -> String? {
+        // Supabase sets app_metadata.provider to the primary sign-in provider.
+        // Fallback: inspect identities[].provider if metadata is missing.
+        if let meta = user.appMetadata["provider"], case .string(let provider) = meta {
+            return provider
+        }
+        return user.identities?.first?.provider
+    }
+
+    /// Request a new verification email for the currently signed-in user.
+    /// Matches Supabase `auth.resend` for the `signup` email type.
+    func resendVerificationEmail() async throws {
+        guard let supabase else { throw AuthError.notConfigured }
+        guard let email = currentUser?.email else { throw AuthError.noUser }
+        try await supabase.auth.resend(email: email, type: .signup)
+    }
+
     @ObservationIgnored private var authListener: Task<Void, Never>?
     private let supabase: SupabaseClient?
 
@@ -57,12 +83,16 @@ final class AuthService {
                     if let userId = session?.user.id.uuidString {
                         await self.fetchProfile(userId: userId)
                         await self.checkAdminRole(userId: userId)
+                        // Begin enforcing the documented idle/absolute timeouts.
+                        // Restart on tokenRefreshed so admin-role changes apply.
+                        SessionTimeoutService.shared.startTracking(isAdmin: self.isAdmin)
                     }
                 case .signedOut:
                     self.currentUser = nil
                     self.currentProfile = nil
                     self.isAuthenticated = false
                     self.isAdmin = false
+                    SessionTimeoutService.shared.stopTracking()
                 default:
                     break
                 }
@@ -107,14 +137,36 @@ final class AuthService {
 
     func signOut() async throws {
         guard let supabase else { throw AuthError.notConfigured }
-        try await supabase.auth.signOut()
-        currentUser = nil
-        currentProfile = nil
-        isAuthenticated = false
-        isAdmin = false
 
-        // Reset biometric auth preference on sign out
-        BiometricAuthService.shared.reset()
+        // Always purge local user state, even if the network sign-out call fails.
+        // Otherwise a user who hits "Sign out" on a flaky connection could be left
+        // with stale favorites/cache visible to the next person on the device.
+        defer {
+            currentUser = nil
+            currentProfile = nil
+            isAuthenticated = false
+            isAdmin = false
+
+            // BiometricAuthService.reset() reads its Keychain entry to disable —
+            // run it BEFORE KeychainService.deleteAll() so the log line is accurate.
+            BiometricAuthService.shared.reset()
+
+            SessionTimeoutService.shared.stopTracking()
+            SearchHistoryService.shared.clearAll()
+            FavoritesService.shared.reset()
+
+            // Spotlight + QueryCache are actor-isolated; fire-and-forget detached tasks.
+            Task.detached {
+                await SpotlightService.shared.removeAllItems()
+                await QueryCache.shared.clearAll()
+            }
+
+            // Keychain wipe is last so any service that needs to read its own
+            // tokens during cleanup (e.g. session tracking timestamps) has a chance.
+            KeychainService.shared.deleteAll()
+        }
+
+        try await supabase.auth.signOut()
     }
 
     func resetPassword(email: String) async throws {

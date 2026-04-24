@@ -21,12 +21,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.desmoines.aipulse.R
+import com.desmoines.aipulse.ui.theme.GlassIntensity
+import com.desmoines.aipulse.ui.theme.PremiumTokens
+import com.desmoines.aipulse.ui.theme.glassSurface
 import com.desmoines.aipulse.util.NetworkMonitor
 
 /**
@@ -49,7 +54,7 @@ fun OfflineBanner(networkMonitor: NetworkMonitor) {
         exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
     ) {
         BannerContent(
-            text = "No internet connection",
+            text = stringResource(R.string.offline_no_connection),
             icon = Icons.Filled.CloudOff,
             backgroundColor = Color(0xFFE65100), // Orange
             contentColor = Color.White
@@ -63,7 +68,7 @@ fun OfflineBanner(networkMonitor: NetworkMonitor) {
         exit = shrinkVertically(shrinkTowards = Alignment.Top) + fadeOut()
     ) {
         BannerContent(
-            text = "Back online",
+            text = stringResource(R.string.offline_back_online),
             icon = Icons.Filled.CloudDone,
             backgroundColor = Color(0xFF2E7D32), // Green
             contentColor = Color.White
@@ -81,8 +86,13 @@ private fun BannerContent(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(backgroundColor)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .glassSurface(
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
+                intensity = GlassIntensity.Bar,
+                elevation = PremiumTokens.Elevation4,
+            )
+            .background(backgroundColor.copy(alpha = 0.85f))
+            .padding(horizontal = 16.dp, vertical = 10.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically
@@ -97,7 +107,7 @@ private fun BannerContent(
             text = text,
             color = contentColor,
             fontSize = 14.sp,
-            fontWeight = FontWeight.Medium
+            fontWeight = FontWeight.SemiBold
         )
     }
 }

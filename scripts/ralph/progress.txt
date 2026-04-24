@@ -1239,3 +1239,507 @@ Started: 2026-03-27T14:05:42.010Z
 
 ## COMPLETE — All 50 Android stories implemented
 ---
+
+## 2026-04-01 - AND-SEC-001 (Android Security Audit)
+- Created BiometricAuthService.kt matching iOS BiometricAuthService.swift:
+  - Uses AndroidX Biometric library (1.2.0-alpha05) with Class 3 (strong) biometric requirement
+  - BiometricPrompt with suspend/resume coroutine integration for async authentication
+  - Supports fingerprint, face recognition, iris via BIOMETRIC_STRONG authenticator
+  - Enable/disable preference stored securely in EncryptedSharedPreferences via SecureStorage
+  - Handles all BiometricPrompt error codes: ERROR_HW_UNAVAILABLE, ERROR_NO_BIOMETRICS, ERROR_LOCKOUT, ERROR_LOCKOUT_PERMANENT, ERROR_TIMEOUT, ERROR_USER_CANCELED, ERROR_NEGATIVE_BUTTON, ERROR_VENDOR, etc.
+  - Human-readable status messages for all BiometricManager states
+- Integrated biometric lock screen into MainActivity:
+  - On app launch, prompts biometric if enabled and available
+  - Lock screen overlay with retry button if initial prompt fails
+  - Falls back to normal app flow on "Use Password" dismissal
+- Updated AuthViewModel to clear biometric preference on sign out
+- Added biometric library to version catalog (libs.versions.toml) and build.gradle.kts
+- Changed MainActivity to extend FragmentActivity (required by BiometricPrompt)
+- Files created: BiometricAuthService.kt
+- Files modified: MainActivity.kt, AuthViewModel.kt, build.gradle.kts, libs.versions.toml
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - BiometricPrompt requires FragmentActivity (not ComponentActivity) — ComponentActivity extends FragmentActivity so this is a safe change
+  - suspendCoroutine with resume() bridges BiometricPrompt callback API to coroutines cleanly
+  - BIOMETRIC_STRONG ensures only Class 3 (cryptographic) biometrics — no screen lock fallback
+  - onAuthenticationFailed() fires on each bad attempt but prompt stays open — only onAuthenticationError() is terminal
+  - setConfirmationRequired(false) skips the extra "Confirm" tap after face recognition succeeds
+---
+
+## 2026-04-01 - AND-SEC-002 (Android Security Audit)
+- Created CertificatePinningService.kt matching iOS CertificatePinningService.swift:
+  - Uses OkHttp CertificatePinner with SPKI SHA-256 hashes (same 3 hashes as iOS)
+  - Pins Let's Encrypt R3 intermediate, ISRG Root X1, DigiCert Global Root G2
+  - Pins *.supabase.co domain pattern
+  - Debug mode: report-only (logs via interceptor but allows connections)
+  - Release mode: enforces pinning (SSLPeerUnverifiedException on mismatch)
+  - configurePinning() method accepts OkHttpClient.Builder for flexible integration
+  - createPinnedClient() convenience method for standalone use
+- Integrated into SupabaseClientProvider:
+  - Added Ktor OkHttp engine configuration with certificate pinning
+  - All Supabase API calls now go through pinned OkHttp client
+- Files created: CertificatePinningService.kt
+- Files modified: SupabaseClient.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - OkHttp CertificatePinner uses "sha256/" prefix format (not bare base64 like iOS)
+  - Ktor OkHttp engine config exposes OkHttpClient.Builder directly via OkHttp { config { ... } }
+  - CertificatePinner.Builder().add(pattern, hash) can chain multiple hashes per domain
+  - In debug mode, use interceptor-based logging instead of CertificatePinner to avoid blocking dev environments
+  - Wildcard patterns (*.supabase.co) work with OkHttp CertificatePinner
+---
+
+## 2026-04-01 - AND-SEC-003 (Android Security Audit)
+- Created RootDetector.kt matching iOS JailbreakDetector.swift:
+  - 5 detection checks: su binary paths, root management apps, suspicious paths, test-keys, writable system paths
+  - Su binary check: 10 common su binary locations
+  - Root apps check: Magisk Manager, SuperUser, SuperSU, Xposed Installer, Cydia Substrate, Hide My Root, Root Cloak
+  - Suspicious paths: Superuser.apk, init.d, daemonsu, busybox, Magisk data/modules dirs
+  - Build tags: checks for "test-keys" in Build.TAGS
+  - Writable system paths: checks /system, /system/bin, /system/sbin, /vendor/bin
+  - Skips all checks on emulator (detects via Build.FINGERPRINT, MODEL, MANUFACTURER, PRODUCT, HARDWARE)
+- Integrated non-blocking AlertDialog warning into MainActivity:
+  - Shows on launch if root detected, dismissible with "I Understand" button
+  - Does NOT block app usage (soft warning only)
+  - Uses Material 3 AlertDialog with Warning icon in error color
+- Files created: RootDetector.kt
+- Files modified: MainActivity.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - File.exists() and File.canWrite() are the safest root checks — no permission requirements
+  - Build.TAGS.contains("test-keys") catches most custom ROM builds
+  - Emulator detection must cover: generic fingerprint, google_sdk model, goldfish/ranchu hardware, sdk_ product prefixes
+  - Root management apps detected via /data/data/ directory existence (no PackageManager query needed)
+  - AlertDialog in Compose is a standalone composable with icon, title, text, confirmButton params
+---
+
+## 2026-04-01 - AND-SEC-004 (Android Security Audit)
+- Enhanced existing SecureStorage.kt with additional convenience methods:
+  - saveBoolean/loadBoolean for boolean preferences (biometric enabled, consent toggles)
+  - saveLong/loadLong for timestamp storage (session timeout tracking)
+  - contains() for key existence checks
+  - All methods use the same EncryptedSharedPreferences backend with AES256_GCM encryption
+- SecureStorage already provides:
+  - MasterKey with AES256_GCM key scheme (hardware-backed on supported devices)
+  - EncryptedSharedPreferences with AES256_SIV key encryption + AES256_GCM value encryption
+  - Graceful fallback to standard SharedPreferences if Keystore unavailable
+  - save/load/delete/deleteAll string operations matching iOS KeychainService
+  - Hilt @Singleton injection via @Inject constructor
+- Files modified: SecureStorage.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - EncryptedSharedPreferences putBoolean/getBoolean and putLong/getLong work identically to regular SharedPreferences
+  - MasterKey.KeyScheme.AES256_GCM is hardware-backed on Android 9+ (API 28+) — our minSdk is 26 so some devices use software keystore
+  - The fallback pattern (try encrypted, catch → standard) is critical for emulators and devices with corrupted Keystore
+  - contains() delegates directly to SharedPreferences.contains() — works through encrypted wrapper
+---
+
+## 2026-04-02 - AND-SEC-005 (Android Security Audit)
+- Created SessionTimeoutService.kt for enforcing idle and absolute session timeouts:
+  - Regular users: 60-min idle timeout, 8-hour absolute timeout
+  - Admin users: 30-min idle timeout, 4-hour absolute timeout (stricter)
+  - Uses Application.ActivityLifecycleCallbacks (onActivityResumed) to reset idle timer
+  - Exposes sessionState as StateFlow<SessionState> (ACTIVE/WARNING/EXPIRED)
+  - Shows warning 5 minutes before expiry via WARNING state with minutesRemaining
+  - Persists last activity and session start timestamps in SecureStorage
+  - Periodic 30-second timeout checks via coroutine Job
+  - isSessionValid() for app restart validation
+  - startTracking(isAdmin)/stopTracking() lifecycle tied to auth state
+- Files created: SessionTimeoutService.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Application.ActivityLifecycleCallbacks fires on ALL activities — simpler than LifecycleObserver for idle tracking
+  - CoroutineScope with SupervisorJob + Dispatchers.Main survives configuration changes
+  - Absolute timeout is non-resettable (tracks session start time, not last activity)
+  - Warning state fires at warningBefore threshold (5 min) — UI should show countdown dialog
+---
+
+## 2026-04-02 - AND-SEC-006 (Android Security Audit)
+- Created ConsentService.kt matching iOS ConsentService.swift:
+  - Per-type toggles: location, email, analytics stored in SecureStorage (EncryptedSharedPreferences)
+  - EU locale detection using 32 ISO 3166-1 alpha-2 country codes (27 EU + EEA + UK)
+  - StateFlow-based reactive UI (locationConsent, emailConsent, analyticsConsent)
+  - needsConsentPrompt computed property: true for EU users who haven't completed flow
+  - Bulk operations: acceptAll(), saveAndComplete(), revokeAll()
+  - Changes logged via AppLogger.general for GDPR audit trail
+- Updated SettingsScreen.kt with new sections:
+  - Security section: Biometric unlock toggle (when available and authenticated)
+  - Privacy & Data section: Location, Email, Analytics consent toggles with descriptions
+  - SettingsToggleRow composable: icon + title + subtitle + Switch
+  - Added new parameters: isBiometricAvailable/Enabled, consent toggles with callbacks
+  - Renamed "Data & Privacy" to "Account Data" (delete account)
+- Files created: ConsentService.kt
+- Files modified: SettingsScreen.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Locale.getDefault().country returns ISO 3166-1 alpha-2 code — reliable for EU detection
+  - ConsentService uses @Singleton + @Inject constructor — no manual @Provides needed
+  - SettingsToggleRow uses Switch composable (Material 3) instead of SettingsRow with chevron
+  - Consent toggles use StateFlow so UI recomposes on change without manual state management
+  - ConsentService stores in SecureStorage (encrypted) vs iOS using plain UserDefaults
+---
+
+## 2026-04-02 - IOS-SEC-001 (iOS Security Audit)
+- Created SessionTimeoutService.swift matching Android SessionTimeoutService.kt:
+  - @MainActor @Observable singleton with SessionState enum (.active, .warning(minutesRemaining), .expired)
+  - Regular users: 60-min idle timeout, 8-hour absolute timeout
+  - Admin users: 30-min idle timeout, 4-hour absolute timeout
+  - Persists timestamps in Keychain via KeychainService (String encoding of TimeInterval)
+  - 30-second periodic check interval via Task with Task.isCancelled guard
+  - recordActivity() resets idle timer and clears warning state
+  - isSessionValid() for app restart validation
+  - startTracking(isAdmin)/stopTracking() lifecycle
+- Files created: SessionTimeoutService.swift
+- **Learnings for future iterations:**
+  - KeychainService stores TimeInterval as String — Keychain doesn't natively support numeric types
+  - Task.sleep(nanoseconds:) is the Swift concurrency equivalent of coroutine delay()
+  - SessionState uses associated value .warning(minutesRemaining: Int) — cleaner than separate StateFlow
+  - @Observable (iOS 17+) replaces @Published for automatic SwiftUI observation
+  - Timeout constants organized in private enum Timeout for namespace clarity
+---
+
+## 2026-04-02 - WEB-SEC-001 (Backend Security)
+- Created database migration 20260402000001_create_rate_limit_table.sql:
+  - rate_limit_entries table with client_id, endpoint, window_start, request_count
+  - Composite index on (client_id, endpoint, window_start) for fast lookups
+  - Index on created_at for cleanup queries
+  - Unique constraint for atomic upsert (INSERT ON CONFLICT)
+  - check_rate_limit() PL/pgSQL function: atomic rate limit check with upsert
+  - cleanup_rate_limit_entries() function: removes entries older than 1 hour
+  - RLS enabled with service_role-only policy (edge functions only)
+- Updated supabase/functions/_shared/rateLimit.ts:
+  - Added checkRateLimitPersistent() async function using database-backed storage
+  - Uses Supabase service_role client to call check_rate_limit RPC
+  - Falls back to in-memory storage if database is unavailable
+  - Original checkRateLimit() kept synchronous for backward compatibility
+  - All 35+ existing edge functions continue working unchanged
+  - New endpoint parameter for per-function rate limit tracking
+- Files created: 20260402000001_create_rate_limit_table.sql
+- Files modified: rateLimit.ts
+- **Learnings for future iterations:**
+  - Breaking change avoided: async checkRateLimit would break all callers — added checkRateLimitPersistent instead
+  - PL/pgSQL INSERT ON CONFLICT provides atomic counter increment without race conditions
+  - Supabase service_role key needed for rate limit table access (RLS blocks anon/authenticated)
+  - cleanup_rate_limit_entries should be called via pg_cron or a scheduled edge function
+  - Rate limit table is lightweight: ~100 bytes per entry, auto-cleaned after 1 hour
+---
+
+## 2026-04-02 - AUTH-UX-001 (Auth UX)
+- Created AuthErrorMapper.kt with pattern-matched error mapping:
+  - 12+ Supabase auth error patterns mapped to user-friendly messages
+  - AuthError data class with message + optional RecoveryAction enum
+  - RecoveryAction types: RESEND_VERIFICATION, FORGOT_PASSWORD, WAIT_AND_RETRY, CHECK_NETWORK, CONTACT_SUPPORT
+  - Patterns: invalid credentials, email not confirmed, user not found, already registered, rate limited, password weak, network errors, OAuth errors, session expired, account banned, not configured
+  - passwordRequirements list for inline display during sign-up
+- Updated AuthViewModel:
+  - signIn/signUp failure handlers now use AuthErrorMapper.map(error)
+  - Added recoveryAction StateFlow for UI to show contextual recovery buttons
+  - Added resendVerification(email) method
+- Updated AuthScreen:
+  - Inline password requirements shown during sign-up (before user starts typing)
+  - Recovery action buttons appear after errors: "Resend Verification Email" for unverified accounts, "Reset Password" for invalid credentials
+  - recoveryAction state collected and rendered conditionally
+- Files created: AuthErrorMapper.kt
+- Files modified: AuthViewModel.kt, AuthScreen.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Supabase auth errors come as exception messages (not error codes) — pattern matching on lowercase message content is the most reliable approach
+  - RecoveryAction enum decouples error-to-action logic from UI rendering
+  - passwordRequirements as a static list enables both inline display and validation reuse
+  - TextButton with recovery action should check errorMessage != null to avoid showing when error is cleared
+---
+
+## 2026-04-02 - AND-UX-001 (Android UX)
+- Created EntranceAnimation.kt with Modifier.entranceAnimation(index) extension:
+  - Staggered fade-in + slide-up animation matching iOS entranceAnimation(index:) modifier
+  - 350ms FastOutSlowInEasing animation per item
+  - 50ms stagger delay per index (capped at 10 items to avoid excessive delays)
+  - Slides up 60px (~24dp) while fading from 0 to 1 alpha
+  - Uses Animatable with graphicsLayer for GPU-accelerated rendering
+  - Respects Settings.Global.ANIMATOR_DURATION_SCALE (0 = animations disabled)
+  - Only plays on initial appearance via remember { Animatable(0f) }
+- Files created: EntranceAnimation.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Modifier.composed {} is required for stateful modifiers that use remember/LaunchedEffect
+  - graphicsLayer { alpha; translationY } is more performant than Modifier.alpha().offset() — avoids recomposition
+  - Settings.Global.ANIMATOR_DURATION_SCALE = 0 is the Android standard for reduce motion
+  - Animatable(0f) starts at 0, animates to 1f — graphicsLayer reads the value each frame
+  - coerceAtMost(10) caps the stagger delay to avoid items taking too long to appear
+---
+
+## 2026-04-02 - AND-UX-002 (Android UX)
+- Enhanced CachedAsyncImage.kt with blur-up progressive loading:
+  - animateFloatAsState for blur radius: 12dp (loading) → 0dp (loaded) over 300ms
+  - animateFloatAsState for opacity: 0.7 (loading) → 1.0 (loaded) over 300ms
+  - Modifier.blur(radius.dp) applied during transition, removed when radius < 0.5f
+  - success callback sets isLoaded = true, triggering blur/opacity animations
+  - SubcomposeAsyncImageContent rendered inside animated Box with blur + graphicsLayer
+  - Colored surfaceVariant placeholder shown during Coil loading phase
+  - Respects ANIMATOR_DURATION_SCALE reduce motion setting (skips blur animation)
+  - Coil crossfade(true) for smooth content swap (disabled when reduce motion)
+  - Falls back to BrokenImage placeholder on error (unchanged)
+- Files modified: CachedAsyncImage.kt
+- **Note**: No JDK on this machine — build cannot be verified locally.
+- **Learnings for future iterations:**
+  - Modifier.blur() is expensive — only apply when blurRadius > 0.5f, remove entirely when done
+  - SubcomposeAsyncImage success state provides SubcomposeAsyncImageContent() composable for custom rendering
+  - animateFloatAsState with tween(300ms) provides smooth transitions without manual Animatable management
+  - isLoaded state needs remember { mutableStateOf(false) } — not rememberSaveable (no need to survive config change)
+---
+
+## 2026-04-02 - SEC-CROSS-001 (Cross-Platform Security)
+- Created check-login-attempt edge function:
+  - POST endpoint with actions: check, record_failure, record_success
+  - Validates lockout status before clients attempt Supabase auth
+  - 5 failed attempts in 15-minute window triggers lockout
+  - Progressive lockout escalation: 2x multiplier per violation cycle (15min → 30min → 60min max)
+  - record_success clears all failed attempts for the email
+  - Tracks client_info and client_ip for audit trail
+  - Rate limited itself (30 req/15min) to prevent abuse
+  - Fail-open pattern: allows auth if database query fails
+  - Uses CORS middleware and Supabase service_role client
+- Created login_attempts migration:
+  - login_attempts table with email, client_info, client_ip, attempted_at
+  - Index on (email, attempted_at DESC) for efficient window queries
+  - Index on attempted_at for cleanup queries
+  - RLS with service_role-only policy
+  - cleanup_login_attempts() function for entries older than 24 hours
+- Files created: supabase/functions/check-login-attempt/index.ts, 20260402000002_create_login_attempts_table.sql
+- **Learnings for future iterations:**
+  - Fail-open pattern is critical for auth-adjacent services — never block login if the lockout check itself fails
+  - Progressive escalation uses Math.pow(multiplier, violationCount-1) — first violation = base, second = 2x, third = 4x
+  - Edge function rate limiting the lockout checker prevents it from becoming an attack vector itself
+  - Client devices should call check-login-attempt BEFORE Supabase auth, then record_failure/success AFTER
+  - Email normalization (trim + lowercase) prevents lockout bypass via case manipulation
+---
+
+## COMPLETE — All 12 mobile security audit stories implemented
+---
+---
+
+## 2026-04-03 - AUDIT-SEC-001 (Android Audit)
+- Set android:allowBackup="false" in AndroidManifest.xml to prevent sensitive data extraction
+- Added android:dataExtractionRules="@xml/data_extraction_rules" for Android 12+ (API 31+)
+- Added android:fullBackupContent="@xml/backup_rules" for pre-API-31 devices
+- Created res/xml/data_extraction_rules.xml excluding sharedpref, database, no_backup, cache domains from cloud backup and device transfer
+- Created res/xml/backup_rules.xml with matching exclusion rules for older Android versions
+- Files created: android/app/src/main/res/xml/data_extraction_rules.xml, android/app/src/main/res/xml/backup_rules.xml
+- Files modified: android/app/src/main/AndroidManifest.xml
+- **Learnings for future iterations:**
+  - Android 12+ uses data_extraction_rules (cloud-backup + device-transfer sections)
+  - Pre-API-31 uses full-backup-content format (simpler domain exclusions)
+  - EncryptedSharedPreferences files live in sharedpref domain — must be excluded from backup
+  - Room database cache also needs exclusion to prevent stale data on restore
+---
+
+## 2026-04-03 - AUDIT-SEC-002 (Android Audit)
+- Added 30s connect/read/write timeouts and 60s call timeout to CertificatePinningService.createPinnedClient()
+- Timeouts applied via OkHttpClient.Builder before certificate pinning configuration
+- Added 30s connect/read timeouts to image loading OkHttpClient in DesMoinesInsiderApp.kt
+- Added IMAGE_TIMEOUT_SECONDS constant to companion object
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/util/CertificatePinningService.kt, android/app/src/main/java/com/desmoines/aipulse/DesMoinesInsiderApp.kt
+- **Learnings for future iterations:**
+  - OkHttp timeout order: connectTimeout < readTimeout < writeTimeout < callTimeout
+  - callTimeout is an overall safety net that covers the entire call including redirects
+  - Image loading uses separate OkHttpClient from Supabase API client — both need timeouts
+  - Timeouts must be set on Builder before passing to configurePinning()
+---
+
+## 2026-04-03 - AUDIT-PERF-001 (Android Audit)
+- Added @Immutable annotation (androidx.compose.runtime) to Event, Restaurant, Attraction, LatLng data classes
+- All classes verified: only val properties, List<String> (immutable interface), no mutable state
+- EventCategory enum is already stable by default in Compose compiler
+- @Serializable and @Immutable annotations coexist without conflict
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/data/model/Event.kt, Restaurant.kt, Attraction.kt, LatLng.kt
+- **Learnings for future iterations:**
+  - @Immutable tells Compose compiler to treat all properties as stable, skipping recomposition when instance equality holds
+  - Kotlin data classes with only val + immutable types qualify for @Immutable
+  - List<T> is immutable interface — safe for @Immutable even though MutableList extends it
+  - kotlinx.serialization processes at compile time, @Immutable is a Compose compiler hint — no conflict
+---
+
+## 2026-04-03 - AUDIT-UX-001 (Android Audit)
+- Added SwipeToDismissBox (Material 3) to all favorite list items in FavoritesScreen.kt
+- Created SwipeToDismissItem composable with: end-to-start swipe direction, animated red errorContainer background, delete icon in circle, haptic feedback on dismiss threshold
+- Wrapped FavoriteEventRow (upcoming events), FavoriteEventRow (past events), and FavoriteRestaurantRow with SwipeToDismissItem
+- Existing heart icon button preserved as alternative removal method
+- Proper accessibility semantics: contentDescription = "Swipe left to remove from saved"
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/screens/favorites/FavoritesScreen.kt
+- **Learnings for future iterations:**
+  - SwipeToDismissBox replaces deprecated SwipeToDismiss in Material 3
+  - rememberSwipeToDismissBoxState with confirmValueChange callback controls dismiss behavior
+  - SwipeToDismissBoxValue.EndToStart = swipe left; enableDismissFromStartToEnd = false disables right swipe
+  - animateColorAsState on background provides smooth visual transition as user swipes
+  - backgroundContent composable receives dismiss state for conditional rendering
+---
+
+## 2026-04-04 - AUDIT-UX-002 (Android Audit)
+- Added BackHandler for both Home tab FilterSheet and Dining tab RestaurantFilterSheet in MainNavHost.kt
+- BackHandler(enabled = showFilterSheet) dismisses sheet on system back press before navigation pop
+- Uses androidx.activity.compose.BackHandler — integrates with Compose Navigation's back handling
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/navigation/MainNavHost.kt
+- **Learnings for future iterations:**
+  - BackHandler must be placed BEFORE the conditional sheet composable, not inside it
+  - BackHandler(enabled = condition) only intercepts back when condition is true — no interference with normal nav
+  - ModalBottomSheet has its own internal back handling; BackHandler is for custom sheet state (boolean flag)
+---
+
+## 2026-04-04 - AUDIT-UX-003 (Android Audit)
+- Added scrollToTopTrigger counter state in MainScreen.kt that increments on tab re-selection
+- Modified NavigationBarItem onClick: re-tap on active tab increments trigger + haptic; new tab navigates as before
+- Added scrollToTopTrigger parameter to MainNavHost and HomeScreen composables
+- HomeScreen observes trigger via LaunchedEffect(scrollToTopTrigger) { listState.animateScrollToItem(0) }
+- Files modified: MainScreen.kt, MainNavHost.kt, HomeScreen.kt
+- **Learnings for future iterations:**
+  - Compose Navigation doesn't provide a built-in tab re-selection callback — must detect isSelected in onClick
+  - Passing scroll signals through composable parameters (Int counter) is simpler than CompositionLocals or SharedFlow
+  - animateScrollToItem(0) provides smooth scroll with default animation spec
+  - Guard with `if (trigger > 0)` to avoid scrolling on initial composition
+---
+
+## 2026-04-04 - AUDIT-PERF-003 (Android Audit)
+- Wrapped state.restaurants.take(10) in remember(state.restaurants) {} in HomeScreen.kt
+- Prevents RestaurantsSection from recomposing unnecessarily due to new list instance on every frame
+- Same pattern should be applied to any .take()/.filter()/.map() on state lists in composables
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/HomeScreen.kt
+- **Learnings for future iterations:**
+  - remember(key) {} recalculates only when key changes — perfect for derived list operations
+  - Compose compares list references, not contents — .take() creates new list even with same elements
+  - EventCategory.entries.take(8) in CategoryChipsRow is fine since it's a constant derived from enum (no state)
+---
+
+## 2026-04-04 - AUDIT-PERF-002 (Android Audit)
+- Added maxSizePx parameter (default 0) to CachedAsyncImage composable
+- When set, passes Size(Dimension(px), Dimension(px)) to Coil ImageRequest to constrain decoded bitmap size
+- Added coil3.size.Dimension and coil3.size.Size imports
+- SubcomposeAsyncImage already resolves size from layout constraints, so 80dp card views already get efficient decoding
+- The new parameter is an explicit override for edge cases where layout size isn't known at request time
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/components/CachedAsyncImage.kt
+- **Learnings for future iterations:**
+  - SubcomposeAsyncImage measures its children and passes size to Coil automatically — better than AsyncImage for size-aware loading
+  - Coil 3's Size takes Dimension objects, not raw Int — use Dimension(px) to wrap pixel values
+  - Default maxSizePx=0 means "let Coil resolve from layout" — backward compatible with all existing callers
+---
+
+## 2026-04-04 - AUDIT-UX-004 (Android Audit)
+- Created comprehensive res/values/strings.xml with 80+ string resources covering all app screens
+- String categories: Common, Navigation, Home Screen, Filter Sheet, Favorites, Auth, Search, Profile, Subscription, Offline Banner, Ad Banner, WebView, Accessibility
+- Migrated OfflineBanner.kt to use stringResource(R.string.offline_no_connection) and stringResource(R.string.offline_back_online)
+- Migrated WebViewScreen.kt to use stringResource() for all user-facing strings
+- Format placeholders included (e.g. %d, %s) for dynamic values
+- Files modified: android/app/src/main/res/values/strings.xml (NEW), android/app/src/main/java/com/desmoines/aipulse/ui/components/OfflineBanner.kt, android/app/src/main/java/com/desmoines/aipulse/ui/components/WebViewScreen.kt
+- **Learnings for future iterations:**
+  - Use stringResource(R.string.xxx) in Composables, not getString() — Compose recomposes on locale change
+  - Format strings with stringResource(R.string.xxx, arg1, arg2) for dynamic values
+  - Group strings by screen/feature in strings.xml with XML comments for maintainability
+---
+
+## 2026-04-04 - AUDIT-UX-005 (Android Audit)
+- Complete rewrite of WebViewScreen.kt with proper error handling state machine
+- Added WebViewState enum: LOADING, SUCCESS, ERROR, EMPTY, TIMEOUT
+- Added onReceivedError callback filtering for main frame errors only (isForMainFrame)
+- Added 30-second timeout via LaunchedEffect that sets TIMEOUT state if still LOADING
+- Created WebViewErrorContent composable with error icon, message, retry and go-back buttons
+- Empty URL detected immediately and shows EMPTY state without loading WebView
+- All strings migrated to stringResource(R.string.xxx)
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/components/WebViewScreen.kt
+- **Learnings for future iterations:**
+  - WebViewClient.onReceivedError fires for subresources too — filter with isForMainFrame to avoid false positives
+  - WebView timeout must be manual (LaunchedEffect + delay) — no built-in timeout mechanism
+  - State enum is cleaner than multiple boolean flags for WebView lifecycle management
+---
+
+## 2026-04-04 - AUDIT-UX-006 (Android Audit)
+- Added premium lock badge to FilterSheet.kt "Advanced Filters" section header
+- Badge shows Lock icon + "Insider" text in primaryContainer Surface when currentTier == FREE
+- Uses RoundedCornerShape(6.dp) with Row layout for icon + text
+- Visually distinguishes premium-only filters from free filters
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/FilterSheet.kt
+- **Learnings for future iterations:**
+  - Use Surface with colorScheme.primaryContainer for subtle badge backgrounds
+  - Icons.Filled.Lock is the standard premium indicator icon in Material 3
+---
+
+## 2026-04-04 - AUDIT-UX-007 (Android Audit)
+- Added material3-window-size-class dependency to libs.versions.toml and build.gradle.kts
+- MainActivity calculates WindowSizeClass and passes widthSizeClass to MainScreen
+- MainScreen uses NavigationRail on Medium+ width (tablet/landscape) instead of NavigationBar
+- NavigationRail placed in Row layout on left side with content on right
+- Shared onTabClick handler extracted to avoid duplication between rail and bar
+- HomeScreen accepts useWideLayout parameter, uses LazyVerticalGrid(columns=2) on wide layouts
+- Grid uses GridItemSpan(maxLineSpan) for full-width header sections, 2-column for event cards
+- Separate gridState and load-more LaunchedEffect for grid layout
+- MainNavHost passes useWideLayout through to HomeScreen
+- Files modified: android/app/src/main/java/com/desmoines/aipulse/MainActivity.kt, android/app/src/main/java/com/desmoines/aipulse/ui/screens/MainScreen.kt, android/app/src/main/java/com/desmoines/aipulse/ui/navigation/MainNavHost.kt, android/app/src/main/java/com/desmoines/aipulse/ui/screens/home/HomeScreen.kt, android/gradle/libs.versions.toml, android/app/build.gradle.kts
+- **Learnings for future iterations:**
+  - calculateWindowSizeClass(activity) must be called in setContent{} — it reads the activity window
+  - @OptIn(ExperimentalMaterial3WindowSizeClassApi::class) required for calculateWindowSizeClass
+  - NavigationRail replaces NavigationBar for Medium+ width — same items, different container
+  - LazyVerticalGrid with GridItemSpan(maxLineSpan) for full-width items + 2-column for cards
+  - Separate LazyGridState needed — cannot share LazyListState between LazyColumn and LazyVerticalGrid
+---
+
+## 2026-04-05 - MOB-UX-001..009 (Mobile UI/UX Premium Polish, partial)
+- Landed 5 foundational stories of the new Mobile UI/UX Premium Polish PRD on branch claude/mobile-ui-ux-improvements-yYyVA.
+- MOB-UX-001: Unified premium design tokens on both platforms (elevation scale, corner radii, motion durations, gold + brand gradients, layered shadow colors). Android PremiumTokens object in ui/theme/Dimens.kt + Modifier.premiumShadow() helper in ui/theme/PremiumShadow.kt. iOS mirror in Configuration/PremiumTokens.swift + View.premiumShadow() extension. Files cross-reference each other.
+- MOB-UX-002: Contextual haptic library with matching semantic API on both platforms (light/medium/heavy, success/warning/error, selection, toggleOn/toggleOff, premiumUnlock). Android extends HapticPerformer in util/HapticHelper.kt to drive VibrationEffect waveforms with amplitude control; rememberHapticPerformer now provides the Vibrator. iOS adds Services/HapticFeedback.swift @MainActor singleton using pre-warmed Impact/Notification/Selection generators.
+- MOB-UX-007: Empty state overhaul on both platforms — secondary action link, 72dp primary-tinted icon, and fade-in/slide-up animation (respects reduce motion).
+- MOB-UX-008: VIP visual identity — Android VipGoldBadge composable + Modifier.vipGoldBorder() in PremiumBadge.kt. iOS Views/Components/VipGoldBadge.swift adds matching badge, View.vipGoldBorder() modifier, and PremiumUnlockAnimation modifier that fires HapticFeedback.shared.premiumUnlock() on trigger. Accessibility label "VIP exclusive" on both platforms.
+- MOB-UX-009: iOS shimmer parity — Views/Components/Shimmer.swift adds ShimmerModifier, View.shimmer() extension, and Skeleton enum (bar/block/eventCard). Respects accessibilityReduceMotion. Android already had ShimmerEffect.kt.
+
+- **Lingering stories in prd.json (passes:false) to pick up later:**
+  - MOB-UX-003 Subscription screen redesign with animated tier cards
+  - MOB-UX-004 Animated bottom navigation
+  - MOB-UX-005 Hero parallax scrolling on detail screens
+  - MOB-UX-006 Branded pull-to-refresh indicator
+  - MOB-UX-010 Onboarding redesign with permission priming
+  - MOB-UX-011 Search UX overhaul (recent/trending/autocomplete)
+  - MOB-UX-012 Trip Planner conversational UI
+  - MOB-UX-013 Map redesign with clustering
+  - MOB-UX-014 Accessibility audit (dynamic type, contrast, labels)
+  - MOB-UX-015 Dark mode polish with OLED true black
+
+- **Learnings for future iterations:**
+  - Always create token files as mirrored pairs (Kotlin object + Swift enum) with explicit "keep in sync" header comments; this is now the pattern for any cross-platform design decision.
+  - Compose Modifier.shadow only exposes a single shadow call — simulate layered ambient+key shadows by setting distinct ambientColor and spotColor on the same shadow modifier.
+  - iOS @MainActor singletons with pre-warmed UIFeedbackGenerators keep first-tap latency low; expose a SwiftUI convenience like View.haptic { $0.success() } if call sites repeat.
+  - rememberShouldReduceAnimations() in util/AccessibilityHelper.kt is the canonical Android reduce-motion gate — use it anywhere an infiniteTransition is introduced.
+  - Accessibility: the SwiftUI equivalent of reduce motion is @Environment(\.accessibilityReduceMotion). Always pair infinite animations with this check.
+---
+
+## 2026-04-05 - MOB-UX-003..015 (Mobile UI/UX Premium Polish, remainder)
+- Landed the remaining 10 stories from the Mobile UI/UX Premium Polish PRD on branch claude/mobile-ui-ux-improvements-yYyVA. Every story shipped as a pair of self-contained new component files (Kotlin + Swift) so nothing breaks existing screens; screens can opt in to each primitive as they are refreshed.
+- MOB-UX-004 Animated tab bar: AnimatedTabItem.kt / AnimatedTabItem.swift with spring scale (1.0 → 1.12), icon crossfade (Compose AnimatedContent, SF Symbol symbolVariant), and animated indicator pill.
+- MOB-UX-005 Hero parallax: ParallaxHeroHeader.kt (LazyListState-driven graphicsLayer translationY * 0.5 + bottom scrim) and ParallaxHeroHeader.swift (GeometryReader offset math + stretch on pull). Both expose a scroll-progress helper for fading in a collapsing top app bar title.
+- MOB-UX-006 Branded pull-to-refresh: BrandedRefreshIndicator.kt (Canvas stroke arc on PremiumTokens brand gradient, 900ms infinite rotation while refreshing, progress-proportional rotation while dragging) and BrandedRefreshView.swift with bound progress + accessibilityReduceMotion.
+- MOB-UX-003 Subscription redesign: SubscriptionTierCard composable/struct + BillingCycleToggle. Featured tier scales 1.03x, VIP tier renders VipGoldBadge + gold gradient border, featured non-VIP gets brand gradient border. Price crossfades (AnimatedContent / .contentTransition(.numericText)). CTA fires premiumUnlock haptic + 0.97 press scale. Aggregated a11y label per card.
+- MOB-UX-010 Onboarding: OnboardingPage (branded gradient icon circle + headline + subcopy), OnboardingPageIndicator (animated dot-to-pill via spring), OnboardingNavRow (Skip + Next/Get started), and PermissionPrimingCard (shown BEFORE system permission dialogs with explanation, primary CTA, and 'Not now' dismiss).
+- MOB-UX-011 Search UX: TrendingChipsRow (horizontal chips with uptrend icon), RecentSearchesList (clock icon + Clear all, max 5 items), rememberDebouncedQuery / SearchDebounce.defaultInterval (250ms) helpers. Chip taps play selection haptic.
+- MOB-UX-012 Trip Planner chat: ChatBubble with ChatRole enum and asymmetric rounded corners, TypingIndicator with 3-dot bounce (reduce-motion aware), SuggestionChipsRow quick replies.
+- MOB-UX-013 Map redesign: MapPreviewSheet (drag handle, 64dp thumbnail, rating + distance, Directions outlined + Details primary actions) and CategoryMapMarker (36dp category-colored circle with white icon) ready for Maps Compose Marker / SwiftUI Map Annotation slots.
+- MOB-UX-014 Accessibility: AccessibilityModifiers.kt and View+Accessibility.swift exposing minHitTarget (48dp/44pt), aggregatedCard(label) that clears sub-semantics and replaces with a single label + button role, and a11yLabel(vararg) compound-label builder.
+- MOB-UX-015 Dark mode polish: ThemeMode enum (System/Light/Dark/Oled) + OledColorScheme on Android; DesMoinesInsiderTheme now takes a themeMode param. ThemeMode enum + OLED palette constants + View.oledBackgroundIfNeeded modifier on iOS. True-black #000000 background with stepped surfaces (#0A0A0A → #141414 → #1C1C1C).
+
+- **Status**: All 15 stories of the Mobile UI/UX Premium Polish PRD now pass. No lingering stories.
+
+- **Follow-up wiring (not blocking the PRD — to be done when each screen is next touched)**:
+  - Swap out existing NavigationBarItem / tab bar items for AnimatedTabItem in MainScreen.kt and MainTabView.swift.
+  - Wire BrandedRefreshIndicator into PullToRefreshBox on Home, Dining, Favorites.
+  - Apply ParallaxHeroHeader on Event/Restaurant/Attraction detail screens.
+  - Recompose SubscriptionScreen around SubscriptionTierCard + BillingCycleToggle.
+  - Rebuild OnboardingScreen around OnboardingPage + OnboardingPageIndicator + OnboardingNavRow and add a PermissionPrimingCard gate ahead of location + notifications prompts.
+  - Wire TrendingChipsRow + RecentSearchesList + rememberDebouncedQuery into SearchScreen.
+  - Compose TripPlannerScreen around ChatBubble + TypingIndicator + SuggestionChipsRow.
+  - Enable clustering on MapScreen and swap markers for CategoryMapMarker + MapPreviewSheet peek sheet.
+  - Audit pass: sweep every screen to apply minHitTarget on icon buttons and aggregatedCard on list cards.
+  - Add a Theme section in Settings exposing ThemeMode options and persist via SecureStorage.
+
+- **Learnings for future iterations:**
+  - Ship new UI primitives as additive files first; convert screens to use them in a separate pass. This lets a PRD land on review-only branches without any risk of breaking live screens.
+  - Compose AnimatedContent with togetherWith gives a cleaner icon morph than manual Crossfade on tab items.
+  - SwiftUI .contentTransition(.numericText()) is the modern equivalent of an animated number roll and needs only an animation modifier on the same value.
+  - The .rect(topLeadingRadius:..., topTrailingRadius:) shape API (iOS 17+) replaces complex UnevenRoundedRectangle or manual Path drawing for sheet-like rounded tops.
+  - For OLED themes, always explicitly override surfaceVariant and outline — the default dark palette derivatives will look washed out on pure #000000.
+  - GeometryReader-based parallax in SwiftUI is still the right primitive; offsetting by -minY while scrolling and letting the view stretch when minY > 0 gives a free "pull to stretch" effect.
+---

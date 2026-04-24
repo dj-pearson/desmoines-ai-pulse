@@ -80,6 +80,7 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.desmoines.aipulse.ui.theme.Dimens
+import com.desmoines.aipulse.util.AuthErrorMapper
 import com.desmoines.aipulse.util.Config
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
@@ -101,6 +102,7 @@ fun AuthScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val showVerificationAlert by viewModel.showVerificationAlert.collectAsState()
     val lockoutSeconds by viewModel.lockoutSecondsRemaining.collectAsState()
+    val recoveryAction by viewModel.recoveryAction.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
@@ -296,9 +298,30 @@ fun AuthScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                // Password strength bar (sign up only)
+                // Password strength bar and requirements (sign up only)
                 if (isSignUpMode && password.isNotEmpty()) {
                     PasswordStrengthBar(strength = viewModel.passwordStrength(password))
+                }
+
+                // Inline password requirements (sign up only, shown when password field focused)
+                if (isSignUpMode && password.isEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = "Password requirements:",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        AuthErrorMapper.passwordRequirements.forEach { req ->
+                            Text(
+                                text = "  \u2022 $req",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
                 }
 
                 // Confirm password (sign up only)
@@ -373,12 +396,35 @@ fun AuthScreen(
                         )
                     }
                 }
+
+                // Recovery action buttons based on error context
+                if (recoveryAction != null && errorMessage != null) {
+                    when (recoveryAction) {
+                        AuthErrorMapper.RecoveryAction.RESEND_VERIFICATION -> {
+                            TextButton(
+                                onClick = { viewModel.resendVerification(email) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Resend Verification Email")
+                            }
+                        }
+                        AuthErrorMapper.RecoveryAction.FORGOT_PASSWORD -> {
+                            TextButton(
+                                onClick = { viewModel.resetPassword(email) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Reset Password")
+                            }
+                        }
+                        else -> {} // Other recovery actions don't need inline buttons
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(Dimens.SpacingXl))
 
-            // Primary action button
-            Button(
+            // Primary action button (migrated to brand button system)
+            BrandPrimaryButton(
                 onClick = {
                     focusManager.clearFocus()
                     if (isSignUpMode) {
@@ -387,27 +433,11 @@ fun AuthScreen(
                         viewModel.signIn(email, password)
                     }
                 },
-                enabled = !isSigningIn && !isSigningUp && lockoutSeconds <= 0,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(Dimens.ButtonHeight)
-                    .padding(horizontal = Dimens.SpacingLg),
-                shape = RoundedCornerShape(Dimens.CardCornerRadius),
-            ) {
-                if (isSigningIn || isSigningUp) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(modifier = Modifier.width(Dimens.SpacingSm))
-                }
-                Text(
-                    text = if (isSignUpMode) "Create Account" else "Sign In",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
+                modifier = Modifier.padding(horizontal = Dimens.SpacingLg),
+                enabled = lockoutSeconds <= 0,
+                isLoading = isSigningIn || isSigningUp,
+                text = if (isSignUpMode) "Create Account" else "Sign In",
+            )
 
             // Forgot password (sign in only)
             if (!isSignUpMode) {

@@ -7,6 +7,10 @@ struct EventMapView: View {
     @State private var viewModel = MapViewModel()
     @State private var navigationPath = NavigationPath()
     @State private var isSearchFocused = false
+    @State private var currentRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: Config.defaultLatitude, longitude: Config.defaultLongitude),
+        span: MKCoordinateSpan(latitudeDelta: 0.15, longitudeDelta: 0.15)
+    )
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -79,46 +83,61 @@ struct EventMapView: View {
             // User location
             UserAnnotation()
 
-            // Event markers
-            ForEach(viewModel.eventAnnotations) { annotation in
-                Annotation(annotation.event.title, coordinate: annotation.coordinate) {
-                    Button {
-                        viewModel.clearSelection()
-                        viewModel.selectedEvent = annotation.event
-                    } label: {
-                        EventMapPin(
-                            category: annotation.event.eventCategory,
-                            isSelected: viewModel.selectedEvent?.id == annotation.event.id
-                        )
+            if viewModel.shouldCluster {
+                // Dense map (>clusterThreshold pins): aggregate into grid
+                // clusters that zoom the user in when tapped.
+                ForEach(viewModel.clusters(for: currentRegion)) { cluster in
+                    Annotation("\(cluster.count) places", coordinate: cluster.coordinate) {
+                        Button {
+                            zoomTo(cluster: cluster)
+                        } label: {
+                            ClusterMapPin(count: cluster.count, tint: cluster.tintColor)
+                        }
+                        .accessibilityLabel("\(cluster.count) places at this location. Tap to zoom in.")
                     }
                 }
-            }
-
-            // Restaurant markers
-            ForEach(viewModel.restaurantAnnotations) { annotation in
-                Annotation(annotation.restaurant.name, coordinate: annotation.coordinate) {
-                    Button {
-                        viewModel.clearSelection()
-                        viewModel.selectedRestaurant = annotation.restaurant
-                    } label: {
-                        RestaurantMapPin(
-                            isSelected: viewModel.selectedRestaurant?.id == annotation.restaurant.id
-                        )
+            } else {
+                // Event markers
+                ForEach(viewModel.eventAnnotations) { annotation in
+                    Annotation(annotation.event.title, coordinate: annotation.coordinate) {
+                        Button {
+                            viewModel.clearSelection()
+                            viewModel.selectedEvent = annotation.event
+                        } label: {
+                            EventMapPin(
+                                category: annotation.event.eventCategory,
+                                isSelected: viewModel.selectedEvent?.id == annotation.event.id
+                            )
+                        }
                     }
                 }
-            }
 
-            // Attraction markers
-            ForEach(viewModel.attractionAnnotations) { annotation in
-                Annotation(annotation.attraction.name, coordinate: annotation.coordinate) {
-                    Button {
-                        viewModel.clearSelection()
-                        viewModel.selectedAttraction = annotation.attraction
-                    } label: {
-                        AttractionMapPin(
-                            type: annotation.attraction.attractionType,
-                            isSelected: viewModel.selectedAttraction?.id == annotation.attraction.id
-                        )
+                // Restaurant markers
+                ForEach(viewModel.restaurantAnnotations) { annotation in
+                    Annotation(annotation.restaurant.name, coordinate: annotation.coordinate) {
+                        Button {
+                            viewModel.clearSelection()
+                            viewModel.selectedRestaurant = annotation.restaurant
+                        } label: {
+                            RestaurantMapPin(
+                                isSelected: viewModel.selectedRestaurant?.id == annotation.restaurant.id
+                            )
+                        }
+                    }
+                }
+
+                // Attraction markers
+                ForEach(viewModel.attractionAnnotations) { annotation in
+                    Annotation(annotation.attraction.name, coordinate: annotation.coordinate) {
+                        Button {
+                            viewModel.clearSelection()
+                            viewModel.selectedAttraction = annotation.attraction
+                        } label: {
+                            AttractionMapPin(
+                                type: annotation.attraction.attractionType,
+                                isSelected: viewModel.selectedAttraction?.id == annotation.attraction.id
+                            )
+                        }
                     }
                 }
             }
@@ -128,6 +147,24 @@ struct EventMapView: View {
             MapUserLocationButton()
             MapCompass()
             MapScaleView()
+        }
+        .onMapCameraChange { context in
+            currentRegion = context.region
+        }
+    }
+
+    /// Zoom into a cluster — halves the visible span so the pins separate out.
+    private func zoomTo(cluster: MapCluster) {
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        let newSpan = MKCoordinateSpan(
+            latitudeDelta: max(currentRegion.span.latitudeDelta / 2.5, 0.005),
+            longitudeDelta: max(currentRegion.span.longitudeDelta / 2.5, 0.005)
+        )
+        withAnimation {
+            viewModel.cameraPosition = .region(MKCoordinateRegion(
+                center: cluster.coordinate,
+                span: newSpan
+            ))
         }
     }
 
@@ -159,10 +196,9 @@ struct EventMapView: View {
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 12))
-            .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .glassBar(cornerRadius: PremiumTokens.cornerMd, material: .ultraThickMaterial, elevation: PremiumTokens.elevation4)
         }
     }
 
@@ -189,8 +225,8 @@ struct EventMapView: View {
             .tint(viewModel.showAttractions ? .green : .gray)
         }
         .font(.caption)
-        .padding(8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .padding(10)
+        .glassBar(cornerRadius: PremiumTokens.cornerMd, material: .ultraThinMaterial, elevation: PremiumTokens.elevation4)
         .padding(.trailing)
     }
 
@@ -229,11 +265,11 @@ struct EventMapView: View {
             Image(systemName: "mappin.circle.fill")
                 .font(.caption)
             Text("\(viewModel.totalPinCount) places")
-                .font(.caption2.weight(.medium))
+                .font(.caption2.weight(.semibold))
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.ultraThinMaterial, in: Capsule())
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .glassChip(cornerRadius: 999, material: .ultraThinMaterial)
     }
 
     // MARK: - Event Popup
@@ -470,6 +506,39 @@ private struct RestaurantMapPin: View {
                 .foregroundStyle(.white)
         }
         .animation(.spring(response: 0.3), value: isSelected)
+    }
+}
+
+private struct ClusterMapPin: View {
+    let count: Int
+    let tint: Color
+
+    private var size: CGFloat {
+        switch count {
+        case ..<10: return 40
+        case ..<50: return 48
+        default: return 56
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(tint.opacity(0.25))
+                .frame(width: size + 14, height: size + 14)
+
+            Circle()
+                .fill(tint)
+                .frame(width: size, height: size)
+                .shadow(color: tint.opacity(0.4), radius: 4)
+
+            Text("\(count)")
+                .font(.system(size: size * 0.38, weight: .bold))
+                .foregroundStyle(.white)
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .padding(4)
+        }
     }
 }
 

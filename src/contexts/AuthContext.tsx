@@ -561,6 +561,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: error.message };
       }
 
+      // Send a transactional security alert to the account email so the
+      // account holder knows their password changed even if their session
+      // is stolen by an attacker. Fire-and-forget.
+      void supabase.functions
+        .invoke('send-security-notification', {
+          body: {
+            event_type: 'password_changed',
+            context: {
+              user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+            },
+          },
+        })
+        .catch((err) => log.warn('updatePassword', 'security alert failed', { error: String(err) }));
+
       return { success: true };
     } catch (error: unknown) {
       log.error('updatePassword', 'Password update exception', { error });

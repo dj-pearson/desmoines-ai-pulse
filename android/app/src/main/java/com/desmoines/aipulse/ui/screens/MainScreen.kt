@@ -1,6 +1,8 @@
 package com.desmoines.aipulse.ui.screens
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
@@ -8,14 +10,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.desmoines.aipulse.ui.theme.LocalBackdropBlurState
+import com.desmoines.aipulse.ui.theme.rememberBackdropBlurScope
+import com.desmoines.aipulse.ui.theme.respondsToBackdropBlur
 import com.desmoines.aipulse.util.rememberHapticPerformer
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -39,12 +53,23 @@ import com.desmoines.aipulse.util.NetworkMonitor
 @Composable
 fun MainScreen(
     networkMonitor: NetworkMonitor,
-    deepLinkHandler: DeepLinkHandler
+    deepLinkHandler: DeepLinkHandler,
+    widthSizeClass: WindowWidthSizeClass = WindowWidthSizeClass.Compact,
 ) {
+    val useNavRail = widthSizeClass != WindowWidthSizeClass.Compact
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val haptic = rememberHapticPerformer()
+
+    // Shared backdrop blur state: any screen presenting a sheet can set
+    // isBlurred = true and the entire nav host below will pick up a
+    // Modifier.glassBackdropBlur on supported devices.
+    val backdropBlur = rememberBackdropBlurScope()
+
+    // Counter that increments when the user re-taps the already-selected tab.
+    // Screens observe this to scroll their lists back to the top.
+    var scrollToTopTrigger by remember { mutableStateOf(0) }
 
     // Observe pending deep link destinations
     val pendingDestination by deepLinkHandler.pendingDestination.collectAsState()
@@ -93,13 +118,34 @@ fun MainScreen(
     val tabRoutes = BottomNavTab.entries.map { it.route }.toSet()
     val showBottomBar = currentDestination?.route in tabRoutes
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        bottomBar = {
+    // Shared tab click handler
+    val onTabClick: (BottomNavTab, Boolean) -> Unit = { tab, isSelected ->
+        if (isSelected) {
+            haptic.light()
+            scrollToTopTrigger++
+        } else {
+            haptic.light()
+            navController.navigate(tab.route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
+
+    CompositionLocalProvider(
+        LocalBackdropBlurState provides backdropBlur,
+    ) {
+    if (useNavRail) {
+        // Tablet / landscape: NavigationRail on the left + content on the right
+        Row(modifier = Modifier.fillMaxSize()) {
             if (showBottomBar) {
-                NavigationBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    contentColor = MaterialTheme.colorScheme.onSurface
+                NavigationRail(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxHeight(),
                 ) {
                     val tabs = BottomNavTab.entries
                     tabs.forEachIndexed { index, tab ->
@@ -107,29 +153,14 @@ fun MainScreen(
                             it.route == tab.route
                         } == true
 
-                        NavigationBarItem(
+                        NavigationRailItem(
                             selected = isSelected,
                             modifier = Modifier.semantics {
                                 contentDescription = "${tab.label}, tab ${index + 1} of ${tabs.size}" +
                                         if (isSelected) ", selected" else ""
                                 selected = isSelected
                             },
-                            onClick = {
-                                if (!isSelected) {
-                                    haptic.light()
-                                    navController.navigate(tab.route) {
-                                        // Pop up to the start destination to avoid building
-                                        // up a large stack of destinations on the back stack
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        // Avoid multiple copies of the same destination
-                                        launchSingleTop = true
-                                        // Restore state when re-selecting a previously selected tab
-                                        restoreState = true
-                                    }
-                                }
-                            },
+                            onClick = { onTabClick(tab, isSelected) },
                             icon = {
                                 Icon(
                                     imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
@@ -142,7 +173,7 @@ fun MainScreen(
                                     style = MaterialTheme.typography.labelSmall
                                 )
                             },
-                            colors = NavigationBarItemDefaults.colors(
+                            colors = NavigationRailItemDefaults.colors(
                                 selectedIconColor = MaterialTheme.colorScheme.primary,
                                 selectedTextColor = MaterialTheme.colorScheme.primary,
                                 unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -153,14 +184,80 @@ fun MainScreen(
                     }
                 }
             }
+            Column(modifier = Modifier.weight(1f)) {
+                OfflineBanner(networkMonitor = networkMonitor)
+                MainNavHost(
+                    navController = navController,
+                    scrollToTopTrigger = scrollToTopTrigger,
+                    useWideLayout = true,
+                    modifier = Modifier
+                        .weight(1f)
+                        .respondsToBackdropBlur()
+                )
+            }
         }
-    ) { innerPadding ->
-        Column(modifier = Modifier.padding(innerPadding)) {
-            OfflineBanner(networkMonitor = networkMonitor)
-            MainNavHost(
-                navController = navController,
-                modifier = Modifier.weight(1f)
-            )
+    } else {
+        // Phone: standard bottom NavigationBar
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            bottomBar = {
+                if (showBottomBar) {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                        tonalElevation = 0.dp,
+                    ) {
+                        val tabs = BottomNavTab.entries
+                        tabs.forEachIndexed { index, tab ->
+                            val isSelected = currentDestination?.hierarchy?.any {
+                                it.route == tab.route
+                            } == true
+
+                            NavigationBarItem(
+                                selected = isSelected,
+                                modifier = Modifier.semantics {
+                                    contentDescription = "${tab.label}, tab ${index + 1} of ${tabs.size}" +
+                                            if (isSelected) ", selected" else ""
+                                    selected = isSelected
+                                },
+                                onClick = { onTabClick(tab, isSelected) },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isSelected) tab.selectedIcon else tab.unselectedIcon,
+                                        contentDescription = tab.label
+                                    )
+                                },
+                                label = {
+                                    Text(
+                                        text = tab.label,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+        ) { innerPadding ->
+            Column(modifier = Modifier.padding(innerPadding)) {
+                OfflineBanner(networkMonitor = networkMonitor)
+                MainNavHost(
+                    navController = navController,
+                    scrollToTopTrigger = scrollToTopTrigger,
+                    useWideLayout = false,
+                    modifier = Modifier
+                        .weight(1f)
+                        .respondsToBackdropBlur()
+                )
+            }
         }
     }
+    } // CompositionLocalProvider
 }

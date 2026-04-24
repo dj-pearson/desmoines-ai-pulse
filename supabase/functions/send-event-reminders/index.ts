@@ -4,6 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { escapeHtml } from "../_shared/escapeHtml.ts";
+import { renderEmail } from "../_shared/emailLayout.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -100,15 +101,7 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
     const subject = `Reminder: ${escapeHtml(reminder.event_title)} ${timeUntil}`;
     const eventUrl = `${SUPABASE_URL.replace('/v1', '')}/events/${createSlug(reminder.event_title)}`;
 
-    const htmlContent = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
-</head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    const bodyHtml = `
   <div style="background: linear-gradient(135deg, #2D1B69 0%, #8B0000 50%, #DC143C 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
     <h1 style="color: white; margin: 0; font-size: 24px;">⏰ Event Reminder</h1>
   </div>
@@ -148,32 +141,43 @@ async function sendReminderEmail(reminder: Reminder, supabase: any) {
     <p style="font-size: 14px; color: #666; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd;">
       Don't miss out! We'll see you there! 🎉
     </p>
-
-    <p style="font-size: 12px; color: #999; margin-top: 20px;">
-      You're receiving this because you set a reminder for this event on Des Moines Insider.
-      <br>
-      <a href="${eventUrl}" style="color: #DC143C;">Manage your event reminders</a>
-    </p>
-  </div>
-</body>
-</html>
     `;
 
-    const textContent = `
-Event Reminder: ${escapeHtml(reminder.event_title)}
+    const bodyText = `
+Event Reminder: ${reminder.event_title}
 
 You have an upcoming event ${timeUntil}!
 
 When: ${eventTime}
-Where: ${escapeHtml(reminder.event_venue || reminder.event_location)}
+Where: ${reminder.event_venue || reminder.event_location}
 
 View event details: ${eventUrl}
 
 Don't miss out! We'll see you there!
-
----
-You're receiving this because you set a reminder for this event on Des Moines Insider.
     `.trim();
+
+    // Look up this recipient's unsubscribe token so the footer renders a
+    // one-click unsubscribe link that complies with CAN-SPAM §5(a)(5).
+    const { data: subscriberRow } = await supabase
+      .from("newsletter_subscribers")
+      .select("unsubscribe_token")
+      .eq("email", reminder.user_email.toLowerCase().trim())
+      .maybeSingle();
+
+    const rendered = renderEmail({
+      bodyHtml,
+      bodyText,
+      // Event reminders are opted-in notifications, but we still render the
+      // full marketing footer so users always have a visible unsubscribe.
+      category: "marketing",
+      recipient: {
+        email: reminder.user_email,
+        unsubscribeToken: subscriberRow?.unsubscribe_token ?? null,
+        preferencesPath: "/profile?tab=settings",
+      },
+    });
+    const htmlContent = rendered.html;
+    const textContent = rendered.text;
 
     // Send email via Resend
     if (!RESEND_API_KEY) {
@@ -192,6 +196,14 @@ You're receiving this because you set a reminder for this event on Des Moines In
         subject,
         html: htmlContent,
         text: textContent,
+        // RFC 8058 one-click unsubscribe headers so Gmail/Apple Mail surface
+        // a native Unsubscribe button above the message.
+        headers: rendered.listUnsubscribe
+          ? {
+              "List-Unsubscribe": rendered.listUnsubscribe,
+              "List-Unsubscribe-Post": rendered.listUnsubscribePost ?? "",
+            }
+          : undefined,
         tags: [
           { name: "type", value: "event_reminder" },
           { name: "reminder_type", value: reminder.reminder_type },

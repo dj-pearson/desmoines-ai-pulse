@@ -117,6 +117,8 @@ struct SearchView: View {
                 .accessibilityAddTraits(viewModel.selectedTab == tab ? .isSelected : [])
             }
         }
+        .padding(6)
+        .glassChip(cornerRadius: PremiumTokens.cornerLg, material: .thinMaterial)
         .padding(.horizontal)
         .padding(.top, 8)
     }
@@ -208,7 +210,7 @@ struct SearchView: View {
                         } label: {
                             EventCardView(event: event)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                     }
 
@@ -219,7 +221,7 @@ struct SearchView: View {
                         } label: {
                             RestaurantCardView(restaurant: restaurant)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                     }
 
@@ -230,7 +232,7 @@ struct SearchView: View {
                         } label: {
                             AttractionCardView(attraction: attraction)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.pressableCard)
                         .entranceAnimation(index: index)
                     }
                 }

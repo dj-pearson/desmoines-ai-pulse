@@ -1,6 +1,13 @@
 package com.desmoines.aipulse.ui.navigation
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideIntoContainer
+import androidx.compose.animation.slideOutOfContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -13,6 +20,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.desmoines.aipulse.ui.theme.PremiumMotion
 import com.desmoines.aipulse.data.model.SubscriptionTier
 import com.desmoines.aipulse.ui.screens.auth.AuthScreen
 import com.desmoines.aipulse.ui.screens.eventdetail.EventDetailScreen
@@ -49,15 +57,56 @@ import com.desmoines.aipulse.data.remote.BillingService
 @Composable
 fun MainNavHost(
     navController: NavHostController,
+    scrollToTopTrigger: Int = 0,
+    useWideLayout: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     NavHost(
         navController = navController,
         startDestination = Route.Home.route,
-        modifier = modifier
+        modifier = modifier,
+        // Glassy slide+fade between destinations gives the app a continuous,
+        // cinematic feel instead of stock instant swaps. Tab swaps fade only
+        // (no slide) since they're not "deeper" navigation.
+        enterTransition = {
+            val isTabSwap = isTabRoute(initialState.destination.route) &&
+                isTabRoute(targetState.destination.route)
+            if (isTabSwap) {
+                fadeIn(animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs))
+            } else {
+                slideIntoContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs)
+                ) + fadeIn(animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs))
+            }
+        },
+        exitTransition = {
+            val isTabSwap = isTabRoute(initialState.destination.route) &&
+                isTabRoute(targetState.destination.route)
+            if (isTabSwap) {
+                fadeOut(animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs))
+            } else {
+                slideOutOfContainer(
+                    towards = AnimatedContentTransitionScope.SlideDirection.Start,
+                    animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs)
+                ) + fadeOut(animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs))
+            }
+        },
+        popEnterTransition = {
+            slideIntoContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs)
+            ) + fadeIn(animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs))
+        },
+        popExitTransition = {
+            slideOutOfContainer(
+                towards = AnimatedContentTransitionScope.SlideDirection.End,
+                animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs)
+            ) + fadeOut(animationSpec = tween(durationMillis = PremiumMotion.SmoothDurationMs))
+        },
     ) {
         // Tab destinations
-        addTabDestinations(navController)
+        addTabDestinations(navController, scrollToTopTrigger, useWideLayout)
 
         // Detail destinations
         addDetailDestinations(navController)
@@ -67,7 +116,21 @@ fun MainNavHost(
     }
 }
 
-private fun NavGraphBuilder.addTabDestinations(navController: NavHostController) {
+private fun isTabRoute(route: String?): Boolean {
+    if (route == null) return false
+    return route == Route.Home.route ||
+        route == Route.Dining.route ||
+        route == Route.Search.route ||
+        route == Route.Map.route ||
+        route == Route.Saved.route ||
+        route == Route.Profile.route
+}
+
+private fun NavGraphBuilder.addTabDestinations(
+    navController: NavHostController,
+    scrollToTopTrigger: Int,
+    useWideLayout: Boolean,
+) {
     composable(Route.Home.route) {
         val viewModel: EventsViewModel = hiltViewModel()
         val state by viewModel.uiState.collectAsState()
@@ -85,6 +148,8 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
 
         HomeScreen(
             state = state,
+            scrollToTopTrigger = scrollToTopTrigger,
+            useWideLayout = useWideLayout,
             onNavigateToEventDetail = { id ->
                 navController.navigate(Route.EventDetail.createRoute(id))
             },
@@ -102,6 +167,11 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             onLoadMore = { viewModel.loadMoreIfNeeded(state.events.size - 1) },
             onFavoriteClick = null, // Favorites implemented in AND-024
         )
+
+        // Dismiss filter sheet on system back press before navigating away
+        BackHandler(enabled = showFilterSheet) {
+            showFilterSheet = false
+        }
 
         if (showFilterSheet) {
             FilterSheet(
@@ -153,6 +223,11 @@ private fun NavGraphBuilder.addTabDestinations(navController: NavHostController)
             onLoadMore = { viewModel.loadMoreIfNeeded(state.restaurants.size - 1) },
             onFavoriteClick = null, // Favorites wired in AND-024
         )
+
+        // Dismiss filter sheet on system back press before navigating away
+        BackHandler(enabled = showFilterSheet) {
+            showFilterSheet = false
+        }
 
         if (showFilterSheet) {
             RestaurantFilterSheet(
