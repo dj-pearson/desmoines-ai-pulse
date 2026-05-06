@@ -135,43 +135,34 @@ struct DiscoverView: View {
 
     @ViewBuilder
     private var deckArea: some View {
-        GeometryReader { proxy in
-            // Compute a card size that always fits inside the deck area.
-            // Aspect (w/h) ~= 0.72 gives a portrait card; we honor whichever
-            // axis is the binding constraint and cap width on iPad.
-            let aspect: CGFloat = 0.72
-            let maxCardWidth: CGFloat = 420
-            let availableW = max(0, proxy.size.width - 24)
-            let availableH = max(0, proxy.size.height - 24)
-            let widthFromHeight = availableH * aspect
-            let cardWidth = min(min(availableW, widthFromHeight), maxCardWidth)
-            let cardHeight = cardWidth / aspect
-
-            ZStack {
-                if viewModel.isLoading && viewModel.deck.isEmpty {
-                    ProgressView().scaleEffect(1.4)
-                } else if viewModel.deck.isEmpty {
-                    emptyState
-                } else {
-                    SwipeCardStack(
-                        items: viewModel.deck,
-                        onLike: { viewModel.like($0) },
-                        onSkip: { viewModel.skip($0) },
-                        onBoost: { viewModel.boost($0) },
-                        onTap: { item in
-                            viewModel.recordDetailTap(item)
-                            switch item {
-                            case .event(let e): navigationPath.append(e)
-                            case .restaurant(let r): navigationPath.append(r)
-                            }
+        ZStack {
+            if viewModel.isLoading && viewModel.deck.isEmpty {
+                ProgressView().scaleEffect(1.4)
+            } else if viewModel.deck.isEmpty {
+                emptyState
+            } else {
+                SwipeCardStack(
+                    items: viewModel.deck,
+                    onLike: { viewModel.like($0) },
+                    onSkip: { viewModel.skip($0) },
+                    onBoost: { viewModel.boost($0) },
+                    onTap: { item in
+                        viewModel.recordDetailTap(item)
+                        switch item {
+                        case .event(let e): navigationPath.append(e)
+                        case .restaurant(let r): navigationPath.append(r)
                         }
-                    )
-                    .id(stackId)
-                    .frame(width: cardWidth, height: cardHeight)
-                }
+                    }
+                )
+                .id(stackId)
+                // Cap width on iPad / large devices so the deck stays a
+                // playing-card shape, and let SwipeCardStack's internal
+                // GeometryReader do the per-card sizing.
+                .frame(maxWidth: 420)
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 16)
         .padding(.vertical, 12)
     }
 

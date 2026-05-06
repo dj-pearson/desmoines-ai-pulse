@@ -19,30 +19,41 @@ struct SwipeCardStack: View {
         items.prefix(3)
     }
 
+    /// Vertical room reserved below cards for the behind-card stack peek
+    /// (.offset(y: +28) is visual-only and doesn't push layout, so without
+    /// this buffer the back card bleeds into the action bar).
+    private static let backCardPeekRoom: CGFloat = 32
+
     var body: some View {
-        ZStack {
-            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                SwipeCard(
-                    item: item,
-                    dragOffset: index == 0 ? dragOffset : .zero,
-                    isTopCard: index == 0
-                )
-                .scaleEffect(scale(for: index))
-                .offset(y: stackYOffset(for: index))
-                .offset(index == 0 ? dragOffset : .zero)
-                .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
-                .zIndex(Double(visibleItems.count - index))
-                .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
-                .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
-                .onTapGesture { if index == 0 { onTap(item) } }
-                .allowsHitTesting(index == 0 && !isDismissing)
+        // Own the layout: cards get an explicit (width, height) so their size
+        // is identical across modes (Tonight / Events / Dining) and devices,
+        // mirroring how FeaturedEventCard / CompactRestaurantCard use fixed
+        // .frame(width:height:) on the home tab.
+        GeometryReader { proxy in
+            let cardWidth = proxy.size.width
+            let cardHeight = max(0, proxy.size.height - Self.backCardPeekRoom)
+
+            ZStack {
+                ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                    SwipeCard(
+                        item: item,
+                        dragOffset: index == 0 ? dragOffset : .zero,
+                        isTopCard: index == 0
+                    )
+                    .frame(width: cardWidth, height: cardHeight)
+                    .scaleEffect(scale(for: index))
+                    .offset(y: stackYOffset(for: index))
+                    .offset(index == 0 ? dragOffset : .zero)
+                    .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
+                    .zIndex(Double(visibleItems.count - index))
+                    .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
+                    .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
+                    .onTapGesture { if index == 0 { onTap(item) } }
+                    .allowsHitTesting(index == 0 && !isDismissing)
+                }
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
         }
-        .padding(.horizontal, 12)
-        // Behind-card .offset(y:) up to +28pt visually peeks past the ZStack
-        // bounds without affecting layout. Reserve room so the back card
-        // doesn't bleed into the action bar.
-        .padding(.bottom, 18)
     }
 
     // MARK: - Stack geometry
