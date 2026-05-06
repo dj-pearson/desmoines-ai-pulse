@@ -6,7 +6,13 @@ import {
   extractImageFromHtml,
   CONTENT_TYPE_MAP,
 } from "../_shared/imageStorage.ts";
-import { requireApiKey } from "../_shared/apiKeyAuth.ts";
+import { requireAdminOrApiKey } from "../_shared/apiKeyAuth.ts";
+import {
+  findExistingVenueRecord,
+  scrapeImageFromWebsite,
+  getGooglePlacesPhoto,
+  getCategoryDefaultImage,
+} from "../_shared/imageFallbacks.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,6 +34,14 @@ interface BackfillRequest {
   dryRun?: boolean;
 }
 
+type ImageSource =
+  | "source_url"
+  | "venue_existing"
+  | "venue_website"
+  | "google_places"
+  | "category_default"
+  | "none";
+
 interface BackfillResult {
   category: Category;
   offset: number;
@@ -45,6 +59,7 @@ interface BackfillResult {
     sourceUrl: string | null;
     imageUrl: string | null;
     status: "updated" | "skipped" | "failed" | "dry_run";
+    source?: ImageSource;
     reason?: string;
   }>;
 }
@@ -72,6 +87,15 @@ const URL_COL: Record<Category, string> = {
   restaurants: "website",
   attractions: "website",
   playgrounds: "source_url",
+};
+
+// Per-category SELECT lists. Includes coords + venue/category for events so
+// the fallback chain can hit Google Places without a second query.
+const SELECT_COLS: Record<Category, string> = {
+  events: "id, title, source_url, image_url, venue, category, latitude, longitude",
+  restaurants: "id, name, website, image_url, latitude, longitude",
+  attractions: "id, name, website, image_url, latitude, longitude",
+  playgrounds: "id, name, image_url, latitude, longitude",
 };
 
 // ─── Image extraction from a page URL ────────────────────────────────────────
@@ -125,8 +149,8 @@ Deno.serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Require API key for this data-processing endpoint
-  const authError = requireApiKey(req, corsHeaders);
+  // Accept either the cron API key OR an admin user JWT (admin UI)
+  const authError = await requireAdminOrApiKey(req, corsHeaders);
   if (authError) return authError;
 
   if (req.method !== "POST") {
@@ -160,7 +184,7 @@ Deno.serve(async (req) => {
     // hosted on Supabase Storage (i.e., external URLs that need migrating).
     const { data: records, error: fetchError } = await supabase
       .from(table)
-      .select(`id, ${namecol}, ${urlCol}, image_url`)
+      .select(SELECT_COLS[category])
       .or(`image_url.is.null,image_url.not.ilike.${supabaseStorageBase}%`)
       .range(offset, offset + batchSize - 1)
       .order("created_at", { ascending: true });
@@ -221,6 +245,12 @@ Deno.serve(async (req) => {
       const id: string = record.id;
       const name: string = record[namecol] ?? id;
       const pageUrl: string | null = record[urlCol] ?? null;
+      const venueName: string | null = record.venue ?? null;
+      const recordCategory: string | null = record.category ?? null;
+      const lat: number | null = record.latitude ?? null;
+      const lng: number | null = record.longitude ?? null;
+      // For Places lookup: events use venue, other categories use the row's own name
+      const lookupName = venueName || (category === "events" ? name : name);
 
       if (dryRun) {
         result.details.push({
@@ -229,28 +259,55 @@ Deno.serve(async (req) => {
           sourceUrl: pageUrl,
           imageUrl: null,
           status: "dry_run",
-          reason: pageUrl ? "Would scrape and store" : "No source URL available",
+          reason: `Would try: source_url${venueName ? ", venue lookup" : ""}, Places, default`,
         });
         continue;
       }
 
-      if (!pageUrl) {
-        result.skipped++;
-        result.details.push({
-          id,
-          name,
-          sourceUrl: null,
-          imageUrl: null,
-          status: "skipped",
-          reason: `No ${urlCol} to scrape`,
-        });
-        continue;
+      console.log(`🔍 Processing [${category}] "${name}" — ${pageUrl ?? "no source_url"}`);
+
+      // ── Fallback chain ──────────────────────────────────────────────────
+      let rawImageUrl: string | null = null;
+      let source: ImageSource = "none";
+
+      // 1) source_url scrape (primary)
+      if (pageUrl) {
+        rawImageUrl = await scrapeImageUrl(pageUrl);
+        if (rawImageUrl) source = "source_url";
       }
 
-      console.log(`🔍 Processing [${category}] "${name}" — ${pageUrl}`);
+      // 2) Look up venue/business in our DB by name
+      if (!rawImageUrl && lookupName) {
+        const venueRecord = await findExistingVenueRecord(supabase, lookupName);
+        if (venueRecord?.imageUrl) {
+          rawImageUrl = venueRecord.imageUrl;
+          source = "venue_existing";
+        } else if (venueRecord?.website) {
+          const fromWebsite = await scrapeImageFromWebsite(venueRecord.website);
+          if (fromWebsite) {
+            rawImageUrl = fromWebsite;
+            source = "venue_website";
+          }
+        }
+      }
 
-      // Step 1: scrape the source page for an image URL
-      const rawImageUrl = await scrapeImageUrl(pageUrl);
+      // 3) Google Places photo by venue/business name
+      if (!rawImageUrl && lookupName) {
+        const placesPhoto = await getGooglePlacesPhoto(lookupName, lat, lng);
+        if (placesPhoto) {
+          rawImageUrl = placesPhoto;
+          source = "google_places";
+        }
+      }
+
+      // 4) Category default
+      if (!rawImageUrl) {
+        const defaultUrl = getCategoryDefaultImage(category, recordCategory);
+        if (defaultUrl) {
+          rawImageUrl = defaultUrl;
+          source = "category_default";
+        }
+      }
 
       if (!rawImageUrl) {
         result.failed++;
@@ -260,12 +317,15 @@ Deno.serve(async (req) => {
           sourceUrl: pageUrl,
           imageUrl: null,
           status: "failed",
-          reason: "No image found on source page",
+          source: "none",
+          reason: pageUrl
+            ? "No image from source, venue lookup, Places, or default"
+            : "No source_url, and venue/Places/default all empty",
         });
         continue;
       }
 
-      // Step 2: download and store in Supabase Storage
+      // Download and store in Supabase Storage
       const cdnUrl = await fetchAndStoreImage(supabase, rawImageUrl, category, id);
 
       if (!cdnUrl) {
@@ -276,12 +336,13 @@ Deno.serve(async (req) => {
           sourceUrl: pageUrl,
           imageUrl: rawImageUrl,
           status: "failed",
+          source,
           reason: "Image download or storage upload failed",
         });
         continue;
       }
 
-      // Step 3: update the record
+      // Update the record
       const { error: updateError } = await supabase
         .from(table)
         .update({ image_url: cdnUrl, updated_at: new Date().toISOString() })
@@ -295,6 +356,7 @@ Deno.serve(async (req) => {
           sourceUrl: pageUrl,
           imageUrl: cdnUrl,
           status: "failed",
+          source,
           reason: `DB update failed: ${updateError.message}`,
         });
         continue;
@@ -307,6 +369,7 @@ Deno.serve(async (req) => {
         sourceUrl: pageUrl,
         imageUrl: cdnUrl,
         status: "updated",
+        source,
       });
     }
 

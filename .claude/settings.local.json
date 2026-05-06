@@ -60,7 +60,9 @@
       "Bash(infisical:*)",
       "Bash(./gradlew.bat clean:*)",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\pears\\\\Documents\\\\Des-Moines-Pulse\\\\desmoines-ai-pulse\\\\ios\" -Recurse -Directory)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "PowerShell(npm run *)",
+      "PowerShell(npx eslint src/components/admin/ImageBackfill.tsx 2>&1 | Select-Object -Last 20)"
     ],
     "deny": [],
     "ask": []

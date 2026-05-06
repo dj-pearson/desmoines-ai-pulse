@@ -28,14 +28,32 @@ const log = createLogger('ImageBackfill');
 
 type Category = 'events' | 'restaurants' | 'attractions' | 'playgrounds';
 
+type ImageSource =
+  | 'source_url'
+  | 'venue_existing'
+  | 'venue_website'
+  | 'google_places'
+  | 'category_default'
+  | 'none';
+
 interface BatchDetail {
   id: string;
   name: string;
   sourceUrl?: string;
   imageUrl?: string;
   status: 'updated' | 'skipped' | 'failed' | 'dry_run';
+  source?: ImageSource;
   reason?: string;
 }
+
+const SOURCE_LABELS: Record<ImageSource, string> = {
+  source_url: 'source',
+  venue_existing: 'venue (DB)',
+  venue_website: 'venue site',
+  google_places: 'Places',
+  category_default: 'default',
+  none: '—',
+};
 
 interface BatchResult {
   category: string;
@@ -330,6 +348,9 @@ export default function ImageBackfill() {
               {allDetails.map((detail, i) => (
                 <div key={`${detail.id}-${i}`} className="flex items-center gap-2 text-sm py-1 border-b last:border-0">
                   <StatusBadge status={detail.status} />
+                  {detail.source && detail.source !== 'none' && (
+                    <Badge variant="outline" className="text-xs">{SOURCE_LABELS[detail.source]}</Badge>
+                  )}
                   <span className="font-medium truncate max-w-[200px]">{detail.name || detail.id}</span>
                   {detail.imageUrl && (
                     <a

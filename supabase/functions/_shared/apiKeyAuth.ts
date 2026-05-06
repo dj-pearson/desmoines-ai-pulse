@@ -6,7 +6,13 @@
  *
  * The API key is stored as a Supabase secret (EDGE_FUNCTION_API_KEY)
  * and must be passed in the X-API-Key header or Authorization header.
+ *
+ * For functions triggered from the admin UI, prefer requireAdminOrApiKey,
+ * which also accepts a valid admin user JWT — so the browser doesn't
+ * need to ship the shared API key.
  */
+
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 export interface ApiKeyAuthResult {
   success: boolean;
@@ -76,6 +82,73 @@ export function requireApiKey(req: Request, corsHeaders: Record<string, string>)
   }
 
   return null; // Auth passed, continue processing
+}
+
+/**
+ * Validate that the request carries either a valid EDGE_FUNCTION_API_KEY
+ * (cron / automation) or a valid Supabase user JWT belonging to a profile
+ * with role='admin' (admin UI). On failure returns a 401/403 Response;
+ * on success returns null and the caller continues.
+ */
+export async function requireAdminOrApiKey(
+  req: Request,
+  corsHeaders: Record<string, string>,
+): Promise<Response | null> {
+  // 1) Try API key first — both X-API-Key and Authorization: Bearer <key>
+  const expectedKey = Deno.env.get('EDGE_FUNCTION_API_KEY');
+  const apiKeyHeader = req.headers.get('X-API-Key') || req.headers.get('x-api-key');
+  if (expectedKey && apiKeyHeader && timingSafeEqual(apiKeyHeader, expectedKey)) {
+    return null;
+  }
+
+  const authHeader = req.headers.get('Authorization') || '';
+  const [scheme, token] = authHeader.split(' ');
+  const bearer = scheme?.toLowerCase() === 'bearer' ? token : '';
+
+  if (expectedKey && bearer && timingSafeEqual(bearer, expectedKey)) {
+    return null;
+  }
+
+  // 2) Otherwise try treating the bearer as a user JWT and checking admin role.
+  if (!bearer) {
+    return new Response(
+      JSON.stringify({ error: 'Missing Authorization bearer token' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!supabaseUrl || !serviceKey) {
+    return new Response(
+      JSON.stringify({ error: 'Server is not configured for JWT verification' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey);
+  const { data: userRes, error: userErr } = await supabase.auth.getUser(bearer);
+  if (userErr || !userRes?.user) {
+    return new Response(
+      JSON.stringify({ error: 'Invalid or expired token' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userRes.user.id)
+    .maybeSingle();
+
+  if (profile?.role !== 'admin') {
+    return new Response(
+      JSON.stringify({ error: 'Admin role required' }),
+      { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+    );
+  }
+
+  return null;
 }
 
 /**

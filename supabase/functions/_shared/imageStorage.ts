@@ -33,9 +33,17 @@ export const CONTENT_TYPE_MAP: Record<string, string> = {
 
 /**
  * Extract the best image URL from raw HTML.
- * Priority: og:image → twitter:image → first prominent <img>
+ * Priority: schema.org JSON-LD → og:image → twitter:image → link rel="image_src" → first prominent <img>
  */
 export function extractImageFromHtml(html: string, pageUrl: string): string | null {
+  // schema.org JSON-LD (Event/Restaurant/Place often have reliable image fields
+  // even when meta tags are missing or generic)
+  const jsonLdImage = extractJsonLdImage(html);
+  if (jsonLdImage) {
+    const resolved = resolveUrl(jsonLdImage, pageUrl);
+    if (resolved) return resolved;
+  }
+
   // og:image
   const ogMatch = html.match(
     /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i
@@ -51,6 +59,14 @@ export function extractImageFromHtml(html: string, pageUrl: string): string | nu
     /<meta[^>]+content=["']([^"']+)["'][^>]+(?:name|property)=["']twitter:image["']/i
   );
   if (twitterMatch?.[1]) return resolveUrl(twitterMatch[1], pageUrl);
+
+  // <link rel="image_src" href="...">
+  const linkMatch = html.match(
+    /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i
+  ) || html.match(
+    /<link[^>]+href=["']([^"']+)["'][^>]+rel=["']image_src["']/i
+  );
+  if (linkMatch?.[1]) return resolveUrl(linkMatch[1], pageUrl);
 
   // First <img> with a decent src (skip data URIs, tracking pixels, tiny icons)
   const imgMatches = html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*>/gi);
@@ -80,6 +96,94 @@ export function extractImageFromHtml(html: string, pageUrl: string): string | nu
   }
 
   return null;
+}
+
+/**
+ * Pull an image URL out of any schema.org JSON-LD block in the HTML.
+ * Handles the common shapes:
+ *   "image": "https://..."
+ *   "image": ["https://...", "https://..."]
+ *   "image": { "@type": "ImageObject", "url": "https://..." }
+ *   "image": { "@type": "ImageObject", "contentUrl": "https://..." }
+ *   wrapped in @graph arrays
+ * Prefers Event > Restaurant > Place > LocalBusiness > anything else.
+ */
+function extractJsonLdImage(html: string): string | null {
+  const blocks = html.matchAll(
+    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi
+  );
+
+  const candidates: Array<{ priority: number; url: string }> = [];
+  const PREF: Record<string, number> = {
+    Event: 0,
+    MusicEvent: 0,
+    SportsEvent: 0,
+    BusinessEvent: 0,
+    SocialEvent: 0,
+    TheaterEvent: 0,
+    Festival: 0,
+    Restaurant: 1,
+    FoodEstablishment: 1,
+    LocalBusiness: 2,
+    Place: 3,
+    TouristAttraction: 3,
+  };
+
+  for (const block of blocks) {
+    const raw = block[1]?.trim();
+    if (!raw) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Some sites embed multiple objects or trailing commas — give up on this block
+      continue;
+    }
+    walkForImages(parsed, candidates, PREF);
+  }
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => a.priority - b.priority);
+  return candidates[0].url;
+}
+
+function walkForImages(
+  node: unknown,
+  out: Array<{ priority: number; url: string }>,
+  pref: Record<string, number>,
+  inheritedPriority = 999,
+): void {
+  if (!node) return;
+  if (Array.isArray(node)) {
+    for (const item of node) walkForImages(item, out, pref, inheritedPriority);
+    return;
+  }
+  if (typeof node !== 'object') return;
+
+  const obj = node as Record<string, unknown>;
+  const type = typeof obj['@type'] === 'string' ? (obj['@type'] as string) : '';
+  const priority = type in pref ? pref[type] : inheritedPriority;
+
+  const img = obj['image'];
+  if (typeof img === 'string') {
+    out.push({ priority, url: img });
+  } else if (Array.isArray(img)) {
+    for (const entry of img) {
+      if (typeof entry === 'string') out.push({ priority, url: entry });
+      else if (entry && typeof entry === 'object') {
+        const url = (entry as Record<string, unknown>).url ?? (entry as Record<string, unknown>).contentUrl;
+        if (typeof url === 'string') out.push({ priority, url });
+      }
+    }
+  } else if (img && typeof img === 'object') {
+    const url = (img as Record<string, unknown>).url ?? (img as Record<string, unknown>).contentUrl;
+    if (typeof url === 'string') out.push({ priority, url });
+  }
+
+  // Recurse into common nested fields where Events list location/organizer/photo
+  for (const key of ['@graph', 'mainEntity', 'mainEntityOfPage', 'location', 'organizer', 'photo', 'subEvent', 'subEvents', 'workExample', 'itemListElement']) {
+    if (key in obj) walkForImages(obj[key], out, pref, priority);
+  }
 }
 
 function resolveUrl(src: string, pageUrl: string): string | null {
