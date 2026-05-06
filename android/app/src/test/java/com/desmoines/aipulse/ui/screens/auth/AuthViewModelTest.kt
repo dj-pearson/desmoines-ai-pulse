@@ -1,5 +1,6 @@
 package com.desmoines.aipulse.ui.screens.auth
 
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.ui.screens.auth.AuthViewModel.PasswordStrength
 import com.desmoines.aipulse.util.BiometricAuthService
@@ -30,6 +31,7 @@ class AuthViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var authRepository: AuthRepository
     private lateinit var biometricAuthService: BiometricAuthService
+    private lateinit var billingService: BillingService
     private lateinit var viewModel: AuthViewModel
 
     @BeforeEach
@@ -37,8 +39,9 @@ class AuthViewModelTest {
         Dispatchers.setMain(testDispatcher)
         authRepository = mockk(relaxed = true)
         biometricAuthService = mockk(relaxed = true)
+        billingService = mockk(relaxed = true)
         every { authRepository.sessionStatus } returns emptyFlow()
-        viewModel = AuthViewModel(authRepository, biometricAuthService)
+        viewModel = AuthViewModel(authRepository, biometricAuthService, billingService)
     }
 
     @AfterEach

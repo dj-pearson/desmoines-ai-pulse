@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.desmoines.aipulse.data.model.UserProfile
 import com.desmoines.aipulse.data.model.UserRole
+import com.desmoines.aipulse.data.remote.BillingService
 import com.desmoines.aipulse.data.repository.AuthRepository
 import com.desmoines.aipulse.util.AuthErrorMapper
 import com.desmoines.aipulse.util.BiometricAuthService
@@ -29,6 +30,7 @@ private const val TAG = "AuthViewModel"
 class AuthViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val biometricAuthService: BiometricAuthService,
+    private val billingService: BillingService,
 ) : ViewModel() {
 
     // MARK: - Auth State
@@ -101,6 +103,11 @@ class AuthViewModel @Inject constructor(
                         if (userId != null) {
                             fetchProfileAndCheckAdmin(userId)
                         }
+                        // Re-resolve the backend tier so a fresh sign-in (or
+                        // a sign-in to a different account in the same
+                        // session) immediately reflects the new account's
+                        // entitlements.
+                        billingService.refreshBackendTier()
                         _isLoading.value = false
                     }
                     is SessionStatus.NotAuthenticated -> {
@@ -108,6 +115,10 @@ class AuthViewModel @Inject constructor(
                         _currentProfile.value = null
                         _isAuthenticated.value = false
                         _isAdmin.value = false
+                        // Drop the cached backend tier so the next account
+                        // never briefly inherits the previous account's
+                        // entitlement.
+                        billingService.clearBackendTier()
                         _isLoading.value = false
                     }
                     is SessionStatus.Initializing -> {

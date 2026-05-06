@@ -51,6 +51,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { usePayments } from "@/hooks/usePayments";
 import { useSubscription } from "@/hooks/useSubscription";
+import { SubscriptionPlatformBreakdown } from "@/components/SubscriptionPlatformBreakdown";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
@@ -219,6 +220,8 @@ export default function SubscriptionPortal() {
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-6">
+            {/* Per-platform breakdown — only renders when 2+ active rows */}
+            <SubscriptionPlatformBreakdown />
             {/* Current Plan Card */}
             <Card
               className={

@@ -58,6 +58,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.desmoines.aipulse.data.model.SubscriptionTier
+import com.desmoines.aipulse.data.remote.BillingService.CrossPlatformOrigin
+import com.desmoines.aipulse.data.remote.BillingService.CrossPlatformSubscription
 import com.desmoines.aipulse.ui.components.BrandGhostButton
 import com.desmoines.aipulse.ui.components.BrandPrimaryButton
 
@@ -81,6 +83,7 @@ fun SubscriptionScreen(
     onNavigateBack: () -> Unit,
     onNavigateToTerms: () -> Unit,
     onNavigateToPrivacy: () -> Unit,
+    crossPlatformSubscriptions: List<CrossPlatformSubscription> = emptyList(),
 ) {
     Scaffold(
         topBar = {
@@ -133,6 +136,16 @@ fun SubscriptionScreen(
 
             // Current tier badge
             CurrentTierBadge(tier = currentTier)
+
+            // Cross-platform subscription banner — surfaces other-platform
+            // active subs (web/Stripe, iOS/StoreKit) so users know where to
+            // manage / cancel them. Per Play policy we don't link to external
+            // paid flows from inside the billing screen, so this is
+            // informational copy only.
+            if (crossPlatformSubscriptions.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                CrossPlatformSubscriptionsBanner(crossPlatformSubscriptions)
+            }
 
             Spacer(Modifier.height(24.dp))
 
@@ -401,6 +414,32 @@ private fun FeatureRow(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun CrossPlatformSubscriptionsBanner(subs: List<CrossPlatformSubscription>) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            subs.forEach { sub ->
+                val (whereLabel, tierLabel) = when (sub.origin) {
+                    CrossPlatformOrigin.WEB -> "via the website" to sub.tier.name.lowercase()
+                        .replaceFirstChar { it.titlecase() }
+                    CrossPlatformOrigin.IOS -> "on the App Store" to sub.tier.name.lowercase()
+                        .replaceFirstChar { it.titlecase() }
+                }
+                Text(
+                    text = "You also have an active $tierLabel subscription $whereLabel. Manage or cancel it from where you bought it.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
 

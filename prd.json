@@ -1038,7 +1038,7 @@
         "Manual QA: sign out of account A, sign in to account B, confirm tier reflects account B before any purchase/restore action"
       ],
       "priority": 65,
-      "passes": false
+      "passes": true
     },
     {
       "id": "SUB-SYNC-009",
@@ -1101,7 +1101,7 @@
         "useSubscription returns all active rows (not just the winning one) via a new subscriptions array, while preserving the existing single-row subscription accessor for back-compat"
       ],
       "priority": 69,
-      "passes": false
+      "passes": true
     },
     {
       "id": "SUB-SYNC-013",
