@@ -98,9 +98,10 @@ struct SwipeCard: View {
                         alignment: .top, rotation: 0, opacity: boostFraction)
             }
         }
-        // Size is owned by SwipeCardStack via .frame(width:height:) — no
-        // greedy maxWidth/maxHeight here, otherwise the card stretches to
-        // fill ancestors and overflows the deck area.
+        // Fill the exact frame proposed by SwipeCardStack (.frame(width:height:)).
+        // Without this the ZStack sizes to its largest child (the image) and
+        // overflows — clipped() clips the render but doesn't fix layout size.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
         .background(Color(.systemGray5))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
