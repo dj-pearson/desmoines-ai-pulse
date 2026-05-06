@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { getRestaurantRotationSeed } from "@/lib/restaurantRotation";
 
 type Restaurant = Database["public"]["Tables"]["restaurants"]["Row"];
 type RestaurantInsert = Database["public"]["Tables"]["restaurants"]["Insert"];
@@ -45,6 +46,82 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
   const fetchRestaurants = useCallback(async () => {
     try {
       setState((prev) => ({ ...prev, isLoading: true, error: null }));
+
+      // Default popularity sort goes through the rotation RPC so the top of
+      // the list isn't the same every visit. Other sorts (rating, newest, A-Z,
+      // price) stay deterministic — users picked them explicitly.
+      // Dietary filtering still runs via the regular query path because the
+      // RPC doesn't model the description/cuisine ILIKE fan-out.
+      const sortBy = filters.sortBy || "popularity";
+      const useRotationRpc =
+        sortBy === "popularity" &&
+        (!filters.dietary || filters.dietary.length === 0);
+
+      if (useRotationRpc) {
+        const limit = filters.limit ?? 1000;
+        const offset = filters.offset ?? 0;
+        // Cast: get_rotated_restaurants is added in a new migration and is
+        // not yet in the generated Database types.
+        const { data: rpcData, error: rpcError } = await (
+          supabase.rpc as unknown as (
+            fn: string,
+            args: Record<string, unknown>
+          ) => Promise<{
+            data:
+              | Array<{
+                  restaurant_data: Restaurant;
+                  total_count: number | string;
+                }>
+              | null;
+            error: { message: string } | null;
+          }>
+        )("get_rotated_restaurants", {
+          rotation_seed: getRestaurantRotationSeed(),
+          search_query: filters.search || null,
+          cuisine_filter:
+            filters.cuisine && filters.cuisine.length > 0
+              ? filters.cuisine
+              : null,
+          price_filter:
+            filters.priceRange && filters.priceRange.length > 0
+              ? filters.priceRange
+              : null,
+          location_filter:
+            filters.location && filters.location.length > 0
+              ? filters.location
+              : null,
+          min_rating:
+            filters.rating && filters.rating.length === 2
+              ? filters.rating[0]
+              : null,
+          max_rating:
+            filters.rating && filters.rating.length === 2
+              ? filters.rating[1]
+              : null,
+          featured_only: !!filters.featuredOnly,
+          limit_count: limit,
+          offset_count: offset,
+        });
+
+        if (!rpcError && rpcData) {
+          setState({
+            restaurants: rpcData.map((r) => r.restaurant_data),
+            isLoading: false,
+            error: null,
+            totalCount:
+              rpcData.length > 0 ? Number(rpcData[0].total_count) : 0,
+          });
+          return;
+        }
+        // Fall through to the legacy query path on RPC error so the page
+        // still renders if the migration hasn't been applied yet.
+        if (rpcError) {
+          console.warn(
+            "useRestaurants: rotation RPC failed, falling back to direct query",
+            rpcError
+          );
+        }
+      }
 
       let query = supabase.from("restaurants").select("*", { count: "exact" });
 

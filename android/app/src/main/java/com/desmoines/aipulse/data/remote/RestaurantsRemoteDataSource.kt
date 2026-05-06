@@ -60,8 +60,20 @@ class RestaurantsRemoteDataSource @Inject constructor(
     /**
      * Fetch restaurants with filtering, full-text search, sorting, and pagination.
      * Matches iOS fetchRestaurants(query:) exactly.
+     *
+     * The default popularity sort is routed through `get_rotated_restaurants`
+     * so the same ~20 restaurants don't always appear at the top of the list.
+     * Other sorts stay deterministic — the user picked them explicitly.
      */
     suspend fun fetchRestaurants(query: RestaurantsQuery = RestaurantsQuery()): RestaurantsResponse {
+        if (query.sortBy == RestaurantSortOption.POPULARITY) {
+            try {
+                return fetchRestaurantsRotated(query)
+            } catch (e: Exception) {
+                Log.w(TAG, "Rotated RPC failed, falling back to direct query: ${e.message}")
+            }
+        }
+
         val client = db()
 
         val result = client.from("restaurants").select {
@@ -130,6 +142,69 @@ class RestaurantsRemoteDataSource @Inject constructor(
         val total = result.countOrNull()?.toInt() ?: restaurants.size
 
         Log.d(TAG, "fetchRestaurants: ${restaurants.size} restaurants, total=$total, offset=${query.offset}")
+
+        return RestaurantsResponse(
+            restaurants = restaurants,
+            totalCount = total,
+            hasMore = query.offset + query.limit < total,
+        )
+    }
+
+    // endregion
+
+    // region Rotated Popularity Listing
+
+    @Serializable
+    private data class RotatedRestaurantsParams(
+        val rotation_seed: Long,
+        val search_query: String? = null,
+        val cuisine_filter: List<String>? = null,
+        val price_filter: List<String>? = null,
+        val location_filter: List<String>? = null,
+        val min_rating: Double? = null,
+        val max_rating: Double? = null,
+        val featured_only: Boolean = false,
+        val limit_count: Int,
+        val offset_count: Int,
+    )
+
+    @Serializable
+    private data class RotatedRestaurantRow(
+        val restaurant_data: Restaurant,
+        val total_count: Long,
+    )
+
+    /**
+     * Per-day rotation seed. Stable for the day so pagination doesn't reshuffle
+     * between pages, but changes daily so users don't see the same first 20
+     * restaurants every visit.
+     */
+    private fun dailyRotationSeed(): Long = System.currentTimeMillis() / 86_400_000L
+
+    private suspend fun fetchRestaurantsRotated(query: RestaurantsQuery): RestaurantsResponse {
+        val client = db()
+        val params = RotatedRestaurantsParams(
+            rotation_seed = dailyRotationSeed(),
+            search_query = query.searchText.takeUnless { it.isNullOrBlank() },
+            cuisine_filter = query.cuisines.takeUnless { it.isNullOrEmpty() },
+            price_filter = query.priceRanges.takeUnless { it.isNullOrEmpty() },
+            location_filter = query.locations.takeUnless { it.isNullOrEmpty() },
+            min_rating = query.minRating,
+            max_rating = null,
+            featured_only = query.isFeatured == true,
+            limit_count = query.limit,
+            offset_count = query.offset,
+        )
+
+        val rows = client.postgrest.rpc(
+            function = "get_rotated_restaurants",
+            parameters = params,
+        ).decodeList<RotatedRestaurantRow>()
+
+        val restaurants = rows.map { it.restaurant_data }
+        val total = (rows.firstOrNull()?.total_count ?: restaurants.size.toLong()).toInt()
+
+        Log.d(TAG, "fetchRestaurantsRotated: ${restaurants.size} restaurants, total=$total, offset=${query.offset}")
 
         return RestaurantsResponse(
             restaurants = restaurants,

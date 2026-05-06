@@ -45,6 +45,17 @@ actor RestaurantsService {
     }
 
     private func _fetchRestaurants(query: RestaurantsQuery) async throws -> RestaurantsResponse {
+        // Default popularity sort goes through the rotation RPC so the same
+        // ~20 restaurants don't appear at the top every visit. Other sorts
+        // were picked explicitly by the user, keep them deterministic.
+        if query.sortBy == .popularity {
+            if let rotated = try? await _fetchRestaurantsRotated(query: query) {
+                return rotated
+            }
+            // Fall through to the legacy table query if the RPC isn't
+            // available (e.g. the migration hasn't deployed yet).
+        }
+
         let client = try db()
         var request = client
             .from("restaurants")
@@ -132,6 +143,63 @@ actor RestaurantsService {
 
         let restaurants = try JSONDecoder().decode([Restaurant].self, from: data)
         let total = count ?? restaurants.count
+
+        return RestaurantsResponse(
+            restaurants: restaurants,
+            totalCount: total,
+            hasMore: query.offset + query.limit < total
+        )
+    }
+
+    // MARK: - Rotated Popularity Listing
+
+    /// Per-day rotation seed. Stable for the day so pagination doesn't
+    /// reshuffle between pages, but changes daily so users don't see the
+    /// same first 20 restaurants every visit.
+    private static func dailyRotationSeed(now: Date = .now) -> Int {
+        Int(now.timeIntervalSince1970 / 86_400)
+    }
+
+    private struct RotatedRestaurantsParams: Encodable {
+        let rotation_seed: Int
+        let search_query: String?
+        let cuisine_filter: [String]?
+        let price_filter: [String]?
+        let location_filter: [String]?
+        let min_rating: Double?
+        let max_rating: Double?
+        let featured_only: Bool
+        let limit_count: Int
+        let offset_count: Int
+    }
+
+    private struct RotatedRestaurantRow: Decodable {
+        let restaurant_data: Restaurant
+        let total_count: Int64
+    }
+
+    private func _fetchRestaurantsRotated(query: RestaurantsQuery) async throws -> RestaurantsResponse {
+        let client = try db()
+        let params = RotatedRestaurantsParams(
+            rotation_seed: Self.dailyRotationSeed(),
+            search_query: (query.searchText?.isEmpty ?? true) ? nil : query.searchText,
+            cuisine_filter: (query.cuisines?.isEmpty ?? true) ? nil : query.cuisines,
+            price_filter: (query.priceRanges?.isEmpty ?? true) ? nil : query.priceRanges,
+            location_filter: (query.locations?.isEmpty ?? true) ? nil : query.locations,
+            min_rating: query.minRating,
+            max_rating: nil,
+            featured_only: query.isFeatured == true,
+            limit_count: query.limit,
+            offset_count: query.offset
+        )
+
+        let rows: [RotatedRestaurantRow] = try await client
+            .rpc("get_rotated_restaurants", params: params)
+            .execute()
+            .value
+
+        let restaurants = rows.map(\.restaurant_data)
+        let total = Int(rows.first?.total_count ?? Int64(restaurants.count))
 
         return RestaurantsResponse(
             restaurants: restaurants,
