@@ -183,7 +183,7 @@ export function useRestaurants(filters: RestaurantFilters = {}) {
       }
 
       // Apply sorting with AI-based popularity as default
-      const sortBy = filters.sortBy || "popularity";
+      // (sortBy already declared above for the rotation RPC branch)
       switch (sortBy) {
         case "popularity":
           // AI-based popularity: use calculated popularity_score
