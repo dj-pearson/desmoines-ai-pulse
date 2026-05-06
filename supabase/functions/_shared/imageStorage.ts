@@ -198,13 +198,69 @@ function resolveUrl(src: string, pageUrl: string): string | null {
 }
 
 /**
+ * SHA-256 of an ArrayBuffer as a lowercase hex string.
+ * Used to detect identical image bytes across different source URLs.
+ */
+async function sha256Hex(data: ArrayBuffer): Promise<string> {
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/**
+ * Build the public CDN URL for a stored file_path.
+ */
+function cdnUrlFor(filePath: string): string {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  return `${supabaseUrl}/storage/v1/object/public/media/${filePath}`;
+}
+
+/**
+ * Insert a media_assets row that points at an existing storage object.
+ * Used when we've detected this content_id's image is byte-identical to
+ * one we've already uploaded for a different content_id.
+ */
+async function insertSharedAssetRow(
+  supabase: any,
+  args: {
+    filePath: string;
+    mimeType: string;
+    fileSize: number;
+    contentType: string;
+    contentId: string;
+    contentHash: string | null;
+    sourceUrl: string;
+  },
+): Promise<void> {
+  const fileName = args.filePath.split("/").pop() || "hero";
+  await supabase.from("media_assets").insert({
+    file_name: fileName,
+    original_file_name: fileName,
+    file_path: args.filePath,
+    bucket_id: "media",
+    mime_type: args.mimeType,
+    file_size: args.fileSize,
+    content_type: args.contentType,
+    content_id: args.contentId,
+    content_hash: args.contentHash,
+    source_url: args.sourceUrl,
+    // Shared assets piggy-back on the original's optimisation, so mark complete
+    // to keep them out of the optimisation queue.
+    processing_status: "completed",
+  });
+}
+
+/**
  * Download an external image and upload it to Supabase Storage.
  * Returns the public CDN URL on success, or null on any failure.
  *
- * @param supabase  Supabase client (service role)
- * @param sourceImageUrl  External image URL to download
- * @param category  Content category (events, restaurants, etc.)
- * @param contentId  UUID of the content row (used as folder name and media_assets.content_id)
+ * Dedup behavior:
+ *  - If a media_assets row already exists with the same source_url, skip the
+ *    download entirely and reuse that storage object.
+ *  - After download, hash the bytes; if a media_assets row exists with the same
+ *    content_hash, skip the upload and reuse that storage object.
+ *  - Otherwise upload as a new file and record content_hash + source_url.
  */
 export async function fetchAndStoreImage(
   supabase: any,
@@ -215,10 +271,45 @@ export async function fetchAndStoreImage(
   if (!sourceImageUrl) return null;
 
   try {
-    // Validate URL scheme
     const parsed = new URL(sourceImageUrl);
     if (!["http:", "https:"].includes(parsed.protocol)) return null;
 
+    const mediaContentType = CONTENT_TYPE_MAP[category] || category;
+
+    // Guard against re-running on the same record.
+    const { data: existing } = await supabase
+      .from("media_assets")
+      .select("file_path")
+      .eq("content_type", mediaContentType)
+      .eq("content_id", contentId)
+      .maybeSingle();
+    if (existing?.file_path) {
+      return cdnUrlFor(existing.file_path);
+    }
+
+    // ── Dedup pass 1: same source URL already downloaded for someone else? ──
+    const { data: bySource } = await supabase
+      .from("media_assets")
+      .select("file_path, mime_type, file_size, content_hash")
+      .eq("source_url", sourceImageUrl)
+      .limit(1)
+      .maybeSingle();
+
+    if (bySource?.file_path) {
+      await insertSharedAssetRow(supabase, {
+        filePath: bySource.file_path,
+        mimeType: bySource.mime_type,
+        fileSize: bySource.file_size,
+        contentType: mediaContentType,
+        contentId,
+        contentHash: bySource.content_hash ?? null,
+        sourceUrl: sourceImageUrl,
+      });
+      console.log(`♻️  Reused storage (URL match) for ${contentId}: ${bySource.file_path}`);
+      return cdnUrlFor(bySource.file_path);
+    }
+
+    // ── Otherwise download ───────────────────────────────────────────────────
     const response = await fetch(sourceImageUrl, {
       headers: {
         "User-Agent":
@@ -240,7 +331,6 @@ export async function fetchAndStoreImage(
       return null;
     }
 
-    // Enforce size cap before buffering
     const contentLength = response.headers.get("content-length");
     if (contentLength && parseInt(contentLength) > IMAGE_MAX_BYTES) {
       console.warn(`⚠️ Skipping oversized image (${contentLength} bytes): ${sourceImageUrl}`);
@@ -253,32 +343,33 @@ export async function fetchAndStoreImage(
       return null;
     }
 
-    const ext = EXT_MAP[contentType] || "jpg";
-    const mediaContentType = CONTENT_TYPE_MAP[category] || category;
-    const filePath = `${mediaContentType}s/${contentId}/hero.${ext}`;
-
-    // Check if this content already has an asset to avoid duplicate uploads on re-run
-    const { data: existing } = await supabase
+    // ── Dedup pass 2: same byte content already stored under a different URL? ──
+    const contentHash = await sha256Hex(buffer);
+    const { data: byHash } = await supabase
       .from("media_assets")
-      .select("id")
-      .eq("content_type", mediaContentType)
-      .eq("content_id", contentId)
+      .select("file_path, mime_type, file_size")
+      .eq("content_hash", contentHash)
+      .limit(1)
       .maybeSingle();
 
-    if (existing) {
-      // Asset already stored — re-derive CDN URL from file_path if possible
-      const { data: asset } = await supabase
-        .from("media_assets")
-        .select("file_path")
-        .eq("id", existing.id)
-        .single();
-      if (asset?.file_path) {
-        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-        return `${supabaseUrl}/storage/v1/object/public/media/${asset.file_path}`;
-      }
+    if (byHash?.file_path) {
+      await insertSharedAssetRow(supabase, {
+        filePath: byHash.file_path,
+        mimeType: byHash.mime_type,
+        fileSize: byHash.file_size,
+        contentType: mediaContentType,
+        contentId,
+        contentHash,
+        sourceUrl: sourceImageUrl,
+      });
+      console.log(`♻️  Reused storage (hash match) for ${contentId}: ${byHash.file_path}`);
+      return cdnUrlFor(byHash.file_path);
     }
 
-    // Upload to Supabase Storage
+    // ── New upload ───────────────────────────────────────────────────────────
+    const ext = EXT_MAP[contentType] || "jpg";
+    const filePath = `${mediaContentType}s/${contentId}/hero.${ext}`;
+
     const { error: uploadError } = await supabase.storage
       .from("media")
       .upload(filePath, buffer, { contentType, upsert: true });
@@ -288,10 +379,8 @@ export async function fetchAndStoreImage(
       return null;
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const cdnUrl = `${supabaseUrl}/storage/v1/object/public/media/${filePath}`;
+    const cdnUrl = cdnUrlFor(filePath);
 
-    // Record in media_assets
     const { data: insertedAsset } = await supabase
       .from("media_assets")
       .insert({
@@ -303,12 +392,13 @@ export async function fetchAndStoreImage(
         file_size: buffer.byteLength,
         content_type: mediaContentType,
         content_id: contentId,
+        content_hash: contentHash,
+        source_url: sourceImageUrl,
         processing_status: "pending",
       })
       .select("id")
       .single();
 
-    // Queue for WebP/thumbnail optimisation
     if (insertedAsset?.id) {
       await supabase.from("image_optimization_queue").insert({
         media_asset_id: insertedAsset.id,
