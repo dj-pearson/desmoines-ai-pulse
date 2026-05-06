@@ -28,35 +28,45 @@ struct SwipeCardStack: View {
     /// Shrink the card so rotation overshoot stays inside the deck area.
     private static let rotationSafetyScale: CGFloat = 0.86
 
-    var body: some View {
-        GeometryReader { proxy in
-            let availableW = proxy.size.width
-            let availableH = max(0, proxy.size.height - Self.backCardPeekRoom)
-            let widthFromHeight = availableH * Self.cardAspectRatio
-            let cardWidth = min(availableW, widthFromHeight) * Self.rotationSafetyScale
-            let cardHeight = cardWidth / Self.cardAspectRatio
+    /// Horizontal padding applied by deckArea (20pt each side = 40pt total).
+    /// We subtract this from screen width so the card size is known before
+    /// the first layout pass — the same approach every other card in the app
+    /// uses (hardcoded dimensions rather than a GeometryReader inside a VStack).
+    private static let deckHorizontalPadding: CGFloat = 40
 
-            ZStack {
-                ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
-                    SwipeCard(
-                        item: item,
-                        dragOffset: index == 0 ? dragOffset : .zero,
-                        isTopCard: index == 0
-                    )
-                    .frame(width: cardWidth, height: cardHeight)
-                    .scaleEffect(scale(for: index))
-                    .offset(y: stackYOffset(for: index))
-                    .offset(index == 0 ? dragOffset : .zero)
-                    .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
-                    .zIndex(Double(visibleItems.count - index))
-                    .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
-                    .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
-                    .onTapGesture { if index == 0 { onTap(item) } }
-                    .allowsHitTesting(index == 0 && !isDismissing)
-                }
+    /// Card width derived from screen width, matching the pattern used by all
+    /// other card components in the app.
+    private var cardWidth: CGFloat {
+        let screenWidth = UIScreen.main.bounds.width
+        let availableW = screenWidth - Self.deckHorizontalPadding
+        return availableW * Self.rotationSafetyScale
+    }
+
+    private var cardHeight: CGFloat {
+        cardWidth / Self.cardAspectRatio
+    }
+
+    var body: some View {
+        ZStack {
+            ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
+                SwipeCard(
+                    item: item,
+                    dragOffset: index == 0 ? dragOffset : .zero,
+                    isTopCard: index == 0
+                )
+                .frame(width: cardWidth, height: cardHeight)
+                .scaleEffect(scale(for: index))
+                .offset(y: stackYOffset(for: index))
+                .offset(index == 0 ? dragOffset : .zero)
+                .rotationEffect(index == 0 ? .degrees(rotationDegrees) : .zero)
+                .zIndex(Double(visibleItems.count - index))
+                .animation(.interactiveSpring(response: 0.32, dampingFraction: 0.78), value: dragOffset)
+                .gesture(dragGesture(for: item), including: index == 0 ? .gesture : .none)
+                .onTapGesture { if index == 0 { onTap(item) } }
+                .allowsHitTesting(index == 0 && !isDismissing)
             }
-            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Stack geometry
