@@ -1053,7 +1053,7 @@
         "Document the manual cleanup commands in DEPLOYMENT.md"
       ],
       "priority": 66,
-      "passes": false
+      "passes": true
     },
     {
       "id": "SUB-SYNC-010",
