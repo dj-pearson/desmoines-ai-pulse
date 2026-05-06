@@ -96,6 +96,62 @@
 
 ## Progress Log
 
+## 2026-05-06 — Ralph Loop 17: Cross-Platform Subscription Sync (SUB-SYNC-009, SUB-SYNC-010, SUB-SYNC-011)
+
+Three iterations on the cross-platform subscription sync stack so iOS,
+Android, and web (Stripe) subscription state stays consistent across all
+three storefronts.
+
+- **SUB-SYNC-010**: Apple App Store Server Notifications v2 webhook
+  - New edge function `supabase/functions/appstore-server-notifications-v2/index.ts`
+  - Verifies the signedPayload JWS using Apple's PKI: validates the x5c root CA fingerprint against Apple Root CA G3, and verifies the JWS signature with the leaf certificate's ES256 public key (custom ASN.1 SPKI extraction since some Deno targets don't accept full DER cert as `spki`)
+  - Decodes notificationType, subtype, notificationUUID, and the embedded signedTransactionInfo + signedRenewalInfo JWSes
+  - Handles SUBSCRIBED, DID_RENEW, DID_CHANGE_RENEWAL_STATUS (auto-renew toggle via subtype), DID_FAIL_TO_RENEW, EXPIRED, REVOKE, REFUND, GRACE_PERIOD_EXPIRED
+  - Looks up `user_subscriptions` by `apple_original_transaction_id` scoped to `platform=ios` and updates status / current_period_end / cancel_at_period_end / apple_transaction_id / plan_id
+  - New table `apple_notification_log` for at-least-once idempotency (Apple retries 5×); keyed by Apple's `notificationUUID`
+  - Migration: `supabase/migrations/20260506000004_apple_notification_log.sql`
+
+- **SUB-SYNC-011**: Google Play Real-Time Developer Notifications webhook
+  - New edge function `supabase/functions/play-rtdn-webhook/index.ts`
+  - Verifies the OIDC bearer token Google attaches to push messages: alg=RS256, fetches Google's JWKS (cached 1 hour), verifies signature with the matching kid's public key, validates iss (accounts.google.com), aud (PLAY_RTDN_AUDIENCE env), and exp
+  - Decodes the base64 Pub/Sub message into a DeveloperNotification — handles both `subscriptionNotification` and `voidedPurchaseNotification` paths
+  - Re-uses GOOGLE_PLAY_SERVICE_ACCOUNT_KEY to call `purchases.subscriptions.get` for fresh state (expiry, autoRenewing, orderId)
+  - Handles SUBSCRIPTION_PURCHASED / RENEWED / RECOVERED / RESTARTED / CANCELED / ON_HOLD / IN_GRACE_PERIOD / PAUSED / REVOKED / EXPIRED
+  - New table `play_rtdn_log` for at-least-once idempotency keyed by Pub/Sub `messageId`
+  - Migration: `supabase/migrations/20260506000005_play_rtdn_log.sql`
+
+- **SUB-SYNC-009**: One-shot data fix — split legacy mixed-platform subscription rows
+  - Migration `supabase/migrations/20260506000006_split_legacy_mixed_platform_subs.sql`
+  - For each `user_subscriptions` row with `platform IN ('ios', 'android')` AND `stripe_subscription_id IS NOT NULL`:
+    - Inserts a fresh `platform='web'` row carrying the Stripe identifiers + canonical period/status/plan_id
+    - Clears `stripe_subscription_id` and `stripe_customer_id` from the original mobile row
+  - Idempotency via `WHERE NOT EXISTS` against the per-user `platform='web'` row, plus `ON CONFLICT DO NOTHING` on the audit table
+  - New `subscription_split_audit` table maps legacy → web rows for traceability and rollback
+  - Deployment checklist, manual reconciliation queries, and rollback procedure documented in `DEPLOYMENT.md` (Subscription Sync — Cross-Platform Cleanup section)
+
+**Build verified**: `npm run build` passes (45s, exit 0, with stub env vars for the sitemap generator)
+**Type-check / lint**: edge functions live in `supabase/functions/` (Deno) and are outside `tsconfig.app.json`'s `include: ["src"]`, so they do not touch the Vite TypeScript scope. The pre-existing baseUrl deprecation in `tsconfig.json` and the `@eslint/js` resolution issue are unrelated.
+
+**Progress**: 59/70 stories complete (84%), 11 remaining
+
+**Files changed**:
+- `supabase/functions/appstore-server-notifications-v2/index.ts` (NEW)
+- `supabase/functions/play-rtdn-webhook/index.ts` (NEW)
+- `supabase/migrations/20260506000004_apple_notification_log.sql` (NEW)
+- `supabase/migrations/20260506000005_play_rtdn_log.sql` (NEW)
+- `supabase/migrations/20260506000006_split_legacy_mixed_platform_subs.sql` (NEW)
+- `DEPLOYMENT.md` (cross-platform cleanup section)
+- `prd.json` (3 stories marked `passes: true`)
+
+- **Learnings for future iterations:**
+  - Deno's WebCrypto subtle.verify accepts JWS-format raw r||s ECDSA signatures directly (no DER conversion needed for verification). Only signing returns DER on some runtimes.
+  - Apple's x5c chain verification requires extracting the SPKI from the leaf cert via ASN.1 walking — `crypto.subtle.importKey('spki', certBytes, ...)` on the full cert fails on Deno because the cert is wrapped in a SEQUENCE and importKey expects a bare SubjectPublicKeyInfo.
+  - For Pub/Sub OIDC verification, Google's JWKS at `https://www.googleapis.com/oauth2/v3/certs` rotates ~daily — cache for ≤1 hour and refetch on `kid` miss.
+  - Apple notificationUUID + Pub/Sub messageId are both safe idempotency keys; both providers redeliver with the same id on retry.
+  - When splitting subscription rows, query the post-state via `WHERE NOT EXISTS` rather than a temp table — keeps the migration single-statement-friendly and idempotent against partial reruns.
+  - The legacy mixed-row issue was a write scope bug in the validate-receipt functions; the fix in 20260506000006 is one-shot. Re-introducing platform-unscoped UPDATEs anywhere in those edge functions will recreate the data corruption.
+---
+
 ## 2026-03-31 — iOS Production Readiness: Security Hardening (IOS-001 through IOS-004)
 
 - **IOS-001**: Implemented certificate pinning for Supabase API calls:

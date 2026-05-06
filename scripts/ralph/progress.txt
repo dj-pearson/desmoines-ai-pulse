@@ -2,6 +2,34 @@
 Started: 2026-03-27T14:05:42.010Z
 ---
 
+## 2026-05-06 — Ralph Loop 17 (SUB-SYNC-009, SUB-SYNC-010, SUB-SYNC-011)
+
+Three back-to-back iterations on cross-platform subscription sync. See
+project-root `progress.txt` for the full write-up. Summary:
+
+- **SUB-SYNC-010**: Apple App Store Server Notifications v2 webhook (new
+  edge function `appstore-server-notifications-v2` + idempotency log
+  table `apple_notification_log`).
+- **SUB-SYNC-011**: Google Play RTDN webhook (new edge function
+  `play-rtdn-webhook` + idempotency log table `play_rtdn_log`,
+  reuses existing `GOOGLE_PLAY_SERVICE_ACCOUNT_KEY`).
+- **SUB-SYNC-009**: One-shot migration `20260506000006` that splits legacy
+  mixed-platform rows into proper per-platform rows with an audit table.
+
+Build verified via `npm run build` (exit 0). Pending stories: 11/70.
+
+**Learnings for future iterations:**
+- Deno's subtle.verify takes JWS raw r||s ECDSA signatures directly — no
+  DER conversion needed for verification.
+- Importing an Apple x5c leaf as `spki` requires extracting just the
+  SubjectPublicKeyInfo via an ASN.1 walk; passing the full cert DER
+  fails on Deno.
+- Google's JWKS at `oauth2/v3/certs` rotates ~daily — cache ≤1h and
+  refetch on `kid` miss to avoid stale-key 401s.
+- The legacy stripe-on-mobile-row bug came from a platform-unscoped
+  UPDATE inside the validate-receipt functions; never reintroduce one.
+---
+
 ## 2026-03-27 - AND-001 (Android)
 - Initialized complete Android project scaffold with Kotlin 2.1.0, AGP 8.7.3, Jetpack Compose BOM 2024.12.01
 - Created version catalog (libs.versions.toml) with all dependencies
