@@ -34,13 +34,18 @@ struct SwipeCardStack: View {
     /// getting clipped by the screen edge.
     private static let rotationSafetyScale: CGFloat = 0.86
 
+    /// Horizontal inset subtracted from the GeometryReader's reported width
+    /// before computing card size. This guarantees visible side margins even
+    /// when the parent layout doesn't fully constrain the reader's width.
+    private static let cardHorizontalInset: CGFloat = 20
+
     var body: some View {
         // Own the layout: cards get an explicit (width, height) so their size
         // is identical across modes (Tonight / Events / Dining) and devices,
         // mirroring how FeaturedEventCard / CompactRestaurantCard use fixed
         // .frame(width:height:) on the home tab.
         GeometryReader { proxy in
-            let availableW = proxy.size.width
+            let availableW = max(0, proxy.size.width - Self.cardHorizontalInset * 2)
             let availableH = max(0, proxy.size.height - Self.backCardPeekRoom)
             // Pick the binding axis: card must fit in BOTH width and height
             // while keeping cardAspectRatio.
