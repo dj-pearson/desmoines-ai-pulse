@@ -899,7 +899,7 @@
         "Handle no-permission state gracefully — show a one-tap settings deep-link"
       ],
       "priority": 56,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. App Intents are platform-natural — wire them once and they appear in Shortcuts, Lock Screen, Action Button (15 Pro+), and Apple Watch. Cheap once IOS-DISCOVER-2026-001 (Ask Pulse) lands, since AskPulseIntent just forwards the query."
     },
     {
