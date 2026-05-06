@@ -129,6 +129,7 @@ export async function requireAdminOrApiKey(
   const supabase = createClient(supabaseUrl, serviceKey);
   const { data: userRes, error: userErr } = await supabase.auth.getUser(bearer);
   if (userErr || !userRes?.user) {
+    console.error('[requireAdminOrApiKey] auth.getUser failed:', userErr?.message ?? 'no user returned');
     return new Response(
       JSON.stringify({ error: 'Invalid or expired token' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
@@ -141,7 +142,7 @@ export async function requireAdminOrApiKey(
   const ADMIN_VALUES = new Set(['admin', 'root_admin']);
   const userId = userRes.user.id;
 
-  const { data: roleRow } = await supabase
+  const { data: roleRow, error: roleErr } = await supabase
     .from('user_roles')
     .select('role')
     .eq('user_id', userId)
@@ -149,7 +150,7 @@ export async function requireAdminOrApiKey(
 
   if (roleRow?.role && ADMIN_VALUES.has(roleRow.role)) return null;
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileErr } = await supabase
     .from('profiles')
     .select('user_role')
     .eq('user_id', userId)
@@ -157,8 +158,27 @@ export async function requireAdminOrApiKey(
 
   if (profile?.user_role && ADMIN_VALUES.has(profile.user_role)) return null;
 
+  // Surface exactly why the check rejected so the user can fix the data.
+  console.error('[requireAdminOrApiKey] admin check failed', {
+    userId,
+    userEmail: userRes.user.email,
+    user_roles_role: roleRow?.role ?? null,
+    user_roles_error: roleErr?.message ?? null,
+    profiles_user_role: profile?.user_role ?? null,
+    profiles_error: profileErr?.message ?? null,
+  });
+
   return new Response(
-    JSON.stringify({ error: 'Admin role required' }),
+    JSON.stringify({
+      error: 'Admin role required',
+      debug: {
+        userId,
+        user_roles_role: roleRow?.role ?? null,
+        profiles_user_role: profile?.user_role ?? null,
+        user_roles_error: roleErr?.message ?? null,
+        profiles_error: profileErr?.message ?? null,
+      },
+    }),
     { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
   );
 }
