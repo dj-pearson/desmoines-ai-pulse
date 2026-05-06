@@ -10,6 +10,7 @@ struct HomeView: View {
     @State private var showScrollToTop = false
     @State private var showDiscover = false
     @State private var showAskPulse = false
+    @State private var showSurpriseMe = false
     /// Optional override applied when the user opens DiscoverView via the
     /// "Right Now" ribbon (IOS-DISCOVER-2026-005). Cleared after the sheet
     /// is presented so subsequent toolbar Swipe taps go back to the
@@ -34,6 +35,10 @@ struct HomeView: View {
 
                     // Ask Pulse entry — primary AI discovery surface
                     askPulseEntryBar
+                        .padding(.horizontal)
+                        .padding(.top, 10)
+
+                    surpriseMeButton
                         .padding(.horizontal)
                         .padding(.top, 10)
 
@@ -121,6 +126,9 @@ struct HomeView: View {
             .sheet(isPresented: $showAskPulse) {
                 AskPulseView()
             }
+            .fullScreenCover(isPresented: $showSurpriseMe) {
+                SurpriseMeView()
+            }
             .navigationDestination(for: Event.self) { event in
                 EventDetailView(event: event)
             }
@@ -149,6 +157,51 @@ struct HomeView: View {
     /// Top-of-feed CTA into the swipe-to-discover deck. Mirrors the
     /// Explore Attractions card's structure so the home feed reads as a
     /// row of CTAs above the smart presets.
+    // MARK: - Surprise Me (IOS-DISCOVER-2026-008)
+
+    /// Full-width "decide for me" CTA. Visually distinct from Discover via
+    /// the die icon + purple accent so users grok it as the "no browsing,
+    /// no filtering" affordance.
+    private var surpriseMeButton: some View {
+        Button {
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            showSurpriseMe = true
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "die.face.5.fill")
+                    .font(.title2)
+                    .foregroundStyle(.white)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Surprise Me")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text("One pick. One reason. No browsing.")
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.85))
+                }
+                Spacer()
+                Image(systemName: "sparkles")
+                    .foregroundStyle(.white.opacity(0.85))
+                    .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [.purple, .indigo],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing,
+                ),
+                in: RoundedRectangle(cornerRadius: 14),
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Surprise Me. One pick, one reason, no browsing.")
+        .accessibilityHint("Opens a single committed recommendation")
+    }
+
     // MARK: - Sort Menu (IOS-DISCOVER-2026-003)
 
     /// Sort menu for the events list. Mirrors RestaurantsView.sortMenu so

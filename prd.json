@@ -916,7 +916,7 @@
         "Tracks acceptance rate (Save vs Try another) so we can tune the algorithm"
       ],
       "priority": 57,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. Best paired with IOS-DISCOVER-2026-005 (weather context) and IOS-DISCOVER-2026-002 (For You signals) since both improve the reasoning quality. Could ship as a v1 with just favorites + time inputs and improve over time."
     },
     {
