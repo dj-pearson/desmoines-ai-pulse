@@ -1116,7 +1116,7 @@
         "Tests run in CI on every PR touching supabase/functions/** or src/hooks/useSubscription.ts"
       ],
       "priority": 70,
-      "passes": false
+      "passes": true
     }
   ]
 }

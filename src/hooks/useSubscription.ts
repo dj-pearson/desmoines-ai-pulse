@@ -48,6 +48,24 @@ const FREE_LIMITS: SubscriptionLimits = {
   saved_searches: 0,
 };
 
+const TIER_RANK: Record<string, number> = { vip: 2, insider: 1, free: 0 };
+
+/**
+ * Picks the highest-tier subscription from a per-platform list. Used both
+ * inside `useSubscription` and by SUB-SYNC tests to verify cross-platform
+ * sync logic (e.g. web=insider + ios=vip → vip wins).
+ */
+export function resolveHighestSubscription(
+  subscriptions: UserSubscription[],
+): UserSubscription | null {
+  if (subscriptions.length === 0) return null;
+  return subscriptions.reduce<UserSubscription | null>((best, row) => {
+    const rowRank = TIER_RANK[row.plan?.name ?? 'free'] ?? 0;
+    const bestRank = best ? TIER_RANK[best.plan?.name ?? 'free'] ?? 0 : -1;
+    return rowRank > bestRank ? row : (best ?? row);
+  }, null);
+}
+
 export function useSubscription() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -116,14 +134,7 @@ export function useSubscription() {
 
   // Single highest-tier subscription, kept for back-compat with code that
   // expects one canonical row.
-  const tierRank: Record<string, number> = { vip: 2, insider: 1, free: 0 };
-  const subscription: UserSubscription | null = subscriptions.length === 0
-    ? null
-    : subscriptions.reduce<UserSubscription | null>((best, row) => {
-        const rowRank = tierRank[row.plan?.name ?? 'free'] ?? 0;
-        const bestRank = best ? tierRank[best.plan?.name ?? 'free'] ?? 0 : -1;
-        return rowRank > bestRank ? row : (best ?? row);
-      }, null);
+  const subscription = resolveHighestSubscription(subscriptions);
 
   // Determine current tier
   const getCurrentTier = (): SubscriptionTier => {
