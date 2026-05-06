@@ -831,7 +831,7 @@
         "Web parity: useEvents hook exposes the same sortBy option"
       ],
       "priority": 52,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. Was originally bundled with the swipe feature work but deferred because EventsService.EventsQuery has no sort field today and adding popularity sort requires a backend column + RPC. Lower priority than 001/002 because the events list is already date-sorted (the most common need)."
     },
     {

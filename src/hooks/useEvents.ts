@@ -13,12 +13,16 @@ interface EventsState {
   totalCount: number;
 }
 
+export type EventSortBy = "soonest" | "featured" | "popularity";
+
 interface EventFilters {
   status?: "all" | "featured" | "enhanced" | "pending";
   category?: string;
   search?: string;
   limit?: number;
   offset?: number;
+  /** Web parity for IOS-DISCOVER-2026-003 — defaults to "soonest". */
+  sortBy?: EventSortBy;
 }
 
 export function useEvents(filters: EventFilters = {}) {
@@ -36,11 +40,26 @@ export function useEvents(filters: EventFilters = {}) {
       const today = new Date().toISOString().split('T')[0];
       console.log('useEvents: Fetching events for date >=', today);
 
+      // Apply sort. "soonest" is the legacy default (date ASC); "featured"
+      // pushes is_featured rows up; "popularity" uses popularity_score added
+      // by migration 20260506000008. NULLS go last so events with no score
+      // don't crowd out scored ones.
+      const sortBy: EventSortBy = filters.sortBy ?? "soonest";
       let query = supabase
         .from("events")
         .select("*", { count: "exact" })
-        .gte("date", today) // Only today and future events
-        .order("date", { ascending: true }); // Sort by event date, not created_at
+        .gte("date", today); // Only today and future events
+      if (sortBy === "featured") {
+        query = query
+          .order("is_featured", { ascending: false })
+          .order("date", { ascending: true });
+      } else if (sortBy === "popularity") {
+        query = query
+          .order("popularity_score", { ascending: false, nullsFirst: false })
+          .order("date", { ascending: true });
+      } else {
+        query = query.order("date", { ascending: true });
+      }
 
       // Apply filters
       if (filters.status && filters.status !== "all") {
@@ -198,6 +217,7 @@ export function useEvents(filters: EventFilters = {}) {
     filters.search,
     filters.limit,
     filters.offset,
+    filters.sortBy,
   ]);
 
   return {

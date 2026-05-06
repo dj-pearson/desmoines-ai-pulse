@@ -83,6 +83,9 @@ struct HomeView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    sortMenu
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         showDiscover = true
@@ -132,6 +135,35 @@ struct HomeView: View {
     /// Top-of-feed CTA into the swipe-to-discover deck. Mirrors the
     /// Explore Attractions card's structure so the home feed reads as a
     /// row of CTAs above the smart presets.
+    // MARK: - Sort Menu (IOS-DISCOVER-2026-003)
+
+    /// Sort menu for the events list. Mirrors RestaurantsView.sortMenu so
+    /// the Events tab matches the Restaurants tab UX.
+    private var sortMenu: some View {
+        Menu {
+            ForEach(EventSortOption.allCases) { option in
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    viewModel.sortBy = option
+                } label: {
+                    if viewModel.sortBy == option {
+                        Label(option.rawValue, systemImage: "checkmark")
+                    } else {
+                        Text(option.rawValue)
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.up.arrow.down")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(viewModel.sortBy.rawValue)
+                    .font(.subheadline.weight(.medium))
+            }
+        }
+        .accessibilityLabel("Sort: \(viewModel.sortBy.rawValue)")
+    }
+
     // MARK: - Ask Pulse Entry
 
     /// Search-bar-styled CTA that opens AskPulseView. Sits above the swipe
