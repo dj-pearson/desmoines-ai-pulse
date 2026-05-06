@@ -918,6 +918,205 @@
       "priority": 57,
       "passes": false,
       "notes": "Queued from 2026-05-06 mobile UX session. Best paired with IOS-DISCOVER-2026-005 (weather context) and IOS-DISCOVER-2026-002 (For You signals) since both improve the reasoning quality. Could ship as a v1 with just favorites + time inputs and improve over time."
+    },
+    {
+      "id": "SUB-SYNC-001",
+      "title": "Per-platform subscription uniqueness in user_subscriptions",
+      "description": "As a user, I need the database to allow concurrent active subscriptions across web, iOS, and Android so that purchases on one platform do not silently overwrite (or get overwritten by) purchases on another platform.",
+      "acceptanceCriteria": [
+        "New migration drops the single-column UNIQUE(user_id) constraint on user_subscriptions",
+        "Adds UNIQUE(user_id, platform) so each user can hold one row per platform (web/ios/android)",
+        "Backfills NULL/empty platform values from apple_*/google_* columns, defaulting remainder to 'web'",
+        "Sets platform NOT NULL after backfill",
+        "Migration is idempotent (DROP CONSTRAINT IF EXISTS plus pg_constraint scan; guarded ADD CONSTRAINT)",
+        "Existing rows survive the migration with their tier intact"
+      ],
+      "priority": 58,
+      "passes": true,
+      "notes": "FIXED: New migration supabase/migrations/20260506000003_subscription_per_platform_uniqueness.sql. Backfill UPDATE statements set platform='ios' for rows with apple_transaction_id/apple_product_id, platform='android' for rows with google_purchase_token/google_product_id, then 'web' for the remainder. ALTER COLUMN platform SET NOT NULL. Drops user_subscriptions_user_id_key (standard PG auto-name) with IF EXISTS, then a defensive DO block scans pg_constraint for any single-column UNIQUE on user_id and drops by name. Adds user_subscriptions_user_platform_key UNIQUE (user_id, platform) inside a NOT EXISTS guard so re-running is safe."
+    },
+    {
+      "id": "SUB-SYNC-002",
+      "title": "Web useSubscription resolves highest tier across platforms",
+      "description": "As a web user with an active mobile subscription, I need the web app to recognize my entitlement so that premium features unlock on the website regardless of where I purchased.",
+      "acceptanceCriteria": [
+        "useSubscription removes .single() and fetches all rows where user_id=X and status='active'",
+        "Resolves the highest tier (vip > insider > free) by reading subscription_plans.name from each row's join",
+        "Returns the row corresponding to the winning tier so consumers of cancel_at_period_end / current_period_end keep working",
+        "Returns null when the user has no active rows (unchanged free-tier behavior)",
+        "TypeScript type-check passes"
+      ],
+      "priority": 59,
+      "passes": true,
+      "notes": "FIXED: src/hooks/useSubscription.ts queryFn drops .single() and fetches the full active rowset. Reduces over rows comparing tierRank lookups ({vip:2, insider:1, free:0}) on each row's joined plan.name to pick the winner. The winning row is then mapped through the existing JSONB-cast plumbing so consumers (isExpiringSoon, cancelAtPeriodEnd, plan.limits, plan.features) continue to read off a single subscription object. Empty rowset returns null (free tier). npm run type-check is clean."
+    },
+    {
+      "id": "SUB-SYNC-003",
+      "title": "Stripe webhook scoped to platform='web'",
+      "description": "As an engineer, I need the Stripe webhook to write only to the user's web subscription row so that an iOS or Android row for the same user is not clobbered when they pay via Stripe.",
+      "acceptanceCriteria": [
+        "handleSubscriptionPayment includes platform: 'web' in subscriptionData on insert",
+        "Existing-row lookup filters by user_id AND platform='web' (not just user_id)",
+        "Existing-row lookup uses .maybeSingle() (no PGRST116 error on absent rows)",
+        "UPDATE writes also filter by user_id AND platform='web'",
+        "Subscription updated/deleted/invoice handlers continue to key off stripe_subscription_id (already platform-safe)"
+      ],
+      "priority": 60,
+      "passes": true,
+      "notes": "FIXED: supabase/functions/stripe-webhook/index.ts handleSubscriptionPayment now filters the existing-row lookup by .eq('user_id', userId).eq('platform', 'web') and uses .maybeSingle(). subscriptionData includes platform: 'web'. The UPDATE branch also filters on platform='web' so it cannot stomp an iOS/Android row for the same user. handleSubscriptionUpdated, handleSubscriptionDeleted, handleInvoicePaymentSucceeded, handleInvoicePaymentFailed already key off stripe_subscription_id, which is unique per Stripe subscription, so they stay correct under the new schema."
+    },
+    {
+      "id": "SUB-SYNC-004",
+      "title": "validate-ios-receipt scoped to platform='ios'",
+      "description": "As an engineer, I need the iOS receipt validator to write only to the user's iOS subscription row so that a web/Stripe or Android row for the same user is not clobbered.",
+      "acceptanceCriteria": [
+        "Existing-row lookup filters by user_id AND platform='ios'",
+        "Switches from .limit(1).single() to .maybeSingle() to avoid PGRST116 noise",
+        "Insert/update payload continues to include platform: 'ios'",
+        "Receipt validation flow otherwise unchanged (Apple JWS verification, grace-period logging)"
+      ],
+      "priority": 61,
+      "passes": true,
+      "notes": "FIXED: supabase/functions/validate-ios-receipt/index.ts existing-row lookup is now .eq('user_id', user.id).eq('platform', 'ios').maybeSingle(). subscriptionData already sets platform: 'ios'. No change to Apple App Store Server API v2 verification, JWS decoding, bundle/product/revocation checks, or the grace-period behavior on validation failure. Idempotent under the new UNIQUE(user_id, platform) constraint."
+    },
+    {
+      "id": "SUB-SYNC-005",
+      "title": "validate-android-receipt scoped to platform='android'",
+      "description": "As an engineer, I need the Android receipt validator to write only to the user's Android subscription row so that a web/Stripe or iOS row for the same user is not clobbered.",
+      "acceptanceCriteria": [
+        "Existing-row lookup filters by user_id AND platform='android'",
+        "Switches from .limit(1).single() to .maybeSingle()",
+        "Insert/update payload continues to include platform: 'android'",
+        "Google Play Developer API verification flow otherwise unchanged"
+      ],
+      "priority": 62,
+      "passes": true,
+      "notes": "FIXED: supabase/functions/validate-android-receipt/index.ts existing-row lookup is now .eq('user_id', user.id).eq('platform', 'android').maybeSingle(). subscriptionData already sets platform: 'android'. No change to Google service-account JWT exchange, Android Publisher API v3 purchase verification, paymentState/cancelReason resolution, or the grace-period behavior."
+    },
+    {
+      "id": "SUB-SYNC-006",
+      "title": "iOS StoreKitService reads tier from Supabase as a peer to local entitlements",
+      "description": "As an iOS user, I need the app to recognize a subscription I purchased on the web (Stripe) or Android so that premium features unlock on iOS without me having to repurchase.",
+      "acceptanceCriteria": [
+        "StoreKitService gains a backendTier observable property fed from user_subscriptions",
+        "currentTier returns max(localTier, backendTier) using a static tierRank helper",
+        "refreshBackendTier() queries user_subscriptions joined with subscription_plans where status='active' and resolves the highest tier",
+        "refreshBackendTier no-ops when no Supabase session is present and clears backendTier to .free on sign-out",
+        "Hooks: called from init, after a successful purchase, after restorePurchases, and after each Transaction.updates listener fire",
+        "Failure to fetch keeps the prior backendTier (no UX downgrade on transient errors)",
+        "Existing 12 view consumers of currentTier continue to compile unchanged"
+      ],
+      "priority": 63,
+      "passes": true,
+      "notes": "FIXED: ios/DesMoinesInsider/Services/StoreKitService.swift now has private(set) var backendTier: SubscriptionTier = .free and a private static tierRank(_:) helper. currentTier became a computed property returning whichever of localTier (the previous direct-from-StoreKit logic, now in a private localTier var) or backendTier ranks higher. New func refreshBackendTier() awaits client.auth.session, then runs `client.from('user_subscriptions').select('status, plan:subscription_plans(name)').eq('user_id', value: userId).eq('status', value: 'active').execute().value` decoding into a [SubRow] of {status, plan:{name}}, walks the rows to find the max tier, and assigns backendTier. Skips when Config.isUITesting. Hook points: Task call from private init() alongside loadProducts/updatePurchasedProducts; awaited inside purchase(_:) right after syncEntitlementToBackend; awaited inside restorePurchases() after syncAllEntitlementsToBackend; awaited inside listenForTransactions() inside the verified-transaction branch. Errors are logged in DEBUG only and do not clear backendTier."
+    },
+    {
+      "id": "SUB-SYNC-007",
+      "title": "Android BillingService reads tier from Supabase as a peer to local entitlements",
+      "description": "As an Android user, I need the app to recognize a subscription I purchased on the web (Stripe) or iOS so that premium features unlock on Android without me having to repurchase.",
+      "acceptanceCriteria": [
+        "BillingService gains a _backendTier StateFlow exposed as backendTier",
+        "currentTier StateFlow becomes derived via a recomputeCurrentTier() helper that picks max(localTier, backendTier)",
+        "suspend fun refreshBackendTier() queries user_subscriptions joined with subscription_plans and resolves the highest tier",
+        "refreshBackendTier no-ops when no Supabase session is present and clears _backendTier on sign-out",
+        "Hooks: scope.launch from init, called after handlePurchase finishes acknowledging+syncing, called after restorePurchases finishes",
+        "Failure to fetch keeps the prior backendTier (no UX downgrade on transient errors)",
+        "Existing 12 view consumers of currentTier continue to read the same StateFlow type"
+      ],
+      "priority": 64,
+      "passes": true,
+      "notes": "FIXED: android/.../data/remote/BillingService.kt now exposes _backendTier MutableStateFlow + backendTier StateFlow. The original direct assignment to _currentTier inside updatePurchasedProducts() was replaced with recomputeCurrentTier(), which compares tierRank(localTier()) vs tierRank(_backendTier.value) and assigns the winner to _currentTier. localTier() wraps the existing resolveTier(_purchasedProductIDs.value) logic. tierRank(SubscriptionTier): Int is private. New suspend fun refreshBackendTier() reads currentSessionOrNull, then `client.from('user_subscriptions').select(Columns.raw(\"status, plan:subscription_plans(name)\")) { filter { eq('user_id', userId); eq('status', 'active') } }.decodeList<BackendSubRow>()` — BackendSubRow and BackendPlanRef are @Serializable private data classes with default-null fields. Walks rows to set _backendTier.value, then calls recomputeCurrentTier(). Hook points: scope.launch in init (alongside connect()); awaited in handlePurchase after the syncEntitlementToBackend forEach; awaited in restorePurchases after syncAllEntitlementsToBackend. Errors are logged at warn level and do not reset _backendTier. Added imports for io.github.jan.supabase.postgrest.from and Columns."
+    },
+    {
+      "id": "SUB-SYNC-008",
+      "title": "Refresh backendTier when auth state changes on iOS and Android",
+      "description": "As a user who logs out and into a different account in the same session (without making a purchase or pulling restore), I need the previously-cached backend tier from my old account to be cleared so the new account's entitlement is reflected immediately.",
+      "acceptanceCriteria": [
+        "iOS: subscribe to AuthService auth-state changes; call StoreKitService.shared.refreshBackendTier() on sign-in and clear backendTier on sign-out",
+        "Android: subscribe to Supabase auth status flow; call BillingService.refreshBackendTier() on sign-in and clear on sign-out",
+        "No regression to existing init / purchase / restore hook timing",
+        "Manual QA: sign out of account A, sign in to account B, confirm tier reflects account B before any purchase/restore action"
+      ],
+      "priority": 65,
+      "passes": false
+    },
+    {
+      "id": "SUB-SYNC-009",
+      "title": "One-shot data migration to clean legacy mixed-platform subscription rows",
+      "description": "Some pre-existing user_subscriptions rows have stripe_* fields populated even though their platform was overwritten to 'ios' or 'android' by validate-*-receipt's previous (unscoped) UPDATE behavior. These rows are confusing and could lead to incorrect cancellation routing.",
+      "acceptanceCriteria": [
+        "New migration audits user_subscriptions rows where platform != 'web' but stripe_subscription_id IS NOT NULL",
+        "For each, splits the row: keeps the platform-specific fields under the existing platform row, and inserts a fresh platform='web' row carrying the stripe_* fields and the canonical Stripe period/status",
+        "Original tier (plan_id) is preserved on whichever row the user is most likely actively paying on (preferred: trust Stripe webhook history for current_period_end recency)",
+        "Migration is idempotent — re-running produces no new rows",
+        "Run on a backup/staging copy first; ship a follow-up data-fix script if Stripe history needs to fill gaps",
+        "Document the manual cleanup commands in DEPLOYMENT.md"
+      ],
+      "priority": 66,
+      "passes": false
+    },
+    {
+      "id": "SUB-SYNC-010",
+      "title": "Apple App Store Server Notifications v2 webhook",
+      "description": "As an engineer, I need to receive server-to-server notifications from Apple so that subscription cancellations, refunds, billing retries, and renewals are reflected in user_subscriptions immediately — instead of only when the user next launches the iOS app.",
+      "acceptanceCriteria": [
+        "New edge function appstore-server-notifications-v2 accepts POST from Apple",
+        "Verifies the signedPayload JWS using Apple's PKI (intermediate cert validation against Apple Root CA)",
+        "Decodes notificationType + signedTransactionInfo + signedRenewalInfo",
+        "Handles SUBSCRIBED, DID_RENEW, DID_CHANGE_RENEWAL_STATUS, DID_FAIL_TO_RENEW, EXPIRED, REVOKE, REFUND, GRACE_PERIOD_EXPIRED",
+        "Looks up user_subscriptions by apple_original_transaction_id and updates status / current_period_end / cancel_at_period_end accordingly",
+        "Apple App Store Connect server notifications URL configured to point at the new function (production + sandbox URLs separately)",
+        "Smoke-tested with Apple's 'Request a Test Notification' API before production",
+        "Logs each event for at-least-once-delivery debugging; idempotent on duplicate notifications"
+      ],
+      "priority": 67,
+      "passes": false
+    },
+    {
+      "id": "SUB-SYNC-011",
+      "title": "Google Real-Time Developer Notifications (RTDN) webhook",
+      "description": "As an engineer, I need to receive RTDN events from Google Pub/Sub so that Android subscription state changes (cancellations, account holds, recoveries, refunds) are reflected in user_subscriptions immediately.",
+      "acceptanceCriteria": [
+        "Configure a Google Pub/Sub topic + push subscription pointing at a new edge function play-rtdn-webhook",
+        "Edge function verifies the OIDC token Google attaches to push messages (audience matches the function URL, issuer is accounts.google.com)",
+        "Decodes the base64 message data into a SubscriptionNotification (with subscriptionId, purchaseToken, notificationType)",
+        "On receipt, calls Android Publisher API v3 purchases.subscriptions.get to fetch fresh state (re-uses existing service account credentials)",
+        "Updates user_subscriptions rows where google_purchase_token matches with the new status / period dates / cancel reason",
+        "Handles SUBSCRIPTION_PURCHASED, RENEWED, CANCELED, ON_HOLD, IN_GRACE_PERIOD, RESTARTED, REVOKED, EXPIRED, PAUSED",
+        "Idempotent on duplicate deliveries (Pub/Sub delivers at-least-once)",
+        "Smoke-tested with the Play Console 'Test notification' helper"
+      ],
+      "priority": 68,
+      "passes": false
+    },
+    {
+      "id": "SUB-SYNC-012",
+      "title": "Subscription management UI shows platform-of-origin and routes cancel correctly",
+      "description": "As a user with subscriptions on multiple platforms, I need the Profile/Subscription screen to show me which platform each subscription came from and to route my cancel action to the correct place (Stripe portal for web, App Store settings for iOS, Google Play for Android) so I do not get stuck unable to cancel.",
+      "acceptanceCriteria": [
+        "Web Pricing/Profile shows a per-platform breakdown when more than one active subscription exists",
+        "Cancel button per row links to the correct destination: Stripe customer portal for platform='web', App Store subscription settings deeplink for 'ios', Google Play Store subscription page for 'android'",
+        "iOS app SubscriptionView and Android SubscriptionScreen surface the same breakdown when backendTier reports a non-iOS/non-Android source",
+        "Copy clarifies: 'You also have an active VIP subscription via the website' (or similar)",
+        "useSubscription returns all active rows (not just the winning one) via a new subscriptions array, while preserving the existing single-row subscription accessor for back-compat"
+      ],
+      "priority": 69,
+      "passes": false
+    },
+    {
+      "id": "SUB-SYNC-013",
+      "title": "End-to-end tests covering cross-platform subscription sync",
+      "description": "As an engineer, I need automated coverage for the cross-platform sync paths so that future changes to webhooks, validate-* functions, or read paths cannot silently break entitlement propagation.",
+      "acceptanceCriteria": [
+        "Playwright (or integration) test: simulate Stripe webhook payload for a checkout.session.completed → assert user_subscriptions row created with platform='web' and tier resolves correctly via useSubscription",
+        "Integration test: POST a synthetic StoreKit transaction to validate-ios-receipt with a stubbed Apple API and assert the iOS row coexists with the existing web row (no clobber)",
+        "Integration test: same for validate-android-receipt with a stubbed Google API",
+        "Read-side test: with rows on web (insider) + ios (vip), useSubscription returns vip and isPremium=true",
+        "Test for the UNIQUE(user_id, platform) constraint: a second insert at the same (user_id, platform) is rejected",
+        "Tests run in CI on every PR touching supabase/functions/** or src/hooks/useSubscription.ts"
+      ],
+      "priority": 70,
+      "passes": false
     }
   ]
 }
