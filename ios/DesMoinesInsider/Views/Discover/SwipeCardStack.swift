@@ -71,6 +71,7 @@ struct SwipeCardStack: View {
             }
         }
         .frame(width: availableWidth, height: availableHeight, alignment: .center)
+        .clipped()
     }
 
     // MARK: - Stack geometry

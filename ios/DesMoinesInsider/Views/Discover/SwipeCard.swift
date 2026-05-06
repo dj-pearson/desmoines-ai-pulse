@@ -33,7 +33,6 @@ struct SwipeCard: View {
             CachedAsyncImage(url: item.imageUrl) {
                 placeholderGradient
             }
-            .aspectRatio(contentMode: .fill)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // Bottom legibility scrim + content
@@ -102,6 +101,7 @@ struct SwipeCard: View {
         // Size is owned by SwipeCardStack via .frame(width:height:) — no
         // greedy maxWidth/maxHeight here, otherwise the card stretches to
         // fill ancestors and overflows the deck area.
+        .clipped()
         .background(Color(.systemGray5))
         .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
         .overlay(
