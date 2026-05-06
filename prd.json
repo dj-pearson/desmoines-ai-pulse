@@ -864,7 +864,7 @@
         "Accessibility: VoiceOver reads the full sentence as a single button label"
       ],
       "priority": 54,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. The pure-LLM version is more impressive but more expensive — start with the templated version, A/B against an LLM-composed version later. Stay keyless for the weather API (Open-Meteo) so we don't have another secret to rotate."
     },
     {

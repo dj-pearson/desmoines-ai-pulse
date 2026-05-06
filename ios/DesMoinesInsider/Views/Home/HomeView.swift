@@ -10,6 +10,11 @@ struct HomeView: View {
     @State private var showScrollToTop = false
     @State private var showDiscover = false
     @State private var showAskPulse = false
+    /// Optional override applied when the user opens DiscoverView via the
+    /// "Right Now" ribbon (IOS-DISCOVER-2026-005). Cleared after the sheet
+    /// is presented so subsequent toolbar Swipe taps go back to the
+    /// derived-from-filters context.
+    @State private var ribbonDiscoverContext: (DiscoverFilterContext, DiscoverMode)?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -18,6 +23,14 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     Color.clear.frame(height: 0).id("top")
                     headerSection
+
+                    // Right Now ribbon — weather-aware contextual entry
+                    RightNowRibbon { ctx, mode in
+                        ribbonDiscoverContext = (ctx, mode)
+                        showDiscover = true
+                    }
+                    .padding(.horizontal)
+                    .padding(.top, 10)
 
                     // Ask Pulse entry — primary AI discovery surface
                     askPulseEntryBar
@@ -96,11 +109,12 @@ struct HomeView: View {
                     .accessibilityLabel("Open swipe discovery")
                 }
             }
-            .fullScreenCover(isPresented: $showDiscover) {
+            .fullScreenCover(isPresented: $showDiscover, onDismiss: { ribbonDiscoverContext = nil }) {
+                let override = ribbonDiscoverContext
                 DiscoverView(
-                    initialFilter: discoverFilterFromEvents(),
-                    initialMode: .events,
-                    lockMode: viewModel.activeFilterCount > 0,
+                    initialFilter: override?.0 ?? discoverFilterFromEvents(),
+                    initialMode: override?.1 ?? .events,
+                    lockMode: override == nil && viewModel.activeFilterCount > 0,
                     onClose: { showDiscover = false }
                 )
             }
