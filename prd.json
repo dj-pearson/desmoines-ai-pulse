@@ -815,7 +815,7 @@
         "Web parity: surface the same For You rail on the web home page using the updated RPC"
       ],
       "priority": 51,
-      "passes": false,
+      "passes": true,
       "notes": "Queued from 2026-05-06 mobile UX session. Depends on swipe_interactions table from migration 20260506000002. Without this story, the swipe data we collect doesn't pay off — users will swipe but won't see the result reflected anywhere. Should ship within a release of IOS-DISCOVER-2026-001 to keep the loop closed."
     },
     {

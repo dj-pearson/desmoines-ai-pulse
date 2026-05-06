@@ -26,6 +26,7 @@ import SEOStructure from "@/components/SEOStructure";
 import { SEOEnhancedHead } from "@/components/SEOEnhancedHead";
 import SearchSection from "@/components/SearchSection";
 import { EnhancedHero } from "@/components/EnhancedHero";
+import { ForYouRail } from "@/components/ForYouRail";
 import { useUserPreferences } from "@/hooks/useUserPreferences";
 import { useHomepageStats } from "@/hooks/useHomepageStats";
 import { BackToTop } from "@/components/BackToTop";
@@ -441,6 +442,9 @@ export default function Index() {
         />
 
         <SearchSection onSearch={handleSearch} />
+
+        {/* For You / Trending rail — IOS-DISCOVER-2026-002 web parity */}
+        <ForYouRail />
 
         {/* Top Banner Ad Placement */}
         <div className="py-4 bg-muted/10">

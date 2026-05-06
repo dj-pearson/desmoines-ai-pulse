@@ -80,7 +80,7 @@ BEGIN
       SELECT e.category, COUNT(*) AS cnt
       FROM swipe_interactions s
       JOIN events e ON e.id = s.item_id::uuid
-      WHERE s.user_id = v_user_id AND s.gesture IN ('like', 'boost')
+      WHERE s.user_id = v_user_id AND s.action IN ('like', 'boost')
         AND e.category IS NOT NULL
       GROUP BY e.category
       ORDER BY cnt DESC
@@ -92,7 +92,7 @@ BEGIN
       SELECT r.cuisine, COUNT(*) AS cnt
       FROM swipe_interactions s
       JOIN restaurants r ON r.id = s.item_id::uuid
-      WHERE s.user_id = v_user_id AND s.gesture IN ('like', 'boost')
+      WHERE s.user_id = v_user_id AND s.action IN ('like', 'boost')
         AND r.cuisine IS NOT NULL
       GROUP BY r.cuisine
       ORDER BY cnt DESC

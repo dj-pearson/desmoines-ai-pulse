@@ -63,6 +63,10 @@ struct HomeView: View {
                         errorBanner(error)
                     }
 
+                    // For You rail (or Trending fallback for cold-start users)
+                    ForYouRail()
+                        .padding(.top, 4)
+
                     if !viewModel.featuredEvents.isEmpty {
                         featuredSection
                     }
